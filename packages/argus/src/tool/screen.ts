@@ -1,4 +1,5 @@
 import z from "zod"
+import { createHash } from "crypto"
 import { Tool } from "./tool"
 import { Capture } from "../argus/perception/capture"
 import { WindowManager } from "../argus/perception/window"
@@ -7,14 +8,21 @@ import { DesktopState } from "./desktop-state"
 const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, and bind to a specific window.
 
 Actions:
-- screenshot: Capture the current screen (or bound window). Returns the image for visual analysis.
-- list_windows: List all visible windows with their positions and sizes.
-- bind_window: Bind to a specific window by title. Subsequent screenshots capture only that window, and coordinates become window-relative.
+- screenshot: Capture the current screen (or bound window). Returns the image for visual analysis. If the screen has not changed since the last screenshot, it will tell you instead of returning the image again (saves analysis time).
+- list_windows: List all visible windows with their positions and sizes. Use this to find windows before interacting.
+- bind_window: Bind to a specific window by title substring. After binding, screenshots capture only that window and coordinates become window-relative to it.
 
-Best practices:
-- Always take a screenshot first to observe the current state before interacting.
-- After performing an action with the input tool, take another screenshot to verify the result.
-- Use bind_window to focus on a specific application window for more precise interaction.`
+IMPORTANT workflow:
+1. Use list_windows FIRST to see what apps are open and find the one you need.
+2. Use bind_window to focus on the target app — this makes coordinates easier and screenshots cleaner.
+3. Take a screenshot of the bound window to see its content.
+4. Interact with the app via the input tool, using coordinates from the screenshot.
+5. Take another screenshot to verify the result.
+
+IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn — only your text description persists.`
+
+/** Track last screenshot hash to avoid sending duplicate images to the LLM */
+let lastScreenshotHash: string | null = null
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
@@ -51,14 +59,30 @@ export const ScreenTool = Tool.define("screen", {
         const result = await Capture.take({ mode: "auto" })
         DesktopState.setBounds(result.windowBounds)
         Capture.cleanup().catch(() => {})
-        const base64 = result.buffer.toString("base64")
+
+        // Hash the screenshot to detect duplicates
+        const hash = createHash("md5").update(result.buffer).digest("hex")
+        const isDuplicate = hash === lastScreenshotHash
+        lastScreenshotHash = hash
+
         const coordInfo = result.windowBounds
           ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).`
           : "Coordinates are screen-absolute."
+
+        // If screen hasn't changed, skip sending the image to save vision tokens
+        if (isDuplicate) {
+          return {
+            title: `Screenshot unchanged (${result.width}x${result.height})`,
+            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} No need to re-analyze — use the previous screenshot as reference. If you are waiting for something to load, try using input.wait first, then screenshot again.`,
+            metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: true },
+          }
+        }
+
+        const base64 = result.buffer.toString("base64")
         return {
           title: `Screenshot captured (${result.width}x${result.height})`,
           output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo}`,
-          metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds },
+          metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false },
           attachments: [
             {
               type: "file" as const,

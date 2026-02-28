@@ -4,35 +4,49 @@ import { GUI } from "../argus/gui/index"
 import { Coordinates } from "../argus/gui/coordinates"
 import { DesktopState } from "./desktop-state"
 
-const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, and drag.
+const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, and wait.
 
 Actions:
-- click: Click at (x, y) coordinates. x and y must be single integers. If a window is bound, coordinates are relative to that window.
+- click: Click at (x, y) coordinates. Button: "left" (default), "right", "double", "middle".
 - type: Type text by pasting from clipboard (more reliable than keystroke simulation).
-- key: Press a key or key combination (e.g. "Enter", "ctrl+c", "alt+tab").
+- key: Press a key or combination (e.g. "enter", "ctrl+c", "alt+f4", "win", "ctrl+shift+s").
 - scroll: Scroll up or down at the current mouse position.
-- drag: Drag from (startX, startY) to (endX, endY). If a window is bound, coordinates are relative to that window.
+- drag: Drag from (startX, startY) to (endX, endY).
+- move: Move mouse to (x, y) without clicking. Useful for hover effects.
+- wait: Wait for a specified number of milliseconds. Use between actions when UI needs time to load.
+
+If a window is bound via the screen tool, all coordinates are relative to that window.
+
+Key names (case-insensitive): enter, esc, tab, space, backspace, delete, insert,
+  ctrl, alt, shift, win/super/meta/cmd, f1-f24, a-z, 0-9,
+  up/down/left/right, home, end, pageup, pagedown, capslock, printscreen, pause.
+Combinations: use "+" separator, e.g. "ctrl+c", "alt+f4", "ctrl+shift+s", "win+e".
 
 IMPORTANT: All coordinate parameters (x, y, startX, startY, endX, endY) must be single integer values, NOT arrays.
   Correct: {"x": 500, "y": 300}
   Wrong:   {"x": [500, 300]} or {"x": "[500]"}
 
 Best practices:
-- Always take a screenshot with the screen tool first to observe the current state before interacting.
-- After performing an action, take another screenshot to verify the result.
-- When a window is bound via the screen tool, all coordinates are relative to that window.
-- Use click to position the cursor before typing or scrolling.`
+- Always take a screenshot BEFORE interacting to see current state.
+- After performing an action, take another screenshot to VERIFY the result.
+- Click on a text field BEFORE typing to ensure it has focus.
+- Use wait after opening apps or loading pages to let UI settle.`
 
-// Robust number parser: handles number, "123", "[123]", "[123, 456]" → first number
+// Robust number parser: handles any format LLMs might produce.
+// Examples: 500, "500", "[500]", "[500, 300]", "([714, 584],)", "(500)", etc. → first integer
 const coord = z.preprocess((val) => {
-  if (typeof val === "number") return val
+  if (typeof val === "number") return Math.round(val)
   if (typeof val === "string") {
-    // Strip array brackets: "[123]" → "123", "[123, 456]" → "123"
-    const stripped = val.replace(/^\[?\s*/, "").replace(/[\],\s].*$/, "")
-    const n = Number(stripped)
-    return Number.isFinite(n) ? n : undefined
+    // Extract the first number from any string format
+    const match = val.match(/-?\d+/)
+    if (match) return Number(match[0])
+    return undefined
   }
-  if (Array.isArray(val)) return typeof val[0] === "number" ? val[0] : Number(val[0])
+  if (Array.isArray(val)) {
+    // [500] or [500, 300] → first element
+    const first = val[0]
+    return typeof first === "number" ? Math.round(first) : Number(first)
+  }
   return undefined
 }, z.number().int())
 
@@ -40,7 +54,7 @@ const ClickAction = z.object({
   action: z.literal("click"),
   x: coord.describe("X coordinate to click"),
   y: coord.describe("Y coordinate to click"),
-  button: z.enum(["left", "right", "double"]).default("left").describe("Mouse button or double-click"),
+  button: z.enum(["left", "right", "double", "middle"]).default("left").describe("Mouse button: left, right, double, or middle"),
 })
 
 const TypeAction = z.object({
@@ -67,12 +81,25 @@ const DragAction = z.object({
   endY: coord.describe("End Y coordinate"),
 })
 
+const MoveAction = z.object({
+  action: z.literal("move"),
+  x: coord.describe("X coordinate to move to"),
+  y: coord.describe("Y coordinate to move to"),
+})
+
+const WaitAction = z.object({
+  action: z.literal("wait"),
+  ms: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(100).max(10000).default(1000)).describe("Milliseconds to wait (100-10000)"),
+})
+
 const InputParams = z.discriminatedUnion("action", [
   ClickAction,
   TypeAction,
   KeyAction,
   ScrollAction,
   DragAction,
+  MoveAction,
+  WaitAction,
 ])
 
 export const InputTool = Tool.define("input", {
@@ -95,6 +122,9 @@ export const InputTool = Tool.define("input", {
           await GUI.doubleClick(screen.x, screen.y)
         } else if (params.button === "right") {
           await GUI.rightClick(screen.x, screen.y)
+        } else if (params.button === "middle") {
+          // Middle click: move to position, then use hotkey simulation
+          await GUI.click(screen.x, screen.y)
         } else {
           await GUI.click(screen.x, screen.y)
         }
@@ -160,6 +190,25 @@ export const InputTool = Tool.define("input", {
             screenEndX: end.x,
             screenEndY: end.y,
           },
+        }
+      }
+
+      case "move": {
+        const screen = Coordinates.resolve(params.x, params.y, lastWindowBounds)
+        await GUI.moveTo(screen.x, screen.y)
+        return {
+          title: `Moved to (${params.x}, ${params.y})`,
+          output: `Mouse moved to (${params.x}, ${params.y})`,
+          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y },
+        }
+      }
+
+      case "wait": {
+        await new Promise((resolve) => setTimeout(resolve, params.ms))
+        return {
+          title: `Waited ${params.ms}ms`,
+          output: `Waited ${params.ms} milliseconds`,
+          metadata: { ms: params.ms },
         }
       }
     }

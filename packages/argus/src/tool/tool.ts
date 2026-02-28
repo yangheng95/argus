@@ -58,11 +58,6 @@ export namespace Tool {
           let parsed: typeof args
           try {
             parsed = toolInfo.parameters.parse(args)
-            if (id === "input") {
-              const fs = await import("node:fs")
-              fs.appendFileSync("/d/myhexin-local/argus-opencode/argus-opencode/tool-debug.log",
-                `[${new Date().toISOString()}] raw: ${JSON.stringify(args)} | parsed: ${JSON.stringify(parsed)}\n`)
-            }
           } catch (error) {
             if (error instanceof z.ZodError && toolInfo.formatValidationError) {
               throw new Error(toolInfo.formatValidationError(error), { cause: error })

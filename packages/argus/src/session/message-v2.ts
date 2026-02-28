@@ -545,6 +545,14 @@ export namespace MessageV2 {
       return { type: "json", value: output as never }
     }
 
+    // Find the last assistant message ID so we can strip old screenshot images
+    const lastAssistantID = (() => {
+      for (let i = input.length - 1; i >= 0; i--) {
+        if (input[i].info.role === "assistant") return input[i].info.id
+      }
+      return undefined
+    })()
+
     for (const msg of input) {
       if (msg.parts.length === 0) continue
 
@@ -618,7 +626,12 @@ export namespace MessageV2 {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
               const outputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
-              const attachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
+              const isOldScreenshot = part.tool === "screen"
+                && part.state.input?.action === "screenshot"
+                && msg.info.id !== lastAssistantID
+              const attachments = (part.state.time.compacted || isOldScreenshot)
+                ? []
+                : (part.state.attachments ?? [])
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message

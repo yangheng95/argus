@@ -1,5 +1,6 @@
 import { createOpencode, type OpencodeClient } from "@opencode-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
+import type { SlackAdapter } from "./adapters/slack"
 import { formatToolUpdate } from "./format"
 
 interface SessionEntry {
@@ -99,6 +100,28 @@ export class BotCore {
     }
 
     console.log(`[BotCore] Prompt sent for session ${session.sessionId}`)
+  }
+
+  /**
+   * Inject a prompt directly into a Slack channel, bypassing the Slack message listener.
+   * This creates a session bound to the channel so SSE events flow back to Slack.
+   * Useful for automated testing with bot tokens.
+   */
+  async injectPrompt(platform: string, channel: string, text: string): Promise<void> {
+    const adapter = this.adapters.find((a) => a.platform === platform) as SlackAdapter | undefined
+    if (!adapter) throw new Error(`No adapter for platform: ${platform}`)
+
+    // Post the prompt as a visible message and get its ts for threading
+    const ts = await adapter.postAndGetTs(channel, `[Argus Task] ${text}`)
+
+    // Treat it as an incoming message — this creates session + sends prompt
+    await this.handleMessage({
+      platform,
+      channel,
+      thread: ts,
+      user: "system",
+      text,
+    })
   }
 
   private findSession(sessionId: string): SessionEntry | undefined {
