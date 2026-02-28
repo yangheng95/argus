@@ -13,10 +13,10 @@ export class SlackAdapter {
   private app: App
   private handler?: MessageHandler
 
-  constructor(opts: { token: string; signingSecret: string; appToken: string }) {
+  constructor(opts: { token: string; signingSecret?: string; appToken: string }) {
     this.app = new App({
       token: opts.token,
-      signingSecret: opts.signingSecret,
+      signingSecret: opts.signingSecret ?? "",
       socketMode: true,
       appToken: opts.appToken,
     })

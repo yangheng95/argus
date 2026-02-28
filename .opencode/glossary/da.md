@@ -2,7 +2,7 @@
 
 ## Sources
 
-- PR #9821: https://github.com/anomalyco/opencode/pull/9821
+- PR #9821: https://github.com/yangheng95/argus/pull/9821
 
 ## Do Not Translate (Locale Additions)
 

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://argus.ai/config.json",
+  "provider": {
+    "argus": {
+      "options": {},
+    },
+  },
+  "mcp": {},
+  "tools": {
+    "github-triage": false,
+    "github-pr-search": false,
+  },
+}

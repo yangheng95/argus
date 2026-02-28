@@ -33,7 +33,7 @@ Prefer guidance that is:
 
 ## Sources
 
-- PR #12345: https://github.com/anomalyco/opencode/pull/12345
+- PR #12345: https://github.com/yangheng95/argus/pull/12345
 
 ## Do Not Translate (Locale Additions)
 
