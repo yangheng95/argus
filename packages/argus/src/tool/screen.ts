@@ -4,6 +4,7 @@ import { Tool } from "./tool"
 import { Capture } from "../argus/perception/capture"
 import { WindowManager } from "../argus/perception/window"
 import { DesktopState } from "./desktop-state"
+import { addCoordinateOverlay } from "../argus/perception/overlay"
 
 const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, and bind to a specific window.
 
@@ -56,11 +57,34 @@ export const ScreenTool = Tool.define("screen", {
 
     switch (params.action) {
       case "screenshot": {
+        // If no window is bound, try to auto-bind to the focused window.
+        // This captures only the active window instead of the full desktop,
+        // producing smaller, more relevant screenshots for the vision LLM.
+        let autoBound = false
+        const currentBinding = await WindowManager.getBinding()
+        if (!currentBinding) {
+          try {
+            const windows = await WindowManager.listWindows()
+            const focused = windows.find((w) => w.isFocused)
+            if (focused && focused.title && focused.width > 100 && focused.height > 100) {
+              await WindowManager.bind(focused.title)
+              autoBound = true
+            }
+          } catch {
+            // Silently fall back to fullscreen
+          }
+        }
+
         const result = await Capture.take({ mode: "auto" })
         DesktopState.setBounds(result.windowBounds)
         Capture.cleanup().catch(() => {})
 
-        // Hash the screenshot to detect duplicates
+        // Unbind if we auto-bound (so the LLM can still bind to other windows)
+        if (autoBound) {
+          WindowManager.unbind()
+        }
+
+        // Hash the raw screenshot to detect duplicates
         const hash = createHash("md5").update(result.buffer).digest("hex")
         const isDuplicate = hash === lastScreenshotHash
         lastScreenshotHash = hash
@@ -78,10 +102,13 @@ export const ScreenTool = Tool.define("screen", {
           }
         }
 
-        const base64 = result.buffer.toString("base64")
+        // Add coordinate grid overlay to help vision LLM locate positions
+        const annotated = await addCoordinateOverlay(result.buffer).catch(() => result.buffer)
+        const base64 = annotated.toString("base64")
+
         return {
           title: `Screenshot captured (${result.width}x${result.height})`,
-          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo}`,
+          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} The image has coordinate tick marks along the edges for precise positioning.`,
           metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false },
           attachments: [
             {
