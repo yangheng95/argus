@@ -1,103 +1,96 @@
 import { Log } from "../../util/log"
 
+/** Ensure thrown value is always a proper Error object */
+function asError(e: unknown): Error {
+  if (e instanceof Error) return e
+  return new Error(typeof e === "string" ? e : JSON.stringify(e))
+}
+
 export namespace Mouse {
   const log = Log.create({ service: "argus-mouse" })
 
+  async function moveToPosition(x: number, y: number): Promise<void> {
+    const { mouse, Point } = await import("@nut-tree-fork/nut-js")
+    // Use setPosition for instant move — more reliable than straightTo+move path animation
+    await mouse.setPosition(new Point(x, y))
+  }
+
   export async function click(x: number, y: number): Promise<void> {
     try {
-      const { mouse, straightTo, Point } = await import("@nut-tree-fork/nut-js")
-      await mouse.move(straightTo(new Point(x, y)))
+      const { mouse } = await import("@nut-tree-fork/nut-js")
+      await moveToPosition(x, y)
       await mouse.leftClick()
       log.info("clicked", { x, y })
     } catch (e) {
-      log.error("click failed", {
-        x,
-        y,
-        error: e instanceof Error ? e.message : String(e),
-      })
-      throw e
+      const err = asError(e)
+      log.error("click failed", { x, y, error: err.message })
+      throw err
     }
   }
 
   export async function doubleClick(x: number, y: number): Promise<void> {
     try {
-      const { mouse, straightTo, Point } = await import("@nut-tree-fork/nut-js")
-      await mouse.move(straightTo(new Point(x, y)))
-      await mouse.leftClick()
-      await mouse.leftClick()
+      const { mouse, Button } = await import("@nut-tree-fork/nut-js")
+      await moveToPosition(x, y)
+      await mouse.doubleClick(Button.LEFT)
       log.info("double clicked", { x, y })
     } catch (e) {
-      log.error("doubleClick failed", {
-        x,
-        y,
-        error: e instanceof Error ? e.message : String(e),
-      })
-      throw e
+      const err = asError(e)
+      log.error("doubleClick failed", { x, y, error: err.message })
+      throw err
     }
   }
 
   export async function rightClick(x: number, y: number): Promise<void> {
     try {
-      const { mouse, straightTo, Point } = await import("@nut-tree-fork/nut-js")
-      await mouse.move(straightTo(new Point(x, y)))
+      const { mouse } = await import("@nut-tree-fork/nut-js")
+      await moveToPosition(x, y)
       await mouse.rightClick()
       log.info("right clicked", { x, y })
     } catch (e) {
-      log.error("rightClick failed", {
-        x,
-        y,
-        error: e instanceof Error ? e.message : String(e),
-      })
-      throw e
+      const err = asError(e)
+      log.error("rightClick failed", { x, y, error: err.message })
+      throw err
     }
   }
 
   export async function scroll(direction: "up" | "down", amount: number = 3): Promise<void> {
     try {
       const { mouse } = await import("@nut-tree-fork/nut-js")
-      const scrollAmount = direction === "up" ? -amount : amount
-      await mouse.scrollDown(scrollAmount)
+      if (direction === "up") {
+        await mouse.scrollUp(amount)
+      } else {
+        await mouse.scrollDown(amount)
+      }
       log.info("scrolled", { direction, amount })
     } catch (e) {
-      log.error("scroll failed", {
-        direction,
-        amount,
-        error: e instanceof Error ? e.message : String(e),
-      })
-      throw e
+      const err = asError(e)
+      log.error("scroll failed", { direction, amount, error: err.message })
+      throw err
     }
   }
 
   export async function moveTo(x: number, y: number): Promise<void> {
     try {
-      const { mouse, straightTo, Point } = await import("@nut-tree-fork/nut-js")
-      await mouse.move(straightTo(new Point(x, y)))
+      await moveToPosition(x, y)
       log.info("moved to", { x, y })
     } catch (e) {
-      log.error("moveTo failed", {
-        x,
-        y,
-        error: e instanceof Error ? e.message : String(e),
-      })
-      throw e
+      const err = asError(e)
+      log.error("moveTo failed", { x, y, error: err.message })
+      throw err
     }
   }
 
   export async function drag(startX: number, startY: number, endX: number, endY: number): Promise<void> {
     try {
       const { mouse, straightTo, Point } = await import("@nut-tree-fork/nut-js")
-      await mouse.move(straightTo(new Point(startX, startY)))
+      await moveToPosition(startX, startY)
       await mouse.drag(straightTo(new Point(endX, endY)))
       log.info("dragged", { startX, startY, endX, endY })
     } catch (e) {
-      log.error("drag failed", {
-        startX,
-        startY,
-        endX,
-        endY,
-        error: e instanceof Error ? e.message : String(e),
-      })
-      throw e
+      const err = asError(e)
+      log.error("drag failed", { startX, startY, endX, endY, error: err.message })
+      throw err
     }
   }
 }

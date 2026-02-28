@@ -17,6 +17,9 @@ export namespace Coordinates {
 
   /** Window-relative coordinates → screen-absolute coordinates (with clamp to prevent out-of-bounds) */
   export function toScreen(relX: number, relY: number, bounds: WindowBounds): ScreenPoint {
+    if (bounds.width <= 0 || bounds.height <= 0) {
+      throw new Error(`WindowBounds has zero dimensions (${bounds.width}x${bounds.height}) — window may be minimized`)
+    }
     return {
       x: bounds.x + clamp(relX, 0, bounds.width - 1),
       y: bounds.y + clamp(relY, 0, bounds.height - 1),

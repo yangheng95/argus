@@ -15,6 +15,14 @@ export namespace ScreenDiff {
   ): Promise<DiffResult> {
     const pixelmatch = (await import("pixelmatch")).default
 
+    const expectedBytes = current.width * current.height * 4
+    if (previous.rawBuffer.length !== previous.width * previous.height * 4) {
+      throw new Error(`rawBuffer length mismatch for previous: expected ${previous.width * previous.height * 4}, got ${previous.rawBuffer.length}`)
+    }
+    if (current.rawBuffer.length !== expectedBytes) {
+      throw new Error(`rawBuffer length mismatch for current: expected ${expectedBytes}, got ${current.rawBuffer.length}`)
+    }
+
     // Different dimensions → 100% change
     if (previous.width !== current.width || previous.height !== current.height) {
       const totalPixels = Math.max(

@@ -84,8 +84,17 @@ export namespace Keyboard {
       for (const key of nutKeys) {
         await keyboard.pressKey(key)
       }
-      for (const key of nutKeys.reverse()) {
-        await keyboard.releaseKey(key)
+      const reverseKeys = [...nutKeys].reverse()
+      try {
+        for (const key of reverseKeys) {
+          await keyboard.releaseKey(key)
+        }
+      } catch (err) {
+        // Best-effort: try releasing remaining keys
+        for (const key of reverseKeys) {
+          await keyboard.releaseKey(key).catch(() => {})
+        }
+        throw err
       }
 
       log.info("hotkey", { keys })

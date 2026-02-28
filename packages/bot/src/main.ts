@@ -12,6 +12,14 @@ process.env.ARGUS_CONFIG_CONTENT = JSON.stringify({
       },
     },
   },
+  // Bot runs headless — auto-approve all tool permissions (no UI to confirm)
+  permission: {
+    input: "allow",
+    screen: "allow",
+    bash: "allow",
+    edit: "allow",
+    write: "allow",
+  },
 })
 
 const bot = new BotCore()

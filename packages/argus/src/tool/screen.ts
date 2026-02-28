@@ -50,6 +50,7 @@ export const ScreenTool = Tool.define("screen", {
       case "screenshot": {
         const result = await Capture.take({ mode: "auto" })
         DesktopState.setBounds(result.windowBounds)
+        Capture.cleanup().catch(() => {})
         const base64 = result.buffer.toString("base64")
         const coordInfo = result.windowBounds
           ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).`

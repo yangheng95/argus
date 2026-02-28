@@ -157,12 +157,17 @@ export namespace Capture {
 
       for (const file of toDelete) {
         const fs = await import("fs/promises")
-        await fs.unlink(file).catch(() => {})
+        await fs.unlink(file).catch((err) => {
+          log.warn("failed to delete screenshot", { file, error: err instanceof Error ? err.message : String(err) })
+        })
       }
 
       log.info("cleaned up screenshots", { deleted: toDelete.length })
-    } catch {
-      // Directory might not exist yet
+    } catch (err) {
+      // Directory might not exist yet — only log unexpected errors
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+        log.warn("cleanup failed", { error: err instanceof Error ? err.message : String(err) })
+      }
     }
   }
 }

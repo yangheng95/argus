@@ -6,6 +6,8 @@ export class SlackAdapter implements BotAdapter {
   private app: App
   private handler?: MessageHandler
   private botUserId?: string
+  /** Deduplicate: Slack Socket Mode can deliver the same message event twice */
+  private processedMessages = new Set<string>()
 
   constructor(opts: { token: string; signingSecret?: string; appToken: string }) {
     this.app = new App({
@@ -17,16 +19,24 @@ export class SlackAdapter implements BotAdapter {
   }
 
   async start(): Promise<void> {
-    // Get the bot's own user ID to filter self-messages
     const auth = await this.app.client.auth.test()
     this.botUserId = auth.user_id
     console.log(`[Slack] Bot user ID: ${this.botUserId}`)
 
     this.app.message(async ({ message }) => {
       if (message.subtype || !("text" in message) || !message.text) return
-      // Skip messages from the bot itself to prevent self-reply loops
       if ("user" in message && message.user === this.botUserId) return
       if (!this.handler) return
+
+      // Deduplicate by message ts — Slack Socket Mode delivers thread events twice
+      const msgTs = message.ts
+      if (this.processedMessages.has(msgTs)) return
+      this.processedMessages.add(msgTs)
+      // Prevent unbounded growth
+      if (this.processedMessages.size > 500) {
+        const oldest = this.processedMessages.values().next().value!
+        this.processedMessages.delete(oldest)
+      }
 
       const channel = message.channel
       const thread = (message as any).thread_ts || message.ts

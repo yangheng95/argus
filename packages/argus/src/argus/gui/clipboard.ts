@@ -4,9 +4,18 @@ export namespace ClipboardInput {
   const log = Log.create({ service: "argus-clipboard" })
 
   export async function paste(text: string): Promise<void> {
+    const clipboardy = (await import("clipboardy")).default
+
+    // Save current clipboard content so we can restore it afterwards
+    let previous: string | null = null
     try {
-      const clipboardy = await import("clipboardy")
-      await clipboardy.default.write(text)
+      previous = await clipboardy.read()
+    } catch {
+      // clipboard may be empty or unreadable — proceed without saving
+    }
+
+    try {
+      await clipboardy.write(text)
 
       // Use nut-js to press Ctrl+V / Cmd+V
       const { keyboard, Key } = await import("@nut-tree-fork/nut-js")
@@ -30,6 +39,11 @@ export namespace ClipboardInput {
         error: e instanceof Error ? e.message : String(e),
       })
       throw e
+    } finally {
+      // Restore the previous clipboard content regardless of success or failure
+      if (previous !== null) {
+        await clipboardy.write(previous).catch(() => {})
+      }
     }
   }
 

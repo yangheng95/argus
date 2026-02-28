@@ -3,6 +3,7 @@ import { generateObject } from "ai"
 import { Bus } from "../../bus"
 import { Provider } from "../../provider/provider"
 import { Log } from "../../util/log"
+import { withRetry } from "../../util/retry"
 import { MonitorEvent } from "../monitor/events"
 import type {
   BrainDecision,
@@ -21,7 +22,10 @@ export { Autonomy } from "./autonomy"
 
 const log = Log.create({ service: "monitor-brain" })
 
-const BrainDecisionSchema = z.object({
+// Keep in sync with the BrainDecision interface in packages/argus/src/argus/monitor/types.ts.
+// The interface cannot be derived directly from this schema because that would create a
+// circular import (types.ts is already imported by this file).
+export const BrainDecisionSchema = z.object({
   action: z.enum([
     "analyze_change",
     "execute_command",
@@ -42,7 +46,10 @@ interface ActionHistoryEntry {
   result?: string
 }
 
-// Keep a rolling history of recent actions for context
+// FIXME: actionHistory is module-level state shared across all sessions.
+// It must be moved into per-session scope (e.g. Instance.state()) once Brain
+// adopts the same session-scoped state pattern that Monitor uses.
+// For now, Brain.reset() is called by Monitor on stop to clear stale history.
 const actionHistory: ActionHistoryEntry[] = []
 const MAX_HISTORY = 20
 
@@ -54,6 +61,14 @@ function addHistory(entry: ActionHistoryEntry) {
 }
 
 export namespace Brain {
+  /**
+   * Clear module-level action history between sessions.
+   * Call this when Monitor stops so stale history does not bleed into the next session.
+   */
+  export function reset(): void {
+    actionHistory.length = 0
+  }
+
   export async function processChange(input: {
     screenshot: Buffer
     diffResult: DiffResult
@@ -183,15 +198,19 @@ export namespace Brain {
 
     const contextMessage = buildContextMessage(context)
 
-    const result = await generateObject({
-      model: language,
-      messages: [
-        { role: "system", content: BRAIN_PROMPT },
-        { role: "user", content: contextMessage },
-      ],
-      schema: BrainDecisionSchema,
-      temperature: 0.1,
-    })
+    const result = await withRetry(
+      () =>
+        generateObject({
+          model: language,
+          messages: [
+            { role: "system", content: BRAIN_PROMPT },
+            { role: "user", content: contextMessage },
+          ],
+          schema: BrainDecisionSchema,
+          temperature: 0.1,
+        }),
+      { maxAttempts: 3, baseDelayMs: 1000, label: "brain.decide" },
+    )
 
     const decision = result.object
 
@@ -247,7 +266,9 @@ export namespace Brain {
       }
 
       case "execute_command": {
-        // Process next command from queue
+        // Process next command from queue.
+        // TODO: connect to tool executor — currently only dequeues and publishes the command
+        // event without dispatching actual tool calls to the agent's tool executor.
         await processQueue({ config, abort })
         return "command_executed"
       }
@@ -265,15 +286,14 @@ export namespace Brain {
       }
 
       case "auto_execute": {
-        log.info("brain: auto_execute", {
-          tools: decision.toolCalls,
-        })
+        log.warn("brain: auto_execute decision received but tool execution is not yet connected", { tools: decision.toolCalls })
+        // TODO: dispatch decision.toolCalls to the agent's tool executor
         await Bus.publish(MonitorEvent.BrainAction, {
           action: "auto_execute",
           result: decision.reasoning,
           timestamp: Date.now(),
         })
-        return "auto_executed"
+        return "auto_executed (not implemented)"
       }
 
       case "ask_user": {

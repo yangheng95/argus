@@ -55,8 +55,9 @@ export namespace Tool {
         const toolInfo = init instanceof Function ? await init(initCtx) : init
         const execute = toolInfo.execute
         toolInfo.execute = async (args, ctx) => {
+          let parsed: typeof args
           try {
-            toolInfo.parameters.parse(args)
+            parsed = toolInfo.parameters.parse(args)
           } catch (error) {
             if (error instanceof z.ZodError && toolInfo.formatValidationError) {
               throw new Error(toolInfo.formatValidationError(error), { cause: error })
@@ -66,7 +67,19 @@ export namespace Tool {
               { cause: error },
             )
           }
-          const result = await execute(args, ctx)
+          let result: Awaited<ReturnType<typeof execute>>
+          try {
+            // Use parsed args (with preprocessed/transformed values) instead of raw args.
+            // The AI SDK may pass strings for numbers (e.g. x: "500" instead of x: 500);
+            // Zod preprocess/coerce transforms fix these, but only in the parse result.
+            result = await execute(parsed, ctx)
+          } catch (e) {
+            // Ensure thrown value is always a proper Error object.
+            // Some native addons throw non-Error values which causes
+            // "TypeError: First argument must be an Error object" in Bun/Node.
+            if (e instanceof Error) throw e
+            throw new Error(typeof e === "string" ? e : `Tool ${id} failed: ${JSON.stringify(e)}`, { cause: e })
+          }
           // skip truncation for tools that handle it themselves
           if (result.metadata.truncated !== undefined) {
             return result

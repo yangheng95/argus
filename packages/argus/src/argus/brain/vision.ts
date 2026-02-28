@@ -2,6 +2,7 @@ import z from "zod"
 import { generateObject } from "ai"
 import { Provider } from "../../provider/provider"
 import { Log } from "../../util/log"
+import { withRetry } from "../../util/retry"
 import type { MonitorConfig, VisionAnalysis } from "../monitor/types"
 
 import VISION_PROMPT from "./prompt/vision.txt"
@@ -35,6 +36,8 @@ export async function analyzeScreenshot(input: {
   screenshot: Buffer
   previousDescription?: string
   config: MonitorConfig
+  /** Unix ms timestamp of when the screenshot was captured; defaults to now if omitted */
+  timestamp?: number
 }): Promise<VisionAnalysis> {
   const modelRef = input.config.visionModel ?? (await Provider.defaultModel())
 
@@ -59,18 +62,23 @@ export async function analyzeScreenshot(input: {
     },
   ]
 
-  const result = await generateObject({
-    model: language,
-    messages: [
-      { role: "system", content: VISION_PROMPT },
-      { role: "user", content: userContent },
-    ],
-    schema: VisionAnalysisSchema,
-    temperature: 0.2,
-  })
+  const result = await withRetry(
+    () =>
+      generateObject({
+        model: language,
+        messages: [
+          { role: "system", content: VISION_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        schema: VisionAnalysisSchema,
+        temperature: 0.2,
+      }),
+    { maxAttempts: 3, baseDelayMs: 1000, label: "vision.analyzeScreenshot" },
+  )
 
   return {
-    timestamp: Date.now(),
+    timestamp: input.timestamp ?? Date.now(), // when the screenshot was captured
+    analyzedAt: Date.now(),                   // when the LLM analysis completed
     ...result.object,
     rawScreenshot: input.screenshot,
   }

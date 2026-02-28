@@ -7,11 +7,15 @@ import { DesktopState } from "./desktop-state"
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, and drag.
 
 Actions:
-- click: Click at (x, y) coordinates. If a window is bound, coordinates are relative to that window.
+- click: Click at (x, y) coordinates. x and y must be single integers. If a window is bound, coordinates are relative to that window.
 - type: Type text by pasting from clipboard (more reliable than keystroke simulation).
 - key: Press a key or key combination (e.g. "Enter", "ctrl+c", "alt+tab").
 - scroll: Scroll up or down at the current mouse position.
 - drag: Drag from (startX, startY) to (endX, endY). If a window is bound, coordinates are relative to that window.
+
+IMPORTANT: All coordinate parameters (x, y, startX, startY, endX, endY) must be single integer values, NOT arrays.
+  Correct: {"x": 500, "y": 300}
+  Wrong:   {"x": [500, 300]} or {"x": "[500]"}
 
 Best practices:
 - Always take a screenshot with the screen tool first to observe the current state before interacting.
@@ -19,10 +23,23 @@ Best practices:
 - When a window is bound via the screen tool, all coordinates are relative to that window.
 - Use click to position the cursor before typing or scrolling.`
 
+// Robust number parser: handles number, "123", "[123]", "[123, 456]" → first number
+const coord = z.preprocess((val) => {
+  if (typeof val === "number") return val
+  if (typeof val === "string") {
+    // Strip array brackets: "[123]" → "123", "[123, 456]" → "123"
+    const stripped = val.replace(/^\[?\s*/, "").replace(/[\],\s].*$/, "")
+    const n = Number(stripped)
+    return Number.isFinite(n) ? n : undefined
+  }
+  if (Array.isArray(val)) return typeof val[0] === "number" ? val[0] : Number(val[0])
+  return undefined
+}, z.number().int())
+
 const ClickAction = z.object({
   action: z.literal("click"),
-  x: z.number().describe("X coordinate to click"),
-  y: z.number().describe("Y coordinate to click"),
+  x: coord.describe("X coordinate to click"),
+  y: coord.describe("Y coordinate to click"),
   button: z.enum(["left", "right", "double"]).default("left").describe("Mouse button or double-click"),
 })
 
@@ -39,15 +56,15 @@ const KeyAction = z.object({
 const ScrollAction = z.object({
   action: z.literal("scroll"),
   direction: z.enum(["up", "down"]).describe("Scroll direction"),
-  amount: z.number().default(3).describe("Number of scroll steps"),
+  amount: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().default(3)).describe("Number of scroll steps"),
 })
 
 const DragAction = z.object({
   action: z.literal("drag"),
-  startX: z.number().describe("Start X coordinate"),
-  startY: z.number().describe("Start Y coordinate"),
-  endX: z.number().describe("End X coordinate"),
-  endY: z.number().describe("End Y coordinate"),
+  startX: coord.describe("Start X coordinate"),
+  startY: coord.describe("Start Y coordinate"),
+  endX: coord.describe("End X coordinate"),
+  endY: coord.describe("End Y coordinate"),
 })
 
 const InputParams = z.discriminatedUnion("action", [

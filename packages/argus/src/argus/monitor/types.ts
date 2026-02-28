@@ -27,7 +27,10 @@ export interface DiffResult {
 }
 
 export interface VisionAnalysis {
+  /** Unix ms timestamp of when the screenshot was captured */
   timestamp: number
+  /** Unix ms timestamp of when the LLM analysis completed */
+  analyzedAt: number
   description: string
   changeType:
     | "ui_update"
@@ -50,6 +53,9 @@ export interface StagedCommand {
   content: string
 }
 
+// Keep in sync with BrainDecisionSchema in packages/argus/src/argus/brain/index.ts.
+// A direct `z.infer<typeof BrainDecisionSchema>` derivation is not used here because
+// types.ts is imported by brain/index.ts, making a reverse import circular.
 export interface BrainDecision {
   action:
     | "analyze_change"
@@ -79,7 +85,7 @@ function clampAutonomy(value: number | undefined): AutonomyLevel {
 }
 
 export function resolveConfig(overrides?: Partial<MonitorConfig>): MonitorConfig {
-  return {
+  const resolved: MonitorConfig = {
     enabled: overrides?.enabled ?? Flag.ARGUS_MONITOR_ENABLED,
     captureInterval: overrides?.captureInterval ?? Flag.ARGUS_MONITOR_CAPTURE_INTERVAL ?? 5000,
     diffThreshold: overrides?.diffThreshold ?? Flag.ARGUS_MONITOR_DIFF_THRESHOLD ?? 1,
@@ -94,4 +100,14 @@ export function resolveConfig(overrides?: Partial<MonitorConfig>): MonitorConfig
     brainModel: overrides?.brainModel ?? parseModel(Flag.ARGUS_MONITOR_BRAIN_MODEL),
     brainEnabled: overrides?.brainEnabled ?? Flag.ARGUS_MONITOR_BRAIN_ENABLED,
   }
+  if (resolved.captureInterval < 500) {
+    throw new Error(`captureInterval must be >= 500ms, got ${resolved.captureInterval}`)
+  }
+  if (resolved.diffThreshold < 0 || resolved.diffThreshold > 100) {
+    throw new Error(`diffThreshold must be in [0, 100], got ${resolved.diffThreshold}`)
+  }
+  if (resolved.maxScreenshots < 1) {
+    throw new Error(`maxScreenshots must be >= 1, got ${resolved.maxScreenshots}`)
+  }
+  return resolved
 }

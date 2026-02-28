@@ -27,7 +27,7 @@ export namespace Monitor {
     processing: boolean
   }
 
-  async function dispose(s: MonitorStateData) {
+  function teardownState(s: MonitorStateData) {
     if (s.captureTimer) {
       clearInterval(s.captureTimer)
       s.captureTimer = null
@@ -39,6 +39,10 @@ export namespace Monitor {
     s.status = "stopped"
     s.previousCapture = null
     s.processing = false
+  }
+
+  async function dispose(s: MonitorStateData) {
+    teardownState(s)
   }
 
   const state = Instance.state(
@@ -101,18 +105,12 @@ export namespace Monitor {
 
     log.info("monitor stopping")
 
-    if (s.captureTimer) {
-      clearInterval(s.captureTimer)
-      s.captureTimer = null
-    }
-    if (s.abort) {
-      s.abort.abort()
-      s.abort = null
-    }
+    teardownState(s)
 
-    s.status = "stopped"
-    s.previousCapture = null
-    s.processing = false
+    // Clear Brain's module-level action history so stale entries do not bleed
+    // into the next session (workaround until Brain adopts per-session state).
+    const { Brain } = await import("../brain")
+    Brain.reset()
 
     await Bus.publish(MonitorEvent.Stopped, { reason: "manual" })
   }
