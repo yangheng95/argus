@@ -6,8 +6,8 @@
 
 ## Do Not Translate (Locale Additions)
 
-- `OpenCode` (preserve casing in prose; keep `opencode` only in commands, package names, paths, or code)
-- `OpenCode CLI`
+- `Argus` (preserve casing in prose; keep `opencode` only in commands, package names, paths, or code)
+- `Argus CLI`
 - `CLI`, `TUI`, `MCP`, `OAuth`
 - Locale code `br` in repo config, code, and paths (repo alias for Brazilian Portuguese)
 

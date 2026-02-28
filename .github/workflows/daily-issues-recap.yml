@@ -20,7 +20,7 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
-      - name: Install opencode
+      - name: Install argus
         run: curl -fsSL https://opencode.ai/install | bash
 
       - name: Generate daily issues recap
@@ -43,7 +43,7 @@ jobs:
           # Get today's date range
           TODAY=$(date -u +%Y-%m-%d)
 
-          opencode run -m opencode/claude-sonnet-4-5 "Generate a daily issues recap for the OpenCode repository.
+          argus run -m opencode/claude-sonnet-4-5 "Generate a daily issues recap for the Argus repository.
 
           TODAY'S DATE: ${TODAY}
 

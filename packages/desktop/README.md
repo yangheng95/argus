@@ -1,6 +1,6 @@
-# OpenCode Desktop
+# Argus Desktop
 
-Native OpenCode desktop app, built with Tauri v2.
+Native Argus desktop app, built with Tauri v2.
 
 ## Prerequisites
 

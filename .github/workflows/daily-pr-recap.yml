@@ -20,7 +20,7 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
-      - name: Install opencode
+      - name: Install argus
         run: curl -fsSL https://opencode.ai/install | bash
 
       - name: Generate daily PR recap
@@ -42,7 +42,7 @@ jobs:
         run: |
           TODAY=$(date -u +%Y-%m-%d)
 
-          opencode run -m opencode/claude-sonnet-4-5 "Generate a daily PR activity recap for the OpenCode repository.
+          argus run -m opencode/claude-sonnet-4-5 "Generate a daily PR activity recap for the Argus repository.
 
           TODAY'S DATE: ${TODAY}
 

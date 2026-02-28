@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>ai.opencode.opencode</id>
+  <id>ai.argus.argus</id>
 
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
@@ -18,7 +18,7 @@
     </p>
   </description>
 
-  <launchable type="desktop-id">ai.opencode.opencode.desktop</launchable>
+  <launchable type="desktop-id">ai.argus.argus.desktop</launchable>
 
   <content_rating type="oars-1.1" />
 

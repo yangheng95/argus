@@ -1,8 +1,14 @@
 {
   "$schema": "https://argus.ai/config.json",
+  "model": "alibaba-cn/qwen3.5-plus",
   "provider": {
     "argus": {
       "options": {},
+    },
+    "alibaba-cn": {
+      "options": {
+        "baseURL": "https://coding.dashscope.aliyuncs.com/v1"
+      }
     },
   },
   "mcp": {},

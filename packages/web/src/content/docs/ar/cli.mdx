@@ -1,30 +1,30 @@
 ---
 title: CLI
-description: أوامر وخيارات CLI في OpenCode.
+description: أوامر وخيارات CLI في Argus.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-يبدأ CLI الخاص بـ OpenCode افتراضيا واجهة [TUI](/docs/tui) عند تشغيله بدون أي معاملات.
+يبدأ CLI الخاص بـ Argus افتراضيا واجهة [TUI](/docs/tui) عند تشغيله بدون أي معاملات.
 
 ```bash
-opencode
+argus
 ```
 
-كما يدعم أيضا أوامر موثقة في هذه الصفحة، ما يتيح لك التفاعل مع OpenCode برمجيا.
+كما يدعم أيضا أوامر موثقة في هذه الصفحة، ما يتيح لك التفاعل مع Argus برمجيا.
 
 ```bash
-opencode run "Explain how closures work in JavaScript"
+argus run "Explain how closures work in JavaScript"
 ```
 
 ---
 
 ### tui
 
-بدء واجهة المستخدم terminal (TUI) الخاصة بـ OpenCode.
+بدء واجهة المستخدم terminal (TUI) الخاصة بـ Argus.
 
 ```bash
-opencode [project]
+argus [project]
 ```
 
 #### الخيارات
@@ -44,36 +44,36 @@ opencode [project]
 
 ## الأوامر
 
-يتضمن CLI الخاص بـ OpenCode أيضا الأوامر التالية.
+يتضمن CLI الخاص بـ Argus أيضا الأوامر التالية.
 
 ---
 
 ### agent
 
-إدارة وكلاء OpenCode.
+إدارة وكلاء Argus.
 
 ```bash
-opencode agent [command]
+argus agent [command]
 ```
 
 ---
 
 ### attach
 
-إرفاق terminal بخادم الواجهة الخلفية لـ OpenCode قيد التشغيل بالفعل، والذي تم تشغيله عبر الأمرين `serve` أو `web`.
+إرفاق terminal بخادم الواجهة الخلفية لـ Argus قيد التشغيل بالفعل، والذي تم تشغيله عبر الأمرين `serve` أو `web`.
 
 ```bash
-opencode attach [url]
+argus attach [url]
 ```
 
-يتيح ذلك استخدام واجهة TUI مع واجهة خلفية لـ OpenCode تعمل عن بعد. على سبيل المثال:
+يتيح ذلك استخدام واجهة TUI مع واجهة خلفية لـ Argus تعمل عن بعد. على سبيل المثال:
 
 ```bash
 # ابدأ خادم الواجهة الخلفية للوصول عبر الويب/الجوال
-opencode web --port 4096 --hostname 0.0.0.0
+argus web --port 4096 --hostname 0.0.0.0
 
 # في محطة طرفية (terminal) أخرى، اربط TUI بالواجهة الخلفية قيد التشغيل
-opencode attach http://10.20.30.40:4096
+argus attach http://10.20.30.40:4096
 ```
 
 #### الرايات
@@ -90,7 +90,7 @@ opencode attach http://10.20.30.40:4096
 إنشاء وكيل جديد بإعدادات مخصصة.
 
 ```bash
-opencode agent create
+argus agent create
 ```
 
 سيرشدك هذا الأمر خلال إنشاء وكيل جديد مع موجه نظام مخصص وإعدادات الأدوات.
@@ -102,7 +102,7 @@ opencode agent create
 عرض جميع الوكلاء المتاحين.
 
 ```bash
-opencode agent list
+argus agent list
 ```
 
 ---
@@ -112,20 +112,20 @@ opencode agent list
 أمر لإدارة بيانات الاعتماد وتسجيل الدخول لمزودي الخدمة.
 
 ```bash
-opencode auth [command]
+argus auth [command]
 ```
 
 ---
 
 #### login
 
-يعتمد OpenCode على قائمة المزودين في [Models.dev](https://models.dev)، لذا يمكنك استخدام `opencode auth login` لتهيئة مفاتيح API لأي مزود ترغب باستخدامه. يتم حفظ ذلك في `~/.local/share/opencode/auth.json`.
+يعتمد Argus على قائمة المزودين في [Models.dev](https://models.dev)، لذا يمكنك استخدام `argus auth login` لتهيئة مفاتيح API لأي مزود ترغب باستخدامه. يتم حفظ ذلك في `~/.local/share/argus/auth.json`.
 
 ```bash
-opencode auth login
+argus auth login
 ```
 
-عند تشغيل OpenCode يقوم بتحميل المزودين من ملف بيانات الاعتماد، وكذلك أي مفاتيح معرّفة في متغيرات البيئة لديك أو في ملف `.env` ضمن مشروعك.
+عند تشغيل Argus يقوم بتحميل المزودين من ملف بيانات الاعتماد، وكذلك أي مفاتيح معرّفة في متغيرات البيئة لديك أو في ملف `.env` ضمن مشروعك.
 
 ---
 
@@ -134,13 +134,13 @@ opencode auth login
 يسرد جميع المزودين الذين تم توثيقهم كما هم محفوظون في ملف بيانات الاعتماد.
 
 ```bash
-opencode auth list
+argus auth list
 ```
 
 أو النسخة المختصرة.
 
 ```bash
-opencode auth ls
+argus auth ls
 ```
 
 ---
@@ -150,7 +150,7 @@ opencode auth ls
 يسجلك خارج مزود عبر حذفه من ملف بيانات الاعتماد.
 
 ```bash
-opencode auth logout
+argus auth logout
 ```
 
 ---
@@ -160,7 +160,7 @@ opencode auth logout
 إدارة وكيل GitHub لأتمتة المستودع.
 
 ```bash
-opencode github [command]
+argus github [command]
 ```
 
 ---
@@ -170,7 +170,7 @@ opencode github [command]
 تثبيت وكيل GitHub في مستودعك.
 
 ```bash
-opencode github install
+argus github install
 ```
 
 يقوم ذلك بإعداد سير عمل GitHub Actions اللازم ويرشدك خلال عملية التهيئة. [اعرف المزيد](/docs/github).
@@ -182,7 +182,7 @@ opencode github install
 تشغيل وكيل GitHub. يُستخدم هذا عادة ضمن GitHub Actions.
 
 ```bash
-opencode github run
+argus github run
 ```
 
 ##### الرايات
@@ -199,7 +199,7 @@ opencode github run
 إدارة خوادم Model Context Protocol.
 
 ```bash
-opencode mcp [command]
+argus mcp [command]
 ```
 
 ---
@@ -209,7 +209,7 @@ opencode mcp [command]
 إضافة خادم MCP إلى تهيئتك.
 
 ```bash
-opencode mcp add
+argus mcp add
 ```
 
 سيرشدك هذا الأمر خلال إضافة خادم MCP محلي أو بعيد.
@@ -221,13 +221,13 @@ opencode mcp add
 عرض جميع خوادم MCP المُهيأة وحالة اتصالها.
 
 ```bash
-opencode mcp list
+argus mcp list
 ```
 
 أو استخدم النسخة المختصرة.
 
 ```bash
-opencode mcp ls
+argus mcp ls
 ```
 
 ---
@@ -237,7 +237,7 @@ opencode mcp ls
 إجراء المصادقة مع خادم MCP يدعم OAuth.
 
 ```bash
-opencode mcp auth [name]
+argus mcp auth [name]
 ```
 
 إذا لم تُحدِّد اسم خادم، فسيُطلب منك الاختيار من الخوادم المتاحة الداعمة لـ OAuth.
@@ -245,13 +245,13 @@ opencode mcp auth [name]
 يمكنك أيضا عرض الخوادم الداعمة لـ OAuth وحالة المصادقة الخاصة بها.
 
 ```bash
-opencode mcp auth list
+argus mcp auth list
 ```
 
 أو استخدم النسخة المختصرة.
 
 ```bash
-opencode mcp auth ls
+argus mcp auth ls
 ```
 
 ---
@@ -261,7 +261,7 @@ opencode mcp auth ls
 إزالة بيانات اعتماد OAuth لخادم MCP.
 
 ```bash
-opencode mcp logout [name]
+argus mcp logout [name]
 ```
 
 ---
@@ -271,7 +271,7 @@ opencode mcp logout [name]
 تشخيص مشاكل اتصال OAuth لخادم MCP.
 
 ```bash
-opencode mcp debug <name>
+argus mcp debug <name>
 ```
 
 ---
@@ -281,7 +281,7 @@ opencode mcp debug <name>
 عرض جميع النماذج المتاحة من المزودين المُهيأين.
 
 ```bash
-opencode models [provider]
+argus models [provider]
 ```
 
 يعرض هذا الأمر جميع النماذج المتاحة عبر المزودين المُهيأين لديك بصيغة `provider/model`.
@@ -291,7 +291,7 @@ opencode models [provider]
 يمكنك اختياريا تمرير معرّف مزود لتصفية النماذج حسب ذلك المزود.
 
 ```bash
-opencode models anthropic
+argus models anthropic
 ```
 
 #### الرايات
@@ -301,36 +301,36 @@ opencode models anthropic
 | `--refresh` | تحديث ذاكرة التخزين المؤقت للنماذج من models.dev              |
 | `--verbose` | استخدام مخرجات أكثر تفصيلا للنماذج (تشمل بيانات مثل التكاليف) |
 
-استخدم الراية `--refresh` لتحديث قائمة النماذج المخزنة مؤقتا. يفيد ذلك عند إضافة نماذج جديدة إلى مزود وتريد رؤيتها في OpenCode.
+استخدم الراية `--refresh` لتحديث قائمة النماذج المخزنة مؤقتا. يفيد ذلك عند إضافة نماذج جديدة إلى مزود وتريد رؤيتها في Argus.
 
 ```bash
-opencode models --refresh
+argus models --refresh
 ```
 
 ---
 
 ### run
 
-تشغيل opencode في وضع غير تفاعلي عبر تمرير موجه مباشرة.
+تشغيل argus في وضع غير تفاعلي عبر تمرير موجه مباشرة.
 
 ```bash
-opencode run [message..]
+argus run [message..]
 ```
 
 هذا مفيد للبرمجة النصية والأتمتة، أو عندما تريد إجابة سريعة دون تشغيل واجهة TUI كاملة. على سبيل المثال.
 
-```bash "opencode run"
-opencode run Explain the use of context in Go
+```bash "argus run"
+argus run Explain the use of context in Go
 ```
 
-يمكنك أيضا الإرفاق بمثيل `opencode serve` قيد التشغيل لتجنّب زمن الإقلاع البارد لخوادم MCP في كل تشغيل:
+يمكنك أيضا الإرفاق بمثيل `argus serve` قيد التشغيل لتجنّب زمن الإقلاع البارد لخوادم MCP في كل تشغيل:
 
 ```bash
 # ابدأ خادمًا بلا واجهة في محطة طرفية واحدة
-opencode serve
+argus serve
 
 # في محطة طرفية أخرى، شغّل الأوامر التي ترتبط به
-opencode run --attach http://localhost:4096 "Explain async/await in JavaScript"
+argus run --attach http://localhost:4096 "Explain async/await in JavaScript"
 ```
 
 #### الرايات
@@ -347,20 +347,20 @@ opencode run --attach http://localhost:4096 "Explain async/await in JavaScript"
 | `--file`     | `-f`    | ملف/ملفات لإرفاقها بالرسالة                                       |
 | `--format`   |         | التنسيق: default (منسق) أو json (أحداث JSON خام)                  |
 | `--title`    |         | عنوان للجلسة (يستخدم موجهًا مقتطعًا إن لم تُحدَّد قيمة)           |
-| `--attach`   |         | الإرفاق بخادم opencode قيد التشغيل (مثل http://localhost:4096)    |
+| `--attach`   |         | الإرفاق بخادم argus قيد التشغيل (مثل http://localhost:4096)    |
 | `--port`     |         | منفذ الخادم المحلي (الافتراضي منفذ عشوائي)                        |
 
 ---
 
 ### serve
 
-بدء خادم OpenCode بدون واجهة للوصول عبر API. راجع [توثيق الخادم](/docs/server) لواجهة HTTP الكاملة.
+بدء خادم Argus بدون واجهة للوصول عبر API. راجع [توثيق الخادم](/docs/server) لواجهة HTTP الكاملة.
 
 ```bash
-opencode serve
+argus serve
 ```
 
-يشغّل هذا خادم HTTP يوفّر وصولا عبر API لوظائف opencode دون واجهة TUI. اضبط `OPENCODE_SERVER_PASSWORD` لتفعيل مصادقة HTTP الأساسية (اسم المستخدم الافتراضي `opencode`).
+يشغّل هذا خادم HTTP يوفّر وصولا عبر API لوظائف argus دون واجهة TUI. اضبط `OPENCODE_SERVER_PASSWORD` لتفعيل مصادقة HTTP الأساسية (اسم المستخدم الافتراضي `argus`).
 
 #### الرايات
 
@@ -375,20 +375,20 @@ opencode serve
 
 ### session
 
-إدارة جلسات OpenCode.
+إدارة جلسات Argus.
 
 ```bash
-opencode session [command]
+argus session [command]
 ```
 
 ---
 
 #### list
 
-عرض جميع جلسات OpenCode.
+عرض جميع جلسات Argus.
 
 ```bash
-opencode session list
+argus session list
 ```
 
 ##### الرايات
@@ -402,10 +402,10 @@ opencode session list
 
 ### stats
 
-عرض إحصاءات استخدام الرموز والتكلفة لجلسات OpenCode لديك.
+عرض إحصاءات استخدام الرموز والتكلفة لجلسات Argus لديك.
 
 ```bash
-opencode stats
+argus stats
 ```
 
 #### الرايات
@@ -424,7 +424,7 @@ opencode stats
 تصدير بيانات الجلسة بصيغة JSON.
 
 ```bash
-opencode export [sessionID]
+argus export [sessionID]
 ```
 
 إذا لم تُقدّم معرّف جلسة، فسيُطلب منك الاختيار من الجلسات المتاحة.
@@ -433,30 +433,30 @@ opencode export [sessionID]
 
 ### import
 
-استيراد بيانات الجلسة من ملف JSON أو رابط مشاركة OpenCode.
+استيراد بيانات الجلسة من ملف JSON أو رابط مشاركة Argus.
 
 ```bash
-opencode import <file>
+argus import <file>
 ```
 
-يمكنك الاستيراد من ملف محلي أو من رابط مشاركة OpenCode.
+يمكنك الاستيراد من ملف محلي أو من رابط مشاركة Argus.
 
 ```bash
-opencode import session.json
-opencode import https://opncd.ai/s/abc123
+argus import session.json
+argus import https://opncd.ai/s/abc123
 ```
 
 ---
 
 ### web
 
-بدء خادم OpenCode بدون واجهة مع واجهة ويب.
+بدء خادم Argus بدون واجهة مع واجهة ويب.
 
 ```bash
-opencode web
+argus web
 ```
 
-يشغّل هذا خادم HTTP ويفتح متصفح ويب للوصول إلى OpenCode عبر واجهة ويب. اضبط `OPENCODE_SERVER_PASSWORD` لتفعيل مصادقة HTTP الأساسية (اسم المستخدم الافتراضي `opencode`).
+يشغّل هذا خادم HTTP ويفتح متصفح ويب للوصول إلى Argus عبر واجهة ويب. اضبط `OPENCODE_SERVER_PASSWORD` لتفعيل مصادقة HTTP الأساسية (اسم المستخدم الافتراضي `argus`).
 
 #### الرايات
 
@@ -474,7 +474,7 @@ opencode web
 بدء خادم ACP (Agent Client Protocol).
 
 ```bash
-opencode acp
+argus acp
 ```
 
 يشغّل هذا الأمر خادم ACP يتواصل عبر stdin/stdout باستخدام nd-JSON.
@@ -491,10 +491,10 @@ opencode acp
 
 ### uninstall
 
-إلغاء تثبيت OpenCode وإزالة جميع الملفات ذات الصلة.
+إلغاء تثبيت Argus وإزالة جميع الملفات ذات الصلة.
 
 ```bash
-opencode uninstall
+argus uninstall
 ```
 
 #### الرايات
@@ -510,22 +510,22 @@ opencode uninstall
 
 ### upgrade
 
-تحديث opencode إلى أحدث إصدار أو إلى إصدار محدد.
+تحديث argus إلى أحدث إصدار أو إلى إصدار محدد.
 
 ```bash
-opencode upgrade [target]
+argus upgrade [target]
 ```
 
 للترقية إلى أحدث إصدار.
 
 ```bash
-opencode upgrade
+argus upgrade
 ```
 
 للترقية إلى إصدار محدد.
 
 ```bash
-opencode upgrade v0.1.48
+argus upgrade v0.1.48
 ```
 
 #### الرايات
@@ -538,7 +538,7 @@ opencode upgrade v0.1.48
 
 ## الخيارات العامة
 
-يدعم سطر أوامر opencode الخيارات العامة التالية.
+يدعم سطر أوامر argus الخيارات العامة التالية.
 
 | الراية         | المختصر | الوصف                                  |
 | -------------- | ------- | -------------------------------------- |
@@ -551,7 +551,7 @@ opencode upgrade v0.1.48
 
 ## متغيرات البيئة
 
-يمكن تهيئة OpenCode باستخدام متغيرات البيئة.
+يمكن تهيئة Argus باستخدام متغيرات البيئة.
 
 | المتغير                               | النوع   | الوصف                                                     |
 | ------------------------------------- | ------- | --------------------------------------------------------- |
@@ -577,7 +577,7 @@ opencode upgrade v0.1.48
 | `OPENCODE_CLIENT`                     | string  | معرّف العميل (الافتراضي `cli`)                            |
 | `OPENCODE_ENABLE_EXA`                 | boolean | تفعيل أدوات بحث الويب من Exa                              |
 | `OPENCODE_SERVER_PASSWORD`            | string  | تفعيل المصادقة الأساسية لخادمي `serve`/`web`              |
-| `OPENCODE_SERVER_USERNAME`            | string  | تجاوز اسم مستخدم المصادقة الأساسية (الافتراضي `opencode`) |
+| `OPENCODE_SERVER_USERNAME`            | string  | تجاوز اسم مستخدم المصادقة الأساسية (الافتراضي `argus`) |
 | `OPENCODE_MODELS_URL`                 | string  | رابط مخصص لجلب تهيئة النماذج                              |
 
 ---

@@ -35,7 +35,7 @@ Locale guidance does not override code/command preservation rules or the global 
 
 ---
 
-# Do-Not-Translate Terms (OpenCode Docs)
+# Do-Not-Translate Terms (Argus Docs)
 
 Generated from: `packages/web/src/content/docs/*.mdx` (default English docs)
 Generated on: 2026-02-10
@@ -68,8 +68,8 @@ Neovim
 Node.js
 npm
 Obsidian
-opencode
-opencode-ai
+argus
+argus-ai
 Paru
 pnpm
 ripgrep
@@ -84,7 +84,7 @@ Windows Terminal
 Yarn
 Zellij
 Zed
-anomalyco
+yangheng95
 ```
 
 Extracted from link labels in the English docs (review and prune as desired):
@@ -152,15 +152,15 @@ OAuth
 Ollama integration docs
 OpenAI's Data Policies
 OpenChamber
-OpenCode
-OpenCode config
-OpenCode Config
-OpenCode TUI with the opencode theme
-OpenCode Web - Active Session
-OpenCode Web - New Session
-OpenCode Web - See Servers
-OpenCode Zen
-OpenCode-Obsidian
+Argus
+Argus config
+Argus Config
+Argus TUI with the argus theme
+Argus Web - Active Session
+Argus Web - New Session
+Argus Web - See Servers
+Argus Zen
+Argus-Obsidian
 OpenRouter dashboard
 OpenWork
 OVHcloud panel
@@ -301,7 +301,7 @@ NoeFabris
 OpenAI
 OpenAPI
 OpenChamber
-OpenCode
+Argus
 OpenRouter
 OpenTUI
 OpenWork
@@ -325,69 +325,69 @@ xAI
 ZenMux
 ```
 
-## OpenCode CLI commands (as shown in docs)
+## Argus CLI commands (as shown in docs)
 
 ```text
-opencode
-opencode [project]
-opencode /path/to/project
-opencode acp
-opencode agent [command]
-opencode agent create
-opencode agent list
-opencode attach [url]
-opencode attach http://10.20.30.40:4096
-opencode attach http://localhost:4096
-opencode auth [command]
-opencode auth list
-opencode auth login
-opencode auth logout
-opencode auth ls
-opencode export [sessionID]
-opencode github [command]
-opencode github install
-opencode github run
-opencode import <file>
-opencode import https://opncd.ai/s/abc123
-opencode import session.json
-opencode mcp [command]
-opencode mcp add
-opencode mcp auth [name]
-opencode mcp auth list
-opencode mcp auth ls
-opencode mcp auth my-oauth-server
-opencode mcp auth sentry
-opencode mcp debug <name>
-opencode mcp debug my-oauth-server
-opencode mcp list
-opencode mcp logout [name]
-opencode mcp logout my-oauth-server
-opencode mcp ls
-opencode models --refresh
-opencode models [provider]
-opencode models anthropic
-opencode run [message..]
-opencode run Explain the use of context in Go
-opencode serve
-opencode serve --cors http://localhost:5173 --cors https://app.example.com
-opencode serve --hostname 0.0.0.0 --port 4096
-opencode serve [--port <number>] [--hostname <string>] [--cors <origin>]
-opencode session [command]
-opencode session list
-opencode session delete <sessionID>
-opencode stats
-opencode uninstall
-opencode upgrade
-opencode upgrade [target]
-opencode upgrade v0.1.48
-opencode web
-opencode web --cors https://example.com
-opencode web --hostname 0.0.0.0
-opencode web --mdns
-opencode web --mdns --mdns-domain myproject.local
-opencode web --port 4096
-opencode web --port 4096 --hostname 0.0.0.0
-opencode.server.close()
+argus
+argus [project]
+argus /path/to/project
+argus acp
+argus agent [command]
+argus agent create
+argus agent list
+argus attach [url]
+argus attach http://10.20.30.40:4096
+argus attach http://localhost:4096
+argus auth [command]
+argus auth list
+argus auth login
+argus auth logout
+argus auth ls
+argus export [sessionID]
+argus github [command]
+argus github install
+argus github run
+argus import <file>
+argus import https://opncd.ai/s/abc123
+argus import session.json
+argus mcp [command]
+argus mcp add
+argus mcp auth [name]
+argus mcp auth list
+argus mcp auth ls
+argus mcp auth my-oauth-server
+argus mcp auth sentry
+argus mcp debug <name>
+argus mcp debug my-oauth-server
+argus mcp list
+argus mcp logout [name]
+argus mcp logout my-oauth-server
+argus mcp ls
+argus models --refresh
+argus models [provider]
+argus models anthropic
+argus run [message..]
+argus run Explain the use of context in Go
+argus serve
+argus serve --cors http://localhost:5173 --cors https://app.example.com
+argus serve --hostname 0.0.0.0 --port 4096
+argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+argus session [command]
+argus session list
+argus session delete <sessionID>
+argus stats
+argus uninstall
+argus upgrade
+argus upgrade [target]
+argus upgrade v0.1.48
+argus web
+argus web --cors https://example.com
+argus web --hostname 0.0.0.0
+argus web --mdns
+argus web --mdns --mdns-domain myproject.local
+argus web --port 4096
+argus web --port 4096 --hostname 0.0.0.0
+argus.server.close()
 ```
 
 ## Slash commands and routes

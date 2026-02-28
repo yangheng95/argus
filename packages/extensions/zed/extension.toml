@@ -1,36 +1,36 @@
-id = "opencode"
-name = "OpenCode"
+id = "argus"
+name = "Argus"
 description = "The open source coding agent."
 version = "1.2.15"
 schema_version = 1
 authors = ["Anomaly"]
 repository = "https://github.com/yangheng95/argus"
 
-[agent_servers.opencode]
-name = "OpenCode"
-icon = "./icons/opencode.svg"
+[agent_servers.argus]
+name = "Argus"
+icon = "./icons/argus.svg"
 
-[agent_servers.opencode.targets.darwin-aarch64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/opencode-darwin-arm64.zip"
-cmd = "./opencode"
+[agent_servers.argus.targets.darwin-aarch64]
+archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-darwin-arm64.zip"
+cmd = "./argus"
 args = ["acp"]
 
-[agent_servers.opencode.targets.darwin-x86_64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/opencode-darwin-x64.zip"
-cmd = "./opencode"
+[agent_servers.argus.targets.darwin-x86_64]
+archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-darwin-x64.zip"
+cmd = "./argus"
 args = ["acp"]
 
-[agent_servers.opencode.targets.linux-aarch64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/opencode-linux-arm64.tar.gz"
-cmd = "./opencode"
+[agent_servers.argus.targets.linux-aarch64]
+archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-linux-arm64.tar.gz"
+cmd = "./argus"
 args = ["acp"]
 
-[agent_servers.opencode.targets.linux-x86_64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/opencode-linux-x64.tar.gz"
-cmd = "./opencode"
+[agent_servers.argus.targets.linux-x86_64]
+archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-linux-x64.tar.gz"
+cmd = "./argus"
 args = ["acp"]
 
-[agent_servers.opencode.targets.windows-x86_64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/opencode-windows-x64.zip"
-cmd = "./opencode.exe"
+[agent_servers.argus.targets.windows-x86_64]
+archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-windows-x64.zip"
+cmd = "./argus.exe"
 args = ["acp"]

@@ -121,8 +121,8 @@ export namespace Installation {
   )
 
   async function getBrewFormula() {
-    const tapFormula = await $`brew list --formula anomalyco/tap/argus`.throws(false).quiet().text()
-    if (tapFormula.includes("argus")) return "anomalyco/tap/argus"
+    const tapFormula = await $`brew list --formula yangheng95/tap/argus`.throws(false).quiet().text()
+    if (tapFormula.includes("argus")) return "yangheng95/tap/argus"
     const coreFormula = await $`brew list --formula argus`.throws(false).quiet().text()
     if (coreFormula.includes("argus")) return "argus"
     return "argus"
@@ -150,7 +150,7 @@ export namespace Installation {
         const formula = await getBrewFormula()
         if (formula.includes("/")) {
           cmd =
-            $`brew tap anomalyco/tap && cd "$(brew --repo anomalyco/tap)" && git pull --ff-only && brew upgrade ${formula}`.env(
+            $`brew tap yangheng95/tap && cd "$(brew --repo yangheng95/tap)" && git pull --ff-only && brew upgrade ${formula}`.env(
               {
                 HOMEBREW_NO_AUTO_UPDATE: "1",
                 ...process.env,

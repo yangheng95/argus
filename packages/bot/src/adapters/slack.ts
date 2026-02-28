@@ -5,6 +5,7 @@ export class SlackAdapter implements BotAdapter {
   readonly platform = "slack"
   private app: App
   private handler?: MessageHandler
+  private botUserId?: string
 
   constructor(opts: { token: string; signingSecret?: string; appToken: string }) {
     this.app = new App({
@@ -16,8 +17,15 @@ export class SlackAdapter implements BotAdapter {
   }
 
   async start(): Promise<void> {
+    // Get the bot's own user ID to filter self-messages
+    const auth = await this.app.client.auth.test()
+    this.botUserId = auth.user_id
+    console.log(`[Slack] Bot user ID: ${this.botUserId}`)
+
     this.app.message(async ({ message }) => {
       if (message.subtype || !("text" in message) || !message.text) return
+      // Skip messages from the bot itself to prevent self-reply loops
+      if ("user" in message && message.user === this.botUserId) return
       if (!this.handler) return
 
       const channel = message.channel

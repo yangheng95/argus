@@ -3,7 +3,7 @@ title: Fehlerbehebung
 description: Haeufige Probleme und schnelle Loesungen.
 ---
 
-Wenn OpenCode Probleme macht, starte mit Logs und lokal gespeicherten Daten auf der Festplatte.
+Wenn Argus Probleme macht, starte mit Logs und lokal gespeicherten Daten auf der Festplatte.
 
 ---
 
@@ -11,21 +11,21 @@ Wenn OpenCode Probleme macht, starte mit Logs und lokal gespeicherten Daten auf 
 
 Logdateien werden hier gespeichert:
 
-- **macOS/Linux**: `~/.local/share/opencode/log/`
-- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.local\share\opencode\log`
+- **macOS/Linux**: `~/.local/share/argus/log/`
+- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.local\share\argus\log`
 
 Dateinamen enthalten Zeitstempel (z. B. `2025-01-09T123456.log`) und es bleiben die letzten 10 Logs erhalten.
 
-Mit `--log-level` bekommst du detailliertere Diagnoseinfos, z. B. `opencode --log-level DEBUG`.
+Mit `--log-level` bekommst du detailliertere Diagnoseinfos, z. B. `argus --log-level DEBUG`.
 
 ---
 
 ## Speicher
 
-opencode speichert Sitzungs- und App-Daten auf der Festplatte unter:
+argus speichert Sitzungs- und App-Daten auf der Festplatte unter:
 
-- **macOS/Linux**: `~/.local/share/opencode/`
-- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.local\share\opencode`
+- **macOS/Linux**: `~/.local/share/argus/`
+- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.local\share\argus`
 
 Dieses Verzeichnis enthaelt:
 
@@ -39,14 +39,14 @@ Dieses Verzeichnis enthaelt:
 
 ## Desktop-App
 
-OpenCode Desktop startet im Hintergrund einen lokalen OpenCode-Server (`opencode-cli`-Sidecar).
+Argus Desktop startet im Hintergrund einen lokalen Argus-Server (`argus-cli`-Sidecar).
 Viele Probleme kommen von fehlerhaften Plugins, kaputtem Cache oder falschen Server-Einstellungen.
 
 ### Schnellchecks
 
 - App komplett beenden und neu starten
 - Bei Fehlerbildschirm **Restart** klicken und Details kopieren
-- Nur macOS: `OpenCode`-Menue -> **Reload Webview** (hilft bei leerer/eingefrorener UI)
+- Nur macOS: `Argus`-Menue -> **Reload Webview** (hilft bei leerer/eingefrorener UI)
 
 ---
 
@@ -58,28 +58,28 @@ If the desktop app is crashing on launch, hanging, or behaving strangely, start 
 
 Open your global config file and look for a `plugin` key.
 
-- **macOS/Linux**: `~/.config/opencode/opencode.jsonc` (or `~/.config/opencode/opencode.json`)
-- **macOS/Linux** (older installs): `~/.local/share/opencode/opencode.jsonc`
-- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.config\opencode\opencode.jsonc`
+- **macOS/Linux**: `~/.config/argus/argus.jsonc` (or `~/.config/argus/argus.json`)
+- **macOS/Linux** (older installs): `~/.local/share/argus/argus.jsonc`
+- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.config\argus\argus.jsonc`
 
 If you have plugins configured, temporarily disable them by removing the key or setting it to an empty array:
 
 ```jsonc
 {
-  "$schema": "https://opencode.ai/config.json",
+  "$schema": "https://argus.ai/config.json",
   "plugin": [],
 }
 ```
 
 #### Plugin-Verzeichnisse prüfen
 
-OpenCode can also load local plugins from disk. Temporarily move these out of the way (or rename the folder) and restart the desktop app:
+Argus can also load local plugins from disk. Temporarily move these out of the way (or rename the folder) and restart the desktop app:
 
 - **Global plugins**
-  - **macOS/Linux**: `~/.config/opencode/plugins/`
-  - **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.config\opencode\plugins`
+  - **macOS/Linux**: `~/.config/argus/plugins/`
+  - **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.config\argus\plugins`
 - **Project plugins** (only if you use per-project config)
-  - `<your-project>/.opencode/plugins/`
+  - `<your-project>/.argus/plugins/`
 
 If the app starts working again, re-enable plugins one at a time to find which one is causing the issue.
 
@@ -87,22 +87,22 @@ If the app starts working again, re-enable plugins one at a time to find which o
 
 ### Cache leeren
 
-If disabling plugins doesn't help (or a plugin install is stuck), clear the cache so OpenCode can rebuild it.
+If disabling plugins doesn't help (or a plugin install is stuck), clear the cache so Argus can rebuild it.
 
-1. Quit OpenCode Desktop completely.
+1. Quit Argus Desktop completely.
 2. Delete the cache directory:
 
-- **macOS**: Finder -> `Cmd+Shift+G` -> paste `~/.cache/opencode`
-- **Linux**: delete `~/.cache/opencode` (or run `rm -rf ~/.cache/opencode`)
-- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.cache\opencode`
+- **macOS**: Finder -> `Cmd+Shift+G` -> paste `~/.cache/argus`
+- **Linux**: delete `~/.cache/argus` (or run `rm -rf ~/.cache/argus`)
+- **Windows**: Press `WIN+R` and paste `%USERPROFILE%\.cache\argus`
 
-3. Restart OpenCode Desktop.
+3. Restart Argus Desktop.
 
 ---
 
 ### Server-Verbindungsprobleme beheben
 
-OpenCode Desktop can either start its own local server (default) or connect to a server URL you configured.
+Argus Desktop can either start its own local server (default) or connect to a server URL you configured.
 
 If you see a **"Connection Failed"** dialog (or the app never gets past the splash screen), check for a custom server URL.
 
@@ -112,7 +112,7 @@ From the Home screen, click the server name (with the status dot) to open the Se
 
 #### `server.port` / `server.hostname` aus Konfiguration entfernen
 
-If your `opencode.json(c)` contains a `server` section, temporarily remove it and restart the desktop app.
+If your `argus.json(c)` contains a `server` section, temporarily remove it and restart the desktop app.
 
 #### Umgebungsvariablen prüfen
 
@@ -133,21 +133,21 @@ On Linux, some Wayland setups can cause blank windows or compositor errors.
 
 ### Windows: WebView2-Laufzeit
 
-On Windows, OpenCode Desktop requires the Microsoft Edge **WebView2 Runtime**. If the app opens to a blank window or won't start, install/update WebView2 and try again.
+On Windows, Argus Desktop requires the Microsoft Edge **WebView2 Runtime**. If the app opens to a blank window or won't start, install/update WebView2 and try again.
 
 ---
 
 ### Windows: Allgemeine Performance-Probleme
 
-If you're experiencing slow performance, file access issues, or terminal problems on Windows, try using [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL provides a Linux environment that works more seamlessly with OpenCode's features.
+If you're experiencing slow performance, file access issues, or terminal problems on Windows, try using [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL provides a Linux environment that works more seamlessly with Argus's features.
 
 ---
 
 ### Benachrichtigungen werden nicht angezeigt
 
-OpenCode Desktop only shows system notifications when:
+Argus Desktop only shows system notifications when:
 
-- notifications are enabled for OpenCode in your OS settings, and
+- notifications are enabled for Argus in your OS settings, and
 - the app window is not focused.
 
 ---
@@ -156,11 +156,11 @@ OpenCode Desktop only shows system notifications when:
 
 If the app won't start and you can't clear settings from inside the UI, reset the desktop app's saved state.
 
-1. Quit OpenCode Desktop.
-2. Find and delete these files (they live in the OpenCode Desktop app data directory):
+1. Quit Argus Desktop.
+2. Find and delete these files (they live in the Argus Desktop app data directory):
 
-- `opencode.settings.dat` (desktop default server URL)
-- `opencode.global.dat` and `opencode.workspace.*.dat` (UI state like recent servers/projects)
+- `argus.settings.dat` (desktop default server URL)
+- `argus.global.dat` and `argus.workspace.*.dat` (UI state like recent servers/projects)
 
 To find the directory quickly:
 
@@ -172,7 +172,7 @@ To find the directory quickly:
 
 ## Hilfe bekommen
 
-Wenn du Probleme mit OpenCode hast:
+Wenn du Probleme mit Argus hast:
 
 1. **Probleme auf GitHub melden**
 
@@ -186,7 +186,7 @@ Wenn du Probleme mit OpenCode hast:
 
    Fuer schnelle Hilfe und Austausch in der Community:
 
-   [**opencode.ai/discord**](https://opencode.ai/discord)
+   [**argus.ai/discord**](https://argus.ai/discord)
 
 ---
 
@@ -196,11 +196,11 @@ Hier sind typische Fehlerbilder und wie du sie loest.
 
 ---
 
-### OpenCode startet nicht
+### Argus startet nicht
 
 1. Check the logs for error messages
 2. Try running with `--print-logs` to see output in the terminal
-3. Ensure you have the latest version with `opencode upgrade`
+3. Ensure you have the latest version with `argus upgrade`
 
 ---
 
@@ -226,9 +226,9 @@ Examples:
 
 - `openai/gpt-4.1`
 - `openrouter/google/gemini-2.5-flash`
-- `opencode/kimi-k2`
+- `argus/kimi-k2`
 
-To figure out what models you have access to, run `opencode models`
+To figure out what models you have access to, run `argus models`
 
 ---
 
@@ -242,10 +242,10 @@ To resolve this:
 2. If the issue persists, try clearing your stored configuration:
 
    ```bash
-   rm -rf ~/.local/share/opencode
+   rm -rf ~/.local/share/argus
    ```
 
-   On Windows, press `WIN+R` and delete: `%USERPROFILE%\.local\share\opencode`
+   On Windows, press `WIN+R` and delete: `%USERPROFILE%\.local\share\argus`
 
 3. Re-authenticate with your provider using the `/connect` command in the TUI.
 
@@ -253,21 +253,21 @@ To resolve this:
 
 ### AI_APICallError und Provider-Paket-Probleme
 
-If you encounter API call errors, this may be due to outdated provider packages. opencode dynamically installs provider packages (OpenAI, Anthropic, Google, etc.) as needed and caches them locally.
+If you encounter API call errors, this may be due to outdated provider packages. argus dynamically installs provider packages (OpenAI, Anthropic, Google, etc.) as needed and caches them locally.
 
 To resolve provider package issues:
 
 1. Clear the provider package cache:
 
    ```bash
-   rm -rf ~/.cache/opencode
+   rm -rf ~/.cache/argus
    ```
 
-   On Windows, press `WIN+R` and delete: `%USERPROFILE%\.cache\opencode`
+   On Windows, press `WIN+R` and delete: `%USERPROFILE%\.cache\argus`
 
-2. Restart opencode to reinstall the latest provider packages
+2. Restart argus to reinstall the latest provider packages
 
-This will force opencode to download the most recent versions of provider packages, which often resolves compatibility issues with model parameters and API changes.
+This will force argus to download the most recent versions of provider packages, which often resolves compatibility issues with model parameters and API changes.
 
 ---
 
@@ -298,4 +298,4 @@ Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
 export DISPLAY=:99.0
 ```
 
-opencode will detect if you're using Wayland and prefer `wl-clipboard`, otherwise it will try to find clipboard tools in order of: `xclip` and `xsel`.
+argus will detect if you're using Wayland and prefer `wl-clipboard`, otherwise it will try to find clipboard tools in order of: `xclip` and `xsel`.

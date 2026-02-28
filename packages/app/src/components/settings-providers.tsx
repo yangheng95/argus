@@ -17,7 +17,7 @@ type ProviderSource = "env" | "api" | "config" | "custom"
 type ProviderItem = ReturnType<ReturnType<typeof useProviders>["connected"]>[number]
 
 const PROVIDER_NOTES = [
-  { match: (id: string) => id === "opencode", key: "dialog.provider.opencode.note" },
+  { match: (id: string) => id === "opencode", key: "dialog.provider.argus.note" },
   { match: (id: string) => id === "anthropic", key: "dialog.provider.anthropic.note" },
   { match: (id: string) => id.startsWith("github-copilot"), key: "dialog.provider.copilot.note" },
   { match: (id: string) => id === "openai", key: "dialog.provider.openai.note" },
@@ -189,7 +189,7 @@ export const SettingsProviders: Component = () => {
                       <span class="text-14-medium text-text-strong">{item.name}</span>
                       <Show when={item.id === "opencode"}>
                         <span class="text-14-regular text-text-weak">
-                          {language.t("dialog.provider.opencode.tagline")}
+                          {language.t("dialog.provider.argus.tagline")}
                         </span>
                       </Show>
                       <Show when={item.id === "opencode"}>
@@ -198,7 +198,7 @@ export const SettingsProviders: Component = () => {
                       <Show when={item.id === "opencode-go"}>
                         <>
                           <span class="text-14-regular text-text-weak">
-                            {language.t("dialog.provider.opencodeGo.tagline")}
+                            {language.t("dialog.provider.argusGo.tagline")}
                           </span>
                           <Tag>{language.t("dialog.provider.tag.recommended")}</Tag>
                         </>

@@ -323,7 +323,7 @@ pub fn run() {
 
     #[cfg(all(target_os = "macos", not(debug_assertions)))]
     let _ = std::process::Command::new("killall")
-        .arg("opencode-cli")
+        .arg("argus-cli")
         .output();
 
     let mut builder = tauri::Builder::default()
@@ -456,7 +456,7 @@ async fn initialize(app: AppHandle) {
     let needs_sqlite_migration = !sqlite_file_exists();
     let sqlite_done = needs_sqlite_migration.then(|| {
         tracing::info!(
-            path = %opencode_db_path().expect("failed to get db path").display(),
+            path = %argus_db_path().expect("failed to get db path").display(),
             "Sqlite file not found, waiting for it to be generated"
         );
 
@@ -512,7 +512,7 @@ async fn initialize(app: AppHandle) {
                                 let _ = child.kill();
 
                                 return Err(format!(
-                                    "Failed to spawn OpenCode Server ({err}). Logs:\n{}",
+                                    "Failed to spawn Argus Server ({err}). Logs:\n{}",
                                     get_logs()
                                 ));
                             }
@@ -657,7 +657,7 @@ async fn setup_server_connection(app: AppHandle) -> ServerConnection {
 
     ServerConnection::CLI {
         url: local_url,
-        username: Some("opencode".to_string()),
+        username: Some("argus".to_string()),
         password: Some(password),
         child,
         health_check,
@@ -679,14 +679,14 @@ fn get_sidecar_port() -> u32 {
 }
 
 fn sqlite_file_exists() -> bool {
-    let Ok(path) = opencode_db_path() else {
+    let Ok(path) = argus_db_path() else {
         return true;
     };
 
     path.exists()
 }
 
-fn opencode_db_path() -> Result<PathBuf, &'static str> {
+fn argus_db_path() -> Result<PathBuf, &'static str> {
     let xdg_data_home = env::var_os("XDG_DATA_HOME").filter(|v| !v.is_empty());
 
     let data_home = match xdg_data_home {
@@ -697,7 +697,7 @@ fn opencode_db_path() -> Result<PathBuf, &'static str> {
         }
     };
 
-    Ok(data_home.join("opencode").join("opencode.db"))
+    Ok(data_home.join("argus").join("argus.db"))
 }
 
 // Creates a `once` listener for the specified event and returns a future that resolves

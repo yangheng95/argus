@@ -1,4 +1,4 @@
-ARG REGISTRY=ghcr.io/anomalyco
+ARG REGISTRY=ghcr.io/yangheng95
 FROM ${REGISTRY}/build/base:24.04
 
 SHELL ["/bin/bash", "-lc"]
