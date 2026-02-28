@@ -1,0 +1,19 @@
+{
+  "name": "@opencode-ai/bot",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@opencode-ai/sdk": "workspace:*",
+    "@opencode-ai/slack": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  },
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "typecheck": "tsgo --noEmit"
+  }
+}

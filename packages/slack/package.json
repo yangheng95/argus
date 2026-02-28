@@ -3,12 +3,11 @@
   "version": "1.2.15",
   "type": "module",
   "license": "MIT",
+  "main": "src/index.ts",
   "scripts": {
-    "dev": "bun run src/index.ts",
     "typecheck": "tsgo --noEmit"
   },
   "dependencies": {
-    "@opencode-ai/sdk": "workspace:*",
     "@slack/bolt": "^3.17.1"
   },
   "devDependencies": {
