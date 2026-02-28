@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process"
+import { spawn, execSync } from "node:child_process"
+import path from "node:path"
 import { type Config } from "./gen/types.gen.js"
 
 export type ServerOptions = {
@@ -18,21 +19,36 @@ export type TuiOptions = {
   config?: Config
 }
 
+function resolveArgusCommand(): { cmd: string; prefix: string[]; cwd?: string } {
+  // Try compiled binary first
+  try {
+    execSync("argus --version", { stdio: "ignore", timeout: 3000 })
+    return { cmd: "argus", prefix: [] }
+  } catch {}
+
+  // Fallback: dev mode via bun
+  const root = path.resolve(import.meta.dirname ?? __dirname, "../../../..")
+  const argusDir = path.join(root, "packages/argus")
+  return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: argusDir }
+}
+
 export async function createOpencodeServer(options?: ServerOptions) {
   options = Object.assign(
     {
       hostname: "127.0.0.1",
       port: 4096,
-      timeout: 5000,
+      timeout: 30000,
     },
     options ?? {},
   )
 
-  const args = [`serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
+  const { cmd, prefix, cwd } = resolveArgusCommand()
+  const args = [...prefix, `serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
 
-  const proc = spawn(`opencode`, args, {
+  const proc = spawn(cmd, args, {
     signal: options.signal,
+    cwd,
     env: {
       ...process.env,
       OPENCODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
@@ -48,7 +64,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
       output += chunk.toString()
       const lines = output.split("\n")
       for (const line of lines) {
-        if (line.startsWith("opencode server listening")) {
+        if (line.includes("server listening")) {
           const match = line.match(/on\s+(https?:\/\/[^\s]+)/)
           if (!match) {
             throw new Error(`Failed to parse server url from output: ${line}`)
@@ -91,7 +107,8 @@ export async function createOpencodeServer(options?: ServerOptions) {
 }
 
 export function createOpencodeTui(options?: TuiOptions) {
-  const args = []
+  const { cmd, prefix, cwd } = resolveArgusCommand()
+  const args = [...prefix]
 
   if (options?.project) {
     args.push(`--project=${options.project}`)
@@ -106,9 +123,10 @@ export function createOpencodeTui(options?: TuiOptions) {
     args.push(`--agent=${options.agent}`)
   }
 
-  const proc = spawn(`opencode`, args, {
+  const proc = spawn(cmd, args, {
     signal: options?.signal,
     stdio: "inherit",
+    cwd,
     env: {
       ...process.env,
       OPENCODE_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),

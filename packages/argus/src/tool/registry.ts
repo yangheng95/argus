@@ -28,7 +28,8 @@ import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
 
 import { ApplyPatchTool } from "./apply_patch"
-import { ComputerTool } from "./computer"
+import { ScreenTool } from "./screen"
+import { InputTool } from "./input"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -118,7 +119,8 @@ export namespace ToolRegistry {
       CodeSearchTool,
       SkillTool,
       ApplyPatchTool,
-      ComputerTool,
+      ScreenTool,
+      InputTool,
       ...(Flag.ARGUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.ARGUS_EXPERIMENTAL_PLAN_MODE && Flag.ARGUS_CLIENT === "cli" ? [PlanExitTool] : []),

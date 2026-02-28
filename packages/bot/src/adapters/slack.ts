@@ -1,14 +1,7 @@
 import { App } from "@slack/bolt"
+import type { BotAdapter, MessageHandler } from "../adapter"
 
-export type MessageHandler = (msg: {
-  platform: string
-  channel: string
-  thread: string
-  user: string
-  text: string
-}) => Promise<void>
-
-export class SlackAdapter {
+export class SlackAdapter implements BotAdapter {
   readonly platform = "slack"
   private app: App
   private handler?: MessageHandler
@@ -51,6 +44,16 @@ export class SlackAdapter {
       channel,
       thread_ts: thread,
       text,
+    })
+  }
+
+  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+    await this.app.client.filesUploadV2({
+      channel_id: channel,
+      thread_ts: thread,
+      file: imageBuffer,
+      filename,
+      title: title ?? filename,
     })
   }
 

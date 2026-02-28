@@ -82,4 +82,22 @@ export namespace Mouse {
       throw e
     }
   }
+
+  export async function drag(startX: number, startY: number, endX: number, endY: number): Promise<void> {
+    try {
+      const { mouse, straightTo, Point } = await import("@nut-tree-fork/nut-js")
+      await mouse.move(straightTo(new Point(startX, startY)))
+      await mouse.drag(straightTo(new Point(endX, endY)))
+      log.info("dragged", { startX, startY, endX, endY })
+    } catch (e) {
+      log.error("drag failed", {
+        startX,
+        startY,
+        endX,
+        endY,
+        error: e instanceof Error ? e.message : String(e),
+      })
+      throw e
+    }
+  }
 }

@@ -56,7 +56,8 @@ export namespace Agent {
     const defaults = PermissionNext.fromConfig({
       "*": "allow",
       doom_loop: "ask",
-      computer: "ask",
+      screen: "allow",
+      input: "ask",
       external_directory: {
         "*": "ask",
         ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
@@ -200,6 +201,36 @@ export namespace Agent {
           user,
         ),
         prompt: PROMPT_SUMMARY,
+      },
+      monitor_vision: {
+        name: "monitor_vision",
+        mode: "primary",
+        options: {},
+        native: true,
+        hidden: true,
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            "*": "deny",
+          }),
+          user,
+        ),
+      },
+      monitor_brain: {
+        name: "monitor_brain",
+        mode: "primary",
+        options: {},
+        native: true,
+        hidden: true,
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            "*": "allow",
+            screen: "allow",
+            input: "allow",
+          }),
+          user,
+        ),
       },
     }
 

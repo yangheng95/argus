@@ -83,12 +83,23 @@ export class BotCore {
     })
 
     if (result.error) {
+      console.error("[BotCore] prompt error:", JSON.stringify(result.error).slice(0, 500))
       await adapter.sendMessage(msg.channel, msg.thread, "Sorry, I had trouble processing your message. Please try again.")
       return
     }
 
-    const responseText = formatResponse(result.data.parts)
-    await adapter.sendMessage(msg.channel, msg.thread, responseText)
+    const parts = result.data?.parts
+    if (!parts || parts.length === 0) {
+      console.warn("[BotCore] prompt returned no parts, data:", JSON.stringify(result.data).slice(0, 500))
+      await adapter.sendMessage(msg.channel, msg.thread, "I processed your message but didn't produce a response.")
+      return
+    }
+
+    const response = formatResponse(parts)
+    await adapter.sendMessage(msg.channel, msg.thread, response.text)
+    for (const image of response.images) {
+      await adapter.uploadImage(msg.channel, msg.thread, image.buffer, image.filename, image.title)
+    }
   }
 
   private subscribeEvents(): void {
@@ -98,12 +109,17 @@ export class BotCore {
         if (event.type === "message.part.updated") {
           const part = event.properties.part
           if (part.type === "tool") {
-            const text = formatToolUpdate(part)
-            if (!text) continue
+            const update = formatToolUpdate(part)
+            if (!update.text && update.images.length === 0) continue
 
             for (const session of this.sessions.values()) {
               if (session.sessionId === part.sessionID) {
-                await session.adapter.sendMessage(session.channel, session.thread, text).catch(() => {})
+                if (update.text) {
+                  await session.adapter.sendMessage(session.channel, session.thread, update.text).catch(() => {})
+                }
+                for (const image of update.images) {
+                  await session.adapter.uploadImage(session.channel, session.thread, image.buffer, image.filename, image.title).catch(() => {})
+                }
                 break
               }
             }

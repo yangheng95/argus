@@ -1,5 +1,5 @@
-import { SlackAdapter } from "@opencode-ai/slack"
 import { BotCore } from "./core"
+import { SlackAdapter } from "./adapters/slack"
 
 const bot = new BotCore()
 bot.register(

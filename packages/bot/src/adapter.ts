@@ -3,6 +3,7 @@ export interface BotAdapter {
   start(): Promise<void>
   stop(): Promise<void>
   sendMessage(channel: string, thread: string, text: string): Promise<void>
+  uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void>
   onMessage(handler: MessageHandler): void
 }
 

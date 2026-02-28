@@ -17,6 +17,9 @@ import { PermissionNext } from "@/permission/next"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { SessionProxyMiddleware } from "../../control-plane/session-proxy-middleware"
+import { Monitor } from "../../argus/monitor"
+import { CommandQueue } from "../../argus/brain"
+import { randomBytes } from "crypto"
 
 const log = Log.create({ service: "server" })
 
@@ -760,11 +763,33 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+
+        // When monitor is running, stage user messages into the command queue
+        const monitorStatus = Monitor.status()
+        if (monitorStatus.state === "running" && monitorStatus.config?.brainEnabled) {
+          const textContent = body.parts
+            ?.filter((p: any) => p.type === "text")
+            .map((p: any) => p.text)
+            .join("\n") ?? ""
+
+          if (textContent) {
+            const id = `cmd_${Date.now().toString(36)}_${randomBytes(6).toString("hex")}`
+            CommandQueue.stage({
+              id,
+              timestamp: Date.now(),
+              priority: "normal",
+              source: "user",
+              content: textContent,
+            })
+            return c.json({ staged: true, id })
+          }
+        }
+
         c.status(200)
         c.header("Content-Type", "application/json")
         return stream(c, async (stream) => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
           const msg = await SessionPrompt.prompt({ ...body, sessionID })
           stream.write(JSON.stringify(msg))
         })

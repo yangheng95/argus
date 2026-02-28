@@ -31,6 +31,14 @@ export namespace GUI {
     return Mouse.scroll(direction, amount)
   }
 
+  export async function moveTo(x: number, y: number): Promise<void> {
+    return Mouse.moveTo(x, y)
+  }
+
+  export async function drag(startX: number, startY: number, endX: number, endY: number): Promise<void> {
+    return Mouse.drag(startX, startY, endX, endY)
+  }
+
   export async function paste(text: string): Promise<void> {
     return ClipboardInput.paste(text)
   }
@@ -44,6 +52,10 @@ export namespace GUI {
       typeText,
       pressKey,
       click,
+      doubleClick,
+      rightClick,
+      moveTo,
+      drag,
       scroll,
       paste,
     }
