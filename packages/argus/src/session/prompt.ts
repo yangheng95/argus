@@ -84,8 +84,7 @@ export namespace SessionPrompt {
   )
 
   export function assertNotBusy(sessionID: string) {
-    const match = state()[sessionID]
-    if (match) throw new Session.BusyError(sessionID)
+    if (SessionStatus.get(sessionID).type === "busy") throw new Session.BusyError(sessionID)
   }
 
   export const PromptInput = z.object({
@@ -277,17 +276,20 @@ export namespace SessionPrompt {
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
     if (!abort) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
-        const callbacks = state()[sessionID].callbacks
-        callbacks.push({ resolve, reject })
+        state()[sessionID].callbacks.push({ resolve, reject })
       })
     }
 
-    using _ = defer(() => cancel(sessionID))
+    // First caller also uses callback — loop runs in background and resolves it
+    const firstResult = new Promise<MessageV2.WithParts>((resolve, reject) => {
+      state()[sessionID].callbacks.push({ resolve, reject })
+    })
 
-    // Structured output state
-    // Note: On session resumption, state is reset but outputFormat is preserved
-    // on the user message and will be retrieved from lastUser below
-    let structuredOutput: unknown | undefined
+    // Persistent loop: processes tasks, enters standby between them, resolves
+    // callbacks at each task completion so prompt() callers get their results.
+    void (async () => {
+      try {
+        let structuredOutput: unknown | undefined
 
     let step = 0
     const session = await Session.get(sessionID)
@@ -320,8 +322,21 @@ export namespace SessionPrompt {
         !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
         lastUser.id < lastAssistant.id
       ) {
-        log.info("exiting loop", { sessionID })
-        break
+        // Task complete — deliver result to waiting prompt() callers
+        const lastResult = msgs.find((m) => m.info.id === lastAssistant!.id)
+        if (lastResult) flushCallbacks(sessionID, lastResult)
+
+        SessionCompaction.prune({ sessionID })
+        log.info("entering standby", { sessionID })
+        SessionStatus.set(sessionID, { type: "idle" })
+
+        // Block until a new user message arrives or session is cancelled
+        await waitForUserMessage(sessionID, abort, lastAssistant!.id)
+        if (abort.aborted) break
+
+        step = 0
+        structuredOutput = undefined
+        continue
       }
 
       step++
@@ -711,17 +726,78 @@ export namespace SessionPrompt {
       }
       continue
     }
-    SessionCompaction.prune({ sessionID })
-    for await (const item of MessageV2.stream(sessionID)) {
-      if (item.info.role === "user") continue
-      const queued = state()[sessionID]?.callbacks ?? []
-      for (const q of queued) {
-        q.resolve(item)
+        // Loop exited (abort or fatal break) — flush remaining callbacks
+        SessionCompaction.prune({ sessionID })
+        for await (const item of MessageV2.stream(sessionID)) {
+          if (item.info.role === "user") continue
+          flushCallbacks(sessionID, item)
+          break
+        }
+      } catch (e) {
+        // Reject all pending callbacks on fatal error
+        const s = state()[sessionID]
+        if (s) {
+          for (const q of s.callbacks) q.reject(e)
+          s.callbacks = []
+        }
+      } finally {
+        // Only clean up if we still own this session (not taken over by a new loop)
+        const s = state()[sessionID]
+        if (s?.abort.signal === abort) cancel(sessionID)
       }
-      return item
-    }
-    throw new Error("Impossible")
+    })()
+
+    return firstResult
   })
+
+  /** Resolve all pending prompt() callbacks with the given result */
+  function flushCallbacks(sessionID: string, result: MessageV2.WithParts) {
+    const s = state()[sessionID]
+    if (!s) return
+    for (const q of s.callbacks) q.resolve(result)
+    s.callbacks = []
+  }
+
+  /**
+   * Block until a new user message arrives for this session, or abort fires.
+   *
+   * Uses the "subscribe then check" pattern to avoid the race where a Bus event
+   * fires between entering standby and registering the subscription:
+   *   1. Subscribe to future Bus events
+   *   2. Check the DB for messages that already arrived
+   */
+  function waitForUserMessage(sessionID: string, abort: AbortSignal, afterID: string): Promise<void> {
+    return new Promise<void>((resolve) => {
+      if (abort.aborted) { resolve(); return }
+
+      let settled = false
+      const settle = () => {
+        if (settled) return
+        settled = true
+        unsub()
+        resolve()
+      }
+
+      // 1. Subscribe to future events first
+      const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
+        if (
+          event.properties.info.role === "user" &&
+          event.properties.info.sessionID === sessionID
+        ) {
+          settle()
+        }
+      })
+      abort.addEventListener("abort", settle, { once: true })
+
+      // 2. Then check DB for messages that may have arrived before subscription
+      void (async () => {
+        for await (const item of MessageV2.stream(sessionID)) {
+          if (item.info.id <= afterID) break
+          if (item.info.role === "user") { settle(); return }
+        }
+      })()
+    })
+  }
 
   async function lastModel(sessionID: string) {
     for await (const item of MessageV2.stream(sessionID)) {

@@ -22,11 +22,20 @@ Every task follows this pattern:
 - **ALWAYS click before typing** — text goes to the focused element.
 - **ALWAYS use wait() before screenshot** when expecting UI changes (app opening, page loading).
 - **Coordinates are separate integers** — `{"x": 500, "y": 300}`, NEVER arrays.
-- **ALWAYS describe screenshots** — 每次截图后，必须用文字描述你看到的内容（可见窗口、UI元素、文本、关键坐标）。截图会在下一轮被自动清除，你的文字描述是唯一留存的记录。
+- **ALWAYS describe screenshots** — after each screenshot, describe what you see in text. Screenshots are auto-removed from context next turn; your description is the only surviving record.
 
-## Opening Programs (Windows)
+## Opening Programs
 
+### Windows
 Press `win` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
+
+### macOS
+Press `cmd+space` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
+
+### Linux
+Press `super` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
+
+TIP: Check the platform info in the first screenshot output to know which OS you're on.
 
 ## If Screen Hasn't Changed
 

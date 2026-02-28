@@ -545,13 +545,9 @@ export namespace MessageV2 {
       return { type: "json", value: output as never }
     }
 
-    // Find the last assistant message ID so we can strip old screenshot images
-    const lastAssistantID = (() => {
-      for (let i = input.length - 1; i >= 0; i--) {
-        if (input[i].info.role === "assistant") return input[i].info.id
-      }
-      return undefined
-    })()
+    // Preserve screenshots only in the latest assistant message (model hasn't described them yet);
+    // older screenshots are stripped — the model's text description serves as the lasting record.
+    const lastAssistantID = input.findLast((m) => m.info.role === "assistant")?.info.id
 
     for (const msg of input) {
       if (msg.parts.length === 0) continue
@@ -625,10 +621,14 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
-              const outputText = part.state.time.compacted ? "[Old tool result content cleared]" : part.state.output
               const isOldScreenshot = part.tool === "screen"
-                && part.state.input?.action === "screenshot"
+                && part.state.input.action === "screenshot"
                 && msg.info.id !== lastAssistantID
+              const outputText = part.state.time.compacted
+                ? "[Old tool result content cleared]"
+                : isOldScreenshot
+                  ? "[Screenshot removed from context — refer to your earlier text description of this screenshot]"
+                  : part.state.output
               const attachments = (part.state.time.compacted || isOldScreenshot)
                 ? []
                 : (part.state.attachments ?? [])

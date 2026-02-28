@@ -93,11 +93,14 @@ export const ScreenTool = Tool.define("screen", {
           ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).`
           : "Coordinates are screen-absolute."
 
+        const platformName = process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : "Windows"
+        const shortcutHint = process.platform === "darwin" ? "Use Cmd for shortcuts (Cmd+C, Cmd+V, etc.)." : "Use Ctrl for shortcuts (Ctrl+C, Ctrl+V, etc.)."
+
         // If screen hasn't changed, skip sending the image to save vision tokens
         if (isDuplicate) {
           return {
             title: `Screenshot unchanged (${result.width}x${result.height})`,
-            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} No need to re-analyze — use the previous screenshot as reference. If you are waiting for something to load, try using input.wait first, then screenshot again.`,
+            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze — use the previous screenshot as reference. If you are waiting for something to load, try using input.wait first, then screenshot again.`,
             metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: true },
           }
         }
@@ -108,7 +111,7 @@ export const ScreenTool = Tool.define("screen", {
 
         return {
           title: `Screenshot captured (${result.width}x${result.height})`,
-          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} The image has coordinate tick marks along the edges for precise positioning.`,
+          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint} The image has coordinate tick marks along the edges for precise positioning.`,
           metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false },
           attachments: [
             {
