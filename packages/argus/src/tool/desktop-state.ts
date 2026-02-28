@@ -1,7 +1,11 @@
 import { Coordinates } from "../argus/gui/coordinates"
+import { Instance } from "../project/instance"
+
+const desktopState = Instance.state((): { bounds: Coordinates.WindowBounds | null } => ({
+  bounds: null,
+}))
 
 export namespace DesktopState {
-  let bounds: Coordinates.WindowBounds | null = null
-  export function getBounds() { return bounds }
-  export function setBounds(b: Coordinates.WindowBounds | null) { bounds = b }
+  export function getBounds() { return desktopState().bounds }
+  export function setBounds(b: Coordinates.WindowBounds | null) { desktopState().bounds = b }
 }

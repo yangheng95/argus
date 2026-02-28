@@ -5,6 +5,9 @@ import type { StagedCommand } from "../monitor/types"
 
 const log = Log.create({ service: "monitor-queue" })
 
+// FIXME: module-level state, needs per-session scoping via Instance.state()
+const MAX_QUEUE_DEPTH = 100
+
 const PRIORITY_ORDER: Record<StagedCommand["priority"], number> = {
   urgent: 0,
   high: 1,
@@ -17,6 +20,17 @@ export namespace CommandQueue {
   const listeners: Array<() => void> = []
 
   export function stage(command: StagedCommand): void {
+    if (queue.length >= MAX_QUEUE_DEPTH) {
+      // Drop the lowest-priority item from the tail
+      const dropIdx = queue.findLastIndex(c => c.priority === "low")
+      if (dropIdx !== -1) {
+        queue.splice(dropIdx, 1)
+      } else {
+        // All high priority — reject new item
+        return
+      }
+    }
+
     queue.push(command)
     // Sort: lower priority number = higher priority, same priority = FIFO (stable sort)
     queue.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])

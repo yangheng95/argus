@@ -112,6 +112,9 @@ export namespace Monitor {
     const { Brain } = await import("../brain")
     Brain.reset()
 
+    const { CommandQueue } = await import("../brain/queue")
+    CommandQueue.clear()
+
     await Bus.publish(MonitorEvent.Stopped, { reason: "manual" })
   }
 
@@ -152,6 +155,111 @@ export namespace Monitor {
     }
   }
 
+  async function runTick(s: MonitorStateData, config: MonitorConfig): Promise<void> {
+    // Check abort signal
+    if (s.abort?.signal.aborted) return
+
+    // Capture screenshot
+    const capture = await Capture.take({
+      mode: config.captureMode === "window" ? "window" : "fullscreen",
+      windowTitle: config.windowTitle,
+      outputDir: config.screenshotDir,
+    })
+
+    if (!capture.rawBuffer) {
+      log.warn("capture did not produce rawBuffer, skipping diff")
+      return
+    }
+
+    const currentData: CaptureData = {
+      rawBuffer: capture.rawBuffer,
+      width: capture.width,
+      height: capture.height,
+      timestamp: capture.timestamp,
+      pngBuffer: capture.buffer,
+      path: capture.path,
+    }
+
+    await Bus.publish(MonitorEvent.CaptureCompleted, {
+      timestamp: capture.timestamp,
+      width: capture.width,
+      height: capture.height,
+      path: capture.path,
+    })
+
+    // First capture — just store it
+    if (!s.previousCapture) {
+      s.previousCapture = currentData
+      log.info("first capture stored", {
+        width: capture.width,
+        height: capture.height,
+      })
+      return
+    }
+
+    // Compare with previous capture
+    const diffResult = await ScreenDiff.compare(
+      {
+        rawBuffer: s.previousCapture.rawBuffer,
+        width: s.previousCapture.width,
+        height: s.previousCapture.height,
+        timestamp: s.previousCapture.timestamp,
+      },
+      {
+        rawBuffer: currentData.rawBuffer,
+        width: currentData.width,
+        height: currentData.height,
+        timestamp: currentData.timestamp,
+      },
+      { diffThreshold: config.diffThreshold },
+    )
+
+    if (!diffResult.changed) {
+      await Bus.publish(MonitorEvent.ChangeNone, {
+        timestamp: currentData.timestamp,
+      })
+      // Still update previous capture to keep reference fresh
+      s.previousCapture = currentData
+      return
+    }
+
+    // Change detected
+    log.info("change detected", {
+      diffPercent: diffResult.diffPercent.toFixed(2),
+      diffPixels: diffResult.diffPixels,
+    })
+
+    await Bus.publish(MonitorEvent.ChangeDetected, {
+      diffPercent: diffResult.diffPercent,
+      diffPixels: diffResult.diffPixels,
+      totalPixels: diffResult.totalPixels,
+      timestamp: currentData.timestamp,
+    })
+
+    // If brain is enabled, delegate analysis
+    if (config.brainEnabled && s.abort && !s.abort.signal.aborted) {
+      try {
+        const { Brain } = await import("../brain")
+        await Brain.processChange({
+          screenshot: currentData.pngBuffer,
+          diffResult,
+          config,
+          abort: s.abort.signal,
+        })
+      } catch (err) {
+        log.error("brain processing failed", {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+
+    // Cleanup old screenshots
+    await Capture.cleanup(config.screenshotDir, config.maxScreenshots).catch(() => {})
+
+    // Update previous capture
+    s.previousCapture = currentData
+  }
+
   async function tick(): Promise<void> {
     const s = state()
 
@@ -160,116 +268,23 @@ export namespace Monitor {
 
     s.processing = true
 
+    const config = resolveConfig(s.config ?? undefined)
+    const TICK_TIMEOUT_MS = Math.max(config.captureInterval * 6, 30_000) // at least 30s
+
     try {
-      const config = s.config
-      if (!config) return
-
-      // Check abort signal
-      if (s.abort?.signal.aborted) return
-
-      // Capture screenshot
-      const capture = await Capture.take({
-        mode: config.captureMode === "window" ? "window" : "fullscreen",
-        windowTitle: config.windowTitle,
-        outputDir: config.screenshotDir,
-      })
-
-      if (!capture.rawBuffer) {
-        log.warn("capture did not produce rawBuffer, skipping diff")
-        return
-      }
-
-      const currentData: CaptureData = {
-        rawBuffer: capture.rawBuffer,
-        width: capture.width,
-        height: capture.height,
-        timestamp: capture.timestamp,
-        pngBuffer: capture.buffer,
-        path: capture.path,
-      }
-
-      await Bus.publish(MonitorEvent.CaptureCompleted, {
-        timestamp: capture.timestamp,
-        width: capture.width,
-        height: capture.height,
-        path: capture.path,
-      })
-
-      // First capture — just store it
-      if (!s.previousCapture) {
-        s.previousCapture = currentData
-        log.info("first capture stored", {
-          width: capture.width,
-          height: capture.height,
-        })
-        return
-      }
-
-      // Compare with previous capture
-      const diffResult = await ScreenDiff.compare(
-        {
-          rawBuffer: s.previousCapture.rawBuffer,
-          width: s.previousCapture.width,
-          height: s.previousCapture.height,
-          timestamp: s.previousCapture.timestamp,
-        },
-        {
-          rawBuffer: currentData.rawBuffer,
-          width: currentData.width,
-          height: currentData.height,
-          timestamp: currentData.timestamp,
-        },
-        { diffThreshold: config.diffThreshold },
-      )
-
-      if (!diffResult.changed) {
-        await Bus.publish(MonitorEvent.ChangeNone, {
-          timestamp: currentData.timestamp,
-        })
-        // Still update previous capture to keep reference fresh
-        s.previousCapture = currentData
-        return
-      }
-
-      // Change detected
-      log.info("change detected", {
-        diffPercent: diffResult.diffPercent.toFixed(2),
-        diffPixels: diffResult.diffPixels,
-      })
-
-      await Bus.publish(MonitorEvent.ChangeDetected, {
-        diffPercent: diffResult.diffPercent,
-        diffPixels: diffResult.diffPixels,
-        totalPixels: diffResult.totalPixels,
-        timestamp: currentData.timestamp,
-      })
-
-      // If brain is enabled, delegate analysis
-      if (config.brainEnabled && s.abort && !s.abort.signal.aborted) {
-        try {
-          const { Brain } = await import("../brain")
-          await Brain.processChange({
-            screenshot: currentData.pngBuffer,
-            diffResult,
-            config,
-            abort: s.abort.signal,
-          })
-        } catch (err) {
-          log.error("brain processing failed", {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-
-      // Cleanup old screenshots
-      await Capture.cleanup(config.screenshotDir, config.maxScreenshots).catch(() => {})
-
-      // Update previous capture
-      s.previousCapture = currentData
-    } catch (err) {
-      log.error("tick failed", {
-        error: err instanceof Error ? err.message : String(err),
-      })
+      await Promise.race([
+        runTick(s, config),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`tick timed out after ${TICK_TIMEOUT_MS}ms`)), TICK_TIMEOUT_MS)
+        ),
+      ])
+    } catch (err: any) {
+      log.error("tick failed", { error: err.message ?? String(err) })
+      await Bus.publish(MonitorEvent.Anomaly, {
+        message: err.message ?? String(err),
+        severity: "high",
+        timestamp: Date.now(),
+      }).catch(() => {})
     } finally {
       s.processing = false
     }

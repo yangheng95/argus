@@ -80,9 +80,9 @@ export namespace Capture {
       throw new Error(`Window with id ${windowId} no longer exists`)
     }
 
-    const image = native.captureImageSync()
-    const buffer = Buffer.from(image.toPngSync())
-    const rawBuffer = Buffer.from(image.toRawSync())
+    const image = await native.captureImage()
+    const buffer = Buffer.from(await image.toPng())
+    const rawBuffer = Buffer.from(await image.toRaw())
     await Filesystem.write(filePath, buffer, undefined)
 
     const bounds: WindowBounds = {
@@ -121,9 +121,9 @@ export namespace Capture {
     }
 
     const primary = monitors[0]
-    const image = primary.captureImageSync()
-    const buffer = Buffer.from(image.toPngSync())
-    const rawBuffer = Buffer.from(image.toRawSync())
+    const image = await primary.captureImage()
+    const buffer = Buffer.from(await image.toPng())
+    const rawBuffer = Buffer.from(await image.toRaw())
     await Filesystem.write(filePath, buffer, undefined)
 
     log.info("captured fullscreen", {

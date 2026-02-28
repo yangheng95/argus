@@ -1,4 +1,9 @@
 import { Log } from "../../util/log"
+import { Instance } from "../../project/instance"
+
+const windowState = Instance.state((): { binding: WindowManager.WindowBinding | null } => ({
+  binding: null,
+}))
 
 export namespace WindowManager {
   const log = Log.create({ service: "argus-window" })
@@ -20,8 +25,6 @@ export namespace WindowManager {
     matchTitle: string
     info: WindowInfo
   }
-
-  let _binding: WindowBinding | null = null
 
   export async function listWindows(includeMinimized = false): Promise<WindowInfo[]> {
     const { Window } = await import("node-screenshots")
@@ -82,33 +85,34 @@ export namespace WindowManager {
       throw new Error(`No window found matching "${titleQuery}"`)
     }
 
-    _binding = {
+    windowState().binding = {
       windowId: info.id,
       matchTitle: titleQuery,
       info,
     }
 
     log.info("bound window", { windowId: info.id, title: info.title, appName: info.appName })
-    return _binding
+    return windowState().binding!
   }
 
   export function unbind(): void {
-    log.info("unbound window", { previous: _binding?.info.title ?? "none" })
-    _binding = null
+    log.info("unbound window", { previous: windowState().binding?.info.title ?? "none" })
+    windowState().binding = null
   }
 
   export async function getBinding(): Promise<WindowBinding | null> {
-    if (!_binding) return null
+    const ws = windowState()
+    if (!ws.binding) return null
 
     // Refresh window position — the window may have moved or been closed
-    const native = await getNativeWindow(_binding.windowId)
+    const native = await getNativeWindow(ws.binding.windowId)
     if (!native) {
-      log.warn("bound window disappeared", { windowId: _binding.windowId, title: _binding.matchTitle })
-      _binding = null
+      log.warn("bound window disappeared", { windowId: ws.binding.windowId, title: ws.binding.matchTitle })
+      ws.binding = null
       return null
     }
 
-    _binding.info = {
+    ws.binding.info = {
       id: native.id(),
       title: native.title(),
       appName: native.appName(),
@@ -120,10 +124,10 @@ export namespace WindowManager {
       isFocused: native.isFocused(),
     }
 
-    return _binding
+    return ws.binding
   }
 
   export function isBound(): boolean {
-    return _binding !== null
+    return windowState().binding !== null
   }
 }

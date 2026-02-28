@@ -118,6 +118,7 @@ export namespace Brain {
         pendingCommands: CommandQueue.list(),
         actionHistory: actionHistory.slice(-10),
         config: input.config,
+        abort: input.abort,
       })
 
       if (input.abort.aborted) return
@@ -191,6 +192,7 @@ export namespace Brain {
     pendingCommands: Array<{ id: string; priority: string; content: string }>
     actionHistory: ActionHistoryEntry[]
     config: MonitorConfig
+    abort?: AbortSignal
   }): Promise<BrainDecision> {
     const modelRef = context.config.brainModel ?? (await Provider.defaultModel())
     const model = await Provider.getModel(modelRef.providerID, modelRef.modelID)
@@ -208,6 +210,7 @@ export namespace Brain {
           ],
           schema: BrainDecisionSchema,
           temperature: 0.1,
+          abortSignal: context.abort,
         }),
       { maxAttempts: 3, baseDelayMs: 1000, label: "brain.decide" },
     )
