@@ -10,7 +10,7 @@ import { ModelsDev } from "../../src/provider/models"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
 import type { Agent } from "../../src/agent/agent"
-import type { MessageV2 } from "../../src/session/message-v2"
+import type { MessageV2 } from "../../src/session/message"
 
 describe("session.llm.hasToolCalls", () => {
   test("returns false for empty messages array", () => {

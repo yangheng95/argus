@@ -7,7 +7,7 @@ import { Instance } from "../project/instance"
 import { Flag } from "@/flag/flag"
 import { Log } from "../util/log"
 import { Glob } from "../util/glob"
-import type { MessageV2 } from "./message-v2"
+import type { MessageV2 } from "./message"
 
 const log = Log.create({ service: "instruction" })
 

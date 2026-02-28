@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test"
 import { extractResponseText, formatPromptTooLargeError } from "../../src/cli/cmd/github"
-import type { MessageV2 } from "../../src/session/message-v2"
+import type { MessageV2 } from "../../src/session/message"
 
 // Helper to create minimal valid parts
 function createTextPart(text: string): MessageV2.Part {

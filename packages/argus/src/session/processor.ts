@@ -1,4 +1,4 @@
-import { MessageV2 } from "./message-v2"
+import { MessageV2 } from "./message"
 import { Log } from "@/util/log"
 import { Identifier } from "@/id/id"
 import { Session } from "."

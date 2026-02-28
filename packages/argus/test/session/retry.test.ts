@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import type { NamedError } from "@opencode-ai/util/error"
 import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"
-import { MessageV2 } from "../../src/session/message-v2"
+import { MessageV2 } from "../../src/session/message"
 
 function apiError(headers?: Record<string, string>): MessageV2.APIError {
   return new MessageV2.APIError({
@@ -123,7 +123,7 @@ describe("session.retry.retryable", () => {
   })
 })
 
-describe("session.message-v2.fromError", () => {
+describe("session.message.fromError", () => {
   test.concurrent(
     "converts ECONNRESET socket errors to retryable APIError",
     async () => {

@@ -1,5 +1,5 @@
 import type { NamedError } from "@opencode-ai/util/error"
-import { MessageV2 } from "./message-v2"
+import { MessageV2 } from "./message"
 import { iife } from "@/util/iife"
 
 export namespace SessionRetry {

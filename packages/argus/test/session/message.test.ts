@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { APICallError } from "ai"
-import { MessageV2 } from "../../src/session/message-v2"
+import { MessageV2 } from "../../src/session/message"
 import type { Provider } from "../../src/provider/provider"
 
 const sessionID = "session"
@@ -103,7 +103,7 @@ function basePart(messageID: string, id: string) {
   }
 }
 
-describe("session.message-v2.toModelMessage", () => {
+describe("session.message.toModelMessage", () => {
   test("filters out messages with no parts", () => {
     const input: MessageV2.WithParts[] = [
       {
@@ -786,7 +786,7 @@ describe("session.message-v2.toModelMessage", () => {
   })
 })
 
-describe("session.message-v2.fromError", () => {
+describe("session.message.fromError", () => {
   test("serializes context_length_exceeded as ContextOverflowError", () => {
     const input = {
       type: "error",

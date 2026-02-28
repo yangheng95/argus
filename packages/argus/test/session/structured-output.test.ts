@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { MessageV2 } from "../../src/session/message-v2"
+import { MessageV2 } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
 
 describe("structured-output.OutputFormat", () => {

@@ -25,7 +25,7 @@ import { Session } from "../../session"
 import { Identifier } from "../../id/id"
 import { Provider } from "../../provider/provider"
 import { Bus } from "../../bus"
-import { MessageV2 } from "../../session/message-v2"
+import { MessageV2 } from "../../session/message"
 import { SessionPrompt } from "@/session/prompt"
 import { $ } from "bun"
 
