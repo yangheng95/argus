@@ -1,3 +1,11 @@
+export interface AudioAttachment {
+  data: Buffer
+  mime: string
+  filename?: string
+  size: number
+  duration?: number
+}
+
 export interface BotAdapter {
   readonly platform: string
   start(): Promise<void>
@@ -13,6 +21,7 @@ export interface IncomingMessage {
   thread: string
   user: string
   text: string
+  audio?: AudioAttachment
 }
 
 export type MessageHandler = (msg: IncomingMessage) => Promise<void>

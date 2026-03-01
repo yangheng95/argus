@@ -63,6 +63,15 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
+  MonitorCommandStageErrors,
+  MonitorCommandStageResponses,
+  MonitorPauseResponses,
+  MonitorQueueListResponses,
+  MonitorResumeResponses,
+  MonitorStartErrors,
+  MonitorStartResponses,
+  MonitorStatusResponses,
+  MonitorStopResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -3150,6 +3159,201 @@ export class Tui extends HeyApiClient {
   }
 }
 
+export class Command extends HeyApiClient {
+  /**
+   * Stage command
+   *
+   * Stage a command for the monitor brain to process.
+   */
+  public stage<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      content?: string
+      priority?: "urgent" | "high" | "normal" | "low"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "content" },
+            { in: "body", key: "priority" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<MonitorCommandStageResponses, MonitorCommandStageErrors, ThrowOnError>(
+      {
+        url: "/monitor/command",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+}
+
+export class Queue extends HeyApiClient {
+  /**
+   * List queued commands
+   *
+   * List all commands currently in the staging queue.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<MonitorQueueListResponses, unknown, ThrowOnError>({
+      url: "/monitor/queue",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Monitor extends HeyApiClient {
+  /**
+   * Get monitor status
+   *
+   * Retrieve the current status of the screen monitor.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<MonitorStatusResponses, unknown, ThrowOnError>({
+      url: "/monitor/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Start monitor
+   *
+   * Start the screen monitor with optional configuration overrides.
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      captureInterval?: number
+      diffThreshold?: number
+      autonomyLevel?: 0 | 1 | 2 | 3
+      captureMode?: "window" | "fullscreen"
+      windowTitle?: string
+      brainEnabled?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "captureInterval" },
+            { in: "body", key: "diffThreshold" },
+            { in: "body", key: "autonomyLevel" },
+            { in: "body", key: "captureMode" },
+            { in: "body", key: "windowTitle" },
+            { in: "body", key: "brainEnabled" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<MonitorStartResponses, MonitorStartErrors, ThrowOnError>({
+      url: "/monitor/start",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Stop monitor
+   *
+   * Stop the screen monitor.
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<MonitorStopResponses, unknown, ThrowOnError>({
+      url: "/monitor/stop",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Pause monitor
+   *
+   * Pause the screen monitor without stopping it.
+   */
+  public pause<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<MonitorPauseResponses, unknown, ThrowOnError>({
+      url: "/monitor/pause",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Resume monitor
+   *
+   * Resume a paused screen monitor.
+   */
+  public resume<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<MonitorResumeResponses, unknown, ThrowOnError>({
+      url: "/monitor/resume",
+      ...options,
+      ...params,
+    })
+  }
+
+  private _command?: Command
+  get command(): Command {
+    return (this._command ??= new Command({ client: this.client }))
+  }
+
+  private _queue?: Queue
+  get queue(): Queue {
+    return (this._queue ??= new Queue({ client: this.client }))
+  }
+}
+
 export class Instance extends HeyApiClient {
   /**
    * Dispose instance
@@ -3213,7 +3417,7 @@ export class Vcs extends HeyApiClient {
   }
 }
 
-export class Command extends HeyApiClient {
+export class Command2 extends HeyApiClient {
   /**
    * List commands
    *
@@ -3473,6 +3677,11 @@ export class OpencodeClient extends HeyApiClient {
     return (this._tui ??= new Tui({ client: this.client }))
   }
 
+  private _monitor?: Monitor
+  get monitor(): Monitor {
+    return (this._monitor ??= new Monitor({ client: this.client }))
+  }
+
   private _instance?: Instance
   get instance(): Instance {
     return (this._instance ??= new Instance({ client: this.client }))
@@ -3488,9 +3697,9 @@ export class OpencodeClient extends HeyApiClient {
     return (this._vcs ??= new Vcs({ client: this.client }))
   }
 
-  private _command?: Command
-  get command(): Command {
-    return (this._command ??= new Command({ client: this.client }))
+  private _command?: Command2
+  get command(): Command2 {
+    return (this._command ??= new Command2({ client: this.client }))
   }
 
   private _app?: App

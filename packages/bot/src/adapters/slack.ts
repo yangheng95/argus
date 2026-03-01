@@ -1,15 +1,17 @@
 import { App } from "@slack/bolt"
-import type { BotAdapter, MessageHandler } from "../adapter"
+import type { AudioAttachment, BotAdapter, MessageHandler } from "../adapter"
 
 export class SlackAdapter implements BotAdapter {
   readonly platform = "slack"
   private app: App
+  private token: string
   private handler?: MessageHandler
   private botUserId?: string
   /** Deduplicate: Slack Socket Mode can deliver the same message event twice */
   private processedMessages = new Set<string>()
 
   constructor(opts: { token: string; signingSecret?: string; appToken: string }) {
+    this.token = opts.token
     this.app = new App({
       token: opts.token,
       signingSecret: opts.signingSecret ?? "",
@@ -24,9 +26,52 @@ export class SlackAdapter implements BotAdapter {
     console.log(`[Slack] Bot user ID: ${this.botUserId}`)
 
     this.app.message(async ({ message }) => {
-      if (message.subtype || !("text" in message) || !message.text) return
+      // Allow file_share subtype (voice messages), block other subtypes
+      if (message.subtype && message.subtype !== "file_share") return
       if ("user" in message && message.user === this.botUserId) return
       if (!this.handler) return
+
+      // Extract text (may be empty for voice-only messages)
+      const text = ("text" in message ? message.text : undefined) ?? ""
+
+      // Detect audio attachments from message files
+      let audio: AudioAttachment | undefined
+      const files = (message as any).files as Array<{
+        mimetype: string
+        url_private: string
+        name?: string
+        size: number
+        duration_ms?: number
+      }> | undefined
+
+      if (files) {
+        const audioFile = files.find((f) => f.mimetype?.startsWith("audio/"))
+        if (audioFile) {
+          try {
+            const res = await fetch(audioFile.url_private, {
+              headers: { Authorization: `Bearer ${this.token}` },
+              signal: AbortSignal.timeout(30_000),
+            })
+            if (res.ok) {
+              const buffer = Buffer.from(await res.arrayBuffer())
+              audio = {
+                data: buffer,
+                mime: audioFile.mimetype,
+                filename: audioFile.name,
+                size: buffer.length,
+                duration: audioFile.duration_ms ? audioFile.duration_ms / 1000 : undefined,
+              }
+            } else {
+              console.error(`[Slack] Failed to download audio: ${res.status}`)
+            }
+          } catch (err) {
+            console.error("[Slack] Audio download error:", err)
+          }
+        }
+      }
+
+      // Skip if no text and no audio
+      if (!text && !audio) return
 
       // Deduplicate by message ts — Slack Socket Mode delivers thread events twice
       const msgTs = message.ts
@@ -46,7 +91,8 @@ export class SlackAdapter implements BotAdapter {
         channel,
         thread,
         user: ("user" in message ? message.user : undefined) ?? "unknown",
-        text: message.text,
+        text,
+        audio,
       })
     })
 

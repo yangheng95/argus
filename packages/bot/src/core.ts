@@ -2,6 +2,7 @@ import { createOpencode, type OpencodeClient } from "@opencode-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { SlackAdapter } from "./adapters/slack"
 import { formatToolUpdate } from "./format"
+import type { STTPipeline } from "./stt/pipeline"
 
 interface SessionEntry {
   sessionId: string
@@ -27,8 +28,17 @@ export class BotCore {
   private userMessageIds = new Set<string>()
   /** Set to false by stop() to terminate the reconnect loop */
   private running = false
+  private stt?: STTPipeline
 
   constructor(private options?: BotCoreOptions) {}
+
+  setSTT(pipeline: STTPipeline): void {
+    this.stt = pipeline
+  }
+
+  get adapterCount(): number {
+    return this.adapters.length
+  }
 
   register(adapter: BotAdapter): this {
     this.adapters.push(adapter)
@@ -63,6 +73,27 @@ export class BotCore {
     const adapter = this.adapters.find((a) => a.platform === msg.platform)
     if (!adapter) return
 
+    // --- Voice message transcription ---
+    let text = msg.text
+    if (msg.audio) {
+      if (!this.stt || !this.stt.isAvailable) {
+        await adapter.sendMessage(msg.channel, msg.thread, "Voice messages are not supported (no STT provider configured).")
+        if (!text) return
+      } else {
+        const result = await this.stt.transcribe(msg.audio)
+        if (result) {
+          const prefix = `[Voice message transcript]: ${result.text}`
+          text = text ? `${prefix}\n\n${text}` : prefix
+          console.log(`[BotCore] Transcribed voice (${result.provider}, ${result.durationMs}ms)`)
+        } else {
+          await adapter.sendMessage(msg.channel, msg.thread, "Failed to transcribe voice message.")
+          if (!text) return
+        }
+      }
+    }
+
+    if (!text) return
+
     let session = this.sessions.get(threadKey)
 
     if (!session) {
@@ -90,7 +121,7 @@ export class BotCore {
     // Use promptAsync to bypass monitor command queue and execute directly.
     const result = await this.client.session.promptAsync({
       path: { id: session.sessionId },
-      body: { parts: [{ type: "text", text: msg.text }] },
+      body: { parts: [{ type: "text", text }] },
     })
 
     if (result.error) {

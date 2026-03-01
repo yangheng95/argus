@@ -1,0 +1,7 @@
+export type { AudioBuffer, STTConfig, STTProvider, STTResult } from "./types"
+export { STTPipeline } from "./pipeline"
+export { GroqProvider } from "./providers/groq"
+export { OpenAIWhisperProvider } from "./providers/openai-whisper"
+export { DeepgramProvider } from "./providers/deepgram"
+export { GoogleGeminiProvider } from "./providers/google-gemini"
+export { LocalCLIProvider } from "./providers/local-cli"

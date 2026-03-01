@@ -916,6 +916,127 @@ export type EventWorkspaceFailed = {
   }
 }
 
+export type EventMonitorStarted = {
+  type: "monitor.started"
+  properties: {
+    captureInterval: number
+    diffThreshold: number
+    autonomyLevel: number
+  }
+}
+
+export type EventMonitorStopped = {
+  type: "monitor.stopped"
+  properties: {
+    reason?: string
+  }
+}
+
+export type EventMonitorPaused = {
+  type: "monitor.paused"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventMonitorResumed = {
+  type: "monitor.resumed"
+  properties: {
+    [key: string]: unknown
+  }
+}
+
+export type EventMonitorCaptureCompleted = {
+  type: "monitor.capture.completed"
+  properties: {
+    timestamp: number
+    width: number
+    height: number
+    path: string
+  }
+}
+
+export type EventMonitorChangeDetected = {
+  type: "monitor.change.detected"
+  properties: {
+    diffPercent: number
+    diffPixels: number
+    totalPixels: number
+    timestamp: number
+  }
+}
+
+export type EventMonitorChangeNone = {
+  type: "monitor.change.none"
+  properties: {
+    timestamp: number
+  }
+}
+
+export type EventMonitorVisionAnalysis = {
+  type: "monitor.vision.analysis"
+  properties: {
+    timestamp: number
+    description: string
+    changeType: string
+    severity: string
+    regions: Array<{
+      x: number
+      y: number
+      w: number
+      h: number
+      label: string
+    }>
+  }
+}
+
+export type EventMonitorBrainDecision = {
+  type: "monitor.brain.decision"
+  properties: {
+    action: string
+    reasoning: string
+    timestamp: number
+  }
+}
+
+export type EventMonitorBrainAction = {
+  type: "monitor.brain.action"
+  properties: {
+    action: string
+    result?: string
+    timestamp: number
+  }
+}
+
+export type EventMonitorCommandStaged = {
+  type: "monitor.command.staged"
+  properties: {
+    id: string
+    priority: string
+    source: string
+    content: string
+    timestamp: number
+  }
+}
+
+export type EventMonitorCommandProcessed = {
+  type: "monitor.command.processed"
+  properties: {
+    id: string
+    result?: string
+    timestamp: number
+  }
+}
+
+export type EventMonitorAnomaly = {
+  type: "monitor.anomaly"
+  properties: {
+    message: string
+    severity: string
+    timestamp: number
+  }
+}
+
 export type Pty = {
   id: string
   title: string
@@ -997,6 +1118,19 @@ export type Event =
   | EventWorktreeFailed
   | EventWorkspaceReady
   | EventWorkspaceFailed
+  | EventMonitorStarted
+  | EventMonitorStopped
+  | EventMonitorPaused
+  | EventMonitorResumed
+  | EventMonitorCaptureCompleted
+  | EventMonitorChangeDetected
+  | EventMonitorChangeNone
+  | EventMonitorVisionAnalysis
+  | EventMonitorBrainDecision
+  | EventMonitorBrainAction
+  | EventMonitorCommandStaged
+  | EventMonitorCommandProcessed
+  | EventMonitorAnomaly
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
@@ -4678,6 +4812,179 @@ export type TuiControlResponseResponses = {
 }
 
 export type TuiControlResponseResponse = TuiControlResponseResponses[keyof TuiControlResponseResponses]
+
+export type MonitorStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/monitor/status"
+}
+
+export type MonitorStatusResponses = {
+  /**
+   * Monitor status
+   */
+  200: {
+    state: "stopped" | "running" | "paused"
+    config: {
+      enabled: boolean
+      captureInterval: number
+      diffThreshold: number
+      autonomyLevel: number
+      captureMode: string
+      brainEnabled: boolean
+    } | null
+  }
+}
+
+export type MonitorStatusResponse = MonitorStatusResponses[keyof MonitorStatusResponses]
+
+export type MonitorStartData = {
+  body?: {
+    captureInterval?: number
+    diffThreshold?: number
+    autonomyLevel?: 0 | 1 | 2 | 3
+    captureMode?: "window" | "fullscreen"
+    windowTitle?: string
+    brainEnabled?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/monitor/start"
+}
+
+export type MonitorStartErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type MonitorStartError = MonitorStartErrors[keyof MonitorStartErrors]
+
+export type MonitorStartResponses = {
+  /**
+   * Monitor started
+   */
+  200: boolean
+}
+
+export type MonitorStartResponse = MonitorStartResponses[keyof MonitorStartResponses]
+
+export type MonitorStopData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/monitor/stop"
+}
+
+export type MonitorStopResponses = {
+  /**
+   * Monitor stopped
+   */
+  200: boolean
+}
+
+export type MonitorStopResponse = MonitorStopResponses[keyof MonitorStopResponses]
+
+export type MonitorPauseData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/monitor/pause"
+}
+
+export type MonitorPauseResponses = {
+  /**
+   * Monitor paused
+   */
+  200: boolean
+}
+
+export type MonitorPauseResponse = MonitorPauseResponses[keyof MonitorPauseResponses]
+
+export type MonitorResumeData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/monitor/resume"
+}
+
+export type MonitorResumeResponses = {
+  /**
+   * Monitor resumed
+   */
+  200: boolean
+}
+
+export type MonitorResumeResponse = MonitorResumeResponses[keyof MonitorResumeResponses]
+
+export type MonitorCommandStageData = {
+  body?: {
+    content: string
+    priority?: "urgent" | "high" | "normal" | "low"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/monitor/command"
+}
+
+export type MonitorCommandStageErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type MonitorCommandStageError = MonitorCommandStageErrors[keyof MonitorCommandStageErrors]
+
+export type MonitorCommandStageResponses = {
+  /**
+   * Command staged
+   */
+  200: {
+    staged: boolean
+    id: string
+  }
+}
+
+export type MonitorCommandStageResponse = MonitorCommandStageResponses[keyof MonitorCommandStageResponses]
+
+export type MonitorQueueListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/monitor/queue"
+}
+
+export type MonitorQueueListResponses = {
+  /**
+   * Queued commands
+   */
+  200: Array<{
+    id: string
+    timestamp: number
+    priority: string
+    source: string
+    content: string
+  }>
+}
+
+export type MonitorQueueListResponse = MonitorQueueListResponses[keyof MonitorQueueListResponses]
 
 export type InstanceDisposeData = {
   body?: never
