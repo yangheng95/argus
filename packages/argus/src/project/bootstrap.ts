@@ -12,7 +12,6 @@ import { Log } from "@/util/log"
 import { ShareNext } from "@/share/share-next"
 import { Snapshot } from "../snapshot"
 import { Truncate } from "../tool/truncation"
-import { Flag } from "../flag/flag"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -32,13 +31,4 @@ export async function InstanceBootstrap() {
     }
   })
 
-  // Auto-start monitor if enabled via environment flag
-  if (Flag.ARGUS_MONITOR_ENABLED) {
-    const { Monitor } = await import("../argus/monitor")
-    Monitor.start().catch((err) => {
-      Log.Default.error("monitor auto-start failed", {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    })
-  }
 }

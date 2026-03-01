@@ -689,6 +689,29 @@ export namespace Session {
     return msg
   })
 
+  /**
+   * Write a message row to the database without publishing a Bus event.
+   * Use this when the message needs to exist in the DB (e.g. as an FK target
+   * for parts) but the notification should be deferred until the message is
+   * fully assembled. Follow up with `updateMessage` to publish the event.
+   */
+  export const saveMessage = fn(MessageV2.Info, async (msg) => {
+    const time_created = msg.time.created
+    const { id, sessionID, ...data } = msg
+    Database.use((db) => {
+      db.insert(MessageTable)
+        .values({
+          id,
+          session_id: sessionID,
+          time_created,
+          data,
+        })
+        .onConflictDoUpdate({ target: MessageTable.id, set: { data } })
+        .run()
+    })
+    return msg
+  })
+
   export const removeMessage = fn(
     z.object({
       sessionID: Identifier.schema("session"),

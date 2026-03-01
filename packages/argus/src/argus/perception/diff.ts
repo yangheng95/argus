@@ -1,4 +1,11 @@
-import type { DiffResult } from "../monitor/types"
+export interface DiffResult {
+  changed: boolean
+  diffPixels: number
+  diffPercent: number
+  totalPixels: number
+  previousTimestamp: number
+  currentTimestamp: number
+}
 
 export namespace ScreenDiff {
   export interface ImageData {

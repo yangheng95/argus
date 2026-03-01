@@ -43,6 +43,7 @@ import { PermissionNext } from "@/permission/next"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
+import { GuiState } from "@/tool/gui-state"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
 
@@ -662,11 +663,110 @@ export namespace SessionPrompt {
 
       await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
+      // Inject GUI action history and repetition alerts for GUI sessions
+      if (GuiState.get().isGuiSession) {
+        GuiState.setStep(step)
+        const actionSummary = GuiState.buildActionSummary()
+        const repetitionAlert = GuiState.checkRepetition()
+
+        if (actionSummary || repetitionAlert) {
+          const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
+          if (lastUserMsg) {
+            const guiContext = [actionSummary, repetitionAlert].filter(Boolean).join("\n\n")
+            lastUserMsg.parts.push({
+              id: Identifier.ascending("part"),
+              messageID: lastUserMsg.info.id,
+              sessionID: lastUserMsg.info.sessionID,
+              type: "text",
+              text: guiContext,
+              synthetic: true,
+            } as MessageV2.TextPart)
+          }
+        }
+      }
+
       // Build system prompt, adding structured output instruction if needed
       const system = [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())]
       const format = lastUser.format ?? { type: "text" }
       if (format.type === "json_schema") {
         system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+      }
+
+      const modelMessages = [
+        ...MessageV2.toModelMessages(msgs, model),
+        ...(isLastStep
+          ? [
+              {
+                role: "assistant" as const,
+                content: MAX_STEPS,
+              },
+            ]
+          : []),
+      ]
+
+      // Context diagnostics logging
+      {
+        const systemChars = system.reduce((sum, s) => sum + s.length, 0)
+        const systemTokensEst = Math.round(systemChars / 4)
+        const toolCount = Object.keys(tools).length
+
+        let userMsgCount = 0
+        let assistantMsgCount = 0
+        let totalContentChars = 0
+        let imageCount = 0
+        let toolCallCount = 0
+
+        for (const msg of modelMessages) {
+          if (msg.role === "user") userMsgCount++
+          else if (msg.role === "assistant") assistantMsgCount++
+
+          if (typeof msg.content === "string") {
+            totalContentChars += msg.content.length
+          } else if (Array.isArray(msg.content)) {
+            for (const part of msg.content) {
+              if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
+              if ("type" in part && part.type === "image") imageCount++
+              if ("type" in part && part.type === "tool-result") toolCallCount++
+            }
+          }
+        }
+
+        const contentTokensEst = Math.round(totalContentChars / 4)
+        const imageTokensEst = imageCount * 1600 // ~1600 tokens per screenshot
+
+        log.info("context-diagnostics", {
+          step,
+          systemPromptParts: system.length,
+          systemChars,
+          systemTokensEst,
+          toolCount,
+          toolNames: Object.keys(tools).join(","),
+          messageCount: modelMessages.length,
+          userMsgCount,
+          assistantMsgCount,
+          totalContentChars,
+          contentTokensEst,
+          imageCount,
+          imageTokensEst,
+          toolCallCount,
+          totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
+        })
+
+        // GUI-specific diagnostics
+        const guiS = GuiState.get()
+        if (guiS.isGuiSession) {
+          log.info("gui-context-diagnostics", {
+            step,
+            isGuiSession: true,
+            actionCount: guiS.actions.length,
+            screenshotCount: guiS.screenshots.size,
+            descriptionsStored: Array.from(guiS.screenshots.values()).filter(s => s.description).length,
+            lastScreenshotHash: guiS.lastScreenshotHash?.substring(0, 8) ?? "none",
+            consecutiveNoChange: guiS.repetition.consecutiveNoChange,
+            recentClickCoords: guiS.repetition.recentClickCoords.length,
+            currentStep: guiS.currentStep,
+          })
+        }
       }
 
       const result = await processor.process({
@@ -675,17 +775,7 @@ export namespace SessionPrompt {
         abort,
         sessionID,
         system,
-        messages: [
-          ...MessageV2.toModelMessages(msgs, model),
-          ...(isLastStep
-            ? [
-                {
-                  role: "assistant" as const,
-                  content: MAX_STEPS,
-                },
-              ]
-            : []),
-        ],
+        messages: modelMessages,
         tools,
         model,
         toolChoice: format.type === "json_schema" ? "required" : undefined,
@@ -782,7 +872,8 @@ export namespace SessionPrompt {
       const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
         if (
           event.properties.info.role === "user" &&
-          event.properties.info.sessionID === sessionID
+          event.properties.info.sessionID === sessionID &&
+          event.properties.info.id > afterID
         ) {
           settle()
         }
@@ -1383,10 +1474,14 @@ export namespace SessionPrompt {
       },
     )
 
-    await Session.updateMessage(info)
+    // Save message row silently first (FK target for parts), then write all
+    // parts, then publish the message.updated event.  This guarantees the
+    // persistent loop sees the full message (with parts) when it wakes up.
+    await Session.saveMessage(info)
     for (const part of parts) {
       await Session.updatePart(part)
     }
+    await Session.updateMessage(info)
 
     return {
       info,

@@ -15,6 +15,7 @@ import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
+import { GuiState } from "@/tool/gui-state"
 
 export namespace MessageV2 {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -624,11 +625,19 @@ export namespace MessageV2 {
               const isOldScreenshot = part.tool === "screen"
                 && part.state.input.action === "screenshot"
                 && msg.info.id !== lastAssistantID
-              const outputText = part.state.time.compacted
-                ? "[Old tool result content cleared]"
-                : isOldScreenshot
-                  ? "[Screenshot removed from context — refer to your earlier text description of this screenshot]"
-                  : part.state.output
+
+              let outputText: string
+              if (part.state.time.compacted) {
+                outputText = "[Old tool result content cleared]"
+              } else if (isOldScreenshot) {
+                const hash = part.state.metadata?.screenshotHash as string | undefined
+                const desc = hash ? GuiState.getDescription(hash) : null
+                outputText = desc
+                  ? `[Screenshot removed — your description from this turn:]\n${desc}`
+                  : "[Screenshot removed from context — refer to your earlier text description of this screenshot]"
+              } else {
+                outputText = part.state.output
+              }
               const attachments = (part.state.time.compacted || isOldScreenshot)
                 ? []
                 : (part.state.attachments ?? [])

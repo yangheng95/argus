@@ -3,6 +3,10 @@ import { Tool } from "./tool"
 import { GUI } from "../argus/gui/index"
 import { Coordinates } from "../argus/gui/coordinates"
 import { DesktopState } from "./desktop-state"
+import { GuiState } from "./gui-state"
+import { Log } from "../util/log"
+
+const log = Log.create({ service: "input" })
 
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, and wait.
 
@@ -113,11 +117,20 @@ export const InputTool = Tool.define("input", {
       metadata: { action: params.action },
     })
 
+    GuiState.activate()
     const lastWindowBounds = DesktopState.getBounds()
 
     switch (params.action) {
       case "click": {
         const screen = Coordinates.resolve(params.x, params.y, lastWindowBounds)
+        log.info("click-resolve", {
+          windowRelative: `${params.x},${params.y}`,
+          screenAbsolute: `${screen.x},${screen.y}`,
+          bounds: lastWindowBounds
+            ? `${lastWindowBounds.width}x${lastWindowBounds.height}@${lastWindowBounds.x},${lastWindowBounds.y}`
+            : "none",
+          button: params.button ?? "left",
+        })
         if (params.button === "double") {
           await GUI.doubleClick(screen.x, screen.y)
         } else if (params.button === "right") {
@@ -131,6 +144,16 @@ export const InputTool = Tool.define("input", {
         const coordDetail = lastWindowBounds
           ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y})`
           : ""
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "click",
+          coords: { x: params.x, y: params.y },
+          detail: params.button ?? "left",
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
+        GuiState.updateRepetition(null, { x: params.x, y: params.y })
         return {
           title: `Clicked (${params.x}, ${params.y})`,
           output: `${params.button ?? "left"} click at (${params.x}, ${params.y})${coordDetail}`,
@@ -140,6 +163,14 @@ export const InputTool = Tool.define("input", {
 
       case "type": {
         await GUI.paste(params.text)
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "type",
+          detail: `"${params.text.length > 40 ? params.text.slice(0, 37) + "..." : params.text}"`,
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
         return {
           title: "Typed text",
           output: `Typed ${params.text.length} characters via clipboard paste`,
@@ -154,6 +185,14 @@ export const InputTool = Tool.define("input", {
         } else {
           await GUI.pressKey(parts[0])
         }
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "key",
+          detail: params.key,
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
         return {
           title: `Pressed ${params.key}`,
           output: `Pressed key: ${params.key}`,
@@ -163,6 +202,14 @@ export const InputTool = Tool.define("input", {
 
       case "scroll": {
         await GUI.scroll(params.direction, params.amount)
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "scroll",
+          detail: `${params.direction} ${params.amount}`,
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
         return {
           title: `Scrolled ${params.direction}`,
           output: `Scrolled ${params.direction} by ${params.amount} steps`,
@@ -177,6 +224,15 @@ export const InputTool = Tool.define("input", {
         const coordDetail = lastWindowBounds
           ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y})`
           : ""
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "drag",
+          coords: { x: params.startX, y: params.startY },
+          detail: `→(${params.endX},${params.endY})`,
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
         return {
           title: `Dragged (${params.startX},${params.startY}) → (${params.endX},${params.endY})`,
           output: `Dragged from (${params.startX},${params.startY}) to (${params.endX},${params.endY})${coordDetail}`,
@@ -196,6 +252,15 @@ export const InputTool = Tool.define("input", {
       case "move": {
         const screen = Coordinates.resolve(params.x, params.y, lastWindowBounds)
         await GUI.moveTo(screen.x, screen.y)
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "move",
+          coords: { x: params.x, y: params.y },
+          detail: "",
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
         return {
           title: `Moved to (${params.x}, ${params.y})`,
           output: `Mouse moved to (${params.x}, ${params.y})`,
@@ -205,6 +270,14 @@ export const InputTool = Tool.define("input", {
 
       case "wait": {
         await new Promise((resolve) => setTimeout(resolve, params.ms))
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "wait",
+          detail: `${params.ms}ms`,
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
         return {
           title: `Waited ${params.ms}ms`,
           output: `Waited ${params.ms} milliseconds`,

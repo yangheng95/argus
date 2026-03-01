@@ -1,5 +1,10 @@
 import { Log } from "../../util/log"
 
+/** Return the primary modifier key name for the current OS */
+export function platformModifier(): string {
+  return process.platform === "darwin" ? "cmd" : "ctrl"
+}
+
 export namespace Keyboard {
   const log = Log.create({ service: "argus-keyboard" })
 
