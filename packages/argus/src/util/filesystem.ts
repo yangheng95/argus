@@ -1,5 +1,5 @@
 import { access, chmod, mkdir, readFile, stat as statAsync, writeFile } from "fs/promises"
-import { createWriteStream, statSync } from "fs"
+import { createWriteStream, existsSync, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
 import { dirname, join, relative } from "path"

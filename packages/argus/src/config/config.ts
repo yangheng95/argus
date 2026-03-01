@@ -193,7 +193,7 @@ export namespace Config {
     }
 
     if (Flag.ARGUS_PERMISSION) {
-      result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.ARGUS_PERMISSION))
+      result.permission = mergeDeep((result.permission ?? {}) as object, JSON.parse(Flag.ARGUS_PERMISSION)) as Config.Permission
     }
 
     // Backwards compatibility: legacy top-level `tools` config
@@ -207,7 +207,7 @@ export namespace Config {
         }
         perms[tool] = action
       }
-      result.permission = mergeDeep(perms, result.permission ?? {})
+      result.permission = mergeDeep(perms as object, (result.permission ?? {}) as object) as Config.Permission
     }
 
     if (!result.username) result.username = os.userInfo().username

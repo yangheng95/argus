@@ -49,13 +49,13 @@ export namespace PermissionNext {
       if (typeof value === "string") {
         ruleset.push({
           permission: key,
-          action: value,
+          action: value as "allow" | "ask" | "deny",
           pattern: "*",
         })
         continue
       }
       ruleset.push(
-        ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action })),
+        ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action: action as "allow" | "ask" | "deny" })),
       )
     }
     return ruleset
