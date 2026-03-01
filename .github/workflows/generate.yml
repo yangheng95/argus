@@ -7,23 +7,23 @@ on:
 
 jobs:
   generate:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
 
-      - name: Setup git committer
-        id: committer
-        uses: ./.github/actions/setup-git-committer
-        with:
-          argus-app-id: ${{ vars.OPENCODE_APP_ID }}
-          argus-app-secret: ${{ secrets.OPENCODE_APP_SECRET }}
+      - name: Configure git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Generate
         run: ./script/generate.ts
@@ -37,15 +37,3 @@ jobs:
           git add -A
           git commit -m "chore: generate" --allow-empty
           git push origin HEAD:${{ github.ref_name }} --no-verify
-          # if ! git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }} --no-verify; then
-          #   echo ""
-          #   echo "============================================"
-          #   echo "Failed to push generated code."
-          #   echo "Please run locally and push:"
-          #   echo ""
-          #   echo "  ./script/generate.ts"
-          #   echo "  git add -A && git commit -m \"chore: generate\" && git push"
-          #   echo ""
-          #   echo "============================================"
-          #   exit 1
-          # fi
