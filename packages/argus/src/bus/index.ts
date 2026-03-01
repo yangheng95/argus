@@ -60,7 +60,7 @@ export namespace Bus {
       directory: Instance.directory,
       payload,
     })
-    return Promise.all(pending)
+    return Promise.allSettled(pending)
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(
@@ -90,6 +90,7 @@ export namespace Bus {
     log.info("subscribing", { type })
     const subscriptions = state().subscriptions
     let match = subscriptions.get(type) ?? []
+    if (match.includes(callback)) return () => {}
     match.push(callback)
     subscriptions.set(type, match)
 

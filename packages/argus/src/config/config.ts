@@ -32,7 +32,6 @@ import { Glob } from "../util/glob"
 import { PackageRegistry } from "@/bun/registry"
 import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
-import { Control } from "@/control"
 import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
 
@@ -105,10 +104,6 @@ export namespace Config {
         )
         log.debug("loaded remote config from well-known", { url: key })
       }
-    }
-
-    const token = await Control.token()
-    if (token) {
     }
 
     // Global user config overrides remote config.
@@ -591,32 +586,10 @@ export namespace Config {
   })
   export type PermissionRule = z.infer<typeof PermissionRule>
 
-  // Capture original key order before zod reorders, then rebuild in original order
-  const permissionPreprocess = (val: unknown) => {
-    if (typeof val === "object" && val !== null && !Array.isArray(val)) {
-      return { __originalKeys: Object.keys(val), ...val }
-    }
-    return val
-  }
-
-  const permissionTransform = (x: unknown): Record<string, PermissionRule> => {
-    if (typeof x === "string") return { "*": x as PermissionAction }
-    const obj = x as { __originalKeys?: string[] } & Record<string, unknown>
-    const { __originalKeys, ...rest } = obj
-    if (!__originalKeys) return rest as Record<string, PermissionRule>
-    const result: Record<string, PermissionRule> = {}
-    for (const key of __originalKeys) {
-      if (key in rest) result[key] = rest[key] as PermissionRule
-    }
-    return result
-  }
-
   export const Permission = z
-    .preprocess(
-      permissionPreprocess,
+    .union([
       z
         .object({
-          __originalKeys: z.string().array().optional(),
           read: PermissionRule.optional(),
           edit: PermissionRule.optional(),
           glob: PermissionRule.optional(),
@@ -635,10 +608,9 @@ export namespace Config {
           doom_loop: PermissionAction.optional(),
           skill: PermissionRule.optional(),
         })
-        .catchall(PermissionRule)
-        .or(PermissionAction),
-    )
-    .transform(permissionTransform)
+        .catchall(PermissionRule),
+      PermissionAction,
+    ])
     .meta({
       ref: "PermissionConfig",
     })
@@ -1165,6 +1137,22 @@ export namespace Config {
             .positive()
             .optional()
             .describe("Timeout in milliseconds for model context protocol (MCP) requests"),
+          memory: z
+            .object({
+              enabled: z.boolean().optional().describe("Enable persistent memory store (default: true)"),
+              auto_inject: z
+                .boolean()
+                .optional()
+                .describe("Auto-inject relevant memories into system prompt (default: true)"),
+              token_budget: z
+                .number()
+                .int()
+                .min(100)
+                .optional()
+                .describe("Max tokens for auto-injected memory context (default: 2000)"),
+            })
+            .optional()
+            .describe("Persistent memory configuration"),
         })
         .optional(),
     })

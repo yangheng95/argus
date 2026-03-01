@@ -1275,11 +1275,11 @@ export namespace Provider {
     return undefined
   }
 
-  const priority = ["gpt-5", "claude-sonnet-4", "big-pickle", "gemini-3-pro"]
+  const priority = ["gpt-5", "claude-sonnet-4", "gemini-3-pro"]
   export function sort(models: Model[]) {
     return sortBy(
       models,
-      [(model) => priority.findIndex((filter) => model.id.includes(filter)), "desc"],
+      [(model) => priority.findIndex((filter) => model.id === filter || model.id.startsWith(filter + "-") || model.id.startsWith(filter + ".")), "desc"],
       [(model) => (model.id.includes("latest") ? 0 : 1), "asc"],
       [(model) => model.id, "desc"],
     )
@@ -1303,9 +1303,19 @@ export namespace Provider {
     }
 
     const provider = Object.values(providers).find((p) => !cfg.provider || Object.keys(cfg.provider).includes(p.id))
-    if (!provider) throw new Error("no providers found")
+    if (!provider)
+      throw new ModelNotFoundError({
+        providerID: "",
+        modelID: "",
+        suggestions: Object.keys(providers),
+      })
     const [model] = sort(Object.values(provider.models))
-    if (!model) throw new Error("no models found")
+    if (!model)
+      throw new ModelNotFoundError({
+        providerID: provider.id,
+        modelID: "",
+        suggestions: [],
+      })
     return {
       providerID: provider.id,
       modelID: model.id,

@@ -2,6 +2,25 @@ import { createOpencode, type OpencodeClient } from "@opencode-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { SlackAdapter } from "./adapters/slack"
 import type { STTPipeline } from "./stt/pipeline"
+import type { VisionPipeline } from "./vision"
+import path from "path"
+import { readFileSync } from "fs"
+
+// Mascot images live in the console asset directory (relative to monorepo root)
+const MASCOT_DIR = path.resolve(__dirname, "../../console/app/src/asset/lander")
+
+function loadMascot(name: string): Buffer | null {
+  try {
+    return readFileSync(path.join(MASCOT_DIR, name))
+  } catch {
+    return null
+  }
+}
+
+// Pre-load at startup — null if files haven't been generated yet
+const MASCOT_CELEBRATING = loadMascot("mascot-ar-celebrating.png")
+const MASCOT_ALERT = loadMascot("mascot-ar-alert.png")
+const MASCOT_IDLE = loadMascot("mascot-ar-idle.png")
 
 interface SessionEntry {
   sessionId: string
@@ -28,11 +47,20 @@ export class BotCore {
   /** Set to false by stop() to terminate the reconnect loop */
   private running = false
   private stt?: STTPipeline
+  private vision?: VisionPipeline
+  /** Base URL of the Argus server */
+  private serverUrl!: string
+  /** Rate-limit mascot stickers: threadKey → last sent timestamp */
+  private lastStickerAt = new Map<string, number>()
 
   constructor(private options?: BotCoreOptions) {}
 
   setSTT(pipeline: STTPipeline): void {
     this.stt = pipeline
+  }
+
+  setVision(pipeline: VisionPipeline): void {
+    this.vision = pipeline
   }
 
   get adapterCount(): number {
@@ -49,7 +77,8 @@ export class BotCore {
     const argus = await createOpencode({ port: this.options?.port ?? 0 })
     this.client = argus.client
     this.server = argus.server
-    console.log(`[BotCore] Argus server running at ${argus.server.url}`)
+    this.serverUrl = argus.server.url
+    console.log(`[BotCore] Argus server running at ${this.serverUrl}`)
 
     this.subscribeEvents()
 
@@ -118,9 +147,13 @@ export class BotCore {
     }
 
     // Use promptAsync to bypass monitor command queue and execute directly.
+    // System prompt is injected via the `system` field (appended to LLM system prompt in llm.ts:76).
     const result = await this.client.session.promptAsync({
       path: { id: session.sessionId },
-      body: { parts: [{ type: "text", text }] },
+      body: {
+        parts: [{ type: "text", text }],
+        system: this.buildSystemPrompt(),
+      },
     })
 
     if (result.error) {
@@ -130,6 +163,37 @@ export class BotCore {
     }
 
     console.log(`[BotCore] Prompt sent for session ${session.sessionId}`)
+  }
+
+  /**
+   * Build bot-specific system prompt injected via the API's `system` field.
+   * Provides operational context: bot interaction mode, TUI launch instructions,
+   * and window binding strategy for on-demand TUI.
+   */
+  private buildSystemPrompt(): string {
+    const projectDir = process.env.TUI_PROJECT_DIR || process.cwd()
+    const botDir = path.resolve(__dirname, "..")
+    const launchScript = path.join(botDir, "launch-tui.cmd")
+
+    return [
+      "## Bot Context",
+      "You are responding to a user via Slack. Keep responses concise and actionable.",
+      "Tool calls are invisible to the user — always write text before/after actions.",
+      "",
+      "## Coding Tasks (via TUI)",
+      "When asked to write or modify code, use the Argus TUI instead of editing files directly:",
+      "1. screen.list_windows — check if a window titled \"ARGUS_TUI_BOT\" exists",
+      "2. If found: screen.bind_window(\"ARGUS_TUI_BOT\") → screen.screenshot → interact",
+      "3. If NOT found: launch TUI via bash, then bind:",
+      `   bash: start "ARGUS_TUI_BOT" "${launchScript}" "${projectDir}"`,
+      "   Wait 5s, then screen.list_windows again, bind to ARGUS_TUI_BOT",
+      "4. Type the coding instruction into the TUI, press Enter, monitor with screenshots",
+      "5. Report results in your text response",
+      "",
+      "## Non-Coding Tasks",
+      "For simple questions, math, or non-GUI tasks — just respond with text, no tools needed.",
+      "For GUI tasks (screenshots, app interaction) — use screen/input tools directly.",
+    ].join("\n")
   }
 
   /**
@@ -154,6 +218,30 @@ export class BotCore {
     })
   }
 
+  /** Format a brief Slack status message for important tool completions */
+  private formatToolStatus(tool: string, input: any): string | null {
+    try {
+      switch (tool) {
+        case "bash": {
+          const cmd = input?.command ?? ""
+          const short = cmd.length > 80 ? cmd.slice(0, 80) + "..." : cmd
+          return `\`$ ${short}\``
+        }
+        case "edit":
+          return `\`edit ${input?.filePath ?? "file"}\``
+        case "write":
+          return `\`write ${input?.filePath ?? "file"}\``
+        case "skill":
+          return `\`skill: ${input?.name ?? "?"}\``
+        // screen, input, read, glob, grep — too noisy, skip
+        default:
+          return null
+      }
+    } catch {
+      return null
+    }
+  }
+
   private findSession(sessionId: string): SessionEntry | undefined {
     const threadKey = this.sessionIndex.get(sessionId)
     if (!threadKey) return undefined
@@ -161,11 +249,29 @@ export class BotCore {
   }
 
   /**
-   * Fetch screenshot attachment from API and upload to Slack.
-   * SSE events may not reliably carry large base64 payloads (4MB+ screenshots),
-   * so we fetch the full message via REST API instead.
+   * Send a mascot sticker to Slack after a task completes.
+   * Rate-limited to at most once per 60 seconds per thread to avoid spam.
    */
-  private async fetchAndUploadScreenshot(
+  private async sendMascotSticker(session: SessionEntry, isError: boolean): Promise<void> {
+    const threadKey = `${session.channel}:${session.thread}`
+    const now = Date.now()
+    const last = this.lastStickerAt.get(threadKey) ?? 0
+    if (now - last < 60_000) return
+
+    const sticker = isError ? MASCOT_ALERT : (Math.random() < 0.3 ? MASCOT_CELEBRATING : MASCOT_IDLE)
+    if (!sticker) return
+
+    this.lastStickerAt.set(threadKey, now)
+    const filename = isError ? "ar-alert.png" : (sticker === MASCOT_CELEBRATING ? "ar-celebrating.png" : "ar-idle.png")
+    await session.adapter.uploadImage(session.channel, session.thread, sticker, filename).catch(() => {})
+  }
+
+  /**
+   * Fetch screenshot attachment from API, upload to Slack, and optionally
+   * run vision analysis in parallel. Vision analysis text is posted as a
+   * follow-up message in the Slack thread.
+   */
+  private async processScreenshot(
     session: SessionEntry,
     sessionId: string,
     messageId: string,
@@ -185,21 +291,41 @@ export class BotCore {
           if (att.type === "file" && att.mime?.startsWith("image/")) {
             const match = att.url?.match(/^data:[^;]+;base64,(.+)$/)
             if (!match) continue
-            const buffer = Buffer.from(match[1], "base64")
+
+            const base64Data = match[1]
+            const buffer = Buffer.from(base64Data, "base64")
             const ext = att.mime === "image/png" ? "png" : "jpg"
-            await session.adapter.uploadImage(
+
+            // Run upload and vision analysis in parallel
+            const uploadPromise = session.adapter.uploadImage(
               session.channel,
               session.thread,
               buffer,
               att.filename ?? `screenshot.${ext}`,
               title,
             )
+
+            const visionPromise = this.vision
+              ? this.vision.analyze(base64Data).catch((err) => {
+                  console.warn("[BotCore] Vision analysis failed:", err)
+                  return null
+                })
+              : Promise.resolve(null)
+
+            const [, visionResult] = await Promise.all([uploadPromise, visionPromise])
+
             console.log(`[BotCore] Uploaded screenshot (${(buffer.length / 1024).toFixed(0)}KB)`)
+
+            if (visionResult) {
+              const visionMsg = `_Vision analysis:_ ${visionResult.description}`
+              await session.adapter.sendMessage(session.channel, session.thread, visionMsg).catch(() => {})
+              console.log(`[BotCore] Vision analysis posted (${visionResult.tokens.prompt + visionResult.tokens.completion} tokens)`)
+            }
           }
         }
       }
     } catch (err) {
-      console.error("[BotCore] fetchAndUploadScreenshot error:", err)
+      console.error("[BotCore] processScreenshot error:", err)
     }
   }
 
@@ -231,6 +357,9 @@ export class BotCore {
           const errMsg = "error" in info.error ? (info.error as any).error : JSON.stringify(info.error)
           await session.adapter.sendMessage(session.channel, session.thread, `Error: ${errMsg}`).catch(() => {})
         }
+
+        // Send mascot sticker — rate-limited to once per 60s per thread
+        await this.sendMascotSticker(session, !!info.error)
       }
     }
 
@@ -248,23 +377,31 @@ export class BotCore {
         this.textBuffers.set(part.messageID, part.text)
       }
 
-      // Only upload screenshots to Slack — do NOT post tool status messages.
-      // Tool results like "input — Pressed win" or "screen — Screenshot captured"
-      // are internal operations; posting each one floods the thread with robotic noise.
-      // The model's text response (buffered above) is the human-readable output.
-      if (part.type === "tool" && part.tool === "screen" && part.state.status === "completed") {
-        // Only upload actual screenshot images, skip unchanged/text-only results
-        const hasImage = (part.state.attachments ?? []).some(
-          (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
-        )
-        if (hasImage) {
-          await this.fetchAndUploadScreenshot(
-            session,
-            part.sessionID,
-            part.messageID,
-            part.id,
-            part.state.title,
+      // Post tool progress for key tools so Slack users can see what's happening.
+      if (part.type === "tool" && part.state?.status === "completed") {
+        const toolName = part.tool
+        const toolInput = part.state?.input
+
+        // Upload screenshot images from screen tool
+        if (toolName === "screen") {
+          const hasImage = (part.state.attachments ?? []).some(
+            (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
           )
+          if (hasImage) {
+            await this.processScreenshot(
+              session,
+              part.sessionID,
+              part.messageID,
+              part.id,
+              part.state.title,
+            )
+          }
+        }
+
+        // Post brief status for important tools (bash, edit, write, skill)
+        const statusMsg = this.formatToolStatus(toolName, toolInput)
+        if (statusMsg) {
+          await session.adapter.sendMessage(session.channel, session.thread, statusMsg).catch(() => {})
         }
       }
     }

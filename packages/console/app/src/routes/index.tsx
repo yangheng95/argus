@@ -3,6 +3,7 @@ import { Title, Meta } from "@solidjs/meta"
 //import { HttpHeader } from "@solidjs/start"
 import video from "../asset/lander/opencode-min.mp4"
 import videoPoster from "../asset/lander/opencode-poster.png"
+import mascotIdle from "../asset/lander/mascot-ar-idle.png"
 import { IconCopy, IconCheck } from "../component/icon"
 import { A, createAsync } from "@solidjs/router"
 import { EmailSignup } from "~/component/email-signup"
@@ -163,6 +164,10 @@ export default function Home() {
                 </div>
               </Tabs>
             </div>
+          </section>
+
+          <section data-component="mascot">
+            <img src={mascotIdle} alt="Ar — Argus mascot" data-slot="mascot-image" />
           </section>
 
           <section data-component="video">

@@ -19,13 +19,10 @@ export namespace Flag {
   export const ARGUS_ENABLE_EXPERIMENTAL_MODELS = truthy("ARGUS_ENABLE_EXPERIMENTAL_MODELS")
   export const ARGUS_DISABLE_AUTOCOMPACT = truthy("ARGUS_DISABLE_AUTOCOMPACT")
   export const ARGUS_DISABLE_MODELS_FETCH = truthy("ARGUS_DISABLE_MODELS_FETCH")
-  export const ARGUS_DISABLE_CLAUDE_CODE = truthy("ARGUS_DISABLE_CLAUDE_CODE")
-  export const ARGUS_DISABLE_CLAUDE_CODE_PROMPT =
-    ARGUS_DISABLE_CLAUDE_CODE || truthy("ARGUS_DISABLE_CLAUDE_CODE_PROMPT")
-  export const ARGUS_DISABLE_CLAUDE_CODE_SKILLS =
-    ARGUS_DISABLE_CLAUDE_CODE || truthy("ARGUS_DISABLE_CLAUDE_CODE_SKILLS")
-  export const ARGUS_DISABLE_EXTERNAL_SKILLS =
-    ARGUS_DISABLE_CLAUDE_CODE_SKILLS || truthy("ARGUS_DISABLE_EXTERNAL_SKILLS")
+  export declare const ARGUS_DISABLE_CLAUDE_CODE: boolean
+  export declare const ARGUS_DISABLE_CLAUDE_CODE_PROMPT: boolean
+  export declare const ARGUS_DISABLE_CLAUDE_CODE_SKILLS: boolean
+  export declare const ARGUS_DISABLE_EXTERNAL_SKILLS: boolean
   export declare const ARGUS_DISABLE_PROJECT_CONFIG: boolean
   export const ARGUS_FAKE_VCS = process.env["ARGUS_FAKE_VCS"]
   export declare const ARGUS_CLIENT: string
@@ -37,21 +34,19 @@ export namespace Flag {
   export const ARGUS_EXPERIMENTAL = truthy("ARGUS_EXPERIMENTAL")
   export const ARGUS_EXPERIMENTAL_FILEWATCHER = truthy("ARGUS_EXPERIMENTAL_FILEWATCHER")
   export const ARGUS_EXPERIMENTAL_DISABLE_FILEWATCHER = truthy("ARGUS_EXPERIMENTAL_DISABLE_FILEWATCHER")
-  export const ARGUS_EXPERIMENTAL_ICON_DISCOVERY =
-    ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_ICON_DISCOVERY")
+  export declare const ARGUS_EXPERIMENTAL_ICON_DISCOVERY: boolean
 
   const copy = process.env["ARGUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
   export const ARGUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT =
     copy === undefined ? process.platform === "win32" : truthy("ARGUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT")
-  export const ARGUS_ENABLE_EXA =
-    truthy("ARGUS_ENABLE_EXA") || ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_EXA")
+  export declare const ARGUS_ENABLE_EXA: boolean
   export const ARGUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS = number("ARGUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS")
   export const ARGUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX = number("ARGUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX")
-  export const ARGUS_EXPERIMENTAL_OXFMT = ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_OXFMT")
+  export declare const ARGUS_EXPERIMENTAL_OXFMT: boolean
   export const ARGUS_EXPERIMENTAL_LSP_TY = truthy("ARGUS_EXPERIMENTAL_LSP_TY")
-  export const ARGUS_EXPERIMENTAL_LSP_TOOL = ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_LSP_TOOL")
+  export declare const ARGUS_EXPERIMENTAL_LSP_TOOL: boolean
   export const ARGUS_DISABLE_FILETIME_CHECK = truthy("ARGUS_DISABLE_FILETIME_CHECK")
-  export const ARGUS_EXPERIMENTAL_PLAN_MODE = ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_PLAN_MODE")
+  export declare const ARGUS_EXPERIMENTAL_PLAN_MODE: boolean
   export const ARGUS_EXPERIMENTAL_MARKDOWN = truthy("ARGUS_EXPERIMENTAL_MARKDOWN")
   export const ARGUS_MODELS_URL = process.env["ARGUS_MODELS_URL"]
   export const ARGUS_MODELS_PATH = process.env["ARGUS_MODELS_PATH"]
@@ -103,6 +98,81 @@ Object.defineProperty(Flag, "ARGUS_CONFIG_DIR", {
 Object.defineProperty(Flag, "ARGUS_CLIENT", {
   get() {
     return process.env["ARGUS_CLIENT"] ?? "cli"
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+// Dynamic getters for flags with dependency chains.
+// These MUST be evaluated at access time, not module load time,
+// because parent flags (e.g. ARGUS_DISABLE_CLAUDE_CODE) may be set after module initialization.
+Object.defineProperty(Flag, "ARGUS_DISABLE_CLAUDE_CODE", {
+  get() {
+    return truthy("ARGUS_DISABLE_CLAUDE_CODE")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_DISABLE_CLAUDE_CODE_PROMPT", {
+  get() {
+    return Flag.ARGUS_DISABLE_CLAUDE_CODE || truthy("ARGUS_DISABLE_CLAUDE_CODE_PROMPT")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_DISABLE_CLAUDE_CODE_SKILLS", {
+  get() {
+    return Flag.ARGUS_DISABLE_CLAUDE_CODE || truthy("ARGUS_DISABLE_CLAUDE_CODE_SKILLS")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_DISABLE_EXTERNAL_SKILLS", {
+  get() {
+    return Flag.ARGUS_DISABLE_CLAUDE_CODE_SKILLS || truthy("ARGUS_DISABLE_EXTERNAL_SKILLS")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_EXPERIMENTAL_ICON_DISCOVERY", {
+  get() {
+    return Flag.ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_ICON_DISCOVERY")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_ENABLE_EXA", {
+  get() {
+    return truthy("ARGUS_ENABLE_EXA") || Flag.ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_EXA")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_EXPERIMENTAL_OXFMT", {
+  get() {
+    return Flag.ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_OXFMT")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_EXPERIMENTAL_LSP_TOOL", {
+  get() {
+    return Flag.ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_LSP_TOOL")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "ARGUS_EXPERIMENTAL_PLAN_MODE", {
+  get() {
+    return Flag.ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_PLAN_MODE")
   },
   enumerable: true,
   configurable: false,

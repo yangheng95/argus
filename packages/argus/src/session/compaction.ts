@@ -14,6 +14,7 @@ import { Agent } from "@/agent/agent"
 import { Plugin } from "@/plugin"
 import { Config } from "@/config/config"
 import { ProviderTransform } from "@/provider/transform"
+import { MemoryFlush } from "@/memory/flush"
 
 export namespace SessionCompaction {
   const log = Log.create({ service: "session.compaction" })
@@ -225,6 +226,12 @@ When constructing the summary, try to stick to this template:
     }
     if (processor.message.error) return "stop"
     Bus.publish(Event.Compacted, { sessionID: input.sessionID })
+
+    // Flush compaction summary to persistent memory (async, non-blocking)
+    MemoryFlush.flush(input.sessionID).catch((err) =>
+      log.warn("memory flush after compaction failed", { sessionID: input.sessionID, err }),
+    )
+
     return "continue"
   }
 

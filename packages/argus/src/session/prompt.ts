@@ -46,6 +46,7 @@ import { iife } from "@/util/iife"
 import { GuiState } from "@/tool/gui-state"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
+import { MemoryInjection } from "@/memory/injection"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -691,6 +692,10 @@ export namespace SessionPrompt {
       if (format.type === "json_schema") {
         system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
       }
+
+      // Add memory recall instruction (OpenClaw pattern: tool-call, not auto-injection)
+      const memoryInstruction = await MemoryInjection.systemPromptSection()
+      if (memoryInstruction) system.push(memoryInstruction)
 
       const modelMessages = [
         ...MessageV2.toModelMessages(msgs, model),

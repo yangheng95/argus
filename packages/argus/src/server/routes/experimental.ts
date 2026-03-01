@@ -11,6 +11,14 @@ import { zodToJsonSchema } from "zod-to-json-schema"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { WorkspaceRoutes } from "./workspace"
+import { WindowManager } from "../../argus/perception/window"
+import { GuiState } from "../../tool/gui-state"
+import { DesktopState } from "../../tool/desktop-state"
+import { Memory } from "../../memory"
+import { Database, eq } from "../../storage/db"
+import { CronJobTable } from "../../scheduler/cron.sql"
+import { Cron } from "../../scheduler/cron"
+import { Identifier } from "../../id/id"
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
@@ -265,6 +273,313 @@ export const ExperimentalRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await MCP.resources())
+      },
+    )
+    .get(
+      "/windows",
+      describeRoute({
+        summary: "List windows",
+        description: "List all visible desktop windows.",
+        operationId: "experimental.windows.list",
+        responses: {
+          200: {
+            description: "Window list",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(z.object({
+                  id: z.number(),
+                  title: z.string(),
+                  appName: z.string(),
+                }))),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        const windows = await WindowManager.listWindows()
+        return c.json(windows.map((w) => ({ id: w.id, title: w.title, appName: w.appName })))
+      },
+    )
+    .post(
+      "/bind_window",
+      describeRoute({
+        summary: "Bind window",
+        description: "Bind to a desktop window by title substring. Activates GUI state and sets the window as the target for screenshots and input.",
+        operationId: "experimental.bind_window",
+        responses: {
+          200: {
+            description: "Window bound",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({
+                  windowId: z.number(),
+                  matchTitle: z.string(),
+                  title: z.string(),
+                  appName: z.string(),
+                })),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("json", z.object({ title: z.string() })),
+      async (c) => {
+        const { title } = c.req.valid("json")
+        GuiState.activate()
+        const binding = await WindowManager.bind(title)
+        DesktopState.setBounds(null)
+        return c.json({
+          windowId: binding.windowId,
+          matchTitle: binding.matchTitle,
+          title: binding.info.title,
+          appName: binding.info.appName,
+        })
+      },
+    )
+    // --- Memory API ---
+    .get(
+      "/memory",
+      describeRoute({
+        summary: "List memory files",
+        operationId: "experimental.memory.list",
+        responses: {
+          200: {
+            description: "Memory file list",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.array(
+                    z.object({
+                      id: z.string(),
+                      title: z.string(),
+                      source: z.string(),
+                      timeCreated: z.number(),
+                    }),
+                  ),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      validator("query", z.object({ projectId: z.string() })),
+      async (c) => {
+        const { projectId } = c.req.valid("query")
+        const files = Memory.listFiles(projectId)
+        return c.json(files)
+      },
+    )
+    .post(
+      "/memory/search",
+      describeRoute({
+        summary: "Search memories",
+        operationId: "experimental.memory.search",
+        responses: {
+          200: {
+            description: "Search results",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.array(
+                    z.object({
+                      chunkId: z.string(),
+                      fileId: z.string(),
+                      fileTitle: z.string(),
+                      content: z.string(),
+                      score: z.number(),
+                    }),
+                  ),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          query: z.string(),
+          projectId: z.string(),
+          limit: z.number().int().min(1).max(50).optional(),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const results = Memory.search(body)
+        return c.json(results)
+      },
+    )
+    .post(
+      "/memory",
+      describeRoute({
+        summary: "Create memory file",
+        operationId: "experimental.memory.create",
+        responses: {
+          200: {
+            description: "Created memory file",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ id: z.string(), title: z.string() })),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          title: z.string(),
+          content: z.string(),
+          projectId: z.string(),
+          source: z.enum(["agent", "compaction", "user"]).optional(),
+        }),
+      ),
+      async (c) => {
+        const { title, content, projectId, source } = c.req.valid("json")
+        const file = Memory.createFile({ title, source: source ?? "user", projectId })
+        Memory.writeChunks(file.id, projectId, content)
+        return c.json({ id: file.id, title: file.title })
+      },
+    )
+    .delete(
+      "/memory/:id",
+      describeRoute({
+        summary: "Delete memory file",
+        operationId: "experimental.memory.delete",
+        responses: {
+          200: {
+            description: "Deleted",
+            content: { "application/json": { schema: resolver(z.object({ ok: z.boolean() })) } },
+          },
+        },
+      }),
+      async (c) => {
+        const id = c.req.param("id")
+        Memory.deleteFile(id)
+        return c.json({ ok: true })
+      },
+    )
+    // --- Schedule API ---
+    .get(
+      "/schedule",
+      describeRoute({
+        summary: "List scheduled tasks",
+        operationId: "experimental.schedule.list",
+        responses: {
+          200: {
+            description: "Scheduled tasks",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.array(
+                    z.object({
+                      id: z.string(),
+                      name: z.string(),
+                      expression: z.string(),
+                      prompt: z.string(),
+                      enabled: z.boolean(),
+                      oneShot: z.boolean(),
+                      lastRun: z.number().nullable(),
+                      nextRun: z.number(),
+                    }),
+                  ),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      validator("query", z.object({ projectId: z.string() })),
+      async (c) => {
+        const { projectId } = c.req.valid("query")
+        const jobs = Database.use((db) =>
+          db.select().from(CronJobTable).where(eq(CronJobTable.project_id, projectId)).all(),
+        )
+        return c.json(
+          jobs.map((j) => ({
+            id: j.id,
+            name: j.name,
+            expression: j.expression,
+            prompt: j.prompt,
+            enabled: j.enabled,
+            oneShot: j.one_shot,
+            lastRun: j.last_run,
+            nextRun: j.next_run,
+          })),
+        )
+      },
+    )
+    .post(
+      "/schedule",
+      describeRoute({
+        summary: "Create scheduled task",
+        operationId: "experimental.schedule.create",
+        responses: {
+          200: {
+            description: "Created task",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ id: z.string(), name: z.string(), nextRun: z.number() })),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          name: z.string(),
+          expression: z.string(),
+          prompt: z.string(),
+          projectId: z.string(),
+          sessionId: z.string().optional(),
+          oneShot: z.boolean().optional(),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        const parsed = Cron.parse(body.expression)
+        const now = Date.now()
+        const nextRun = Cron.nextRun(parsed, now)
+        const id = Identifier.ascending("cron")
+        const oneShot = body.oneShot ?? (parsed.type === "interval")
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id,
+              project_id: body.projectId,
+              session_id: body.sessionId,
+              name: body.name,
+              expression: body.expression,
+              prompt: body.prompt,
+              enabled: true,
+              one_shot: oneShot,
+              next_run: nextRun,
+            })
+            .run(),
+        )
+        return c.json({ id, name: body.name, nextRun })
+      },
+    )
+    .delete(
+      "/schedule/:id",
+      describeRoute({
+        summary: "Cancel scheduled task",
+        operationId: "experimental.schedule.delete",
+        responses: {
+          200: {
+            description: "Cancelled",
+            content: { "application/json": { schema: resolver(z.object({ ok: z.boolean() })) } },
+          },
+        },
+      }),
+      async (c) => {
+        const id = c.req.param("id")
+        Database.use((db) => db.delete(CronJobTable).where(eq(CronJobTable.id, id)).run())
+        return c.json({ ok: true })
       },
     ),
 )

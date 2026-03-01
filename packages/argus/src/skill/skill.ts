@@ -1,6 +1,7 @@
 import z from "zod"
 import path from "path"
 import os from "os"
+import matter from "gray-matter"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
 import { NamedError } from "@opencode-ai/util/error"
@@ -13,6 +14,8 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
+import codingMd from "./builtin/coding.md" with { type: "text" }
+import desktopMd from "./builtin/desktop.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -52,6 +55,19 @@ export namespace Skill {
   export const state = Instance.state(async () => {
     const skills: Record<string, Info> = {}
     const dirs = new Set<string>()
+
+    // Register built-in skills (lowest priority — user skills with same name override)
+    for (const raw of [codingMd, desktopMd]) {
+      const md = matter(raw)
+      const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
+      if (!parsed.success) continue
+      skills[parsed.data.name] = {
+        name: parsed.data.name,
+        description: parsed.data.description,
+        location: "builtin",
+        content: md.content,
+      }
+    }
 
     const addSkill = async (match: string) => {
       const md = await ConfigMarkdown.parse(match).catch((err) => {

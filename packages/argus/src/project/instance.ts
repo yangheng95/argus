@@ -35,6 +35,10 @@ export const Instance = {
         })
         return ctx
       })
+      // Remove rejected promises from cache so they can be retried on the next call.
+      existing.catch(() => {
+        if (cache.get(input.directory) === existing) cache.delete(input.directory)
+      })
       cache.set(input.directory, existing)
     }
     const ctx = await existing

@@ -3,6 +3,7 @@ import { createHash } from "crypto"
 import { Tool } from "./tool"
 import { Capture } from "../argus/perception/capture"
 import { WindowManager } from "../argus/perception/window"
+import { ScreenDiff } from "../argus/perception/diff"
 import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
 import { addCoordinateOverlay } from "../argus/perception/overlay"
@@ -13,7 +14,7 @@ const log = Log.create({ service: "screen" })
 const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, and bind to a specific window.
 
 Actions:
-- screenshot: Capture the current screen (or bound window). Returns the image for visual analysis. If the screen has not changed since the last screenshot, it will tell you instead of returning the image again (saves analysis time).
+- screenshot: Capture the current screen (or bound window). Returns the image for visual analysis. If the screen has not changed since the last screenshot, it will tell you instead of returning the image again (saves analysis time). Set wait_for_change=true to block until the screen actually changes — use this when waiting for page loads, dialogs, or animations instead of polling with repeated screenshots.
 - list_windows: List all visible windows with their positions and sizes. Use this to find windows before interacting.
 - bind_window: Bind to a specific window by title substring. After binding, screenshots capture only that window and coordinates become window-relative to it.
 
@@ -29,6 +30,7 @@ IMPORTANT: After viewing each screenshot, you MUST describe what you see in your
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
+  wait_for_change: z.boolean().optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
 })
 
 const BindWindowAction = z.object({
@@ -79,7 +81,64 @@ export const ScreenTool = Tool.define("screen", {
           }
         }
 
-        const result = await Capture.take({ mode: "auto" })
+        let result = await Capture.take({ mode: "auto" })
+
+        // wait_for_change: if the screen hasn't changed, poll cheaply until it does
+        if (params.wait_for_change && result.rawBuffer) {
+          const firstHash = createHash("md5").update(result.buffer).digest("hex")
+          if (firstHash === GuiState.get().lastScreenshotHash) {
+            const baseline: ScreenDiff.ImageData = {
+              rawBuffer: result.rawBuffer,
+              width: result.width,
+              height: result.height,
+              timestamp: result.timestamp,
+            }
+            const POLL_INTERVAL = 500
+            const MAX_WAIT = 30_000
+            const startTime = Date.now()
+
+            log.info("wait_for_change: screen unchanged, polling for changes", {
+              maxWait: MAX_WAIT,
+              pollInterval: POLL_INTERVAL,
+            })
+
+            let changed = false
+            while (Date.now() - startTime < MAX_WAIT) {
+              if (ctx.abort.aborted) break
+              await new Promise((r) => setTimeout(r, POLL_INTERVAL))
+              if (ctx.abort.aborted) break
+
+              try {
+                const probe = await Capture.take({ mode: "auto" })
+                if (!probe.rawBuffer) continue
+                const diff = await ScreenDiff.compare(baseline, {
+                  rawBuffer: probe.rawBuffer,
+                  width: probe.width,
+                  height: probe.height,
+                  timestamp: probe.timestamp,
+                })
+                if (diff.changed) {
+                  result = probe
+                  changed = true
+                  log.info("wait_for_change: change detected", {
+                    diffPercent: diff.diffPercent.toFixed(1),
+                    elapsed: Date.now() - startTime,
+                  })
+                  break
+                }
+              } catch {
+                // Capture or compare failed — skip this round
+              }
+            }
+
+            if (!changed) {
+              log.info("wait_for_change: timeout, returning current state", {
+                elapsed: Date.now() - startTime,
+              })
+            }
+          }
+        }
+
         DesktopState.setBounds(result.windowBounds)
         Capture.cleanup().catch(() => {})
 

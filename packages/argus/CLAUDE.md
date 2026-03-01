@@ -37,7 +37,7 @@ Every desktop task follows this pattern:
 
 ## RULES
 
-- **NEVER skip list_windows** — always check what's open before interacting.
+- **ALWAYS check window state before interacting** — use list_windows or screenshot to verify.
 - **ALWAYS bind_window** — it makes coordinates relative and screenshots focused.
 - **ALWAYS click before typing** — text goes to the focused element.
 - **ALWAYS use wait() before screenshot** when expecting UI changes (app opening, page loading).
@@ -45,15 +45,30 @@ Every desktop task follows this pattern:
 - **ALWAYS describe screenshots** — after each screenshot, describe what you see in text. Screenshots are auto-removed from context next turn; your description is the only surviving record.
 - **ALWAYS write text between tool calls** — explain what you're doing and what you see. Never chain 3+ tool calls without any text output.
 
+## Coding Tasks (via TUI)
+
+When asked to write or modify code, prefer using the Argus TUI (Claude Code terminal) over editing files directly:
+
+1. `screen.list_windows` — check if a window titled "ARGUS_TUI_BOT" is available
+2. If found: `screen.bind_window("ARGUS_TUI_BOT")` → `screen.screenshot` → interact
+3. If NOT found: launch the TUI via bash (the launch command is provided in the bot system prompt), then wait 5s, `screen.list_windows` again, and bind
+4. Type the coding instruction into the TUI, press Enter, monitor progress with screenshots
+5. Report results in your text response
+
+The TUI delegates coding to a specialized Claude Code instance — it handles file creation, editing, testing, and error recovery. Your role is to orchestrate and monitor.
+
 ## Opening Programs
 
 ### Windows
+
 Press `win` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
 
 ### macOS
+
 Press `cmd+space` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
 
 ### Linux
+
 Press `super` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
 
 TIP: Check the platform info in the first screenshot output to know which OS you're on.
@@ -61,12 +76,14 @@ TIP: Check the platform info in the first screenshot output to know which OS you
 ## Error Recovery
 
 When an action doesn't produce the expected result:
+
 1. Wait longer, retry same action
 2. Try alternative approach (keyboard shortcut instead of click, different target)
 3. Press Esc to dismiss popups, Alt+F4 to close stuck windows
 4. Go back to list_windows and reassess
 
 Common failures:
+
 - **Click missed target** — Re-screenshot, re-read coordinates
 - **Popup blocking** — Dismiss with Esc or click X
 - **Wrong window focused** — Re-bind to target window
@@ -75,6 +92,7 @@ Common failures:
 ## If Screen Hasn't Changed
 
 When you see "Screen has NOT changed", the UI hasn't updated yet:
+
 - Use `input.wait(2000)` then screenshot again
 - Or try a different action
 - Double the wait time on each retry: 500 → 1000 → 2000 → 5000

@@ -79,6 +79,29 @@ export namespace WindowManager {
     return windows.find((w) => w.id() === windowId) ?? null
   }
 
+  /**
+   * Focus/activate a window by its native ID (HWND on Windows).
+   * Brings the window to the foreground so it's visible for screenshots and interaction.
+   */
+  export async function focusWindow(windowId: number): Promise<boolean> {
+    try {
+      if (process.platform === "win32") {
+        const { execSync } = await import("child_process")
+        execSync(
+          `powershell -NoProfile -Command "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W { [DllImport(\\\"user32.dll\\\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\\\"user32.dll\\\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'; [W]::ShowWindow([IntPtr]${windowId}, 9); [W]::SetForegroundWindow([IntPtr]${windowId})"`,
+          { timeout: 5000, stdio: "ignore" },
+        )
+        log.info("focused window", { windowId })
+        return true
+      }
+      // On other platforms, no native focus mechanism yet
+      return false
+    } catch (err) {
+      log.warn("failed to focus window", { windowId, err })
+      return false
+    }
+  }
+
   export async function bind(titleQuery: string): Promise<WindowBinding> {
     const info = await findWindow(titleQuery)
     if (!info) {
@@ -90,6 +113,9 @@ export namespace WindowManager {
       matchTitle: titleQuery,
       info,
     }
+
+    // Bring window to foreground after binding
+    await focusWindow(info.id)
 
     log.info("bound window", { windowId: info.id, title: info.title, appName: info.appName })
     return windowState().binding!

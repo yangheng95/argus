@@ -7,6 +7,14 @@ import { OpenAIWhisperProvider } from "./stt/providers/openai-whisper"
 import { DeepgramProvider } from "./stt/providers/deepgram"
 import { GoogleGeminiProvider } from "./stt/providers/google-gemini"
 import { LocalCLIProvider } from "./stt/providers/local-cli"
+import { VisionPipeline } from "./vision"
+
+// Ensure DASHSCOPE_API_KEY is set for the Argus alibaba-cn provider.
+// Support both: DASHSCOPE_API_KEY (standard) and CODING_DASHSCOPE_API_KEY (Coding Plan).
+// The Coding Plan key (sk-sp-*) uses a different baseURL (coding.dashscope.aliyuncs.com).
+if (!process.env.DASHSCOPE_API_KEY && process.env.CODING_DASHSCOPE_API_KEY) {
+  process.env.DASHSCOPE_API_KEY = process.env.CODING_DASHSCOPE_API_KEY
+}
 
 // Pass Argus config inline since the SDK spawns the server in packages/argus,
 // which won't find the project-root .argus/ config directory.
@@ -19,18 +27,20 @@ process.env.ARGUS_CONFIG_CONTENT = JSON.stringify({
       },
     },
   },
-  // Argus is a GUI automation agent — it MUST interact through the desktop GUI.
-  // Deny all file-editing and shell tools to prevent the LLM from bypassing GUI.
-  // If it needs to write code, it should open an editor (e.g. Claude, VS Code) via GUI.
-  // If it needs to run a command, it should open a terminal via GUI.
   permission: {
     "*": "deny",
     screen: "allow",
     input: "allow",
-    // Read-only tools for context understanding (no side effects)
+    bash: "allow",
+    edit: "allow",
+    write: "allow",
     read: "allow",
     glob: "allow",
     grep: "allow",
+    skill: "allow",
+    memory: "allow",
+    schedule: "allow",
+    external_directory: "allow",
   },
 })
 
@@ -48,6 +58,20 @@ sttPipeline.register(new GoogleGeminiProvider({ apiKey: process.env.GOOGLE_API_K
 sttPipeline.register(new LocalCLIProvider({ command: process.env.STT_LOCAL_COMMAND }))
 await sttPipeline.init()
 bot.setSTT(sttPipeline)
+
+// --- Vision Pipeline Setup ---
+// Support both key names: DASHSCOPE_API_KEY (standard) and CODING_DASHSCOPE_API_KEY (Coding Plan)
+const dashscopeKey = process.env.DASHSCOPE_API_KEY ?? process.env.CODING_DASHSCOPE_API_KEY
+if (dashscopeKey) {
+  const visionModel = process.env.ARGUS_VISION_MODEL ?? "qwen3.5-plus"
+  bot.setVision(new VisionPipeline({
+    apiKey: dashscopeKey,
+    baseURL: "https://coding.dashscope.aliyuncs.com/v1",
+    model: visionModel,
+  }))
+  const keySource = process.env.DASHSCOPE_API_KEY ? "DASHSCOPE_API_KEY" : "CODING_DASHSCOPE_API_KEY"
+  console.log(`[Bot] Vision pipeline enabled (model: ${visionModel}, key: ${keySource})`)
+}
 
 if (process.env.SLACK_BOT_TOKEN) {
   bot.register(

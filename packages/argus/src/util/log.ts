@@ -38,8 +38,6 @@ export namespace Log {
     }
   }
 
-  const loggers = new Map<string, Logger>()
-
   export const Default = create({ service: "default" })
 
   export interface Options {
@@ -99,14 +97,6 @@ export namespace Log {
   let last = Date.now()
   export function create(tags?: Record<string, any>) {
     tags = tags || {}
-
-    const service = tags["service"]
-    if (service && typeof service === "string") {
-      const cached = loggers.get(service)
-      if (cached) {
-        return cached
-      }
-    }
 
     function build(message: any, extra?: Record<string, any>) {
       const prefix = Object.entries({
@@ -171,10 +161,6 @@ export namespace Log {
           },
         }
       },
-    }
-
-    if (service && typeof service === "string") {
-      loggers.set(service, result)
     }
 
     return result

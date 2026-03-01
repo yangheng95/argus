@@ -30,6 +30,8 @@ import { Truncate } from "./truncation"
 import { ApplyPatchTool } from "./apply_patch"
 import { ScreenTool } from "./screen"
 import { InputTool } from "./input"
+import { MemoryTool } from "./memory"
+import { ScheduleTool } from "./schedule"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -121,6 +123,8 @@ export namespace ToolRegistry {
       ApplyPatchTool,
       ScreenTool,
       InputTool,
+      MemoryTool,
+      ScheduleTool,
       ...(Flag.ARGUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...(Flag.ARGUS_EXPERIMENTAL_PLAN_MODE && Flag.ARGUS_CLIENT === "cli" ? [PlanExitTool] : []),

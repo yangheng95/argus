@@ -1,3 +1,7 @@
+import { Log } from "./log"
+
+const log = Log.create({ service: "retry" })
+
 /**
  * Retry an async function with exponential backoff.
  * Retries on rate-limit (429) and server errors (503, 502), not on client errors.
@@ -21,10 +25,13 @@ export async function withRetry<T>(
       if (!isRetryable || attempt === maxAttempts) throw err
       const delay =
         baseDelayMs * Math.pow(2, attempt - 1) * (0.5 + Math.random() * 0.5)
-      console.warn(
-        `[retry] ${label} failed (attempt ${attempt}/${maxAttempts}), retrying in ${Math.round(delay)}ms:`,
-        err?.message,
-      )
+      log.warn("retrying after failure", {
+        label,
+        attempt,
+        maxAttempts,
+        delayMs: Math.round(delay),
+        error: err?.message,
+      })
       await new Promise((r) => setTimeout(r, delay))
     }
   }
