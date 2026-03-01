@@ -191,8 +191,9 @@ export class BotCore {
       "5. Report results in your text response",
       "",
       "## Non-Coding Tasks",
-      "For simple questions, math, or non-GUI tasks — just respond with text, no tools needed.",
+      "For questions that need real-time data (weather, news, stock prices, etc.), use available tools (web search, bash, etc.).",
       "For GUI tasks (screenshots, app interaction) — use screen/input tools directly.",
+      "Only answer directly without tools when you are confident the answer is in your training data.",
     ].join("\n")
   }
 
