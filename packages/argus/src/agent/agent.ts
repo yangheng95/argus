@@ -63,7 +63,6 @@ export namespace Agent {
         ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
       },
       question: "deny",
-      plan_exit: "deny",
       // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
       read: {
         "*": "allow",
@@ -83,29 +82,6 @@ export namespace Agent {
           defaults,
           PermissionNext.fromConfig({
             question: "allow",
-          }),
-          user,
-        ),
-        mode: "primary",
-        native: true,
-      },
-      plan: {
-        name: "plan",
-        description: "Plan mode. Disallows all edit tools.",
-        options: {},
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            question: "allow",
-            plan_exit: "allow",
-            external_directory: {
-              [path.join(Global.Path.data, "plans", "*")]: "allow",
-            },
-            edit: {
-              "*": "deny",
-              [path.join(".argus", "plans", "*.md")]: "allow",
-              [path.relative(Instance.worktree, path.join(Global.Path.data, path.join("plans", "*.md")))]: "allow",
-            },
           }),
           user,
         ),

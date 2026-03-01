@@ -1,4 +1,3 @@
-import { PlanExitTool } from "./plan"
 import { QuestionTool } from "./question"
 import { BashTool } from "./bash"
 import { EditTool } from "./edit"
@@ -32,6 +31,8 @@ import { ScreenTool } from "./screen"
 import { InputTool } from "./input"
 import { MemoryTool } from "./memory"
 import { ScheduleTool } from "./schedule"
+import { PlannerTool } from "./planner"
+import { GoalTool } from "./goal"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -125,9 +126,10 @@ export namespace ToolRegistry {
       InputTool,
       MemoryTool,
       ScheduleTool,
+      PlannerTool,
+      GoalTool,
       ...(Flag.ARGUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
-      ...(Flag.ARGUS_EXPERIMENTAL_PLAN_MODE && Flag.ARGUS_CLIENT === "cli" ? [PlanExitTool] : []),
       ...custom,
     ]
   }
@@ -147,10 +149,7 @@ export namespace ToolRegistry {
     const result = await Promise.all(
       tools
         .filter((t) => {
-          // Enable websearch/codesearch for zen users OR via enable flag
-          if (t.id === "codesearch" || t.id === "websearch") {
-            return model.providerID === "argus" || Flag.ARGUS_ENABLE_EXA
-          }
+
 
           // use apply tool in same format as codex
           const usePatch =

@@ -46,7 +46,6 @@ export namespace Flag {
   export const ARGUS_EXPERIMENTAL_LSP_TY = truthy("ARGUS_EXPERIMENTAL_LSP_TY")
   export declare const ARGUS_EXPERIMENTAL_LSP_TOOL: boolean
   export const ARGUS_DISABLE_FILETIME_CHECK = truthy("ARGUS_DISABLE_FILETIME_CHECK")
-  export declare const ARGUS_EXPERIMENTAL_PLAN_MODE: boolean
   export const ARGUS_EXPERIMENTAL_MARKDOWN = truthy("ARGUS_EXPERIMENTAL_MARKDOWN")
   export const ARGUS_MODELS_URL = process.env["ARGUS_MODELS_URL"]
   export const ARGUS_MODELS_PATH = process.env["ARGUS_MODELS_PATH"]
@@ -165,14 +164,6 @@ Object.defineProperty(Flag, "ARGUS_EXPERIMENTAL_OXFMT", {
 Object.defineProperty(Flag, "ARGUS_EXPERIMENTAL_LSP_TOOL", {
   get() {
     return Flag.ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_LSP_TOOL")
-  },
-  enumerable: true,
-  configurable: false,
-})
-
-Object.defineProperty(Flag, "ARGUS_EXPERIMENTAL_PLAN_MODE", {
-  get() {
-    return Flag.ARGUS_EXPERIMENTAL || truthy("ARGUS_EXPERIMENTAL_PLAN_MODE")
   },
   enumerable: true,
   configurable: false,

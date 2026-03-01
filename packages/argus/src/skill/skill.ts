@@ -16,6 +16,7 @@ import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import codingMd from "./builtin/coding.md" with { type: "text" }
 import desktopMd from "./builtin/desktop.md" with { type: "text" }
+import planMd from "./builtin/plan.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -57,7 +58,7 @@ export namespace Skill {
     const dirs = new Set<string>()
 
     // Register built-in skills (lowest priority — user skills with same name override)
-    for (const raw of [codingMd, desktopMd]) {
+    for (const raw of [codingMd, desktopMd, planMd]) {
       const md = matter(raw)
       const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
       if (!parsed.success) continue
