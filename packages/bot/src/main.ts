@@ -233,10 +233,13 @@ if (!process.env.DASHSCOPE_API_KEY && process.env.CODING_DASHSCOPE_API_KEY) {
 // Build ARGUS_CONFIG_CONTENT from saved/env config
 const savedCfg = await loadConfig()
 const argusModel = savedCfg?.model ?? "alibaba-cn/qwen3.5-plus"
+// Detect Coding Plan key (sk-sp-*) regardless of which env var it came from
+const dashKey = process.env.DASHSCOPE_API_KEY ?? process.env.CODING_DASHSCOPE_API_KEY ?? ""
+const isCodingPlanKey = !!process.env.CODING_DASHSCOPE_API_KEY || dashKey.startsWith("sk-sp-")
 const argusProvider: Record<string, any> = {
   "alibaba-cn": {
     options: {
-      baseURL: process.env.CODING_DASHSCOPE_API_KEY
+      baseURL: isCodingPlanKey
         ? "https://coding.dashscope.aliyuncs.com/v1"
         : "https://dashscope.aliyuncs.com/compatible-mode/v1",
     },
@@ -285,7 +288,8 @@ bot.setSTT(sttPipeline)
 const dashscopeKey = process.env.DASHSCOPE_API_KEY ?? process.env.CODING_DASHSCOPE_API_KEY
 if (dashscopeKey) {
   const visionModel = process.env.ARGUS_VISION_MODEL ?? "qwen3.5-plus"
-  const baseURL = process.env.CODING_DASHSCOPE_API_KEY
+  const visionIsCoding = !!process.env.CODING_DASHSCOPE_API_KEY || dashscopeKey.startsWith("sk-sp-")
+  const baseURL = visionIsCoding
     ? "https://coding.dashscope.aliyuncs.com/v1"
     : "https://dashscope.aliyuncs.com/compatible-mode/v1"
   bot.setVision(new VisionPipeline({

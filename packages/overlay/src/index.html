@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      /* Solid dark background — WebView2 on Windows renders "transparent"
+         as green. Since the window is only 360x60 with click-through, solid is fine. */
+      background: #14141e;
+      border-radius: 12px;
+      overflow: hidden;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    #popup {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) translateY(4px);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background: #14141e;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+    }
+
+    #popup.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) translateY(0);
+    }
+
+    #popup.hiding {
+      opacity: 0;
+      transform: translate(-50%, -50%) translateY(-4px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+
+    #popup[data-action="click"],
+    #popup[data-action="double"],
+    #popup[data-action="right"],
+    #popup[data-action="middle"] { border-left: 2px solid rgba(96, 165, 250, 0.6); }
+    #popup[data-action="type"]   { border-left: 2px solid rgba(52, 211, 153, 0.6); }
+    #popup[data-action="key"]    { border-left: 2px solid rgba(251, 191, 36, 0.6); }
+    #popup[data-action="scroll"] { border-left: 2px solid rgba(167, 139, 250, 0.6); }
+    #popup[data-action="drag"]   { border-left: 2px solid rgba(248, 113, 113, 0.6); }
+    #popup[data-action="move"]   { border-left: 2px solid rgba(156, 163, 175, 0.4); }
+
+    #icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    #icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    #label {
+      font-size: 12px;
+      opacity: 0.9;
+      letter-spacing: 0.01em;
+    }
+  </style>
+</head>
+<body>
+  <div id="popup">
+    <span id="icon"></span>
+    <span id="label"></span>
+  </div>
+  <script src="overlay.js"></script>
+</body>
+</html>
