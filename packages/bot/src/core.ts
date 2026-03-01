@@ -1,7 +1,6 @@
 import { createOpencode, type OpencodeClient } from "@opencode-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { SlackAdapter } from "./adapters/slack"
-import { formatToolUpdate } from "./format"
 import type { STTPipeline } from "./stt/pipeline"
 
 interface SessionEntry {
@@ -214,7 +213,7 @@ export class BotCore {
         return
       }
 
-      // Flush buffered text when assistant message is complete
+      // Flush buffered text when assistant message (one agentic step) completes
       if (info.role === "assistant" && info.time.completed) {
         const session = this.findSession(info.sessionID)
         if (!session) return
@@ -225,7 +224,7 @@ export class BotCore {
         if (text) {
           const truncated = text.length > 3900 ? text.slice(0, 3900) + "\n...(truncated)" : text
           await session.adapter.sendMessage(session.channel, session.thread, truncated).catch(() => {})
-          console.log(`[BotCore] Sent response for session ${info.sessionID} (${text.length} chars)`)
+          console.log(`[BotCore] Sent text for ${info.sessionID} (${text.length} chars)`)
         }
 
         if (info.error) {
@@ -249,15 +248,16 @@ export class BotCore {
         this.textBuffers.set(part.messageID, part.text)
       }
 
-      // Handle tool updates
-      if (part.type === "tool") {
-        const update = formatToolUpdate(part)
-        if (update.text) {
-          await session.adapter.sendMessage(session.channel, session.thread, update.text).catch(() => {})
-        }
-
-        // For completed screen tool: fetch screenshot via API and upload
-        if (part.tool === "screen" && part.state.status === "completed") {
+      // Only upload screenshots to Slack — do NOT post tool status messages.
+      // Tool results like "input — Pressed win" or "screen — Screenshot captured"
+      // are internal operations; posting each one floods the thread with robotic noise.
+      // The model's text response (buffered above) is the human-readable output.
+      if (part.type === "tool" && part.tool === "screen" && part.state.status === "completed") {
+        // Only upload actual screenshot images, skip unchanged/text-only results
+        const hasImage = (part.state.attachments ?? []).some(
+          (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
+        )
+        if (hasImage) {
           await this.fetchAndUploadScreenshot(
             session,
             part.sessionID,
