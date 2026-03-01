@@ -14,10 +14,6 @@
   <a href="https://github.com/yangheng95/argus/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/yangheng95/argus?style=flat-square" /></a>
 </p>
 
-<p align="center">
-  <img src="packages/console/app/src/asset/lander/screenshot.png" width="640" alt="Argus in action">
-</p>
-
 ---
 
 ## What is Argus?
