@@ -129,6 +129,7 @@ export namespace ToolRegistry {
       ScheduleTool,
       PlannerTool,
       GoalTool,
+      VisionAnalyzeTool,
       ...(Flag.ARGUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
