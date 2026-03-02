@@ -9,6 +9,7 @@ import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { Tui } from "@/tui"
 import { SessionStatus } from "@/session/status"
+import { SessionPrompt } from "@/session/prompt"
 
 const TuiRequest = z.object({
   path: z.string(),
@@ -224,7 +225,7 @@ export const TuiRoutes = lazy(() =>
       describeRoute({
         summary: "Submit task to managed TUI and optionally wait",
         description:
-          "Write a task into the managed TUI prompt, submit it, and optionally wait until the session finishes to return assistant output.",
+          "Submit a task through Session API and optionally wait until completion. TUI runtime is only for UI lifecycle, not task execution truth.",
         operationId: "tui.runtime.submitTask",
         responses: {
           200: {
@@ -251,16 +252,13 @@ export const TuiRoutes = lazy(() =>
         z.object({
           text: z.string().min(1),
           sessionID: z.string().optional(),
+          agent: z.string().optional(),
           wait: z.boolean().default(true).optional(),
           timeoutMs: z.number().int().min(1000).max(30 * 60 * 1000).default(5 * 60 * 1000).optional(),
-          pollMs: z.number().int().min(100).max(5000).default(500).optional(),
         }),
       ),
       async (c) => {
         const body = c.req.valid("json")
-        if (!runtime.handle || runtime.handle.closed) {
-          throw new Error("TUI runtime is not running. Call /tui/runtime/start first.")
-        }
 
         const sessionID = body.sessionID ?? runtime.sessionID
         if (!sessionID) {
@@ -268,24 +266,21 @@ export const TuiRoutes = lazy(() =>
         }
         runtime.sessionID = sessionID
 
-        const doPost = async (path: string, payload: unknown) => {
-          const res = await fetch(`${runtime.handle!.url}${path}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+        const run = () =>
+          SessionPrompt.prompt({
+            sessionID,
+            agent: body.agent,
+            parts: [
+              {
+                type: "text",
+                text: body.text,
+              },
+            ],
           })
-          const text = await res.text()
-          if (!res.ok) {
-            throw new Error(`TUI request failed: ${res.status} ${path} ${text}`)
-          }
-        }
-
-        await doPost("/tui/select-session", { sessionID })
-        await doPost("/tui/append-prompt", { text: body.text })
-        await doPost("/tui/submit-prompt", {})
 
         const wait = body.wait ?? true
         if (!wait) {
+          void run().catch(() => {})
           return c.json({
             accepted: true,
             sessionID,
@@ -297,28 +292,25 @@ export const TuiRoutes = lazy(() =>
 
         const start = Date.now()
         const timeoutMs = body.timeoutMs ?? 5 * 60 * 1000
-        const pollMs = body.pollMs ?? 500
-        let sawBusy = false
 
-        while (Date.now() - start < timeoutMs) {
-          const status = SessionStatus.get(sessionID)
-          if (status.type === "busy") sawBusy = true
-          if (status.type === "idle" && sawBusy) {
-            const msgs = await Session.messages({ sessionID, limit: 50 })
-            const latest = msgs
-              .filter((m) => m.info.role === "assistant" && m.info.time.created >= start)
-              .at(-1) ?? null
-            return c.json({
-              accepted: true,
-              sessionID,
-              waited: true,
-              completed: true,
-              message: latest,
-            })
-          }
-          await new Promise((resolve) => setTimeout(resolve, pollMs))
+        const result = await Promise.race([
+          run().then((message) => ({ kind: "done" as const, message })),
+          new Promise<{ kind: "timeout" as const }>((resolve) =>
+            setTimeout(() => resolve({ kind: "timeout" }), timeoutMs),
+          ),
+        ])
+
+        if (result.kind === "done") {
+          return c.json({
+            accepted: true,
+            sessionID,
+            waited: true,
+            completed: true,
+            message: result.message,
+          })
         }
 
+        const status = SessionStatus.get(sessionID)
         const msgs = await Session.messages({ sessionID, limit: 50 })
         const latest = msgs
           .filter((m) => m.info.role === "assistant" && m.info.time.created >= start)
@@ -327,7 +319,7 @@ export const TuiRoutes = lazy(() =>
           accepted: true,
           sessionID,
           waited: true,
-          completed: false,
+          completed: status.type === "idle" && !!latest,
           message: latest,
         })
       },
