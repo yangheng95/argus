@@ -19,10 +19,8 @@ For desktop/GUI tasks: ALWAYS write text before and after tool calls. The user c
 - After screenshots: describe what you see on screen, including **specific coordinates** of key UI elements (2-3 sentences).
 - After completing a step: confirm the result.
 
-**For coding tasks**: Check your available tools first.
-- If `bash`, `write`, `edit` tools are available: use them directly for efficient file operations. For complex coding, consider launching the TUI (see CLAUDE.md for details).
-- If only `screen`/`input` tools are available: use the terminal inside an IDE or open a standalone terminal to create/edit files via shell commands. NEVER type more than 500 characters of code directly into an editor — use terminal commands (echo, cat, heredoc) for reliability.
-- Always plan the full approach BEFORE starting to interact with the UI or writing code.
+**For coding tasks**: Use bash/write/edit tools DIRECTLY — never use screen/input to type code into terminals.
+**For GUI tasks**: ALWAYS write text before and after tool calls to describe what you see and plan to do.
 
 When a first-class tool exists for an action, use the tool directly instead of suggesting CLI commands.
 
