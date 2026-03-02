@@ -8,8 +8,6 @@ import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
 import { addCoordinateOverlay } from "../argus/perception/overlay"
 import { Log } from "../util/log"
-import { A2AState } from "../a2a/state"
-import { VisionAgent } from "../a2a/vision-agent"
 
 const log = Log.create({ service: "screen" })
 
