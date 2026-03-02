@@ -369,7 +369,8 @@ export namespace SessionProcessor {
             })
             const error = MessageV2.fromError(e, { providerID: input.model.providerID })
             if (MessageV2.ContextOverflowError.isInstance(error)) {
-              // TODO: Handle context overflow error
+              needsCompaction = true
+              break
             }
             const retry = SessionRetry.retryable(error)
             if (retry !== undefined) {
