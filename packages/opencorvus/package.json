@@ -13,7 +13,6 @@
     "db": "bun drizzle-kit"
   },
   "bin": {
-    "opencorvus": "./bin/opencorvus",
     "opencorvus": "./bin/opencorvus"
   },
   "exports": {
