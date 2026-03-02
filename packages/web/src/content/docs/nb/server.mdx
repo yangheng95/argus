@@ -164,7 +164,7 @@ argus-serveren viser følgende APIer.
 | `POST`   | `/session/:id/summarize`                 | Oppsummer økten                          | body: `{ providerID, modelID }`, returnerer `boolean`                                 |
 | `POST`   | `/session/:id/revert`                    | Tilbakestill en melding                  | body: `{ messageID, partID? }`, returnerer `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | Gjenopprett alle tilbakestilte meldinger | Returnerer `boolean`                                                                  |
-| `POST`   | `/session/:id/permissions/:permissionID` | Svar på en tillatelsesforespørsel        | body: `{ response, remember? }`, returnerer `boolean`                                 |
+| `POST`   | `/permission/:requestID/reply` | Svar på en tillatelsesforespørsel        | body: `{ reply, message? }`, returnerer `boolean`                                 |
 
 ---
 

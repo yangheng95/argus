@@ -11,32 +11,35 @@ import { createClient } from "@hey-api/openapi-ts"
 
 await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../argus"))
 
-await createClient({
-  input: "./openapi.json",
-  output: {
-    path: "./src/v2/gen",
-    tsConfigPath: path.join(dir, "tsconfig.json"),
-    clean: true,
-  },
-  plugins: [
-    {
-      name: "@hey-api/typescript",
-      exportFromIndex: false,
+const generate = async (output: string) =>
+  createClient({
+    input: "./openapi.json",
+    output: {
+      path: output,
+      tsConfigPath: path.join(dir, "tsconfig.json"),
+      clean: true,
     },
-    {
-      name: "@hey-api/sdk",
-      instance: "OpencodeClient",
-      exportFromIndex: false,
-      auth: false,
-      paramsStructure: "flat",
-    },
-    {
-      name: "@hey-api/client-fetch",
-      exportFromIndex: false,
-      baseUrl: "http://localhost:4096",
-    },
-  ],
-})
+    plugins: [
+      {
+        name: "@hey-api/typescript",
+        exportFromIndex: false,
+      },
+      {
+        name: "@hey-api/sdk",
+        instance: "OpencodeClient",
+        exportFromIndex: false,
+        auth: false,
+        paramsStructure: "flat",
+      },
+      {
+        name: "@hey-api/client-fetch",
+        exportFromIndex: false,
+        baseUrl: "http://localhost:4096",
+      },
+    ],
+  })
+
+await Promise.all([generate("./src/gen"), generate("./src/v2/gen")])
 
 await $`bun prettier --write src/gen`
 await $`bun prettier --write src/v2`

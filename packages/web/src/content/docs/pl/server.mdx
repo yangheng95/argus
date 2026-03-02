@@ -164,7 +164,7 @@ Serwer argus udostępnia następujące interfejsy API.
 | `POST`   | `/session/:id/summarize`                 | Podsumuj sesję                              | treść: `{ providerID, modelID }`, zwraca `boolean`                                 |
 | `POST`   | `/session/:id/revert`                    | Przywróć wiadomość                          | treść: `{ messageID, partID? }`, zwraca `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | Przywróć wszystkie przywrócone wiadomości   | Zwraca `boolean`                                                                   |
-| `POST`   | `/session/:id/permissions/:permissionID` | Odpowiedz na prośbę o pozwolenie            | treść: `{ response, remember? }`, zwraca `boolean`                                 |
+| `POST`   | `/permission/:requestID/reply` | Odpowiedz na prośbę o pozwolenie            | treść: `{ reply, message? }`, zwraca `boolean`                                 |
 
 ---
 

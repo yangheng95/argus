@@ -89,13 +89,21 @@ async function deleteConfig(): Promise<void> {
   } catch {}
 }
 
+// ─── DashScope endpoint routing rule ─────────────────────────────────────────
+// sk-sp-* → https://coding.dashscope.aliyuncs.com/api/v1  (Coding Plan)
+// sk-*    → https://dashscope-intl.aliyuncs.com/compatible-mode/v1  (Standard)
+function dashscopeBaseURLForKey(apiKey: string | undefined): string {
+  if (apiKey?.startsWith("sk-sp-")) {
+    return "https://coding.dashscope.aliyuncs.com/api/v1"
+  }
+  return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+}
+
 function buildProviderOptions(providerId: string): Record<string, any> {
   const opts: Record<string, any> = {}
   if (providerId === "alibaba-cn") {
-    const ck = process.env.CODING_DASHSCOPE_API_KEY
-    opts.baseURL = ck
-      ? "https://coding.dashscope.aliyuncs.com/v1"
-      : "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    const activeKey = process.env.CODING_DASHSCOPE_API_KEY ?? process.env.DASHSCOPE_API_KEY
+    opts.baseURL = dashscopeBaseURLForKey(activeKey)
   }
   return opts
 }

@@ -1510,39 +1510,6 @@ export type Config = {
      */
     reserved?: number
   }
-  /**
-   * A2A (Agent-to-Agent) orchestration configuration
-   */
-  a2a?: {
-    /**
-     * Enable A2A (Agent-to-Agent) orchestration mode
-     */
-    enabled?: boolean
-    /**
-     * Model for visual analysis agent (format: provider/model)
-     */
-    vision_model?: string
-    /**
-     * Model for plan agent (format: provider/model)
-     */
-    plan_model?: string
-    /**
-     * Model for GUI operation agent (format: provider/model)
-     */
-    gui_model?: string
-    /**
-     * Max re-planning attempts per task (default: 3)
-     */
-    max_replans?: number
-    /**
-     * Max retries per step before re-planning (default: 3)
-     */
-    max_step_retries?: number
-    /**
-     * Max tasks in queue (default: 20)
-     */
-    queue_max_size?: number
-  }
   experimental?: {
     disable_paste_summary?: boolean
     /**
@@ -4037,42 +4004,6 @@ export type SessionUnrevertResponses = {
 
 export type SessionUnrevertResponse = SessionUnrevertResponses[keyof SessionUnrevertResponses]
 
-export type PermissionRespondData = {
-  body?: {
-    response: "once" | "always" | "reject"
-  }
-  path: {
-    sessionID: string
-    permissionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/permissions/{permissionID}"
-}
-
-export type PermissionRespondErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type PermissionRespondError = PermissionRespondErrors[keyof PermissionRespondErrors]
-
-export type PermissionRespondResponses = {
-  /**
-   * Permission processed successfully
-   */
-  200: boolean
-}
-
-export type PermissionRespondResponse = PermissionRespondResponses[keyof PermissionRespondResponses]
-
 export type PermissionReplyData = {
   body?: {
     reply: "once" | "always" | "reject"
@@ -5360,6 +5291,7 @@ export type AppSkillsResponses = {
   200: Array<{
     name: string
     description: string
+    platforms?: Array<"win32" | "darwin" | "linux">
     location: string
     content: string
   }>

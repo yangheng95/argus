@@ -164,7 +164,7 @@ Argus-serveren viser følgende API'er.
 | `POST`   | `/session/:id/summarize`                 | Opsummér sessionen                         | body: `{ providerID, modelID }`, returnerer `boolean`                                 |
 | `POST`   | `/session/:id/revert`                    | Tilbagestil en besked                      | body: `{ messageID, partID? }`, returnerer `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | Gendan alle nulstillede beskeder           | Returnerer `boolean`                                                                  |
-| `POST`   | `/session/:id/permissions/:permissionID` | Svar på en tilladelsesforespørgsel         | body: `{ response, remember? }`, returnerer `boolean`                                 |
+| `POST`   | `/permission/:requestID/reply` | Svar på en tilladelsesforespørgsel         | body: `{ reply, message? }`, returnerer `boolean`                                 |
 
 ---
 

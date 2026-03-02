@@ -164,7 +164,7 @@ http://<hostname>:<port>/doc
 | `POST`   | `/session/:id/summarize`                 | สรุปเซสชัน                         | เนื้อความ: `{ providerID, modelID }` ส่งคืน `boolean`                            |
 | `POST`   | `/session/:id/revert`                    | คืนค่าข้อความ                      | เนื้อความ: `{ messageID, partID? }` ส่งคืน `boolean`                             |
 | `POST`   | `/session/:id/unrevert`                  | กู้คืนข้อความที่เปลี่ยนกลับทั้งหมด | ส่งคืน `boolean`                                                                 |
-| `POST`   | `/session/:id/permissions/:permissionID` | ตอบสนองต่อการร้องขอการอนุญาต       | เนื้อความ: `{ response, remember? }` ส่งคืน `boolean`                            |
+| `POST`   | `/permission/:requestID/reply` | ตอบสนองต่อการร้องขอการอนุญาต       | เนื้อความ: `{ reply, message? }` ส่งคืน `boolean`                            |
 
 ---
 

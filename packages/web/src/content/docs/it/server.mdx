@@ -161,7 +161,7 @@ Il server argus espone le seguenti API.
 | `POST`   | `/session/:id/summarize`                 | Riassume la sessione                  | body: `{ providerID, modelID }`, returns `boolean`                                 |
 | `POST`   | `/session/:id/revert`                    | Ripristina un messaggio               | body: `{ messageID, partID? }`, returns `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | Ripristina tutti i messaggi revertiti | Returns `boolean`                                                                  |
-| `POST`   | `/session/:id/permissions/:permissionID` | Risponde a una richiesta permessi     | body: `{ response, remember? }`, returns `boolean`                                 |
+| `POST`   | `/permission/:requestID/reply` | Risponde a una richiesta permessi     | body: `{ reply, message? }`, returns `boolean`                                 |
 
 ---
 

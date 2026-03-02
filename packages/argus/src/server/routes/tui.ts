@@ -124,8 +124,7 @@ export const TuiRoutes = lazy(() =>
             port: z.number().int().optional(),
             hostname: z.string().optional(),
             bin: z.string().optional(),
-          })
-          .default({}),
+          }),
       ),
       async (c) => {
         const body = c.req.valid("json")

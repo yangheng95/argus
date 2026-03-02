@@ -164,7 +164,7 @@ http://<hostname>:<port>/doc
 | `POST`   | `/session/:id/summarize`                 | تلخيص الجلسة                          | المتن: `{ providerID, modelID }`، يعيد `boolean`                                 |
 | `POST`   | `/session/:id/revert`                    | التراجع عن رسالة                      | المتن: `{ messageID, partID? }`، يعيد `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | استعادة جميع الرسائل المتراجع عنها    | يعيد `boolean`                                                                   |
-| `POST`   | `/session/:id/permissions/:permissionID` | الرد على طلب إذن                      | المتن: `{ response, remember? }`، يعيد `boolean`                                 |
+| `POST`   | `/permission/:requestID/reply` | الرد على طلب إذن                      | المتن: `{ reply, message? }`، يعيد `boolean`                                 |
 
 ---
 

@@ -13,7 +13,6 @@ import { Todo } from "../../session/todo"
 import { Agent } from "../../agent/agent"
 import { Snapshot } from "@/snapshot"
 import { Log } from "../../util/log"
-import { PermissionNext } from "@/permission/next"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { SessionProxyMiddleware } from "../../control-plane/session-proxy-middleware"
@@ -936,40 +935,4 @@ export const SessionRoutes = lazy(() =>
         return c.json(session)
       },
     )
-    .post(
-      "/:sessionID/permissions/:permissionID",
-      describeRoute({
-        summary: "Respond to permission",
-        deprecated: true,
-        description: "Approve or deny a permission request from the AI assistant.",
-        operationId: "permission.respond",
-        responses: {
-          200: {
-            description: "Permission processed successfully",
-            content: {
-              "application/json": {
-                schema: resolver(z.boolean()),
-              },
-            },
-          },
-          ...errors(400, 404),
-        },
-      }),
-      validator(
-        "param",
-        z.object({
-          sessionID: z.string(),
-          permissionID: z.string(),
-        }),
-      ),
-      validator("json", z.object({ response: PermissionNext.Reply })),
-      async (c) => {
-        const params = c.req.valid("param")
-        PermissionNext.reply({
-          requestID: params.permissionID,
-          reply: c.req.valid("json").response,
-        })
-        return c.json(true)
-      },
-    ),
 )

@@ -164,7 +164,7 @@ argus 서버는 다음과 같은 API를 노출합니다.
 | `POST`   | `/session/:id/summarize`                 | 세션을 요약                        | 본체: `{ providerID, modelID }`, `boolean` 반환                               |
 | `POST`   | `/session/:id/revert`                    | 메시지 재생                        | 몸: `{ messageID, partID? }`, 반환 `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | 메시지 되돌리기 취소               | 반품 `boolean`                                                                |
-| `POST`   | `/session/:id/permissions/:permissionID` | 허가 요청 대응                     | 본체: `{ response, remember? }`, `boolean`                                    |
+| `POST`   | `/permission/:requestID/reply` | 허가 요청 대응                     | 본체: `{ reply, message? }`, `boolean`                                    |
 
 ---
 

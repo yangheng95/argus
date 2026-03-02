@@ -161,7 +161,7 @@ argus 伺服器暴露以下 API。
 | `POST`   | `/session/:id/summarize`                 | 摘要工作階段                   | 請求主體：`{ providerID, modelID }`，回傳 `boolean`                                 |
 | `POST`   | `/session/:id/revert`                    | 還原訊息                       | 請求主體：`{ messageID, partID? }`，回傳 `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | 恢復所有已還原的訊息           | 回傳 `boolean`                                                                      |
-| `POST`   | `/session/:id/permissions/:permissionID` | 回應權限請求                   | 請求主體：`{ response, remember? }`，回傳 `boolean`                                 |
+| `POST`   | `/permission/:requestID/reply` | 回應權限請求                   | 請求主體：`{ reply, message? }`，回傳 `boolean`                                 |
 
 ---
 

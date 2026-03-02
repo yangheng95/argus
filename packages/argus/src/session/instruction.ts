@@ -14,7 +14,6 @@ const log = Log.create({ service: "instruction" })
 const FILES = [
   "AGENTS.md",
   "CLAUDE.md",
-  "CONTEXT.md", // deprecated
 ]
 
 function globalFiles() {

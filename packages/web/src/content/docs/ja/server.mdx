@@ -159,7 +159,7 @@ Argus サーバーは次の API を公開します。
 | `POST`   | `/session/:id/summarize`                 | セッションを要約する                               | 本文: `{ providerID, modelID }`、`boolean` を返します。                                 |
 | `POST`   | `/session/:id/revert`                    | メッセージを元に戻す                               | 本文: `{ messageID, partID? }`、`boolean` を返します。                                  |
 | `POST`   | `/session/:id/unrevert`                  | 元に戻したすべてのメッセージを復元する             | 戻り値 `boolean`                                                                        |
-| `POST`   | `/session/:id/permissions/:permissionID` | 許可リクエストに応答する                           | 本文: `{ response, remember? }`、`boolean` を返します。                                 |
+| `POST`   | `/permission/:requestID/reply` | 許可リクエストに応答する                           | 本文: `{ reply, message? }`、`boolean` を返します。                                 |
 
 ---
 

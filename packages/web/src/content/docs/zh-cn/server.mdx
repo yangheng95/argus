@@ -161,7 +161,7 @@ argus 服务器暴露以下 API。
 | `POST`   | `/session/:id/summarize`                 | 总结会话                   | 请求体：`{ providerID, modelID }`，返回 `boolean`                                 |
 | `POST`   | `/session/:id/revert`                    | 回退消息                   | 请求体：`{ messageID, partID? }`，返回 `boolean`                                  |
 | `POST`   | `/session/:id/unrevert`                  | 恢复所有已回退的消息       | 返回 `boolean`                                                                    |
-| `POST`   | `/session/:id/permissions/:permissionID` | 响应权限请求               | 请求体：`{ response, remember? }`，返回 `boolean`                                 |
+| `POST`   | `/permission/:requestID/reply` | 响应权限请求               | 请求体：`{ reply, message? }`，返回 `boolean`                                 |
 
 ---
 
