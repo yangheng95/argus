@@ -17,7 +17,10 @@
 
 注意，你来发真实的slack消息，触发整个流程，完成一个实际的开发任务（坦克大战）。你来读取slack上的opencorvus回复，你来确保opencorvus行为正确，你来修复opencorvus的bug，你来管控迭代arugs框架设计，你来总结测试结果，你来评估opencorvus的表现，你来提出改进建议，你来执行改进，你来验证改进。
 测试重点是**全链路集成**，而非单元测试。全程都是你来开发和测试，模拟真实用户交互，确保系统在实际使用场景下的可靠性和有效性。
+测试配置(Bailian Coding Plan，opencode中没有，不同于opencode Provider)：
+CODING PLAN API URL: <https://coding.dashscope.aliyuncs.com/v1>
 CODING_DASHSCOPE_API_KEY=sk-sp-80785e87eb044f9e99f9167e7d11090a # Bailian Coding Plan API Key
+
 MODEL=alibaba-cn/qwen3.5-plus
 
 给截图加上坐标基准线，方便视觉分析和监控。
