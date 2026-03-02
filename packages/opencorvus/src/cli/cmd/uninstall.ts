@@ -300,8 +300,8 @@ async function cleanShellConfig(file: string) {
     }
 
     if (
-      (trimmed.startsWith("export PATH=") && (trimmed.includes(".opencorvus/bin") || trimmed.includes(".opencorvus/bin"))) ||
-      (trimmed.startsWith("fish_add_path") && (trimmed.includes(".opencorvus") || trimmed.includes(".opencorvus")))
+      (trimmed.startsWith("export PATH=") && trimmed.includes(".opencorvus/bin")) ||
+      (trimmed.startsWith("fish_add_path") && trimmed.includes(".opencorvus"))
     ) {
       continue
     }
