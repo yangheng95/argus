@@ -124,6 +124,12 @@ export const InputTool = Tool.define("input", {
     switch (params.action) {
       case "click": {
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
+        showOverlay(
+          screen.x,
+          screen.y,
+          params.button === "double" ? "double" : params.button === "right" ? "right" : params.button === "middle" ? "middle" : "click",
+          `${params.button ?? "left"} (${params.x},${params.y})`,
+        )
         log.info("click-resolve", {
           windowRelative: `${params.x},${params.y}`,
           screenAbsolute: `${screen.x},${screen.y}`,
