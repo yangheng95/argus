@@ -223,7 +223,7 @@ export const ScreenTool = Tool.define("screen", {
               context: "Screenshot taken during GUI operation step",
               previousSummary: A2AState.get()?.visionSummary,
               boundWindow: binding
-                ? { title: binding.title, width: binding.width, height: binding.height }
+                ? { title: binding.info.title, width: binding.info.width, height: binding.info.height }
                 : undefined,
             })
             A2AState.setVisionSummary(vision.runningSummary)
