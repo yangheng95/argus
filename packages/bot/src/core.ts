@@ -3,7 +3,6 @@ import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { SlackAdapter } from "./adapters/slack"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
-import path from "path"
 
 interface SessionEntry {
   sessionId: string

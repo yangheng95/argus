@@ -176,6 +176,69 @@ export namespace Agent {
         ),
         prompt: PROMPT_SUMMARY,
       },
+      // ── A2A Agents ────────────────────────────────────────
+      a2a_plan: {
+        name: "a2a_plan",
+        description:
+          "A2A Plan Agent: decomposes tasks into step-by-step GUI/code operation plans. Can search the web to learn how to operate unfamiliar applications.",
+        mode: "subagent",
+        native: true,
+        hidden: true,
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            "*": "deny",
+            websearch: "allow",
+            webfetch: "allow",
+            read: "allow",
+            glob: "allow",
+            grep: "allow",
+            memory: "allow",
+            planner: "allow",
+            goal: "allow",
+          }),
+          user,
+        ),
+        options: {},
+      },
+      a2a_vision: {
+        name: "a2a_vision",
+        description:
+          "A2A Vision Agent: analyzes screenshots and outputs coordinates, UI element descriptions, and operation suggestions. Screenshots never enter the main conversation flow.",
+        mode: "subagent",
+        native: true,
+        hidden: true,
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            "*": "deny",
+            screen: "allow",
+          }),
+          user,
+        ),
+        options: {},
+      },
+      a2a_gui: {
+        name: "a2a_gui",
+        description:
+          "A2A GUI Agent: executes GUI operations from a plan. Uses visual analysis results for precise mouse/keyboard actions. Reports errors for re-planning.",
+        mode: "subagent",
+        native: true,
+        hidden: true,
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            "*": "deny",
+            screen: "allow",
+            input: "allow",
+            bash: "allow",
+            planner: "allow",
+            goal: "allow",
+          }),
+          user,
+        ),
+        options: {},
+      },
     }
 
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {
