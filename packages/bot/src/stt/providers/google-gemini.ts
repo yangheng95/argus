@@ -3,13 +3,17 @@ import type { AudioBuffer, STTProvider, STTResult } from "../types"
 export class GoogleGeminiProvider implements STTProvider {
   readonly name = "google-gemini"
   private apiKey?: string
+  private model: string
+  private baseURL: string
 
-  constructor(opts: { apiKey?: string }) {
+  constructor(opts: { apiKey?: string; model?: string; baseURL?: string }) {
     this.apiKey = opts.apiKey
+    this.model = opts.model ?? ""
+    this.baseURL = opts.baseURL ?? ""
   }
 
   async isAvailable(): Promise<boolean> {
-    return !!this.apiKey
+    return !!this.apiKey && !!this.model && !!this.baseURL
   }
 
   async transcribe(audio: AudioBuffer, options?: { language?: string; prompt?: string }): Promise<STTResult> {
@@ -19,7 +23,7 @@ export class GoogleGeminiProvider implements STTProvider {
     const langHint = options?.language ? ` The audio is in ${options.language}.` : ""
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${this.apiKey}`,
+      `${this.baseURL}/models/${this.model}:generateContent?key=${this.apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
