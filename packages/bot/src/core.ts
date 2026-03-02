@@ -13,7 +13,6 @@ interface SessionEntry {
 
 export interface BotCoreOptions {
   port?: number
-  a2a?: boolean
 }
 
 export class BotCore {
