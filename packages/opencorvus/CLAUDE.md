@@ -56,9 +56,9 @@ If the `bash` tool is available, you can launch the OpenCorvus TUI for high-effi
 1. **Launch TUI in a new terminal window:**
    ```bash
    # Windows: start in a new cmd window
-   start "OPENCORVUS_TUI" cmd /c "cd /d PROJECT_DIR && bun run --cwd packages/opencorvus --conditions=browser src/index.ts ."
+   start "OPENCORVUS_TUI" cmd /c "cd /d PROJECT_DIR/packages/opencorvus && bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts PROJECT_DIR"
    ```
-   Replace `PROJECT_DIR` with the actual project directory path.
+   Replace `PROJECT_DIR` with the actual project directory path. The `--preload` flag is **required** for rendering.
 
 2. **Wait for TUI to start** — `input.wait(5000)` then `screen.list_windows`
 
