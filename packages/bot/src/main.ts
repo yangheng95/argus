@@ -276,7 +276,7 @@ async function promptProviderSelection(): Promise<PromptResult | null> {
       })
       console.log("\x1b[36m│\x1b[0m")
       console.log(`\x1b[36m│\x1b[0m  LLM:    ${model || "(env default)"}`)
-      console.log(`\x1b[36m│\x1b[0m  Vision: ${visionModel ?? process.env.ARGUS_VISION_MODEL ?? "qwen3.5-plus"}`)
+      console.log(`\x1b[36m│\x1b[0m  Vision: ${visionModel ?? process.env.ARGUS_VISION_MODEL ?? "(not set)"}`)
       console.log(`\x1b[36m│\x1b[0m  Slack:  ${slackBotToken ? "\x1b[32mconfigured\x1b[0m" : "\x1b[2mnot set\x1b[0m"}`)
       console.log(`\x1b[36m│\x1b[0m  \x1b[2mSaved to: ${getConfigPath()}\x1b[0m`)
       console.log(`\x1b[36m└\x1b[0m  \x1b[32mConfiguration saved\x1b[0m\n`)
