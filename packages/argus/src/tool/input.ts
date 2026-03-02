@@ -272,6 +272,7 @@ export const InputTool = Tool.define("input", {
 
       case "move": {
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
+        showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)
         await GUI.moveTo(screen.x, screen.y)
         GuiState.recordAction({
           time: Date.now(),
