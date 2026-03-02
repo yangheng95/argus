@@ -45,9 +45,48 @@ Every desktop task follows this pattern:
 - **ALWAYS describe screenshots** — after each screenshot, describe what you see in text. Screenshots are auto-removed from context next turn; your description is the only surviving record.
 - **ALWAYS write text between tool calls** — explain what you're doing and what you see. Never chain 3+ tool calls without any text output.
 
-## Coding Tasks via GUI
+## Coding Tasks — Choose Your Approach
 
-When asked to write or modify code, you operate entirely through GUI tools (screen + input). All coding happens by visually interacting with applications on screen — opening terminals, typing into editors, clicking buttons. You do NOT have direct file system tools like bash or write. Follow this strategy:
+When asked to write or modify code, choose the best approach based on available tools:
+
+### Option A: TUI Coding Mode (Preferred for complex tasks)
+
+If the `bash` tool is available, you can launch the OpenCorvus TUI for high-efficiency coding:
+
+1. **Launch TUI in a new terminal window:**
+   ```bash
+   # Windows: start in a new cmd window
+   start "OPENCORVUS_TUI" cmd /c "cd /d PROJECT_DIR && bun run --cwd packages/opencorvus --conditions=browser src/index.ts ."
+   ```
+   Replace `PROJECT_DIR` with the actual project directory path.
+
+2. **Wait for TUI to start** — `input.wait(5000)` then `screen.list_windows`
+
+3. **Bind to TUI window** — The window title contains "OPENCORVUS" or the project name:
+   ```
+   screen.bind_window("OPENCORVUS")
+   ```
+
+4. **Screenshot the TUI** to see its interface — it has a prompt input at the bottom.
+
+5. **Type your coding task** into the TUI prompt via `input.type`, then press Enter.
+
+6. **Monitor progress** — Screenshot periodically to see what the TUI agent is doing. The TUI agent has full file system access (bash, write, edit, read, glob, grep) and will autonomously write code.
+
+7. **When done**, the TUI shows the completed output. Screenshot and verify.
+
+Alternatively, if `bash` tool is available, you can use it directly:
+```bash
+# Create files directly
+bash: echo '<html>...</html>' > filename.html
+
+# Or use the write tool
+write: { "path": "filename.html", "content": "..." }
+```
+
+### Option B: GUI-Only Coding (When only screen/input tools are available)
+
+When you do NOT have bash/write/edit tools, you operate entirely through GUI tools (screen + input). All coding happens by visually interacting with applications on screen — opening terminals, typing into editors, clicking buttons. Follow this strategy:
 
 ### Step 1: Decompose the Task
 

@@ -85,6 +85,44 @@ describe("Coordinates.resolveDetailed", () => {
     expect(physical.y).toBe(1900)  // This would be off-screen on a 1440-tall logical display
   })
 
+  test("auto mode chooses logical when dpi scale differs from 1", () => {
+    const dpi150: Coordinates.WindowBounds = {
+      x: 0,
+      y: 0,
+      width: 3840,
+      height: 2088,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      logicalX: 0,
+      logicalY: 0,
+      logicalWidth: 2560,
+      logicalHeight: 1392,
+    }
+    expect(Coordinates.resolveSpace(300, 1900, dpi150, "auto")).toBe("logical")
+    const result = Coordinates.resolveDetailed(300, 1900, dpi150, "auto")
+    expect(result.x).toBe(200)
+    expect(result.y).toBe(1267)
+  })
+
+  test("auto mode chooses physical when scale is 1", () => {
+    const unitScale: Coordinates.WindowBounds = {
+      x: 10,
+      y: 20,
+      width: 1920,
+      height: 1080,
+      scaleX: 1,
+      scaleY: 1,
+      logicalX: 10,
+      logicalY: 20,
+      logicalWidth: 1920,
+      logicalHeight: 1080,
+    }
+    expect(Coordinates.resolveSpace(400, 500, unitScale, "auto")).toBe("physical")
+    const result = Coordinates.resolveDetailed(400, 500, unitScale, "auto")
+    expect(result.x).toBe(410)
+    expect(result.y).toBe(520)
+  })
+
   test("falls back to physical mapping when logical metadata is incomplete", () => {
     const result = Coordinates.resolveDetailed(450, 300, {
       x: 300,

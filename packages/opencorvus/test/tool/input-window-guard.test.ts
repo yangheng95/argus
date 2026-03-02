@@ -166,6 +166,32 @@ describe("tool.input bound window guard", () => {
     }
   })
 
+  test("auto space resolves to logical on scaled bounds", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.setBounds({
+          x: 150,
+          y: 75,
+          width: 1200,
+          height: 900,
+          scaleX: 1.5,
+          scaleY: 1.5,
+          logicalX: 100,
+          logicalY: 50,
+          logicalWidth: 800,
+          logicalHeight: 600,
+        })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 450, y: 300, button: "left" }, ctx)
+        expect(result.metadata.coordinateSpaceRequested).toBe("auto")
+        expect(result.metadata.coordinateSpace).toBe("logical")
+        expect(clicks).toEqual([{ x: 400, y: 250 }])
+      },
+    })
+  })
+
   test("confirm unavailable includes diagnostic reason", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({

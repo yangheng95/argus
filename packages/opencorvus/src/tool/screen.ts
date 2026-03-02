@@ -95,7 +95,7 @@ export const ScreenTool = Tool.define("screen", {
         // producing smaller, more relevant screenshots for the vision LLM.
         let autoBound = false
         let foregroundFailed = false
-        const currentBinding = await WindowManager.getBinding()
+        let currentBinding = await WindowManager.getBinding()
         if (currentBinding) {
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
@@ -107,6 +107,7 @@ export const ScreenTool = Tool.define("screen", {
             })
             foregroundFailed = true
             await WindowManager.unbind()
+            currentBinding = null
           }
         }
         if (!currentBinding) {

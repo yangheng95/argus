@@ -1,5 +1,6 @@
 export namespace Coordinates {
-  export type CoordinateSpace = "physical" | "logical"
+  export type CoordinateSpace = "physical" | "logical" | "auto"
+  export type ResolvedSpace = "physical" | "logical"
 
   export interface ScreenPoint {
     x: number
@@ -70,6 +71,32 @@ export namespace Coordinates {
     }
   }
 
+  export function resolveSpace(
+    relX: number,
+    relY: number,
+    bounds: WindowBounds,
+    space: CoordinateSpace = "auto",
+  ): ResolvedSpace {
+    if (space === "physical" || space === "logical") return space
+    const info = logical(bounds)
+    if (!info) return "physical"
+
+    const scaled = Math.abs(info.scaleX - 1) > 0.01 || Math.abs(info.scaleY - 1) > 0.01
+    if (!scaled) return "physical"
+
+    const px = clampWithMeta(relX, 0, bounds.width - 1)
+    const py = clampWithMeta(relY, 0, bounds.height - 1)
+    const logicalX = clampWithMeta(Math.round(px.value / info.scaleX), 0, info.width - 1)
+    const logicalY = clampWithMeta(Math.round(py.value / info.scaleY), 0, info.height - 1)
+    const physicalScreenX = bounds.x + px.value
+    const physicalScreenY = bounds.y + py.value
+    const physicalInLogicalX = physicalScreenX >= info.x && physicalScreenX <= info.x + info.width - 1
+    const physicalInLogicalY = physicalScreenY >= info.y && physicalScreenY <= info.y + info.height - 1
+    if (!physicalInLogicalX || !physicalInLogicalY) return "logical"
+    if (logicalX.clamped || logicalY.clamped) return "logical"
+    return "logical"
+  }
+
   /** Window-relative coordinates → screen-absolute coordinates (with clamp to prevent out-of-bounds) */
   export function toScreen(
     relX: number,
@@ -90,8 +117,9 @@ export namespace Coordinates {
     if (bounds.width <= 0 || bounds.height <= 0) {
       throw new Error(`WindowBounds has zero dimensions (${bounds.width}x${bounds.height}) — window may be minimized`)
     }
+    const mode = resolveSpace(relX, relY, bounds, space)
 
-    if (space === "logical") {
+    if (mode === "logical") {
       const info = logical(bounds)
       if (info) {
         const px = clampWithMeta(relX, 0, bounds.width - 1)
