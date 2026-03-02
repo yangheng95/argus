@@ -165,18 +165,18 @@ export namespace Orchestrator {
             // a. Vision: analyze current screen
             let visionText = ""
             try {
-              const capture = await Capture.take({})
+              const capture = await Capture.take({ mode: "auto" })
               if (capture) {
-                const binding = WindowManager.getBinding()
+                const binding = await WindowManager.getBinding()
                 const vision = await VisionAgent.analyze({
-                  screenshot: capture.png,
+                  screenshot: capture.buffer,
                   context: step.description,
                   previousSummary: A2AState.get()?.visionSummary,
                   boundWindow: binding
                     ? {
-                        title: binding.title,
-                        width: binding.width,
-                        height: binding.height,
+                        title: binding.info.title,
+                        width: binding.info.width,
+                        height: binding.info.height,
                       }
                     : undefined,
                 })
