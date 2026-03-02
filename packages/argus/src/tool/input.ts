@@ -122,7 +122,7 @@ export const InputTool = Tool.define("input", {
 
     switch (params.action) {
       case "click": {
-        const screen = Coordinates.resolve(params.x, params.y, lastWindowBounds)
+        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
         log.info("click-resolve", {
           windowRelative: `${params.x},${params.y}`,
           screenAbsolute: `${screen.x},${screen.y}`,
@@ -130,7 +130,15 @@ export const InputTool = Tool.define("input", {
             ? `${lastWindowBounds.width}x${lastWindowBounds.height}@${lastWindowBounds.x},${lastWindowBounds.y}`
             : "none",
           button: params.button ?? "left",
+          clamped: screen.clamped,
         })
+        if (screen.clamped && lastWindowBounds) {
+          log.warn("click-coordinate-clamped", {
+            requested: `${params.x},${params.y}`,
+            clampedTo: `${screen.x},${screen.y}`,
+            bounds: `${lastWindowBounds.width}x${lastWindowBounds.height}`,
+          })
+        }
         if (params.button === "double") {
           await GUI.doubleClick(screen.x, screen.y)
         } else if (params.button === "right") {
@@ -142,7 +150,7 @@ export const InputTool = Tool.define("input", {
           await GUI.click(screen.x, screen.y)
         }
         const coordDetail = lastWindowBounds
-          ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y})`
+          ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y}${screen.clamped ? " [CLAMPED]" : ""})`
           : ""
         GuiState.recordAction({
           time: Date.now(),
@@ -157,7 +165,7 @@ export const InputTool = Tool.define("input", {
         return {
           title: `Clicked (${params.x}, ${params.y})`,
           output: `${params.button ?? "left"} click at (${params.x}, ${params.y})${coordDetail}`,
-          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, button: params.button },
+          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, button: params.button, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY },
         }
       }
 
@@ -218,11 +226,11 @@ export const InputTool = Tool.define("input", {
       }
 
       case "drag": {
-        const start = Coordinates.resolve(params.startX, params.startY, lastWindowBounds)
-        const end = Coordinates.resolve(params.endX, params.endY, lastWindowBounds)
+        const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds)
+        const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds)
         await GUI.drag(start.x, start.y, end.x, end.y)
         const coordDetail = lastWindowBounds
-          ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y})`
+          ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y}${start.clamped || end.clamped ? " [CLAMPED]" : ""})`
           : ""
         GuiState.recordAction({
           time: Date.now(),
@@ -245,12 +253,14 @@ export const InputTool = Tool.define("input", {
             screenStartY: start.y,
             screenEndX: end.x,
             screenEndY: end.y,
+            clampedStart: start.clamped,
+            clampedEnd: end.clamped,
           },
         }
       }
 
       case "move": {
-        const screen = Coordinates.resolve(params.x, params.y, lastWindowBounds)
+        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
         await GUI.moveTo(screen.x, screen.y)
         GuiState.recordAction({
           time: Date.now(),
@@ -263,8 +273,8 @@ export const InputTool = Tool.define("input", {
         })
         return {
           title: `Moved to (${params.x}, ${params.y})`,
-          output: `Mouse moved to (${params.x}, ${params.y})`,
-          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y },
+          output: `Mouse moved to (${params.x}, ${params.y})${screen.clamped ? " [CLAMPED]" : ""}`,
+          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY },
         }
       }
 

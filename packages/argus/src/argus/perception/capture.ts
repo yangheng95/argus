@@ -12,6 +12,12 @@ export namespace Capture {
     y: number
     width: number
     height: number
+    scaleX?: number
+    scaleY?: number
+    logicalX?: number
+    logicalY?: number
+    logicalWidth?: number
+    logicalHeight?: number
   }
 
   export interface CaptureResult {
@@ -85,11 +91,26 @@ export namespace Capture {
     const rawBuffer = Buffer.from(await image.toRaw())
     await Filesystem.write(filePath, buffer, undefined)
 
+    const logicalX = native.x()
+    const logicalY = native.y()
+    const logicalWidth = Math.max(1, native.width())
+    const logicalHeight = Math.max(1, native.height())
+    const rawScaleX = image.width / logicalWidth
+    const rawScaleY = image.height / logicalHeight
+    const scaleX = Number.isFinite(rawScaleX) && rawScaleX > 0 ? rawScaleX : 1
+    const scaleY = Number.isFinite(rawScaleY) && rawScaleY > 0 ? rawScaleY : 1
+
     const bounds: WindowBounds = {
-      x: native.x(),
-      y: native.y(),
+      x: Math.round(logicalX * scaleX),
+      y: Math.round(logicalY * scaleY),
       width: image.width,
       height: image.height,
+      scaleX,
+      scaleY,
+      logicalX,
+      logicalY,
+      logicalWidth,
+      logicalHeight,
     }
 
     log.info("captured window", {
@@ -99,6 +120,8 @@ export namespace Capture {
       width: image.width,
       height: image.height,
       bounds,
+      logicalBounds: `${logicalWidth}x${logicalHeight}@${logicalX},${logicalY}`,
+      pixelScale: `${scaleX.toFixed(3)}x${scaleY.toFixed(3)}`,
     })
 
     return {
