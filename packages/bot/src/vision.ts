@@ -19,7 +19,7 @@ export class VisionPipeline {
     this.apiKey = opts.apiKey
     // Default: coding plan endpoint (sk-sp-*); callers should pass baseURL explicitly when using sk-* keys
     this.baseURL = (opts.baseURL ?? "https://coding.dashscope.aliyuncs.com/api/v1").replace(/\/$/, "")
-    this.model = opts.model ?? "qwen-vl-max"
+    this.model = opts.model ?? "qwen3.5-plus"
   }
 
   async analyze(imageBase64: string, prompt?: string): Promise<VisionAnalysis> {
