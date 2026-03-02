@@ -98,10 +98,10 @@ export namespace Orchestrator {
       // Get initial screen state for context
       let screenSummary = ""
       try {
-        const capture = await Capture.take({})
+        const capture = await Capture.take({ mode: "auto" })
         if (capture) {
           const vision = await VisionAgent.analyze({
-            screenshot: capture.png,
+            screenshot: capture.buffer,
             context: `About to start task: ${task.prompt}`,
             previousSummary: task.previousSummary ?? undefined,
           })

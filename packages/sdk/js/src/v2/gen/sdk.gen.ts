@@ -24,8 +24,20 @@ import type {
   EventTuiPromptAppend,
   EventTuiSessionSelect,
   EventTuiToastShow,
+  ExperimentalBindWindowErrors,
+  ExperimentalBindWindowResponses,
+  ExperimentalMemoryCreateResponses,
+  ExperimentalMemoryDeleteResponses,
+  ExperimentalMemoryListResponses,
+  ExperimentalMemorySearchResponses,
   ExperimentalResourceListResponses,
+  ExperimentalScheduleCreateResponses,
+  ExperimentalScheduleDeleteResponses,
+  ExperimentalScheduleListResponses,
+  ExperimentalScratchpadGetResponses,
   ExperimentalSessionListResponses,
+  ExperimentalTaskplanListResponses,
+  ExperimentalWindowsListResponses,
   ExperimentalWorkspaceCreateErrors,
   ExperimentalWorkspaceCreateResponses,
   ExperimentalWorkspaceListResponses,
@@ -63,15 +75,6 @@ import type {
   McpLocalConfig,
   McpRemoteConfig,
   McpStatusResponses,
-  MonitorCommandStageErrors,
-  MonitorCommandStageResponses,
-  MonitorPauseResponses,
-  MonitorQueueListResponses,
-  MonitorResumeResponses,
-  MonitorStartErrors,
-  MonitorStartResponses,
-  MonitorStatusResponses,
-  MonitorStopResponses,
   OutputFormat,
   Part as Part2,
   PartDeleteErrors,
@@ -176,6 +179,14 @@ import type {
   TuiOpenThemesResponses,
   TuiPublishErrors,
   TuiPublishResponses,
+  TuiRuntimeProxyErrors,
+  TuiRuntimeProxyResponses,
+  TuiRuntimeStartErrors,
+  TuiRuntimeStartResponses,
+  TuiRuntimeStatusResponses,
+  TuiRuntimeStopResponses,
+  TuiRuntimeSubmitTaskErrors,
+  TuiRuntimeSubmitTaskResponses,
   TuiSelectSessionErrors,
   TuiSelectSessionResponses,
   TuiShowToastResponses,
@@ -1079,7 +1090,362 @@ export class Resource extends HeyApiClient {
   }
 }
 
+export class Windows extends HeyApiClient {
+  /**
+   * List windows
+   *
+   * List all visible desktop windows.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ExperimentalWindowsListResponses, unknown, ThrowOnError>({
+      url: "/experimental/windows",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Memory extends HeyApiClient {
+  /**
+   * List memory files
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      projectId: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "projectId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperimentalMemoryListResponses, unknown, ThrowOnError>({
+      url: "/experimental/memory",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create memory file
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      title?: string
+      content?: string
+      projectId?: string
+      source?: "agent" | "compaction" | "user"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+            { in: "body", key: "content" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "source" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperimentalMemoryCreateResponses, unknown, ThrowOnError>({
+      url: "/experimental/memory",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Search memories
+   */
+  public search<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      query?: string
+      projectId?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "query" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperimentalMemorySearchResponses, unknown, ThrowOnError>({
+      url: "/experimental/memory/search",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete memory file
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<ExperimentalMemoryDeleteResponses, unknown, ThrowOnError>({
+      url: "/experimental/memory/{id}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Schedule extends HeyApiClient {
+  /**
+   * List scheduled tasks
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      projectId: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "projectId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperimentalScheduleListResponses, unknown, ThrowOnError>({
+      url: "/experimental/schedule",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create scheduled task
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      name?: string
+      expression?: string
+      prompt?: string
+      projectId?: string
+      sessionId?: string
+      oneShot?: boolean
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "expression" },
+            { in: "body", key: "prompt" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sessionId" },
+            { in: "body", key: "oneShot" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperimentalScheduleCreateResponses, unknown, ThrowOnError>({
+      url: "/experimental/schedule",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Cancel scheduled task
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<ExperimentalScheduleDeleteResponses, unknown, ThrowOnError>({
+      url: "/experimental/schedule/{id}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Taskplan extends HeyApiClient {
+  /**
+   * List tasks for a session
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      sessionId: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperimentalTaskplanListResponses, unknown, ThrowOnError>({
+      url: "/experimental/task-plan",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Scratchpad extends HeyApiClient {
+  /**
+   * Get scratchpad content
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      sessionId: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperimentalScratchpadGetResponses, unknown, ThrowOnError>({
+      url: "/experimental/scratchpad",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Experimental extends HeyApiClient {
+  /**
+   * Bind window
+   *
+   * Bind to a desktop window by title substring. Activates GUI state and sets the window as the target for screenshots and input.
+   */
+  public bindWindow<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      title?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "title" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalBindWindowResponses,
+      ExperimentalBindWindowErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/bind_window",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
   private _workspace?: Workspace
   get workspace(): Workspace {
     return (this._workspace ??= new Workspace({ client: this.client }))
@@ -1093,6 +1459,31 @@ export class Experimental extends HeyApiClient {
   private _resource?: Resource
   get resource(): Resource {
     return (this._resource ??= new Resource({ client: this.client }))
+  }
+
+  private _windows?: Windows
+  get windows(): Windows {
+    return (this._windows ??= new Windows({ client: this.client }))
+  }
+
+  private _memory?: Memory
+  get memory(): Memory {
+    return (this._memory ??= new Memory({ client: this.client }))
+  }
+
+  private _schedule?: Schedule
+  get schedule(): Schedule {
+    return (this._schedule ??= new Schedule({ client: this.client }))
+  }
+
+  private _taskplan?: Taskplan
+  get taskplan(): Taskplan {
+    return (this._taskplan ??= new Taskplan({ client: this.client }))
+  }
+
+  private _scratchpad?: Scratchpad
+  get scratchpad(): Scratchpad {
+    return (this._scratchpad ??= new Scratchpad({ client: this.client }))
   }
 }
 
@@ -2801,6 +3192,195 @@ export class Mcp extends HeyApiClient {
   }
 }
 
+export class Runtime extends HeyApiClient {
+  /**
+   * Start or connect TUI runtime
+   *
+   * Start a managed TUI subprocess or connect to an existing TUI server for internal API control.
+   */
+  public start<ThrowOnError extends boolean = false>(
+    parameters?: {
+      query_directory?: string
+      mode?: "spawn" | "connect"
+      url?: string
+      body_directory?: string
+      sessionID?: string
+      model?: string
+      agent?: string
+      prompt?: string
+      continue?: boolean
+      fork?: boolean
+      port?: number
+      hostname?: string
+      bin?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            {
+              in: "query",
+              key: "query_directory",
+              map: "directory",
+            },
+            { in: "body", key: "mode" },
+            { in: "body", key: "url" },
+            {
+              in: "body",
+              key: "body_directory",
+              map: "directory",
+            },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "model" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "prompt" },
+            { in: "body", key: "continue" },
+            { in: "body", key: "fork" },
+            { in: "body", key: "port" },
+            { in: "body", key: "hostname" },
+            { in: "body", key: "bin" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TuiRuntimeStartResponses, TuiRuntimeStartErrors, ThrowOnError>({
+      url: "/tui/runtime/start",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get TUI runtime status
+   *
+   * Get status of the managed TUI runtime used by internal API control.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<TuiRuntimeStatusResponses, unknown, ThrowOnError>({
+      url: "/tui/runtime/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Stop TUI runtime
+   *
+   * Stop the managed TUI runtime process if it was started by internal API.
+   */
+  public stop<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<TuiRuntimeStopResponses, unknown, ThrowOnError>({
+      url: "/tui/runtime/stop",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Submit task to managed TUI and optionally wait
+   *
+   * Submit a task through Session API and optionally wait until completion. TUI runtime is only for UI lifecycle, not task execution truth.
+   */
+  public submitTask<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      text?: string
+      sessionID?: string
+      agent?: string
+      wait?: boolean
+      timeoutMs?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "text" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "agent" },
+            { in: "body", key: "wait" },
+            { in: "body", key: "timeoutMs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      TuiRuntimeSubmitTaskResponses,
+      TuiRuntimeSubmitTaskErrors,
+      ThrowOnError
+    >({
+      url: "/tui/runtime/submit-task",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Proxy control to managed TUI
+   *
+   * Proxy a POST request to the managed TUI instance (e.g. /tui/append-prompt, /tui/submit-prompt).
+   */
+  public proxy<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      path?: string
+      body?: unknown
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "path" },
+            { in: "body", key: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TuiRuntimeProxyResponses, TuiRuntimeProxyErrors, ThrowOnError>({
+      url: "/tui/runtime/proxy",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Control extends HeyApiClient {
   /**
    * Get next TUI request
@@ -3153,204 +3733,14 @@ export class Tui extends HeyApiClient {
     })
   }
 
+  private _runtime?: Runtime
+  get runtime(): Runtime {
+    return (this._runtime ??= new Runtime({ client: this.client }))
+  }
+
   private _control?: Control
   get control(): Control {
     return (this._control ??= new Control({ client: this.client }))
-  }
-}
-
-export class Command extends HeyApiClient {
-  /**
-   * Stage command
-   *
-   * Stage a command for the monitor brain to process.
-   */
-  public stage<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      content?: string
-      priority?: "urgent" | "high" | "normal" | "low"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "content" },
-            { in: "body", key: "priority" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<MonitorCommandStageResponses, MonitorCommandStageErrors, ThrowOnError>(
-      {
-        url: "/monitor/command",
-        ...options,
-        ...params,
-        headers: {
-          "Content-Type": "application/json",
-          ...options?.headers,
-          ...params.headers,
-        },
-      },
-    )
-  }
-}
-
-export class Queue extends HeyApiClient {
-  /**
-   * List queued commands
-   *
-   * List all commands currently in the staging queue.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<MonitorQueueListResponses, unknown, ThrowOnError>({
-      url: "/monitor/queue",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Monitor extends HeyApiClient {
-  /**
-   * Get monitor status
-   *
-   * Retrieve the current status of the screen monitor.
-   */
-  public status<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<MonitorStatusResponses, unknown, ThrowOnError>({
-      url: "/monitor/status",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Start monitor
-   *
-   * Start the screen monitor with optional configuration overrides.
-   */
-  public start<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      captureInterval?: number
-      diffThreshold?: number
-      autonomyLevel?: 0 | 1 | 2 | 3
-      captureMode?: "window" | "fullscreen"
-      windowTitle?: string
-      brainEnabled?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "captureInterval" },
-            { in: "body", key: "diffThreshold" },
-            { in: "body", key: "autonomyLevel" },
-            { in: "body", key: "captureMode" },
-            { in: "body", key: "windowTitle" },
-            { in: "body", key: "brainEnabled" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<MonitorStartResponses, MonitorStartErrors, ThrowOnError>({
-      url: "/monitor/start",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Stop monitor
-   *
-   * Stop the screen monitor.
-   */
-  public stop<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<MonitorStopResponses, unknown, ThrowOnError>({
-      url: "/monitor/stop",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Pause monitor
-   *
-   * Pause the screen monitor without stopping it.
-   */
-  public pause<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<MonitorPauseResponses, unknown, ThrowOnError>({
-      url: "/monitor/pause",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Resume monitor
-   *
-   * Resume a paused screen monitor.
-   */
-  public resume<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<MonitorResumeResponses, unknown, ThrowOnError>({
-      url: "/monitor/resume",
-      ...options,
-      ...params,
-    })
-  }
-
-  private _command?: Command
-  get command(): Command {
-    return (this._command ??= new Command({ client: this.client }))
-  }
-
-  private _queue?: Queue
-  get queue(): Queue {
-    return (this._queue ??= new Queue({ client: this.client }))
   }
 }
 
@@ -3417,7 +3807,7 @@ export class Vcs extends HeyApiClient {
   }
 }
 
-export class Command2 extends HeyApiClient {
+export class Command extends HeyApiClient {
   /**
    * List commands
    *
@@ -3677,11 +4067,6 @@ export class OpencodeClient extends HeyApiClient {
     return (this._tui ??= new Tui({ client: this.client }))
   }
 
-  private _monitor?: Monitor
-  get monitor(): Monitor {
-    return (this._monitor ??= new Monitor({ client: this.client }))
-  }
-
   private _instance?: Instance
   get instance(): Instance {
     return (this._instance ??= new Instance({ client: this.client }))
@@ -3697,9 +4082,9 @@ export class OpencodeClient extends HeyApiClient {
     return (this._vcs ??= new Vcs({ client: this.client }))
   }
 
-  private _command?: Command2
-  get command(): Command2 {
-    return (this._command ??= new Command2({ client: this.client }))
+  private _command?: Command
+  get command(): Command {
+    return (this._command ??= new Command({ client: this.client }))
   }
 
   private _app?: App

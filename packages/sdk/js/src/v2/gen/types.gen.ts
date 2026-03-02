@@ -715,6 +715,42 @@ export type EventTodoUpdated = {
   }
 }
 
+export type EventTaskPlanUpdated = {
+  type: "task_plan.updated"
+  properties: {
+    task: {
+      id: string
+      sessionID: string
+      goal: string
+      status: string
+    }
+  }
+}
+
+export type EventGoalUpdated = {
+  type: "goal.updated"
+  properties: {
+    goal: {
+      id: string
+      sessionID: string
+      description: string
+      status: string
+    }
+  }
+}
+
+export type EventGoalDeadlock = {
+  type: "goal.deadlock"
+  properties: {
+    goal: {
+      id: string
+      sessionID: string
+      description: string
+      attempts: number
+    }
+  }
+}
+
 export type EventTuiPromptAppend = {
   type: "tui.prompt.append"
   properties: {
@@ -916,127 +952,6 @@ export type EventWorkspaceFailed = {
   }
 }
 
-export type EventMonitorStarted = {
-  type: "monitor.started"
-  properties: {
-    captureInterval: number
-    diffThreshold: number
-    autonomyLevel: number
-  }
-}
-
-export type EventMonitorStopped = {
-  type: "monitor.stopped"
-  properties: {
-    reason?: string
-  }
-}
-
-export type EventMonitorPaused = {
-  type: "monitor.paused"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventMonitorResumed = {
-  type: "monitor.resumed"
-  properties: {
-    [key: string]: unknown
-  }
-}
-
-export type EventMonitorCaptureCompleted = {
-  type: "monitor.capture.completed"
-  properties: {
-    timestamp: number
-    width: number
-    height: number
-    path: string
-  }
-}
-
-export type EventMonitorChangeDetected = {
-  type: "monitor.change.detected"
-  properties: {
-    diffPercent: number
-    diffPixels: number
-    totalPixels: number
-    timestamp: number
-  }
-}
-
-export type EventMonitorChangeNone = {
-  type: "monitor.change.none"
-  properties: {
-    timestamp: number
-  }
-}
-
-export type EventMonitorVisionAnalysis = {
-  type: "monitor.vision.analysis"
-  properties: {
-    timestamp: number
-    description: string
-    changeType: string
-    severity: string
-    regions: Array<{
-      x: number
-      y: number
-      w: number
-      h: number
-      label: string
-    }>
-  }
-}
-
-export type EventMonitorBrainDecision = {
-  type: "monitor.brain.decision"
-  properties: {
-    action: string
-    reasoning: string
-    timestamp: number
-  }
-}
-
-export type EventMonitorBrainAction = {
-  type: "monitor.brain.action"
-  properties: {
-    action: string
-    result?: string
-    timestamp: number
-  }
-}
-
-export type EventMonitorCommandStaged = {
-  type: "monitor.command.staged"
-  properties: {
-    id: string
-    priority: string
-    source: string
-    content: string
-    timestamp: number
-  }
-}
-
-export type EventMonitorCommandProcessed = {
-  type: "monitor.command.processed"
-  properties: {
-    id: string
-    result?: string
-    timestamp: number
-  }
-}
-
-export type EventMonitorAnomaly = {
-  type: "monitor.anomaly"
-  properties: {
-    message: string
-    severity: string
-    timestamp: number
-  }
-}
-
 export type Pty = {
   id: string
   title: string
@@ -1101,6 +1016,9 @@ export type Event =
   | EventSessionCompacted
   | EventFileWatcherUpdated
   | EventTodoUpdated
+  | EventTaskPlanUpdated
+  | EventGoalUpdated
+  | EventGoalDeadlock
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -1118,19 +1036,6 @@ export type Event =
   | EventWorktreeFailed
   | EventWorkspaceReady
   | EventWorkspaceFailed
-  | EventMonitorStarted
-  | EventMonitorStopped
-  | EventMonitorPaused
-  | EventMonitorResumed
-  | EventMonitorCaptureCompleted
-  | EventMonitorChangeDetected
-  | EventMonitorChangeNone
-  | EventMonitorVisionAnalysis
-  | EventMonitorBrainDecision
-  | EventMonitorBrainAction
-  | EventMonitorCommandStaged
-  | EventMonitorCommandProcessed
-  | EventMonitorAnomaly
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
@@ -1182,7 +1087,6 @@ export type PermissionRuleConfig = PermissionActionConfig | PermissionObjectConf
 
 export type PermissionConfig =
   | {
-      __originalKeys?: Array<string>
       read?: PermissionRuleConfig
       edit?: PermissionRuleConfig
       glob?: PermissionRuleConfig
@@ -1200,7 +1104,7 @@ export type PermissionConfig =
       lsp?: PermissionRuleConfig
       doom_loop?: PermissionActionConfig
       skill?: PermissionRuleConfig
-      [key: string]: PermissionRuleConfig | Array<string> | PermissionActionConfig | undefined
+      [key: string]: PermissionRuleConfig | PermissionActionConfig | undefined
     }
   | PermissionActionConfig
 
@@ -1606,6 +1510,39 @@ export type Config = {
      */
     reserved?: number
   }
+  /**
+   * A2A (Agent-to-Agent) orchestration configuration
+   */
+  a2a?: {
+    /**
+     * Enable A2A (Agent-to-Agent) orchestration mode
+     */
+    enabled?: boolean
+    /**
+     * Model for visual analysis agent (format: provider/model)
+     */
+    vision_model?: string
+    /**
+     * Model for plan agent (format: provider/model)
+     */
+    plan_model?: string
+    /**
+     * Model for GUI operation agent (format: provider/model)
+     */
+    gui_model?: string
+    /**
+     * Max re-planning attempts per task (default: 3)
+     */
+    max_replans?: number
+    /**
+     * Max retries per step before re-planning (default: 3)
+     */
+    max_step_retries?: number
+    /**
+     * Max tasks in queue (default: 20)
+     */
+    queue_max_size?: number
+  }
   experimental?: {
     disable_paste_summary?: boolean
     /**
@@ -1628,6 +1565,23 @@ export type Config = {
      * Timeout in milliseconds for model context protocol (MCP) requests
      */
     mcp_timeout?: number
+    /**
+     * Persistent memory configuration
+     */
+    memory?: {
+      /**
+       * Enable persistent memory store (default: true)
+       */
+      enabled?: boolean
+      /**
+       * Auto-inject relevant memories into system prompt (default: true)
+       */
+      auto_inject?: boolean
+      /**
+       * Max tokens for auto-injected memory context (default: 2000)
+       */
+      token_budget?: number
+    }
   }
 }
 
@@ -2812,6 +2766,296 @@ export type ExperimentalResourceListResponses = {
 
 export type ExperimentalResourceListResponse =
   ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
+
+export type ExperimentalWindowsListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/windows"
+}
+
+export type ExperimentalWindowsListResponses = {
+  /**
+   * Window list
+   */
+  200: Array<{
+    id: number
+    title: string
+    appName: string
+  }>
+}
+
+export type ExperimentalWindowsListResponse = ExperimentalWindowsListResponses[keyof ExperimentalWindowsListResponses]
+
+export type ExperimentalBindWindowData = {
+  body?: {
+    title: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/bind_window"
+}
+
+export type ExperimentalBindWindowErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ExperimentalBindWindowError = ExperimentalBindWindowErrors[keyof ExperimentalBindWindowErrors]
+
+export type ExperimentalBindWindowResponses = {
+  /**
+   * Window bound
+   */
+  200: {
+    windowId: number
+    matchTitle: string
+    title: string
+    appName: string
+    focused: boolean
+  }
+}
+
+export type ExperimentalBindWindowResponse = ExperimentalBindWindowResponses[keyof ExperimentalBindWindowResponses]
+
+export type ExperimentalMemoryListData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    projectId: string
+  }
+  url: "/experimental/memory"
+}
+
+export type ExperimentalMemoryListResponses = {
+  /**
+   * Memory file list
+   */
+  200: Array<{
+    id: string
+    title: string
+    source: string
+    timeCreated: number
+  }>
+}
+
+export type ExperimentalMemoryListResponse = ExperimentalMemoryListResponses[keyof ExperimentalMemoryListResponses]
+
+export type ExperimentalMemoryCreateData = {
+  body?: {
+    title: string
+    content: string
+    projectId: string
+    source?: "agent" | "compaction" | "user"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/memory"
+}
+
+export type ExperimentalMemoryCreateResponses = {
+  /**
+   * Created memory file
+   */
+  200: {
+    id: string
+    title: string
+  }
+}
+
+export type ExperimentalMemoryCreateResponse =
+  ExperimentalMemoryCreateResponses[keyof ExperimentalMemoryCreateResponses]
+
+export type ExperimentalMemorySearchData = {
+  body?: {
+    query: string
+    projectId: string
+    limit?: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/memory/search"
+}
+
+export type ExperimentalMemorySearchResponses = {
+  /**
+   * Search results
+   */
+  200: Array<{
+    chunkId: string
+    fileId: string
+    fileTitle: string
+    content: string
+    score: number
+  }>
+}
+
+export type ExperimentalMemorySearchResponse =
+  ExperimentalMemorySearchResponses[keyof ExperimentalMemorySearchResponses]
+
+export type ExperimentalMemoryDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/memory/{id}"
+}
+
+export type ExperimentalMemoryDeleteResponses = {
+  /**
+   * Deleted
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ExperimentalMemoryDeleteResponse =
+  ExperimentalMemoryDeleteResponses[keyof ExperimentalMemoryDeleteResponses]
+
+export type ExperimentalScheduleListData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    projectId: string
+  }
+  url: "/experimental/schedule"
+}
+
+export type ExperimentalScheduleListResponses = {
+  /**
+   * Scheduled tasks
+   */
+  200: Array<{
+    id: string
+    name: string
+    expression: string
+    prompt: string
+    enabled: boolean
+    oneShot: boolean
+    lastRun: number | null
+    nextRun: number
+  }>
+}
+
+export type ExperimentalScheduleListResponse =
+  ExperimentalScheduleListResponses[keyof ExperimentalScheduleListResponses]
+
+export type ExperimentalScheduleCreateData = {
+  body?: {
+    name: string
+    expression: string
+    prompt: string
+    projectId: string
+    sessionId?: string
+    oneShot?: boolean
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/schedule"
+}
+
+export type ExperimentalScheduleCreateResponses = {
+  /**
+   * Created task
+   */
+  200: {
+    id: string
+    name: string
+    nextRun: number
+  }
+}
+
+export type ExperimentalScheduleCreateResponse =
+  ExperimentalScheduleCreateResponses[keyof ExperimentalScheduleCreateResponses]
+
+export type ExperimentalScheduleDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/schedule/{id}"
+}
+
+export type ExperimentalScheduleDeleteResponses = {
+  /**
+   * Cancelled
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ExperimentalScheduleDeleteResponse =
+  ExperimentalScheduleDeleteResponses[keyof ExperimentalScheduleDeleteResponses]
+
+export type ExperimentalTaskplanListData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    sessionId: string
+  }
+  url: "/experimental/task-plan"
+}
+
+export type ExperimentalTaskplanListResponses = {
+  /**
+   * Tasks
+   */
+  200: Array<{
+    id: string
+    goal: string
+    status: string
+    parentID: string | null
+    progressPct: number
+  }>
+}
+
+export type ExperimentalTaskplanListResponse =
+  ExperimentalTaskplanListResponses[keyof ExperimentalTaskplanListResponses]
+
+export type ExperimentalScratchpadGetData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    sessionId: string
+  }
+  url: "/experimental/scratchpad"
+}
+
+export type ExperimentalScratchpadGetResponses = {
+  /**
+   * Scratchpad
+   */
+  200: {
+    content: string
+  }
+}
+
+export type ExperimentalScratchpadGetResponse =
+  ExperimentalScratchpadGetResponses[keyof ExperimentalScratchpadGetResponses]
 
 export type SessionListData = {
   body?: never
@@ -4519,6 +4763,157 @@ export type McpDisconnectResponses = {
 
 export type McpDisconnectResponse = McpDisconnectResponses[keyof McpDisconnectResponses]
 
+export type TuiRuntimeStartData = {
+  body?: {
+    mode?: "spawn" | "connect"
+    url?: string
+    directory?: string
+    sessionID?: string
+    model?: string
+    agent?: string
+    prompt?: string
+    continue?: boolean
+    fork?: boolean
+    port?: number
+    hostname?: string
+    bin?: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/runtime/start"
+}
+
+export type TuiRuntimeStartErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiRuntimeStartError = TuiRuntimeStartErrors[keyof TuiRuntimeStartErrors]
+
+export type TuiRuntimeStartResponses = {
+  /**
+   * TUI runtime ready
+   */
+  200: {
+    mode: "spawned" | "connected"
+    url: string
+  }
+}
+
+export type TuiRuntimeStartResponse = TuiRuntimeStartResponses[keyof TuiRuntimeStartResponses]
+
+export type TuiRuntimeStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/runtime/status"
+}
+
+export type TuiRuntimeStatusResponses = {
+  /**
+   * TUI runtime status
+   */
+  200: {
+    running: boolean
+    mode: "none" | "spawned" | "connected"
+    url: string | null
+    sessionID: string | null
+  }
+}
+
+export type TuiRuntimeStatusResponse = TuiRuntimeStatusResponses[keyof TuiRuntimeStatusResponses]
+
+export type TuiRuntimeStopData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/runtime/stop"
+}
+
+export type TuiRuntimeStopResponses = {
+  /**
+   * TUI runtime stopped
+   */
+  200: boolean
+}
+
+export type TuiRuntimeStopResponse = TuiRuntimeStopResponses[keyof TuiRuntimeStopResponses]
+
+export type TuiRuntimeSubmitTaskData = {
+  body?: {
+    text: string
+    sessionID?: string
+    agent?: string
+    wait?: boolean
+    timeoutMs?: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/runtime/submit-task"
+}
+
+export type TuiRuntimeSubmitTaskErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiRuntimeSubmitTaskError = TuiRuntimeSubmitTaskErrors[keyof TuiRuntimeSubmitTaskErrors]
+
+export type TuiRuntimeSubmitTaskResponses = {
+  /**
+   * Task submitted
+   */
+  200: {
+    accepted: true
+    sessionID: string
+    waited: boolean
+    completed: boolean
+    message: unknown | null
+  }
+}
+
+export type TuiRuntimeSubmitTaskResponse = TuiRuntimeSubmitTaskResponses[keyof TuiRuntimeSubmitTaskResponses]
+
+export type TuiRuntimeProxyData = {
+  body?: {
+    path: string
+    body?: unknown
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/runtime/proxy"
+}
+
+export type TuiRuntimeProxyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiRuntimeProxyError = TuiRuntimeProxyErrors[keyof TuiRuntimeProxyErrors]
+
+export type TuiRuntimeProxyResponses = {
+  /**
+   * Proxy result
+   */
+  200: unknown
+}
+
 export type TuiAppendPromptData = {
   body?: {
     text: string
@@ -4812,179 +5207,6 @@ export type TuiControlResponseResponses = {
 }
 
 export type TuiControlResponseResponse = TuiControlResponseResponses[keyof TuiControlResponseResponses]
-
-export type MonitorStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/monitor/status"
-}
-
-export type MonitorStatusResponses = {
-  /**
-   * Monitor status
-   */
-  200: {
-    state: "stopped" | "running" | "paused"
-    config: {
-      enabled: boolean
-      captureInterval: number
-      diffThreshold: number
-      autonomyLevel: number
-      captureMode: string
-      brainEnabled: boolean
-    } | null
-  }
-}
-
-export type MonitorStatusResponse = MonitorStatusResponses[keyof MonitorStatusResponses]
-
-export type MonitorStartData = {
-  body?: {
-    captureInterval?: number
-    diffThreshold?: number
-    autonomyLevel?: 0 | 1 | 2 | 3
-    captureMode?: "window" | "fullscreen"
-    windowTitle?: string
-    brainEnabled?: boolean
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/monitor/start"
-}
-
-export type MonitorStartErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type MonitorStartError = MonitorStartErrors[keyof MonitorStartErrors]
-
-export type MonitorStartResponses = {
-  /**
-   * Monitor started
-   */
-  200: boolean
-}
-
-export type MonitorStartResponse = MonitorStartResponses[keyof MonitorStartResponses]
-
-export type MonitorStopData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/monitor/stop"
-}
-
-export type MonitorStopResponses = {
-  /**
-   * Monitor stopped
-   */
-  200: boolean
-}
-
-export type MonitorStopResponse = MonitorStopResponses[keyof MonitorStopResponses]
-
-export type MonitorPauseData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/monitor/pause"
-}
-
-export type MonitorPauseResponses = {
-  /**
-   * Monitor paused
-   */
-  200: boolean
-}
-
-export type MonitorPauseResponse = MonitorPauseResponses[keyof MonitorPauseResponses]
-
-export type MonitorResumeData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/monitor/resume"
-}
-
-export type MonitorResumeResponses = {
-  /**
-   * Monitor resumed
-   */
-  200: boolean
-}
-
-export type MonitorResumeResponse = MonitorResumeResponses[keyof MonitorResumeResponses]
-
-export type MonitorCommandStageData = {
-  body?: {
-    content: string
-    priority?: "urgent" | "high" | "normal" | "low"
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/monitor/command"
-}
-
-export type MonitorCommandStageErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type MonitorCommandStageError = MonitorCommandStageErrors[keyof MonitorCommandStageErrors]
-
-export type MonitorCommandStageResponses = {
-  /**
-   * Command staged
-   */
-  200: {
-    staged: boolean
-    id: string
-  }
-}
-
-export type MonitorCommandStageResponse = MonitorCommandStageResponses[keyof MonitorCommandStageResponses]
-
-export type MonitorQueueListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/monitor/queue"
-}
-
-export type MonitorQueueListResponses = {
-  /**
-   * Queued commands
-   */
-  200: Array<{
-    id: string
-    timestamp: number
-    priority: string
-    source: string
-    content: string
-  }>
-}
-
-export type MonitorQueueListResponse = MonitorQueueListResponses[keyof MonitorQueueListResponses]
 
 export type InstanceDisposeData = {
   body?: never

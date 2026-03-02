@@ -295,7 +295,7 @@ export const TuiRoutes = lazy(() =>
 
         const result = await Promise.race([
           run().then((message) => ({ kind: "done" as const, message })),
-          new Promise<{ kind: "timeout" as const }>((resolve) =>
+          new Promise<{ kind: "timeout" }>((resolve) =>
             setTimeout(() => resolve({ kind: "timeout" }), timeoutMs),
           ),
         ])

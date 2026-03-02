@@ -126,3 +126,7 @@ export async function addCoordinateOverlay(
     .png()
     .toBuffer()
 }
+
+export const Overlay = {
+  add: addCoordinateOverlay,
+}
