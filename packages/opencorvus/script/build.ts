@@ -185,11 +185,11 @@ for (const item of targets) {
     },
     entrypoints: ["./src/index.ts", parserWorker, workerPath],
     define: {
-      ARGUS_VERSION: `'${Script.version}'`,
-      ARGUS_MIGRATIONS: JSON.stringify(migrations),
+      OPENCORVUS_VERSION: `'${Script.version}'`,
+      OPENCORVUS_MIGRATIONS: JSON.stringify(migrations),
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
       ARGUS_WORKER_PATH: workerPath,
-      ARGUS_CHANNEL: `'${Script.channel}'`,
+      OPENCORVUS_CHANNEL: `'${Script.channel}'`,
       ARGUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
     },
   })
