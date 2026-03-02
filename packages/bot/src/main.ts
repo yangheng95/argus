@@ -14,6 +14,7 @@ import { applyDashscopeRuntime } from "./dashscope"
 const botPermission = {
   "*": "deny",
   doom_loop: "allow",
+  invalid: "allow", // required for experimental_repairToolCall error handling
   screen: "allow",
   input: "allow",
   bash: "allow",
