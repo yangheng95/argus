@@ -432,6 +432,7 @@ export namespace SessionPrompt {
         SessionCompaction.prune({ sessionID })
         log.info("entering standby", { sessionID })
         SessionStatus.set(sessionID, { type: "idle" })
+        Bus.publish(Session.Event.Idle, { sessionID })
 
         // Block until a new user message arrives or session is cancelled
         await waitForUserMessage(sessionID, abort, lastAssistant!.id)
