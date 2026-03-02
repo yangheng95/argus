@@ -394,10 +394,10 @@ const sttPipeline = new STTPipeline({
   providers: (process.env.STT_PROVIDERS ?? "groq,openai-whisper,deepgram,google-gemini,local-cli").split(","),
   language: process.env.STT_LANGUAGE,
 })
-sttPipeline.register(new GroqProvider({ apiKey: process.env.GROQ_API_KEY }))
-sttPipeline.register(new OpenAIWhisperProvider({ apiKey: process.env.OPENAI_API_KEY }))
-sttPipeline.register(new DeepgramProvider({ apiKey: process.env.DEEPGRAM_API_KEY }))
-sttPipeline.register(new GoogleGeminiProvider({ apiKey: process.env.GOOGLE_API_KEY }))
+sttPipeline.register(new GroqProvider({ apiKey: process.env.GROQ_API_KEY, model: process.env.STT_GROQ_MODEL, baseURL: process.env.STT_GROQ_BASE_URL }))
+sttPipeline.register(new OpenAIWhisperProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.STT_OPENAI_MODEL, baseURL: process.env.STT_OPENAI_BASE_URL }))
+sttPipeline.register(new DeepgramProvider({ apiKey: process.env.DEEPGRAM_API_KEY, model: process.env.STT_DEEPGRAM_MODEL, baseURL: process.env.STT_DEEPGRAM_BASE_URL }))
+sttPipeline.register(new GoogleGeminiProvider({ apiKey: process.env.GOOGLE_API_KEY, model: process.env.STT_GOOGLE_MODEL, baseURL: process.env.STT_GOOGLE_BASE_URL }))
 sttPipeline.register(new LocalCLIProvider({ command: process.env.STT_LOCAL_COMMAND }))
 await sttPipeline.init()
 bot.setSTT(sttPipeline)
