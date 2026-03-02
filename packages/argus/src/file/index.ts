@@ -322,6 +322,37 @@ export namespace File {
     return false
   }
 
+  function trimTrailingSeparators(input: string) {
+    const normalized = path.normalize(input)
+    const root = path.parse(normalized).root
+    let value = normalized
+    while (value.length > root.length && (value.endsWith("\\") || value.endsWith("/"))) {
+      value = value.slice(0, -1)
+    }
+    return value
+  }
+
+  async function canonicalPath(input: string) {
+    const absolute = path.resolve(input)
+    const real = await fs.promises.realpath(absolute).catch(() => absolute)
+    let normalized = trimTrailingSeparators(real)
+    normalized = Filesystem.normalizePath(normalized)
+    if (process.platform === "win32") normalized = normalized.toLowerCase()
+    return normalized
+  }
+
+  function isWithin(base: string, target: string) {
+    return target === base || target.startsWith(base + path.sep)
+  }
+
+  async function isPathAllowed(input: string) {
+    const [target, directory] = await Promise.all([canonicalPath(input), canonicalPath(Instance.directory)])
+    if (isWithin(directory, target)) return true
+    if (Instance.worktree === "/") return false
+    const worktree = await canonicalPath(Instance.worktree)
+    return isWithin(worktree, target)
+  }
+
   export const Event = {
     Edited: BusEvent.define(
       "file.edited",
@@ -347,8 +378,16 @@ export namespace File {
         const dirs = new Set<string>()
         const ignore = new Set<string>()
 
-        if (process.platform === "darwin") ignore.add("Library")
-        if (process.platform === "win32") ignore.add("AppData")
+        if (process.platform === "darwin") {
+          ignore.add("Library")
+          ignore.add(".Trash")
+          ignore.add("Caches")
+        }
+        if (process.platform === "win32") {
+          ignore.add("AppData")
+          ignore.add("$Recycle.Bin")
+          ignore.add("System Volume Information")
+        }
 
         const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
         const shouldIgnore = (name: string) => name.startsWith(".") || ignore.has(name)
@@ -496,9 +535,7 @@ export namespace File {
     const project = Instance.project
     const full = path.join(Instance.directory, file)
 
-    // TODO: Filesystem.contains is lexical only - symlinks inside the project can escape.
-    // TODO: On Windows, cross-drive paths bypass this check. Consider realpath canonicalization.
-    if (!Instance.containsPath(full)) {
+    if (!(await isPathAllowed(full))) {
       throw new Error(`Access denied: path escapes project directory`)
     }
 
@@ -572,9 +609,7 @@ export namespace File {
     }
     const resolved = dir ? path.join(Instance.directory, dir) : Instance.directory
 
-    // TODO: Filesystem.contains is lexical only - symlinks inside the project can escape.
-    // TODO: On Windows, cross-drive paths bypass this check. Consider realpath canonicalization.
-    if (!Instance.containsPath(resolved)) {
+    if (!(await isPathAllowed(resolved))) {
       throw new Error(`Access denied: path escapes project directory`)
     }
 

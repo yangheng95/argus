@@ -15,10 +15,23 @@ export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
 
   function expand(pattern: string): string {
-    if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
-    if (pattern === "~") return os.homedir()
-    if (pattern.startsWith("$HOME/")) return os.homedir() + pattern.slice(5)
-    if (pattern.startsWith("$HOME")) return os.homedir() + pattern.slice(5)
+    const home = os.homedir()
+    const userProfile = process.env.USERPROFILE || home
+
+    if (pattern.startsWith("~/")) return home + pattern.slice(1)
+    if (pattern === "~") return home
+    if (pattern.startsWith("$HOME/")) return home + pattern.slice(5)
+    if (pattern.startsWith("$HOME")) return home + pattern.slice(5)
+
+    const userProfileToken = "%USERPROFILE%"
+    if (pattern.localeCompare(userProfileToken, undefined, { sensitivity: "accent" }) === 0) {
+      return userProfile
+    }
+    if (pattern.toUpperCase().startsWith(userProfileToken)) {
+      const suffix = pattern.slice(userProfileToken.length)
+      if (!suffix || suffix.startsWith("/") || suffix.startsWith("\\")) return userProfile + suffix
+    }
+
     return pattern
   }
 

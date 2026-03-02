@@ -15,6 +15,8 @@ export namespace Identifier {
     memory: "mem",
     memchunk: "mck",
     cron: "crn",
+    task: "tsk",
+    goal: "gol",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

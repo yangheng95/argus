@@ -1,3 +1,24 @@
+// Apply embedded env vars (baked in at build time via --embed-env).
+// External env vars take priority so users can still override at runtime.
+declare const ARGUS_EMBEDDED_ENV: Record<string, string> | undefined
+try {
+  if (typeof ARGUS_EMBEDDED_ENV === "object" && ARGUS_EMBEDDED_ENV) {
+    for (const [key, value] of Object.entries(ARGUS_EMBEDDED_ENV)) {
+      if (!(key in process.env) || process.env[key] === undefined) {
+        process.env[key] = value
+      }
+    }
+  }
+} catch {}
+
+// Restore original CWD if launched via the self-contained launcher
+// (launcher.ts changes CWD to the binary's directory for native module resolution)
+if (process.env.ARGUS_ORIGINAL_CWD) {
+  try {
+    process.chdir(process.env.ARGUS_ORIGINAL_CWD)
+  } catch {}
+}
+
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
 import { RunCommand } from "./cli/cmd/run"

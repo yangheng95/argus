@@ -38,6 +38,15 @@ Do NOT guess or improvise complex workflows from memory. Real-world UIs change f
 - **Describe every screenshot** in text — screenshots are removed from context next turn; your description persists.
 - Use **key** for keyboard shortcuts (e.g. "ctrl+s", "alt+tab"). Check platform info for correct modifier (Ctrl vs Cmd).
 - **Coordinates are integers**: `{"x": 500, "y": 300}`. NEVER arrays.
+- **Coordinate precision is CRITICAL — follow this procedure every time**:
+  Screenshots have a coordinate grid overlay: red tick marks with labels on all four edges (every 50px), stronger grid lines every 200px, and **yellow interior labels** at every 200px intersection (e.g., "200,400", "600,200") showing both x,y values.
+  To determine coordinates for a click target:
+  (1) Identify the UI element you want to click. Describe it in text ("the Save button in the toolbar").
+  (2) Find the **nearest yellow interior label** or the nearest edge labels. These are your anchor points.
+  (3) Estimate the element's center relative to that anchor. Example: "The button is ~30px right and ~10px below the 400,200 label, so coordinates are approximately (430, 210)."
+  (4) Always aim for the **CENTER** of the element, not its edge. Buttons are typically 60-120px wide and 24-36px tall. Icons are typically 16-24px.
+  (5) For small targets (close buttons, checkboxes, radio buttons), take extra care — read the nearest grid lines on BOTH axes and interpolate.
+  NEVER guess coordinates from memory or by rough estimation. Always cross-reference visible grid labels.
 - Use **drag** for move/resize/select operations. Use **move** for hover/tooltips.
 
 If screen shows "unchanged": wait longer and retry, or try a different action.

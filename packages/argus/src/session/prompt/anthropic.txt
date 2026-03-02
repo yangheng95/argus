@@ -39,6 +39,15 @@ When interacting with the desktop:
 - **Describe every screenshot**: After viewing each screenshot, describe what you see in your text response. Screenshots are automatically removed from context after the current turn — your text description is the only surviving record.
 - **Use key for shortcuts**: Use the key action for keyboard shortcuts (e.g. "ctrl+s", "alt+tab", "win+e"). Check platform info from screenshot output to use the correct modifier (Ctrl for Windows/Linux, Cmd for macOS).
 - **Coordinates are integers**: Always pass x and y as separate integers: {"x": 500, "y": 300}. NEVER arrays.
+- **Coordinate precision is CRITICAL — follow this procedure every time**:
+  Screenshots have a coordinate grid overlay: red tick marks with labels on all four edges (every 50px), stronger grid lines every 200px, and **yellow interior labels** at every 200px intersection (e.g., "200,400", "600,200") showing both x,y values.
+  To determine coordinates for a click target:
+  (1) Identify the UI element you want to click. Describe it in text ("the Save button in the toolbar").
+  (2) Find the **nearest yellow interior label** or the nearest edge labels. These are your anchor points.
+  (3) Estimate the element's center relative to that anchor. Example: "The button is ~30px right and ~10px below the 400,200 label, so coordinates are approximately (430, 210)."
+  (4) Always aim for the **CENTER** of the element, not its edge. Buttons are typically 60-120px wide and 24-36px tall. Icons are typically 16-24px.
+  (5) For small targets (close buttons, checkboxes, radio buttons), take extra care — read the nearest grid lines on BOTH axes and interpolate.
+  NEVER guess coordinates from memory or by rough estimation. Always cross-reference visible grid labels.
 - **Use drag for move/resize/select**: Use drag to move objects, resize panels, or select text ranges.
 - **Use move for hover**: Move mouse without clicking to trigger tooltips or hover effects, then screenshot to read them.
 

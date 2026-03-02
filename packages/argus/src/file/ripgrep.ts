@@ -125,6 +125,17 @@ export namespace Ripgrep {
     }),
   )
 
+  async function findFile(root: string, name: string): Promise<string | undefined> {
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
+    for (const entry of entries) {
+      const full = path.join(root, entry.name)
+      if (entry.isFile() && entry.name === name) return full
+      if (!entry.isDirectory()) continue
+      const nested = await findFile(full, name)
+      if (nested) return nested
+    }
+  }
+
   const state = lazy(async () => {
     const system = Bun.which("rg")
     if (system) {
@@ -150,10 +161,8 @@ export namespace Ripgrep {
       const archivePath = path.join(Global.Path.bin, filename)
       await Filesystem.write(archivePath, Buffer.from(arrayBuffer))
       if (config.extension === "tar.gz") {
-        const args = ["tar", "-xzf", archivePath, "--strip-components=1"]
-
-        if (platformKey.endsWith("-darwin")) args.push("--include=*/rg")
-        if (platformKey.endsWith("-linux")) args.push("--wildcards", "*/rg")
+        const extractDir = await fs.mkdtemp(path.join(Global.Path.bin, "ripgrep-"))
+        const args = ["tar", "-xzf", archivePath, "-C", extractDir]
 
         const proc = Process.spawn(args, {
           cwd: Global.Path.bin,
@@ -168,6 +177,15 @@ export namespace Ripgrep {
             stderr,
           })
         }
+        const extracted = await findFile(extractDir, "rg")
+        if (!extracted) {
+          throw new ExtractionFailedError({
+            filepath: archivePath,
+            stderr: "rg binary not found after tar extraction",
+          })
+        }
+        await fs.copyFile(extracted, filepath)
+        await fs.rm(extractDir, { recursive: true, force: true }).catch(() => {})
       }
       if (config.extension === "zip") {
         const zipFileReader = new ZipReader(new BlobReader(new Blob([arrayBuffer])))
@@ -198,7 +216,11 @@ export namespace Ripgrep {
         await zipFileReader.close()
       }
       await fs.unlink(archivePath)
-      if (!platformKey.endsWith("-win32")) await fs.chmod(filepath, 0o755)
+      if (!platformKey.endsWith("-win32")) {
+        await fs.chmod(filepath, 0o755).catch((error) => {
+          log.warn("failed to chmod ripgrep binary", { filepath, error })
+        })
+      }
     }
 
     return {
@@ -291,7 +313,7 @@ export namespace Ripgrep {
     const root: Node = { name: "", children: new Map() }
     for (const file of files) {
       if (file.includes(".argus")) continue
-      const parts = file.split(path.sep)
+      const parts = file.split(/[\\/]/).filter(Boolean)
       if (parts.length < 2) continue
       let node = root
       for (const part of parts.slice(0, -1)) {

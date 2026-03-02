@@ -7,16 +7,63 @@ import { spawn, type ChildProcess } from "child_process"
 const SIGKILL_TIMEOUT_MS = 200
 
 export namespace Shell {
+  function firstExisting(paths: Array<string | null | undefined>) {
+    for (const item of paths) {
+      if (!item) continue
+      if (Filesystem.stat(item)?.size) return item
+    }
+  }
+
+  function gitBashCandidates() {
+    const fromGit = (() => {
+      const git = Bun.which("git")
+      if (!git) return []
+      const gitDir = path.dirname(git)
+      return [path.resolve(gitDir, "..", "bin", "bash.exe"), path.resolve(gitDir, "..", "usr", "bin", "bash.exe")]
+    })()
+
+    const installRoots = [
+      process.env.ProgramW6432,
+      process.env.ProgramFiles,
+      process.env["ProgramFiles(x86)"],
+      process.env.LocalAppData,
+      process.env.ChocolateyInstall,
+    ].filter((value): value is string => Boolean(value))
+
+    const fromCommonInstalls = installRoots.flatMap((root) => [
+      path.join(root, "Git", "bin", "bash.exe"),
+      path.join(root, "Git", "usr", "bin", "bash.exe"),
+    ])
+
+    const genericBash = [Bun.which("bash.exe"), Bun.which("bash")].filter((item): item is string => {
+      if (!item) return false
+      return !item.toLowerCase().endsWith("\\windows\\system32\\bash.exe")
+    })
+
+    return [
+      ...fromGit,
+      ...fromCommonInstalls,
+      ...genericBash,
+    ]
+  }
+
   export async function killTree(proc: ChildProcess, opts?: { exited?: () => boolean }): Promise<void> {
     const pid = proc.pid
     if (!pid || opts?.exited?.()) return
 
     if (process.platform === "win32") {
-      await new Promise<void>((resolve) => {
+      const killed = await new Promise<boolean>((resolve) => {
         const killer = spawn("taskkill", ["/pid", String(pid), "/f", "/t"], { stdio: "ignore" })
-        killer.once("exit", () => resolve())
-        killer.once("error", () => resolve())
+        killer.once("exit", (code) => resolve(code === 0))
+        killer.once("error", () => resolve(false))
       })
+      if (!killed && !opts?.exited?.()) {
+        proc.kill("SIGTERM")
+        await Bun.sleep(SIGKILL_TIMEOUT_MS)
+        if (!opts?.exited?.()) {
+          proc.kill("SIGKILL")
+        }
+      }
       return
     }
 
@@ -38,19 +85,19 @@ export namespace Shell {
 
   function fallback() {
     if (process.platform === "win32") {
-      if (Flag.ARGUS_GIT_BASH_PATH) return Flag.ARGUS_GIT_BASH_PATH
-      const git = Bun.which("git")
-      if (git) {
-        // git.exe is typically at: C:\Program Files\Git\cmd\git.exe
-        // bash.exe is at: C:\Program Files\Git\bin\bash.exe
-        const bash = path.join(git, "..", "..", "bin", "bash.exe")
-        if (Filesystem.stat(bash)?.size) return bash
-      }
+      const bash = firstExisting([Flag.ARGUS_GIT_BASH_PATH, ...gitBashCandidates()])
+      if (bash) return bash
       return process.env.COMSPEC || "cmd.exe"
     }
-    if (process.platform === "darwin") return "/bin/zsh"
+    if (process.platform === "darwin") {
+      const zsh = Bun.which("zsh")
+      if (zsh) return zsh
+      return "/bin/zsh"
+    }
     const bash = Bun.which("bash")
     if (bash) return bash
+    const sh = Bun.which("sh")
+    if (sh) return sh
     return "/bin/sh"
   }
 

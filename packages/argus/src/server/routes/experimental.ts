@@ -19,6 +19,8 @@ import { Database, eq } from "../../storage/db"
 import { CronJobTable } from "../../scheduler/cron.sql"
 import { Cron } from "../../scheduler/cron"
 import { Identifier } from "../../id/id"
+import { TaskPlan } from "../../memory/task-plan"
+import { Scratchpad } from "../../memory/scratchpad"
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
@@ -317,6 +319,7 @@ export const ExperimentalRoutes = lazy(() =>
                   matchTitle: z.string(),
                   title: z.string(),
                   appName: z.string(),
+                  focused: z.boolean(),
                 })),
               },
             },
@@ -330,11 +333,13 @@ export const ExperimentalRoutes = lazy(() =>
         GuiState.activate()
         const binding = await WindowManager.bind(title)
         DesktopState.setBounds(null)
+        const refreshed = await WindowManager.getBinding()
         return c.json({
           windowId: binding.windowId,
           matchTitle: binding.matchTitle,
           title: binding.info.title,
           appName: binding.info.appName,
+          focused: refreshed?.info.isFocused ?? binding.info.isFocused,
         })
       },
     )
@@ -580,6 +585,59 @@ export const ExperimentalRoutes = lazy(() =>
         const id = c.req.param("id")
         Database.use((db) => db.delete(CronJobTable).where(eq(CronJobTable.id, id)).run())
         return c.json({ ok: true })
+      },
+    )
+    // --- Task Plan API ---
+    .get(
+      "/task-plan",
+      describeRoute({
+        summary: "List tasks for a session",
+        operationId: "experimental.taskplan.list",
+        responses: {
+          200: {
+            description: "Tasks",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.array(
+                    z.object({
+                      id: z.string(),
+                      goal: z.string(),
+                      status: z.string(),
+                      parentID: z.string().nullable(),
+                      progressPct: z.number(),
+                    }),
+                  ),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      validator("query", z.object({ sessionId: z.string() })),
+      async (c) => {
+        const { sessionId } = c.req.valid("query")
+        const tasks = TaskPlan.list(sessionId)
+        return c.json(tasks)
+      },
+    )
+    // --- Scratchpad API ---
+    .get(
+      "/scratchpad",
+      describeRoute({
+        summary: "Get scratchpad content",
+        operationId: "experimental.scratchpad.get",
+        responses: {
+          200: {
+            description: "Scratchpad",
+            content: { "application/json": { schema: resolver(z.object({ content: z.string() })) } },
+          },
+        },
+      }),
+      validator("query", z.object({ sessionId: z.string() })),
+      async (c) => {
+        const { sessionId } = c.req.valid("query")
+        return c.json({ content: Scratchpad.get(sessionId) })
       },
     ),
 )

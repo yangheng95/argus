@@ -62,7 +62,8 @@ window.__TAURI__.event.listen("show-overlay", (event) => {
   const winWidth = Math.round(window.innerWidth * dpr)
   const winHeight = Math.round(window.innerHeight * dpr)
   const winX = Math.round(px - winWidth / 2)
-  const winY = Math.round(py - winHeight - 10)
+  // Gap of 10 CSS pixels above cursor, converted to physical pixels.
+  const winY = Math.round(py - winHeight - 10 * dpr)
 
   window.__TAURI__.core
     .invoke("position_window", { window: "overlay", x: winX, y: winY })

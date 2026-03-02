@@ -92,20 +92,17 @@ export const PrCommand = cmd({
         UI.println()
 
         // Launch argus TUI with session ID if available
-        const { spawn } = await import("child_process")
-        const argusArgs = sessionId ? ["-s", sessionId] : []
-        const argusProcess = spawn("argus", argusArgs, {
-          stdio: "inherit",
-          cwd: process.cwd(),
+        const { Tui } = await import("@/tui")
+        const handle = await Tui.spawn({
+          sessionID: sessionId,
+          bin: "argus",
+          directory: process.cwd(),
         })
 
-        await new Promise<void>((resolve, reject) => {
-          argusProcess.on("exit", (code) => {
-            if (code === 0) resolve()
-            else reject(new Error(`argus exited with code ${code}`))
-          })
-          argusProcess.on("error", reject)
-        })
+        const exitCode = await handle.waitForExit()
+        if (exitCode !== 0 && exitCode !== null) {
+          throw new Error(`argus exited with code ${exitCode}`)
+        }
       },
     })
   },

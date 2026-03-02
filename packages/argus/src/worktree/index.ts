@@ -13,9 +13,11 @@ import { fn } from "../util/fn"
 import { Log } from "../util/log"
 import { BusEvent } from "@/bus/bus-event"
 import { GlobalBus } from "@/bus/global"
+import { Shell } from "@/shell/shell"
 
 export namespace Worktree {
   const log = Log.create({ service: "worktree" })
+  const caseInsensitiveCache = new Map<string, boolean>()
 
   export const Event = {
     Ready: BusEvent.define(
@@ -262,7 +264,41 @@ export namespace Worktree {
     const abs = path.resolve(input)
     const real = await fs.realpath(abs).catch(() => abs)
     const normalized = path.normalize(real)
-    return process.platform === "win32" ? normalized.toLowerCase() : normalized
+    const insensitive = await isCaseInsensitiveFilesystem(normalized)
+    return insensitive ? normalized.toLowerCase() : normalized
+  }
+
+  async function isCaseInsensitiveFilesystem(target: string) {
+    if (process.platform === "win32") return true
+    if (process.platform !== "darwin") return false
+
+    const absolute = path.resolve(target)
+    const root = path.parse(absolute).root || "/"
+    const cached = caseInsensitiveCache.get(root)
+    if (cached !== undefined) return cached
+
+    const dir = await fs.realpath(path.dirname(absolute)).catch(() => path.dirname(absolute))
+    const parent = path.dirname(dir)
+    const base = path.basename(dir)
+    const index = base.search(/[a-zA-Z]/)
+    if (index < 0 || parent === dir) {
+      caseInsensitiveCache.set(root, false)
+      return false
+    }
+
+    const toggled =
+      base.slice(0, index) +
+      (base[index] === base[index].toLowerCase() ? base[index].toUpperCase() : base[index].toLowerCase()) +
+      base.slice(index + 1)
+    const probe = path.join(parent, toggled)
+
+    const insensitive = await Promise.all([fs.stat(dir).catch(() => undefined), fs.stat(probe).catch(() => undefined)]).then(
+      ([original, variant]) =>
+        Boolean(original && variant && original.dev === variant.dev && original.ino === variant.ino),
+    )
+
+    caseInsensitiveCache.set(root, insensitive)
+    return insensitive
   }
 
   async function candidate(root: string, base?: string) {
@@ -287,7 +323,8 @@ export namespace Worktree {
     if (process.platform === "win32") {
       return $`cmd /c ${cmd}`.nothrow().cwd(directory)
     }
-    return $`bash -lc ${cmd}`.nothrow().cwd(directory)
+    const shell = Shell.acceptable()
+    return $`${shell} -c ${cmd}`.nothrow().cwd(directory)
   }
 
   type StartKind = "project" | "worktree"

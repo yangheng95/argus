@@ -9,6 +9,10 @@ function sanitizePath(p: string): string {
   return p.replace(/\0/g, "")
 }
 
+// Schema URL written by config.ts when generating argus.json files.
+// Kept in one place so tests stay in sync with the source.
+export const CONFIG_SCHEMA_URL = "https://opencode.ai/config.json"
+
 type TmpDirOptions<T> = {
   git?: boolean
   config?: Partial<Config.Info>
@@ -26,7 +30,7 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
     await Bun.write(
       path.join(dirpath, "argus.json"),
       JSON.stringify({
-        $schema: "https://opencode.ai/config.json",
+        $schema: CONFIG_SCHEMA_URL,
         ...options.config,
       }),
     )

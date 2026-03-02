@@ -2,13 +2,13 @@ import z from "zod"
 import { spawn } from "child_process"
 import { Tool } from "./tool"
 import path from "path"
+import fs from "fs/promises"
 import DESCRIPTION from "./bash.txt"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { lazy } from "@/util/lazy"
 import { Language } from "web-tree-sitter"
 
-import { $ } from "bun"
 import { Filesystem } from "@/util/filesystem"
 import { fileURLToPath } from "url"
 import { Flag } from "@/flag/flag.ts"
@@ -22,6 +22,8 @@ const MAX_METADATA_LENGTH = 30_000
 const DEFAULT_TIMEOUT = Flag.ARGUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS || 2 * 60 * 1000
 
 export const log = Log.create({ service: "bash-tool" })
+const DYNAMIC_PATH_PATTERN = /[*?[\]{}$`~]/
+const FORBIDDEN_ENV_KEYS = new Set(["LD_PRELOAD", "LD_AUDIT", "DYLD_INSERT_LIBRARIES", "DYLD_FORCE_FLAT_NAMESPACE"])
 
 const resolveWasm = (asset: string) => {
   if (asset.startsWith("file://")) return fileURLToPath(asset)
@@ -50,6 +52,38 @@ const parser = lazy(async () => {
   p.setLanguage(bashLanguage)
   return p
 })
+
+function stripShellQuotes(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return ""
+  if (
+    (trimmed.startsWith("'") && trimmed.endsWith("'") && trimmed.length >= 2) ||
+    (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2)
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
+}
+
+async function resolveStaticPathArg(arg: string, cwd: string) {
+  const cleaned = stripShellQuotes(arg)
+  if (!cleaned || DYNAMIC_PATH_PATTERN.test(cleaned)) return undefined
+
+  const absolute = path.resolve(cwd, cleaned)
+  const real = await fs.realpath(absolute).catch(() => absolute)
+  return process.platform === "win32" ? Filesystem.windowsPath(real).replace(/\//g, "\\") : real
+}
+
+function sanitizeChildEnv(base: NodeJS.ProcessEnv, override: Record<string, string>) {
+  const env: NodeJS.ProcessEnv = {
+    ...base,
+    ...override,
+  }
+  for (const key of FORBIDDEN_ENV_KEYS) {
+    delete env[key]
+  }
+  return env
+}
 
 // TODO: we may wanna rename this tool so it works better on other shells
 export const BashTool = Tool.define("bash", async () => {
@@ -116,18 +150,11 @@ export const BashTool = Tool.define("bash", async () => {
         if (["cd", "rm", "cp", "mv", "mkdir", "touch", "chmod", "chown", "cat"].includes(command[0])) {
           for (const arg of command.slice(1)) {
             if (arg.startsWith("-") || (command[0] === "chmod" && arg.startsWith("+"))) continue
-            const resolved = await $`realpath ${arg}`
-              .cwd(cwd)
-              .quiet()
-              .nothrow()
-              .text()
-              .then((x) => x.trim())
+            const resolved = await resolveStaticPathArg(arg, cwd)
             log.info("resolved path", { arg, resolved })
             if (resolved) {
-              const normalized =
-                process.platform === "win32" ? Filesystem.windowsPath(resolved).replace(/\//g, "\\") : resolved
-              if (!Instance.containsPath(normalized)) {
-                const dir = (await Filesystem.isDir(normalized)) ? normalized : path.dirname(normalized)
+              if (!Instance.containsPath(resolved)) {
+                const dir = (await Filesystem.isDir(resolved)) ? resolved : path.dirname(resolved)
                 directories.add(dir)
               }
             }
@@ -172,10 +199,7 @@ export const BashTool = Tool.define("bash", async () => {
       const proc = spawn(params.command, {
         shell,
         cwd,
-        env: {
-          ...process.env,
-          ...shellEnv.env,
-        },
+        env: sanitizeChildEnv(process.env, shellEnv.env),
         stdio: ["ignore", "pipe", "pipe"],
         detached: process.platform !== "win32",
       })

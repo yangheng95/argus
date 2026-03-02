@@ -22,6 +22,12 @@ export class VisionPipeline {
   }
 
   async analyze(imageBase64: string, prompt?: string): Promise<VisionAnalysis> {
+    // Guard: skip if base64 payload is too large for the vision API
+    const base64MB = imageBase64.length / (1024 * 1024)
+    if (base64MB > 10) {
+      throw new Error(`Vision skipped: base64 payload too large (${base64MB.toFixed(1)}MB)`)
+    }
+
     const userPrompt = prompt ?? "Describe what you see on this screen. Focus on the main content, UI state, and any notable elements."
 
     const body = {
@@ -45,10 +51,11 @@ export class VisionPipeline {
     }
 
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 30_000)
+    const timeout = setTimeout(() => controller.abort(), 60_000)
 
     try {
-      const res = await fetch(`${this.baseURL}/chat/completions`, {
+      const url = `${this.baseURL}/chat/completions`
+      const fetchOpts: RequestInit & { tls?: any } = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -56,7 +63,15 @@ export class VisionPipeline {
         },
         body: JSON.stringify(body),
         signal: controller.signal,
-      })
+      }
+
+      // Bun on Windows/MINGW may not trust certain CAs — disable strict TLS
+      // verification for the vision API if SSL_CERT_FILE is not configured.
+      if (process.platform === "win32" && !process.env.SSL_CERT_FILE) {
+        fetchOpts.tls = { rejectUnauthorized: false }
+      }
+
+      const res = await fetch(url, fetchOpts)
 
       if (!res.ok) {
         const text = await res.text().catch(() => "")
@@ -75,6 +90,13 @@ export class VisionPipeline {
           completion: usage.completion_tokens ?? 0,
         },
       }
+    } catch (err) {
+      // Re-throw with more context for diagnosis
+      if (err instanceof DOMException && err.name === "AbortError") {
+        const elapsed = "timeout or SSL handshake failure"
+        throw new Error(`Vision API aborted (${elapsed}). URL: ${this.baseURL}. Tip: set SSL_CERT_FILE env var on Windows.`)
+      }
+      throw err
     } finally {
       clearTimeout(timeout)
     }

@@ -14,9 +14,95 @@ import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { TuiConfig } from "@/config/tui"
 import { Instance } from "@/project/instance"
+import * as prompts from "@clack/prompts"
+import { ModelsDev } from "@/provider/models"
+import { Auth } from "@/auth"
 
 declare global {
   const ARGUS_WORKER_PATH: string
+}
+
+const PROVIDER_PRIORITY: Record<string, number> = {
+  anthropic: 0,
+  openai: 1,
+  google: 2,
+  openrouter: 3,
+  "amazon-bedrock": 4,
+}
+
+async function promptProviderSelection(): Promise<void> {
+  const database = await ModelsDev.get()
+  const existingAuth = await Auth.all()
+
+  // Check which providers already have credentials (env var or auth.json)
+  const configured: string[] = []
+  for (const [id, provider] of Object.entries(database)) {
+    const hasEnv = provider.env.some((e) => process.env[e])
+    const hasAuth = !!existingAuth[id]
+    if (hasEnv || hasAuth) configured.push(id)
+  }
+
+  const configuredHint = configured.length > 0 ? ` [${configured.join(", ")}]` : ""
+
+  prompts.intro("Provider Configuration")
+
+  if (configured.length > 0) {
+    prompts.log.info(`Currently configured:${configuredHint}`)
+  }
+
+  const options = Object.values(database)
+    .filter((p) => p.env.length > 0)
+    .sort((a, b) => (PROVIDER_PRIORITY[a.id] ?? 99) - (PROVIDER_PRIORITY[b.id] ?? 99))
+    .map((p) => ({
+      label: p.name + (configured.includes(p.id) ? UI.Style.TEXT_DIM + " (configured)" : ""),
+      value: p.id,
+      hint: p.env[0],
+    }))
+
+  const provider = await prompts.select({
+    message: "Select LLM provider (Ctrl+C to skip)",
+    options: [{ label: "Skip - use existing config", value: "__skip__" }, ...options],
+  })
+
+  if (prompts.isCancel(provider) || provider === "__skip__") {
+    prompts.outro("Using existing configuration")
+    return
+  }
+
+  const providerInfo = database[provider]
+  if (!providerInfo) return
+
+  const key = await prompts.password({
+    message: `Enter API key for ${providerInfo.name}`,
+    validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+  })
+
+  if (prompts.isCancel(key)) {
+    prompts.outro("Using existing configuration")
+    return
+  }
+
+  // Set env vars so the worker process inherits them
+  for (const envVar of providerInfo.env) {
+    process.env[envVar] = key
+  }
+
+  // Ask for model ID
+  const model = await prompts.text({
+    message: `Model for ${providerInfo.name}`,
+    placeholder: `${provider}/model-name`,
+    validate: (x) => (x && x.length > 0 ? undefined : "Required"),
+  })
+
+  if (prompts.isCancel(model)) {
+    prompts.outro("Using existing configuration")
+    return
+  }
+
+  // Persist to auth.json for future sessions
+  await Auth.set(provider, { type: "api", key })
+
+  prompts.outro(`${providerInfo.name} configured (env: ${providerInfo.env.join(", ")}, model: ${model})`)
 }
 
 type RpcClient = ReturnType<typeof Rpc.client<typeof rpc>>
@@ -82,6 +168,19 @@ export const TuiThreadCommand = cmd({
         describe: "agent to use",
       }),
   handler: async (args) => {
+    if (args.fork && !args.continue && !args.session) {
+      UI.error("--fork requires --continue or --session")
+      process.exitCode = 1
+      return
+    }
+
+    // Show provider selection before Worker spawn so env vars are inherited.
+    try {
+      await promptProviderSelection()
+    } catch {
+      // Prompt library failure (e.g. non-interactive env) — skip silently
+    }
+
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
     // (Important when running under `bun run` wrappers on Windows.)
     const unguard = win32InstallCtrlCGuard()
@@ -89,12 +188,6 @@ export const TuiThreadCommand = cmd({
       // Must be the very first thing — disables CTRL_C_EVENT before any Worker
       // spawn or async work so the OS cannot kill the process group.
       win32DisableProcessedInput()
-
-      if (args.fork && !args.continue && !args.session) {
-        UI.error("--fork requires --continue or --session")
-        process.exitCode = 1
-        return
-      }
 
       // Resolve relative paths against PWD to preserve behavior when using --cwd flag
       const baseCwd = process.env.PWD ?? process.cwd()

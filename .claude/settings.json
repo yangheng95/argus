@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && git add -A && git commit -m \"auto-commit\" --allow-empty-message 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

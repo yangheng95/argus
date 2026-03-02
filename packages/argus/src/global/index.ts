@@ -6,16 +6,30 @@ import { Filesystem } from "../util/filesystem"
 
 const app = "argus"
 
-const data = path.join(xdgData!, app)
-const cache = path.join(xdgCache!, app)
-const config = path.join(xdgConfig!, app)
-const state = path.join(xdgState!, app)
+function resolveHome() {
+  if (process.env.ARGUS_TEST_HOME) return process.env.ARGUS_TEST_HOME
+  try {
+    const home = os.homedir()
+    if (home) return home
+  } catch {}
+  return process.env.HOME || process.env.USERPROFILE || os.tmpdir()
+}
+
+const home = resolveHome()
+const isWin = process.platform === "win32"
+const winLocal   = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local")
+const winRoaming = process.env.APPDATA       || path.join(home, "AppData", "Roaming")
+
+const data   = path.join(xdgData   || (isWin ? winLocal   : path.join(home, ".local", "share")), app)
+const cache  = path.join(xdgCache  || (isWin ? winLocal   : path.join(home, ".cache")),           app)
+const config = path.join(xdgConfig || (isWin ? winRoaming : path.join(home, ".config")),          app)
+const state  = path.join(xdgState  || (isWin ? winLocal   : path.join(home, ".local", "state")),  app)
 
 export namespace Global {
   export const Path = {
     // Allow override via ARGUS_TEST_HOME for test isolation
     get home() {
-      return process.env.ARGUS_TEST_HOME || os.homedir()
+      return resolveHome()
     },
     data,
     bin: path.join(data, "bin"),
@@ -26,12 +40,21 @@ export namespace Global {
   }
 }
 
+async function ensureDirectory(dir: string) {
+  try {
+    await fs.mkdir(dir, { recursive: true })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to initialize directory ${dir}: ${detail}`)
+  }
+}
+
 await Promise.all([
-  fs.mkdir(Global.Path.data, { recursive: true }),
-  fs.mkdir(Global.Path.config, { recursive: true }),
-  fs.mkdir(Global.Path.state, { recursive: true }),
-  fs.mkdir(Global.Path.log, { recursive: true }),
-  fs.mkdir(Global.Path.bin, { recursive: true }),
+  ensureDirectory(Global.Path.data),
+  ensureDirectory(Global.Path.config),
+  ensureDirectory(Global.Path.state),
+  ensureDirectory(Global.Path.log),
+  ensureDirectory(Global.Path.bin),
 ])
 
 const CACHE_VERSION = "21"

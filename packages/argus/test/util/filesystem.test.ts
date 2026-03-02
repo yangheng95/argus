@@ -318,6 +318,29 @@ describe("filesystem", () => {
       expect(Filesystem.windowsPath("C:/Users/test")).toBe("C:/Users/test")
       expect(Filesystem.windowsPath("D:\\dev\\project")).toBe("D:\\dev\\project")
     })
+
+    test("converts UNC-style paths", () => {
+      if (process.platform === "win32") {
+        expect(Filesystem.windowsPath("//server/share/path")).toBe("\\\\server\\share\\path")
+      } else {
+        expect(Filesystem.windowsPath("//server/share/path")).toBe("//server/share/path")
+      }
+    })
+
+    test("supports custom Windows drive mounts", () => {
+      const previous = process.env.ARGUS_WINDOWS_DRIVE_MOUNTS
+      try {
+        process.env.ARGUS_WINDOWS_DRIVE_MOUNTS = "custommnt"
+        if (process.platform === "win32") {
+          expect(Filesystem.windowsPath("/custommnt/e/dev/project")).toBe("E:/dev/project")
+        } else {
+          expect(Filesystem.windowsPath("/custommnt/e/dev/project")).toBe("/custommnt/e/dev/project")
+        }
+      } finally {
+        if (previous === undefined) delete process.env.ARGUS_WINDOWS_DRIVE_MOUNTS
+        else process.env.ARGUS_WINDOWS_DRIVE_MOUNTS = previous
+      }
+    })
   })
 
   describe("writeStream()", () => {

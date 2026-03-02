@@ -2,6 +2,7 @@ import os from "os"
 import { Ripgrep } from "../file/ripgrep"
 
 import { Instance } from "../project/instance"
+import { Shell } from "@/shell/shell"
 
 import PROMPT_ANTHROPIC from "./prompt/anthropic.txt"
 import PROMPT_QWEN from "./prompt/qwen.txt"
@@ -25,6 +26,13 @@ function platformName(): string {
   }
 }
 
+function displayServer(): string | undefined {
+  if (process.platform !== "linux") return undefined
+  if (process.env.WAYLAND_DISPLAY) return process.env.DISPLAY ? "Wayland (XWayland available)" : "Wayland"
+  if (process.env.DISPLAY) return "X11"
+  return "headless"
+}
+
 export namespace SystemPrompt {
   export function instructions() {
     return PROMPT_CODEX.trim()
@@ -45,7 +53,8 @@ export namespace SystemPrompt {
     const platform = platformName()
     const arch = process.arch
     const hostname = os.hostname()
-    const shell = process.env.SHELL || process.env.COMSPEC || "unknown"
+    const shell = Shell.acceptable()
+    const display = displayServer()
 
     return [
       [
@@ -57,6 +66,7 @@ export namespace SystemPrompt {
         `  Platform: ${platform} (${arch})`,
         `  Hostname: ${hostname}`,
         `  Shell: ${shell}`,
+        ...(display ? [`  Display-Server: ${display}`] : []),
         `  Today's date: ${new Date().toDateString()}`,
         `</env>`,
         `<directories>`,

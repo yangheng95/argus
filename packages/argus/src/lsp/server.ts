@@ -21,6 +21,19 @@ export namespace LSPServer {
       .then(() => true)
       .catch(() => false)
 
+  function pathWithBin() {
+    return [process.env["PATH"], Global.Path.bin].filter((value): value is string => Boolean(value)).join(path.delimiter)
+  }
+
+  function resolveNpmCommand() {
+    const candidates = process.platform === "win32" ? ["npm.cmd", "npm.exe", "npm"] : ["npm"]
+    for (const candidate of candidates) {
+      const found = Bun.which(candidate)
+      if (found) return found
+    }
+    return process.platform === "win32" ? "npm.cmd" : "npm"
+  }
+
   export interface Handle {
     process: ChildProcessWithoutNullStreams
     initialization?: Record<string, any>
@@ -203,7 +216,7 @@ export namespace LSPServer {
         }
         await fs.rename(extractedPath, finalPath)
 
-        const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm"
+        const npmCmd = resolveNpmCommand()
         await $`${npmCmd} install`.cwd(finalPath).quiet()
         await $`${npmCmd} run compile`.cwd(finalPath).quiet()
 
@@ -369,7 +382,7 @@ export namespace LSPServer {
     extensions: [".go"],
     async spawn(root) {
       let bin = Bun.which("gopls", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
       if (!bin) {
         if (!Bun.which("go")) return
@@ -406,7 +419,7 @@ export namespace LSPServer {
     extensions: [".rb", ".rake", ".gemspec", ".ru"],
     async spawn(root) {
       let bin = Bun.which("rubocop", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
       if (!bin) {
         const ruby = Bun.which("ruby")
@@ -626,7 +639,7 @@ export namespace LSPServer {
     root: NearestRoot(["build.zig"]),
     async spawn(root) {
       let bin = Bun.which("zls", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
 
       if (!bin) {
@@ -738,7 +751,7 @@ export namespace LSPServer {
     extensions: [".cs"],
     async spawn(root) {
       let bin = Bun.which("csharp-ls", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
       if (!bin) {
         if (!Bun.which("dotnet")) {
@@ -777,7 +790,7 @@ export namespace LSPServer {
     extensions: [".fs", ".fsi", ".fsx", ".fsscript"],
     async spawn(root) {
       let bin = Bun.which("fsautocomplete", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
       if (!bin) {
         if (!Bun.which("dotnet")) {
@@ -1023,8 +1036,17 @@ export namespace LSPServer {
         await $`chmod +x ${bin}`.quiet().nothrow()
       }
 
-      await fs.unlink(path.join(Global.Path.bin, "clangd")).catch(() => {})
-      await fs.symlink(bin, path.join(Global.Path.bin, "clangd")).catch(() => {})
+      const alias = path.join(Global.Path.bin, "clangd" + ext)
+      await fs.unlink(alias).catch(() => {})
+      if (platform === "win32") {
+        await fs.copyFile(bin, alias).catch((error) => {
+          log.warn("Failed to copy clangd binary alias", { bin, alias, error })
+        })
+      } else {
+        await fs.symlink(bin, alias).catch((error) => {
+          log.warn("Failed to symlink clangd binary alias", { bin, alias, error })
+        })
+      }
 
       log.info(`installed clangd`, { bin })
 
@@ -1381,7 +1403,7 @@ export namespace LSPServer {
     extensions: [".lua"],
     async spawn(root) {
       let bin = Bun.which("lua-language-server", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
 
       if (!bin) {
@@ -1649,7 +1671,7 @@ export namespace LSPServer {
     root: NearestRoot([".terraform.lock.hcl", "terraform.tfstate", "*.tf"]),
     async spawn(root) {
       let bin = Bun.which("terraform-ls", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
 
       if (!bin) {
@@ -1732,7 +1754,7 @@ export namespace LSPServer {
     root: NearestRoot([".latexmkrc", "latexmkrc", ".texlabroot", "texlabroot"]),
     async spawn(root) {
       let bin = Bun.which("texlab", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
 
       if (!bin) {
@@ -1931,7 +1953,7 @@ export namespace LSPServer {
     root: NearestRoot(["typst.toml"]),
     async spawn(root) {
       let bin = Bun.which("tinymist", {
-        PATH: process.env["PATH"] + path.delimiter + Global.Path.bin,
+        PATH: pathWithBin(),
       })
 
       if (!bin) {

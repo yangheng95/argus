@@ -1,5 +1,6 @@
 import { join } from "path"
 import { fileURLToPath } from "url"
+import { existsSync } from "fs"
 
 // Resolve the binary path relative to this source file.
 // Compiled binary lives at: packages/overlay/src-tauri/target/release/argus-overlay.exe
@@ -17,23 +18,22 @@ let procDead = false
 function ensureProcess(): ReturnType<typeof Bun.spawn> | null {
   if (process.env.ARGUS_OVERLAY_DISABLED === "1") return null
 
-  // Check if binary exists (sync stat; cheap for a cached path)
-  try {
-    const stat = Bun.file(BINARY_PATH)
-    if (!stat) return null
-  } catch {
+  // Ensure the overlay binary exists before attempting spawn.
+  if (!existsSync(BINARY_PATH)) {
     return null
   }
 
   if (proc && !procDead) return proc
 
   try {
+    console.log(`[Overlay] Spawning: ${BINARY_PATH}`)
     proc = Bun.spawn([BINARY_PATH], {
       stdin: "pipe",
       stdout: "ignore",
       stderr: "ignore",
     })
     procDead = false
+    console.log(`[Overlay] Process spawned (pid: ${proc.pid})`)
 
     // Mark dead when process exits so we re-spawn next call
     proc.exited.then(() => {
@@ -59,14 +59,18 @@ export function showOverlay(screenX: number, screenY: number, action: string, la
   void (async () => {
     try {
       const p = ensureProcess()
-      if (!p) return
+      if (!p) {
+        console.log(`[Overlay] process not available (binary: ${BINARY_PATH})`)
+        return
+      }
 
       const line = JSON.stringify({ x: screenX, y: screenY, action, label }) + "\n"
+      console.log(`[Overlay] → ${line.trimEnd()}`)
       const stdin = p.stdin
       if (!stdin || typeof stdin === "number") return
       await stdin.write(new TextEncoder().encode(line))
-    } catch {
-      // Silently ignore all errors — overlay is best-effort
+    } catch (err) {
+      console.log(`[Overlay] error: ${err}`)
     }
   })()
 }

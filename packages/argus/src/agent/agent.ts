@@ -176,36 +176,6 @@ export namespace Agent {
         ),
         prompt: PROMPT_SUMMARY,
       },
-      monitor_vision: {
-        name: "monitor_vision",
-        mode: "primary",
-        options: {},
-        native: true,
-        hidden: true,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            "*": "deny",
-          }),
-          user,
-        ),
-      },
-      monitor_brain: {
-        name: "monitor_brain",
-        mode: "primary",
-        options: {},
-        native: true,
-        hidden: true,
-        permission: PermissionNext.merge(
-          defaults,
-          PermissionNext.fromConfig({
-            "*": "allow",
-            screen: "allow",
-            input: "allow",
-          }),
-          user,
-        ),
-      },
     }
 
     for (const [key, value] of Object.entries(cfg.agent ?? {})) {

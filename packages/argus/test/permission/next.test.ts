@@ -53,6 +53,32 @@ test("fromConfig - expands $HOME without trailing slash", () => {
   expect(result).toEqual([{ permission: "external_directory", pattern: os.homedir(), action: "allow" }])
 })
 
+test("fromConfig - expands %USERPROFILE% to user profile directory", () => {
+  const previous = process.env.USERPROFILE
+  process.env.USERPROFILE = "C:\\Users\\tester"
+  try {
+    const result = PermissionNext.fromConfig({ external_directory: { "%USERPROFILE%\\projects\\*": "allow" } })
+    expect(result).toEqual([
+      { permission: "external_directory", pattern: "C:\\Users\\tester\\projects\\*", action: "allow" },
+    ])
+  } finally {
+    if (previous === undefined) delete process.env.USERPROFILE
+    else process.env.USERPROFILE = previous
+  }
+})
+
+test("fromConfig - expands %USERPROFILE% case-insensitively", () => {
+  const previous = process.env.USERPROFILE
+  process.env.USERPROFILE = "C:\\Users\\tester"
+  try {
+    const result = PermissionNext.fromConfig({ external_directory: { "%userprofile%": "allow" } })
+    expect(result).toEqual([{ permission: "external_directory", pattern: "C:\\Users\\tester", action: "allow" }])
+  } finally {
+    if (previous === undefined) delete process.env.USERPROFILE
+    else process.env.USERPROFILE = previous
+  }
+})
+
 test("fromConfig - does not expand tilde in middle of path", () => {
   const result = PermissionNext.fromConfig({ external_directory: { "/some/~/path": "allow" } })
   expect(result).toEqual([{ permission: "external_directory", pattern: "/some/~/path", action: "allow" }])

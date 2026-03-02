@@ -4,23 +4,6 @@ import type { SlackAdapter } from "./adapters/slack"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
 import path from "path"
-import { readFileSync } from "fs"
-
-// Mascot images live in the console asset directory (relative to monorepo root)
-const MASCOT_DIR = path.resolve(__dirname, "../../console/app/src/asset/lander")
-
-function loadMascot(name: string): Buffer | null {
-  try {
-    return readFileSync(path.join(MASCOT_DIR, name))
-  } catch {
-    return null
-  }
-}
-
-// Pre-load at startup — null if files haven't been generated yet
-const MASCOT_CELEBRATING = loadMascot("mascot-ar-celebrating.png")
-const MASCOT_ALERT = loadMascot("mascot-ar-alert.png")
-const MASCOT_IDLE = loadMascot("mascot-ar-idle.png")
 
 interface SessionEntry {
   sessionId: string
@@ -50,8 +33,6 @@ export class BotCore {
   private vision?: VisionPipeline
   /** Base URL of the Argus server */
   private serverUrl!: string
-  /** Rate-limit mascot stickers: threadKey → last sent timestamp */
-  private lastStickerAt = new Map<string, number>()
 
   constructor(private options?: BotCoreOptions) {}
 
@@ -249,23 +230,6 @@ export class BotCore {
     return this.sessions.get(threadKey)
   }
 
-  /**
-   * Send a mascot sticker to Slack after a task completes.
-   * Rate-limited to at most once per 60 seconds per thread to avoid spam.
-   */
-  private async sendMascotSticker(session: SessionEntry, isError: boolean): Promise<void> {
-    const threadKey = `${session.channel}:${session.thread}`
-    const now = Date.now()
-    const last = this.lastStickerAt.get(threadKey) ?? 0
-    if (now - last < 60_000) return
-
-    const sticker = isError ? MASCOT_ALERT : (Math.random() < 0.3 ? MASCOT_CELEBRATING : MASCOT_IDLE)
-    if (!sticker) return
-
-    this.lastStickerAt.set(threadKey, now)
-    const filename = isError ? "ar-alert.png" : (sticker === MASCOT_CELEBRATING ? "ar-celebrating.png" : "ar-idle.png")
-    await session.adapter.uploadImage(session.channel, session.thread, sticker, filename).catch(() => {})
-  }
 
   /**
    * Fetch screenshot attachment from API, upload to Slack, and optionally
@@ -278,6 +242,7 @@ export class BotCore {
     messageId: string,
     partId: string,
     title: string,
+    diffPercent?: number,
   ): Promise<void> {
     try {
       const msgResult = await this.client.session.message({
@@ -297,6 +262,19 @@ export class BotCore {
             const buffer = Buffer.from(base64Data, "base64")
             const ext = att.mime === "image/png" ? "png" : "jpg"
 
+            // Skip vision for oversized screenshots (would timeout or OOM the API)
+            const tooLarge = buffer.length >= 7 * 1024 * 1024
+            if (tooLarge) {
+              console.log(`[BotCore] Vision skipped: screenshot too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB > 7MB)`)
+            }
+
+            // Skip vision for trivial screen changes (cursor blinks, etc.)
+            const visionDiffThreshold = Number(process.env.ARGUS_MONITOR_DIFF_THRESHOLD) || 2
+            const lowDiff = diffPercent !== undefined && diffPercent < visionDiffThreshold
+            if (lowDiff) {
+              console.log(`[BotCore] Vision skipped: low screen change (${diffPercent.toFixed(1)}% < ${visionDiffThreshold}% threshold)`)
+            }
+
             // Run upload and vision analysis in parallel
             const uploadPromise = session.adapter.uploadImage(
               session.channel,
@@ -306,8 +284,9 @@ export class BotCore {
               title,
             )
 
-            const visionPromise = this.vision
-              ? this.vision.analyze(base64Data).catch((err) => {
+            const shouldVision = this.vision && !tooLarge && !lowDiff
+            const visionPromise = shouldVision
+              ? this.vision!.analyze(base64Data).catch((err) => {
                   console.warn("[BotCore] Vision analysis failed:", err)
                   return null
                 })
@@ -318,9 +297,7 @@ export class BotCore {
             console.log(`[BotCore] Uploaded screenshot (${(buffer.length / 1024).toFixed(0)}KB)`)
 
             if (visionResult) {
-              const visionMsg = `_Vision analysis:_ ${visionResult.description}`
-              await session.adapter.sendMessage(session.channel, session.thread, visionMsg).catch(() => {})
-              console.log(`[BotCore] Vision analysis posted (${visionResult.tokens.prompt + visionResult.tokens.completion} tokens)`)
+              console.log(`[BotCore] Vision analysis (${visionResult.tokens.prompt + visionResult.tokens.completion} tokens): ${visionResult.description.slice(0, 120)}...`)
             }
           }
         }
@@ -359,8 +336,6 @@ export class BotCore {
           await session.adapter.sendMessage(session.channel, session.thread, `Error: ${errMsg}`).catch(() => {})
         }
 
-        // Send mascot sticker — rate-limited to once per 60s per thread
-        await this.sendMascotSticker(session, !!info.error)
       }
     }
 
@@ -389,12 +364,14 @@ export class BotCore {
             (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
           )
           if (hasImage) {
+            const metadata = part.state.metadata ?? {}
             await this.processScreenshot(
               session,
               part.sessionID,
               part.messageID,
               part.id,
               part.state.title,
+              metadata.diffPercent,
             )
           }
         }

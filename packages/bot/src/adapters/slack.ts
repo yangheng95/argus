@@ -25,6 +25,11 @@ export class SlackAdapter implements BotAdapter {
     this.botUserId = auth.user_id
     console.log(`[Slack] Bot user ID: ${this.botUserId}`)
 
+    // Debug: log ALL raw message events before any filtering
+    this.app.event("message", async ({ event }) => {
+      console.log(`[Slack][DEBUG] raw event: subtype=${(event as any).subtype ?? "none"} bot_id=${(event as any).bot_id ?? "none"} user=${(event as any).user ?? "none"} text="${((event as any).text ?? "").slice(0, 60)}"`)
+    })
+
     this.app.message(async ({ message }) => {
       // Allow file_share subtype (voice messages), block other subtypes
       if (message.subtype && message.subtype !== "file_share") return

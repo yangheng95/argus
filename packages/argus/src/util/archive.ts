@@ -7,8 +7,9 @@ export namespace Archive {
       const winZipPath = path.resolve(zipPath)
       const winDestDir = path.resolve(destDir)
       // $global:ProgressPreference suppresses PowerShell's blue progress bar popup
-      const cmd = `$global:ProgressPreference = 'SilentlyContinue'; Expand-Archive -Path '${winZipPath}' -DestinationPath '${winDestDir}' -Force`
-      await $`powershell -NoProfile -NonInteractive -Command ${cmd}`.quiet()
+      const cmd =
+        "$global:ProgressPreference = 'SilentlyContinue'; Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force"
+      await $`powershell -NoProfile -NonInteractive -Command ${cmd} ${winZipPath} ${winDestDir}`.quiet()
     } else {
       await $`unzip -o -q ${zipPath} -d ${destDir}`.quiet()
     }

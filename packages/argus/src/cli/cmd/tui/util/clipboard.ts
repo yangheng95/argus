@@ -73,6 +73,15 @@ export namespace Clipboard {
     }
   }
 
+  async function writeWith(command: string[], text: string): Promise<boolean> {
+    const proc = Process.spawn(command, { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
+    if (!proc.stdin) return false
+    proc.stdin.write(text)
+    proc.stdin.end()
+    const exit = await proc.exited.catch(() => 1)
+    return exit === 0
+  }
+
   const getCopyMethod = lazy(() => {
     const os = platform()
 
@@ -85,42 +94,30 @@ export namespace Clipboard {
     }
 
     if (os === "linux") {
+      const hasXclip = Boolean(Bun.which("xclip"))
+      const hasXsel = Boolean(Bun.which("xsel"))
       if (process.env["WAYLAND_DISPLAY"] && Bun.which("wl-copy")) {
         console.log("clipboard: using wl-copy")
         return async (text: string) => {
-          const proc = Process.spawn(["wl-copy"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          await proc.exited.catch(() => {})
+          if (await writeWith(["wl-copy"], text)) return
+          if (hasXclip && (await writeWith(["xclip", "-selection", "clipboard"], text))) return
+          if (hasXsel && (await writeWith(["xsel", "--clipboard", "--input"], text))) return
+          await clipboardy.write(text).catch(() => {})
         }
       }
-      if (Bun.which("xclip")) {
+      if (hasXclip) {
         console.log("clipboard: using xclip")
         return async (text: string) => {
-          const proc = Process.spawn(["xclip", "-selection", "clipboard"], {
-            stdin: "pipe",
-            stdout: "ignore",
-            stderr: "ignore",
-          })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          await proc.exited.catch(() => {})
+          if (await writeWith(["xclip", "-selection", "clipboard"], text)) return
+          if (hasXsel && (await writeWith(["xsel", "--clipboard", "--input"], text))) return
+          await clipboardy.write(text).catch(() => {})
         }
       }
-      if (Bun.which("xsel")) {
+      if (hasXsel) {
         console.log("clipboard: using xsel")
         return async (text: string) => {
-          const proc = Process.spawn(["xsel", "--clipboard", "--input"], {
-            stdin: "pipe",
-            stdout: "ignore",
-            stderr: "ignore",
-          })
-          if (!proc.stdin) return
-          proc.stdin.write(text)
-          proc.stdin.end()
-          await proc.exited.catch(() => {})
+          if (await writeWith(["xsel", "--clipboard", "--input"], text)) return
+          await clipboardy.write(text).catch(() => {})
         }
       }
     }

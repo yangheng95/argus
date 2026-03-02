@@ -2,7 +2,7 @@ import { access, chmod, mkdir, readFile, stat as statAsync, writeFile } from "fs
 import { createWriteStream, existsSync, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
-import { dirname, join, relative } from "path"
+import { dirname, isAbsolute, join, parse, relative, resolve, normalize } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { Glob } from "./glob"
@@ -116,24 +116,56 @@ export namespace Filesystem {
 
   export function windowsPath(p: string): string {
     if (process.platform !== "win32") return p
-    return (
-      p
-        // Git Bash for Windows paths are typically /<drive>/...
-        .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
-        // Cygwin git paths are typically /cygdrive/<drive>/...
-        .replace(/^\/cygdrive\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
-        // WSL paths are typically /mnt/<drive>/...
-        .replace(/^\/mnt\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
-    )
+    // UNC paths may come through as //server/share on POSIX-style tools.
+    if (p.startsWith("//")) return p.replace(/\//g, "\\")
+
+    const mounts = new Set(["mnt", "cygdrive"])
+    for (const item of (process.env.ARGUS_WINDOWS_DRIVE_MOUNTS || "").split(",")) {
+      const value = item.trim().replace(/^\/+|\/+$/g, "")
+      if (value) mounts.add(value)
+    }
+
+    const escapedMounts = Array.from(mounts)
+      .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+      .join("|")
+
+    return p
+      // Git Bash for Windows paths are typically /<drive>/...
+      .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
+      // Cygwin/WSL/custom paths: /<mount>/<drive>/...
+      .replace(new RegExp(`^\\/(?:${escapedMounts})\\/([a-zA-Z])\\/`), (_, drive) => `${drive.toUpperCase()}:/`)
   }
   export function overlaps(a: string, b: string) {
-    const relA = relative(a, b)
-    const relB = relative(b, a)
-    return !relA || !relA.startsWith("..") || !relB || !relB.startsWith("..")
+    return contains(a, b) || contains(b, a)
+  }
+
+  function trimTrailingSeparators(p: string) {
+    const root = parse(p).root
+    let value = p
+    while (value.length > root.length && (value.endsWith("\\") || value.endsWith("/"))) {
+      value = value.slice(0, -1)
+    }
+    return value
+  }
+
+  function normalizeForCompare(p: string) {
+    let value = trimTrailingSeparators(normalize(resolve(p)))
+    if (process.platform === "win32") value = value.toLowerCase()
+    return value
   }
 
   export function contains(parent: string, child: string) {
-    return !relative(parent, child).startsWith("..")
+    const normalizedParent = normalizeForCompare(parent)
+    const normalizedChild = normalizeForCompare(child)
+
+    if (normalizedParent === normalizedChild) return true
+
+    const parentRoot = parse(normalizedParent).root
+    const childRoot = parse(normalizedChild).root
+    if (parentRoot && childRoot && parentRoot !== childRoot) return false
+
+    const rel = relative(normalizedParent, normalizedChild)
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel)
   }
 
   export async function findUp(target: string, start: string, stop?: string) {

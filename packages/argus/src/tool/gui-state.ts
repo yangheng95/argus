@@ -24,6 +24,7 @@ interface GuiSessionState {
   actions: ActionRecord[]
   screenshots: Map<string, ScreenshotRecord>
   currentStep: number
+  taskEpoch: number
   lastScreenshotHash: string | null
   isGuiSession: boolean
   repetition: {
@@ -41,6 +42,7 @@ const guiState = Instance.state(
     actions: [],
     screenshots: new Map(),
     currentStep: 0,
+    taskEpoch: 0,
     lastScreenshotHash: null,
     isGuiSession: false,
     repetition: {
@@ -59,6 +61,13 @@ export namespace GuiState {
     const s = guiState()
     if (!s.isGuiSession) return
     s.currentStep = step
+  }
+
+  export function markNewTask(): void {
+    const s = guiState()
+    if (!s.isGuiSession) return
+    s.taskEpoch++
+    s.currentStep = 0
   }
 
   export function activate(): void {
@@ -180,6 +189,14 @@ export namespace GuiState {
 
     result.push("</gui-action-history>")
     return result.join("\n")
+  }
+
+  export function lastActionCoords(): { x: number; y: number } | null {
+    const s = guiState()
+    for (let i = s.actions.length - 1; i >= 0; i--) {
+      if (s.actions[i].coords) return s.actions[i].coords!
+    }
+    return null
   }
 
   export function checkRepetition(): string | null {

@@ -805,7 +805,9 @@ export default function Spotlight(props: SpotlightProps) {
 
     const dpr = Math.min(window.devicePixelRatio, 2)
     const { clientWidth: wCSS, clientHeight: hCSS } = containerRef
-    const { anchor, dir } = getAnchorAndDir(config.placement, wCSS * dpr, hCSS * dpr)
+    const w = Math.floor(wCSS * dpr)
+    const h = Math.floor(hCSS * dpr)
+    const { anchor, dir } = getAnchorAndDir(config.placement, w, h)
     uniformDataRef.lightPos = anchor
     uniformDataRef.lightDir = dir
   })

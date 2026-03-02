@@ -40,6 +40,20 @@ export namespace Config {
 
   const log = Log.create({ service: "config" })
 
+  function errnoCode(error: unknown): string | undefined {
+    if (!error || typeof error !== "object") return
+    const direct = (error as NodeJS.ErrnoException).code
+    if (typeof direct === "string") return direct
+    const cause = (error as { cause?: NodeJS.ErrnoException }).cause
+    if (!cause) return
+    return cause.code
+  }
+
+  function permissionDenied(error: unknown) {
+    const code = errnoCode(error)
+    return code === "EACCES" || code === "EPERM"
+  }
+
   // Managed settings directory for enterprise deployments (highest priority, admin-controlled)
   // These settings override all user and project settings
   function systemManagedConfigDir(): string {
@@ -176,10 +190,21 @@ export namespace Config {
     // Kept separate from directories array to avoid write operations when installing plugins
     // which would fail on system directories requiring elevated permissions
     // This way it only loads config file and not skills/plugins/commands
-    if (existsSync(managedDir)) {
-      for (const file of ["argus.jsonc", "argus.json"]) {
-        result = mergeConfigConcatArrays(result, await loadFile(path.join(managedDir, file)))
+    try {
+      if (existsSync(managedDir)) {
+        for (const file of ["argus.jsonc", "argus.json"]) {
+          const managedFile = path.join(managedDir, file)
+          try {
+            result = mergeConfigConcatArrays(result, await loadFile(managedFile))
+          } catch (error) {
+            if (!permissionDenied(error)) throw error
+            log.warn("skipping managed config due to permission error", { path: managedFile })
+          }
+        }
       }
+    } catch (error) {
+      if (!permissionDenied(error)) throw error
+      log.warn("managed config directory exists but cannot be accessed", { path: managedDir })
     }
 
     // Migrate deprecated mode field to agent field
