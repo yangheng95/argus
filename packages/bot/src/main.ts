@@ -54,11 +54,18 @@ const config = inlineConfig()
 const permission = config.permission
 const permissionMap =
   permission && typeof permission === "object" && !Array.isArray(permission) ? (permission as Record<string, unknown>) : {}
+// IMPORTANT: "*": "deny" must come FIRST so that PermissionNext.disabled()
+// (which uses findLast) finds specific allows AFTER the wildcard deny.
+// Object spread preserves insertion order — if permissionMap already has keys
+// like "bash", they keep their original position, causing "*": "deny" from
+// botPermission to land AFTER them (disabling them). Fix: put deny-all first.
+const { "*": _denyAll, ...botAllows } = botPermission
 process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
   ...config,
   permission: {
+    "*": "deny",
     ...permissionMap,
-    ...botPermission,
+    ...botAllows,
   },
 })
 
