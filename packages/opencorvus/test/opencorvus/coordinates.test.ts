@@ -55,6 +55,36 @@ describe("Coordinates.resolveDetailed", () => {
     expect(result.clamped).toBe(false)
   })
 
+  test("150% DPI: logical mode converts screenshot coords to OS coords", () => {
+    // Real scenario: VS Code is 2560x1392 logical at (0,0).
+    // Screenshot is 3840x2088 physical pixels (1.5x DPI).
+    // Model identifies terminal at y≈1900 in screenshot space.
+    // Without DPI conversion, nut.js gets y=1900 logical → off-screen.
+    // With logical mode, 1900/1.5 = 1267 logical → inside window.
+    const dpi150: Coordinates.WindowBounds = {
+      x: 0,
+      y: 0,
+      width: 3840,
+      height: 2088,
+      scaleX: 1.5,
+      scaleY: 1.5,
+      logicalX: 0,
+      logicalY: 0,
+      logicalWidth: 2560,
+      logicalHeight: 1392,
+    }
+
+    const result = Coordinates.resolveDetailed(300, 1900, dpi150, "logical")
+    expect(result.x).toBe(200)   // 300 / 1.5 = 200
+    expect(result.y).toBe(1267)  // 1900 / 1.5 ≈ 1267
+    expect(result.clamped).toBe(false)
+
+    // Verify the physical path would give wrong (off-screen) coordinates
+    const physical = Coordinates.resolveDetailed(300, 1900, dpi150, "physical")
+    expect(physical.x).toBe(300)
+    expect(physical.y).toBe(1900)  // This would be off-screen on a 1440-tall logical display
+  })
+
   test("falls back to physical mapping when logical metadata is incomplete", () => {
     const result = Coordinates.resolveDetailed(450, 300, {
       x: 300,
