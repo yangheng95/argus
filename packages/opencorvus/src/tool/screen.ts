@@ -12,6 +12,7 @@ import { showWindowHighlight } from "./overlay-client"
 
 const log = Log.create({ service: "screen" })
 const MAX_ATTACHMENT_BYTES = Number(process.env.OPENCORVUS_SCREEN_MAX_ATTACHMENT_MB ?? "32") * 1024 * 1024
+const SCREEN_COMPRESSION_ENABLED = false
 
 async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; compressed: boolean }> {
   if (buffer.length <= MAX_ATTACHMENT_BYTES) {
@@ -254,8 +255,10 @@ export const ScreenTool = Tool.define("screen", {
           screenChanged: true,
         })
 
-        // Compress first, then draw coordinate grid to keep guides sharp.
-        const encoded = await image(result.buffer)
+        // Compression is intentionally disabled. Keep `image()` for fast rollback.
+        const encoded = SCREEN_COMPRESSION_ENABLED
+          ? await image(result.buffer)
+          : { mime: "image/png", buffer: result.buffer, compressed: false }
         const output = await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
         const outputMime = output[0] === 0x89 && output[1] === 0x50 ? "image/png" : "image/jpeg"
         const base64 = output.toString("base64")
