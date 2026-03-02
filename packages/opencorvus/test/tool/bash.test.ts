@@ -367,8 +367,8 @@ describe("tool.bash truncation", () => {
           ctx,
         )
         expect((result.metadata as any).truncated).toBe(false)
-        const eol = process.platform === "win32" ? "\r\n" : "\n"
-        expect(result.output).toBe(`hello${eol}`)
+        // MSYS/Git Bash on Windows outputs LF, not CRLF
+        expect(result.output.trim()).toBe("hello")
       },
     })
   })
