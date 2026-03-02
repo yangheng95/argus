@@ -389,7 +389,6 @@ async function resolveConfigPath(baseDir: string, global = false) {
       path.join(baseDir, ".opencorvus", "opencorvus.json"),
       path.join(baseDir, ".opencorvus", "opencorvus.jsonc"),
     )
-    candidates.push(path.join(baseDir, ".opencorvus", "opencorvus.json"), path.join(baseDir, ".opencorvus", "opencorvus.jsonc"))
   }
 
   for (const candidate of candidates) {
