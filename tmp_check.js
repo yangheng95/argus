@@ -1,5 +1,7 @@
 const fs = require("fs");
-const data = JSON.parse(fs.readFileSync("/tmp/prov.json", "utf8"));
+const os = require("os");
+const path = require("path");
+const data = JSON.parse(fs.readFileSync(path.join(os.tmpdir(), "prov.json"), "utf8"));
 const list = data.all;
 console.log("Type:", typeof list, Array.isArray(list) ? "array" : "not-array");
 if (typeof list === "object" && list !== null) {
