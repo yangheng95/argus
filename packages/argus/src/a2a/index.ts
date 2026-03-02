@@ -1,3 +1,8 @@
 export { TaskQueue } from "./queue"
 export { A2AProtocol } from "./protocol"
 export { A2AState } from "./state"
+export { VisionAgent } from "./vision-agent"
+export { PlanAgent } from "./plan-agent"
+export { GuiAgent } from "./gui-agent"
+export { GoalAgent } from "./goal-agent"
+export { A2AContext } from "./context"

@@ -9,64 +9,31 @@ description: Software engineering skill — code exploration, editing, debugging
 You are a coding agent. You solve software engineering tasks by exploring,
 understanding, modifying, and verifying code through specialized tools.
 
-## TUI-First Coding (Recommended)
+## Session API-First Coding (Recommended)
 
-When you need to write or modify code, **prefer using the Argus TUI** over direct
-file tools (bash/edit/write). The TUI provides an interactive coding environment
-with session management, undo/redo, and a visible workspace on the desktop.
+When you need to write or modify code, **use Session API as the execution
+source of truth**. TUI is optional for visibility/manual takeover, but task
+submission and completion must be tracked through session APIs.
 
 ### Workflow
 
-1. **Check if TUI is running**:
-   ```
-   screen.list_windows  →  look for a window titled "ARGUS_TUI_BOT"
-   ```
-
-2. **If found** — bind and interact:
-   ```
-   screen.bind_window("ARGUS_TUI_BOT")
-   screen.screenshot
-   ```
-
-3. **If NOT found** — launch the TUI on demand, then bind:
-   The bot system prompt provides the exact launch command for your platform.
-   After launching, wait for the TUI to start:
-   ```
-   input.wait(5000)
-   screen.list_windows  →  find and bind to "ARGUS_TUI_BOT"
-   screen.bind_window("ARGUS_TUI_BOT")
-   screen.screenshot
-   ```
-
-4. **Send coding prompt to TUI**:
-   ```
-   input.type("your detailed coding instruction here")
-   input.key("enter")
-   ```
-
-5. **Monitor progress**:
-   ```
-   input.wait(5000)
-   screen.screenshot              ← observe TUI output
-   ```
-   Repeat wait + screenshot until the TUI finishes.
-
-6. **Report results**: Describe what the TUI accomplished in your text response.
+1. **Submit task via session** (`session.prompt` / `session.prompt_async` semantics)
+2. **Track completion via session status/message stream**, not GUI observation
+3. **Return final result from assistant message** as authoritative output
+4. **Optionally mirror in TUI** for monitoring, but never gate completion on GUI state
 
 ### When to Use Direct Tools Instead
 
 Fall back to direct `bash`/`edit`/`write` tools when:
-- The TUI is not available or cannot be started
+- Session API path is unavailable
 - The task is a simple one-liner (e.g., `mkdir`, `git status`)
 - You need to read files for context (`read`, `glob`, `grep` are always fine)
 
 ### TUI Interaction Tips
 
-- The TUI prompt is at the bottom of the terminal window
-- After typing a prompt and pressing Enter, the TUI will show progress
-- Wait for the TUI to finish before sending the next instruction
-- If the TUI shows a permission prompt, click "Allow" or press the appropriate key
-- Use `screen.screenshot` frequently to stay aware of TUI state
+- TUI is an optional observer/control surface, not the task state backend
+- Session status/message stream is authoritative for completion and result
+- Use GUI tools only for explicit UI tasks or manual intervention
 
 ## Core Principles
 
