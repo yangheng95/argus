@@ -4,6 +4,12 @@ import type { SlackAdapter } from "./adapters/slack"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
 
+// A2A event type definitions (mirrored from protocol.ts for bot-side use)
+interface A2AEvent {
+  type: string
+  properties: Record<string, any>
+}
+
 interface SessionEntry {
   sessionId: string
   adapter: BotAdapter
