@@ -80,7 +80,16 @@ const AnalysisResult = z.object({
     .describe("Any error messages or warnings visible on screen"),
 })
 
-export const VisionAnalyzeTool = Tool.define("vision_analyze", {
+interface VisionMetadata {
+  width: number
+  height: number
+  screenshotHash: string
+  elementsFound: number
+  runningSummary: string
+  error?: boolean
+}
+
+export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionMetadata>("vision_analyze", {
   description: DESCRIPTION,
   parameters: VisionAnalyzeParams,
   async execute(params, ctx) {
