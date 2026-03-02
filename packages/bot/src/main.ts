@@ -358,12 +358,6 @@ if (providerChoice && providerChoice.providerId !== "alibaba-cn") {
 process.env.ARGUS_CONFIG_CONTENT = JSON.stringify({
   model: argusModel,
   provider: argusProvider,
-  a2a: {
-    // A2A pipeline is opt-in only. The LLM already has screen/input/planner/goal
-    // tools and can orchestrate its own workflow — no need for a rigid state machine.
-    // Set ARGUS_A2A_ENABLED=1 to explicitly enable the legacy orchestrator pipeline.
-    enabled: process.env.ARGUS_A2A_ENABLED === "1",
-  },
   permission: {
     "*": "deny",
     screen: "allow",
