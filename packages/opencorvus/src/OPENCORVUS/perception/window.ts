@@ -108,11 +108,11 @@ export namespace WindowManager {
         // Write a .ps1 script to temp dir to avoid command-line escaping issues.
         // AttachThreadInput attaches to the current foreground window's input thread,
         // which grants us permission to call SetForegroundWindow from a background process.
-        const scriptPath = path.join(os.tmpdir(), `argus_focus_${windowId}.ps1`)
+        const scriptPath = path.join(os.tmpdir(), `opencorvus_focus_${windowId}.ps1`)
         const script = `Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public class ArgusF${windowId} {
+public class OpenCorvusF${windowId} {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
@@ -124,17 +124,17 @@ public class ArgusF${windowId} {
 }
 "@
 $hwnd = [IntPtr]${windowId}
-$fg   = [ArgusF${windowId}]::GetForegroundWindow()
+$fg   = [OpenCorvusF${windowId}]::GetForegroundWindow()
 $pid  = 0
-$fgTid = [ArgusF${windowId}]::GetWindowThreadProcessId($fg, [ref]$pid)
-$myTid = [ArgusF${windowId}]::GetCurrentThreadId()
-[ArgusF${windowId}]::AttachThreadInput($myTid, $fgTid, $true)  | Out-Null
-if ([ArgusF${windowId}]::IsIconic($hwnd)) {
-  [ArgusF${windowId}]::ShowWindow($hwnd, 9)                   | Out-Null
+$fgTid = [OpenCorvusF${windowId}]::GetWindowThreadProcessId($fg, [ref]$pid)
+$myTid = [OpenCorvusF${windowId}]::GetCurrentThreadId()
+[OpenCorvusF${windowId}]::AttachThreadInput($myTid, $fgTid, $true)  | Out-Null
+if ([OpenCorvusF${windowId}]::IsIconic($hwnd)) {
+  [OpenCorvusF${windowId}]::ShowWindow($hwnd, 9)                   | Out-Null
 }
-[ArgusF${windowId}]::BringWindowToTop($hwnd)                    | Out-Null
-[ArgusF${windowId}]::SetForegroundWindow($hwnd)                 | Out-Null
-[ArgusF${windowId}]::AttachThreadInput($myTid, $fgTid, $false) | Out-Null
+[OpenCorvusF${windowId}]::BringWindowToTop($hwnd)                    | Out-Null
+[OpenCorvusF${windowId}]::SetForegroundWindow($hwnd)                 | Out-Null
+[OpenCorvusF${windowId}]::AttachThreadInput($myTid, $fgTid, $false) | Out-Null
 `
         await writeFile(scriptPath, script, "utf-8")
         try {
