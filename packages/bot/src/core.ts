@@ -305,7 +305,105 @@ export class BotCore {
     }
   }
 
+  /**
+   * Handle A2A-specific events for Slack progress reporting.
+   * These events come from the A2A orchestrator and provide
+   * real-time updates about task execution progress.
+   */
+  private async handleA2AEvent(event: A2AEvent): Promise<void> {
+    const props = event.properties
+    const sessionId = props.sessionID
+    if (!sessionId) return
+
+    const session = this.findSession(sessionId)
+    if (!session) return
+
+    try {
+      switch (event.type) {
+        case "a2a.task.dispatched":
+          await session.adapter.sendMessage(
+            session.channel,
+            session.thread,
+            `🚀 *Task started*`,
+          )
+          break
+
+        case "a2a.plan.ready":
+          await session.adapter.sendMessage(
+            session.channel,
+            session.thread,
+            `📋 *Plan ready* — ${props.stepCount} steps`,
+          )
+          break
+
+        case "a2a.step.started":
+          await session.adapter.sendMessage(
+            session.channel,
+            session.thread,
+            `▶️ Step ${props.stepIndex + 1}/${props.totalSteps}: ${props.description}`,
+          )
+          break
+
+        case "a2a.step.completed":
+          if (props.success) {
+            await session.adapter.sendMessage(
+              session.channel,
+              session.thread,
+              `✅ Step completed${props.retryCount > 0 ? ` (${props.retryCount} retries)` : ""}`,
+            )
+          } else {
+            await session.adapter.sendMessage(
+              session.channel,
+              session.thread,
+              `❌ Step failed: ${(props.summary as string).slice(0, 200)}`,
+            )
+          }
+          break
+
+        case "a2a.replan.requested":
+          await session.adapter.sendMessage(
+            session.channel,
+            session.thread,
+            `🔄 *Re-planning* (attempt ${props.attempt}): ${(props.reason as string).slice(0, 200)}`,
+          )
+          break
+
+        case "a2a.goal.evaluated":
+          if (props.action === "achieved") {
+            await session.adapter.sendMessage(
+              session.channel,
+              session.thread,
+              `🎯 *Goal achieved!*`,
+            )
+          } else if (props.action === "deadlock") {
+            await session.adapter.sendMessage(
+              session.channel,
+              session.thread,
+              `⚠️ *Deadlock detected*: ${(props.reason as string).slice(0, 200)}`,
+            )
+          }
+          break
+
+        case "a2a.task.completed":
+          const emoji = props.success ? "✅" : "❌"
+          await session.adapter.sendMessage(
+            session.channel,
+            session.thread,
+            `${emoji} *Task ${props.success ? "completed" : "failed"}*\n${(props.summary as string).slice(0, 500)}`,
+          )
+          break
+      }
+    } catch (err) {
+      console.error("[BotCore] A2A event handler error:", err)
+    }
+  }
+
   private async handleEvent(event: any): Promise<void> {
+    // Handle A2A events
+    if (typeof event.type === "string" && event.type.startsWith("a2a.")) {
+      await this.handleA2AEvent(event as A2AEvent)
+      return
+    }
     // Track user message IDs so we can skip their parts
     if (event.type === "message.updated") {
       const info = event.properties.info
