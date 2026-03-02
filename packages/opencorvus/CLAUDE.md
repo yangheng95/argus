@@ -130,12 +130,29 @@ When an action doesn't produce the expected result:
 3. Press Esc to dismiss popups, Alt+F4 to close stuck windows
 4. Go back to list_windows and reassess
 
+**CRITICAL: 3-Strike Rule for Click Failures**
+If you click the same target area 3 times and it doesn't respond:
+- **STOP clicking.** Switch to keyboard shortcuts immediately.
+- Use Tab/Shift+Tab to navigate between UI elements.
+- Use keyboard shortcuts instead (see VS Code shortcuts above).
+- If no shortcut exists, try Alt+key menu navigation.
+
 Common failures:
 
-- **Click missed target** — Re-screenshot, re-read coordinates
+- **Click missed target** — Re-screenshot. Read the **nearest yellow interior label** and calculate offset precisely. Record the exact coordinates in your text response (e.g., "终端区域在坐标 (400, 850) 附近").
 - **Popup blocking** — Dismiss with Esc or click X
 - **Wrong window focused** — Re-bind to target window
 - **App not responding** — Wait 5000ms, or alt+tab away and back
+
+## Screenshot Description Requirements
+
+After EVERY screenshot, your text description MUST include:
+1. **What app/window is visible** — "VS Code 编辑器，打开了 tank-battle.html"
+2. **Key UI elements and their approximate coordinates** — "终端面板在底部 y≈800-1050, 编辑器占据 y≈50-750"
+3. **Current focus/cursor position** — "光标在编辑器第15行"
+4. **Any dialogs/popups** — "保存对话框出现在 (600,400) 附近"
+
+This precision is critical because screenshots are removed from context next turn. Your text is the ONLY record.
 
 ## If Screen Hasn't Changed
 
