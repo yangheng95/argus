@@ -68,7 +68,7 @@ process.on("uncaughtException", (e) => {
 
 let cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })
-  .scriptName("argus")
+  .scriptName("opencorvus")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
