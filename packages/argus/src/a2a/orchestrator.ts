@@ -31,7 +31,7 @@ export namespace Orchestrator {
    * Start the orchestrator loop for a session.
    * Runs continuously, dequeuing tasks and executing them.
    */
-  export async function run(sessionID: string): Promise<void> {
+  export async function run(): Promise<void> {
     const cfg = await Config.get()
     const a2a = cfg.a2a
 
@@ -44,19 +44,19 @@ export namespace Orchestrator {
     running = true
     abortController = new AbortController()
 
-    log.info("orchestrator started", { sessionID })
+    log.info("orchestrator started")
 
     try {
       while (running && !abortController.signal.aborted) {
         // 1. Dequeue next task
-        const task = TaskQueue.dequeue(sessionID)
+        const task = TaskQueue.dequeueAny()
         if (!task) {
           // Wait for new tasks (poll every 2 seconds)
           await sleep(2000, abortController.signal)
           continue
         }
 
-        await executeTask(sessionID, task)
+        await executeTask(task)
       }
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
@@ -66,24 +66,35 @@ export namespace Orchestrator {
       running = false
       A2AState.setEnabled(false)
       A2AState.end()
-      log.info("orchestrator stopped", { sessionID })
+      log.info("orchestrator stopped")
     }
+  }
+
+  /**
+   * Start the orchestrator in background mode if not already running.
+   * Returns true when a new loop is started.
+   */
+  export function start(): boolean {
+    if (running) return false
+    void run().catch((err) => {
+      log.error("orchestrator background loop failed", { err })
+      running = false
+      A2AState.setEnabled(false)
+    })
+    return true
   }
 
   /**
    * Execute a single task through the full A2A pipeline.
    */
-  async function executeTask(
-    sessionID: string,
-    task: TaskQueue.QueuedTask,
-  ): Promise<void> {
+  async function executeTask(task: TaskQueue.QueuedTask): Promise<void> {
     const maxReplans = (await Config.get()).a2a?.max_replans ?? 3
     const maxStepRetries = (await Config.get()).a2a?.max_step_retries ?? 3
 
     // Initialize task runtime
     const runtime = A2AState.begin({
       taskID: task.id,
-      sessionID,
+      sessionID: task.sessionID,
       maxReplans,
       maxStepRetries,
     })
@@ -113,7 +124,7 @@ export namespace Orchestrator {
       }
 
       let planResult = await PlanAgent.plan({
-        parentSessionID: sessionID,
+        parentSessionID: task.sessionID,
         prompt: task.prompt,
         previousSummary: task.previousSummary ?? undefined,
         screenSummary,
@@ -200,7 +211,7 @@ export namespace Orchestrator {
 
             // b. GUI: execute the step
             const guiResult = await GuiAgent.execute({
-              parentSessionID: sessionID,
+              parentSessionID: task.sessionID,
               stepDescription: step.description,
               visionText,
               stepIndex: i,
@@ -268,7 +279,7 @@ export namespace Orchestrator {
               })
 
               planResult = await PlanAgent.replan({
-                parentSessionID: sessionID,
+                parentSessionID: task.sessionID,
                 originalPrompt: task.prompt,
                 failedStepDescription: step.description,
                 errorDetail: lastError,
@@ -330,7 +341,7 @@ export namespace Orchestrator {
               replanCount++
               A2AState.incrementReplan()
               planResult = await PlanAgent.replan({
-                parentSessionID: sessionID,
+                parentSessionID: task.sessionID,
                 originalPrompt: task.prompt,
                 failedStepDescription: "All steps completed but goal not achieved",
                 errorDetail: finalEval.reason,

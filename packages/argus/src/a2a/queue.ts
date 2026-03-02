@@ -176,6 +176,46 @@ export namespace TaskQueue {
     return { ...task, status: "planning", timeStarted: Date.now() }
   }
 
+  /**
+   * Dequeue the highest-priority queued task across all sessions.
+   * Returns null if the queue is empty.
+   */
+  export function dequeueAny(): QueuedTask | null {
+    const rows = Database.use((db) =>
+      db.select().from(A2ATaskQueueTable).where(eq(A2ATaskQueueTable.status, "queued")).all(),
+    )
+
+    if (rows.length === 0) return null
+
+    const sorted = rows.sort((a, b) => {
+      const pa = PRIORITY_ORDER[a.priority as Priority] ?? 99
+      const pb = PRIORITY_ORDER[b.priority as Priority] ?? 99
+      if (pa !== pb) return pa - pb
+      return a.time_created - b.time_created
+    })
+
+    const row = sorted[0]
+    const task = fromRow(row)
+    const now = Date.now()
+
+    Database.use((db) =>
+      db
+        .update(A2ATaskQueueTable)
+        .set({ status: "planning", time_started: now })
+        .where(eq(A2ATaskQueueTable.id, task.id))
+        .run(),
+    )
+
+    log.info("task dequeued", { id: task.id, priority: task.priority, sessionID: task.sessionID })
+
+    Bus.publish(A2AProtocol.TaskDispatched, {
+      taskID: task.id,
+      sessionID: task.sessionID,
+    })
+
+    return { ...task, status: "planning", timeStarted: now }
+  }
+
   export function updateStatus(taskID: string, status: Status) {
     const set: Record<string, unknown> = { status }
     if (status === "completed" || status === "failed") {

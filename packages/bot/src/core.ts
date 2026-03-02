@@ -26,6 +26,7 @@ export class BotCore {
   private sessions = new Map<string, SessionEntry>()
   /** Reverse lookup: sessionId → threadKey */
   private sessionIndex = new Map<string, string>()
+  private taskIndex = new Map<string, string>()
   private adapters: BotAdapter[] = []
   private client!: OpencodeClient
   private server!: { url: string; close(): void }
@@ -312,7 +313,23 @@ export class BotCore {
    */
   private async handleA2AEvent(event: A2AEvent): Promise<void> {
     const props = event.properties
-    const sessionId = props.sessionID
+    const taskID = typeof props.taskID === "string" ? props.taskID : undefined
+    if (event.type === "a2a.task.enqueued" && taskID && typeof props.sessionID === "string") {
+      this.taskIndex.set(taskID, props.sessionID)
+    }
+    if (event.type === "a2a.task.dispatched" && taskID && typeof props.sessionID === "string") {
+      this.taskIndex.set(taskID, props.sessionID)
+    }
+    if (event.type === "a2a.task.completed" && taskID && typeof props.sessionID === "string") {
+      this.taskIndex.set(taskID, props.sessionID)
+    }
+
+    const sessionId =
+      typeof props.sessionID === "string"
+        ? props.sessionID
+        : taskID
+          ? this.taskIndex.get(taskID)
+          : undefined
     if (!sessionId) return
 
     const session = this.findSession(sessionId)
@@ -391,6 +408,7 @@ export class BotCore {
             session.thread,
             `${emoji} *Task ${props.success ? "completed" : "failed"}*\n${(props.summary as string).slice(0, 500)}`,
           )
+          if (taskID) this.taskIndex.delete(taskID)
           break
       }
     } catch (err) {
