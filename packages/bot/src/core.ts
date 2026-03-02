@@ -110,7 +110,7 @@ export class BotCore {
 
     if (!session) {
       const createResult = await this.client.session.create({
-        body: { title: `${msg.platform} thread ${msg.thread}` },
+        title: `${msg.platform} thread ${msg.thread}`,
       })
 
       if (createResult.error) {
@@ -146,11 +146,9 @@ export class BotCore {
     // Use promptAsync to bypass monitor command queue and execute directly.
     // System prompt is injected via the `system` field (appended to LLM system prompt in llm.ts:76).
     const result = await this.client.session.promptAsync({
-      path: { id: session.sessionId },
-      body: {
-        parts: [{ type: "text", text }],
-        system: this.buildSystemPrompt(msg.platform),
-      },
+      sessionID: session.sessionId,
+      parts: [{ type: "text", text }],
+      system: this.buildSystemPrompt(msg.platform),
     })
 
     if (result.error) {
@@ -282,7 +280,8 @@ export class BotCore {
   ): Promise<void> {
     try {
       const msgResult = await this.client.session.message({
-        path: { id: sessionId, messageID: messageId },
+        sessionID: sessionId,
+        messageID: messageId,
       })
       if (msgResult.error) return
 

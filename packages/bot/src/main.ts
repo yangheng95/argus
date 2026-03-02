@@ -25,12 +25,12 @@ interface ProviderOption {
 }
 
 const PROVIDERS: ProviderOption[] = [
-  { name: "Anthropic", id: "anthropic", envKey: "ANTHROPIC_API_KEY", defaultModel: "anthropic/claude-sonnet-4-20250514" },
-  { name: "OpenAI", id: "openai", envKey: "OPENAI_API_KEY", defaultModel: "openai/gpt-4o" },
-  { name: "Google", id: "google", envKey: "GOOGLE_GENERATIVE_AI_API_KEY", defaultModel: "google/gemini-2.5-pro" },
-  { name: "DeepSeek", id: "deepseek", envKey: "DEEPSEEK_API_KEY", defaultModel: "deepseek/deepseek-chat" },
-  { name: "Alibaba (China)", id: "alibaba-cn", envKey: "DASHSCOPE_API_KEY", defaultModel: "alibaba-cn/qwen3.5-plus" },
-  { name: "OpenRouter", id: "openrouter", envKey: "OPENROUTER_API_KEY", defaultModel: "openrouter/anthropic/claude-sonnet-4" },
+  { name: "Anthropic", id: "anthropic", envKey: "ANTHROPIC_API_KEY", defaultModel: process.env.ARGUS_MODEL_ANTHROPIC ?? "" },
+  { name: "OpenAI", id: "openai", envKey: "OPENAI_API_KEY", defaultModel: process.env.ARGUS_MODEL_OPENAI ?? "" },
+  { name: "Google", id: "google", envKey: "GOOGLE_GENERATIVE_AI_API_KEY", defaultModel: process.env.ARGUS_MODEL_GOOGLE ?? "" },
+  { name: "DeepSeek", id: "deepseek", envKey: "DEEPSEEK_API_KEY", defaultModel: process.env.ARGUS_MODEL_DEEPSEEK ?? "" },
+  { name: "Alibaba (China)", id: "alibaba-cn", envKey: "DASHSCOPE_API_KEY", defaultModel: process.env.ARGUS_MODEL_ALIBABA ?? "" },
+  { name: "OpenRouter", id: "openrouter", envKey: "OPENROUTER_API_KEY", defaultModel: process.env.ARGUS_MODEL_OPENROUTER ?? "" },
 ]
 
 function rlQuestion(rl: readline.Interface, query: string): Promise<string> {
