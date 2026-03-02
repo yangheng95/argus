@@ -1143,36 +1143,6 @@ export namespace Config {
             .describe("Token buffer for compaction. Leaves enough window to avoid overflow during compaction."),
         })
         .optional(),
-      a2a: z
-        .object({
-          enabled: z.boolean().optional().describe("Enable A2A (Agent-to-Agent) orchestration mode"),
-          vision_model: ModelId.optional().describe("Model for visual analysis agent (format: provider/model)"),
-          plan_model: ModelId.optional().describe("Model for plan agent (format: provider/model)"),
-          gui_model: ModelId.optional().describe("Model for GUI operation agent (format: provider/model)"),
-          max_replans: z
-            .number()
-            .int()
-            .min(1)
-            .max(10)
-            .optional()
-            .describe("Max re-planning attempts per task (default: 3)"),
-          max_step_retries: z
-            .number()
-            .int()
-            .min(1)
-            .max(10)
-            .optional()
-            .describe("Max retries per step before re-planning (default: 3)"),
-          queue_max_size: z
-            .number()
-            .int()
-            .min(1)
-            .max(100)
-            .optional()
-            .describe("Max tasks in queue (default: 20)"),
-        })
-        .optional()
-        .describe("A2A (Agent-to-Agent) orchestration configuration"),
       experimental: z
         .object({
           disable_paste_summary: z.boolean().optional(),
