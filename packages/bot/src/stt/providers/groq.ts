@@ -3,13 +3,17 @@ import type { AudioBuffer, STTProvider, STTResult } from "../types"
 export class GroqProvider implements STTProvider {
   readonly name = "groq"
   private apiKey?: string
+  private model: string
+  private baseURL: string
 
-  constructor(opts: { apiKey?: string }) {
+  constructor(opts: { apiKey?: string; model?: string; baseURL?: string }) {
     this.apiKey = opts.apiKey
+    this.model = opts.model ?? ""
+    this.baseURL = opts.baseURL ?? ""
   }
 
   async isAvailable(): Promise<boolean> {
-    return !!this.apiKey
+    return !!this.apiKey && !!this.model && !!this.baseURL
   }
 
   async transcribe(audio: AudioBuffer, options?: { language?: string; prompt?: string }): Promise<STTResult> {
@@ -17,11 +21,11 @@ export class GroqProvider implements STTProvider {
 
     const form = new FormData()
     form.append("file", new Blob([new Uint8Array(audio.data)], { type: audio.mime }), audio.filename ?? "audio.ogg")
-    form.append("model", "whisper-large-v3-turbo")
+    form.append("model", this.model)
     if (options?.language) form.append("language", options.language)
     if (options?.prompt) form.append("prompt", options.prompt)
 
-    const res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
+    const res = await fetch(`${this.baseURL}/audio/transcriptions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${this.apiKey}` },
       body: form,
