@@ -183,6 +183,7 @@ export namespace Agent {
         name: "a2a_plan",
         description:
           "A2A Plan Agent: decomposes tasks into step-by-step GUI/code operation plans. Can search the web to learn how to operate unfamiliar applications.",
+        prompt: PROMPT_A2A_PLAN,
         mode: "subagent",
         native: true,
         hidden: true,
