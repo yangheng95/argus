@@ -44,6 +44,7 @@ import { fromNodeProviderChain } from "@aws-sdk/credential-providers"
 import { GoogleAuth } from "google-auth-library"
 import { ProviderTransform } from "./transform"
 import { Installation } from "../installation"
+import { applyProviderPolicy } from "./policy"
 
 export namespace Provider {
   const log = Log.create({ service: "provider" })
@@ -894,6 +895,7 @@ export namespace Provider {
     const env = Env.all()
     for (const [providerID, provider] of Object.entries(database)) {
       if (disabled.has(providerID)) continue
+      if (providerID === "alibaba-cn" || providerID === "alibaba") continue
       const apiKey = provider.env.map((item) => env[item]).find(Boolean)
       if (!apiKey) continue
       mergeProvider(providerID, {
@@ -1046,6 +1048,8 @@ export namespace Provider {
       const s = await state()
       const provider = s.providers[model.providerID]
       const options = { ...provider.options }
+      if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
+      applyProviderPolicy(model.providerID, options)
 
       if (model.providerID === "google-vertex" && !model.api.npm.includes("@ai-sdk/openai-compatible")) {
         delete options.fetch
@@ -1057,7 +1061,6 @@ export namespace Provider {
 
       const baseURL = loadBaseURL(model, options)
       if (baseURL !== undefined) options["baseURL"] = baseURL
-      if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
       if (model.headers)
         options["headers"] = {
           ...options["headers"],

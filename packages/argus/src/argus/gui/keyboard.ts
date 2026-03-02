@@ -175,16 +175,31 @@ export namespace Keyboard {
       .filter((k) => k !== undefined)
   }
 
+  function toError(input: unknown, fallback: string): Error {
+    if (input instanceof Error) return input
+    return new Error(input === undefined ? fallback : String(input))
+  }
+
   export async function pressKey(keyName: string): Promise<void> {
     try {
       const { keyboard, Key } = await import("@nut-tree-fork/nut-js")
+      if (process.platform === "win32" && SUPER_KEYS.has(keyName)) {
+        try {
+          await keyboard.pressKey(Key.LeftControl)
+          await keyboard.pressKey(Key.Escape)
+          await keyboard.releaseKey(Key.Escape)
+          await keyboard.releaseKey(Key.LeftControl)
+          log.info("pressed key", { keyName, resolved: "Ctrl+Esc(fallback)" })
+          return
+        } catch {}
+      }
       const keys = candidates(keyName, Key as any)
       if (keys.length === 0) {
         log.warn("unknown key, attempting type", { keyName })
         await keyboard.type(keyName)
         return
       }
-      let err: unknown
+      let last: unknown
       for (const key of keys) {
         try {
           await keyboard.pressKey(key)
@@ -192,16 +207,20 @@ export namespace Keyboard {
           log.info("pressed key", { keyName, resolved: key })
           return
         } catch (e) {
-          err = e
+          last = e
         }
       }
-      throw err
+      throw toError(last, `Failed to press key: ${keyName}`)
     } catch (e) {
+      const error = toError(e, `Failed to press key: ${keyName}`)
       log.error("pressKey failed", {
         keyName,
-        error: e instanceof Error ? e.message : String(e),
+        errorName: error.name,
+        error: error.message,
+        stack: error.stack,
+        rawType: typeof e,
       })
-      throw e
+      throw error
     }
   }
 
@@ -211,10 +230,14 @@ export namespace Keyboard {
       await keyboard.type(text)
       log.info("typed text", { length: text.length })
     } catch (e) {
+      const error = toError(e, "Failed to type text")
       log.error("typeText failed", {
-        error: e instanceof Error ? e.message : String(e),
+        errorName: error.name,
+        error: error.message,
+        stack: error.stack,
+        rawType: typeof e,
       })
-      throw e
+      throw error
     }
   }
 
@@ -228,7 +251,7 @@ export namespace Keyboard {
         (acc, cur) => acc.flatMap((prefix) => cur.map((key) => [...prefix, key])),
         [[] as any[]],
       )
-      let err: unknown
+      let last: unknown
       for (const plan of plans) {
         try {
           for (const key of plan) {
@@ -248,16 +271,20 @@ export namespace Keyboard {
           log.info("hotkey", { keys, resolved: plan })
           return
         } catch (e) {
-          err = e
+          last = e
         }
       }
-      throw err
+      throw toError(last, `Failed to press hotkey: ${keys.join("+")}`)
     } catch (e) {
+      const error = toError(e, `Failed to press hotkey: ${keys.join("+")}`)
       log.error("hotkey failed", {
         keys,
-        error: e instanceof Error ? e.message : String(e),
+        errorName: error.name,
+        error: error.message,
+        stack: error.stack,
+        rawType: typeof e,
       })
-      throw e
+      throw error
     }
   }
 }

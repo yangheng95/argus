@@ -6,11 +6,11 @@ import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
 import { WindowManager } from "../argus/perception/window"
 import { Log } from "../util/log"
-import { showOverlay } from "./overlay-client"
+import { requestOverlayConfirm, showOverlay } from "./overlay-client"
 
 const log = Log.create({ service: "input" })
 
-const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, and wait.
+const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, wait, and request desktop confirmation.
 
 Actions:
 - click: Click at (x, y) coordinates. Button: "left" (default), "right", "double", "middle".
@@ -20,6 +20,7 @@ Actions:
 - drag: Drag from (startX, startY) to (endX, endY).
 - move: Move mouse to (x, y) without clicking. Useful for hover effects.
 - wait: Wait for a specified number of milliseconds. Use between actions when UI needs time to load.
+- confirm: Open a desktop confirmation dialog and wait for user choice before continuing.
 
 If a window is bound via the screen tool, all coordinates are relative to that window.
 Pointer actions (click/drag/move) require a recent screen.screenshot anchor. If no anchor exists, they are blocked.
@@ -99,6 +100,15 @@ const WaitAction = z.object({
   ms: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(100).max(10000).default(1000)).describe("Milliseconds to wait (100-10000)"),
 })
 
+const ConfirmAction = z.object({
+  action: z.literal("confirm"),
+  title: z.string().min(1).max(120).describe("Dialog title"),
+  message: z.string().min(1).max(1000).describe("Dialog body text"),
+  confirm: z.string().min(1).max(30).default("Confirm").describe("Confirm button label"),
+  cancel: z.string().min(1).max(30).default("Cancel").describe("Cancel button label"),
+  timeoutMs: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(1000).max(120000).default(30000)).describe("Dialog timeout in milliseconds"),
+})
+
 const InputParams = z.discriminatedUnion("action", [
   ClickAction,
   TypeAction,
@@ -107,6 +117,7 @@ const InputParams = z.discriminatedUnion("action", [
   DragAction,
   MoveAction,
   WaitAction,
+  ConfirmAction,
 ])
 
 export const InputTool = Tool.define("input", {
@@ -157,10 +168,11 @@ export const InputTool = Tool.define("input", {
         const windowBlocked = await ensureBoundWindowReady()
         if (windowBlocked) return windowBlocked
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
+        const action = params.button === "double" ? "double" : params.button === "right" ? "right" : params.button === "middle" ? "middle" : "click"
         showOverlay(
           screen.x,
           screen.y,
-          params.button === "double" ? "double" : params.button === "right" ? "right" : params.button === "middle" ? "middle" : "click",
+          action,
           `${params.button ?? "left"} (${params.x},${params.y})`,
         )
         log.info("click-resolve", {
@@ -189,6 +201,7 @@ export const InputTool = Tool.define("input", {
         } else {
           await GUI.click(screen.x, screen.y)
         }
+        showOverlay(screen.x, screen.y, action, "done", "done")
         const coordDetail = lastWindowBounds
           ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y}${screen.clamped ? " [CLAMPED]" : ""})`
           : ""
@@ -212,6 +225,7 @@ export const InputTool = Tool.define("input", {
       case "type": {
         showOverlay(0, 0, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
         await GUI.paste(params.text)
+        showOverlay(0, 0, "type", `done ${params.text.length} chars`, "done")
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -235,6 +249,7 @@ export const InputTool = Tool.define("input", {
         } else {
           await GUI.pressKey(parts[0])
         }
+        showOverlay(0, 0, "key", `done ${params.key}`, "done")
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -253,6 +268,7 @@ export const InputTool = Tool.define("input", {
       case "scroll": {
         showOverlay(0, 0, "scroll", `${params.direction} ${params.amount}`)
         await GUI.scroll(params.direction, params.amount)
+        showOverlay(0, 0, "scroll", `done ${params.direction}`, "done")
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -277,6 +293,7 @@ export const InputTool = Tool.define("input", {
         const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds)
         showOverlay(start.x, start.y, "drag", `→(${params.endX},${params.endY})`)
         await GUI.drag(start.x, start.y, end.x, end.y)
+        showOverlay(end.x, end.y, "drag", "done", "done")
         const coordDetail = lastWindowBounds
           ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y}${start.clamped || end.clamped ? " [CLAMPED]" : ""})`
           : ""
@@ -315,6 +332,7 @@ export const InputTool = Tool.define("input", {
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
         showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)
         await GUI.moveTo(screen.x, screen.y)
+        showOverlay(screen.x, screen.y, "move", "done", "done")
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -345,6 +363,37 @@ export const InputTool = Tool.define("input", {
           title: `Waited ${params.ms}ms`,
           output: `Waited ${params.ms} milliseconds`,
           metadata: { ms: params.ms },
+        }
+      }
+
+      case "confirm": {
+        const answer = await requestOverlayConfirm({
+          title: params.title,
+          message: params.message,
+          confirm: params.confirm,
+          cancel: params.cancel,
+          timeoutMs: params.timeoutMs,
+        })
+        const accepted = answer === "confirm"
+        const unavailable = answer === "unavailable"
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "input",
+          action: "confirm",
+          detail: `${params.title} => ${answer}`,
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
+        return {
+          title: accepted ? "User confirmed" : unavailable ? "Desktop confirm unavailable" : "User did not confirm",
+          output: unavailable
+            ? "Desktop confirmation window is unavailable. Continue with a fallback flow (question tool or safe default)."
+            : accepted
+              ? "User confirmed to continue with the next step."
+              : answer === "timeout"
+                ? "Confirmation timed out. Treat as not confirmed and ask a follow-up if needed."
+                : "User cancelled the next step.",
+          metadata: { answer, confirmed: accepted, timeout: answer === "timeout", unavailable },
         }
       }
     }

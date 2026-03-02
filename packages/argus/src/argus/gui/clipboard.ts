@@ -35,10 +35,14 @@ export namespace ClipboardInput {
 
       log.info("pasted text", { length: text.length })
     } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e))
       log.error("paste failed", {
-        error: e instanceof Error ? e.message : String(e),
+        errorName: err.name,
+        error: err.message,
+        stack: err.stack,
+        rawType: typeof e,
       })
-      throw e
+      throw err
     } finally {
       // Restore the previous clipboard content regardless of success or failure
       if (previous !== null) {

@@ -1,0 +1,28 @@
+[Bot] Model/provider config source: argus auth + argus.json + ARGUS_CONFIG_CONTENT
+[Bot] DashScope runtime: sk-sp-* (Coding Plan), baseURL: https://coding.dashscope.aliyuncs.com/v1, source: auth:alibaba-cn @ C:\Users\chuan\.local\share\argus\auth.json
+[STT] Pipeline initialized: (none)
+[Bot] Vision pipeline enabled (model: qwen3.5-plus, key: argus auth (coding plan), baseURL: https://coding.dashscope.aliyuncs.com/v1)
+[BotCore] Argus server running at http://127.0.0.1:54885
+[Slack] Bot user ID: U0AJC6JDA72
+Bot is running
+[Test] Injecting prompt into channel C0AHFU59LVC
+[BotCore] Created session ses_351b19874ffeBYVoHuV3VTMXW7 for slack:C0AHFU59LVC:1772450909.279119
+[BotCore] Prompt sent for session ses_351b19874ffeBYVoHuV3VTMXW7
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (35 chars)
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (29 chars)
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (26 chars)
+[BotCore] Uploaded screenshot (1108KB)
+[BotCore] Vision analysis (4535 tokens): Based on the screenshot, here is a detailed description of what is visible:
+
+**Overview**
+The image displays a highly cu...
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (12 chars)
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (45 chars)
+[BotCore] Uploaded screenshot (1108KB)
+[BotCore] Vision analysis (4350 tokens): This is a screenshot of the **Visual Studio Code (VS Code)** interface, heavily customized and running a development env...
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (17 chars)
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (17 chars)
+[BotCore] Uploaded screenshot (1108KB)
+[BotCore] Vision analysis (4303 tokens): This is a screenshot of a **Visual Studio Code (VS Code)** interface, heavily customized with a debugging or visualizati...
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (18 chars)
+[BotCore] Sent text for ses_351b19874ffeBYVoHuV3VTMXW7 (26 chars)

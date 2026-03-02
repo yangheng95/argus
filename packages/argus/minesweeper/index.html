@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>扫雷游戏 - 8x8</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .game-container {
+        background: #f0f0f0;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 10px;
+        background: #c0c0c0;
+        border: 2px solid #808080;
+        border-radius: 5px;
+      }
+
+      .title {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .info {
+        display: flex;
+        gap: 20px;
+      }
+
+      .info-item {
+        font-size: 16px;
+        color: #333;
+      }
+
+      .info-label {
+        color: #666;
+      }
+
+      .board {
+        display: grid;
+        grid-template-columns: repeat(8, 40px);
+        grid-template-rows: repeat(8, 40px);
+        gap: 2px;
+        background: #808080;
+        padding: 5px;
+        border: 3px solid #c0c0c0;
+        border-radius: 5px;
+      }
+
+      .cell {
+        width: 40px;
+        height: 40px;
+        background: #c0c0c0;
+        border: 2px outset #ffffff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .cell:hover {
+        background: #d0d0d0;
+      }
+
+      .cell.revealed {
+        border: 1px solid #808080;
+        background: #e0e0e0;
+      }
+
+      .cell.mine {
+        background: #ff4444;
+      }
+
+      .cell.flagged {
+        background: #ffeb3b;
+      }
+
+      .cell[data-number="1"] {
+        color: #0000ff;
+      }
+      .cell[data-number="2"] {
+        color: #008000;
+      }
+      .cell[data-number="3"] {
+        color: #ff0000;
+      }
+      .cell[data-number="4"] {
+        color: #000080;
+      }
+      .cell[data-number="5"] {
+        color: #800000;
+      }
+      .cell[data-number="6"] {
+        color: #008080;
+      }
+      .cell[data-number="7"] {
+        color: #000000;
+      }
+      .cell[data-number="8"] {
+        color: #808080;
+      }
+
+      .controls {
+        margin-top: 15px;
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+      }
+
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        background: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        transition: background 0.3s;
+      }
+
+      button:hover {
+        background: #45a049;
+      }
+
+      .mode-toggle {
+        background: #2196f3;
+      }
+
+      .mode-toggle:hover {
+        background: #1976d2;
+      }
+
+      .message {
+        margin-top: 10px;
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        height: 25px;
+      }
+
+      .message.win {
+        color: #4caf50;
+      }
+
+      .message.lose {
+        color: #f44336;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="game-container">
+      <div class="header">
+        <div class="title">💣 扫雷</div>
+        <div class="info">
+          <div class="info-item">
+            <span class="info-label">剩余地雷:</span>
+            <span id="mine-count">10</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">时间:</span>
+            <span id="timer">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="board" id="board"></div>
+
+      <div class="message" id="message"></div>
+
+      <div class="controls">
+        <button class="mode-toggle" id="mode-btn">🚩 标记模式</button>
+        <button id="new-game-btn">🔄 新游戏</button>
+      </div>
+    </div>
+
+    <script>
+      const BOARD_SIZE = 8
+      const MINE_COUNT = 10
+
+      let board = []
+      let revealed = []
+      let flagged = []
+      let gameOver = false
+      let firstClick = true
+      let flagMode = false
+      let minesRemaining = MINE_COUNT
+      let timer = 0
+      let timerInterval = null
+
+      const boardElement = document.getElementById("board")
+      const mineCountElement = document.getElementById("mine-count")
+      const timerElement = document.getElementById("timer")
+      const messageElement = document.getElementById("message")
+      const modeBtn = document.getElementById("mode-btn")
+      const newGameBtn = document.getElementById("new-game-btn")
+
+      function initGame() {
+        board = []
+        revealed = []
+        flagged = []
+        gameOver = false
+        firstClick = true
+        minesRemaining = MINE_COUNT
+        timer = 0
+
+        if (timerInterval) {
+          clearInterval(timerInterval)
+          timerInterval = null
+        }
+
+        for (let i = 0; i < BOARD_SIZE; i++) {
+          board[i] = []
+          revealed[i] = []
+          flagged[i] = []
+          for (let j = 0; j < BOARD_SIZE; j++) {
+            board[i][j] = 0
+            revealed[i][j] = false
+            flagged[i][j] = false
+          }
+        }
+
+        renderBoard()
+        updateInfo()
+        messageElement.textContent = ""
+        messageElement.className = "message"
+      }
+
+      function placeMines(excludeRow, excludeCol) {
+        let minesPlaced = 0
+        while (minesPlaced < MINE_COUNT) {
+          const row = Math.floor(Math.random() * BOARD_SIZE)
+          const col = Math.floor(Math.random() * BOARD_SIZE)
+
+          if (board[row][col] !== -1 && !(row === excludeRow && col === excludeCol)) {
+            board[row][col] = -1
+            minesPlaced++
+          }
+        }
+
+        for (let i = 0; i < BOARD_SIZE; i++) {
+          for (let j = 0; j < BOARD_SIZE; j++) {
+            if (board[i][j] !== -1) {
+              board[i][j] = countAdjacentMines(i, j)
+            }
+          }
+        }
+      }
+
+      function countAdjacentMines(row, col) {
+        let count = 0
+        for (let i = -1; i <= 1; i++) {
+          for (let j = -1; j <= 1; j++) {
+            const newRow = row + i
+            const newCol = col + j
+            if (
+              newRow >= 0 &&
+              newRow < BOARD_SIZE &&
+              newCol >= 0 &&
+              newCol < BOARD_SIZE &&
+              board[newRow][newCol] === -1
+            ) {
+              count++
+            }
+          }
+        }
+        return count
+      }
+
+      function renderBoard() {
+        boardElement.innerHTML = ""
+
+        for (let i = 0; i < BOARD_SIZE; i++) {
+          for (let j = 0; j < BOARD_SIZE; j++) {
+            const cell = document.createElement("div")
+            cell.className = "cell"
+            cell.dataset.row = i
+            cell.dataset.col = j
+
+            if (revealed[i][j]) {
+              cell.classList.add("revealed")
+              if (board[i][j] === -1) {
+                cell.classList.add("mine")
+                cell.textContent = "💣"
+              } else if (board[i][j] > 0) {
+                cell.textContent = board[i][j]
+                cell.dataset.number = board[i][j]
+              }
+            } else if (flagged[i][j]) {
+              cell.classList.add("flagged")
+              cell.textContent = "🚩"
+            }
+
+            cell.addEventListener("click", () => handleClick(i, j))
+            cell.addEventListener("contextmenu", (e) => {
+              e.preventDefault()
+              handleRightClick(i, j)
+            })
+
+            boardElement.appendChild(cell)
+          }
+        }
+      }
+
+      function handleClick(row, col) {
+        if (gameOver || flagged[row][col] || revealed[row][col]) return
+
+        if (firstClick) {
+          firstClick = false
+          placeMines(row, col)
+          startTimer()
+        }
+
+        if (flagMode) {
+          toggleFlag(row, col)
+        } else {
+          revealCell(row, col)
+        }
+
+        renderBoard()
+        updateInfo()
+        checkWin()
+      }
+
+      function handleRightClick(row, col) {
+        if (gameOver || revealed[row][col]) return
+        toggleFlag(row, col)
+        renderBoard()
+        updateInfo()
+        checkWin()
+      }
+
+      function toggleFlag(row, col) {
+        if (!revealed[row][col]) {
+          flagged[row][col] = !flagged[row][col]
+          minesRemaining += flagged[row][col] ? -1 : 1
+        }
+      }
+
+      function revealCell(row, col) {
+        if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE || revealed[row][col] || flagged[row][col])
+          return
+
+        revealed[row][col] = true
+
+        if (board[row][col] === -1) {
+          endGame(false)
+          return
+        }
+
+        if (board[row][col] === 0) {
+          for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+              revealCell(row + i, col + j)
+            }
+          }
+        }
+      }
+
+      function checkWin() {
+        if (gameOver) return
+
+        let allRevealed = true
+        for (let i = 0; i < BOARD_SIZE; i++) {
+          for (let j = 0; j < BOARD_SIZE; j++) {
+            if (!revealed[i][j] && board[i][j] !== -1) {
+              allRevealed = false
+            }
+          }
+        }
+
+        if (allRevealed) {
+          endGame(true)
+        }
+      }
+
+      function endGame(won) {
+        gameOver = true
+        clearInterval(timerInterval)
+
+        if (won) {
+          messageElement.textContent = "🎉 恭喜你赢了！"
+          messageElement.className = "message win"
+        } else {
+          messageElement.textContent = "💥 游戏结束！"
+          messageElement.className = "message lose"
+
+          for (let i = 0; i < BOARD_SIZE; i++) {
+            for (let j = 0; j < BOARD_SIZE; j++) {
+              if (board[i][j] === -1) {
+                revealed[i][j] = true
+              }
+            }
+          }
+          renderBoard()
+        }
+      }
+
+      function startTimer() {
+        timerInterval = setInterval(() => {
+          timer++
+          timerElement.textContent = timer
+        }, 1000)
+      }
+
+      function updateInfo() {
+        mineCountElement.textContent = minesRemaining
+        timerElement.textContent = timer
+      }
+
+      modeBtn.addEventListener("click", () => {
+        flagMode = !flagMode
+        modeBtn.textContent = flagMode ? "✅ 点击模式" : "🚩 标记模式"
+      })
+
+      newGameBtn.addEventListener("click", initGame)
+
+      initGame()
+    </script>
+  </body>
+</html>

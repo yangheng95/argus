@@ -54,13 +54,14 @@ export async function createOpencodeServer(options?: ServerOptions) {
   const { cmd, prefix, cwd } = resolveArgusCommand()
   const args = [...prefix, `serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
+  const config = options.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
 
   const proc = spawn(cmd, args, {
     signal: options.signal,
     cwd,
     env: {
       ...process.env,
-      ARGUS_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+      ...(config === undefined ? {} : { ARGUS_CONFIG_CONTENT: config }),
     },
   })
 
@@ -132,13 +133,14 @@ export function createOpencodeTui(options?: TuiOptions) {
     args.push(`--agent=${options.agent}`)
   }
 
+  const config = options?.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
   const proc = spawn(cmd, args, {
     signal: options?.signal,
     stdio: "inherit",
     cwd,
     env: {
       ...process.env,
-      ARGUS_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
+      ...(config === undefined ? {} : { ARGUS_CONFIG_CONTENT: config }),
     },
   })
 

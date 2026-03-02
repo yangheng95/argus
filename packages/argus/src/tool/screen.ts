@@ -10,6 +10,30 @@ import { addCoordinateOverlay } from "../argus/perception/overlay"
 import { Log } from "../util/log"
 
 const log = Log.create({ service: "screen" })
+const MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024
+
+async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; compressed: boolean }> {
+  if (buffer.length <= MAX_ATTACHMENT_BYTES) {
+    return { mime: "image/png", buffer, compressed: false }
+  }
+  const sharp = await import("sharp").then((x) => x.default)
+  const attempts = [
+    () => sharp(buffer).jpeg({ quality: 85, mozjpeg: true }).toBuffer(),
+    () => sharp(buffer).jpeg({ quality: 75, mozjpeg: true }).toBuffer(),
+    () => sharp(buffer).jpeg({ quality: 65, mozjpeg: true }).toBuffer(),
+    () => sharp(buffer).jpeg({ quality: 55, mozjpeg: true }).toBuffer(),
+  ]
+  for (const attempt of attempts) {
+    try {
+      const next = await attempt()
+      if (next.length <= MAX_ATTACHMENT_BYTES) {
+        return { mime: "image/jpeg", buffer: next, compressed: true }
+      }
+    } catch {}
+  }
+  const fallback = await sharp(buffer).jpeg({ quality: 45, mozjpeg: true }).toBuffer()
+  return { mime: "image/jpeg", buffer: fallback, compressed: true }
+}
 
 const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, and bind to a specific window.
 
@@ -214,7 +238,8 @@ export const ScreenTool = Tool.define("screen", {
 
         // Add coordinate grid overlay to help vision LLM locate positions
         const annotated = await addCoordinateOverlay(result.buffer).catch(() => result.buffer)
-        const base64 = annotated.toString("base64")
+        const encoded = await image(annotated)
+        const base64 = encoded.buffer.toString("base64")
 
         // Check if agent is stuck — append corrective guidance
         const rep = GuiState.get().repetition
@@ -228,12 +253,23 @@ export const ScreenTool = Tool.define("screen", {
               `2. Use keyboard (Tab, Enter) instead of clicking\n` +
               `3. Use list_windows to find new dialogs\n` +
               `4. Try a completely different UI path`,
-            metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false, screenshotHash: hash, stuck: true, scaleX: result.windowBounds?.scaleX ?? 1, scaleY: result.windowBounds?.scaleY ?? 1 },
+            metadata: {
+              width: result.width,
+              height: result.height,
+              windowBounds: result.windowBounds,
+              unchanged: false,
+              screenshotHash: hash,
+              stuck: true,
+              compressed: encoded.compressed,
+              attachmentBytes: encoded.buffer.length,
+              scaleX: result.windowBounds?.scaleX ?? 1,
+              scaleY: result.windowBounds?.scaleY ?? 1,
+            },
             attachments: [
               {
                 type: "file" as const,
-                mime: "image/png",
-                url: `data:image/png;base64,${base64}`,
+                mime: encoded.mime,
+                url: `data:${encoded.mime};base64,${base64}`,
               },
             ],
           }
@@ -242,12 +278,22 @@ export const ScreenTool = Tool.define("screen", {
         return {
           title: `Screenshot captured (${result.width}x${result.height})`,
           output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint} The image has coordinate tick marks along the edges for precise positioning.`,
-          metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false, screenshotHash: hash, scaleX: result.windowBounds?.scaleX ?? 1, scaleY: result.windowBounds?.scaleY ?? 1 },
+          metadata: {
+            width: result.width,
+            height: result.height,
+            windowBounds: result.windowBounds,
+            unchanged: false,
+            screenshotHash: hash,
+            compressed: encoded.compressed,
+            attachmentBytes: encoded.buffer.length,
+            scaleX: result.windowBounds?.scaleX ?? 1,
+            scaleY: result.windowBounds?.scaleY ?? 1,
+          },
           attachments: [
             {
               type: "file" as const,
-              mime: "image/png",
-              url: `data:image/png;base64,${base64}`,
+              mime: encoded.mime,
+              url: `data:${encoded.mime};base64,${base64}`,
             },
           ],
         }
