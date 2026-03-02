@@ -1,4 +1,4 @@
-import { createOpencode, type OpencodeClient } from "@opencode-ai/sdk"
+import { createOpencode, type OpencodeClient } from "@opencorvus-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { SlackAdapter } from "./adapters/slack"
 import type { STTPipeline } from "./stt/pipeline"

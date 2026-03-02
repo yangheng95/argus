@@ -1,5 +1,5 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { AWS } from "@opencode-ai/console-core/aws.js"
+import { AWS } from "@opencorvus-ai/console-core/aws.js"
 import { i18n } from "~/i18n"
 import { localeFromRequest } from "~/lib/language"
 
@@ -48,3 +48,4 @@ ${body.email}`.trim()
     return Response.json({ error: dict["enterprise.form.error.internalServer"] }, { status: 500 })
   }
 }
+

@@ -1,5 +1,5 @@
 {
-  "name": "@opencode-ai/function",
+  "name": "@opencorvus-ai/function",
   "version": "1.2.15",
   "$schema": "https://json.schemastore.org/package.json",
   "private": true,
@@ -18,3 +18,4 @@
     "jose": "6.0.11"
   }
 }
+

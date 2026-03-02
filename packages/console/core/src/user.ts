@@ -138,7 +138,7 @@ export namespace User {
             .then((rows) => rows[0]),
         )
 
-        const { InviteEmail } = await import("@opencode-ai/console-mail/InviteEmail.jsx")
+        const { InviteEmail } = await import("@opencorvus-ai/console-mail/InviteEmail.jsx")
         await AWS.sendEmail({
           to: email,
           subject: `You've been invited to join the ${emailInfo.workspaceName} workspace on Argus`,
@@ -224,3 +224,4 @@ export namespace User {
     )
   })
 }
+

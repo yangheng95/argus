@@ -1,13 +1,13 @@
-import { Billing } from "@opencode-ai/console-core/billing.js"
+import { Billing } from "@opencorvus-ai/console-core/billing.js"
 import type { APIEvent } from "@solidjs/start/server"
-import { and, Database, eq, sql } from "@opencode-ai/console-core/drizzle/index.js"
-import { BillingTable, LiteTable, PaymentTable } from "@opencode-ai/console-core/schema/billing.sql.js"
-import { Identifier } from "@opencode-ai/console-core/identifier.js"
-import { centsToMicroCents } from "@opencode-ai/console-core/util/price.js"
-import { Actor } from "@opencode-ai/console-core/actor.js"
-import { Resource } from "@opencode-ai/console-resource"
-import { LiteData } from "@opencode-ai/console-core/lite.js"
-import { BlackData } from "@opencode-ai/console-core/black.js"
+import { and, Database, eq, sql } from "@opencorvus-ai/console-core/drizzle/index.js"
+import { BillingTable, LiteTable, PaymentTable } from "@opencorvus-ai/console-core/schema/billing.sql.js"
+import { Identifier } from "@opencorvus-ai/console-core/identifier.js"
+import { centsToMicroCents } from "@opencorvus-ai/console-core/util/price.js"
+import { Actor } from "@opencorvus-ai/console-core/actor.js"
+import { Resource } from "@opencorvus-ai/console-resource"
+import { LiteData } from "@opencorvus-ai/console-core/lite.js"
+import { BlackData } from "@opencorvus-ai/console-core/black.js"
 
 export async function POST(input: APIEvent) {
   const body = await Billing.stripe().webhooks.constructEventAsync(
@@ -366,3 +366,4 @@ export async function POST(input: APIEvent) {
       return Response.json({ message: error.message }, { status: 500 })
     })
 }
+

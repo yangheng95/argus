@@ -1,4 +1,4 @@
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import matter from "gray-matter"
 import { z } from "zod"
 import { Filesystem } from "../util/filesystem"
@@ -97,3 +97,4 @@ export namespace ConfigMarkdown {
     }),
   )
 }
+

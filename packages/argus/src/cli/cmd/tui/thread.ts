@@ -9,7 +9,7 @@ import { iife } from "@/util/iife"
 import { Log } from "@/util/log"
 import { withNetworkOptions, resolveNetworkOptions } from "@/cli/network"
 import { Filesystem } from "@/util/filesystem"
-import type { Event } from "@opencode-ai/sdk/v2"
+import type { Event } from "@opencorvus-ai/sdk/v2"
 import type { EventSource } from "./context/sdk"
 import { win32DisableProcessedInput, win32InstallCtrlCGuard } from "./win32"
 import { TuiConfig } from "@/config/tui"
@@ -290,3 +290,4 @@ export const TuiThreadCommand = cmd({
     process.exit(0)
   },
 })
+

@@ -14,12 +14,12 @@ import type { FileSearchHandle } from "./file"
 import { buildSessionSearchHits, stepSessionSearchIndex, type SessionSearchHit } from "./session-review-search"
 import { useFileComponent } from "../context/file"
 import { useI18n } from "../context/i18n"
-import { getDirectory, getFilename } from "@opencode-ai/util/path"
-import { checksum } from "@opencode-ai/util/encode"
+import { getDirectory, getFilename } from "@opencorvus-ai/util/path"
+import { checksum } from "@opencorvus-ai/util/encode"
 import { createEffect, createMemo, createSignal, For, Match, Show, Switch, untrack, type JSX } from "solid-js"
 import { onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
-import { type FileContent, type FileDiff } from "@opencode-ai/sdk/v2"
+import { type FileContent, type FileDiff } from "@opencorvus-ai/sdk/v2"
 import { PreloadMultiFileDiffResult } from "@pierre/diffs/ssr"
 import { type SelectedLineRange } from "@pierre/diffs"
 import { Dynamic } from "solid-js/web"
@@ -897,3 +897,4 @@ export const SessionReview = (props: SessionReviewProps) => {
     </ScrollView>
   )
 }
+

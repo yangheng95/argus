@@ -6,7 +6,7 @@ import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
 import { WindowManager } from "../argus/perception/window"
 import { Log } from "../util/log"
-import { requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
+import { overlayDiagnostic, requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
 
 const log = Log.create({ service: "input" })
 
@@ -206,8 +206,7 @@ export const InputTool = Tool.define("input", {
         } else if (params.button === "right") {
           await GUI.rightClick(screen.x, screen.y)
         } else if (params.button === "middle") {
-          // Middle click: move to position, then use hotkey simulation
-          await GUI.click(screen.x, screen.y)
+          await GUI.middleClick(screen.x, screen.y)
         } else {
           await GUI.click(screen.x, screen.y)
         }
@@ -392,6 +391,8 @@ export const InputTool = Tool.define("input", {
         })
         const accepted = answer === "confirm"
         const unavailable = answer === "unavailable"
+        const overlay = overlayDiagnostic()
+        const unavailableReason = unavailable ? overlay.reason ?? "unknown" : undefined
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -400,16 +401,22 @@ export const InputTool = Tool.define("input", {
           screenshotHashAfter: null,
           screenChanged: null,
         })
+        if (unavailable) {
+          log.warn("overlay-confirm-unavailable", {
+            reason: unavailableReason,
+            path: overlay.path,
+          })
+        }
         return {
           title: accepted ? "User confirmed" : unavailable ? "Desktop confirm unavailable" : "User did not confirm",
           output: unavailable
-            ? "Desktop confirmation window is unavailable. Continue with a fallback flow (question tool or safe default)."
+            ? `Desktop confirmation window is unavailable (${unavailableReason}). Continue with a fallback flow (question tool or safe default).`
             : accepted
               ? "User confirmed to continue with the next step."
               : answer === "timeout"
                 ? "Confirmation timed out. Treat as not confirmed and ask a follow-up if needed."
                 : "User cancelled the next step.",
-          metadata: { answer, confirmed: accepted, timeout: answer === "timeout", unavailable },
+          metadata: { answer, confirmed: accepted, timeout: answer === "timeout", unavailable, unavailableReason },
         }
       }
     }

@@ -28,9 +28,9 @@ npm install @argus-ai/sdk
 Bir argus örneği oluşturun:
 
 ```javascript
-import { createOpencode } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@argus-ai/sdk"
 
-const { client } = await createOpencode()
+const { client } = await createOpenCorvus()
 ```
 
 Bu, hem bir sunucu hem de bir istemci başlatır
@@ -52,9 +52,9 @@ Bu, hem bir sunucu hem de bir istemci başlatır
 Davranışı özelleştirmek için bir yapılandırma nesnesi iletebilirsiniz. Örnek yine de `argus.json` dosyanızı alır, ancak yapılandırmayı satır içi olarak geçersiz kılabilir veya ekleyebilirsiniz:
 
 ```javascript
-import { createOpencode } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@argus-ai/sdk"
 
-const argus = await createOpencode({
+const argus = await createOpenCorvus({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -72,9 +72,9 @@ argus.server.close()
 Halihazırda çalışan bir argus örneğiniz varsa, ona bağlanmak için bir istemci örneği oluşturabilirsiniz:
 
 ```javascript
-import { createOpencodeClient } from "@argus-ai/sdk"
+import { createOpenCorvusClient } from "@argus-ai/sdk"
 
-const client = createOpencodeClient({
+const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
 })
 ```
@@ -389,3 +389,5 @@ for await (const event of events.stream) {
   console.log("Event:", event.type, event.properties)
 }
 ```
+
+

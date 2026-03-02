@@ -8,7 +8,7 @@ import { streamSSE } from "hono/streaming"
 import { basicAuth } from "hono/basic-auth"
 import z from "zod"
 import { Provider } from "../provider/provider"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { LSP } from "../lsp"
 import { Format } from "../format"
 import { TuiRoutes } from "./routes/tui"
@@ -605,3 +605,4 @@ export namespace Server {
     return server
   }
 }
+

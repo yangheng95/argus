@@ -7,7 +7,7 @@ import { Context } from "../util/context"
 import { lazy } from "../util/lazy"
 import { Global } from "../global"
 import { Log } from "../util/log"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 import path from "path"
 import { readFileSync, readdirSync, existsSync } from "fs"
@@ -153,3 +153,4 @@ export namespace Database {
     }
   }
 }
+

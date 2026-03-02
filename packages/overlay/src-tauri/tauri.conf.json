@@ -1,15 +1,15 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "openlens-overlay",
+  "productName": "opencorvus-overlay",
   "version": "0.1.0",
-  "identifier": "dev.openlens.overlay",
+  "identifier": "dev.opencorvus.overlay",
   "build": { "frontendDist": "../src" },
   "app": {
     "withGlobalTauri": true,
     "windows": [
       {
         "label": "overlay",
-        "title": "openlens-overlay",
+        "title": "opencorvus-overlay",
         "url": "index.html",
         "width": 380,
         "height": 160,
@@ -26,7 +26,7 @@
       },
       {
         "label": "window-highlight",
-        "title": "argus-window-highlight",
+        "title": "opencorvus-window-highlight",
         "url": "window-highlight.html",
         "width": 640,
         "height": 420,
@@ -43,7 +43,7 @@
       },
       {
         "label": "confirm",
-        "title": "argus-confirm",
+        "title": "opencorvus-confirm",
         "url": "confirm.html",
         "width": 460,
         "height": 220,
@@ -60,7 +60,7 @@
       },
       {
         "label": "console",
-        "title": "Argus Console",
+        "title": "OpenCorvus Console",
         "url": "manager.html",
         "width": 1180,
         "height": 760,

@@ -1,4 +1,4 @@
-@import "@opencode-ai/ui/styles/tailwind";
+@import "@opencorvus-ai/ui/styles/tailwind";
 
 :root {
   --desktop-bg-1: #0d1a2d;
@@ -223,3 +223,4 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+

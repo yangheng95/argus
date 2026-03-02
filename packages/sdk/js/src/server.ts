@@ -33,6 +33,10 @@ function resolveArgusCommand(): { cmd: string; prefix: string[]; cwd?: string } 
 
   // Fallback to compiled binary if available.
   try {
+    execSync("opencorvus --version", { stdio: "ignore", timeout: 3000 })
+    return { cmd: "opencorvus", prefix: [] }
+  } catch {}
+  try {
     execSync("argus --version", { stdio: "ignore", timeout: 3000 })
     return { cmd: "argus", prefix: [] }
   } catch {}
@@ -41,7 +45,7 @@ function resolveArgusCommand(): { cmd: string; prefix: string[]; cwd?: string } 
   return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: argusDir }
 }
 
-export async function createOpencodeServer(options?: ServerOptions) {
+export async function createOpenCorvusServer(options?: ServerOptions) {
   options = Object.assign(
     {
       hostname: "127.0.0.1",
@@ -116,7 +120,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
   }
 }
 
-export function createOpencodeTui(options?: TuiOptions) {
+export function createOpenCorvusTui(options?: TuiOptions) {
   const { cmd, prefix, cwd } = resolveArgusCommand()
   const args = [...prefix]
 
@@ -150,3 +154,7 @@ export function createOpencodeTui(options?: TuiOptions) {
     },
   }
 }
+
+export const createOpencodeServer = createOpenCorvusServer
+export const createOpencodeTui = createOpenCorvusTui
+

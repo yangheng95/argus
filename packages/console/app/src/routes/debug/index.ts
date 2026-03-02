@@ -1,7 +1,7 @@
 import type { APIEvent } from "@solidjs/start/server"
 import { json } from "@solidjs/router"
-import { Database } from "@opencode-ai/console-core/drizzle/index.js"
-import { UserTable } from "@opencode-ai/console-core/schema/user.sql.js"
+import { Database } from "@opencorvus-ai/console-core/drizzle/index.js"
+import { UserTable } from "@opencorvus-ai/console-core/schema/user.sql.js"
 
 export async function GET(evt: APIEvent) {
   return json({
@@ -11,3 +11,4 @@ export async function GET(evt: APIEvent) {
     }),
   })
 }
+

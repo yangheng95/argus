@@ -1,4 +1,4 @@
-import { Resource } from "@opencode-ai/console-resource"
+import { Resource } from "@opencorvus-ai/console-resource"
 
 export const logger = {
   metric: (values: Record<string, any>) => {
@@ -10,3 +10,4 @@ export const logger = {
     console.debug(message)
   },
 }
+

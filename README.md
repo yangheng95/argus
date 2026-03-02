@@ -1,30 +1,57 @@
 <p align="center">
-  <a href="https://github.com/yangheng95/argus">
-    <img src="packages/console/app/src/asset/brand/mascot-ar-icon.png" width="160" alt="Ar — Argus mascot">
+  <a href="https://github.com/yangheng95/opencorvus">
+    <img src="packages/console/app/src/asset/brand/mascot-ar-icon.png" width="160" alt="OpenCorvus mascot">
   </a>
 </p>
 
-<h1 align="center">Argus</h1>
+<h1 align="center">OpenCorvus</h1>
 
-<p align="center">An AI-powered desktop assistant that codes and controls your GUI.</p>
+<p align="center">From prompt to shipped result: one agent for code and GUI.</p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/argus-ai"><img alt="npm" src="https://img.shields.io/npm/v/argus-ai?style=flat-square" /></a>
-  <a href="https://github.com/yangheng95/argus/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/yangheng95/argus/publish.yml?style=flat-square&branch=dev" /></a>
-  <a href="https://github.com/yangheng95/argus/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/yangheng95/argus?style=flat-square" /></a>
+  <a href="https://www.npmjs.com/package/opencorvus-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencorvus-ai?style=flat-square" /></a>
+  <a href="https://github.com/yangheng95/opencorvus/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/yangheng95/opencorvus/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://github.com/yangheng95/opencorvus/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/yangheng95/opencorvus?style=flat-square" /></a>
 </p>
 
 ---
 
-## What is Argus?
+## Slogan
 
-Argus is an AI-powered desktop assistant that combines **code development** and **GUI automation** in a single agent. It can:
+**写下目标，交付结果。**  
+**Write the goal. Ship the outcome.**
+
+## Positioning
+
+OpenCorvus is an **execution agent** for software teams.
+It is not only a coding copilot, and not a traditional RPA bot.
+It bridges three worlds in one loop:
+
+- **Code** — implement and refactor in real repositories
+- **Desktop** — operate browser and GUI apps like a human operator
+- **Workflow** — report progress in Slack/Telegram and continue autonomously
+
+## Vision
+
+Build a general AI teammate that can complete real-world software tasks end-to-end:
+
+- From requirement to merged PR
+- From code change to UI verification
+- From local development to team collaboration channels
+
+## Mission
+
+Make "intent-to-delivery" the default way of building software: humans define direction, OpenCorvus executes across tools.
+
+## What is OpenCorvus?
+
+OpenCorvus is an AI-powered desktop assistant that combines **code development** and **GUI automation** in a single agent. It can:
 
 - **Write & edit code** — explore codebases, make targeted edits, run tests, manage git workflows
 - **Control the desktop** — observe the screen, click, type, scroll, and interact with any GUI application
 - **Combine both** — e.g., write code in the editor, then switch to the browser to test it visually
 
-Unlike pure coding agents, Argus can see and interact with your entire desktop environment, making it suitable for tasks that span the terminal and graphical applications.
+Unlike pure coding agents, OpenCorvus can see and interact with your entire desktop environment, making it suitable for tasks that span the terminal and graphical applications.
 
 ## Features
 
@@ -80,7 +107,7 @@ argus serve --port 8080
 
 ## Agents
 
-Argus includes two built-in agents, switchable with the `Tab` key in the TUI:
+OpenCorvus includes two built-in agents, switchable with the `Tab` key in the TUI:
 
 - **build** — Default, full-access agent for development and desktop automation
 - **plan** — Read-only agent for analysis and code exploration
@@ -92,7 +119,7 @@ A **general** subagent is also available for complex searches and multistep task
 
 ## Skills
 
-Argus uses a skill system to load specialized instructions on demand:
+OpenCorvus uses a skill system to load specialized instructions on demand:
 
 | Skill | Loaded when | Capabilities |
 |-------|------------|-------------|
@@ -103,7 +130,7 @@ Skills are loaded automatically based on the task. Only one skill is active at a
 
 ## Bot — Slack / Telegram 接入
 
-Bot 是 Argus 的首选启动方式。它在内部自动启动 Argus 服务器，并通过 Slack 或 Telegram 接受指令、汇报进度。
+Bot 是 OpenCorvus 的首选启动方式。它在内部自动启动 OpenCorvus 服务器，并通过 Slack 或 Telegram 接受指令、汇报进度。
 
 ### 快速启动
 
@@ -111,7 +138,7 @@ Bot 是 Argus 的首选启动方式。它在内部自动启动 Argus 服务器�
 # 1. 复制并填写环境变量
 cp packages/bot/.env.example packages/bot/.env
 
-# 2. 启动 Bot（同时自动启动 Argus 服务器）
+# 2. 启动 Bot（同时自动启动 OpenCorvus 服务器）
 bun dev
 ```
 
@@ -142,7 +169,7 @@ bun dev
 
 #### LLM 模型配置
 
-Bot 通过 `ARGUS_CONFIG_CONTENT` 环境变量以 JSON 格式注入 Argus 配置，**不依赖**项目目录中的配置文件。
+Bot 通过 `ARGUS_CONFIG_CONTENT` 环境变量以 JSON 格式注入 OpenCorvus 配置，**不依赖**项目目录中的配置文件。
 
 ```bash
 # 使用 Qwen（DashScope）
@@ -157,7 +184,7 @@ ARGUS_CONFIG_CONTENT='{"model":"openai/gpt-4o","provider":{"openai":{"env":"OPEN
 OPENAI_API_KEY=sk-...
 ```
 
-> 完整的 provider 配置选项请参考 [Argus 配置文档](https://opencode.ai/docs/config)。
+> 完整的 provider 配置选项请参考 [OpenCorvus 配置文档](https://opencode.ai/docs/config)。
 
 #### 权限配置
 
@@ -240,7 +267,7 @@ TUI_PROJECT_DIR=D:/my-project
 
 | 命令 | 用途 |
 |------|------|
-| `bun dev` | **启动 Bot**（内嵌 Argus 服务器，推荐开发入口） |
+| `bun dev` | **启动 Bot**（内嵌 OpenCorvus 服务器，推荐开发入口） |
 | `bun dev:tui` | 启动 TUI（终端交互界面） |
 | `bun dev:server` | 启动无头 API 服务器（供 SDK 或外部程序接入） |
 
@@ -250,7 +277,7 @@ TUI_PROJECT_DIR=D:/my-project
 
 ```
 ┌──────────────────────────────────┐
-│           Argus Server           │
+│        OpenCorvus Server         │
 │  (packages/argus)                │
 │  ┌──────────┐  ┌──────────────┐  │
 │  │ Sessions │  │ Tool System  │  │
@@ -271,11 +298,11 @@ TUI_PROJECT_DIR=D:/my-project
 - **packages/argus** — Core: agents, sessions, tools, providers, skills, LSP, TUI
 - **packages/sdk** — JavaScript SDK for programmatic access
 - **packages/bot** — Chat bot adapters (Slack, Telegram)
-- **packages/plugin** — Plugin system (`@opencode-ai/plugin`)
+- **packages/plugin** — Plugin system (`@opencorvus-ai/plugin`)
 
 ## Contributing
 
-If you're interested in contributing to Argus, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
+If you're interested in contributing to OpenCorvus, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
 
 **Requirements:** Bun 1.3+
 
@@ -286,8 +313,9 @@ bun dev
 
 ## Acknowledgments
 
-Argus is built upon code originally from [OpenCode](https://github.com/nicepkg/opencode). We are grateful to the OpenCode contributors for their foundational work. The project has since diverged in positioning and functionality — Argus extends the original coding agent with desktop GUI automation, a skill system, and a headless server architecture.
+OpenCorvus is built upon code originally from [OpenCode](https://github.com/nicepkg/opencode). We are grateful to the OpenCode contributors for their foundational work. The project has since diverged in positioning and functionality — OpenCorvus extends the original coding agent with desktop GUI automation, a skill system, and a headless server architecture.
 
 ## License
 
 [MIT](./LICENSE)
+

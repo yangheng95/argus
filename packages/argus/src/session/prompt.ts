@@ -33,7 +33,7 @@ import { $, fileURLToPath, pathToFileURL } from "bun"
 import { ConfigMarkdown } from "../config/markdown"
 import { Config } from "../config/config"
 import { SessionSummary } from "./summary"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { fn } from "@/util/fn"
 import { SessionProcessor } from "./processor"
 import { TaskTool } from "@/tool/task"
@@ -2099,3 +2099,4 @@ export namespace SessionPrompt {
     }
   }
 }
+

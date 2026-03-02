@@ -1,16 +1,16 @@
 export * from "./client.js"
 export * from "./server.js"
 
-import { createOpencodeClient } from "./client.js"
-import { createOpencodeServer } from "./server.js"
+import { createOpenCorvusClient } from "./client.js"
+import { createOpenCorvusServer } from "./server.js"
 import type { ServerOptions } from "./server.js"
 
-export async function createOpencode(options?: ServerOptions) {
-  const server = await createOpencodeServer({
+export async function createOpenCorvus(options?: ServerOptions) {
+  const server = await createOpenCorvusServer({
     ...options,
   })
 
-  const client = createOpencodeClient({
+  const client = createOpenCorvusClient({
     baseUrl: server.url,
   })
 
@@ -19,3 +19,6 @@ export async function createOpencode(options?: ServerOptions) {
     server,
   }
 }
+
+export const createOpencode = createOpenCorvus
+

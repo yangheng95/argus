@@ -1,4 +1,4 @@
-import { Slug } from "@opencode-ai/util/slug"
+import { Slug } from "@opencorvus-ai/util/slug"
 import path from "path"
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
@@ -889,3 +889,4 @@ export namespace Session {
     },
   )
 }
+

@@ -1,8 +1,8 @@
-import { Database, eq, and, sql, inArray } from "@opencode-ai/console-core/drizzle/index.js"
-import { IpRateLimitTable } from "@opencode-ai/console-core/schema/ip.sql.js"
+import { Database, eq, and, sql, inArray } from "@opencorvus-ai/console-core/drizzle/index.js"
+import { IpRateLimitTable } from "@opencorvus-ai/console-core/schema/ip.sql.js"
 import { FreeUsageLimitError } from "./error"
 import { logger } from "./logger"
-import { ZenData } from "@opencode-ai/console-core/model.js"
+import { ZenData } from "@opencorvus-ai/console-core/model.js"
 import { i18n } from "~/i18n"
 import { localeFromRequest } from "~/lib/language"
 
@@ -84,3 +84,4 @@ function buildYYYYMMDDHH(timestamp: number) {
     .replace(/[^0-9]/g, "")
     .substring(0, 10)
 }
+

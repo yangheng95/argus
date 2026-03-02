@@ -7,7 +7,7 @@ import { SessionTable } from "../session/session.sql"
 import { Log } from "../util/log"
 import { Flag } from "@/flag/flag"
 import { work } from "../util/queue"
-import { fn } from "@opencode-ai/util/fn"
+import { fn } from "@opencorvus-ai/util/fn"
 import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
@@ -439,3 +439,4 @@ export namespace Project {
     return data
   }
 }
+

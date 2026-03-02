@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { NamedError } from "@opencode-ai/util/error"
+import type { NamedError } from "@opencorvus-ai/util/error"
 import { APICallError } from "ai"
 import { SessionRetry } from "../../src/session/retry"
 import { MessageV2 } from "../../src/session/message"
@@ -186,3 +186,4 @@ describe("session.message.fromError", () => {
     expect(result.data.isRetryable).toBe(true)
   })
 })
+

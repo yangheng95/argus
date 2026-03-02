@@ -14,9 +14,9 @@ export const GenerateCommand = {
           {
             lang: "js",
             source: [
-              `import { createOpencodeClient } from "@opencode-ai/sdk`,
+              `import { createOpenCorvusClient } from "@opencorvus-ai/sdk`,
               ``,
-              `const client = createOpencodeClient()`,
+              `const client = createOpenCorvusClient()`,
               `await client.${operation.operationId}({`,
               `  ...`,
               `})`,
@@ -36,3 +36,5 @@ export const GenerateCommand = {
     })
   },
 } satisfies CommandModule
+
+

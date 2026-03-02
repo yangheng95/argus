@@ -1,5 +1,5 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { Resource } from "@opencode-ai/console-resource"
+import { Resource } from "@opencorvus-ai/console-resource"
 import { docs, localeFromRequest, tag } from "~/lib/language"
 
 async function handler(evt: APIEvent) {
@@ -26,3 +26,4 @@ export const PUT = handler
 export const DELETE = handler
 export const OPTIONS = handler
 export const PATCH = handler
+

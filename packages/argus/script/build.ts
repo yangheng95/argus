@@ -12,7 +12,7 @@ const dir = path.resolve(__dirname, "..")
 
 process.chdir(dir)
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 
 const modelsUrl = process.env.ARGUS_MODELS_URL || "https://models.dev"
@@ -222,3 +222,4 @@ if (Script.release) {
 }
 
 export { binaries }
+

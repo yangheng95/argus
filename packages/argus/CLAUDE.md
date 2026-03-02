@@ -99,3 +99,32 @@ When you see "Screen has NOT changed", the UI hasn't updated yet:
 ## Skills
 
 If a desktop task matches an available skill (e.g., `desktop`), load it for detailed scenario-specific instructions (file dialogs, form filling, browser tabs, etc.).
+
+## Build Notes
+
+### Build commands
+
+- Argus package build: `bun run --cwd packages/argus script/build.ts`
+- Overlay (Tauri) build from `packages/overlay/src-tauri`:
+  - Debug: `cargo build`
+  - Release: `cargo build --release`
+
+### Large artifact locations
+
+- `packages/argus/dist` (multi-platform binaries and sourcemaps)
+- `packages/overlay/src-tauri/target` (Rust incremental and release artifacts)
+
+### Cleanup commands
+
+- Remove Argus build outputs:
+  - `cmd /c "if exist packages\\argus\\dist rmdir /s /q packages\\argus\\dist"`
+- Remove Overlay build outputs:
+  - `cmd /c "if exist packages\\overlay\\src-tauri\\target rmdir /s /q packages\\overlay\\src-tauri\\target"`
+- If `argus-overlay.exe` is locked:
+  - `cmd /c "taskkill /im argus-overlay.exe /f"`
+  - Retry target cleanup command
+
+### Bun + nut-js compatibility
+
+- Known issue: `TypeError: First argument must be an Error object` can occur through `@nut-tree-fork/nut-js -> jimp -> follow-redirects` on some Bun environments.
+- After reinstalling dependencies, verify `follow-redirects` Bun compatibility patch is still applied before running GUI automation e2e.

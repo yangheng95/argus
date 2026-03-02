@@ -1,9 +1,9 @@
-import { AssistantMessage, type FileDiff, Message as MessageType, Part as PartType } from "@opencode-ai/sdk/v2/client"
+import { AssistantMessage, type FileDiff, Message as MessageType, Part as PartType } from "@opencorvus-ai/sdk/v2/client"
 import { useData } from "../context"
 import { useFileComponent } from "../context/file"
 
-import { Binary } from "@opencode-ai/util/binary"
-import { getDirectory, getFilename } from "@opencode-ai/util/path"
+import { Binary } from "@opencorvus-ai/util/binary"
+import { getDirectory, getFilename } from "@opencorvus-ai/util/path"
 import { createEffect, createMemo, createSignal, For, on, ParentProps, Show } from "solid-js"
 import { Dynamic } from "solid-js/web"
 import { AssistantParts, Message, PART_MAPPING } from "./message-part"
@@ -498,3 +498,4 @@ export function SessionTurn(
     </div>
   )
 }
+

@@ -54,6 +54,19 @@ export namespace Mouse {
     }
   }
 
+  export async function middleClick(x: number, y: number): Promise<void> {
+    try {
+      const { mouse, Button } = await import("@nut-tree-fork/nut-js")
+      await moveToPosition(x, y)
+      await mouse.click(Button.MIDDLE)
+      log.info("middle clicked", { x, y })
+    } catch (e) {
+      const err = asError(e)
+      log.error("middleClick failed", { x, y, errorName: err.name, error: err.message, stack: err.stack, rawType: typeof e })
+      throw err
+    }
+  }
+
   export async function scroll(direction: "up" | "down", amount: number = 3): Promise<void> {
     try {
       const { mouse } = await import("@nut-tree-fork/nut-js")

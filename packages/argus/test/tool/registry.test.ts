@@ -88,7 +88,7 @@ describe("tool.registry", () => {
           JSON.stringify({
             name: "custom-tools",
             dependencies: {
-              "@opencode-ai/plugin": "^0.0.0",
+              "@opencorvus-ai/plugin": "^0.0.0",
               cowsay: "^1.6.0",
             },
           }),
@@ -120,3 +120,4 @@ describe("tool.registry", () => {
     })
   })
 })
+

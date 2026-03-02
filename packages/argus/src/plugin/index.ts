@@ -1,15 +1,15 @@
-import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencode-ai/plugin"
+import type { Hooks, PluginInput, Plugin as PluginInstance } from "@opencorvus-ai/plugin"
 import { Config } from "../config/config"
 import { Bus } from "../bus"
 import { Log } from "../util/log"
-import { createOpencodeClient } from "@opencode-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 import { Server } from "../server/server"
 import { BunProc } from "../bun"
 import { Instance } from "../project/instance"
 import { Flag } from "../flag/flag"
 import { CodexAuthPlugin } from "./codex"
 import { Session } from "../session"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { CopilotAuthPlugin } from "./copilot"
 import { gitlabAuthPlugin as GitlabAuthPlugin } from "@gitlab/opencode-gitlab-auth"
 
@@ -22,7 +22,7 @@ export namespace Plugin {
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
 
   const state = Instance.state(async () => {
-    const client = createOpencodeClient({
+    const client = createOpenCorvusClient({
       baseUrl: "http://localhost:4096",
       directory: Instance.directory,
       // @ts-ignore - fetch type incompatibility
@@ -140,3 +140,5 @@ export namespace Plugin {
     })
   }
 }
+
+

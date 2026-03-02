@@ -28,9 +28,9 @@ npm install @argus-ai/sdk
 argus의 인스턴스 만들기:
 
 ```javascript
-import { createOpencode } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@argus-ai/sdk"
 
-const { client } = await createOpencode()
+const { client } = await createOpenCorvus()
 ```
 
 서버와 클라이언트 모두 시작
@@ -52,9 +52,9 @@ const { client } = await createOpencode()
 구성 객체를 전달할 수 있습니다. 인스턴스는 여전히 `argus.json`를 선택하지만 구성 인라인을 추가 할 수 있습니다.
 
 ```javascript
-import { createOpencode } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@argus-ai/sdk"
 
-const argus = await createOpencode({
+const argus = await createOpenCorvus({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -72,9 +72,9 @@ argus.server.close()
 argus의 실행 인스턴스가 이미 있다면 클라이언트 인스턴스를 만들 수 있습니다.
 
 ```javascript
-import { createOpencodeClient } from "@argus-ai/sdk"
+import { createOpenCorvusClient } from "@argus-ai/sdk"
 
-const client = createOpencodeClient({
+const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
 })
 ```
@@ -389,3 +389,5 @@ for await (const event of events.stream) {
   console.log("Event:", event.type, event.properties)
 }
 ```
+
+

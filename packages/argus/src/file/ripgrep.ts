@@ -3,7 +3,7 @@ import path from "path"
 import { Global } from "../global"
 import fs from "fs/promises"
 import z from "zod"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { lazy } from "../util/lazy"
 import { $ } from "bun"
 import { Filesystem } from "../util/filesystem"
@@ -312,7 +312,7 @@ export namespace Ripgrep {
 
     const root: Node = { name: "", children: new Map() }
     for (const file of files) {
-      if (file.includes(".argus")) continue
+      if (file.includes(".opencorvus") || file.includes(".argus")) continue
       const parts = file.split(/[\\/]/).filter(Boolean)
       if (parts.length < 2) continue
       let node = root
@@ -392,3 +392,4 @@ export namespace Ripgrep {
       .map((r) => r.data)
   }
 }
+

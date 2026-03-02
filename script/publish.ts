@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@opencorvus-ai/script"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 
@@ -81,3 +81,4 @@ await import(`../packages/plugin/script/publish.ts`)
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
+

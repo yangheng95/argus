@@ -1,11 +1,11 @@
-import { AssistantMessage, Message, Part, Session, UserMessage } from "@opencode-ai/sdk/v2"
-import { Dialog } from "@opencode-ai/ui/dialog"
-import { useDialog } from "@opencode-ai/ui/context/dialog"
+import { AssistantMessage, Message, Part, Session, UserMessage } from "@opencorvus-ai/sdk/v2"
+import { Dialog } from "@opencorvus-ai/ui/dialog"
+import { useDialog } from "@opencorvus-ai/ui/context/dialog"
 import { createAsync, query, useParams } from "@solidjs/router"
 import { createEffect, createMemo, ErrorBoundary, For, onCleanup, Show } from "solid-js"
 import { Share } from "~/core/share"
-import { Binary } from "@opencode-ai/util/binary"
-import { NamedError } from "@opencode-ai/util/error"
+import { Binary } from "@opencorvus-ai/util/binary"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { DateTime } from "luxon"
 import z from "zod"
 import NotFound from "../[...404]"
@@ -227,3 +227,4 @@ export default function () {
     </ErrorBoundary>
   )
 }
+

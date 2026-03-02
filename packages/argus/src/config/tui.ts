@@ -54,7 +54,7 @@ export namespace TuiConfig {
     }
 
     for (const dir of unique(directories)) {
-      if (!dir.endsWith(".argus") && dir !== Flag.ARGUS_CONFIG_DIR) continue
+      if (!dir.endsWith(".opencorvus") && !dir.endsWith(".argus") && dir !== Flag.ARGUS_CONFIG_DIR) continue
       for (const file of ConfigPaths.fileInDirectory(dir, "tui")) {
         result = mergeInfo(result, await loadFile(file))
       }

@@ -2,7 +2,7 @@
 /**
  * generate-mascot.ts
  *
- * Generates all "Ar" (chibi crow mascot) images for the OpenLens brand.
+ * Generates OpenCorvus mascot and logo images.
  * Primary: DashScope Wanx (wanx2.1-t2i-plus) — excels at anime/chibi style
  * Fallback: OpenAI DALL-E 3
  *
@@ -32,7 +32,7 @@ const BOT_STICKER_DIR = `${ROOT}/packages/bot/stickers`
 const STYLE_PREFIX = `
 chibi anime illustration, flat vector style, clean linework, no gradients,
 dark background #0D0B0B,
-mascot character "Ar": tiny cute chibi crow, plump round body, large expressive eyes,
+mascot character "Corvus": tiny cute chibi crow, plump round body, large expressive eyes,
 body color very dark charcoal #1A1717 with subtle feather texture,
 single left-wing feather highlighted in amber #E8A838,
 beak tip amber #E8A838, claw tips amber #E8A838,
@@ -66,7 +66,7 @@ const MASCOT_IMAGES: MascotImage[] = [
     description: "Full design sheet — front/side/back + expressions",
     prompt: `
 ${STYLE_PREFIX}
-Character design sheet showing "Ar" the chibi crow in five views arranged horizontally:
+Character design sheet showing "Corvus" the chibi crow in five views arranged horizontally:
 1. Front view standing upright, wings slightly open, happy expression
 2. Side profile view, walking pose
 3. Back view, tail feathers fanned out
@@ -85,7 +85,7 @@ ${STYLE_SUFFIX}
     description: "App icon — centered bust, suitable for favicon/icon use",
     prompt: `
 ${STYLE_PREFIX}
-Centered bust portrait of "Ar" the chibi crow,
+Centered bust portrait of "Corvus" the chibi crow,
 face filling 70% of frame, slight upward gaze, confident slight smile,
 single amber feather on left wing visible at bottom edge,
 dark rounded square background #0D0B0B, subtle amber glow halo behind head,
@@ -99,10 +99,10 @@ ${STYLE_SUFFIX}
     id: "working",
     outPath: `${LANDER_DIR}/mascot-ar-working.png`,
     size: "1024x1024",
-    description: "Ar coding — hunched over a tiny glowing terminal",
+    description: "Corvus coding — hunched over a tiny glowing terminal",
     prompt: `
 ${STYLE_PREFIX}
-"Ar" the chibi crow sitting at a tiny glowing terminal/laptop,
+"Corvus" the chibi crow sitting at a tiny glowing terminal/laptop,
 hunched forward with focused squinting eyes, one wing typing on keyboard,
 amber glow reflecting off face from the screen,
 small amber sparks floating around — signs of intense coding activity,
@@ -116,10 +116,10 @@ ${STYLE_SUFFIX}
     id: "thinking",
     outPath: `${LANDER_DIR}/mascot-ar-thinking.png`,
     size: "1024x1024",
-    description: "Ar in thought — tilted head, floating question marks",
+    description: "Corvus in thought — tilted head, floating question marks",
     prompt: `
 ${STYLE_PREFIX}
-"Ar" the chibi crow standing with head tilted to one side, one wing tip touching chin,
+"Corvus" the chibi crow standing with head tilted to one side, one wing tip touching chin,
 large curious eyes looking upward,
 three small amber-colored question marks floating above head,
 slight upward curvature of beak suggesting curiosity,
@@ -133,10 +133,10 @@ ${STYLE_SUFFIX}
     id: "celebrating",
     outPath: `${LANDER_DIR}/mascot-ar-celebrating.png`,
     size: "1024x1024",
-    description: "Ar celebrating — wings spread, confetti, big smile",
+    description: "Corvus celebrating — wings spread, confetti, big smile",
     prompt: `
 ${STYLE_PREFIX}
-"Ar" the chibi crow with both wings spread wide in celebration,
+"Corvus" the chibi crow with both wings spread wide in celebration,
 jumping slightly off ground, eyes closed in joyful crescents,
 beak open in a big smile,
 small amber sparkles and star confetti bursting outward around the body,
@@ -150,10 +150,10 @@ ${STYLE_SUFFIX}
     id: "alert",
     outPath: `${LANDER_DIR}/mascot-ar-alert.png`,
     size: "1024x1024",
-    description: "Ar alerting — pointing wing, amber exclamation mark",
+    description: "Corvus alerting — pointing wing, amber exclamation mark",
     prompt: `
 ${STYLE_PREFIX}
-"Ar" the chibi crow in alert stance, one wing extended pointing forward,
+"Corvus" the chibi crow in alert stance, one wing extended pointing forward,
 eyes wide open with raised brow feathers showing urgency,
 a single large amber exclamation mark floating beside the head,
 slightly leaning forward, feathers slightly ruffled,
@@ -167,10 +167,10 @@ ${STYLE_SUFFIX}
     id: "idle",
     outPath: `${LANDER_DIR}/mascot-ar-idle.png`,
     size: "1024x1024",
-    description: "Ar idle — perched, calm, waiting patiently",
+    description: "Corvus idle — perched, calm, waiting patiently",
     prompt: `
 ${STYLE_PREFIX}
-"Ar" the chibi crow perched on a thin branch, wings folded neatly,
+"Corvus" the chibi crow perched on a thin branch, wings folded neatly,
 relaxed half-lidded eyes, slight content expression,
 ambient amber glow dots floating slowly around body like fireflies,
 serene waiting pose, peaceful atmosphere,
@@ -187,11 +187,11 @@ ${STYLE_SUFFIX}
     description: "2×2 sticker grid — happy, cool, oops, love",
     prompt: `
 ${STYLE_PREFIX}
-2×2 sticker sheet of "Ar" the chibi crow, four stickers on dark background:
-Top-left: happy Ar with big smile, arms up, "( ^▽^)" energy
-Top-right: cool Ar wearing tiny amber-tinted sunglasses, confident lean
-Bottom-left: oops Ar, eyes swirling, wing covering mouth apologetically
-Bottom-right: love Ar, eyes as amber hearts, tiny amber hearts floating around
+2×2 sticker sheet of "Corvus" the chibi crow, four stickers on dark background:
+Top-left: happy Corvus with big smile, arms up, "( ^▽^)" energy
+Top-right: cool Corvus wearing tiny amber-tinted sunglasses, confident lean
+Bottom-left: oops Corvus, eyes swirling, wing covering mouth apologetically
+Bottom-right: love Corvus, eyes as amber hearts, tiny amber hearts floating around
 Each sticker has a thin white outline for cut-line visibility,
 uniform chibi style across all four.
 ${STYLE_SUFFIX}
@@ -203,16 +203,16 @@ ${STYLE_SUFFIX}
     id: "screenshot",
     outPath: `${LANDER_DIR}/screenshot.png`,
     size: "1024x1024",
-    description: "README hero — TUI terminal scene with Ar watching",
+    description: "README hero — TUI terminal scene with Corvus watching",
     prompt: `
 chibi anime illustration, flat vector style, dark background #0D0B0B,
 a glowing terminal window floating in the center of the scene,
 the terminal shows colorful syntax-highlighted code lines in green and amber,
 a blinking amber cursor at the bottom of the terminal,
-"Ar" the chibi crow mascot (tiny plump dark #1A1717 body, amber #E8A838 beak tip and single left-wing feather)
+"Corvus" the chibi crow mascot (tiny plump dark #1A1717 body, amber #E8A838 beak tip and single left-wing feather)
 stands to the right of the terminal, looking at it with focused squinting eyes,
 one wing tip raised slightly as if pointing at the code,
-subtle amber glow from the terminal screen illuminating Ar's face,
+subtle amber glow from the terminal screen illuminating Corvus's face,
 clean minimalist composition, professional developer tool aesthetic,
 no text labels, no watermark, dark #0D0B0B background
     `.trim(),
@@ -223,17 +223,79 @@ no text labels, no watermark, dark #0D0B0B background
     id: "social-card",
     outPath: `${ROOT}/packages/console/app/public/social-share.png`,
     size: "1024x1024",
-    description: "Social share card — banner with Ar + brand identity",
+    description: "Social share card — banner with Corvus + OpenCorvus identity",
     prompt: `
 chibi anime illustration, flat vector style,
 wide horizontal banner composition on dark #0D0B0B background,
-left half: "Ar" the chibi crow mascot (tiny plump dark #1A1717 body, amber #E8A838 beak tip, single amber-highlighted left-wing feather)
+left half: "Corvus" the chibi crow mascot (tiny plump dark #1A1717 body, amber #E8A838 beak tip, single amber-highlighted left-wing feather)
 standing upright, confident pose, slight smile, looking slightly right,
 surrounded by small floating amber sparkles and code bracket symbols [ ] { },
 right half: clean empty dark space with a subtle vertical amber #E8A838 dividing line,
 two horizontal amber accent lines in the lower right quadrant,
-overall mood: professional, modern, developer-friendly,
+overall mood: professional, modern, developer-friendly for OpenCorvus,
 no text, no watermark, isolated on dark #0D0B0B
+    `.trim(),
+  },
+
+  // ── Logo mark light (raster) ───────────────────────────────────────────
+  {
+    id: "logo-mark-light",
+    outPath: `${BRAND_DIR}/opencorvus-logo-light.png`,
+    size: "1024x1024",
+    description: "OpenCorvus logo mark on light background",
+    prompt: `
+minimal geometric brand mark for OpenCorvus, no text,
+inspired by a crow eye and terminal bracket shape, pixel-grid precision,
+single centered symbol, strong negative space, no gradients, no shadows,
+foreground dark charcoal #211E1E, inner fill #CFCECD,
+background clean off-white #F8F7F6,
+flat vector look, icon-safe composition, high contrast
+    `.trim(),
+  },
+
+  // ── Logo mark dark (raster) ────────────────────────────────────────────
+  {
+    id: "logo-mark-dark",
+    outPath: `${BRAND_DIR}/opencorvus-logo-dark.png`,
+    size: "1024x1024",
+    description: "OpenCorvus logo mark on dark background",
+    prompt: `
+minimal geometric brand mark for OpenCorvus, no text,
+inspired by a crow eye and terminal bracket shape, pixel-grid precision,
+single centered symbol, strong negative space, no gradients, no shadows,
+foreground warm white #F1ECEC, inner fill #4B4646,
+background deep charcoal #0D0B0B,
+flat vector look, icon-safe composition, high contrast
+    `.trim(),
+  },
+
+  // ── Wordmark light (raster) ────────────────────────────────────────────
+  {
+    id: "wordmark-light",
+    outPath: `${BRAND_DIR}/opencorvus-wordmark-light.png`,
+    size: "1792x1024",
+    description: "OpenCorvus wordmark on light background",
+    prompt: `
+flat vector logo wordmark, exact lowercase text: "opencorvus",
+custom geometric blocky monospace lettering, crisp orthogonal edges,
+single-line centered composition, no extra symbols, no subtitle, no watermark,
+letter color dark charcoal #211E1E with subtle inner fills #CFCECD,
+background off-white #F8F7F6, high contrast, print-ready
+    `.trim(),
+  },
+
+  // ── Wordmark dark (raster) ─────────────────────────────────────────────
+  {
+    id: "wordmark-dark",
+    outPath: `${BRAND_DIR}/opencorvus-wordmark-dark.png`,
+    size: "1792x1024",
+    description: "OpenCorvus wordmark on dark background",
+    prompt: `
+flat vector logo wordmark, exact lowercase text: "opencorvus",
+custom geometric blocky monospace lettering, crisp orthogonal edges,
+single-line centered composition, no extra symbols, no subtitle, no watermark,
+letter color warm white #F1ECEC with inner fills #4B4646,
+background deep charcoal #0D0B0B, high contrast, brand-ready
     `.trim(),
   },
 ]
@@ -450,7 +512,7 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`OpenLens Mascot Generator — "Ar the chibi crow"`)
+  console.log(`OpenCorvus Mascot Generator — "Corvus the chibi crow"`)
   console.log(`Mode: ${dryRun ? "DRY RUN (no API calls)" : "LIVE"}`)
   console.log(`Provider: ${process.env.DASHSCOPE_API_KEY ? "DashScope Wanx" : process.env.OPENAI_API_KEY ? "DALL-E 3" : "NONE (set DASHSCOPE_API_KEY)"}`)
   console.log(`Images to generate: ${targets.length}`)

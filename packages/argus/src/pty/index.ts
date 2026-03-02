@@ -5,7 +5,7 @@ import z from "zod"
 import { Identifier } from "../id/id"
 import { Log } from "../util/log"
 import { Instance } from "../project/instance"
-import { lazy } from "@opencode-ai/util/lazy"
+import { lazy } from "@opencorvus-ai/util/lazy"
 import { Shell } from "@/shell/shell"
 import { Plugin } from "@/plugin"
 
@@ -324,3 +324,4 @@ export namespace Pty {
     }
   }
 }
+

@@ -8,7 +8,7 @@ import { DialogPrompt } from "../ui/dialog-prompt"
 import { Link } from "../ui/link"
 import { useTheme } from "../context/theme"
 import { TextAttributes } from "@opentui/core"
-import type { ProviderAuthAuthorization } from "@opencode-ai/sdk/v2"
+import type { ProviderAuthAuthorization } from "@opencorvus-ai/sdk/v2"
 import { DialogModel } from "./dialog-model"
 import { useKeyboard } from "@opentui/solid"
 import { Clipboard } from "@tui/util/clipboard"
@@ -257,3 +257,4 @@ function ApiMethod(props: ApiMethodProps) {
     />
   )
 }
+

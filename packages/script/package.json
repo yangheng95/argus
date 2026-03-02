@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package",
-  "name": "@opencode-ai/script",
+  "name": "@opencorvus-ai/script",
   "license": "MIT",
   "devDependencies": {
     "@types/bun": "catalog:"
@@ -9,3 +9,4 @@
     ".": "./src/index.ts"
   }
 }
+

@@ -2,7 +2,7 @@ import { BusEvent } from "@/bus/bus-event"
 import path from "path"
 import { $ } from "bun"
 import z from "zod"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { Log } from "../util/log"
 import { iife } from "@/util/iife"
 import { Flag } from "../flag/flag"
@@ -58,6 +58,7 @@ export namespace Installation {
   }
 
   export async function method() {
+    if (process.execPath.includes(path.join(".opencorvus", "bin"))) return "curl"
     if (process.execPath.includes(path.join(".argus", "bin"))) return "curl"
     if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
     const exec = process.execPath.toLowerCase()
@@ -259,3 +260,4 @@ export namespace Installation {
       .then((data: any) => data.tag_name.replace(/^v/, ""))
   }
 }
+

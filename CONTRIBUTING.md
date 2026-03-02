@@ -72,9 +72,9 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
 - Core pieces:
   - `packages/argus`: Core business logic, server, agents, tools, LSP
   - `packages/argus/src/cli/cmd/tui/`: TUI interface (SolidJS + [opentui](https://github.com/sst/opentui))
-  - `packages/sdk`: JavaScript SDK (`@opencode-ai/sdk`)
+  - `packages/sdk`: JavaScript SDK (`@opencorvus-ai/sdk`)
   - `packages/bot`: Chat bot adapters (Slack, Telegram)
-  - `packages/plugin`: Plugin system (`@opencode-ai/plugin`)
+  - `packages/plugin`: Plugin system (`@opencorvus-ai/plugin`)
 
 ### Understanding bun dev vs argus
 
@@ -264,3 +264,4 @@ Issues may be flagged for:
 - Missing meaningful content
 
 If you believe your issue was incorrectly flagged, let a maintainer know.
+

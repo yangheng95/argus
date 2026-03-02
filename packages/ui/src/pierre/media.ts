@@ -1,4 +1,4 @@
-import type { FileContent } from "@opencode-ai/sdk/v2"
+import type { FileContent } from "@opencorvus-ai/sdk/v2"
 
 export type MediaKind = "image" | "audio" | "svg"
 
@@ -108,3 +108,4 @@ export function hasMediaValue(value: MediaValue) {
   if (!record) return false
   return typeof record.content === "string" && record.content.length > 0
 }
+

@@ -4,7 +4,7 @@ import os from "os"
 import matter from "gray-matter"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { ConfigMarkdown } from "../config/markdown"
 import { Log } from "../util/log"
 import { Global } from "@/global"
@@ -144,7 +144,7 @@ export namespace Skill {
       }
     }
 
-    // Scan .argus/skill/ directories
+    // Scan .opencorvus/skill/ directories (with legacy .argus compatibility)
     for (const dir of await Config.directories()) {
       const matches = await Glob.scan(ARGUS_SKILL_PATTERN, {
         cwd: dir,
@@ -212,3 +212,4 @@ export namespace Skill {
     return state().then((x) => x.dirs)
   }
 }
+

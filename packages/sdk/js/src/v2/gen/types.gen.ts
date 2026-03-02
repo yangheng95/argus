@@ -268,6 +268,13 @@ export type TextPart = {
   text: string
   synthetic?: boolean
   ignored?: boolean
+  kind?: "user_content" | "control" | "context" | "trace"
+  source?: "user" | "system" | "scheduler" | "planner" | "goal_gate" | "task_tool"
+  audience?: {
+    model?: boolean
+    ui?: boolean
+    acp?: boolean
+  }
   time?: {
     start: number
     end?: number
@@ -1769,6 +1776,13 @@ export type TextPartInput = {
   text: string
   synthetic?: boolean
   ignored?: boolean
+  kind?: "user_content" | "control" | "context" | "trace"
+  source?: "user" | "system" | "scheduler" | "planner" | "goal_gate" | "task_tool"
+  audience?: {
+    model?: boolean
+    ui?: boolean
+    acp?: boolean
+  }
   time?: {
     start: number
     end?: number
@@ -2917,6 +2931,8 @@ export type ExperimentalScheduleListResponses = {
     oneShot: boolean
     lastRun: number | null
     nextRun: number
+    failureCount: number
+    lastError: string | null
   }>
 }
 
@@ -2958,8 +2974,9 @@ export type ExperimentalScheduleDeleteData = {
   path: {
     id: string
   }
-  query?: {
+  query: {
     directory?: string
+    projectId: string
   }
   url: "/experimental/schedule/{id}"
 }
@@ -2975,6 +2992,97 @@ export type ExperimentalScheduleDeleteResponses = {
 
 export type ExperimentalScheduleDeleteResponse =
   ExperimentalScheduleDeleteResponses[keyof ExperimentalScheduleDeleteResponses]
+
+export type ExperimentalEventscheduleListData = {
+  body?: never
+  path?: never
+  query: {
+    directory?: string
+    projectId: string
+  }
+  url: "/experimental/event-schedule"
+}
+
+export type ExperimentalEventscheduleListResponses = {
+  /**
+   * Event-triggered tasks
+   */
+  200: Array<{
+    id: string
+    name: string
+    eventType: string
+    match: {
+      [key: string]: string | number | boolean
+    }
+    prompt: string
+    enabled: boolean
+    oneShot: boolean
+    cooldownMs: number
+    lastRun: number | null
+    lastEvent: string | null
+  }>
+}
+
+export type ExperimentalEventscheduleListResponse =
+  ExperimentalEventscheduleListResponses[keyof ExperimentalEventscheduleListResponses]
+
+export type ExperimentalEventscheduleCreateData = {
+  body?: {
+    name: string
+    eventType: string
+    match?: {
+      [key: string]: string | number | boolean
+    }
+    prompt: string
+    projectId: string
+    sessionId?: string
+    oneShot?: boolean
+    cooldownMs?: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/experimental/event-schedule"
+}
+
+export type ExperimentalEventscheduleCreateResponses = {
+  /**
+   * Created event task
+   */
+  200: {
+    id: string
+    name: string
+    eventType: string
+  }
+}
+
+export type ExperimentalEventscheduleCreateResponse =
+  ExperimentalEventscheduleCreateResponses[keyof ExperimentalEventscheduleCreateResponses]
+
+export type ExperimentalEventscheduleDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query: {
+    directory?: string
+    projectId: string
+  }
+  url: "/experimental/event-schedule/{id}"
+}
+
+export type ExperimentalEventscheduleDeleteResponses = {
+  /**
+   * Cancelled
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ExperimentalEventscheduleDeleteResponse =
+  ExperimentalEventscheduleDeleteResponses[keyof ExperimentalEventscheduleDeleteResponses]
 
 export type ExperimentalTaskplanListData = {
   body?: never

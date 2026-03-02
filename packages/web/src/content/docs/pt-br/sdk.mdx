@@ -28,9 +28,9 @@ npm install @argus-ai/sdk
 Crie uma instância do argus:
 
 ```javascript
-import { createOpencode } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@argus-ai/sdk"
 
-const { client } = await createOpencode()
+const { client } = await createOpenCorvus()
 ```
 
 Isso inicia tanto um servidor quanto um cliente.
@@ -52,9 +52,9 @@ Isso inicia tanto um servidor quanto um cliente.
 Você pode passar um objeto de configuração para personalizar o comportamento. A instância ainda pega seu `argus.json`, mas você pode substituir ou adicionar configuração inline:
 
 ```javascript
-import { createOpencode } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@argus-ai/sdk"
 
-const argus = await createOpencode({
+const argus = await createOpenCorvus({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -72,9 +72,9 @@ argus.server.close()
 Se você já tem uma instância do argus em execução, pode criar uma instância de cliente para se conectar a ela:
 
 ```javascript
-import { createOpencodeClient } from "@argus-ai/sdk"
+import { createOpenCorvusClient } from "@argus-ai/sdk"
 
-const client = createOpencodeClient({
+const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
 })
 ```
@@ -389,3 +389,5 @@ for await (const event of events.stream) {
   console.log("Event:", event.type, event.properties)
 }
 ```
+
+

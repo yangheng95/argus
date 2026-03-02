@@ -8,7 +8,7 @@ import { Log } from "../util/log"
 import { BunProc } from "../bun"
 import { Plugin } from "../plugin"
 import { ModelsDev } from "./models"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "../auth"
 import { Env } from "../env"
 import { Instance } from "../project/instance"
@@ -1349,3 +1349,4 @@ export namespace Provider {
     }),
   )
 }
+

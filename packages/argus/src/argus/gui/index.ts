@@ -27,6 +27,10 @@ export namespace GUI {
     return Mouse.rightClick(x, y)
   }
 
+  export async function middleClick(x: number, y: number): Promise<void> {
+    return Mouse.middleClick(x, y)
+  }
+
   export async function scroll(direction: "up" | "down", amount: number = 3): Promise<void> {
     return Mouse.scroll(direction, amount)
   }
@@ -54,6 +58,7 @@ export namespace GUI {
       click,
       doubleClick,
       rightClick,
+      middleClick,
       moveTo,
       drag,
       scroll,

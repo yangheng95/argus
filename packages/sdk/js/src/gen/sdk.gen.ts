@@ -26,6 +26,9 @@ import type {
   EventTuiToastShow,
   ExperimentalBindWindowErrors,
   ExperimentalBindWindowResponses,
+  ExperimentalEventscheduleCreateResponses,
+  ExperimentalEventscheduleDeleteResponses,
+  ExperimentalEventscheduleListResponses,
   ExperimentalMemoryCreateResponses,
   ExperimentalMemoryDeleteResponses,
   ExperimentalMemoryListResponses,
@@ -1322,6 +1325,7 @@ export class Schedule extends HeyApiClient {
     parameters: {
       id: string
       directory?: string
+      projectId: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1332,12 +1336,122 @@ export class Schedule extends HeyApiClient {
           args: [
             { in: "path", key: "id" },
             { in: "query", key: "directory" },
+            { in: "query", key: "projectId" },
           ],
         },
       ],
     )
     return (options?.client ?? this.client).delete<ExperimentalScheduleDeleteResponses, unknown, ThrowOnError>({
       url: "/experimental/schedule/{id}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Eventschedule extends HeyApiClient {
+  /**
+   * List event-triggered tasks
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters: {
+      directory?: string
+      projectId: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "projectId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExperimentalEventscheduleListResponses, unknown, ThrowOnError>({
+      url: "/experimental/event-schedule",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create event-triggered task
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      name?: string
+      eventType?: string
+      match?: {
+        [key: string]: string | number | boolean
+      }
+      prompt?: string
+      projectId?: string
+      sessionId?: string
+      oneShot?: boolean
+      cooldownMs?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "eventType" },
+            { in: "body", key: "match" },
+            { in: "body", key: "prompt" },
+            { in: "body", key: "projectId" },
+            { in: "body", key: "sessionId" },
+            { in: "body", key: "oneShot" },
+            { in: "body", key: "cooldownMs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ExperimentalEventscheduleCreateResponses, unknown, ThrowOnError>({
+      url: "/experimental/event-schedule",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Cancel event-triggered task
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      projectId: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "projectId" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<ExperimentalEventscheduleDeleteResponses, unknown, ThrowOnError>({
+      url: "/experimental/event-schedule/{id}",
       ...options,
       ...params,
     })
@@ -1472,6 +1586,11 @@ export class Experimental extends HeyApiClient {
   private _schedule?: Schedule
   get schedule(): Schedule {
     return (this._schedule ??= new Schedule({ client: this.client }))
+  }
+
+  private _eventschedule?: Eventschedule
+  get eventschedule(): Eventschedule {
+    return (this._eventschedule ??= new Eventschedule({ client: this.client }))
   }
 
   private _taskplan?: Taskplan

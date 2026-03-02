@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process"
+import { spawn, execSync } from "node:child_process"
 import { type Config } from "./gen/types.gen.js"
 
 export type ServerOptions = {
@@ -18,7 +18,15 @@ export type TuiOptions = {
   config?: Config
 }
 
-export async function createOpencodeServer(options?: ServerOptions) {
+function resolveCommand() {
+  try {
+    execSync("opencorvus --version", { stdio: "ignore", timeout: 3000 })
+    return "opencorvus"
+  } catch {}
+  return "argus"
+}
+
+export async function createOpenCorvusServer(options?: ServerOptions) {
   options = Object.assign(
     {
       hostname: "127.0.0.1",
@@ -32,7 +40,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
   const config = options.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
 
-  const proc = spawn(`argus`, args, {
+  const proc = spawn(resolveCommand(), args, {
     signal: options.signal,
     env: {
       ...process.env,
@@ -91,7 +99,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
   }
 }
 
-export function createOpencodeTui(options?: TuiOptions) {
+export function createOpenCorvusTui(options?: TuiOptions) {
   const args = []
 
   if (options?.project) {
@@ -108,7 +116,7 @@ export function createOpencodeTui(options?: TuiOptions) {
   }
 
   const config = options?.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
-  const proc = spawn(`argus`, args, {
+  const proc = spawn(resolveCommand(), args, {
     signal: options?.signal,
     stdio: "inherit",
     env: {
@@ -123,3 +131,6 @@ export function createOpencodeTui(options?: TuiOptions) {
     },
   }
 }
+
+export const createOpencodeServer = createOpenCorvusServer
+export const createOpencodeTui = createOpenCorvusTui

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/storybook",
+  "name": "@opencorvus-ai/storybook",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "storybook build"
   },
   "devDependencies": {
-    "@opencode-ai/ui": "workspace:*",
+    "@opencorvus-ai/ui": "workspace:*",
     "@solidjs/meta": "catalog:",
     "@storybook/addon-a11y": "^10.2.10",
     "@storybook/addon-docs": "^10.2.10",
@@ -26,3 +26,4 @@
     "vite": "catalog:"
   }
 }
+

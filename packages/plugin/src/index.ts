@@ -1,6 +1,6 @@
 import type {
   Event,
-  createOpencodeClient,
+  createOpenCorvusClient,
   Project,
   Model,
   Provider,
@@ -10,7 +10,7 @@ import type {
   Part,
   Auth,
   Config,
-} from "@opencode-ai/sdk"
+} from "@opencorvus-ai/sdk"
 
 import type { BunShell } from "./shell"
 import { type ToolDefinition } from "./tool"
@@ -24,7 +24,7 @@ export type ProviderContext = {
 }
 
 export type PluginInput = {
-  client: ReturnType<typeof createOpencodeClient>
+  client: ReturnType<typeof createOpenCorvusClient>
   project: Project
   directory: string
   worktree: string
@@ -232,3 +232,5 @@ export interface Hooks {
    */
   "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: any }) => Promise<void>
 }
+
+

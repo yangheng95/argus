@@ -7,7 +7,7 @@ import { MessageV2 } from "@/session/message"
 import { Database, eq } from "@/storage/db"
 import { SessionShareTable } from "./share.sql"
 import { Log } from "@/util/log"
-import type * as SDK from "@opencode-ai/sdk/v2"
+import type * as SDK from "@opencorvus-ai/sdk/v2"
 
 export namespace ShareNext {
   const log = Log.create({ service: "share-next" })
@@ -208,3 +208,4 @@ export namespace ShareNext {
     ])
   }
 }
+

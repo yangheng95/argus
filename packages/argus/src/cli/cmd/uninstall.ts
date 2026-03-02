@@ -218,7 +218,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     prompts.log.info(`  rm "${targets.binary}"`)
 
     const binDir = path.dirname(targets.binary)
-    if (binDir.includes(".argus")) {
+    if (binDir.includes(".opencorvus") || binDir.includes(".argus")) {
       prompts.log.info(`  rmdir "${binDir}" 2>/dev/null`)
     }
   }
@@ -269,7 +269,7 @@ async function getShellConfigFile(): Promise<string | null> {
     if (!exists) continue
 
     const content = await Filesystem.readText(file).catch(() => "")
-    if (content.includes("# argus") || content.includes(".argus/bin")) {
+    if (content.includes("# argus") || content.includes(".opencorvus/bin") || content.includes(".argus/bin")) {
       return file
     }
   }
@@ -294,14 +294,14 @@ async function cleanShellConfig(file: string) {
 
     if (skip) {
       skip = false
-      if (trimmed.includes(".argus/bin") || trimmed.includes("fish_add_path")) {
+      if (trimmed.includes(".opencorvus/bin") || trimmed.includes(".argus/bin") || trimmed.includes("fish_add_path")) {
         continue
       }
     }
 
     if (
-      (trimmed.startsWith("export PATH=") && trimmed.includes(".argus/bin")) ||
-      (trimmed.startsWith("fish_add_path") && trimmed.includes(".argus"))
+      (trimmed.startsWith("export PATH=") && (trimmed.includes(".opencorvus/bin") || trimmed.includes(".argus/bin"))) ||
+      (trimmed.startsWith("fish_add_path") && (trimmed.includes(".opencorvus") || trimmed.includes(".argus")))
     ) {
       continue
     }

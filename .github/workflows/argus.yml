@@ -1,4 +1,4 @@
-name: argus
+name: opencorvus
 
 on:
   issue_comment:
@@ -7,10 +7,12 @@ on:
     types: [created]
 
 jobs:
-  argus:
+  opencorvus:
     if: |
       contains(github.event.comment.body, ' /oc') ||
       startsWith(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, ' /opencorvus') ||
+      startsWith(github.event.comment.body, '/opencorvus') ||
       contains(github.event.comment.body, ' /opencode') ||
       startsWith(github.event.comment.body, '/opencode')
     runs-on: ubuntu-latest
@@ -25,11 +27,12 @@ jobs:
 
       - uses: ./.github/actions/setup-bun
 
-      - name: Run argus
+      - name: Run OpenCorvus
         uses: yangheng95/argus/github@latest
         env:
           DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
           ARGUS_CONFIG_CONTENT: '{"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
+          OPENCORVUS_PERMISSION: '{"bash": "deny"}'
           OPENCODE_PERMISSION: '{"bash": "deny"}'
         with:
           model: alibaba-cn/qwen3.5-plus

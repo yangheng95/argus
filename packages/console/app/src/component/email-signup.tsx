@@ -1,6 +1,6 @@
 import { action, useSubmission } from "@solidjs/router"
 import dock from "../asset/lander/dock.png"
-import { Resource } from "@opencode-ai/console-resource"
+import { Resource } from "@opencorvus-ai/console-resource"
 import { Show } from "solid-js"
 import { useI18n } from "~/context/i18n"
 
@@ -46,3 +46,4 @@ export function EmailSignup() {
     </section>
   )
 }
+

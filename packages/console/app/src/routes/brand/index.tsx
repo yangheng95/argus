@@ -5,31 +5,31 @@ import { Footer } from "~/component/footer"
 import { Legal } from "~/component/legal"
 import { useI18n } from "~/context/i18n"
 import { LocaleLinks } from "~/component/locale-links"
-import previewLogoLight from "../../asset/brand/preview-argus-logo-light.png"
-import previewLogoDark from "../../asset/brand/preview-argus-logo-dark.png"
-import previewLogoLightSquare from "../../asset/brand/preview-argus-logo-light-square.png"
-import previewLogoDarkSquare from "../../asset/brand/preview-argus-logo-dark-square.png"
-import previewWordmarkLight from "../../asset/brand/preview-argus-wordmark-light.png"
-import previewWordmarkDark from "../../asset/brand/preview-argus-wordmark-dark.png"
-import previewWordmarkSimpleLight from "../../asset/brand/preview-argus-wordmark-simple-light.png"
-import previewWordmarkSimpleDark from "../../asset/brand/preview-argus-wordmark-simple-dark.png"
-import logoLightPng from "../../asset/brand/argus-logo-light.png"
-import logoDarkPng from "../../asset/brand/argus-logo-dark.png"
-import logoLightSquarePng from "../../asset/brand/argus-logo-light-square.png"
-import logoDarkSquarePng from "../../asset/brand/argus-logo-dark-square.png"
-import wordmarkLightPng from "../../asset/brand/argus-wordmark-light.png"
-import wordmarkDarkPng from "../../asset/brand/argus-wordmark-dark.png"
-import wordmarkSimpleLightPng from "../../asset/brand/argus-wordmark-simple-light.png"
-import wordmarkSimpleDarkPng from "../../asset/brand/argus-wordmark-simple-dark.png"
-import logoLightSvg from "../../asset/brand/argus-logo-light.svg"
-import logoDarkSvg from "../../asset/brand/argus-logo-dark.svg"
-import logoLightSquareSvg from "../../asset/brand/argus-logo-light-square.svg"
-import logoDarkSquareSvg from "../../asset/brand/argus-logo-dark-square.svg"
-import wordmarkLightSvg from "../../asset/brand/argus-wordmark-light.svg"
-import wordmarkDarkSvg from "../../asset/brand/argus-wordmark-dark.svg"
-import wordmarkSimpleLightSvg from "../../asset/brand/argus-wordmark-simple-light.svg"
-import wordmarkSimpleDarkSvg from "../../asset/brand/argus-wordmark-simple-dark.svg"
-const brandAssets = "/argus-brand-assets.zip"
+import previewLogoLight from "../../asset/brand/preview-opencorvus-logo-light.png"
+import previewLogoDark from "../../asset/brand/preview-opencorvus-logo-dark.png"
+import previewLogoLightSquare from "../../asset/brand/preview-opencorvus-logo-light-square.png"
+import previewLogoDarkSquare from "../../asset/brand/preview-opencorvus-logo-dark-square.png"
+import previewWordmarkLight from "../../asset/brand/preview-opencorvus-wordmark-light.png"
+import previewWordmarkDark from "../../asset/brand/preview-opencorvus-wordmark-dark.png"
+import previewWordmarkSimpleLight from "../../asset/brand/preview-opencorvus-wordmark-simple-light.png"
+import previewWordmarkSimpleDark from "../../asset/brand/preview-opencorvus-wordmark-simple-dark.png"
+import logoLightPng from "../../asset/brand/opencorvus-logo-light.png"
+import logoDarkPng from "../../asset/brand/opencorvus-logo-dark.png"
+import logoLightSquarePng from "../../asset/brand/opencorvus-logo-light-square.png"
+import logoDarkSquarePng from "../../asset/brand/opencorvus-logo-dark-square.png"
+import wordmarkLightPng from "../../asset/brand/opencorvus-wordmark-light.png"
+import wordmarkDarkPng from "../../asset/brand/opencorvus-wordmark-dark.png"
+import wordmarkSimpleLightPng from "../../asset/brand/opencorvus-wordmark-simple-light.png"
+import wordmarkSimpleDarkPng from "../../asset/brand/opencorvus-wordmark-simple-dark.png"
+import logoLightSvg from "../../asset/brand/opencorvus-logo-light.svg"
+import logoDarkSvg from "../../asset/brand/opencorvus-logo-dark.svg"
+import logoLightSquareSvg from "../../asset/brand/opencorvus-logo-light-square.svg"
+import logoDarkSquareSvg from "../../asset/brand/opencorvus-logo-dark-square.svg"
+import wordmarkLightSvg from "../../asset/brand/opencorvus-wordmark-light.svg"
+import wordmarkDarkSvg from "../../asset/brand/opencorvus-wordmark-dark.svg"
+import wordmarkSimpleLightSvg from "../../asset/brand/opencorvus-wordmark-simple-light.svg"
+import wordmarkSimpleDarkSvg from "../../asset/brand/opencorvus-wordmark-simple-dark.svg"
+const brandAssets = "/opencorvus-brand-assets.zip"
 
 export default function Brand() {
   const i18n = useI18n()
@@ -74,7 +74,7 @@ export default function Brand() {
             <p>{i18n.t("brand.subtitle")}</p>
             <button
               data-component="download-button"
-              onClick={() => downloadFile(brandAssets, "argus-brand-assets.zip")}
+              onClick={() => downloadFile(brandAssets, "opencorvus-brand-assets.zip")}
             >
               {i18n.t("brand.downloadAll")}
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -91,7 +91,7 @@ export default function Brand() {
               <div>
                 <img src={previewLogoLight} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(logoLightPng, "argus-logo-light.png")}>
+                  <button onClick={() => downloadFile(logoLightPng, "opencorvus-logo-light.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -102,7 +102,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(logoLightSvg, "argus-logo-light.svg")}>
+                  <button onClick={() => downloadFile(logoLightSvg, "opencorvus-logo-light.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -118,7 +118,7 @@ export default function Brand() {
               <div>
                 <img src={previewLogoDark} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(logoDarkPng, "argus-logo-dark.png")}>
+                  <button onClick={() => downloadFile(logoDarkPng, "opencorvus-logo-dark.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -129,7 +129,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(logoDarkSvg, "argus-logo-dark.svg")}>
+                  <button onClick={() => downloadFile(logoDarkSvg, "opencorvus-logo-dark.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -145,7 +145,7 @@ export default function Brand() {
               <div>
                 <img src={previewLogoLightSquare} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(logoLightSquarePng, "argus-logo-light-square.png")}>
+                  <button onClick={() => downloadFile(logoLightSquarePng, "opencorvus-logo-light-square.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -156,7 +156,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(logoLightSquareSvg, "argus-logo-light-square.svg")}>
+                  <button onClick={() => downloadFile(logoLightSquareSvg, "opencorvus-logo-light-square.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -172,7 +172,7 @@ export default function Brand() {
               <div>
                 <img src={previewLogoDarkSquare} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(logoDarkSquarePng, "argus-logo-dark-square.png")}>
+                  <button onClick={() => downloadFile(logoDarkSquarePng, "opencorvus-logo-dark-square.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -183,7 +183,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(logoDarkSquareSvg, "argus-logo-dark-square.svg")}>
+                  <button onClick={() => downloadFile(logoDarkSquareSvg, "opencorvus-logo-dark-square.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -199,7 +199,7 @@ export default function Brand() {
               <div>
                 <img src={previewWordmarkLight} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(wordmarkLightPng, "argus-wordmark-light.png")}>
+                  <button onClick={() => downloadFile(wordmarkLightPng, "opencorvus-wordmark-light.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -210,7 +210,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(wordmarkLightSvg, "argus-wordmark-light.svg")}>
+                  <button onClick={() => downloadFile(wordmarkLightSvg, "opencorvus-wordmark-light.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -226,7 +226,7 @@ export default function Brand() {
               <div>
                 <img src={previewWordmarkDark} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(wordmarkDarkPng, "argus-wordmark-dark.png")}>
+                  <button onClick={() => downloadFile(wordmarkDarkPng, "opencorvus-wordmark-dark.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -237,7 +237,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(wordmarkDarkSvg, "argus-wordmark-dark.svg")}>
+                  <button onClick={() => downloadFile(wordmarkDarkSvg, "opencorvus-wordmark-dark.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -253,7 +253,7 @@ export default function Brand() {
               <div>
                 <img src={previewWordmarkSimpleLight} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(wordmarkSimpleLightPng, "argus-wordmark-simple-light.png")}>
+                  <button onClick={() => downloadFile(wordmarkSimpleLightPng, "opencorvus-wordmark-simple-light.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -264,7 +264,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(wordmarkSimpleLightSvg, "argus-wordmark-simple-light.svg")}>
+                  <button onClick={() => downloadFile(wordmarkSimpleLightSvg, "opencorvus-wordmark-simple-light.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -280,7 +280,7 @@ export default function Brand() {
               <div>
                 <img src={previewWordmarkSimpleDark} alt={alt} />
                 <div data-component="actions">
-                  <button onClick={() => downloadFile(wordmarkSimpleDarkPng, "argus-wordmark-simple-dark.png")}>
+                  <button onClick={() => downloadFile(wordmarkSimpleDarkPng, "opencorvus-wordmark-simple-dark.png")}>
                     PNG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path
@@ -291,7 +291,7 @@ export default function Brand() {
                       />
                     </svg>
                   </button>
-                  <button onClick={() => downloadFile(wordmarkSimpleDarkSvg, "argus-wordmark-simple-dark.svg")}>
+                  <button onClick={() => downloadFile(wordmarkSimpleDarkSvg, "opencorvus-wordmark-simple-dark.svg")}>
                     SVG
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path

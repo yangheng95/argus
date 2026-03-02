@@ -32,11 +32,11 @@ jobs:
 
       - name: Configure git identity
         run: |
-          git config --global user.email "bot@opencode.ai"
-          git config --global user.name "argus"
+          git config --global user.email "bot@opencorvus.ai"
+          git config --global user.name "opencorvus"
 
       - name: Run unit tests
-        run: bun turbo test
+        run: bunx turbo run test --filter=opencorvus
 
   gui-coordinate-smoke:
     name: gui-coordinate-smoke (${{ matrix.settings.name }})
@@ -66,17 +66,50 @@ jobs:
       - name: Run GUI coordinate smoke
         run: bun run ./packages/argus/script/gui-coordinate-smoke.ts
 
+  bot-unit:
+    name: bot-unit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run bot tests
+        run: bun run --cwd packages/bot test
+
+  overlay-check:
+    name: overlay-check (windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run overlay cargo check
+        run: cargo check
+        working-directory: packages/overlay/src-tauri
+
   required:
     name: test (linux)
     runs-on: ubuntu-latest
     needs:
       - unit
       - gui-coordinate-smoke
+      - bot-unit
+      - overlay-check
     if: always()
     steps:
       - name: Verify upstream test jobs passed
         run: |
           echo "unit=${{ needs.unit.result }}"
           echo "gui-coordinate-smoke=${{ needs['gui-coordinate-smoke'].result }}"
+          echo "bot-unit=${{ needs['bot-unit'].result }}"
+          echo "overlay-check=${{ needs['overlay-check'].result }}"
           test "${{ needs.unit.result }}" = "success"
           test "${{ needs['gui-coordinate-smoke'].result }}" = "success"
+          test "${{ needs['bot-unit'].result }}" = "success"
+          test "${{ needs['overlay-check'].result }}" = "success"

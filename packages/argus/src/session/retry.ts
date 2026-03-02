@@ -1,4 +1,4 @@
-import type { NamedError } from "@opencode-ai/util/error"
+import type { NamedError } from "@opencorvus-ai/util/error"
 import { MessageV2 } from "./message"
 import { iife } from "@/util/iife"
 
@@ -99,3 +99,4 @@ export namespace SessionRetry {
     }
   }
 }
+

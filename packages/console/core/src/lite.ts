@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { fn } from "./util/fn"
-import { Resource } from "@opencode-ai/console-resource"
+import { Resource } from "@opencorvus-ai/console-resource"
 
 export namespace LiteData {
   const Schema = z.object({
@@ -23,3 +23,4 @@ export namespace LiteData {
   export const priceID = fn(z.void(), () => Resource.ZEN_LITE_PRICE.price)
   export const planName = fn(z.void(), () => "lite")
 }
+

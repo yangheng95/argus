@@ -11,7 +11,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod/v4"
 import { Instance } from "../project/instance"
 import { Installation } from "../installation"
@@ -935,3 +935,4 @@ export namespace MCP {
     return expired ? "expired" : "authenticated"
   }
 }
+

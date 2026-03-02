@@ -1,6 +1,6 @@
 import { BusEvent } from "@/bus/bus-event"
 import z from "zod"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessage, type UIMessage } from "ai"
 import { Identifier } from "../id/id"
 import { LSP } from "../lsp"
@@ -929,3 +929,4 @@ export namespace MessageV2 {
     }
   }
 }
+

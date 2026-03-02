@@ -1,7 +1,7 @@
-import { Database, eq, sql } from "@opencode-ai/console-core/drizzle/index.js"
-import { IpTable } from "@opencode-ai/console-core/schema/ip.sql.js"
+import { Database, eq, sql } from "@opencorvus-ai/console-core/drizzle/index.js"
+import { IpTable } from "@opencorvus-ai/console-core/schema/ip.sql.js"
 import { UsageInfo } from "./provider/provider"
-import { ZenData } from "@opencode-ai/console-core/model.js"
+import { ZenData } from "@opencorvus-ai/console-core/model.js"
 
 export function createTrialLimiter(trial: ZenData.Trial | undefined, ip: string, client: string) {
   if (!trial) return
@@ -47,3 +47,4 @@ export function createTrialLimiter(trial: ZenData.Trial | undefined, ip: string,
     },
   }
 }
+

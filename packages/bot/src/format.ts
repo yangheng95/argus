@@ -1,4 +1,4 @@
-import type { Part, ToolPart } from "@opencode-ai/sdk"
+import type { Part, ToolPart } from "@opencorvus-ai/sdk"
 
 const MAX_LENGTH = 3000
 
@@ -72,3 +72,4 @@ function dataUrlToBuffer(url: string): Buffer | null {
   if (!match) return null
   return Buffer.from(match[1], "base64")
 }
+

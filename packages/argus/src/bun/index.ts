@@ -3,7 +3,7 @@ import { Global } from "../global"
 import { Log } from "../util/log"
 import path from "path"
 import { Filesystem } from "../util/filesystem"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { text } from "node:stream/consumers"
 import { Lock } from "../util/lock"
 import { PackageRegistry } from "./registry"
@@ -129,3 +129,4 @@ export namespace BunProc {
     return mod
   }
 }
+

@@ -1,4 +1,4 @@
-import { ZenData } from "@opencode-ai/console-core/model.js"
+import { ZenData } from "@opencorvus-ai/console-core/model.js"
 import {
   fromAnthropicChunk,
   fromAnthropicRequest,
@@ -209,3 +209,4 @@ export function createResponseConverter(from: ZenData.Format, to: ZenData.Format
     if (to === "oa-compat") return toOaCompatibleResponse(raw)
   }
 }
+

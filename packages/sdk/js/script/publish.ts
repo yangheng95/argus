@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@opencorvus-ai/script"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 
@@ -29,3 +29,4 @@ await Bun.write("package.json", JSON.stringify(pkg, null, 2))
 await $`bun pm pack`
 await $`npm publish *.tgz --tag ${Script.channel} --access public`
 await Bun.write("package.json", JSON.stringify(original, null, 2))
+

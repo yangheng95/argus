@@ -9,7 +9,7 @@ import { mergeDeep, pipe, unique } from "remeda"
 import { Global } from "../global"
 import fs from "fs/promises"
 import { lazy } from "../util/lazy"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 import { Flag } from "../flag/flag"
 import { Auth } from "../auth"
 import {
@@ -93,7 +93,7 @@ export namespace Config {
     // 2) Global config (~/.config/argus/argus.json{,c})
     // 3) Custom config (ARGUS_CONFIG)
     // 4) Project config (argus.json{,c})
-    // 5) .argus directories (.argus/agents/, .argus/commands/, .argus/plugins/, .argus/argus.json{,c})
+    // 5) local config directories (.opencorvus/*, legacy .argus/*)
     // 6) Inline config (ARGUS_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
@@ -142,7 +142,7 @@ export namespace Config {
 
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
 
-    // .argus directory config overrides (project and global) config sources.
+    // .opencorvus directory config overrides (project and global) config sources.
     if (Flag.ARGUS_CONFIG_DIR) {
       log.debug("loading config from ARGUS_CONFIG_DIR", { path: Flag.ARGUS_CONFIG_DIR })
     }
@@ -150,7 +150,7 @@ export namespace Config {
     const deps = []
 
     for (const dir of unique(directories)) {
-      if (dir.endsWith(".argus") || dir === Flag.ARGUS_CONFIG_DIR) {
+      if (dir.endsWith(".opencorvus") || dir.endsWith(".argus") || dir === Flag.ARGUS_CONFIG_DIR) {
         for (const file of ["argus.jsonc", "argus.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
@@ -273,7 +273,7 @@ export namespace Config {
     }))
     json.dependencies = {
       ...json.dependencies,
-      "@opencode-ai/plugin": targetVersion,
+      "@opencorvus-ai/plugin": targetVersion,
     }
     await Filesystem.writeJson(pkg, json)
 
@@ -323,15 +323,15 @@ export namespace Config {
 
     const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => null)
     const dependencies = parsed?.dependencies ?? {}
-    const depVersion = dependencies["@opencode-ai/plugin"]
+    const depVersion = dependencies["@opencorvus-ai/plugin"]
     if (!depVersion) return true
 
     const targetVersion = Installation.isLocal() ? "latest" : Installation.VERSION
     if (targetVersion === "latest") {
-      const isOutdated = await PackageRegistry.isOutdated("@opencode-ai/plugin", depVersion, dir)
+      const isOutdated = await PackageRegistry.isOutdated("@opencorvus-ai/plugin", depVersion, dir)
       if (!isOutdated) return false
       log.info("Cached version is outdated, proceeding with install", {
-        pkg: "@opencode-ai/plugin",
+        pkg: "@opencorvus-ai/plugin",
         cachedVersion: depVersion,
       })
       return true
@@ -373,7 +373,14 @@ export namespace Config {
       })
       if (!md) continue
 
-      const patterns = ["/.argus/command/", "/.argus/commands/", "/command/", "/commands/"]
+      const patterns = [
+        "/.opencorvus/command/",
+        "/.opencorvus/commands/",
+        "/.argus/command/",
+        "/.argus/commands/",
+        "/command/",
+        "/commands/",
+      ]
       const file = rel(item, patterns) ?? path.basename(item)
       const name = trim(file)
 
@@ -412,7 +419,14 @@ export namespace Config {
       })
       if (!md) continue
 
-      const patterns = ["/.argus/agent/", "/.argus/agents/", "/agent/", "/agents/"]
+      const patterns = [
+        "/.opencorvus/agent/",
+        "/.opencorvus/agents/",
+        "/.argus/agent/",
+        "/.argus/agents/",
+        "/agent/",
+        "/agents/",
+      ]
       const file = rel(item, patterns) ?? path.basename(item)
       const agentName = trim(file)
 
@@ -1413,3 +1427,4 @@ export namespace Config {
     return state().then((x) => x.directories)
   }
 }
+

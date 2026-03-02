@@ -5,6 +5,7 @@ import { tmpdir } from "../fixture/fixture"
 let binding: any = null
 let foreground = true
 const clicks: Array<{ x: number; y: number }> = []
+const middleClicks: Array<{ x: number; y: number }> = []
 
 mock.module("../../src/argus/perception/window", () => ({
   WindowManager: {
@@ -20,6 +21,9 @@ mock.module("../../src/argus/gui/index", () => ({
     },
     doubleClick: async (_x: number, _y: number) => {},
     rightClick: async (_x: number, _y: number) => {},
+    middleClick: async (x: number, y: number) => {
+      middleClicks.push({ x, y })
+    },
     scroll: async (_direction: "up" | "down", _amount = 3) => {},
     moveTo: async (_x: number, _y: number) => {},
     drag: async (_startX: number, _startY: number, _endX: number, _endY: number) => {},
@@ -33,6 +37,12 @@ mock.module("../../src/tool/overlay-client", () => ({
   showOverlay: () => {},
   showWindowHighlight: () => {},
   requestOverlayConfirm: async () => "unavailable",
+  overlayDiagnostic: () => ({
+    available: false,
+    reason: "binary_missing",
+    updatedAt: Date.now(),
+    path: "overlay-binary",
+  }),
   parseOverlayReply: (line: string) => {
     let raw: unknown
     try {
@@ -67,6 +77,7 @@ beforeEach(() => {
   binding = null
   foreground = true
   clicks.length = 0
+  middleClicks.length = 0
 })
 
 describe("tool.input bound window guard", () => {
@@ -100,6 +111,44 @@ describe("tool.input bound window guard", () => {
         const result = await tool.execute({ action: "click", x: 200, y: 240, button: "left" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(clicks).toEqual([{ x: 200, y: 240 }])
+      },
+    })
+  })
+
+  test("executes middle click with middle button", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.setBounds({ x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 320, y: 360, button: "middle" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(middleClicks).toEqual([{ x: 320, y: 360 }])
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("confirm unavailable includes diagnostic reason", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          {
+            action: "confirm",
+            title: "Proceed?",
+            message: "Run destructive action?",
+            confirm: "Yes",
+            cancel: "No",
+            timeoutMs: 3000,
+          },
+          ctx,
+        )
+        expect(result.metadata.unavailable).toBe(true)
+        expect(result.metadata.unavailableReason).toBe("binary_missing")
       },
     })
   })

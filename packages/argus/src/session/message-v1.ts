@@ -1,5 +1,5 @@
 import z from "zod"
-import { NamedError } from "@opencode-ai/util/error"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 export namespace Message {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -187,3 +187,4 @@ export namespace Message {
     })
   export type Info = z.infer<typeof Info>
 }
+

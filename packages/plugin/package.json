@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@opencode-ai/plugin",
+  "name": "@opencorvus-ai/plugin",
   "version": "1.2.15",
   "type": "module",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "dist"
   ],
   "dependencies": {
-    "@opencode-ai/sdk": "workspace:*",
+    "@opencorvus-ai/sdk": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -26,3 +26,4 @@
     "@typescript/native-preview": "catalog:"
   }
 }
+

@@ -4,7 +4,7 @@ import { Portal, useKeyboard, useRenderer, useTerminalDimensions, type JSX } fro
 import type { TextareaRenderable } from "@opentui/core"
 import { useKeybind } from "../../context/keybind"
 import { useTheme, selectedForeground } from "../../context/theme"
-import type { PermissionRequest } from "@opencode-ai/sdk/v2"
+import type { PermissionRequest } from "@opencorvus-ai/sdk/v2"
 import { useSDK } from "../../context/sdk"
 import { SplitBorder } from "../../component/border"
 import { useSync } from "../../context/sync"
@@ -683,3 +683,4 @@ function Prompt<const T extends Record<string, string>>(props: {
     </Show>
   )
 }
+

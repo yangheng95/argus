@@ -1,4 +1,4 @@
-import { sampledChecksum } from "@opencode-ai/util/encode"
+import { sampledChecksum } from "@opencorvus-ai/util/encode"
 import {
   DEFAULT_VIRTUAL_FILE_METRICS,
   type ExpansionDirections,
@@ -1174,3 +1174,4 @@ export function File<T>(props: FileProps<T>) {
 
   return <FileMedia media={props.media} fallback={() => DiffViewer(props)} />
 }
+

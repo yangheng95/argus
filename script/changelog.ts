@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
-import { createOpencode } from "@opencode-ai/sdk/v2"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 import { parseArgs } from "util"
-import { Script } from "@opencode-ai/script"
+import { Script } from "@opencorvus-ai/script"
 
 type Release = {
   tag_name: string
@@ -132,7 +132,7 @@ function getSection(areas: Set<string>): string {
   return "Core"
 }
 
-async function summarizeCommit(opencode: Awaited<ReturnType<typeof createOpencode>>, message: string): Promise<string> {
+async function summarizeCommit(opencode: Awaited<ReturnType<typeof createOpenCorvus>>, message: string): Promise<string> {
   console.log("summarizing commit:", message)
   const session = await opencode.client.session.create()
   const result = await opencode.client.session
@@ -160,7 +160,7 @@ Commit: ${message}`,
   return result.trim()
 }
 
-export async function generateChangelog(commits: Commit[], opencode: Awaited<ReturnType<typeof createOpencode>>) {
+export async function generateChangelog(commits: Commit[], opencode: Awaited<ReturnType<typeof createOpenCorvus>>) {
   // Summarize commits in parallel with max 10 concurrent requests
   const BATCH_SIZE = 10
   const summaries: string[] = []
@@ -223,7 +223,7 @@ export async function buildNotes(from: string, to: string) {
 
   console.log("generating changelog since " + from)
 
-  const opencode = await createOpencode({ port: 0 })
+  const opencode = await createOpenCorvus({ port: 0 })
   const notes: string[] = []
 
   try {
@@ -300,3 +300,6 @@ Examples:
   console.log("\n=== Final Notes ===")
   console.log(notes.join("\n"))
 }
+
+
+

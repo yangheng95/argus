@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Script } from "@opencode-ai/script"
+import { Script } from "@opencorvus-ai/script"
 import { $ } from "bun"
 import { buildNotes, getLatestRelease } from "./changelog"
 
@@ -32,3 +32,4 @@ if (process.env.GITHUB_OUTPUT) {
 }
 
 process.exit(0)
+

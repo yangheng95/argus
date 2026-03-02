@@ -3,9 +3,9 @@ import { createEffect, For, Show } from "solid-js"
 import { withActor } from "~/context/auth.withActor"
 import { createStore } from "solid-js/store"
 import styles from "./member-section.module.css"
-import { UserRole } from "@opencode-ai/console-core/schema/user.sql.js"
-import { Actor } from "@opencode-ai/console-core/actor.js"
-import { User } from "@opencode-ai/console-core/user.js"
+import { UserRole } from "@opencorvus-ai/console-core/schema/user.sql.js"
+import { Actor } from "@opencorvus-ai/console-core/actor.js"
+import { User } from "@opencorvus-ai/console-core/user.js"
 import { RoleDropdown } from "./role-dropdown"
 import { useI18n } from "~/context/i18n"
 import { useLanguage } from "~/context/language"
@@ -366,3 +366,4 @@ export function MemberSection() {
     </section>
   )
 }
+

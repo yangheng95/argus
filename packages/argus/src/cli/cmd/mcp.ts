@@ -381,10 +381,14 @@ export const McpLogoutCommand = cmd({
 })
 
 async function resolveConfigPath(baseDir: string, global = false) {
-  // Check for existing config files (prefer .jsonc over .json, check .argus/ subdirectory too)
+  // Check for existing config files (prefer .jsonc over .json, check .opencorvus/ and .argus/ subdirectories too)
   const candidates = [path.join(baseDir, "argus.json"), path.join(baseDir, "argus.jsonc")]
 
   if (!global) {
+    candidates.push(
+      path.join(baseDir, ".opencorvus", "argus.json"),
+      path.join(baseDir, ".opencorvus", "argus.jsonc"),
+    )
     candidates.push(path.join(baseDir, ".argus", "argus.json"), path.join(baseDir, ".argus", "argus.jsonc"))
   }
 

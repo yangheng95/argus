@@ -1,4 +1,4 @@
-import { type FilteredListProps, useFilteredList } from "@opencode-ai/ui/hooks"
+import { type FilteredListProps, useFilteredList } from "@opencorvus-ai/ui/hooks"
 import { createEffect, createSignal, For, onCleanup, type JSX, on, Show } from "solid-js"
 import { createStore } from "solid-js/store"
 import { useI18n } from "../context/i18n"
@@ -386,3 +386,4 @@ export function List<T>(props: ListProps<T> & { ref?: (ref: ListRef) => void }) 
     </div>
   )
 }
+
