@@ -214,6 +214,41 @@ export const ScreenTool = Tool.define("screen", {
           screenChanged: true,
         })
 
+        // ── A2A Mode: Route through VisionAgent, return text only ──
+        if (A2AState.isActive()) {
+          try {
+            const binding = await WindowManager.getBinding()
+            const vision = await VisionAgent.analyze({
+              screenshot: result.buffer,
+              context: "Screenshot taken during GUI operation step",
+              previousSummary: A2AState.get()?.visionSummary,
+              boundWindow: binding
+                ? { title: binding.title, width: binding.width, height: binding.height }
+                : undefined,
+            })
+            A2AState.setVisionSummary(vision.runningSummary)
+            const visionText = VisionAgent.toText(vision)
+
+            return {
+              title: `Screenshot analyzed (${result.width}x${result.height})`,
+              output: `${visionText}\n\n${coordInfo} Platform: ${platformName}. ${shortcutHint}`,
+              metadata: {
+                width: result.width,
+                height: result.height,
+                windowBounds: result.windowBounds,
+                unchanged: false,
+                screenshotHash: hash,
+                a2a: true,
+                elementsFound: vision.elements.length,
+              },
+              // NO attachments — screenshot stays out of the conversation
+            }
+          } catch (visionErr) {
+            log.warn("A2A vision analysis failed, falling back to image", { err: visionErr })
+            // Fall through to normal behavior
+          }
+        }
+
         // Add coordinate grid overlay to help vision LLM locate positions
         const annotated = await addCoordinateOverlay(result.buffer).catch(() => result.buffer)
         const base64 = annotated.toString("base64")
