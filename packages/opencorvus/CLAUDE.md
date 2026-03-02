@@ -45,16 +45,65 @@ Every desktop task follows this pattern:
 - **ALWAYS describe screenshots** — after each screenshot, describe what you see in text. Screenshots are auto-removed from context next turn; your description is the only surviving record.
 - **ALWAYS write text between tool calls** — explain what you're doing and what you see. Never chain 3+ tool calls without any text output.
 
-## Coding Tasks (Session API First)
+## Coding Tasks via GUI
 
-When asked to write or modify code, use Session API as execution source of truth:
+When asked to write or modify code, you MUST use GUI tools. Follow this strategy:
 
-1. Submit coding task through session prompt flow
-2. Track progress/completion via session status and assistant messages
-3. Return final result from assistant completion payload
-4. Use TUI only as optional visual monitor/manual intervention surface
+### Step 1: Decompose the Task
 
-Do not rely on GUI window detection/binding as the primary coding execution path.
+Before touching any UI, plan:
+- What files need to be created/modified?
+- How large is the code? (>500 chars = must use terminal, NOT direct typing)
+- What's the target directory?
+
+### Step 2: Choose the Right Approach
+
+**For creating new files (preferred: terminal approach):**
+1. Open a terminal: bind to VS Code → press `ctrl+`` (backtick) to toggle terminal
+2. If VS Code terminal not available, open standalone PowerShell via Win → type "powershell" → Enter
+3. Use shell commands to create files:
+   - Small files: `echo 'content' > filename.html`
+   - Large files: Use heredoc or multiple `echo >> filename.html` appends
+   - Or use `cat > filename.html << 'EOF'` (then paste content, then `EOF`)
+
+**For editing existing files:**
+1. Open file in VS Code: `ctrl+p` → type filename → Enter
+2. Navigate with `ctrl+g` (go to line) or `ctrl+f` (find text)
+3. Select text, then type replacement
+
+**NEVER do this:**
+- Type >1000 chars of code directly into the editor pane via `input.type` — use terminal commands instead
+- Create a new file with Ctrl+N then try to save — use terminal `echo` or `cat` to create the file directly
+
+### Step 3: Break Large Code into Chunks
+
+For code >500 characters:
+1. Split into logical sections (HTML structure, CSS, JavaScript)
+2. Write each section via separate terminal commands
+3. Verify after each chunk with `cat filename | head -20`
+
+### Step 4: Verify
+
+After creating/editing:
+1. Open the file in VS Code: `ctrl+p` → filename
+2. Screenshot and verify content is correct
+3. If it's an HTML file, open in browser to test
+
+### VS Code Keyboard Shortcuts (ALWAYS prefer over mouse clicks)
+
+| Action | Shortcut |
+|--------|----------|
+| Toggle terminal | `ctrl+`` (backtick) |
+| New terminal | `ctrl+shift+`` |
+| Quick file open | `ctrl+p` |
+| Go to line | `ctrl+g` |
+| Find/Replace | `ctrl+h` |
+| Save | `ctrl+s` |
+| Command palette | `ctrl+shift+p` |
+| Close tab | `ctrl+w` |
+| Switch tab | `ctrl+tab` |
+| Focus editor | `ctrl+1` |
+| Focus terminal | `` ctrl+` `` |
 
 ## Opening Programs
 
