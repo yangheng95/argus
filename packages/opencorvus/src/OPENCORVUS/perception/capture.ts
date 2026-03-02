@@ -5,7 +5,7 @@ import { WindowManager } from "./window"
 import path from "path"
 
 export namespace Capture {
-  const log = Log.create({ service: "argus-capture" })
+  const log = Log.create({ service: "opencorvus-capture" })
 
   export interface WindowBounds {
     x: number
