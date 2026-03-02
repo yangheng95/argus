@@ -49,6 +49,7 @@ import { MemoryInjection } from "@/memory/injection"
 import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
 import { Goal } from "@/session/goal"
+import { messageControlOnly, textForBoth } from "./part-visibility"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -745,7 +746,7 @@ export namespace SessionPrompt {
         for (const msg of msgs) {
           if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
           for (const part of msg.parts) {
-            if (part.type !== "text" || part.ignored || part.synthetic) continue
+            if (part.type !== "text" || !textForBoth(part)) continue
             if (!part.text.trim()) continue
             part.text = [
               "<system-reminder>",
@@ -2035,14 +2036,14 @@ export namespace SessionPrompt {
     if (input.session.parentID) return
     if (!Session.isDefaultTitle(input.session.title)) return
 
-    // Find first non-synthetic user message
+    // Find first user message that is not only control text.
     const firstRealUserIdx = input.history.findIndex(
-      (m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic),
+      (m) => m.info.role === "user" && !messageControlOnly(m.parts),
     )
     if (firstRealUserIdx === -1) return
 
     const isFirst =
-      input.history.filter((m) => m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic))
+      input.history.filter((m) => m.info.role === "user" && !messageControlOnly(m.parts))
         .length === 1
     if (!isFirst) return
 

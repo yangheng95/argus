@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Argus Console</title>
+  <style>
+    :root {
+      --bg-0: #0d141f;
+      --bg-1: #111e2c;
+      --bg-2: #15283c;
+      --card: rgba(12, 24, 36, 0.78);
+      --line: rgba(164, 210, 255, 0.22);
+      --text: #eef5ff;
+      --muted: #a9bfd7;
+      --good: #40d695;
+      --warn: #ffb347;
+      --accent: #57b8ff;
+      --accent-soft: rgba(87, 184, 255, 0.18);
+      --mono: "IBM Plex Mono", "Cascadia Code", "Consolas", monospace;
+      --ui: "Space Grotesk", "Segoe UI", "Arial", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      color: var(--text);
+      font-family: var(--ui);
+      background:
+        radial-gradient(1000px 520px at 10% -10%, rgba(77, 151, 255, 0.20), transparent 60%),
+        radial-gradient(720px 420px at 100% 0%, rgba(64, 214, 149, 0.16), transparent 58%),
+        linear-gradient(165deg, var(--bg-0), var(--bg-1) 46%, var(--bg-2));
+      overflow: hidden;
+    }
+
+    .shell {
+      height: 100%;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 14px;
+    }
+
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: linear-gradient(135deg, rgba(87, 184, 255, 0.16), rgba(64, 214, 149, 0.12));
+      backdrop-filter: blur(6px);
+    }
+
+    .title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .title strong {
+      font-size: 18px;
+      letter-spacing: 0.02em;
+    }
+
+    .title span {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--line);
+      background: rgba(4, 16, 27, 0.65);
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--warn);
+      box-shadow: 0 0 0 6px rgba(255, 179, 71, 0.18);
+    }
+
+    .status.running .status-dot {
+      background: var(--good);
+      box-shadow: 0 0 0 6px rgba(64, 214, 149, 0.20);
+    }
+
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 14px;
+    }
+
+    .card {
+      min-height: 0;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--card);
+      backdrop-filter: blur(6px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .card-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(164, 210, 255, 0.14);
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+    }
+
+    .chat {
+      min-height: 0;
+      padding: 14px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .msg {
+      max-width: 92%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      line-height: 1.4;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid transparent;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, rgba(87, 184, 255, 0.3), rgba(87, 184, 255, 0.16));
+      border-color: rgba(87, 184, 255, 0.38);
+    }
+
+    .msg.assistant {
+      align-self: flex-start;
+      background: rgba(15, 31, 46, 0.95);
+      border-color: rgba(164, 210, 255, 0.26);
+    }
+
+    .msg.system {
+      align-self: center;
+      max-width: 96%;
+      background: rgba(255, 179, 71, 0.15);
+      border-color: rgba(255, 179, 71, 0.36);
+      color: #ffe3bc;
+    }
+
+    .composer {
+      border-top: 1px solid rgba(164, 210, 255, 0.14);
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+
+    textarea,
+    input {
+      width: 100%;
+      color: var(--text);
+      background: rgba(7, 16, 26, 0.82);
+      border: 1px solid rgba(164, 210, 255, 0.24);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-family: var(--mono);
+      font-size: 12px;
+      resize: none;
+      outline: none;
+    }
+
+    textarea:focus,
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .send {
+      min-width: 110px;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 14px;
+      font-weight: 600;
+      color: #051422;
+      background: linear-gradient(140deg, #5fe2a9, #57b8ff);
+      cursor: pointer;
+    }
+
+    .side {
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 0.92fr 1.08fr;
+      gap: 14px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid rgba(164, 210, 255, 0.14);
+    }
+
+    button {
+      border: 1px solid rgba(164, 210, 255, 0.24);
+      background: rgba(15, 33, 48, 0.88);
+      color: var(--text);
+      border-radius: 9px;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    button:hover {
+      border-color: rgba(164, 210, 255, 0.52);
+    }
+
+    .btn-primary {
+      background: rgba(64, 214, 149, 0.2);
+      border-color: rgba(64, 214, 149, 0.48);
+      color: #c9ffe8;
+    }
+
+    .btn-danger {
+      background: rgba(255, 98, 98, 0.14);
+      border-color: rgba(255, 98, 98, 0.4);
+      color: #ffd2d2;
+    }
+
+    .log-body {
+      min-height: 0;
+      margin: 0;
+      padding: 12px;
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.45;
+      color: #d8e8fa;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .cfg {
+      min-height: 0;
+      overflow: auto;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .cfg label {
+      display: grid;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .save-wrap {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    @media (max-width: 1100px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        grid-template-rows: 340px 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="top">
+      <div class="title">
+        <strong>Argus Control Center</strong>
+        <span>System tray + command console + bot configuration</span>
+      </div>
+      <div class="status" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">Stopped</span>
+        <span id="pidText">PID: -</span>
+      </div>
+    </header>
+
+    <div class="main">
+      <section class="card">
+        <div class="card-head">Conversation</div>
+        <div class="chat" id="chat"></div>
+        <form class="composer" id="sendForm">
+          <textarea id="promptInput" rows="3" placeholder="Send instruction to Argus, for example: summarize last session logs"></textarea>
+          <button class="send" id="sendBtn" type="submit">Send</button>
+        </form>
+      </section>
+
+      <div class="side">
+        <section class="card">
+          <div class="card-head">Runtime</div>
+          <div class="toolbar">
+            <button class="btn-primary" id="startBtn" type="button">Start</button>
+            <button class="btn-danger" id="stopBtn" type="button">Stop</button>
+            <button id="refreshBtn" type="button">Refresh</button>
+            <button id="clearLogsBtn" type="button">Clear Logs</button>
+          </div>
+          <pre class="log-body" id="logs"></pre>
+        </section>
+
+        <section class="card">
+          <div class="card-head">Bot Config</div>
+          <div class="cfg">
+            <label>Command
+              <input id="commandInput" placeholder="argus" />
+            </label>
+            <label>Working Directory
+              <input id="cwdInput" placeholder="(optional)" />
+            </label>
+            <label>Start Args (one per line)
+              <textarea id="serveArgsInput" rows="4"></textarea>
+            </label>
+            <label>Prompt Args (one per line)
+              <textarea id="runArgsInput" rows="4"></textarea>
+            </label>
+            <label>Env (KEY=VALUE, one per line)
+              <textarea id="envInput" rows="4"></textarea>
+            </label>
+            <div class="save-wrap">
+              <button id="saveBtn" type="button">Save Config</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script src="tauri-bridge.js"></script>
+  <script src="manager.js"></script>
+</body>
+</html>

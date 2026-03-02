@@ -7,6 +7,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { useDialog } from "../../ui/dialog"
 import type { PromptInfo } from "@tui/component/prompt/history"
+import { textForBoth, textForUI } from "@/session/part-visibility"
 
 export function DialogForkFromTimeline(props: { sessionID: string; onMove: (messageID: string) => void }) {
   const sync = useSync()
@@ -24,7 +25,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
     for (const message of messages) {
       if (message.role !== "user") continue
       const part = (sync.data.part[message.id] ?? []).find(
-        (x) => x.type === "text" && !x.synthetic && !x.ignored,
+        (x) => x.type === "text" && textForBoth(x),
       ) as TextPart
       if (!part) continue
       result.push({
@@ -40,7 +41,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
           const initialPrompt = parts.reduce(
             (agg, part) => {
               if (part.type === "text") {
-                if (!part.synthetic) agg.input += part.text
+                if (textForUI(part)) agg.input += part.text
               }
               if (part.type === "file") agg.parts.push(part)
               return agg

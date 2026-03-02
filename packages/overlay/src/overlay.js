@@ -12,6 +12,7 @@ const ACTION_ICONS = {
 }
 
 const POINTER_ACTIONS = new Set(["click", "double", "right", "middle", "drag", "move"])
+const bridge = window.argusBridge
 
 const popup = document.getElementById("popup")
 const focus = document.getElementById("focus")
@@ -58,13 +59,13 @@ function showPopup(action, label, status) {
     focus.classList.remove("visible")
     hideWindowTimer = setTimeout(() => {
       hideWindowTimer = null
-      window.__TAURI__.core.invoke("hide_window", { window: "overlay" }).catch(() => {})
+      void bridge.invokeSafe("hide_window", { window: "overlay" })
     }, 320)
   }, done ? 800 : 1500)
 }
 
-window.__TAURI__.event.listen("show-overlay", (event) => {
-  const { x, y, action, label, status } = event.payload
+bridge.listen(bridge.events.showOverlay, (payload) => {
+  const { x, y, action, label, status } = payload
   const px = Number(x)
   const py = Number(y)
   if (!Number.isFinite(px) || !Number.isFinite(py)) return
@@ -74,7 +75,7 @@ window.__TAURI__.event.listen("show-overlay", (event) => {
   const winX = Math.round(px - winWidth / 2)
   const winY = Math.round(py - 88 * dpr)
 
-  window.__TAURI__.core
+  bridge
     .invoke("position_window", { window: "overlay", x: winX, y: winY })
     .then(() => showPopup(action, label, status ?? "start"))
     .catch(() => showPopup(action, label, status ?? "start"))

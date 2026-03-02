@@ -10,6 +10,7 @@ import { lazy } from "../../util/lazy"
 import { Tui } from "@/tui"
 import { SessionStatus } from "@/session/status"
 import { SessionPrompt } from "@/session/prompt"
+import { TaskQueueService } from "@/scheduler/task-queue-service"
 
 const TuiRequest = z.object({
   path: z.string(),
@@ -265,21 +266,28 @@ export const TuiRoutes = lazy(() =>
         }
         runtime.sessionID = sessionID
 
+        const prompt = {
+          agent: body.agent,
+          parts: [
+            {
+              type: "text" as const,
+              text: body.text,
+            },
+          ],
+        }
         const run = () =>
           SessionPrompt.prompt({
             sessionID,
-            agent: body.agent,
-            parts: [
-              {
-                type: "text",
-                text: body.text,
-              },
-            ],
+            ...prompt,
           })
 
         const wait = body.wait ?? true
         if (!wait) {
-          void run().catch(() => {})
+          TaskQueueService.enqueuePrompt({
+            sessionID,
+            prompt,
+            source: "tui.runtime.submit-task",
+          })
           return c.json({
             accepted: true,
             sessionID,

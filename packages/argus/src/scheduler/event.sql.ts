@@ -3,8 +3,10 @@ import { ProjectTable } from "../project/project.sql"
 import { SessionTable } from "../session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
-export const CronJobTable = sqliteTable(
-  "cron_job",
+type Match = Record<string, string | number | boolean>
+
+export const EventJobTable = sqliteTable(
+  "event_job",
   {
     id: text().primaryKey(),
     project_id: text()
@@ -13,22 +15,20 @@ export const CronJobTable = sqliteTable(
     session_id: text()
       .references(() => SessionTable.id, { onDelete: "set null" }),
     name: text().notNull(),
-    expression: text().notNull(),
+    event_type: text().notNull(),
+    match_json: text({ mode: "json" }).$type<Match>(),
     prompt: text().notNull(),
     agent: text().notNull().default("default"),
     enabled: integer({ mode: "boolean" }).notNull().default(true),
     one_shot: integer({ mode: "boolean" }).notNull().default(false),
+    cooldown_ms: integer().notNull().default(0),
     last_run: integer(),
-    failure_count: integer().notNull().default(0),
-    last_error: text(),
-    lease_until: integer().notNull().default(0),
-    lease_owner: text(),
-    next_run: integer().notNull(),
+    last_event: text(),
     ...Timestamps,
   },
   (table) => [
-    index("cron_job_project_idx").on(table.project_id),
-    index("cron_job_next_run_idx").on(table.next_run),
-    index("cron_job_lease_until_idx").on(table.lease_until),
+    index("event_job_project_idx").on(table.project_id),
+    index("event_job_type_idx").on(table.event_type),
+    index("event_job_enabled_idx").on(table.enabled),
   ],
 )

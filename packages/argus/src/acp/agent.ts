@@ -37,6 +37,7 @@ import { Provider } from "../provider/provider"
 import { Agent as AgentModule } from "../agent/agent"
 import { Installation } from "@/installation"
 import { MessageV2 } from "@/session/message"
+import { textAudience, textForACP } from "@/session/part-visibility"
 import { Config } from "@/config/config"
 import { Todo } from "@/session/todo"
 import { z } from "zod"
@@ -475,7 +476,7 @@ export namespace ACP {
           const part = message.parts.find((p) => p.id === props.partID)
           if (!part) return
 
-          if (part.type === "text" && props.field === "text" && part.ignored !== true) {
+          if (part.type === "text" && props.field === "text" && textForACP(part)) {
             await this.connection
               .sessionUpdate({
                 sessionId,
@@ -961,7 +962,8 @@ export namespace ACP {
           }
         } else if (part.type === "text") {
           if (part.text) {
-            const audience: Role[] | undefined = part.synthetic ? ["assistant"] : part.ignored ? ["user"] : undefined
+            const scope = textAudience(part)
+            const audience: Role[] | undefined = scope ? [scope] : undefined
             await this.connection
               .sessionUpdate({
                 sessionId,

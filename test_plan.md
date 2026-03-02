@@ -26,7 +26,7 @@
 截图坐标系铺满屏幕
 opencode的遗留删除，例如plan系统
 argus的记忆系统测试
-打包测试
+打包测试argus-e2e-smoke
 窗口绑定bug，聚焦测试
 goal目标设计
 vision分析采用独立agent，不混入主要信息流，避免干扰主流程的决策和执行。

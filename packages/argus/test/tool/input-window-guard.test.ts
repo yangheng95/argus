@@ -31,6 +31,22 @@ mock.module("../../src/argus/gui/index", () => ({
 
 mock.module("../../src/tool/overlay-client", () => ({
   showOverlay: () => {},
+  showWindowHighlight: () => {},
+  requestOverlayConfirm: async () => "unavailable",
+  parseOverlayReply: (line: string) => {
+    let raw: unknown
+    try {
+      raw = JSON.parse(line)
+    } catch {
+      return
+    }
+    if (!raw || typeof raw !== "object") return
+    const obj = raw as Record<string, unknown>
+    if (obj.type !== "confirm-reply") return
+    if (typeof obj.id !== "string") return
+    if (obj.answer !== "confirm" && obj.answer !== "cancel" && obj.answer !== "timeout") return
+    return { id: obj.id, answer: obj.answer }
+  },
 }))
 
 const { InputTool } = await import("../../src/tool/input")

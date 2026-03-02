@@ -5,6 +5,7 @@ import { useSDK } from "@tui/context/sdk"
 import { useRoute } from "@tui/context/route"
 import { Clipboard } from "@tui/util/clipboard"
 import type { PromptInfo } from "@tui/component/prompt/history"
+import { textForUI } from "@/session/part-visibility"
 
 export function DialogMessage(props: {
   messageID: string
@@ -38,7 +39,7 @@ export function DialogMessage(props: {
               const promptInfo = parts.reduce(
                 (agg, part) => {
                   if (part.type === "text") {
-                    if (!part.synthetic) agg.input += part.text
+                    if (textForUI(part)) agg.input += part.text
                   }
                   if (part.type === "file") agg.parts.push(part)
                   return agg
@@ -61,7 +62,7 @@ export function DialogMessage(props: {
 
             const parts = sync.data.part[msg.id]
             const text = parts.reduce((agg, part) => {
-              if (part.type === "text" && !part.synthetic) {
+              if (part.type === "text" && textForUI(part)) {
                 agg += part.text
               }
               return agg
@@ -87,7 +88,7 @@ export function DialogMessage(props: {
               return parts.reduce(
                 (agg, part) => {
                   if (part.type === "text") {
-                    if (!part.synthetic) agg.input += part.text
+                    if (textForUI(part)) agg.input += part.text
                   }
                   if (part.type === "file") agg.parts.push(part)
                   return agg

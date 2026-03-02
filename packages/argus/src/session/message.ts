@@ -16,6 +16,7 @@ import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { GuiState } from "@/tool/gui-state"
+import { textForModel } from "./part-visibility"
 
 export namespace MessageV2 {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -102,6 +103,15 @@ export namespace MessageV2 {
     text: z.string(),
     synthetic: z.boolean().optional(),
     ignored: z.boolean().optional(),
+    kind: z.enum(["user_content", "control", "context", "trace"]).optional(),
+    source: z.enum(["user", "system", "scheduler", "planner", "goal_gate", "task_tool"]).optional(),
+    audience: z
+      .object({
+        model: z.boolean().optional(),
+        ui: z.boolean().optional(),
+        acp: z.boolean().optional(),
+      })
+      .optional(),
     time: z
       .object({
         start: z.number(),
@@ -561,7 +571,7 @@ export namespace MessageV2 {
         }
         result.push(userMessage)
         for (const part of msg.parts) {
-          if (part.type === "text" && !part.ignored)
+          if (part.type === "text" && textForModel(part))
             userMessage.parts.push({
               type: "text",
               text: part.text,

@@ -75,6 +75,21 @@ describe("transcript", () => {
       expect(result).toBe("")
     })
 
+    test("skips text parts when ui visibility is disabled", () => {
+      const part = {
+        id: "part_1",
+        sessionID: "ses_123",
+        messageID: "msg_123",
+        type: "text",
+        text: "Hidden content",
+        audience: {
+          ui: false,
+        },
+      } as Part
+      const result = formatPart(part, options)
+      expect(result).toBe("")
+    })
+
     test("formats reasoning when thinking enabled", () => {
       const part: Part = {
         id: "part_1",

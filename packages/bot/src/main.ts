@@ -23,6 +23,8 @@ const botPermission = {
   glob: "allow",
   grep: "allow",
   skill: "allow",
+  websearch: "allow",
+  webfetch: "allow",
   memory: "allow",
   schedule: "allow",
   planner: "allow",

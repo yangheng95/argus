@@ -78,6 +78,7 @@ import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
 import { formatTranscript } from "../../util/transcript"
+import { textForBoth, textForUI } from "@/session/part-visibility"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
 
@@ -249,18 +250,18 @@ export function Session() {
     const messagesList = messages()
     const scrollTop = scroll.y
 
-    // Get visible messages sorted by position, filtering for valid non-synthetic, non-ignored content
+    // Get visible messages sorted by position, filtering for user-authored text.
     const visibleMessages = children
       .filter((c) => {
         if (!c.id) return false
         const message = messagesList.find((m) => m.id === c.id)
         if (!message) return false
 
-        // Check if message has valid non-synthetic, non-ignored text parts
+        // Check if message has valid user-authored text parts.
         const parts = sync.data.part[message.id]
         if (!parts || !Array.isArray(parts)) return false
 
-        return parts.some((part) => part && part.type === "text" && !part.synthetic && !part.ignored)
+        return parts.some((part) => part && part.type === "text" && textForBoth(part))
       })
       .sort((a, b) => a.y - b.y)
 
@@ -494,7 +495,7 @@ export function Session() {
           parts.reduce(
             (agg, part) => {
               if (part.type === "text") {
-                if (!part.synthetic) agg.input += part.text
+                if (textForUI(part)) agg.input += part.text
               }
               if (part.type === "file") agg.parts.push(part)
               return agg
@@ -719,7 +720,7 @@ export function Session() {
         const messages = sync.data.message[route.sessionID]
         if (!messages || !messages.length) return
 
-        // Find the most recent user message with non-ignored, non-synthetic text parts
+        // Find the most recent user message with user-authored text parts.
         for (let i = messages.length - 1; i >= 0; i--) {
           const message = messages[i]
           if (!message || message.role !== "user") continue
@@ -727,9 +728,7 @@ export function Session() {
           const parts = sync.data.part[message.id]
           if (!parts || !Array.isArray(parts)) continue
 
-          const hasValidTextPart = parts.some(
-            (part) => part && part.type === "text" && !part.synthetic && !part.ignored,
-          )
+          const hasValidTextPart = parts.some((part) => part && part.type === "text" && textForBoth(part))
 
           if (hasValidTextPart) {
             const child = scroll.getChildren().find((child) => {
@@ -1200,7 +1199,7 @@ function UserMessage(props: {
 }) {
   const ctx = use()
   const local = useLocal()
-  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && !x.synthetic ? [x] : []))[0])
+  const text = createMemo(() => props.parts.flatMap((x) => (x.type === "text" && textForUI(x) ? [x] : []))[0])
   const files = createMemo(() => props.parts.flatMap((x) => (x.type === "file" ? [x] : [])))
   const sync = useSync()
   const { theme } = useTheme()

@@ -6,7 +6,7 @@ import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
 import { WindowManager } from "../argus/perception/window"
 import { Log } from "../util/log"
-import { requestOverlayConfirm, showOverlay } from "./overlay-client"
+import { requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
 
 const log = Log.create({ service: "input" })
 
@@ -143,15 +143,25 @@ export const InputTool = Tool.define("input", {
       }
     }
 
-    const ensureBoundWindowReady = async () => {
+    const ensureBoundWindowForeground = async () => {
       const binding = await WindowManager.getBinding()
       if (!binding) return null
       const ok = await WindowManager.ensureBoundForeground()
-      if (ok) return null
+      if (ok) {
+        showWindowHighlight({
+          x: binding.info.x,
+          y: binding.info.y,
+          width: binding.info.width,
+          height: binding.info.height,
+          label: binding.info.title,
+          durationMs: 1200,
+        })
+        return null
+      }
       return {
-        title: "Pointer action blocked: bound window not foreground",
+        title: "Action blocked: bound window not foreground",
         output:
-          "The bound window is not in foreground (possibly occluded or minimized). Re-bind with screen.bind_window and take a fresh screen.screenshot before retrying.",
+          "The bound window is not in foreground (possibly occluded or minimized). Re-bind with screen.bind_window before retrying. If your action uses coordinates, take a fresh screen.screenshot after re-bind.",
         metadata: {
           blocked: true,
           reason: "bound_window_not_foreground",
@@ -165,7 +175,7 @@ export const InputTool = Tool.define("input", {
       case "click": {
         const blocked = requireBounds()
         if (blocked) return blocked
-        const windowBlocked = await ensureBoundWindowReady()
+        const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
         const action = params.button === "double" ? "double" : params.button === "right" ? "right" : params.button === "middle" ? "middle" : "click"
@@ -223,6 +233,8 @@ export const InputTool = Tool.define("input", {
       }
 
       case "type": {
+        const windowBlocked = await ensureBoundWindowForeground()
+        if (windowBlocked) return windowBlocked
         showOverlay(0, 0, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
         await GUI.paste(params.text)
         showOverlay(0, 0, "type", `done ${params.text.length} chars`, "done")
@@ -242,6 +254,8 @@ export const InputTool = Tool.define("input", {
       }
 
       case "key": {
+        const windowBlocked = await ensureBoundWindowForeground()
+        if (windowBlocked) return windowBlocked
         showOverlay(0, 0, "key", params.key)
         const parts = params.key.split("+").map((k) => k.trim())
         if (parts.length > 1) {
@@ -266,6 +280,8 @@ export const InputTool = Tool.define("input", {
       }
 
       case "scroll": {
+        const windowBlocked = await ensureBoundWindowForeground()
+        if (windowBlocked) return windowBlocked
         showOverlay(0, 0, "scroll", `${params.direction} ${params.amount}`)
         await GUI.scroll(params.direction, params.amount)
         showOverlay(0, 0, "scroll", `done ${params.direction}`, "done")
@@ -287,7 +303,7 @@ export const InputTool = Tool.define("input", {
       case "drag": {
         const blocked = requireBounds()
         if (blocked) return blocked
-        const windowBlocked = await ensureBoundWindowReady()
+        const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
         const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds)
         const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds)
@@ -327,7 +343,7 @@ export const InputTool = Tool.define("input", {
       case "move": {
         const blocked = requireBounds()
         if (blocked) return blocked
-        const windowBlocked = await ensureBoundWindowReady()
+        const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
         showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)

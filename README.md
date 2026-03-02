@@ -175,6 +175,8 @@ OPENAI_API_KEY=sk-...
     "read": "allow",
     "glob": "allow",
     "grep": "allow",
+    "websearch": "allow",
+    "webfetch": "allow",
     "skill": "allow",
     "external_directory": "allow"
   }
@@ -214,7 +216,7 @@ OPENAI_API_KEY=sk-...
 
 ```bash
 # === LLM 模型（必填） ===
-ARGUS_CONFIG_CONTENT={"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}},"permission":{"*":"deny","screen":"allow","input":"allow","bash":"allow","edit":"allow","write":"allow","read":"allow","glob":"allow","grep":"allow","skill":"allow","external_directory":"allow"}}
+ARGUS_CONFIG_CONTENT={"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}},"permission":{"*":"deny","screen":"allow","input":"allow","bash":"allow","edit":"allow","write":"allow","read":"allow","glob":"allow","grep":"allow","websearch":"allow","webfetch":"allow","skill":"allow","external_directory":"allow"}}
 
 # === Slack（与 Telegram 二选一或同时配置）===
 SLACK_BOT_TOKEN=xoxb-...

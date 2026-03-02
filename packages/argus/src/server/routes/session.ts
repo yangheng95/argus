@@ -16,6 +16,7 @@ import { Log } from "../../util/log"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 import { SessionProxyMiddleware } from "../../control-plane/session-proxy-middleware"
+import { TaskQueueService } from "@/scheduler/task-queue-service"
 
 const log = Log.create({ service: "server" })
 
@@ -792,13 +793,14 @@ export const SessionRoutes = lazy(() =>
       ),
       validator("json", SessionPrompt.PromptInput.omit({ sessionID: true })),
       async (c) => {
-        c.status(204)
-        c.header("Content-Type", "application/json")
-        return stream(c, async () => {
-          const sessionID = c.req.valid("param").sessionID
-          const body = c.req.valid("json")
-          SessionPrompt.prompt({ ...body, sessionID })
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json")
+        TaskQueueService.enqueuePrompt({
+          sessionID,
+          prompt: body,
+          source: "session.prompt_async",
         })
+        return c.body(null, 204)
       },
     )
     .post(

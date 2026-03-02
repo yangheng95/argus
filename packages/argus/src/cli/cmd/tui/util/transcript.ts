@@ -1,5 +1,6 @@
 import type { AssistantMessage, Part, UserMessage } from "@opencode-ai/sdk/v2"
 import { Locale } from "@/util/locale"
+import { textForUI } from "@/session/part-visibility"
 
 export type TranscriptOptions = {
   thinking: boolean
@@ -68,7 +69,7 @@ export function formatAssistantHeader(msg: AssistantMessage, includeMetadata: bo
 }
 
 export function formatPart(part: Part, options: TranscriptOptions): string {
-  if (part.type === "text" && !part.synthetic) {
+  if (part.type === "text" && textForUI(part)) {
     return `${part.text}\n\n`
   }
 

@@ -25,6 +25,23 @@
         "visible": false
       },
       {
+        "label": "window-highlight",
+        "title": "argus-window-highlight",
+        "url": "window-highlight.html",
+        "width": 640,
+        "height": 420,
+        "x": -9999,
+        "y": -9999,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "resizable": false,
+        "shadow": false,
+        "visible": false
+      },
+      {
         "label": "confirm",
         "title": "argus-confirm",
         "url": "confirm.html",
@@ -39,6 +56,21 @@
         "focus": true,
         "resizable": false,
         "shadow": true,
+        "visible": false
+      },
+      {
+        "label": "console",
+        "title": "Argus Console",
+        "url": "manager.html",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 920,
+        "minHeight": 620,
+        "decorations": true,
+        "alwaysOnTop": false,
+        "skipTaskbar": false,
+        "focus": false,
+        "resizable": true,
         "visible": false
       }
     ],

@@ -16,6 +16,15 @@ type Pending = {
   timer: ReturnType<typeof setTimeout>
 }
 
+type WindowHighlightInput = {
+  x: number
+  y: number
+  width: number
+  height: number
+  label?: string
+  durationMs?: number
+}
+
 let proc: ReturnType<typeof Bun.spawn> | null = null
 let dead = false
 let reading = false
@@ -86,6 +95,10 @@ function ensureProcess() {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "ignore",
+      env: {
+        ...process.env,
+        ARGUS_OVERLAY_STDIN_EXIT: "1",
+      },
     })
     dead = false
     void watchOutput(proc)
@@ -122,6 +135,24 @@ export function showOverlay(screenX: number, screenY: number, action: string, la
     const y = Number.isFinite(screenY) && screenY > 0 ? Math.round(screenY) : last.y
     last = { x, y }
     await send({ type: "hint", x, y, action, label, status })
+  })()
+}
+
+export function showWindowHighlight(input: WindowHighlightInput) {
+  void (async () => {
+    const width = Number.isFinite(input.width) ? Math.round(input.width) : 0
+    const height = Number.isFinite(input.height) ? Math.round(input.height) : 0
+    if (width < 20 || height < 20) return
+    const duration = Number.isFinite(input.durationMs) ? Math.round(input.durationMs!) : 1400
+    await send({
+      type: "window-highlight",
+      x: Number.isFinite(input.x) ? Math.round(input.x) : 0,
+      y: Number.isFinite(input.y) ? Math.round(input.y) : 0,
+      width,
+      height,
+      label: input.label ?? "Argus target window",
+      duration_ms: Math.max(300, Math.min(duration, 10000)),
+    })
   })()
 }
 
