@@ -164,17 +164,6 @@ export namespace Keyboard {
     AudioRandom: "AudioRandom", shuffle: "AudioRandom",
   }
 
-  const SUPER_KEYS = new Set([
-    "win", "Win", "windows", "Windows",
-    "super", "Super", "Super_L",
-    "meta", "Meta",
-    "cmd", "Cmd", "command", "Command",
-    "LeftWin", "RightWin",
-    "LeftSuper", "RightSuper",
-    "LeftMeta", "RightMeta",
-    "LeftCmd", "RightCmd",
-  ])
-
   function candidates(name: string, Key: Record<string, any>) {
     const primary = KEY_MAP[name] ?? name
     const list = [primary]
