@@ -1,10 +1,10 @@
 import z from "zod"
 import { Tool } from "./tool"
-import { GUI } from "../argus/gui/index"
-import { Coordinates } from "../argus/gui/coordinates"
+import { GUI } from "../opencorvus/gui/index"
+import { Coordinates } from "../opencorvus/gui/coordinates"
 import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
-import { WindowManager } from "../argus/perception/window"
+import { WindowManager } from "../opencorvus/perception/window"
 import { Log } from "../util/log"
 import { overlayDiagnostic, requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
 
