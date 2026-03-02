@@ -7,7 +7,7 @@ import { Filesystem } from "../util/filesystem"
 const app = "argus"
 
 function resolveHome() {
-  if (process.env.ARGUS_TEST_HOME) return process.env.ARGUS_TEST_HOME
+  if (process.env.OPENCORVUS_TEST_HOME) return process.env.OPENCORVUS_TEST_HOME
   try {
     const home = os.homedir()
     if (home) return home
