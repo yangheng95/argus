@@ -45,17 +45,16 @@ Every desktop task follows this pattern:
 - **ALWAYS describe screenshots** — after each screenshot, describe what you see in text. Screenshots are auto-removed from context next turn; your description is the only surviving record.
 - **ALWAYS write text between tool calls** — explain what you're doing and what you see. Never chain 3+ tool calls without any text output.
 
-## Coding Tasks (via TUI)
+## Coding Tasks (Session API First)
 
-When asked to write or modify code, prefer using the Argus TUI (Claude Code terminal) over editing files directly:
+When asked to write or modify code, use Session API as execution source of truth:
 
-1. `screen.list_windows` — check if a window titled "ARGUS_TUI_BOT" is available
-2. If found: `screen.bind_window("ARGUS_TUI_BOT")` → `screen.screenshot` → interact
-3. If NOT found: launch the TUI via bash (the launch command is provided in the bot system prompt), then wait 5s, `screen.list_windows` again, and bind
-4. Type the coding instruction into the TUI, press Enter, monitor progress with screenshots
-5. Report results in your text response
+1. Submit coding task through session prompt flow
+2. Track progress/completion via session status and assistant messages
+3. Return final result from assistant completion payload
+4. Use TUI only as optional visual monitor/manual intervention surface
 
-The TUI delegates coding to a specialized Claude Code instance — it handles file creation, editing, testing, and error recovery. Your role is to orchestrate and monitor.
+Do not rely on GUI window detection/binding as the primary coding execution path.
 
 ## Opening Programs
 
