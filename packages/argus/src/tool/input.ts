@@ -218,6 +218,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "scroll": {
+        showOverlay(0, 0, "scroll", `${params.direction} ${params.amount}`)
         await GUI.scroll(params.direction, params.amount)
         GuiState.recordAction({
           time: Date.now(),
