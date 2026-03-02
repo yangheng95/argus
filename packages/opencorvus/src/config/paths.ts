@@ -33,7 +33,7 @@ export namespace ConfigPaths {
         : []),
       ...(await Array.fromAsync(
         Filesystem.up({
-          targets: [".opencorvus", ".opencorvus"],
+          targets: [".opencorvus"],
           start: Global.Path.home,
           stop: Global.Path.home,
         }),
