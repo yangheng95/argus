@@ -32,6 +32,10 @@ export class BotCore {
   private vision?: VisionPipeline
   /** Base URL of the Argus server */
   private serverUrl!: string
+  /** Per-session pending message queue (staging area) */
+  private sessionQueues = new Map<string, Array<{ msg: IncomingMessage; text: string }>>()
+  /** Sessions currently being processed — new messages are queued until session.idle fires */
+  private sessionProcessing = new Set<string>()
 
   constructor(private options?: BotCoreOptions) {}
 
