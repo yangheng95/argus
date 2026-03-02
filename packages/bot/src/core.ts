@@ -184,6 +184,9 @@ export class BotCore {
       "## Non-Coding Tasks",
       "For questions that need real-time data (weather, news, stock prices, etc.), use available tools (web search, bash, etc.).",
       "For GUI tasks (screenshots, app interaction) — use screen/input tools directly.",
+      "For GUI tasks, DO NOT use bash to operate desktop apps unless explicitly asked to use terminal commands.",
+      "For GUI tasks, execute concrete actions (key/click/type) between screenshots — avoid repeated planning text with no tool action.",
+      "Windows GUI workflow: screen.list_windows -> screen.bind_window(target) -> screen.screenshot -> input actions -> screen.screenshot verify.",
       "Only answer directly without tools when you are confident the answer is in your training data.",
       "",
       "## Task Context & Memory",
@@ -230,7 +233,25 @@ export class BotCore {
           return `\`write ${input?.filePath ?? "file"}\``
         case "skill":
           return `\`skill: ${input?.name ?? "?"}\``
-        // screen, input, read, glob, grep — too noisy, skip
+        case "screen": {
+          const action = input?.action
+          if (action === "bind_window") return `\`screen.bind_window: ${input?.title ?? "?"}\``
+          if (action === "list_windows") return "`screen.list_windows`"
+          if (action === "screenshot") return "`screen.screenshot`"
+          return "`screen`"
+        }
+        case "input": {
+          const action = input?.action
+          if (action === "key") return `\`input.key: ${input?.key ?? "?"}\``
+          if (action === "click") return `\`input.click: (${input?.x ?? "?"}, ${input?.y ?? "?"}) ${input?.button ?? "left"}\``
+          if (action === "type") return `\`input.type: ${Math.min(String(input?.text ?? "").length, 999)} chars\``
+          if (action === "wait") return `\`input.wait: ${input?.ms ?? "?"}ms\``
+          if (action === "scroll") return `\`input.scroll: ${input?.direction ?? "?"} ${input?.amount ?? ""}\``
+          if (action === "drag") return `\`input.drag: (${input?.startX ?? "?"}, ${input?.startY ?? "?"}) -> (${input?.endX ?? "?"}, ${input?.endY ?? "?"})\``
+          if (action === "move") return `\`input.move: (${input?.x ?? "?"}, ${input?.y ?? "?"})\``
+          return "`input`"
+        }
+        // read, glob, grep — too noisy, skip
         default:
           return null
       }
@@ -384,33 +405,41 @@ export class BotCore {
         this.textBuffers.set(part.messageID, part.text)
       }
 
-      // Post tool progress for key tools so Slack users can see what's happening.
-      if (part.type === "tool" && part.state?.status === "completed") {
+      // Post tool progress for key tools so bot users can see what happened.
+      if (part.type === "tool") {
         const toolName = part.tool
         const toolInput = part.state?.input
 
-        // Upload screenshot images from screen tool
-        if (toolName === "screen") {
-          const hasImage = (part.state.attachments ?? []).some(
-            (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
-          )
-          if (hasImage) {
-            const metadata = part.state.metadata ?? {}
-            await this.processScreenshot(
-              session,
-              part.sessionID,
-              part.messageID,
-              part.id,
-              part.state.title,
-              metadata.diffPercent,
+        if (part.state?.status === "completed") {
+          // Upload screenshot images from screen tool
+          if (toolName === "screen") {
+            const hasImage = (part.state.attachments ?? []).some(
+              (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
             )
+            if (hasImage) {
+              const metadata = part.state.metadata ?? {}
+              await this.processScreenshot(
+                session,
+                part.sessionID,
+                part.messageID,
+                part.id,
+                part.state.title,
+                metadata.diffPercent,
+              )
+            }
+          }
+
+          // Post brief status for important tools (bash, edit, write, skill)
+          const statusMsg = this.formatToolStatus(toolName, toolInput)
+          if (statusMsg) {
+            await session.adapter.sendMessage(session.channel, session.thread, statusMsg).catch(() => {})
           }
         }
 
-        // Post brief status for important tools (bash, edit, write, skill)
-        const statusMsg = this.formatToolStatus(toolName, toolInput)
-        if (statusMsg) {
-          await session.adapter.sendMessage(session.channel, session.thread, statusMsg).catch(() => {})
+        if (part.state?.status === "error") {
+          const statusMsg = this.formatToolStatus(toolName, toolInput) ?? `\`${toolName}\``
+          const err = String(part.state.error ?? "Unknown tool error")
+          await session.adapter.sendMessage(session.channel, session.thread, `${statusMsg} failed: ${err}`).catch(() => {})
         }
       }
     }

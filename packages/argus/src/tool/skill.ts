@@ -9,6 +9,7 @@ import { iife } from "@/util/iife"
 
 export const SkillTool = Tool.define("skill", async (ctx) => {
   const skills = await Skill.all()
+  const platform = process.platform
 
   // Filter skills by agent permissions if agent provided
   const agent = ctx?.agent
@@ -19,11 +20,20 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
       })
     : skills
 
+  const compatible = accessibleSkills.filter((skill) =>
+    skill.platforms.length === 0 || skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
+  )
+  const incompatible = accessibleSkills.filter((skill) =>
+    skill.platforms.length > 0 && !skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
+  )
+
   const description =
     accessibleSkills.length === 0
       ? "Load a specialized skill that provides domain-specific instructions and workflows. No skills are currently available."
       : [
           "Load a specialized skill that provides domain-specific instructions and workflows.",
+          `Current platform: ${platform}`,
+          "Prefer skills compatible with the current platform to avoid incorrect OS-specific shortcuts.",
           "",
           "When you recognize that a task matches one of the available skills listed below, use this tool to load the full skill instructions.",
           "",
@@ -35,17 +45,32 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
           "Invoke this tool to load a skill when a task matches one of the available skills listed below:",
           "",
           "<available_skills>",
-          ...accessibleSkills.flatMap((skill) => [
+          ...compatible.flatMap((skill) => [
             `  <skill>`,
             `    <name>${skill.name}</name>`,
             `    <description>${skill.description}</description>`,
+            `    <platforms>${skill.platforms.length ? skill.platforms.join(",") : "all"}</platforms>`,
             `    <location>${pathToFileURL(skill.location).href}</location>`,
             `  </skill>`,
           ]),
+          ...iife(() => {
+            if (incompatible.length === 0) return []
+            return [
+              "",
+              "<incompatible_skills>",
+              ...incompatible.flatMap((skill) => [
+                `  <skill>`,
+                `    <name>${skill.name}</name>`,
+                `    <platforms>${skill.platforms.join(",")}</platforms>`,
+                `  </skill>`,
+              ]),
+              "</incompatible_skills>",
+            ]
+          }),
           "</available_skills>",
         ].join("\n")
 
-  const examples = accessibleSkills
+  const examples = compatible
     .map((skill) => `'${skill.name}'`)
     .slice(0, 3)
     .join(", ")
@@ -64,6 +89,13 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
       if (!skill) {
         const available = await Skill.all().then((x) => Object.keys(x).join(", "))
         throw new Error(`Skill "${params.name}" not found. Available skills: ${available || "none"}`)
+      }
+
+      if (skill.platforms.length > 0 && !skill.platforms.includes(platform as "win32" | "darwin" | "linux")) {
+        const names = compatible.map((x) => x.name).join(", ")
+        throw new Error(
+          `Skill "${skill.name}" is not compatible with current platform (${platform}). Compatible skills: ${names || "none"}`,
+        )
       }
 
       await ctx.ask({

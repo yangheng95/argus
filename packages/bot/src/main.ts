@@ -361,6 +361,7 @@ process.env.ARGUS_CONFIG_CONTENT = JSON.stringify({
   provider: argusProvider,
   permission: {
     "*": "deny",
+    doom_loop: "allow",
     screen: "allow",
     input: "allow",
     bash: "allow",

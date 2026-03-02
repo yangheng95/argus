@@ -16,6 +16,9 @@ import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import codingMd from "./builtin/coding.md" with { type: "text" }
 import desktopMd from "./builtin/desktop.md" with { type: "text" }
+import desktopWindowsMd from "./builtin/desktop-windows.md" with { type: "text" }
+import desktopMacosMd from "./builtin/desktop-macos.md" with { type: "text" }
+import desktopLinuxMd from "./builtin/desktop-linux.md" with { type: "text" }
 import planMd from "./builtin/plan.md" with { type: "text" }
 
 export namespace Skill {
@@ -23,6 +26,9 @@ export namespace Skill {
   export const Info = z.object({
     name: z.string(),
     description: z.string(),
+    platforms: z.array(z.enum(["win32", "darwin", "linux"]))
+      .optional()
+      .default([]),
     location: z.string(),
     content: z.string(),
   })
@@ -58,13 +64,14 @@ export namespace Skill {
     const dirs = new Set<string>()
 
     // Register built-in skills (lowest priority — user skills with same name override)
-    for (const raw of [codingMd, desktopMd, planMd]) {
+    for (const raw of [codingMd, desktopMd, desktopWindowsMd, desktopMacosMd, desktopLinuxMd, planMd]) {
       const md = matter(raw)
-      const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true }).safeParse(md.data)
       if (!parsed.success) continue
       skills[parsed.data.name] = {
         name: parsed.data.name,
         description: parsed.data.description,
+        platforms: parsed.data.platforms,
         location: "builtin",
         content: md.content,
       }
@@ -82,7 +89,7 @@ export namespace Skill {
 
       if (!md) return
 
-      const parsed = Info.pick({ name: true, description: true }).safeParse(md.data)
+      const parsed = Info.pick({ name: true, description: true, platforms: true }).safeParse(md.data)
       if (!parsed.success) return
 
       // Warn on duplicate skill names
@@ -99,6 +106,7 @@ export namespace Skill {
       skills[parsed.data.name] = {
         name: parsed.data.name,
         description: parsed.data.description,
+        platforms: parsed.data.platforms,
         location: match,
         content: md.content,
       }

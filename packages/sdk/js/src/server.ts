@@ -1,4 +1,5 @@
 import { spawn, execSync } from "node:child_process"
+import { existsSync } from "node:fs"
 import path from "node:path"
 import { type Config } from "./gen/types.gen.js"
 
@@ -20,15 +21,23 @@ export type TuiOptions = {
 }
 
 function resolveArgusCommand(): { cmd: string; prefix: string[]; cwd?: string } {
-  // Try compiled binary first
+  const root = path.resolve(import.meta.dirname ?? __dirname, "../../../..")
+  const argusDir = path.join(root, "packages/argus")
+  const localEntry = path.join(argusDir, "src/index.ts")
+  const preferLocal = process.env.ARGUS_USE_GLOBAL_BINARY !== "1"
+
+  // In monorepo/dev, prefer local source so server changes are picked up immediately.
+  if (preferLocal && existsSync(localEntry)) {
+    return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: argusDir }
+  }
+
+  // Fallback to compiled binary if available.
   try {
     execSync("argus --version", { stdio: "ignore", timeout: 3000 })
     return { cmd: "argus", prefix: [] }
   } catch {}
 
-  // Fallback: dev mode via bun
-  const root = path.resolve(import.meta.dirname ?? __dirname, "../../../..")
-  const argusDir = path.join(root, "packages/argus")
+  // Last fallback: local source mode.
   return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: argusDir }
 }
 

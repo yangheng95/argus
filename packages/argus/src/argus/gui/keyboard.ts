@@ -5,6 +5,18 @@ export function platformModifier(): string {
   return process.platform === "darwin" ? "cmd" : "ctrl"
 }
 
+/**
+ * Platform-correct nut-js key name for the OS "Super/Win/Cmd" key.
+ * - win32: LeftWin (VK_LWIN = 0x5B) — libnut-win32 uses this for the Windows key
+ * - darwin: LeftCmd — macOS Command key
+ * - linux: LeftSuper — X11 Super key
+ */
+function platformSuperKey(): string {
+  if (process.platform === "win32") return "LeftWin"
+  if (process.platform === "darwin") return "LeftCmd"
+  return "LeftSuper"
+}
+
 export namespace Keyboard {
   const log = Log.create({ service: "argus-keyboard" })
 
@@ -47,14 +59,14 @@ export namespace Keyboard {
     shift: "LeftShift", Shift: "LeftShift",
     LeftShift: "LeftShift", RightShift: "RightShift",
     rshift: "RightShift", RShift: "RightShift",
-    // Windows / Super / Meta / Cmd
-    win: "LeftSuper", Win: "LeftSuper",
-    windows: "LeftSuper", Windows: "LeftSuper",
-    super: "LeftSuper", Super: "LeftSuper", Super_L: "LeftSuper",
-    meta: "LeftSuper", Meta: "LeftSuper",
+    // Windows / Super / Meta / Cmd — resolved at runtime via platformSuperKey()
+    win: platformSuperKey(), Win: platformSuperKey(),
+    windows: platformSuperKey(), Windows: platformSuperKey(),
+    super: platformSuperKey(), Super: platformSuperKey(), Super_L: platformSuperKey(),
+    meta: platformSuperKey(), Meta: platformSuperKey(),
     LeftMeta: "LeftMeta", RightMeta: "RightMeta",
-    cmd: "LeftSuper", Cmd: "LeftSuper",
-    command: "LeftSuper", Command: "LeftSuper",
+    cmd: platformSuperKey(), Cmd: platformSuperKey(),
+    command: platformSuperKey(), Command: platformSuperKey(),
     LeftCmd: "LeftCmd", RightCmd: "RightCmd",
     LeftSuper: "LeftSuper", RightSuper: "RightSuper",
     LeftWin: "LeftWin", RightWin: "RightWin",
@@ -146,22 +158,38 @@ export namespace Keyboard {
     AudioRandom: "AudioRandom", shuffle: "AudioRandom",
   }
 
+  function candidates(name: string, Key: Record<string, any>) {
+    const primary = KEY_MAP[name] ?? name
+    const list = [primary]
+    if (SUPER_KEYS.has(name) || SUPER_KEYS.has(primary)) {
+      list.push("LeftSuper", "LeftWin", "LeftMeta")
+    }
+    return Array.from(new Set(list))
+      .map((k) => Key[k])
+      .filter((k) => k !== undefined)
+  }
+
   export async function pressKey(keyName: string): Promise<void> {
     try {
       const { keyboard, Key } = await import("@nut-tree-fork/nut-js")
-
-      const mapped = KEY_MAP[keyName] ?? keyName
-      const key = (Key as any)[mapped]
-
-      if (key === undefined) {
+      const keys = candidates(keyName, Key as any)
+      if (keys.length === 0) {
         log.warn("unknown key, attempting type", { keyName })
         await keyboard.type(keyName)
         return
       }
-
-      await keyboard.pressKey(key)
-      await keyboard.releaseKey(key)
-      log.info("pressed key", { keyName })
+      let err: unknown
+      for (const key of keys) {
+        try {
+          await keyboard.pressKey(key)
+          await keyboard.releaseKey(key)
+          log.info("pressed key", { keyName, resolved: key })
+          return
+        } catch (e) {
+          err = e
+        }
+      }
+      throw err
     } catch (e) {
       log.error("pressKey failed", {
         keyName,
@@ -187,31 +215,37 @@ export namespace Keyboard {
   export async function hotkey(...keys: string[]): Promise<void> {
     try {
       const { keyboard, Key } = await import("@nut-tree-fork/nut-js")
-
-      const nutKeys = keys.map((k) => {
-        const mapped = KEY_MAP[k] ?? k
-        const key = (Key as any)[mapped]
-        if (key === undefined) throw new Error(`Unknown key: ${k}`)
-        return key
-      })
-
-      for (const key of nutKeys) {
-        await keyboard.pressKey(key)
-      }
-      const reverseKeys = [...nutKeys].reverse()
-      try {
-        for (const key of reverseKeys) {
-          await keyboard.releaseKey(key)
+      const resolved = keys.map((k) => candidates(k, Key as any))
+      const missing = resolved.findIndex((x) => x.length === 0)
+      if (missing >= 0) throw new Error(`Unknown key: ${keys[missing]}`)
+      const plans = resolved.reduce(
+        (acc, cur) => acc.flatMap((prefix) => cur.map((key) => [...prefix, key])),
+        [[] as any[]],
+      )
+      let err: unknown
+      for (const plan of plans) {
+        try {
+          for (const key of plan) {
+            await keyboard.pressKey(key)
+          }
+          const reverse = [...plan].reverse()
+          try {
+            for (const key of reverse) {
+              await keyboard.releaseKey(key)
+            }
+          } catch (releaseErr) {
+            for (const key of reverse) {
+              await keyboard.releaseKey(key).catch(() => {})
+            }
+            throw releaseErr
+          }
+          log.info("hotkey", { keys, resolved: plan })
+          return
+        } catch (e) {
+          err = e
         }
-      } catch (err) {
-        // Best-effort: try releasing remaining keys
-        for (const key of reverseKeys) {
-          await keyboard.releaseKey(key).catch(() => {})
-        }
-        throw err
       }
-
-      log.info("hotkey", { keys })
+      throw err
     } catch (e) {
       log.error("hotkey failed", {
         keys,

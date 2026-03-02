@@ -55,6 +55,10 @@ export namespace Tool {
         const toolInfo = init instanceof Function ? await init(initCtx) : init
         const execute = toolInfo.execute
         toolInfo.execute = async (args, ctx) => {
+          const asError = (e: unknown) => {
+            if (e instanceof Error) return e
+            return new Error(typeof e === "string" ? e : JSON.stringify(e))
+          }
           let parsed: typeof args
           try {
             parsed = toolInfo.parameters.parse(args)
@@ -62,9 +66,10 @@ export namespace Tool {
             if (error instanceof z.ZodError && toolInfo.formatValidationError) {
               throw new Error(toolInfo.formatValidationError(error), { cause: error })
             }
+            const err = asError(error)
             throw new Error(
-              `The ${id} tool was called with invalid arguments: ${error}.\nPlease rewrite the input so it satisfies the expected schema.`,
-              { cause: error },
+              `The ${id} tool was called with invalid arguments: ${err.message}.\nPlease rewrite the input so it satisfies the expected schema.`,
+              { cause: err },
             )
           }
           let result: Awaited<ReturnType<typeof execute>>
@@ -78,7 +83,7 @@ export namespace Tool {
             // Some native addons throw non-Error values which causes
             // "TypeError: First argument must be an Error object" in Bun/Node.
             if (e instanceof Error) throw e
-            throw new Error(typeof e === "string" ? e : `Tool ${id} failed: ${JSON.stringify(e)}`, { cause: e })
+            throw new Error(`Tool ${id} failed: ${asError(e).message}`)
           }
           // skip truncation for tools that handle it themselves
           if (result.metadata.truncated !== undefined) {

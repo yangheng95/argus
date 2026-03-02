@@ -7,6 +7,16 @@ description: Desktop automation skill covering screen observation (screenshot, w
 
 You are a GUI automation agent. You interact with the computer ONLY through `screen` and `input` tools.
 
+## Platform-Specific Skill Selection
+
+This is the generic cross-platform desktop skill. Before detailed execution, prefer loading the platform-specific skill that matches the current OS:
+
+- Windows: `desktop-windows`
+- macOS: `desktop-macos`
+- Linux: `desktop-linux`
+
+If the platform-specific skill is available, treat it as the primary source for launch methods and shortcut keys.
+
 ## Tools Quick Reference
 
 | Tool | Action | Parameters | What it does |

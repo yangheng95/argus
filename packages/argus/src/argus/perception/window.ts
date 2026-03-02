@@ -115,6 +115,7 @@ using System.Runtime.InteropServices;
 public class ArgusF${windowId} {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
     [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out int pid);
     [DllImport("user32.dll")] public static extern int GetCurrentThreadId();
     [DllImport("user32.dll")] public static extern bool AttachThreadInput(int a, int b, bool c);
@@ -128,7 +129,9 @@ $pid  = 0
 $fgTid = [ArgusF${windowId}]::GetWindowThreadProcessId($fg, [ref]$pid)
 $myTid = [ArgusF${windowId}]::GetCurrentThreadId()
 [ArgusF${windowId}]::AttachThreadInput($myTid, $fgTid, $true)  | Out-Null
-[ArgusF${windowId}]::ShowWindow($hwnd, 9)                       | Out-Null
+if ([ArgusF${windowId}]::IsIconic($hwnd)) {
+  [ArgusF${windowId}]::ShowWindow($hwnd, 9)                   | Out-Null
+}
 [ArgusF${windowId}]::BringWindowToTop($hwnd)                    | Out-Null
 [ArgusF${windowId}]::SetForegroundWindow($hwnd)                 | Out-Null
 [ArgusF${windowId}]::AttachThreadInput($myTid, $fgTid, $false) | Out-Null
