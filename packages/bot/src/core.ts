@@ -185,6 +185,11 @@ export class BotCore {
       "For questions that need real-time data (weather, news, stock prices, etc.), use available tools (web search, bash, etc.).",
       "For GUI tasks (screenshots, app interaction) — use screen/input tools directly.",
       "Only answer directly without tools when you are confident the answer is in your training data.",
+      "",
+      "## Task Context & Memory",
+      "At the start of a new task, use the memory tool to search for relevant context from previous sessions.",
+      "Search for the task topic or keywords to find past decisions, operation results, and lessons learned.",
+      "This prevents repeating mistakes and builds on prior work.",
     ].join("\n")
   }
 
