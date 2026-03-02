@@ -37,7 +37,7 @@ export namespace Capture {
   }
 
   function getOutputDir(outputDir?: string): string {
-    return outputDir ?? path.join(Global.Path.data, "argus", "screenshots")
+    return outputDir ?? path.join(Global.Path.data, "opencorvus", "screenshots")
   }
 
   export function scaleWindowBounds(input: {
