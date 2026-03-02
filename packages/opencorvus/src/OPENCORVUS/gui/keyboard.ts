@@ -18,7 +18,7 @@ function platformSuperKey(): string {
 }
 
 export namespace Keyboard {
-  const log = Log.create({ service: "argus-keyboard" })
+  const log = Log.create({ service: "opencorvus-keyboard" })
   const SUPER_KEYS = new Set([
     "win", "Win", "windows", "Windows", "super", "Super", "Super_L",
     "meta", "Meta", "cmd", "Cmd", "command", "Command",
