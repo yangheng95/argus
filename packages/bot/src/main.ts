@@ -331,16 +331,15 @@ if (process.env.SKIP_PROVIDER_PROMPT || process.env.TEST_PROMPT) {
 
 // ─── DashScope / provider setup ──────────────────────────────────────────────
 
-// Select the correct API key and base URL based on key type:
-//   sk-sp-* (CODING_DASHSCOPE_API_KEY) → Coding Plan endpoint
-//   sk-*   (DASHSCOPE_API_KEY)         → Standard DashScope OpenAI-compatible endpoint
+// Select the correct API key and base URL based on key prefix:
+//   sk-sp-* → coding.dashscope.aliyuncs.com/api/v1  (Coding Plan)
+//   sk-*    → dashscope-intl.aliyuncs.com/compatible-mode/v1  (Standard)
+// Prefer CODING_DASHSCOPE_API_KEY (sk-sp-*), fallback to DASHSCOPE_API_KEY (sk-*)
 const codingKey = process.env.CODING_DASHSCOPE_API_KEY
 const standardKey = process.env.DASHSCOPE_API_KEY
-const useCodingPlan = !!codingKey
-const activeKey = useCodingPlan ? codingKey! : standardKey
-const dashscopeBaseURL = useCodingPlan
-  ? "https://coding.dashscope.aliyuncs.com/v1"
-  : "https://dashscope.aliyuncs.com/compatible-mode/v1"
+const activeKey = codingKey ?? standardKey
+const useCodingPlan = activeKey?.startsWith("sk-sp-") ?? false
+const dashscopeBaseURL = dashscopeBaseURLForKey(activeKey)
 
 // Expose the selected key as DASHSCOPE_API_KEY so the Argus server picks it up.
 if (activeKey) process.env.DASHSCOPE_API_KEY = activeKey
