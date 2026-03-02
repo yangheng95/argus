@@ -318,6 +318,22 @@ export class BotCore {
   }
 
   private async handleEvent(event: any): Promise<void> {
+    // Session entered standby — clear processing flag and dequeue next pending message
+    if (event.type === "session.idle") {
+      const sessionId = event.properties?.sessionID
+      if (sessionId) {
+        this.sessionProcessing.delete(sessionId)
+        const queue = this.sessionQueues.get(sessionId)
+        if (queue && queue.length > 0) {
+          const next = queue.shift()!
+          if (queue.length === 0) this.sessionQueues.delete(sessionId)
+          console.log(`[BotCore] Dequeuing next message for ${sessionId}, remaining: ${queue.length}`)
+          this.handleMessage(next.msg).catch((err) => console.error("[BotCore] dequeue handleMessage error:", err))
+        }
+      }
+      return
+    }
+
     // Track user message IDs so we can skip their parts
     if (event.type === "message.updated") {
       const info = event.properties.info
