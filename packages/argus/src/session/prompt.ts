@@ -186,9 +186,11 @@ export namespace SessionPrompt {
       return message
     }
 
+    // A2A legacy pipeline (opt-in via ARGUS_A2A_ENABLED=1).
+    // By default, the LLM orchestrates itself through tools (screen, input,
+    // planner, goal, bash, etc.) — no rigid state machine needed.
     const cfg = await Config.get()
-    const shouldRouteA2A = cfg.a2a?.enabled === true && !session.parentID
-    if (shouldRouteA2A) {
+    if (cfg.a2a?.enabled === true && !session.parentID) {
       const maxQueue = cfg.a2a?.queue_max_size ?? 20
       if (TaskQueue.queueSize(input.sessionID) >= maxQueue) {
         return createA2AQueueMessage({
@@ -206,7 +208,9 @@ export namespace SessionPrompt {
         source: "api",
       })
 
+      // Start orchestrator and wake it immediately (no polling delay)
       Orchestrator.start()
+      Orchestrator.wake()
 
       const queuePos = TaskQueue.listQueued(input.sessionID).findIndex((x) => x.id === task.id) + 1
       return createA2AQueueMessage({
@@ -225,6 +229,7 @@ export namespace SessionPrompt {
       })
     }
 
+    // Default path: LLM orchestrates itself through direct tool use.
     return loop({ sessionID: input.sessionID })
   })
 
