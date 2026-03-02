@@ -58,13 +58,15 @@ Before touching any UI, plan:
 
 ### Step 2: Choose the Right Approach
 
-**For creating new files (preferred: terminal approach):**
-1. Open a terminal: bind to VS Code → press `ctrl+`` (backtick) to toggle terminal
-2. If VS Code terminal not available, open standalone PowerShell via Win → type "powershell" → Enter
-3. Use shell commands to create files:
-   - Small files: `echo 'content' > filename.html`
-   - Large files: Use heredoc or multiple `echo >> filename.html` appends
-   - Or use `cat > filename.html << 'EOF'` (then paste content, then `EOF`)
+**For creating new files (preferred: terminal window approach):**
+1. Open a terminal window via GUI:
+   - If VS Code is open: bind to VS Code → press `ctrl+`` (backtick) to toggle the integrated terminal panel
+   - If no IDE: open standalone PowerShell via `Win` key → type "powershell" → `Enter` → `wait(2000)` → `list_windows` → `bind_window("PowerShell")`
+2. Type shell commands into the terminal via `input.type`:
+   - Small files (<500 chars): `echo 'content' > filename.html`
+   - Large files: Break into chunks, use multiple `echo '...' >> filename.html` appends
+   - Or use PowerShell: `Set-Content -Path filename.html -Value @'...content...'@`
+3. Verify: type `cat filename.html | head -20` in the terminal and screenshot to check
 
 **For editing existing files:**
 1. Open file in VS Code: `ctrl+p` → type filename → Enter
