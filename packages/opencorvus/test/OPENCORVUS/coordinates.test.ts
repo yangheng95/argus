@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Coordinates } from "../../src/argus/gui/coordinates"
+import { Coordinates } from "../../src/opencorvus/gui/coordinates"
 
 describe("Coordinates.resolveDetailed", () => {
   const bounds: Coordinates.WindowBounds = {
