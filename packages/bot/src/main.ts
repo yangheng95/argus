@@ -419,6 +419,7 @@ if (activeKey) {
     console.log(`[Bot] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${dashscopeBaseURL})`)
   } else {
     console.log("[Bot] Vision pipeline disabled (ARGUS_VISION_MODEL not set)")
+  }
 }
 
 if (process.env.SLACK_BOT_TOKEN) {
