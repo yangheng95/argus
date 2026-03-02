@@ -12,10 +12,10 @@ import sharp from "sharp"
  *    cross-reference from any direction.
  */
 export async function addCoordinateOverlay(
-  pngBuffer: Buffer,
+  imageBuffer: Buffer,
   opts?: { step?: number; labelStep?: number },
 ): Promise<Buffer> {
-  const meta = await sharp(pngBuffer).metadata()
+  const meta = await sharp(imageBuffer).metadata()
   const width = meta.width!
   const height = meta.height!
 
@@ -121,10 +121,11 @@ export async function addCoordinateOverlay(
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svgParts.join("")}</svg>`,
   )
 
-  return sharp(pngBuffer)
-    .composite([{ input: svg, top: 0, left: 0 }])
-    .png()
-    .toBuffer()
+  const pipeline = sharp(imageBuffer).composite([{ input: svg, top: 0, left: 0 }])
+  if (meta.format === "jpeg" || meta.format === "jpg") {
+    return pipeline.jpeg({ quality: 95, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer()
+  }
+  return pipeline.png().toBuffer()
 }
 
 export const Overlay = {

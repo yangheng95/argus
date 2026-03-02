@@ -94,21 +94,19 @@ export const ScreenTool = Tool.define("screen", {
         // This captures only the active window instead of the full desktop,
         // producing smaller, more relevant screenshots for the vision LLM.
         let autoBound = false
+        let foregroundFailed = false
         const currentBinding = await WindowManager.getBinding()
         if (currentBinding) {
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
-            return {
-              title: "Screenshot blocked: bound window not foreground",
-              output:
-                "The bound window is not in foreground (possibly occluded or minimized). Re-bind with screen.bind_window and retry screenshot.",
-              metadata: {
-                blocked: true,
-                reason: "bound_window_not_foreground",
-                title: currentBinding.info.title,
-                appName: currentBinding.info.appName,
-              },
-            }
+            // Don't block — fall back to fullscreen capture so the agent can still see the desktop.
+            // The agent can then decide how to recover (alt+tab, re-bind, etc.).
+            log.warn("bound window not foreground, falling back to fullscreen capture", {
+              title: currentBinding.info.title,
+              appName: currentBinding.info.appName,
+            })
+            foregroundFailed = true
+            await WindowManager.unbind()
           }
         }
         if (!currentBinding) {
@@ -255,10 +253,11 @@ export const ScreenTool = Tool.define("screen", {
           screenChanged: true,
         })
 
-        // Add coordinate grid overlay to help vision LLM locate positions
-        const annotated = await addCoordinateOverlay(result.buffer).catch(() => result.buffer)
-        const encoded = await image(annotated)
-        const base64 = encoded.buffer.toString("base64")
+        // Compress first, then draw coordinate grid to keep guides sharp.
+        const encoded = await image(result.buffer)
+        const output = await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
+        const outputMime = output[0] === 0x89 && output[1] === 0x50 ? "image/png" : "image/jpeg"
+        const base64 = output.toString("base64")
 
         // Check if agent is stuck — append corrective guidance
         const rep = GuiState.get().repetition
@@ -280,15 +279,15 @@ export const ScreenTool = Tool.define("screen", {
               screenshotHash: hash,
               stuck: true,
               compressed: encoded.compressed,
-              attachmentBytes: encoded.buffer.length,
+              attachmentBytes: output.length,
               scaleX: result.windowBounds?.scaleX ?? 1,
               scaleY: result.windowBounds?.scaleY ?? 1,
             },
             attachments: [
               {
                 type: "file" as const,
-                mime: encoded.mime,
-                url: `data:${encoded.mime};base64,${base64}`,
+                mime: outputMime,
+                url: `data:${outputMime};base64,${base64}`,
               },
             ],
           }
@@ -304,15 +303,15 @@ export const ScreenTool = Tool.define("screen", {
             unchanged: false,
             screenshotHash: hash,
             compressed: encoded.compressed,
-            attachmentBytes: encoded.buffer.length,
+            attachmentBytes: output.length,
             scaleX: result.windowBounds?.scaleX ?? 1,
             scaleY: result.windowBounds?.scaleY ?? 1,
           },
           attachments: [
             {
               type: "file" as const,
-              mime: encoded.mime,
-              url: `data:${encoded.mime};base64,${base64}`,
+              mime: outputMime,
+              url: `data:${outputMime};base64,${base64}`,
             },
           ],
         }
