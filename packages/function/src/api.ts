@@ -190,10 +190,11 @@ export default new Hono<{ Bindings: Env }>()
     console.log("share_data", id)
     if (!id) return c.text("Error: Share ID is required", { status: 400 })
     const stub = c.env.SYNC_SERVER.get(c.env.SYNC_SERVER.idFromName(id))
-    const data = await stub.getData()
+    const sync = stub as unknown as { getData: () => Promise<Array<{ key: string; content: Record<string, unknown> }>> }
+    const data = await sync.getData()
 
-    let info: unknown
-    const messages: Record<string, any> = {}
+    let info: Record<string, unknown> | undefined
+    const messages: Record<string, Record<string, unknown> & { parts: Array<Record<string, unknown>> }> = {}
     data.forEach((d) => {
       const [root, type, ...splits] = d.key.split("/")
       if (root !== "session") return
@@ -202,13 +203,17 @@ export default new Hono<{ Bindings: Env }>()
         return
       }
       if (type === "message") {
+        if (typeof d.content.id !== "string") return
         messages[d.content.id] = {
           parts: [],
           ...d.content,
         }
       }
       if (type === "part") {
-        messages[d.content.messageID].parts.push(d.content)
+        if (typeof d.content.messageID !== "string") return
+        const item = messages[d.content.messageID]
+        if (!item) return
+        item.parts.push(d.content)
       }
     })
 
