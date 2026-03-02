@@ -294,7 +294,7 @@ async function cleanShellConfig(file: string) {
 
     if (skip) {
       skip = false
-      if (trimmed.includes(".opencorvus/bin") || trimmed.includes(".opencorvus/bin") || trimmed.includes("fish_add_path")) {
+      if (trimmed.includes(".opencorvus/bin") || trimmed.includes("fish_add_path")) {
         continue
       }
     }
