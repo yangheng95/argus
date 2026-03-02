@@ -19,7 +19,6 @@ export class BotCore {
   private sessions = new Map<string, SessionEntry>()
   /** Reverse lookup: sessionId → threadKey */
   private sessionIndex = new Map<string, string>()
-  private taskIndex = new Map<string, string>()
   private adapters: BotAdapter[] = []
   private client!: OpencodeClient
   private server!: { url: string; close(): void }
