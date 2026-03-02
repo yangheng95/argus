@@ -207,6 +207,12 @@ export namespace Session {
         error: MessageV2.Assistant.shape.error,
       }),
     ),
+    Idle: BusEvent.define(
+      "session.idle",
+      z.object({
+        sessionID: z.string(),
+      }),
+    ),
   }
 
   export const create = fn(
