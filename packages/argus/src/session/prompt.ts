@@ -49,8 +49,6 @@ import { MemoryInjection } from "@/memory/injection"
 import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
 import { Goal } from "@/session/goal"
-import { TaskQueue } from "@/a2a/queue"
-import { Orchestrator } from "@/a2a/orchestrator"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
