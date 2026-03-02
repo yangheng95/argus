@@ -95,9 +95,9 @@ let cli = yargs(hideBin(process.argv))
     })
 
     process.env.AGENT = "1"
-    process.env.ARGUS = "1"
+    process.env.OPENCORVUS = "1"
 
-    Log.Default.info("argus", {
+    Log.Default.info("opencorvus", {
       version: Installation.VERSION,
       args: process.argv.slice(2),
     })
