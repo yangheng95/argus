@@ -29,7 +29,7 @@ const PROVIDERS: ProviderOption[] = [
   { name: "OpenAI", id: "openai", envKey: "OPENAI_API_KEY", defaultModel: process.env.ARGUS_MODEL_OPENAI ?? "" },
   { name: "Google", id: "google", envKey: "GOOGLE_GENERATIVE_AI_API_KEY", defaultModel: process.env.ARGUS_MODEL_GOOGLE ?? "" },
   { name: "DeepSeek", id: "deepseek", envKey: "DEEPSEEK_API_KEY", defaultModel: process.env.ARGUS_MODEL_DEEPSEEK ?? "" },
-  { name: "Alibaba (China)", id: "alibaba-cn", envKey: "DASHSCOPE_API_KEY", defaultModel: process.env.ARGUS_MODEL_ALIBABA ?? "" },
+  { name: "Alibaba (China)", id: "alibaba-cn", envKey: "CODING_DASHSCOPE_API_KEY", defaultModel: process.env.ARGUS_MODEL_ALIBABA ?? "" },
   { name: "OpenRouter", id: "openrouter", envKey: "OPENROUTER_API_KEY", defaultModel: process.env.ARGUS_MODEL_OPENROUTER ?? "" },
 ]
 
@@ -415,7 +415,7 @@ if (activeKey) {
       baseURL: dashscopeBaseURL,
       model: visionModel,
     }))
-    const keySource = useCodingPlan ? "CODING_DASHSCOPE_API_KEY (coding plan)" : "DASHSCOPE_API_KEY (standard)"
+    const keySource = useCodingPlan ? "CODING_DASHSCOPE_API_KEY (coding plan)" : "DASHSCOPE_API_KEY"
     console.log(`[Bot] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${dashscopeBaseURL})`)
   } else {
     console.log("[Bot] Vision pipeline disabled (ARGUS_VISION_MODEL not set)")
@@ -464,3 +464,4 @@ if (process.env.TEST_PROMPT) {
     console.error("[Test] injectPrompt failed:", err),
   )
 }
+
