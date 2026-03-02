@@ -177,6 +177,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "type": {
+        showOverlay(0, 0, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
         await GUI.paste(params.text)
         GuiState.recordAction({
           time: Date.now(),
