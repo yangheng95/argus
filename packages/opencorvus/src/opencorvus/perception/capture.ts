@@ -48,22 +48,26 @@ export namespace Capture {
     imageWidth: number
     imageHeight: number
   }): WindowBounds {
-    const logicalWidth = Math.max(1, input.logicalWidth)
-    const logicalHeight = Math.max(1, input.logicalHeight)
-    const rawScaleX = input.imageWidth / logicalWidth
-    const rawScaleY = input.imageHeight / logicalHeight
+    const logicalX = Number.isFinite(input.logicalX) ? input.logicalX : 0
+    const logicalY = Number.isFinite(input.logicalY) ? input.logicalY : 0
+    const logicalWidth = Number.isFinite(input.logicalWidth) ? input.logicalWidth : 0
+    const logicalHeight = Number.isFinite(input.logicalHeight) ? input.logicalHeight : 0
+    const imageWidth = Number.isFinite(input.imageWidth) && input.imageWidth > 0 ? input.imageWidth : 1
+    const imageHeight = Number.isFinite(input.imageHeight) && input.imageHeight > 0 ? input.imageHeight : 1
+    const rawScaleX = logicalWidth > 0 ? imageWidth / logicalWidth : 1
+    const rawScaleY = logicalHeight > 0 ? imageHeight / logicalHeight : 1
     const scaleX = Number.isFinite(rawScaleX) && rawScaleX > 0 ? rawScaleX : 1
     const scaleY = Number.isFinite(rawScaleY) && rawScaleY > 0 ? rawScaleY : 1
 
     return {
-      x: Math.round(input.logicalX * scaleX),
-      y: Math.round(input.logicalY * scaleY),
-      width: input.imageWidth,
-      height: input.imageHeight,
+      x: Math.round(logicalX * scaleX),
+      y: Math.round(logicalY * scaleY),
+      width: imageWidth,
+      height: imageHeight,
       scaleX,
       scaleY,
-      logicalX: input.logicalX,
-      logicalY: input.logicalY,
+      logicalX,
+      logicalY,
       logicalWidth,
       logicalHeight,
     }

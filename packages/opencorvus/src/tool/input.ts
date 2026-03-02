@@ -10,6 +10,16 @@ import { overlayDiagnostic, requestOverlayConfirm, showOverlay, showWindowHighli
 
 const log = Log.create({ service: "input" })
 
+function coordinateSpace(): Coordinates.CoordinateSpace {
+  const value = process.env.OPENCORVUS_COORDINATE_SPACE?.toLowerCase()
+  if (value === "physical" || value === "logical") return value
+  // Default to "logical": screenshots are captured at physical-pixel resolution
+  // but nut.js operates in OS/logical coordinates (DPI-scaled).
+  // On 1:1 displays the two spaces are identical, but on HiDPI displays
+  // "physical" sends oversized coordinates that land off-screen.
+  return "logical"
+}
+
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, wait, and request desktop confirmation.
 
 Actions:
@@ -133,6 +143,7 @@ export const InputTool = Tool.define("input", {
 
     GuiState.activate()
     const lastWindowBounds = DesktopState.getBounds()
+    const space = coordinateSpace()
 
     const requireBounds = () => {
       if (lastWindowBounds) return null
@@ -177,7 +188,7 @@ export const InputTool = Tool.define("input", {
         if (blocked) return blocked
         const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
-        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
+        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds, space)
         const action = params.button === "double" ? "double" : params.button === "right" ? "right" : params.button === "middle" ? "middle" : "click"
         showOverlay(
           screen.x,
@@ -191,6 +202,7 @@ export const InputTool = Tool.define("input", {
           bounds: lastWindowBounds
             ? `${lastWindowBounds.width}x${lastWindowBounds.height}@${lastWindowBounds.x},${lastWindowBounds.y}`
             : "none",
+          coordinateSpace: space,
           button: params.button ?? "left",
           clamped: screen.clamped,
         })
@@ -227,7 +239,7 @@ export const InputTool = Tool.define("input", {
         return {
           title: `Clicked (${params.x}, ${params.y})`,
           output: `${params.button ?? "left"} click at (${params.x}, ${params.y})${coordDetail}`,
-          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, button: params.button, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY },
+          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, button: params.button, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY, coordinateSpace: space },
         }
       }
 
@@ -304,8 +316,8 @@ export const InputTool = Tool.define("input", {
         if (blocked) return blocked
         const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
-        const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds)
-        const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds)
+        const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds, space)
+        const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds, space)
         showOverlay(start.x, start.y, "drag", `→(${params.endX},${params.endY})`)
         await GUI.drag(start.x, start.y, end.x, end.y)
         showOverlay(end.x, end.y, "drag", "done", "done")
@@ -335,6 +347,7 @@ export const InputTool = Tool.define("input", {
             screenEndY: end.y,
             clampedStart: start.clamped,
             clampedEnd: end.clamped,
+            coordinateSpace: space,
           },
         }
       }
@@ -344,7 +357,7 @@ export const InputTool = Tool.define("input", {
         if (blocked) return blocked
         const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
-        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
+        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds, space)
         showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)
         await GUI.moveTo(screen.x, screen.y)
         showOverlay(screen.x, screen.y, "move", "done", "done")
@@ -360,7 +373,7 @@ export const InputTool = Tool.define("input", {
         return {
           title: `Moved to (${params.x}, ${params.y})`,
           output: `Mouse moved to (${params.x}, ${params.y})${screen.clamped ? " [CLAMPED]" : ""}`,
-          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY },
+          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY, coordinateSpace: space },
         }
       }
 
