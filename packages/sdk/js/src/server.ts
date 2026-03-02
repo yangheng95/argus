@@ -60,7 +60,7 @@ export async function createOpencodeServer(options?: ServerOptions) {
     cwd,
     env: {
       ...process.env,
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
+      ARGUS_CONFIG_CONTENT: JSON.stringify(options.config ?? {}),
     },
   })
 
@@ -138,7 +138,7 @@ export function createOpencodeTui(options?: TuiOptions) {
     cwd,
     env: {
       ...process.env,
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
+      ARGUS_CONFIG_CONTENT: JSON.stringify(options?.config ?? {}),
     },
   })
 

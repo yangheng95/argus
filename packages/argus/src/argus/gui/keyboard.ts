@@ -19,6 +19,12 @@ function platformSuperKey(): string {
 
 export namespace Keyboard {
   const log = Log.create({ service: "argus-keyboard" })
+  const SUPER_KEYS = new Set([
+    "win", "Win", "windows", "Windows", "super", "Super", "Super_L",
+    "meta", "Meta", "cmd", "Cmd", "command", "Command",
+    "LeftSuper", "LeftWin", "LeftMeta", "LeftCmd",
+    "RightSuper", "RightWin", "RightMeta", "RightCmd",
+  ])
 
   // Complete key mapping: common aliases → nut-js Key enum names.
   // Covers all 137 keys in @nut-tree-fork/shared Key enum.
@@ -157,6 +163,17 @@ export namespace Keyboard {
     AudioRepeat: "AudioRepeat", mediarepeat: "AudioRepeat",
     AudioRandom: "AudioRandom", shuffle: "AudioRandom",
   }
+
+  const SUPER_KEYS = new Set([
+    "win", "Win", "windows", "Windows",
+    "super", "Super", "Super_L",
+    "meta", "Meta",
+    "cmd", "Cmd", "command", "Command",
+    "LeftWin", "RightWin",
+    "LeftSuper", "RightSuper",
+    "LeftMeta", "RightMeta",
+    "LeftCmd", "RightCmd",
+  ])
 
   function candidates(name: string, Key: Record<string, any>) {
     const primary = KEY_MAP[name] ?? name
