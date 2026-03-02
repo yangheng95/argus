@@ -3,22 +3,26 @@ import type { AudioBuffer, STTProvider, STTResult } from "../types"
 export class DeepgramProvider implements STTProvider {
   readonly name = "deepgram"
   private apiKey?: string
+  private model: string
+  private baseURL: string
 
-  constructor(opts: { apiKey?: string }) {
+  constructor(opts: { apiKey?: string; model?: string; baseURL?: string }) {
     this.apiKey = opts.apiKey
+    this.model = opts.model ?? ""
+    this.baseURL = opts.baseURL ?? ""
   }
 
   async isAvailable(): Promise<boolean> {
-    return !!this.apiKey
+    return !!this.apiKey && !!this.model && !!this.baseURL
   }
 
   async transcribe(audio: AudioBuffer, options?: { language?: string; prompt?: string }): Promise<STTResult> {
     const start = performance.now()
 
-    const params = new URLSearchParams({ model: "nova-2" })
+    const params = new URLSearchParams({ model: this.model })
     if (options?.language) params.set("language", options.language)
 
-    const res = await fetch(`https://api.deepgram.com/v1/listen?${params}`, {
+    const res = await fetch(`${this.baseURL}/listen?${params}`, {
       method: "POST",
       headers: {
         Authorization: `Token ${this.apiKey}`,
