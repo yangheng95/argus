@@ -13,7 +13,7 @@ import path from "path"
 import { readFileSync, readdirSync, existsSync } from "fs"
 import * as schema from "./schema"
 
-declare const ARGUS_MIGRATIONS: { sql: string; timestamp: number }[] | undefined
+declare const OPENCORVUS_MIGRATIONS: { sql: string; timestamp: number }[] | undefined
 
 export const NotFoundError = NamedError.create(
   "NotFoundError",
