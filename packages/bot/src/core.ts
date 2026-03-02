@@ -184,7 +184,7 @@ export class BotCore {
       "",
       "### TUI Coding Mode (for complex interactive coding sessions)",
       "When the user requests TUI or you need interactive coding with real-time feedback:",
-      '1. Use bash to launch TUI: `bash("start \\"OPENCORVUS_TUI\\" cmd /c \\"cd /d PROJECT_DIR && packages\\\\bot\\\\launch-tui.cmd .\\"")` (Windows)',
+      '1. Use bash to launch TUI: `bash("start \\"OPENCORVUS_TUI\\" cmd /c \\"cd /d PROJECT_DIR\\\\packages\\\\opencorvus && bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts PROJECT_DIR\\"")` (Windows)',
       "2. Wait 5 seconds: `input.wait(5000)`",
       "3. Find TUI window: `screen.list_windows` → look for window with title containing 'OPENCORVUS'",
       "4. Bind to TUI: `screen.bind_window(\"OPENCORVUS\")`",
