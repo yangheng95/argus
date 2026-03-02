@@ -48,6 +48,8 @@ jobs:
             host: ubuntu-latest
           - name: macos
             host: macos-latest
+          - name: windows
+            host: windows-latest
     runs-on: ${{ matrix.settings.host }}
     defaults:
       run:
