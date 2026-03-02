@@ -238,6 +238,7 @@ export const InputTool = Tool.define("input", {
       case "drag": {
         const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds)
         const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds)
+        showOverlay(start.x, start.y, "drag", `→(${params.endX},${params.endY})`)
         await GUI.drag(start.x, start.y, end.x, end.y)
         const coordDetail = lastWindowBounds
           ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y}${start.clamped || end.clamped ? " [CLAMPED]" : ""})`
