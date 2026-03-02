@@ -225,6 +225,7 @@ export namespace Agent {
         name: "a2a_gui",
         description:
           "A2A GUI Agent: executes GUI operations from a plan. Uses visual analysis results for precise mouse/keyboard actions. Reports errors for re-planning.",
+        prompt: PROMPT_A2A_GUI,
         mode: "subagent",
         native: true,
         hidden: true,
