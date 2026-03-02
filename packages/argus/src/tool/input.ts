@@ -195,6 +195,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "key": {
+        showOverlay(0, 0, "key", params.key)
         const parts = params.key.split("+").map((k) => k.trim())
         if (parts.length > 1) {
           await GUI.hotkey(...parts)
