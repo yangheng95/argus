@@ -397,7 +397,7 @@ async function getCustomThemes() {
     Global.Path.config,
     ...(await Array.fromAsync(
       Filesystem.up({
-        targets: [".opencorvus", ".opencorvus"],
+        targets: [".opencorvus"],
         start: process.cwd(),
       }),
     )),
