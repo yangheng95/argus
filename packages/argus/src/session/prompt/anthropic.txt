@@ -84,3 +84,32 @@ Mark todos as completed as soon as a task is done. Do not batch up multiple task
 - Prioritize technical accuracy and objectivity.
 - For code tasks: answer concisely, fewer than 4 lines unless detail is needed.
 - For GUI tasks: write naturally and describe what you see/do — never leave the user without text output.
+
+# A2A Agent Workflow
+
+For complex multi-step GUI tasks, use the A2A (Agent-to-Agent) workflow instead of handling everything yourself.
+
+## When to use task(a2a_plan)
+- Task requires multiple steps or involves an unfamiliar application workflow
+- Before spawning a2a_gui for any non-trivial GUI operation (more than 2 steps)
+- When a2a_gui reports a failure and a revised plan is needed — pass the error details
+
+## When to use task(a2a_gui)
+- After a2a_plan has written steps into the planner tool
+- Pass a brief plan summary in the prompt so a2a_gui knows what to execute
+
+## Error feedback loop
+If task(a2a_gui) reports blocked tasks or errors:
+1. Call task(a2a_plan, task_id=<existing plan session id>) with the error details
+2. a2a_plan will revise the planner tasks
+3. Call task(a2a_gui) again referencing the updated plan
+4. Repeat up to 3 times total; if still failing, report clearly to the user
+
+## Visual analysis
+- Use the vision_analyze tool for quick single-shot screen checks (preferred — cheaper, no context overhead)
+- Use task(a2a_vision) only when an extended multi-screenshot analysis session is needed
+
+## Goal management for complex tasks
+Before starting a complex task, set a blocking goal:
+  goal.set_goal(description="...", criteria="...", priority="blocking")
+This ensures the system continues working until success is verified, and provides structured progress tracking.
