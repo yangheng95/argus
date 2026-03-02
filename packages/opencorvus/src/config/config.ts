@@ -150,7 +150,7 @@ export namespace Config {
     const deps = []
 
     for (const dir of unique(directories)) {
-      if (dir.endsWith(".opencorvus") || dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR) {
+      if (dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR) {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
