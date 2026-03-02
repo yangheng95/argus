@@ -93,7 +93,7 @@ export namespace Config {
     // 2) Global config (~/.config/opencorvus/opencorvus.json{,c})
     // 3) Custom config (OPENCORVUS_CONFIG)
     // 4) Project config (opencorvus.json{,c})
-    // 5) local config directories (.opencorvus/*, legacy .opencorvus/*)
+    // 5) local config directories (.opencorvus/*)
     // 6) Inline config (OPENCORVUS_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
