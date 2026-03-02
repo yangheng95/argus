@@ -90,13 +90,13 @@ async function deleteConfig(): Promise<void> {
 }
 
 // ─── DashScope endpoint routing rule ─────────────────────────────────────────
-// sk-sp-* → https://coding.dashscope.aliyuncs.com/api/v1  (Coding Plan)
-// sk-*    → https://dashscope-intl.aliyuncs.com/compatible-mode/v1  (Standard)
+// sk-sp-* → DASHSCOPE_CODING_BASE_URL  (Coding Plan)
+// sk-*    → DASHSCOPE_INTL_BASE_URL    (Standard)
 function dashscopeBaseURLForKey(apiKey: string | undefined): string {
   if (apiKey?.startsWith("sk-sp-")) {
-    return "https://coding.dashscope.aliyuncs.com/api/v1"
+    return process.env.DASHSCOPE_CODING_BASE_URL!
   }
-  return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+  return process.env.DASHSCOPE_INTL_BASE_URL!
 }
 
 function buildProviderOptions(providerId: string): Record<string, any> {
