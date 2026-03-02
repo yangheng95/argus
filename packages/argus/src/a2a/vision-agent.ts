@@ -126,7 +126,6 @@ export namespace VisionAgent {
               {
                 type: "image" as const,
                 image: base64,
-                mimeType: "image/png" as const,
               },
               {
                 type: "text" as const,
