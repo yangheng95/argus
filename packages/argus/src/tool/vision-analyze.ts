@@ -201,7 +201,14 @@ export const VisionAnalyzeTool = Tool.define("vision_analyze", {
       return {
         title: "Vision analysis failed",
         output: `Vision analysis failed: ${(err as Error).message}. Use screen.screenshot as fallback.`,
-        metadata: { error: true },
+        metadata: {
+          width: 0,
+          height: 0,
+          screenshotHash: "",
+          elementsFound: 0,
+          runningSummary: "",
+          error: true,
+        },
       }
     } finally {
       timer.stop()
