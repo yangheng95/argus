@@ -144,7 +144,7 @@ export namespace Skill {
       }
     }
 
-    // Scan .opencorvus/skill/ directories (with legacy .opencorvus compatibility)
+    // Scan .opencorvus/skill/ directories
     for (const dir of await Config.directories()) {
       const matches = await Glob.scan(OPENCORVUS_SKILL_PATTERN, {
         cwd: dir,
