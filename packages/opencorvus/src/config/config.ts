@@ -376,8 +376,6 @@ export namespace Config {
       const patterns = [
         "/.opencorvus/command/",
         "/.opencorvus/commands/",
-        "/.opencorvus/command/",
-        "/.opencorvus/commands/",
         "/command/",
         "/commands/",
       ]
