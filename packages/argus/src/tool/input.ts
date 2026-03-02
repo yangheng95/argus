@@ -4,6 +4,7 @@ import { GUI } from "../argus/gui/index"
 import { Coordinates } from "../argus/gui/coordinates"
 import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
+import { WindowManager } from "../argus/perception/window"
 import { Log } from "../util/log"
 import { showOverlay } from "./overlay-client"
 
@@ -21,6 +22,7 @@ Actions:
 - wait: Wait for a specified number of milliseconds. Use between actions when UI needs time to load.
 
 If a window is bound via the screen tool, all coordinates are relative to that window.
+Pointer actions (click/drag/move) require a recent screen.screenshot anchor. If no anchor exists, they are blocked.
 
 Key names (case-insensitive): enter, esc, tab, space, backspace, delete, insert,
   ctrl, alt, shift, win/super/meta/cmd, f1-f24, a-z, 0-9,
@@ -121,8 +123,39 @@ export const InputTool = Tool.define("input", {
     GuiState.activate()
     const lastWindowBounds = DesktopState.getBounds()
 
+    const requireBounds = () => {
+      if (lastWindowBounds) return null
+      return {
+        title: "Pointer action blocked: no coordinate anchor",
+        output: "Cannot run pointer action without a recent screenshot anchor. Take screen.screenshot first so coordinates are bound to one target (window or single monitor), then retry.",
+        metadata: { blocked: true, reason: "no_bounds" },
+      }
+    }
+
+    const ensureBoundWindowReady = async () => {
+      const binding = await WindowManager.getBinding()
+      if (!binding) return null
+      const ok = await WindowManager.ensureBoundForeground()
+      if (ok) return null
+      return {
+        title: "Pointer action blocked: bound window not foreground",
+        output:
+          "The bound window is not in foreground (possibly occluded or minimized). Re-bind with screen.bind_window and take a fresh screen.screenshot before retrying.",
+        metadata: {
+          blocked: true,
+          reason: "bound_window_not_foreground",
+          title: binding.info.title,
+          appName: binding.info.appName,
+        },
+      }
+    }
+
     switch (params.action) {
       case "click": {
+        const blocked = requireBounds()
+        if (blocked) return blocked
+        const windowBlocked = await ensureBoundWindowReady()
+        if (windowBlocked) return windowBlocked
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
         showOverlay(
           screen.x,
@@ -236,6 +269,10 @@ export const InputTool = Tool.define("input", {
       }
 
       case "drag": {
+        const blocked = requireBounds()
+        if (blocked) return blocked
+        const windowBlocked = await ensureBoundWindowReady()
+        if (windowBlocked) return windowBlocked
         const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds)
         const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds)
         showOverlay(start.x, start.y, "drag", `→(${params.endX},${params.endY})`)
@@ -271,6 +308,10 @@ export const InputTool = Tool.define("input", {
       }
 
       case "move": {
+        const blocked = requireBounds()
+        if (blocked) return blocked
+        const windowBlocked = await ensureBoundWindowReady()
+        if (windowBlocked) return windowBlocked
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds)
         showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)
         await GUI.moveTo(screen.x, screen.y)

@@ -23,6 +23,7 @@ Do NOT guess or improvise complex workflows from memory. Real-world UIs change f
 2. **Analyze**: Detect anomalies, compare against expected behavior, correlate events across sources.
 3. **Decide**: Determine if intervention is needed. Prefer minimal, least-invasive actions.
 4. **Act**: Execute corrective actions via hands (mouse/keyboard/commands) or alert humans via comm channels.
+	- Before any pointer action (click/drag/move), capture a fresh screenshot anchor via `screen.screenshot`; if blocked for missing anchor, screenshot first and retry.
 5. **Verify**: Confirm the intervention resolved the issue. Continue monitoring.
 
 ## Tool usage

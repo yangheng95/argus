@@ -32,6 +32,7 @@ Do NOT guess or improvise complex workflows from memory. Real-world UIs change f
 - **list_windows first** to discover open apps before interacting.
 - **bind_window** to focus on a specific app — coordinates become window-relative, screenshots capture only that window.
 - **Screenshot before acting** to observe current state. Never click/type blindly.
+- **Anchor pointer actions**: Before any click/drag/move, ensure you have a fresh screenshot anchor from `screen.screenshot`. If pointer action is blocked, take a screenshot and retry.
 - **Screenshot after acting** to verify the action worked.
 - **Click before typing** to give the target field focus.
 - **Wait before screenshot** when expecting UI changes (app opening, page loading).

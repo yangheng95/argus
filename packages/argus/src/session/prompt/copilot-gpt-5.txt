@@ -63,6 +63,7 @@ Do NOT guess or improvise complex workflows from memory. Real-world UIs change f
 - Take corrective actions: restart services, adjust configs, clear errors
 - Make small, verifiable changes
 - Check for required credentials or environment variables
+- Before any pointer action (click/drag/move), capture a fresh screenshot anchor via `screen.screenshot`; if blocked for missing anchor, screenshot first and retry.
 
 ## 5. Verify
 - Confirm the issue is resolved

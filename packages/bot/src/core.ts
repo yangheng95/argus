@@ -132,7 +132,7 @@ export class BotCore {
       path: { id: session.sessionId },
       body: {
         parts: [{ type: "text", text }],
-        system: this.buildSystemPrompt(),
+        system: this.buildSystemPrompt(msg.platform),
       },
     })
 
@@ -150,10 +150,11 @@ export class BotCore {
    * Provides operational context: bot interaction mode, TUI launch instructions,
    * and window binding strategy for on-demand TUI.
    */
-  private buildSystemPrompt(): string {
+  private buildSystemPrompt(platform: string): string {
+    const channel = platform === "slack" ? "Slack" : platform === "discord" ? "Discord" : platform
     return [
       "## Bot Context",
-      "You are responding to a user via Slack. Keep responses concise and actionable.",
+      `You are responding to a user via ${channel}. Keep responses concise and actionable.`,
       "Tool calls are invisible to the user — always write text before/after actions.",
       "",
       "## Coding Tasks (Session API First)",

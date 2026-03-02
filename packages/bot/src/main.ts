@@ -1,6 +1,7 @@
 import { BotCore } from "./core"
 import { SlackAdapter } from "./adapters/slack"
 import { TelegramAdapter } from "./adapters/telegram"
+import { DiscordAdapter } from "./adapters/discord"
 import { STTPipeline } from "./stt/pipeline"
 import { GroqProvider } from "./stt/providers/groq"
 import { OpenAIWhisperProvider } from "./stt/providers/openai-whisper"
@@ -425,8 +426,16 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
   )
 }
 
+if (process.env.DISCORD_BOT_TOKEN) {
+  bot.register(
+    new DiscordAdapter({
+      token: process.env.DISCORD_BOT_TOKEN,
+    }),
+  )
+}
+
 if (bot.adapterCount === 0) {
-  console.error("No adapter configured. Set SLACK_BOT_TOKEN or TELEGRAM_BOT_TOKEN.")
+  console.error("No adapter configured. Set SLACK_BOT_TOKEN, TELEGRAM_BOT_TOKEN, or DISCORD_BOT_TOKEN.")
   process.exit(1)
 }
 

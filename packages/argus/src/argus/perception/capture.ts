@@ -156,23 +156,59 @@ export namespace Capture {
   }
 
   async function captureFullscreen(filePath: string, timestamp: number): Promise<CaptureResult> {
-    const { Monitor } = await import("node-screenshots")
+    const { Monitor, Window } = await import("node-screenshots")
     const monitors = Monitor.all()
 
     if (monitors.length === 0) {
       throw new Error("No monitors found")
     }
 
-    const primary = monitors[0]
-    const image = await primary.captureImage()
+    const focused = Window.all().find((w) => w.isFocused() && !w.isMinimized())
+    const target = focused?.currentMonitor()
+      ?? monitors.find((m) => m.isPrimary())
+      ?? monitors[0]
+    const source = focused ? "focused-window-monitor" : target.isPrimary() ? "primary-monitor" : "first-monitor"
+
+    const image = await target.captureImage()
     const buffer = Buffer.from(await image.toPng())
     const rawBuffer = Buffer.from(await image.toRaw())
     await Filesystem.write(filePath, buffer, undefined)
+
+    const logicalX = target.x()
+    const logicalY = target.y()
+    const logicalWidth = target.width()
+    const logicalHeight = target.height()
+    const bounds = scaleWindowBounds({
+      logicalX,
+      logicalY,
+      logicalWidth,
+      logicalHeight,
+      imageWidth: image.width,
+      imageHeight: image.height,
+    })
 
     log.info("captured fullscreen", {
       path: filePath,
       width: image.width,
       height: image.height,
+      monitor: {
+        id: target.id(),
+        name: target.name(),
+        x: logicalX,
+        y: logicalY,
+        width: logicalWidth,
+        height: logicalHeight,
+        isPrimary: target.isPrimary(),
+        scaleFactor: target.scaleFactor(),
+      },
+      source,
+      focusedWindow: focused
+        ? {
+            id: focused.id(),
+            title: focused.title(),
+            appName: focused.appName(),
+          }
+        : null,
     })
 
     return {
@@ -182,7 +218,7 @@ export namespace Capture {
       buffer,
       rawBuffer,
       timestamp,
-      windowBounds: null,
+      windowBounds: bounds,
     }
   }
 
