@@ -218,7 +218,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     prompts.log.info(`  rm "${targets.binary}"`)
 
     const binDir = path.dirname(targets.binary)
-    if (binDir.includes(".opencorvus") || binDir.includes(".opencorvus")) {
+    if (binDir.includes(".opencorvus")) {
       prompts.log.info(`  rmdir "${binDir}" 2>/dev/null`)
     }
   }
