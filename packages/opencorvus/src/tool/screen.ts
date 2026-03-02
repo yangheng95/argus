@@ -293,9 +293,12 @@ export const ScreenTool = Tool.define("screen", {
           }
         }
 
+        const foregroundNote = foregroundFailed
+          ? ` WARNING: Could not bring the previously bound window to foreground. The binding was released and this is a fullscreen capture. Use list_windows to find your target window, then use input.key with "alt+tab" to switch windows, or re-bind with screen.bind_window.`
+          : ""
         return {
-          title: `Screenshot captured (${result.width}x${result.height})`,
-          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint} The image has coordinate tick marks along the edges for precise positioning.`,
+          title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [fullscreen fallback]" : ""}`,
+          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint} The image has coordinate tick marks along the edges for precise positioning.${foregroundNote}`,
           metadata: {
             width: result.width,
             height: result.height,
