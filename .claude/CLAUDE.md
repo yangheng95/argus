@@ -65,3 +65,81 @@ bun run script/build.ts --single --embed-env ../../.env --skip-install
 - **linux-x64-baseline-musl**: Bun 目标命名不匹配（生成 `baseline-musl` 但期望 `musl-baseline`），已跳过。
 - **部分 Linux 原生依赖缺失**: linux-arm64/x64 的 @parcel/watcher、linux-arm64-musl 的 node-screenshots 无对应包，为非致命警告，相关可选功能不可用。
 - **models-snapshot.ts**: 需提前准备 `api.json`（网络下载或本地文件），若用本地文件需去除尾部换行：`tr -d '\n\r' < api.json > clean.json`。
+
+## 调试命令 (Debug Commands)
+
+### Bot 启动与调试
+
+```bash
+# 1. Kill 旧进程
+pkill -f "bun.*packages/bot" 2>/dev/null; pkill -f "bun.*packages/opencorvus.*serve" 2>/dev/null
+
+# 2. 启动 bot（开发模式，带测试提示注入）
+cd packages/bot
+TEST_PROMPT='你的测试指令' bun run src/main.ts 2>&1 | tee /tmp/bot.log
+
+# 3. 仅启动 OpenCorvus server（不含 bot）
+cd packages/opencorvus
+bun run --conditions=browser ./src/index.ts serve --hostname=127.0.0.1 --port=4096
+```
+
+### Auth 验证
+
+```bash
+# 检查 auth.json 路径（Windows/MINGW 下 xdg-basedir 会把路径设为 ~/.local/share）
+cat ~/.local/share/opencorvus/auth.json
+
+# 写入 auth（Coding Plan API）
+mkdir -p ~/.local/share/opencorvus
+echo '{"alibaba-cn":{"type":"api","key":"sk-sp-YOUR_KEY"}}' > ~/.local/share/opencorvus/auth.json
+```
+
+### API 直接测试
+
+```bash
+# 测试 provider 加载
+curl -s http://127.0.0.1:4096/provider | jq '.[] | select(.id == "alibaba-cn") | {id, modelCount: (.models | length)}'
+
+# 创建 session
+curl -s -X POST http://127.0.0.1:4096/session -H 'Content-Type: application/json' \
+  -d '{"model":"alibaba-cn/qwen3.5-plus"}' | jq .id
+
+# 发送 prompt（同步）
+curl -s -X POST http://127.0.0.1:4096/session/SESSION_ID/message \
+  -H 'Content-Type: application/json' -d '{"content":"hello"}'
+
+# 发送 prompt（异步 - bot 模式）
+curl -s -X POST http://127.0.0.1:4096/session/SESSION_ID/prompt_async \
+  -H 'Content-Type: application/json' -d '{"content":"hello"}'
+
+# 查看 session 消息
+curl -s http://127.0.0.1:4096/session/SESSION_ID/message | jq '.[].role'
+
+# 查看可用工具
+curl -s "http://127.0.0.1:4096/experimental/tool?provider=alibaba-cn&model=qwen3.5-plus" | jq '.[].id'
+```
+
+### SSE 事件监控
+
+```bash
+# 监听所有 SSE 事件
+curl -N -s http://127.0.0.1:4096/event
+```
+
+### Slack 调试
+
+```bash
+# 使用 user token 发送测试消息（需要 .env 中的 SLACK_USER_TOKEN）
+source .env
+curl -s -X POST https://slack.com/api/chat.postMessage \
+  -H "Authorization: Bearer $SLACK_USER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{\"channel\":\"$SLACK_CHANNEL_ID\",\"text\":\"测试消息\"}"
+```
+
+### 常见问题排查
+
+- **ProviderModelNotFoundError**: 检查 `~/.local/share/opencorvus/auth.json` 是否存在正确的 key
+- **SSE 没有 session 事件**: promptAsync 的 task queue 在 scheduler 中运行缺少 Instance 上下文，Bus.publish 无法到达 GlobalBus
+- **Bot 不回复 Slack**: 检查 SSE 事件流是否包含 `message.part.updated` 和 `message.updated`
+- **GUI 工具坐标问题**: 高分辨率屏幕 (3840x2088) 下坐标需要参考截图中的坐标网格标签
