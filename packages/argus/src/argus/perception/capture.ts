@@ -40,6 +40,35 @@ export namespace Capture {
     return outputDir ?? path.join(Global.Path.data, "argus", "screenshots")
   }
 
+  export function scaleWindowBounds(input: {
+    logicalX: number
+    logicalY: number
+    logicalWidth: number
+    logicalHeight: number
+    imageWidth: number
+    imageHeight: number
+  }): WindowBounds {
+    const logicalWidth = Math.max(1, input.logicalWidth)
+    const logicalHeight = Math.max(1, input.logicalHeight)
+    const rawScaleX = input.imageWidth / logicalWidth
+    const rawScaleY = input.imageHeight / logicalHeight
+    const scaleX = Number.isFinite(rawScaleX) && rawScaleX > 0 ? rawScaleX : 1
+    const scaleY = Number.isFinite(rawScaleY) && rawScaleY > 0 ? rawScaleY : 1
+
+    return {
+      x: Math.round(input.logicalX * scaleX),
+      y: Math.round(input.logicalY * scaleY),
+      width: input.imageWidth,
+      height: input.imageHeight,
+      scaleX,
+      scaleY,
+      logicalX: input.logicalX,
+      logicalY: input.logicalY,
+      logicalWidth,
+      logicalHeight,
+    }
+  }
+
   export async function take(options: CaptureOptions): Promise<CaptureResult> {
     const outputDir = getOutputDir(options.outputDir)
     await Filesystem.write(path.join(outputDir, ".keep"), "", undefined)
@@ -93,25 +122,16 @@ export namespace Capture {
 
     const logicalX = native.x()
     const logicalY = native.y()
-    const logicalWidth = Math.max(1, native.width())
-    const logicalHeight = Math.max(1, native.height())
-    const rawScaleX = image.width / logicalWidth
-    const rawScaleY = image.height / logicalHeight
-    const scaleX = Number.isFinite(rawScaleX) && rawScaleX > 0 ? rawScaleX : 1
-    const scaleY = Number.isFinite(rawScaleY) && rawScaleY > 0 ? rawScaleY : 1
-
-    const bounds: WindowBounds = {
-      x: Math.round(logicalX * scaleX),
-      y: Math.round(logicalY * scaleY),
-      width: image.width,
-      height: image.height,
-      scaleX,
-      scaleY,
+    const logicalWidth = native.width()
+    const logicalHeight = native.height()
+    const bounds = scaleWindowBounds({
       logicalX,
       logicalY,
       logicalWidth,
       logicalHeight,
-    }
+      imageWidth: image.width,
+      imageHeight: image.height,
+    })
 
     log.info("captured window", {
       path: filePath,
@@ -120,8 +140,8 @@ export namespace Capture {
       width: image.width,
       height: image.height,
       bounds,
-      logicalBounds: `${logicalWidth}x${logicalHeight}@${logicalX},${logicalY}`,
-      pixelScale: `${scaleX.toFixed(3)}x${scaleY.toFixed(3)}`,
+      logicalBounds: `${bounds.logicalWidth}x${bounds.logicalHeight}@${logicalX},${logicalY}`,
+      pixelScale: `${(bounds.scaleX ?? 1).toFixed(3)}x${(bounds.scaleY ?? 1).toFixed(3)}`,
     })
 
     return {
