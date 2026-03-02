@@ -373,6 +373,8 @@ process.env.ARGUS_CONFIG_CONTENT = JSON.stringify({
     memory: "allow",
     schedule: "allow",
     planner: "allow",
+    goal: "allow",
+    vision_analyze: "allow",
     external_directory: "allow",
   },
 })
