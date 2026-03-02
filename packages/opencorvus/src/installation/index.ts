@@ -9,7 +9,7 @@ import { Flag } from "../flag/flag"
 
 declare global {
   const OPENCORVUS_VERSION: string
-  const ARGUS_CHANNEL: string
+  const OPENCORVUS_CHANNEL: string
 }
 
 export namespace Installation {
@@ -191,7 +191,7 @@ export namespace Installation {
   }
 
   export const VERSION = typeof OPENCORVUS_VERSION === "string" ? OPENCORVUS_VERSION : "local"
-  export const CHANNEL = typeof ARGUS_CHANNEL === "string" ? ARGUS_CHANNEL : "local"
+  export const CHANNEL = typeof OPENCORVUS_CHANNEL === "string" ? OPENCORVUS_CHANNEL : "local"
   export const USER_AGENT = `argus/${CHANNEL}/${VERSION}/${Flag.ARGUS_CLIENT}`
 
   export async function latest(installMethod?: Method) {
