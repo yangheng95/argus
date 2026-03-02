@@ -68,7 +68,7 @@ export namespace Config {
   }
 
   export function managedConfigDir() {
-    return process.env.ARGUS_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
+    return process.env.OPENCORVUS_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
   }
 
   const managedDir = managedConfigDir()
