@@ -237,10 +237,15 @@ export namespace PermissionNext {
           pending.resolve()
         }
 
-        // TODO: we don't save the permission ruleset to disk yet until there's
-        // UI to manage it
-        // db().insert(PermissionTable).values({ projectID: Instance.project.id, data: s.approved })
-        //   .onConflictDoUpdate({ target: PermissionTable.projectID, set: { data: s.approved } }).run()
+        Database.use((db) =>
+          db.insert(PermissionTable)
+            .values({ project_id: Instance.project.id, data: s.approved })
+            .onConflictDoUpdate({
+              target: PermissionTable.project_id,
+              set: { data: s.approved },
+            })
+            .run()
+        )
         return
       }
     },
