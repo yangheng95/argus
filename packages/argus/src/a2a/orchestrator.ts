@@ -13,23 +13,37 @@ import { Capture } from "@/argus/perception/capture"
 import { WindowManager } from "@/argus/perception/window"
 
 /**
- * Orchestrator — The heart of the A2A system.
+ * Orchestrator — Legacy A2A pipeline (opt-in only).
  *
- * A TypeScript state machine (NOT an LLM) that coordinates specialized agents:
- *   TaskQueue → PlanAgent → [VisionAgent → GuiAgent → GoalAgent]* → Context
+ * NOTE: This is the legacy rigid state machine. By default, the LLM handles
+ * all orchestration through its own tool use (screen, input, planner, goal, etc.).
+ * This pipeline is only activated when ARGUS_A2A_ENABLED=1 is explicitly set.
  *
- * The orchestrator's job is purely procedural routing and state management.
- * All intelligence resides in the specialized agents.
+ * Pipeline: TaskQueue → PlanAgent → [VisionAgent → GuiAgent → GoalAgent]* → Context
  */
 export namespace Orchestrator {
   const log = Log.create({ service: "a2a.orchestrator" })
 
   let running = false
   let abortController: AbortController | null = null
+  /** Event-driven wake-up: resolves when a new task is enqueued */
+  let wakeResolver: (() => void) | null = null
 
   /**
-   * Start the orchestrator loop for a session.
+   * Wake up the orchestrator loop if it's sleeping waiting for tasks.
+   * Called by TaskQueue.enqueue() via prompt.ts to eliminate polling delay.
+   */
+  export function wake(): void {
+    if (wakeResolver) {
+      wakeResolver()
+      wakeResolver = null
+    }
+  }
+
+  /**
+   * Start the orchestrator loop.
    * Runs continuously, dequeuing tasks and executing them.
+   * Uses event-driven wake-up instead of polling.
    */
   export async function run(): Promise<void> {
     const cfg = await Config.get()
@@ -48,11 +62,10 @@ export namespace Orchestrator {
 
     try {
       while (running && !abortController.signal.aborted) {
-        // 1. Dequeue next task
         const task = TaskQueue.dequeueAny()
         if (!task) {
-          // Wait for new tasks (poll every 2 seconds)
-          await sleep(2000, abortController.signal)
+          // Wait for wake-up signal (from enqueue) or timeout after 10s as fallback
+          await waitForWake(10_000, abortController.signal)
           continue
         }
 
@@ -75,7 +88,11 @@ export namespace Orchestrator {
    * Returns true when a new loop is started.
    */
   export function start(): boolean {
-    if (running) return false
+    if (running) {
+      // Already running — just wake it in case it's sleeping
+      wake()
+      return false
+    }
     void run().catch((err) => {
       log.error("orchestrator background loop failed", { err })
       running = false
@@ -88,8 +105,9 @@ export namespace Orchestrator {
    * Execute a single task through the full A2A pipeline.
    */
   async function executeTask(task: TaskQueue.QueuedTask): Promise<void> {
-    const maxReplans = (await Config.get()).a2a?.max_replans ?? 3
-    const maxStepRetries = (await Config.get()).a2a?.max_step_retries ?? 3
+    const cfg = await Config.get()
+    const maxReplans = cfg.a2a?.max_replans ?? 3
+    const maxStepRetries = cfg.a2a?.max_step_retries ?? 3
 
     // Initialize task runtime
     const runtime = A2AState.begin({
