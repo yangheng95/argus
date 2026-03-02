@@ -424,11 +424,23 @@ export namespace Orchestrator {
 
   // ── Helpers ────────────────────────────────────────────────
 
-  function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  /**
+   * Wait for either a wake() signal or a timeout, whichever comes first.
+   * Replaces the old 2-second polling loop with event-driven wake-up.
+   */
+  function waitForWake(ms: number, signal?: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(resolve, ms)
+
+      // Register wake callback so enqueue can resolve immediately
+      wakeResolver = () => {
+        clearTimeout(timeout)
+        resolve()
+      }
+
       signal?.addEventListener("abort", () => {
         clearTimeout(timeout)
+        wakeResolver = null
         reject(new DOMException("Aborted", "AbortError"))
       })
     })
