@@ -1,9 +1,9 @@
 // Apply embedded env vars (baked in at build time via --embed-env).
 // External env vars take priority so users can still override at runtime.
-declare const ARGUS_EMBEDDED_ENV: Record<string, string> | undefined
+declare const OPENCORVUS_EMBEDDED_ENV: Record<string, string> | undefined
 try {
-  if (typeof ARGUS_EMBEDDED_ENV === "object" && ARGUS_EMBEDDED_ENV) {
-    for (const [key, value] of Object.entries(ARGUS_EMBEDDED_ENV)) {
+  if (typeof OPENCORVUS_EMBEDDED_ENV === "object" && OPENCORVUS_EMBEDDED_ENV) {
+    for (const [key, value] of Object.entries(OPENCORVUS_EMBEDDED_ENV)) {
       if (!(key in process.env) || process.env[key] === undefined) {
         process.env[key] = value
       }
@@ -13,9 +13,9 @@ try {
 
 // Restore original CWD if launched via the self-contained launcher
 // (launcher.ts changes CWD to the binary's directory for native module resolution)
-if (process.env.ARGUS_ORIGINAL_CWD) {
+if (process.env.OPENCORVUS_ORIGINAL_CWD) {
   try {
-    process.chdir(process.env.ARGUS_ORIGINAL_CWD)
+    process.chdir(process.env.OPENCORVUS_ORIGINAL_CWD)
   } catch {}
 }
 
