@@ -27,7 +27,7 @@ const state  = path.join(xdgState  || (isWin ? winLocal   : path.join(home, ".lo
 
 export namespace Global {
   export const Path = {
-    // Allow override via ARGUS_TEST_HOME for test isolation
+    // Allow override via OPENCORVUS_TEST_HOME for test isolation
     get home() {
       return resolveHome()
     },
