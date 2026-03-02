@@ -8,7 +8,7 @@ import { iife } from "@/util/iife"
 import { Flag } from "../flag/flag"
 
 declare global {
-  const ARGUS_VERSION: string
+  const OPENCORVUS_VERSION: string
   const ARGUS_CHANNEL: string
 }
 
@@ -190,7 +190,7 @@ export namespace Installation {
     await $`${process.execPath} --version`.nothrow().quiet().text()
   }
 
-  export const VERSION = typeof ARGUS_VERSION === "string" ? ARGUS_VERSION : "local"
+  export const VERSION = typeof OPENCORVUS_VERSION === "string" ? OPENCORVUS_VERSION : "local"
   export const CHANNEL = typeof ARGUS_CHANNEL === "string" ? ARGUS_CHANNEL : "local"
   export const USER_AGENT = `argus/${CHANNEL}/${VERSION}/${Flag.ARGUS_CLIENT}`
 
