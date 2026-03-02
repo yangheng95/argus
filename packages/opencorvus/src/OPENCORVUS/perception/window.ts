@@ -10,7 +10,7 @@ const windowState = Instance.state((): { binding: WindowManager.WindowBinding | 
 }))
 
 export namespace WindowManager {
-  const log = Log.create({ service: "argus-window" })
+  const log = Log.create({ service: "opencorvus-window" })
 
   export interface WindowInfo {
     id: number
