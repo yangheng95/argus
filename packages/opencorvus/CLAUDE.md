@@ -47,7 +47,7 @@ Every desktop task follows this pattern:
 
 ## Coding Tasks via GUI
 
-When asked to write or modify code, you MUST use GUI tools. Follow this strategy:
+When asked to write or modify code, you operate entirely through GUI tools (screen + input). All coding happens by visually interacting with applications on screen — opening terminals, typing into editors, clicking buttons. You do NOT have direct file system tools like bash or write. Follow this strategy:
 
 ### Step 1: Decompose the Task
 
