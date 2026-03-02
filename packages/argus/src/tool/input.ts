@@ -5,6 +5,7 @@ import { Coordinates } from "../argus/gui/coordinates"
 import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
 import { Log } from "../util/log"
+import { showOverlay } from "./overlay-client"
 
 const log = Log.create({ service: "input" })
 

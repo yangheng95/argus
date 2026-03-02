@@ -166,11 +166,21 @@ export const ScreenTool = Tool.define("screen", {
           windowBounds: result.windowBounds
             ? `${result.windowBounds.width}x${result.windowBounds.height}@${result.windowBounds.x},${result.windowBounds.y}`
             : "fullscreen",
+          pixelScale: result.windowBounds?.scaleX && result.windowBounds?.scaleY
+            ? `${result.windowBounds.scaleX.toFixed(3)}x${result.windowBounds.scaleY.toFixed(3)}`
+            : "1.000x1.000",
           consecutiveNoChange: GuiState.get().repetition.consecutiveNoChange,
         })
 
+        const hasScaleCompensation = !!result.windowBounds && (
+          Math.abs((result.windowBounds.scaleX ?? 1) - 1) > 0.01 ||
+          Math.abs((result.windowBounds.scaleY ?? 1) - 1) > 0.01
+        )
+        const scaleInfo = hasScaleCompensation
+          ? ` DPI scale compensation active (${(result.windowBounds?.scaleX ?? 1).toFixed(2)}x, ${(result.windowBounds?.scaleY ?? 1).toFixed(2)}x).`
+          : ""
         const coordInfo = result.windowBounds
-          ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).`
+          ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
           : "Coordinates are screen-absolute."
 
         const platformName = process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : "Windows"
@@ -189,7 +199,7 @@ export const ScreenTool = Tool.define("screen", {
           return {
             title: `Screenshot unchanged (${result.width}x${result.height})`,
             output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze — use the previous screenshot as reference. If you are waiting for something to load, try using input.wait first, then screenshot again.`,
-            metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: true, screenshotHash: hash },
+            metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: true, screenshotHash: hash, scaleX: result.windowBounds?.scaleX ?? 1, scaleY: result.windowBounds?.scaleY ?? 1 },
           }
         }
 
@@ -218,7 +228,7 @@ export const ScreenTool = Tool.define("screen", {
               `2. Use keyboard (Tab, Enter) instead of clicking\n` +
               `3. Use list_windows to find new dialogs\n` +
               `4. Try a completely different UI path`,
-            metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false, screenshotHash: hash, stuck: true },
+            metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false, screenshotHash: hash, stuck: true, scaleX: result.windowBounds?.scaleX ?? 1, scaleY: result.windowBounds?.scaleY ?? 1 },
             attachments: [
               {
                 type: "file" as const,
@@ -232,7 +242,7 @@ export const ScreenTool = Tool.define("screen", {
         return {
           title: `Screenshot captured (${result.width}x${result.height})`,
           output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint} The image has coordinate tick marks along the edges for precise positioning.`,
-          metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false, screenshotHash: hash },
+          metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: false, screenshotHash: hash, scaleX: result.windowBounds?.scaleX ?? 1, scaleY: result.windowBounds?.scaleY ?? 1 },
           attachments: [
             {
               type: "file" as const,
