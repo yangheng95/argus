@@ -11,12 +11,14 @@ import { LocalCLIProvider } from "./stt/providers/local-cli"
 import { VisionPipeline } from "./vision"
 import { applyDashscopeRuntime } from "./dashscope"
 
+// Bot tool permissions: override defaults that would "ask" user for confirmation.
+// Defaults already have "*": "allow", so we don't need to deny-all + re-allow.
+// We only need to override "ask" → "allow" for tools the bot should use freely.
 const botPermission = {
-  "*": "deny",
   doom_loop: "allow",
   invalid: "allow", // required for experimental_repairToolCall error handling
   screen: "allow",
-  input: "allow",
+  input: "allow",   // defaults has "ask" — override to "allow" for bot
   bash: "allow",
   edit: "allow",
   write: "allow",
