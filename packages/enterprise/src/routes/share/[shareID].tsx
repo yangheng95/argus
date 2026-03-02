@@ -157,7 +157,7 @@ export default function () {
                   {status().label}
                 </span>
               }
-              description="Argus conversation state monitor"
+              description="OpenCorvus conversation state monitor"
             >
               <div class="desktop-body">
                 <div class="desktop-grid">
@@ -211,12 +211,12 @@ export default function () {
           return (
             <>
               <Show when={info().title}>
-                <Title>{info().title} | Argus</Title>
+                <Title>{info().title} | OpenCorvus</Title>
               </Show>
-              <Meta name="description" content="Argus desktop dialog session monitor." />
+              <Meta name="description" content="OpenCorvus desktop dialog session monitor." />
               <div class="desktop-root">
                 <div class="desktop-stripe">
-                  <div class="desktop-pill">Argus Desktop</div>
+                  <div class="desktop-pill">OpenCorvus Desktop</div>
                   <div class="desktop-pill">{DateTime.fromMillis(info().time.updated).toFormat("HH:mm")}</div>
                 </div>
               </div>

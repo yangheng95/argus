@@ -1,5 +1,5 @@
 {
-  description = "Argus development flake";
+  description = "OpenCorvus development flake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -37,16 +37,16 @@
             node_modules = final.callPackage ./nix/node_modules.nix {
               inherit rev;
             };
-            argus = final.callPackage ./nix/opencode.nix {
+            opencorvus = final.callPackage ./nix/opencode.nix {
               inherit node_modules;
             };
             desktop = final.callPackage ./nix/desktop.nix {
-              opencode = argus;
+              opencode = opencorvus;
             };
           in
           {
-            inherit argus;
-            argus-desktop = desktop;
+            inherit opencorvus;
+            opencorvus-desktop = desktop;
           };
       };
 
@@ -56,16 +56,16 @@
           node_modules = pkgs.callPackage ./nix/node_modules.nix {
             inherit rev;
           };
-          argus = pkgs.callPackage ./nix/opencode.nix {
+          opencorvus = pkgs.callPackage ./nix/opencode.nix {
             inherit node_modules;
           };
           desktop = pkgs.callPackage ./nix/desktop.nix {
-            opencode = argus;
+            opencode = opencorvus;
           };
         in
         {
-          default = argus;
-          inherit argus desktop;
+          default = opencorvus;
+          inherit opencorvus desktop;
           # Updater derivation with fakeHash - build fails and reveals correct hash
           node_modules_updater = node_modules.override {
             hash = pkgs.lib.fakeHash;

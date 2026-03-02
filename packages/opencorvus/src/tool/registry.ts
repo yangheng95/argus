@@ -104,7 +104,7 @@ export namespace ToolRegistry {
   async function all(): Promise<Tool.Info[]> {
     const custom = await state().then((x) => x.custom)
     const config = await Config.get()
-    const question = ["app", "cli", "desktop"].includes(Flag.ARGUS_CLIENT) || Flag.ARGUS_ENABLE_QUESTION_TOOL
+    const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
 
     return [
       InvalidTool,
@@ -130,7 +130,7 @@ export namespace ToolRegistry {
       PlannerTool,
       GoalTool,
       VisionAnalyzeTool,
-      ...(Flag.ARGUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
+      ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
     ]

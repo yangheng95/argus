@@ -1,19 +1,19 @@
 ---
 title: サーバー
-description: HTTP 経由で Argus サーバーと通信します。
+description: HTTP 経由で OpenCorvus サーバーと通信します。
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-`argus serve` コマンドは、Argus クライアントが使用できる OpenAPI エンドポイントを公開するヘッドレス HTTP サーバーを実行します。
+`opencorvus serve` コマンドは、OpenCorvus クライアントが使用できる OpenAPI エンドポイントを公開するヘッドレス HTTP サーバーを実行します。
 
 ---
 
 ### 使用法
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### オプション
@@ -23,36 +23,36 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | リッスンするポート                | `4096`           |
 | `--hostname`    | リッスンするホスト名              | `127.0.0.1`      |
 | `--mdns`        | mDNS 検出を有効にする             | `false`          |
-| `--mdns-domain` | mDNS サービスのカスタムドメイン名 | `argus.local` |
+| `--mdns-domain` | mDNS サービスのカスタムドメイン名 | `opencorvus.local` |
 | `--cors`        | 許可する追加のブラウザーオリジン  | `[]`             |
 
 `--cors` は複数回渡すことができます。
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### 認証
 
-HTTP 基本認証でサーバーを保護するには、`OPENCODE_SERVER_PASSWORD` を設定します。ユーザー名はデフォルトで `argus` になるか、`OPENCODE_SERVER_USERNAME` を設定してオーバーライドします。これは、`argus serve` と `argus web` の両方に当てはまります。
+HTTP 基本認証でサーバーを保護するには、`OPENCODE_SERVER_PASSWORD` を設定します。ユーザー名はデフォルトで `opencorvus` になるか、`OPENCODE_SERVER_USERNAME` を設定してオーバーライドします。これは、`opencorvus serve` と `opencorvus web` の両方に当てはまります。
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### 仕組み
 
-`argus` を実行すると、TUI とサーバーが起動します。 TUI はサーバーと通信するクライアントです。サーバーは OpenAPI 3.1 仕様のエンドポイントを公開します。このエンドポイントは、[SDK](/docs/sdk) を使用してアクセスできます。
+`opencorvus` を実行すると、TUI とサーバーが起動します。 TUI はサーバーと通信するクライアントです。サーバーは OpenAPI 3.1 仕様のエンドポイントを公開します。このエンドポイントは、[SDK](/docs/sdk) を使用してアクセスできます。
 
 :::tip
-Argus サーバーを使用して、プログラムで Argus と対話します。
+OpenCorvus サーバーを使用して、プログラムで OpenCorvus と対話します。
 :::
 
-`argus serve` を実行してスタンドアロンサーバーを起動できます。すでに Argus TUI を実行している場合でも、`argus serve` は新しいサーバーを起動します。
+`opencorvus serve` を実行してスタンドアロンサーバーを起動できます。すでに OpenCorvus TUI を実行している場合でも、`opencorvus serve` は新しいサーバーを起動します。
 
 ---
 
@@ -60,7 +60,7 @@ Argus サーバーを使用して、プログラムで Argus と対話します�
 
 TUI を起動すると、ポートとホスト名がランダムに割り当てられます。代わりに、`--hostname` と `--port` [フラグ](/docs/cli) を使用して固定できます。次に、これを使用してサーバーに接続します。
 
-[`/tui`](#tui) エンドポイントは、サーバー経由で TUI を駆動するために使用できます。たとえば、プロンプトを事前入力したり、実行したりできます。この設定は、Argus [IDE](/docs/ide) プラグインによって使用されます。
+[`/tui`](#tui) エンドポイントは、サーバー経由で TUI を駆動するために使用できます。たとえば、プロンプトを事前入力したり、実行したりできます。この設定は、OpenCorvus [IDE](/docs/ide) プラグインによって使用されます。
 
 ---
 
@@ -78,7 +78,7 @@ http://<hostname>:<port>/doc
 
 ## API
 
-Argus サーバーは次の API を公開します。
+OpenCorvus サーバーは次の API を公開します。
 
 ---
 

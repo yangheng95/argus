@@ -68,22 +68,22 @@ Unlike pure coding agents, OpenCorvus can see and interact with your entire desk
 
 ```bash
 # npm (or bun/pnpm/yarn)
-npm i -g argus-ai@latest
+npm i -g opencorvus-ai@latest
 
 # macOS and Linux (Homebrew)
-brew install yangheng95/tap/argus
+brew install yangheng95/tap/opencorvus
 
 # Windows (Scoop)
-scoop install argus
+scoop install opencorvus
 
 # Windows (Chocolatey)
-choco install argus
+choco install opencorvus
 
 # Arch Linux
-sudo pacman -S argus
+sudo pacman -S opencorvus
 
 # Nix
-nix run nixpkgs#argus
+nix run nixpkgs#opencorvus
 ```
 
 > [!TIP]
@@ -93,16 +93,16 @@ nix run nixpkgs#argus
 
 ```bash
 # Launch TUI in the current directory
-argus
+opencorvus
 
 # Launch TUI in a specific directory
-argus /path/to/project
+opencorvus /path/to/project
 
 # Start headless API server only
-argus serve
+opencorvus serve
 
 # Start server on a specific port
-argus serve --port 8080
+opencorvus serve --port 8080
 ```
 
 ## Agents
@@ -169,18 +169,18 @@ bun dev
 
 #### LLM 模型配置
 
-Bot 通过 `ARGUS_CONFIG_CONTENT` 环境变量以 JSON 格式注入 OpenCorvus 配置，**不依赖**项目目录中的配置文件。
+Bot 通过 `OPENCORVUS_CONFIG_CONTENT` 环境变量以 JSON 格式注入 OpenCorvus 配置，**不依赖**项目目录中的配置文件。
 
 ```bash
 # 使用 Qwen（DashScope）
-ARGUS_CONFIG_CONTENT='{"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
+OPENCORVUS_CONFIG_CONTENT='{"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
 
 # 使用 Claude（Anthropic）
-ARGUS_CONFIG_CONTENT='{"model":"anthropic/claude-sonnet-4-6","provider":{"anthropic":{"env":"ANTHROPIC_API_KEY"}}}'
+OPENCORVUS_CONFIG_CONTENT='{"model":"anthropic/claude-sonnet-4-6","provider":{"anthropic":{"env":"ANTHROPIC_API_KEY"}}}'
 ANTHROPIC_API_KEY=sk-ant-...
 
 # 使用 OpenAI
-ARGUS_CONFIG_CONTENT='{"model":"openai/gpt-4o","provider":{"openai":{"env":"OPENAI_API_KEY"}}}'
+OPENCORVUS_CONFIG_CONTENT='{"model":"openai/gpt-4o","provider":{"openai":{"env":"OPENAI_API_KEY"}}}'
 OPENAI_API_KEY=sk-...
 ```
 
@@ -188,7 +188,7 @@ OPENAI_API_KEY=sk-...
 
 #### 权限配置
 
-`ARGUS_CONFIG_CONTENT` 中的 `permission` 字段控制 Bot 可以执行哪些工具：
+`OPENCORVUS_CONFIG_CONTENT` 中的 `permission` 字段控制 Bot 可以执行哪些工具：
 
 ```json
 {
@@ -231,7 +231,7 @@ OPENAI_API_KEY=sk-...
 | 变量 | 说明 |
 |------|------|
 | `DASHSCOPE_API_KEY` | DashScope API Key（开启视觉分析） |
-| `ARGUS_VISION_MODEL` | 视觉模型，默认 `qwen3.5-plus` |
+| `OPENCORVUS_VISION_MODEL` | 视觉模型，默认 `qwen3.5-plus` |
 
 #### 其他配置
 
@@ -243,7 +243,7 @@ OPENAI_API_KEY=sk-...
 
 ```bash
 # === LLM 模型（必填） ===
-ARGUS_CONFIG_CONTENT={"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}},"permission":{"*":"deny","screen":"allow","input":"allow","bash":"allow","edit":"allow","write":"allow","read":"allow","glob":"allow","grep":"allow","websearch":"allow","webfetch":"allow","skill":"allow","external_directory":"allow"}}
+OPENCORVUS_CONFIG_CONTENT={"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}},"permission":{"*":"deny","screen":"allow","input":"allow","bash":"allow","edit":"allow","write":"allow","read":"allow","glob":"allow","grep":"allow","websearch":"allow","webfetch":"allow","skill":"allow","external_directory":"allow"}}
 
 # === Slack（与 Telegram 二选一或同时配置）===
 SLACK_BOT_TOKEN=xoxb-...
@@ -278,7 +278,7 @@ TUI_PROJECT_DIR=D:/my-project
 ```
 ┌──────────────────────────────────┐
 │        OpenCorvus Server         │
-│  (packages/argus)                │
+│  (packages/opencorvus)                │
 │  ┌──────────┐  ┌──────────────┐  │
 │  │ Sessions │  │ Tool System  │  │
 │  │ & Agents │  │ (code+desktop│  │
@@ -295,7 +295,7 @@ TUI_PROJECT_DIR=D:/my-project
     └───────┘  └───────┘ └──────┘
 ```
 
-- **packages/argus** — Core: agents, sessions, tools, providers, skills, LSP, TUI
+- **packages/opencorvus** — Core: agents, sessions, tools, providers, skills, LSP, TUI
 - **packages/sdk** — JavaScript SDK for programmatic access
 - **packages/bot** — Chat bot adapters (Slack, Telegram)
 - **packages/plugin** — Plugin system (`@opencorvus-ai/plugin`)

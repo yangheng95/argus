@@ -1,19 +1,19 @@
 ---
 title: Сервер
-description: Взаимодействуйте с сервером argus через HTTP.
+description: Взаимодействуйте с сервером opencorvus через HTTP.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-Команда `argus serve` запускает автономный HTTP-сервер, который предоставляет конечную точку OpenAPI, которую может использовать клиент с открытым кодом.
+Команда `opencorvus serve` запускает автономный HTTP-сервер, который предоставляет конечную точку OpenAPI, которую может использовать клиент с открытым кодом.
 
 ---
 
 ### Использование
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### Параметры
@@ -23,41 +23,41 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | Port to listen on                   | `4096`           |
 | `--hostname`    | Hostname to listen on               | `127.0.0.1`      |
 | `--mdns`        | Enable mDNS discovery               | `false`          |
-| `--mdns-domain` | Custom domain name for mDNS service | `argus.local` |
+| `--mdns-domain` | Custom domain name for mDNS service | `opencorvus.local` |
 | `--cors`        | Additional browser origins to allow | `[]`             |
 
 `--cors` можно передать несколько раз:
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### Аутентификация
 
-Установите `OPENCODE_SERVER_PASSWORD`, чтобы защитить сервер с помощью базовой аутентификации HTTP. Имя пользователя по умолчанию — `argus` или установите `OPENCODE_SERVER_USERNAME`, чтобы переопределить его. Это относится как к `argus serve`, так и к `argus web`.
+Установите `OPENCODE_SERVER_PASSWORD`, чтобы защитить сервер с помощью базовой аутентификации HTTP. Имя пользователя по умолчанию — `opencorvus` или установите `OPENCODE_SERVER_USERNAME`, чтобы переопределить его. Это относится как к `opencorvus serve`, так и к `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### Как это работает
 
-Когда вы запускаете `argus`, он запускает TUI и сервер. Где находится TUI
+Когда вы запускаете `opencorvus`, он запускает TUI и сервер. Где находится TUI
 клиент, который общается с сервером. Сервер предоставляет спецификацию OpenAPI 3.1.
 конечная точка. Эта конечная точка также используется для создания файла [SDK](/docs/sdk).
 
 :::tip
-Используйте сервер argus для программного взаимодействия с открытым кодом.
+Используйте сервер opencorvus для программного взаимодействия с открытым кодом.
 :::
 
 Эта архитектура позволяет открытому коду поддерживать несколько клиентов и позволяет программно взаимодействовать с открытым кодом.
 
-Вы можете запустить `argus serve`, чтобы запустить автономный сервер. Если у вас есть
-TUI с открытым кодом запущен, `argus serve` запустит новый сервер.
+Вы можете запустить `opencorvus serve`, чтобы запустить автономный сервер. Если у вас есть
+TUI с открытым кодом запущен, `opencorvus serve` запустит новый сервер.
 
 ---
 
@@ -65,7 +65,7 @@ TUI с открытым кодом запущен, `argus serve` запусти�
 
 Когда вы запускаете TUI, он случайным образом назначает порт и имя хоста. Вместо этого вы можете передать `--hostname` и `--port` [flags](/docs/cli). Затем используйте это для подключения к его серверу.
 
-Конечную точку [`/tui`](#tui) можно использовать для управления TUI через сервер. Например, вы можете предварительно заполнить или запустить подсказку. Эта настройка используется плагинами argus [IDE](/docs/ide).
+Конечную точку [`/tui`](#tui) можно использовать для управления TUI через сервер. Например, вы можете предварительно заполнить или запустить подсказку. Эта настройка используется плагинами opencorvus [IDE](/docs/ide).
 
 ---
 
@@ -83,7 +83,7 @@ For example, `http://localhost:4096/doc`. Use the spec to generate clients or in
 
 ## API
 
-Сервер argus предоставляет следующие API.
+Сервер opencorvus предоставляет следующие API.
 
 ---
 

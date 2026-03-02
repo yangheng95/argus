@@ -64,7 +64,7 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Run GUI coordinate smoke
-        run: bun run ./packages/argus/script/gui-coordinate-smoke.ts
+        run: bun run ./packages/opencorvus/script/gui-coordinate-smoke.ts
 
   bot-unit:
     name: bot-unit

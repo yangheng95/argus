@@ -113,7 +113,7 @@ export default function Home() {
             <h3 data-component="title">npm</h3>
             <button data-copy data-slot="button">
               <span>
-                npm install -g <strong>argus-ai</strong>
+                npm install -g <strong>opencorvus-ai</strong>
               </span>
               <CopyStatus />
             </button>
@@ -122,7 +122,7 @@ export default function Home() {
             <h3 data-component="title">bun</h3>
             <button data-copy data-slot="button">
               <span>
-                bun install -g <strong>argus-ai</strong>
+                bun install -g <strong>opencorvus-ai</strong>
               </span>
               <CopyStatus />
             </button>
@@ -131,7 +131,7 @@ export default function Home() {
             <h3 data-component="title">homebrew</h3>
             <button data-copy data-slot="button">
               <span>
-                brew install <strong>argus</strong>
+                brew install <strong>opencorvus</strong>
               </span>
               <CopyStatus />
             </button>
@@ -140,7 +140,7 @@ export default function Home() {
             <h3 data-component="title">paru</h3>
             <button data-copy data-slot="button">
               <span>
-                paru -S <strong>argus-bin</strong>
+                paru -S <strong>opencorvus-bin</strong>
               </span>
               <CopyStatus />
             </button>
@@ -161,7 +161,7 @@ export default function Home() {
             <a href="https://x.com/opencode">{i18n.t("footer.x")}</a>
           </div>
           <div data-slot="cell">
-            <a href="https://github.com/yangheng95/argus">{i18n.t("footer.github")}</a>
+            <a href="https://github.com/yangheng95/opencorvus">{i18n.t("footer.github")}</a>
           </div>
           <div data-slot="cell">
             <a href="https://opencode.ai/discord">{i18n.t("footer.discord")}</a>

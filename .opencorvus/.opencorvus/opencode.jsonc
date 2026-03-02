@@ -1,8 +1,8 @@
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "model": "alibaba-cn/qwen3.5-plus",
   "provider": {
-    "argus": {
+    "opencorvus": {
       "options": {},
     },
     "alibaba-cn": {

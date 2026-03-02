@@ -15,8 +15,8 @@ import { Clipboard } from "@tui/util/clipboard"
 import { useToast } from "../ui/toast"
 
 const PROVIDER_PRIORITY: Record<string, number> = {
-  argus: 0,
-  "argus-go": 1,
+  opencorvus: 0,
+  "opencorvus-go": 1,
   openai: 2,
   "github-copilot": 3,
   anthropic: 4,
@@ -35,10 +35,10 @@ export function createDialogProviderOptions() {
         title: provider.name,
         value: provider.id,
         description: {
-          argus: "(Recommended)",
+          opencorvus: "(Recommended)",
           anthropic: "(Claude Max or API key)",
           openai: "(ChatGPT Plus/Pro or API key)",
-          "argus-go": "Low cost subscription for everyone",
+          "opencorvus-go": "Low cost subscription for everyone",
         }[provider.id],
         category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Other",
         async onSelect() {
@@ -217,10 +217,10 @@ function ApiMethod(props: ApiMethodProps) {
       placeholder="API key"
       description={
         {
-          argus: (
+          opencorvus: (
             <box gap={1}>
               <text fg={theme.textMuted}>
-                Argus Zen gives you access to all the best coding models at the cheapest prices with a single API
+                OpenCorvus Zen gives you access to all the best coding models at the cheapest prices with a single API
                 key.
               </text>
               <text fg={theme.text}>
@@ -228,14 +228,14 @@ function ApiMethod(props: ApiMethodProps) {
               </text>
             </box>
           ),
-          "argus-go": (
+          "opencorvus-go": (
             <box gap={1}>
               <text fg={theme.textMuted}>
-                Argus Go is a $10 per month subscription that provides reliable access to popular open coding models
+                OpenCorvus Go is a $10 per month subscription that provides reliable access to popular open coding models
                 with generous usage limits.
               </text>
               <text fg={theme.text}>
-                Go to <span style={{ fg: theme.primary }}>https://opencode.ai/zen</span> and enable Argus Go
+                Go to <span style={{ fg: theme.primary }}>https://opencode.ai/zen</span> and enable OpenCorvus Go
               </text>
             </box>
           ),

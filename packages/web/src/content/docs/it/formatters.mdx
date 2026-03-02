@@ -1,15 +1,15 @@
 ---
 title: Formattatori
-description: Argus usa formattatori specifici per linguaggio.
+description: OpenCorvus usa formattatori specifici per linguaggio.
 ---
 
-Argus formatta automaticamente i file dopo che vengono scritti o modificati usando formattatori specifici per linguaggio. Questo assicura che il codice generato segua lo stile del tuo progetto.
+OpenCorvus formatta automaticamente i file dopo che vengono scritti o modificati usando formattatori specifici per linguaggio. Questo assicura che il codice generato segua lo stile del tuo progetto.
 
 ---
 
 ## Integrati
 
-Argus include diversi formattatori integrati per linguaggi e framework popolari. Qui sotto trovi la lista dei formattatori, delle estensioni supportate e dei comandi o opzioni di config richiesti.
+OpenCorvus include diversi formattatori integrati per linguaggi e framework popolari. Qui sotto trovi la lista dei formattatori, delle estensioni supportate e dei comandi o opzioni di config richiesti.
 
 | Formattatore         | Estensioni                                                                                               | Requisiti                                                                                             |
 | -------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -39,13 +39,13 @@ Argus include diversi formattatori integrati per linguaggi e framework popolari.
 | oxfmt (Experimental) | .js, .jsx, .ts, .tsx                                                                                     | `oxfmt` dependency in `package.json` and an [experimental env variable flag](/docs/cli/#experimental) |
 | ormolu               | .hs                                                                                                      | `ormolu` command available                                                                            |
 
-Quindi, se il progetto ha `prettier` in `package.json`, Argus lo usera automaticamente.
+Quindi, se il progetto ha `prettier` in `package.json`, OpenCorvus lo usera automaticamente.
 
 ---
 
 ## Come funziona
 
-Quando Argus scrive o modifica un file:
+Quando OpenCorvus scrive o modifica un file:
 
 1. Controlla l'estensione del file rispetto a tutti i formattatori abilitati.
 2. Esegue il comando del formattatore appropriato sul file.
@@ -57,11 +57,11 @@ Questo processo avviene in background, mantenendo lo stile del codice senza pass
 
 ## Configurazione
 
-Puoi personalizzare i formattatori nella sezione `formatter` della config di Argus.
+Puoi personalizzare i formattatori nella sezione `formatter` della config di OpenCorvus.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {}
 }
 ```
@@ -83,18 +83,18 @@ Vediamo alcuni esempi.
 
 Per disabilitare **tutti** i formattatori globalmente, imposta `formatter` a `false`:
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": false
 }
 ```
 
 Per disabilitare un formattatore **specifico**, imposta `disabled` a `true`:
 
-```json title="argus.json" {5}
+```json title="opencorvus.json" {5}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": true
@@ -109,9 +109,9 @@ Per disabilitare un formattatore **specifico**, imposta `disabled` a `true`:
 
 Puoi sovrascrivere i formattatori integrati o aggiungerne di nuovi specificando comando, variabili d'ambiente ed estensioni file:
 
-```json title="argus.json" {4-14}
+```json title="opencorvus.json" {4-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],

@@ -3,9 +3,9 @@ title: Themes
 description: Waehle ein eingebautes Theme oder erstelle eins.
 ---
 
-Mit Argus kannst du ein eingebautes Theme waehlen, ein an dein Terminal angepasstes Theme nutzen oder ein eigenes Theme definieren.
+Mit OpenCorvus kannst du ein eingebautes Theme waehlen, ein an dein Terminal angepasstes Theme nutzen oder ein eigenes Theme definieren.
 
-Standardmaessig verwendet Argus das `argus`-Theme.
+Standardmaessig verwendet OpenCorvus das `opencorvus`-Theme.
 
 ---
 
@@ -24,7 +24,7 @@ Ohne truecolor werden Farben weniger exakt dargestellt oder auf eine 256-Farben-
 
 ## Eingebaute Themes
 
-Argus liefert mehrere eingebaute Themes mit.
+OpenCorvus liefert mehrere eingebaute Themes mit.
 
 | Name                   | Description                                                                  |
 | ---------------------- | ---------------------------------------------------------------------------- |
@@ -55,7 +55,7 @@ Im Gegensatz zu Themes mit festen Farben gilt beim _system_-Theme:
 
 Das System-Theme ist ideal fuer Nutzer, die:
 
-- Argus optisch ans Terminal anpassen wollen
+- OpenCorvus optisch ans Terminal anpassen wollen
 - eigene Terminal-Farbschemata nutzen
 - ein konsistentes Erscheinungsbild in Terminal-Apps bevorzugen
 
@@ -65,9 +65,9 @@ Das System-Theme ist ideal fuer Nutzer, die:
 
 Du kannst ein Theme ueber `/theme` auswaehlen oder direkt in der [Konfiguration](/docs/config) setzen.
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "theme": "tokyonight"
 }
 ```
@@ -76,7 +76,7 @@ Du kannst ein Theme ueber `/theme` auswaehlen oder direkt in der [Konfiguration]
 
 ## Eigene Themes
 
-Argus unterstuetzt ein flexibles JSON-basiertes Theme-System.
+OpenCorvus unterstuetzt ein flexibles JSON-basiertes Theme-System.
 Damit lassen sich Themes einfach erstellen und anpassen.
 
 ---
@@ -86,9 +86,9 @@ Damit lassen sich Themes einfach erstellen und anpassen.
 Themes are loaded from multiple directories in the following order where later directories override earlier ones:
 
 1. **Built-in themes** - These are embedded in the binary
-2. **User config directory** - Defined in `~/.config/argus/themes/*.json` or `$XDG_CONFIG_HOME/argus/themes/*.json`
-3. **Project root directory** - Defined in the `<project-root>/.argus/themes/*.json`
-4. **Current working directory** - Defined in `./.argus/themes/*.json`
+2. **User config directory** - Defined in `~/.config/opencorvus/themes/*.json` or `$XDG_CONFIG_HOME/opencorvus/themes/*.json`
+3. **Project root directory** - Defined in the `<project-root>/.opencorvus/themes/*.json`
+4. **Current working directory** - Defined in `./.opencorvus/themes/*.json`
 
 If multiple directories contain a theme with the same name, the theme from the directory with higher priority will be used.
 
@@ -101,15 +101,15 @@ To create a custom theme, create a JSON file in one of the theme directories.
 For user-wide themes:
 
 ```bash no-frame
-mkdir -p ~/.config/argus/themes
-vim ~/.config/argus/themes/my-theme.json
+mkdir -p ~/.config/opencorvus/themes
+vim ~/.config/opencorvus/themes/my-theme.json
 ```
 
 And for project-specific themes.
 
 ```bash no-frame
-mkdir -p .argus/themes
-vim .argus/themes/my-theme.json
+mkdir -p .opencorvus/themes
+vim .opencorvus/themes/my-theme.json
 ```
 
 ---
@@ -147,7 +147,7 @@ Here's an example of a custom theme:
 
 ```json title="my-theme.json"
 {
-  "$schema": "https://argus.ai/theme.json",
+  "$schema": "https://opencorvus.ai/theme.json",
   "defs": {
     "nord0": "#2E3440",
     "nord1": "#3B4252",

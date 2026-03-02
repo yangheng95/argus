@@ -125,27 +125,27 @@ export default function Download() {
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("npm i -g argus-ai")}>
+              <button data-component="cli-row" onClick={handleCopyClick("npm i -g opencorvus-ai")}>
                 <code>
-                  npm i -g <strong>argus-ai</strong>
+                  npm i -g <strong>opencorvus-ai</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("bun add -g argus-ai")}>
+              <button data-component="cli-row" onClick={handleCopyClick("bun add -g opencorvus-ai")}>
                 <code>
-                  bun add -g <strong>argus-ai</strong>
+                  bun add -g <strong>opencorvus-ai</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("brew install argus")}>
+              <button data-component="cli-row" onClick={handleCopyClick("brew install opencorvus")}>
                 <code>
-                  brew install <strong>argus</strong>
+                  brew install <strong>opencorvus</strong>
                 </code>
                 <CopyStatus />
               </button>
-              <button data-component="cli-row" onClick={handleCopyClick("paru -S argus-bin")}>
+              <button data-component="cli-row" onClick={handleCopyClick("paru -S opencorvus-bin")}>
                 <code>
-                  paru -S <strong>argus-bin</strong>
+                  paru -S <strong>opencorvus-bin</strong>
                 </code>
                 <CopyStatus />
               </button>
@@ -157,9 +157,9 @@ export default function Download() {
               <span>[2]</span> {i18n.t("download.section.desktop")}
             </div>
             <div data-component="section-content">
-              <button data-component="cli-row" onClick={handleCopyClick("brew install --cask argus-desktop")}>
+              <button data-component="cli-row" onClick={handleCopyClick("brew install --cask opencorvus-desktop")}>
                 <code>
-                  brew install --cask <strong>argus-desktop</strong>
+                  brew install --cask <strong>opencorvus-desktop</strong>
                 </code>
                 <CopyStatus />
               </button>

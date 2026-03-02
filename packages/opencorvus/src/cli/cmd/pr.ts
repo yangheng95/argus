@@ -5,7 +5,7 @@ import { $ } from "bun"
 
 export const PrCommand = cmd({
   command: "pr <number>",
-  describe: "fetch and checkout a GitHub PR branch, then run argus",
+  describe: "fetch and checkout a GitHub PR branch, then run opencorvus",
   builder: (yargs) =>
     yargs.positional("number", {
       type: "number",
@@ -63,15 +63,15 @@ export const PrCommand = cmd({
               await $`git branch --set-upstream-to=${remoteName}/${headRefName} ${localBranchName}`.nothrow()
             }
 
-            // Check for argus session link in PR body
+            // Check for opencorvus session link in PR body
             if (prInfo && prInfo.body) {
               const sessionMatch = prInfo.body.match(/https:\/\/opncd\.ai\/s\/([a-zA-Z0-9_-]+)/)
               if (sessionMatch) {
                 const sessionUrl = sessionMatch[0]
-                UI.println(`Found argus session: ${sessionUrl}`)
+                UI.println(`Found opencorvus session: ${sessionUrl}`)
                 UI.println(`Importing session...`)
 
-                const importResult = await $`argus import ${sessionUrl}`.nothrow()
+                const importResult = await $`opencorvus import ${sessionUrl}`.nothrow()
                 if (importResult.exitCode === 0) {
                   const importOutput = importResult.text().trim()
                   // Extract session ID from the output (format: "Imported session: <session-id>")
@@ -88,20 +88,20 @@ export const PrCommand = cmd({
 
         UI.println(`Successfully checked out PR #${prNumber} as branch '${localBranchName}'`)
         UI.println()
-        UI.println("Starting argus...")
+        UI.println("Starting opencorvus...")
         UI.println()
 
-        // Launch argus TUI with session ID if available
+        // Launch opencorvus TUI with session ID if available
         const { Tui } = await import("@/tui")
         const handle = await Tui.spawn({
           sessionID: sessionId,
-          bin: "argus",
+          bin: "opencorvus",
           directory: process.cwd(),
         })
 
         const exitCode = await handle.waitForExit()
         if (exitCode !== 0 && exitCode !== null) {
-          throw new Error(`argus exited with code ${exitCode}`)
+          throw new Error(`opencorvus exited with code ${exitCode}`)
         }
       },
     })

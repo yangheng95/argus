@@ -2,12 +2,12 @@
 
 ## Sources
 
-- PR #9821: https://github.com/yangheng95/argus/pull/9821
+- PR #9821: https://github.com/yangheng95/opencorvus/pull/9821
 
 ## Do Not Translate (Locale Additions)
 
-- `Argus` (preserve casing in prose; keep `argus` only in commands, package names, paths, or code)
-- `Argus CLI`
+- `OpenCorvus` (preserve casing in prose; keep `opencorvus` only in commands, package names, paths, or code)
+- `OpenCorvus CLI`
 - `CLI`, `TUI`, `MCP`, `OAuth`
 - Commands, flags, file paths, and code literals (keep exactly as written)
 

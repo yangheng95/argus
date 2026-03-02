@@ -3,11 +3,11 @@ title: Skróty klawiszowe
 description: Dostosuj swoje skróty klawiszowe.
 ---
 
-argus zawiera listę skrótów klawiszowych, które można zastosować poprzez argus.
+opencorvus zawiera listę skrótów klawiszowych, które można zastosować poprzez opencorvus.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "leader": "ctrl+x",
     "app_exit": "ctrl+c,ctrl+d,<leader>q",
@@ -107,7 +107,7 @@ argus zawiera listę skrótów klawiszowych, które można zastosować poprzez a
 
 ## Klucz lidera
 
-argus używa klucza `leader` dla głównych skrótów klawiszowych. Rozwiązanie problemu konfliktów w terminalu.
+opencorvus używa klucza `leader` dla głównych skrótów klawiszowych. Rozwiązanie problemu konfliktów w terminalu.
 
 Domyślnie `ctrl+x` jest klawiszem głównym i główną akcją wymaga najpierw naciśnięcia klawisza lidera, a następnie skrótu. Na przykład, aby ponownie zastosować, następnie następuje `ctrl+x`, a następnie następuje `n`.
 
@@ -119,9 +119,9 @@ Nie musisz mieć klawisza wiodącego do skrótów klawiszowych, ale zalecamy to 
 
 Możesz podłączyć powiązanie klawiszy, dodając klucz do swojej konfiguracji z wartością „none”.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "session_compact": "none"
   }
@@ -132,7 +132,7 @@ Możesz podłączyć powiązanie klawiszy, dodając klucz do swojej konfiguracji
 
 ## Skróty monitów na pulpicie
 
-Pole sprawdzania aplikacji komputerowej argus obsługuje popularne skróty w stylu Readline/Emacs do edycji tekstu. Są one dostępne i obecnie nie można ich skonfigurować za pomocą `argus.json`.
+Pole sprawdzania aplikacji komputerowej opencorvus obsługuje popularne skróty w stylu Readline/Emacs do edycji tekstu. Są one dostępne i obecnie nie można ich skonfigurować za pomocą `opencorvus.json`.
 
 | Skrót    | Akcja                                                         |
 | -------- | ------------------------------------------------------------- |

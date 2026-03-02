@@ -7,7 +7,7 @@ import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
 Åpenkoden JS/TS SDK gir en typesikker klient for samhandling med serveren.
-Brug den til at bygge integrasjoner og kontrollere argus programmatisk.
+Brug den til at bygge integrasjoner og kontrollere opencorvus programmatisk.
 
 [Finn ut mer](/docs/server) om hvordan serveren fungerer. For eksempler, tjek ut [prosjektene](/docs/ecosystem#projects) bygget av fellesskapet.
 
@@ -18,17 +18,17 @@ Brug den til at bygge integrasjoner og kontrollere argus programmatisk.
 Installer SDK fra npm:
 
 ```bash
-npm install @argus-ai/sdk
+npm install @opencorvus-ai/sdk
 ```
 
 ---
 
 ## Opret klient
 
-Opret en forekomst av argus:
+Opret en forekomst av opencorvus:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
 const { client } = await createOpenCorvus()
 ```
@@ -49,12 +49,12 @@ Dette starter både en server og en klient
 
 ## Konfig
 
-Du kan sende et konfigurasjonsobjekt for at tilpasse virkemåten. Forekomsten henter fortsatt din `argus.json`, men du kan overstyre eller tilføje til konfigurasjon inline:
+Du kan sende et konfigurasjonsobjekt for at tilpasse virkemåten. Forekomsten henter fortsatt din `opencorvus.json`, men du kan overstyre eller tilføje til konfigurasjon inline:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
-const argus = await createOpenCorvus({
+const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -62,17 +62,17 @@ const argus = await createOpenCorvus({
   },
 })
 
-console.log(`Server running at ${argus.server.url}`)
+console.log(`Server running at ${opencorvus.server.url}`)
 
-argus.server.close()
+opencorvus.server.close()
 ```
 
 ## Kun klient
 
-Hvis du allerede har en kjørende forekomst av argus, kan du oprete en klientforekomst for at koble til den:
+Hvis du allerede har en kjørende forekomst av opencorvus, kan du oprete en klientforekomst for at koble til den:
 
 ```javascript
-import { createOpenCorvusClient } from "@argus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 SDK inkluderer TypeScript-definisjoner for alle API-typer. Importer dem direkte:
 
 ```typescript
-import type { Session, Message, Part } from "@argus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk"
 ```
 
 Alle typer er generert fra serverens OpenAPI-spesifikasjon og tilgængelig i <a href={typesUrl}>types-filen</a>.
@@ -304,7 +304,7 @@ await client.session.prompt({
 ```javascript
 // Search and read files
 const textResults = await client.find.text({
-  query: { pattern: "function.*argus" },
+  query: { pattern: "function.*opencorvus" },
 })
 
 const files = await client.find.files({

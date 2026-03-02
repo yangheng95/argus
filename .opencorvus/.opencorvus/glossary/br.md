@@ -2,12 +2,12 @@
 
 ## Sources
 
-- PR #10086: https://github.com/yangheng95/argus/pull/10086
+- PR #10086: https://github.com/yangheng95/opencorvus/pull/10086
 
 ## Do Not Translate (Locale Additions)
 
-- `Argus` (preserve casing in prose; keep `argus` only in commands, package names, paths, or code)
-- `Argus CLI`
+- `OpenCorvus` (preserve casing in prose; keep `opencorvus` only in commands, package names, paths, or code)
+- `OpenCorvus CLI`
 - `CLI`, `TUI`, `MCP`, `OAuth`
 - Locale code `br` in repo config, code, and paths (repo alias for Brazilian Portuguese)
 

@@ -1,36 +1,36 @@
-id = "argus"
-name = "Argus"
+id = "opencorvus"
+name = "OpenCorvus"
 description = "The open source coding agent."
 version = "1.2.15"
 schema_version = 1
 authors = ["Anomaly"]
-repository = "https://github.com/yangheng95/argus"
+repository = "https://github.com/yangheng95/opencorvus"
 
-[agent_servers.argus]
-name = "Argus"
-icon = "./icons/argus.svg"
+[agent_servers.opencorvus]
+name = "OpenCorvus"
+icon = "./icons/opencorvus.svg"
 
-[agent_servers.argus.targets.darwin-aarch64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-darwin-arm64.zip"
-cmd = "./argus"
+[agent_servers.opencorvus.targets.darwin-aarch64]
+archive = "https://github.com/yangheng95/opencorvus/releases/download/v1.2.15/opencorvus-darwin-arm64.zip"
+cmd = "./opencorvus"
 args = ["acp"]
 
-[agent_servers.argus.targets.darwin-x86_64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-darwin-x64.zip"
-cmd = "./argus"
+[agent_servers.opencorvus.targets.darwin-x86_64]
+archive = "https://github.com/yangheng95/opencorvus/releases/download/v1.2.15/opencorvus-darwin-x64.zip"
+cmd = "./opencorvus"
 args = ["acp"]
 
-[agent_servers.argus.targets.linux-aarch64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-linux-arm64.tar.gz"
-cmd = "./argus"
+[agent_servers.opencorvus.targets.linux-aarch64]
+archive = "https://github.com/yangheng95/opencorvus/releases/download/v1.2.15/opencorvus-linux-arm64.tar.gz"
+cmd = "./opencorvus"
 args = ["acp"]
 
-[agent_servers.argus.targets.linux-x86_64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-linux-x64.tar.gz"
-cmd = "./argus"
+[agent_servers.opencorvus.targets.linux-x86_64]
+archive = "https://github.com/yangheng95/opencorvus/releases/download/v1.2.15/opencorvus-linux-x64.tar.gz"
+cmd = "./opencorvus"
 args = ["acp"]
 
-[agent_servers.argus.targets.windows-x86_64]
-archive = "https://github.com/yangheng95/argus/releases/download/v1.2.15/argus-windows-x64.zip"
-cmd = "./argus.exe"
+[agent_servers.opencorvus.targets.windows-x86_64]
+archive = "https://github.com/yangheng95/opencorvus/releases/download/v1.2.15/opencorvus-windows-x64.zip"
+cmd = "./opencorvus.exe"
 args = ["acp"]

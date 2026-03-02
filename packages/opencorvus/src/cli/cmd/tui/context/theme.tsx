@@ -24,7 +24,7 @@ import nightowl from "./theme/nightowl.json" with { type: "json" }
 import nord from "./theme/nord.json" with { type: "json" }
 import osakaJade from "./theme/osaka-jade.json" with { type: "json" }
 import onedark from "./theme/one-dark.json" with { type: "json" }
-import argus from "./theme/argus.json" with { type: "json" }
+import opencorvus from "./theme/opencorvus.json" with { type: "json" }
 import orng from "./theme/orng.json" with { type: "json" }
 import lucentOrng from "./theme/lucent-orng.json" with { type: "json" }
 import palenight from "./theme/palenight.json" with { type: "json" }
@@ -160,7 +160,7 @@ export const DEFAULT_THEMES: Record<string, ThemeJson> = {
   nord,
   ["one-dark"]: onedark,
   ["osaka-jade"]: osakaJade,
-  argus,
+  opencorvus,
   orng,
   ["lucent-orng"]: lucentOrng,
   palenight,
@@ -285,7 +285,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     const [store, setStore] = createStore({
       themes: DEFAULT_THEMES,
       mode: kv.get("theme_mode", props.mode),
-      active: (config.theme ?? kv.get("theme", "argus")) as string,
+      active: (config.theme ?? kv.get("theme", "opencorvus")) as string,
       ready: false,
     })
 
@@ -305,7 +305,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
           )
         })
         .catch(() => {
-          setStore("active", "argus")
+          setStore("active", "opencorvus")
         })
         .finally(() => {
           if (store.active !== "system") {
@@ -328,7 +328,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
             if (store.active === "system") {
               setStore(
                 produce((draft) => {
-                  draft.active = "argus"
+                  draft.active = "opencorvus"
                   draft.ready = true
                 }),
               )
@@ -353,7 +353,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     })
 
     const values = createMemo(() => {
-      return resolveTheme(store.themes[store.active] ?? store.themes.argus, store.mode)
+      return resolveTheme(store.themes[store.active] ?? store.themes.opencorvus, store.mode)
     })
 
     const syntax = createMemo(() => generateSyntax(values()))
@@ -397,7 +397,7 @@ async function getCustomThemes() {
     Global.Path.config,
     ...(await Array.fromAsync(
       Filesystem.up({
-        targets: [".opencorvus", ".argus"],
+        targets: [".opencorvus", ".opencorvus"],
         start: process.cwd(),
       }),
     )),

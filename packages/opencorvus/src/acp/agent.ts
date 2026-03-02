@@ -519,18 +519,18 @@ export namespace ACP {
       log.info("initialize", { protocolVersion: params.protocolVersion })
 
       const authMethod: AuthMethod = {
-        description: "Run `argus auth login` in the terminal",
-        name: "Login with argus",
-        id: "argus-login",
+        description: "Run `opencorvus auth login` in the terminal",
+        name: "Login with opencorvus",
+        id: "opencorvus-login",
       }
 
       // If client supports terminal-auth capability, use that instead.
       if (params.clientCapabilities?._meta?.["terminal-auth"] === true) {
         authMethod._meta = {
           "terminal-auth": {
-            command: "argus",
+            command: "opencorvus",
             args: ["auth", "login"],
-            label: "Argus Login",
+            label: "OpenCorvus Login",
           },
         }
       }
@@ -555,7 +555,7 @@ export namespace ACP {
         },
         authMethods: [authMethod],
         agentInfo: {
-          name: "Argus",
+          name: "OpenCorvus",
           version: Installation.VERSION,
         },
       }
@@ -982,7 +982,7 @@ export namespace ACP {
           }
         } else if (part.type === "file") {
           // Replay file attachments as appropriate ACP content blocks.
-          // Argus stores files internally as { type: "file", url, filename, mime }.
+          // OpenCorvus stores files internally as { type: "file", url, filename, mime }.
           // We convert these back to ACP blocks based on the URL scheme and MIME type:
           // - file:// URLs → resource_link
           // - data: URLs with image/* → image block
@@ -1564,12 +1564,12 @@ export namespace ACP {
 
     if (specified && !providers.length) return specified
 
-    const argusProvider = providers.find((p) => p.id === "argus")
-    if (argusProvider) {
-      if (argusProvider.models["big-pickle"]) {
-        return { providerID: "argus", modelID: "big-pickle" }
+    const opencorvusProvider = providers.find((p) => p.id === "opencorvus")
+    if (opencorvusProvider) {
+      if (opencorvusProvider.models["big-pickle"]) {
+        return { providerID: "opencorvus", modelID: "big-pickle" }
       }
-      const [best] = Provider.sort(Object.values(argusProvider.models))
+      const [best] = Provider.sort(Object.values(opencorvusProvider.models))
       if (best) {
         return {
           providerID: best.providerID,
@@ -1589,7 +1589,7 @@ export namespace ACP {
 
     if (specified) return specified
 
-    return { providerID: "argus", modelID: "big-pickle" }
+    return { providerID: "opencorvus", modelID: "big-pickle" }
   }
 
   function parseUri(
@@ -1701,7 +1701,7 @@ export namespace ACP {
     availableVariants: string[]
   }) {
     return {
-      argus: {
+      opencorvus: {
         modelId: `${input.model.providerID}/${input.model.modelID}`,
         variant: input.variant ?? null,
         availableVariants: input.availableVariants,

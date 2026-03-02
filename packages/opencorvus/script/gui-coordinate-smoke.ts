@@ -1,5 +1,5 @@
-import { Coordinates } from "../src/argus/gui/coordinates"
-import { Capture } from "../src/argus/perception/capture"
+import { Coordinates } from "../src/opencorvus/gui/coordinates"
+import { Capture } from "../src/opencorvus/perception/capture"
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(message)

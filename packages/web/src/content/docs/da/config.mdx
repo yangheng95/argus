@@ -1,21 +1,21 @@
 ---
 title: Konfiguration
-description: Ved at bruge Argus JSON konfig.
+description: Ved at bruge OpenCorvus JSON konfig.
 ---
 
-Du kan konfigurere Argus ved hjælp af en JSON-konfigurationsfil.
+Du kan konfigurere OpenCorvus ved hjælp af en JSON-konfigurationsfil.
 
 ---
 
 ## Format
 
-Argus understøtter både **JSON** og **JSONC** (JSON med kommentarer) formater.
+OpenCorvus understøtter både **JSON** og **JSONC** (JSON med kommentarer) formater.
 
-```jsonc title="argus.jsonc"
+```jsonc title="opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   // Theme configuration
-  "theme": "argus",
+  "theme": "opencorvus",
   "model": "anthropic/claude-sonnet-4-5",
   "autoupdate": true,
 }
@@ -34,7 +34,7 @@ Konfigurationsfiler **flettes sammen**, erstattes ikke.
 
 Konfigurationsfiler flettes sammen, erstattes ikke. Indstillinger fra følgende konfigurationssteder kombineret. Senere konfigurationer tilsidesætter kun tidligere konfigurationer for modstridende nøgler. Ikke-modstridende indstillinger fra alle konfigurationer bevares.
 
-For eksempel, hvis dine globale konfigurationssæt `theme: "argus"` og `autoupdate: true`, og dine projektkonfigurationssæt `model: "anthropic/claude-sonnet-4-5"`, vil den endelige konfiguration integrere alle tre indstillinger.
+For eksempel, hvis dine globale konfigurationssæt `theme: "opencorvus"` og `autoupdate: true`, og dine projektkonfigurationssæt `model: "anthropic/claude-sonnet-4-5"`, vil den endelige konfiguration integrere alle tre indstillinger.
 
 ---
 
@@ -42,30 +42,30 @@ For eksempel, hvis dine globale konfigurationssæt `theme: "argus"` og `autoupda
 
 Konfigurationskilder indlæses i denne rækkefølge (senere kilder tilsidesætter tidligere):
 
-1. **Fjernkonfiguration** (fra `.well-known/argus`) - organisatoriske standardindstillinger
-2. **Global config** (`~/.config/argus/argus.json`) - brugerpræferencer
+1. **Fjernkonfiguration** (fra `.well-known/opencorvus`) - organisatoriske standardindstillinger
+2. **Global config** (`~/.config/opencorvus/opencorvus.json`) - brugerpræferencer
 3. **Tilpasset konfiguration** (`OPENCODE_CONFIG` env var) - tilpassede tilsidesættelser
-4. **Project config** (`argus.json` i projekt) - projektspecifikke indstillinger
-5. **`.argus` mapper** - agent, kommandoer, plugins
+4. **Project config** (`opencorvus.json` i projekt) - projektspecifikke indstillinger
+5. **`.opencorvus` mapper** - agent, kommandoer, plugins
 6. **Inline config** (`OPENCODE_CONFIG_CONTENT` env var) - runtime tilsidesættelser
 
 Dette betyder, at projektkonfigurationer kan tilsidesætte globale standardindstillinger, og globale konfigurationer kan tilsidesætte eksterne organisatoriske standarder.
 
 :::note
-`.argus` og `~/.config/argus` mapperne bruger **flertalsnavne** for undermapper: `agents/`, `commands/`, `modes/`, `plugins/`, `skills/`, `tools/` og `themes/`. Enkelte navne (f.eks. `agent/`) understøtter også bagudkompatibilitet.
+`.opencorvus` og `~/.config/opencorvus` mapperne bruger **flertalsnavne** for undermapper: `agents/`, `commands/`, `modes/`, `plugins/`, `skills/`, `tools/` og `themes/`. Enkelte navne (f.eks. `agent/`) understøtter også bagudkompatibilitet.
 :::
 
 ---
 
 ### Ekstern konfiguration
 
-Organisationer kan levere standardkonfiguration via `.well-known/argus`-slutpunktet. Dette hentes automatisk, når du godkender med en udbyder, der understøtter det.
+Organisationer kan levere standardkonfiguration via `.well-known/opencorvus`-slutpunktet. Dette hentes automatisk, når du godkender med en udbyder, der understøtter det.
 
 Remote config indlæses først og fungerer som basislaget. Alle andre konfigurationskilder (global, projekt) kan tilsidesætte disse standardindstillinger.
 
 Hvis din organisation f.eks. leverer MCP-servere, der er deaktiveret som standard:
 
-```json title="Remote config from .well-known/argus"
+```json title="Remote config from .well-known/opencorvus"
 {
   "mcp": {
     "jira": {
@@ -79,7 +79,7 @@ Hvis din organisation f.eks. leverer MCP-servere, der er deaktiveret som standar
 
 Du kan aktivere specifikke servere i din lokale konfiguration:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mcp": {
     "jira": {
@@ -95,7 +95,7 @@ Du kan aktivere specifikke servere i din lokale konfiguration:
 
 ### Global
 
-Placer din globale Argus-konfiguration i `~/.config/argus/argus.json`. Brug global konfiguration til brugerdækkende præferencer som temaer, udbydere eller nøglebindinger.
+Placer din globale OpenCorvus-konfiguration i `~/.config/opencorvus/opencorvus.json`. Brug global konfiguration til brugerdækkende præferencer som temaer, udbydere eller nøglebindinger.
 
 Global config tilsidesætter eksterne organisatoriske standarder.
 
@@ -103,13 +103,13 @@ Global config tilsidesætter eksterne organisatoriske standarder.
 
 ### Projekt-niveau
 
-Tilføj `argus.json` i dit projektrod. Project config har den højeste forrang blandt standard config-filer - den tilsidesætter både globale og eksterne config.
+Tilføj `opencorvus.json` i dit projektrod. Project config har den højeste forrang blandt standard config-filer - den tilsidesætter både globale og eksterne config.
 
 :::tip
 Placer projektspecifik konfiguration i roden af ​​dit projekt.
 :::
 
-Når Argus starter op, søger den efter en konfigurationsfil i den aktuelle mappe eller går op til den nærmeste Git-mappe.
+Når OpenCorvus starter op, søger den efter en konfigurationsfil i den aktuelle mappe eller går op til den nærmeste Git-mappe.
 
 Dette er også sikkert at blive tjekket ind i Git og bruger det samme skema som det globale.
 
@@ -121,7 +121,7 @@ Angiv en brugerdefineret konfigurationsfilsti ved hjælp af miljøvariablen `OPE
 
 ```bash
 export OPENCODE_CONFIG=/path/to/my/custom-config.json
-argus run "Hello world"
+opencorvus run "Hello world"
 ```
 
 Brugerdefineret konfigurationsindlæses mellem globale konfigurationer og projektkonfigurationer i prioriteret rækkefølge.
@@ -132,21 +132,21 @@ Brugerdefineret konfigurationsindlæses mellem globale konfigurationer og projek
 
 Angiv en brugerdefineret konfigurationsmappe ved hjælp af `OPENCODE_CONFIG_DIR`
 miljøvariabel. Dette kort vil blive søgt efter agenter, kommandoer,
-modes og plugins ligesom standard `.argus` mappen, og bør
+modes og plugins ligesom standard `.opencorvus` mappen, og bør
 følge samme struktur.
 
 ```bash
 export OPENCODE_CONFIG_DIR=/path/to/my/config-directory
-argus run "Hello world"
+opencorvus run "Hello world"
 ```
 
-Den brugerdefinerede mappe indlæses efter den globale konfig og `.argus` mapper, så den **kan tilsidesætte** deres indstillinger.
+Den brugerdefinerede mappe indlæses efter den globale konfig og `.opencorvus` mapper, så den **kan tilsidesætte** deres indstillinger.
 
 ---
 
 ## Skema
 
-Konfigurationsfilen har et skema, der defineres i [**`argus.ai/config.json`**](https://argus.ai/config.json).
+Konfigurationsfilen har et skema, der defineres i [**`opencorvus.ai/config.json`**](https://opencorvus.ai/config.json).
 
 Din editor skal være i stand til at validere og autofuldføre baseret på skemaet.
 
@@ -156,9 +156,9 @@ Din editor skal være i stand til at validere og autofuldføre baseret på skema
 
 Du kan konfigurere TUI-specifikke indstillinger gennem indstillingen `tui`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "tui": {
     "scroll_speed": 3,
     "scroll_acceleration": {
@@ -181,11 +181,11 @@ Tilgængelige muligheder:
 
 ### Server
 
-Du kan konfigurere serverindstillinger for kommandoerne `argus serve` og `argus web` gennem indstillingen `server`.
+Du kan konfigurere serverindstillinger for kommandoerne `opencorvus serve` og `opencorvus web` gennem indstillingen `server`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "server": {
     "port": 4096,
     "hostname": "0.0.0.0",
@@ -200,8 +200,8 @@ Tilgængelige muligheder:
 
 - `port` - Port til at lytte på.
 - `hostname` - Værtsnavn at lytte på. Når `mdns` er aktiveret, og der ikke er angivet noget værtsnavn, er standarden `0.0.0.0`.
-- `mdns` - Aktiver mDNS-tjenesteopdagelse. Dette gør det muligt for andre enheder på netværket at opdage din Argus-server.
-- `mdnsDomain` - Brugerdefineret domænenavn til mDNS-tjeneste. Som standard er `argus.local`. Nyttigt til at køre flere forekomster på det samme netværk.
+- `mdns` - Aktiver mDNS-tjenesteopdagelse. Dette gør det muligt for andre enheder på netværket at opdage din OpenCorvus-server.
+- `mdnsDomain` - Brugerdefineret domænenavn til mDNS-tjeneste. Som standard er `opencorvus.local`. Nyttigt til at køre flere forekomster på det samme netværk.
 - `cors` - Yderligere oprindelser for at tillade CORS ved brug af HTTP-serveren fra en browserbaseret klient. Værdier skal være fulde oprindelser (skema + vært + valgfri port), f.eks. `https://app.example.com`.
 
 [Learn more about the server here](/docs/server).
@@ -212,9 +212,9 @@ Tilgængelige muligheder:
 
 Du kan administrere de værktøjer, en LLM kan bruge, gennem indstillingen `tools`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "tools": {
     "write": false,
     "bash": false
@@ -228,24 +228,24 @@ Du kan administrere de værktøjer, en LLM kan bruge, gennem indstillingen `tool
 
 ### Modeller (`models`)
 
-Du kan konfigurere de udbydere og modeller, du vil bruge i din Argus-konfiguration, gennem mulighederne `provider`, `model` og `small_model`.
+Du kan konfigurere de udbydere og modeller, du vil bruge i din OpenCorvus-konfiguration, gennem mulighederne `provider`, `model` og `small_model`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {},
   "model": "anthropic/claude-sonnet-4-5",
   "small_model": "anthropic/claude-haiku-4-5"
 }
 ```
 
-Indstillingen `small_model` konfigurerer en separat model til lette opgaver som titelgenerering. Som standard forsøger Argus at bruge en billigere model, hvis en er tilgængelig fra din udbyder, ellers falder den tilbage til din hovedmodel.
+Indstillingen `small_model` konfigurerer en separat model til lette opgaver som titelgenerering. Som standard forsøger OpenCorvus at bruge en billigere model, hvis en er tilgængelig fra din udbyder, ellers falder den tilbage til din hovedmodel.
 
 Udbydermuligheder kan omfatte `timeout` og `setCacheKey`:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "anthropic": {
       "options": {
@@ -272,9 +272,9 @@ Nogle udbydere understøtter yderligere konfigurationsmuligheder ud over de gene
 
 Amazon Bedrock understøtter AWS-specifik konfiguration:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "amazon-bedrock": {
       "options": {
@@ -301,11 +301,11 @@ Bearer tokens (`AWS_BEARER_TOKEN_BEDROCK` eller `/connect`) har forrang over pro
 
 ### Temaer (`themes`)
 
-Du kan konfigurere det tema, du vil bruge i din Argus-konfiguration, gennem indstillingen `theme`.
+Du kan konfigurere det tema, du vil bruge i din OpenCorvus-konfiguration, gennem indstillingen `theme`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "theme": ""
 }
 ```
@@ -318,9 +318,9 @@ Du kan konfigurere det tema, du vil bruge i din Argus-konfiguration, gennem inds
 
 Du kan konfigurere opgaver specialiserede agenter til specifikke indstillinger gennem indstillingen `agent`.
 
-```jsonc title="argus.jsonc"
+```jsonc title="opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "agent": {
     "code-reviewer": {
       "description": "Reviews code for best practices and potential issues",
@@ -336,7 +336,7 @@ Du kan konfigurere opgaver specialiserede agenter til specifikke indstillinger g
 }
 ```
 
-Du kan også definere agenter ved at bruge markdown-filer i `~/.config/argus/agents/` eller `.argus/agents/`. [Learn more here](/docs/agents).
+Du kan også definere agenter ved at bruge markdown-filer i `~/.config/opencorvus/agents/` eller `.opencorvus/agents/`. [Learn more here](/docs/agents).
 
 ---
 
@@ -344,16 +344,16 @@ Du kan også definere agenter ved at bruge markdown-filer i `~/.config/argus/age
 
 Du kan indstille standardagenten ved at bruge indstillingen `default_agent`. Dette bestemmer, hvilken agent der bruges, når ingen er eksplicit angivet.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "default_agent": "plan"
 }
 ```
 
-Standardagenten skal være en primær agent (ikke en subagent). Dette kan være en indbygget agent som `"build"` eller `"plan"`, eller en [custom agent](/docs/agents), du har defineret. Hvis den angivne agent ikke eksisterer eller er en underagent, vil Argus falde tilbage til `"build"` med en advarsel.
+Standardagenten skal være en primær agent (ikke en subagent). Dette kan være en indbygget agent som `"build"` eller `"plan"`, eller en [custom agent](/docs/agents), du har defineret. Hvis den angivne agent ikke eksisterer eller er en underagent, vil OpenCorvus falde tilbage til `"build"` med en advarsel.
 
-Denne indstilling gælder på tværs af alle grænseflader: TUI, CLI (`argus run`), desktop-app og GitHub Action.
+Denne indstilling gælder på tværs af alle grænseflader: TUI, CLI (`opencorvus run`), desktop-app og GitHub Action.
 
 ---
 
@@ -361,9 +361,9 @@ Denne indstilling gælder på tværs af alle grænseflader: TUI, CLI (`argus run
 
 Du kan konfigurere funktionen [share](/docs/share) gennem indstillingen `share`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "share": "manual"
 }
 ```
@@ -382,9 +382,9 @@ Som standard er deling indstillet til manuel tilstand, hvor du eksplicit skal de
 
 Du kan konfigurere brugerdefinerede kommandoer til gentagne opgaver gennem indstillingen `command`.
 
-```jsonc title="argus.jsonc"
+```jsonc title="opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "command": {
     "test": {
       "template": "Run the full test suite with coverage report and show any failures.\nFocus on the failing tests and suggest fixes.",
@@ -400,7 +400,7 @@ Du kan konfigurere brugerdefinerede kommandoer til gentagne opgaver gennem indst
 }
 ```
 
-Du kan også definere kommandoer ved hjælp af markdown-filer i `~/.config/argus/commands/` eller `.argus/commands/`. [Learn more here](/docs/commands).
+Du kan også definere kommandoer ved hjælp af markdown-filer i `~/.config/opencorvus/commands/` eller `.opencorvus/commands/`. [Learn more here](/docs/commands).
 
 ---
 
@@ -408,9 +408,9 @@ Du kan også definere kommandoer ved hjælp af markdown-filer i `~/.config/argus
 
 Du kan tilpasse dine nøglebindinger gennem indstillingen `keybinds`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {}
 }
 ```
@@ -421,11 +421,11 @@ Du kan tilpasse dine nøglebindinger gennem indstillingen `keybinds`.
 
 ### Auto-opdatering (`autoupdate`)
 
-Argus vil automatisk downloade alle nye opdateringer, når den starter op. Du kan deaktivere dette med indstillingen `autoupdate`.
+OpenCorvus vil automatisk downloade alle nye opdateringer, når den starter op. Du kan deaktivere dette med indstillingen `autoupdate`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "autoupdate": false
 }
 ```
@@ -439,9 +439,9 @@ Bemærk, at dette kun virker, hvis det ikke blev installeret ved hjælp af en pa
 
 Du kan konfigurere kodeformatere gennem indstillingen `formatter`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": true
@@ -463,13 +463,13 @@ Du kan konfigurere kodeformatere gennem indstillingen `formatter`.
 
 ### Tilladelse (`permission`)
 
-Som standard argus **tillader alle operationer** uden at kræve eksplicit godkendelse. Du kan ændre dette ved at bruge indstillingen `permission`.
+Som standard opencorvus **tillader alle operationer** uden at kræve eksplicit godkendelse. Du kan ændre dette ved at bruge indstillingen `permission`.
 
 For at sikre, at værktøjerne `edit` og `bash` for eksempel kræver brugergodkendelse:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "permission": {
     "edit": "ask",
     "bash": "ask"
@@ -485,9 +485,9 @@ For at sikre, at værktøjerne `edit` og `bash` for eksempel kræver brugergodke
 
 Du kan styre kontekstkomprimeringsadfærd gennem indstillingen `compaction`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "compaction": {
     "auto": true,
     "prune": true
@@ -504,9 +504,9 @@ Du kan styre kontekstkomprimeringsadfærd gennem indstillingen `compaction`.
 
 Du kan konfigurere ignoreringsmønstre for filovervåger gennem indstillingen `watcher`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "watcher": {
     "ignore": ["node_modules/**", "dist/**", ".git/**"]
   }
@@ -521,9 +521,9 @@ Mønstre følger glob-syntaks. Brug dette til at udelukke støjende mapper fra f
 
 Du kan konfigurere MCP-servere, som du vil bruge, gennem indstillingen `mcp`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {}
 }
 ```
@@ -534,14 +534,14 @@ Du kan konfigurere MCP-servere, som du vil bruge, gennem indstillingen `mcp`.
 
 ### Plugin
 
-[Plugins](/docs/plugins) udvide Argus med brugerdefinerede værktøjer, kroge og integrationer.
+[Plugins](/docs/plugins) udvide OpenCorvus med brugerdefinerede værktøjer, kroge og integrationer.
 
-Placer plugin-filer i `.argus/plugins/` eller `~/.config/argus/plugins/`. Du kan også indlæse plugins fra npm gennem indstillingen `plugin`.
+Placer plugin-filer i `.opencorvus/plugins/` eller `~/.config/opencorvus/plugins/`. Du kan også indlæse plugins fra npm gennem indstillingen `plugin`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
-  "plugin": ["argus-helicone-session", "@my-org/custom-plugin"]
+  "$schema": "https://opencorvus.ai/config.json",
+  "plugin": ["opencorvus-helicone-session", "@my-org/custom-plugin"]
 }
 ```
 
@@ -553,9 +553,9 @@ Placer plugin-filer i `.argus/plugins/` eller `~/.config/argus/plugins/`. Du kan
 
 Du kan konfigurere brugervejledningen til den model, du kan gennem indstillingen `instructions`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"]
 }
 ```
@@ -569,9 +569,9 @@ om regler her](/docs/rules).
 
 Du kan deaktivere udbydere, der indlæses automatisk gennem `disabled_providers`-indstillingen. Dette er nyttigt, når du vil forhindre visse udbydere i at blive indlæst, deres legitimationsoplysninger er tilgængelige.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "disabled_providers": ["openai", "gemini"]
 }
 ```
@@ -592,14 +592,14 @@ Indstillingen `disabled_providers` accepterer en række udbyder-id'er. Når en u
 
 Du kan angive en tilladelsesliste over udbydere gennem muligheden `enabled_providers`. Når den er indstillet, vil kun de angivne udbydere blive aktiveret, og alle andre vil blive ignoreret.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "enabled_providers": ["anthropic", "openai"]
 }
 ```
 
-Dette er nyttigt, når du vil begrænse Argus til kun at bruge specifikke udbydere i stedet for at deaktivere dem én efter én.
+Dette er nyttigt, når du vil begrænse OpenCorvus til kun at bruge specifikke udbydere i stedet for at deaktivere dem én efter én.
 
 :::note
 `disabled_providers` har prioritet over `enabled_providers`.
@@ -613,9 +613,9 @@ Hvis en udbyder optræder i både `enabled_providers` og `disabled_providers`, h
 
 Nøglen `experimental` indeholder muligheder, der er under aktiv udvikling.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "experimental": {}
 }
 ```
@@ -636,9 +636,9 @@ Du kan bruge variabelsubstitution i dine konfigurationsfiler til at referere til
 
 Brug `{env:VARIABLE_NAME}` til at erstatte miljøvariabler:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "model": "{env:OPENCODE_MODEL}",
   "provider": {
     "anthropic": {
@@ -659,9 +659,9 @@ Hvis miljøvariablen ikke er indstillet, vil den blive erstattet med en tom stre
 
 Brug `{file:path/to/file}` til at erstatte indholdet af en fil:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "instructions": ["./custom-instructions.md"],
   "provider": {
     "openai": {

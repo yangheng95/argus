@@ -22,11 +22,11 @@ export namespace TuiConfig {
   }
 
   function customPath() {
-    return Flag.ARGUS_TUI_CONFIG
+    return Flag.OPENCORVUS_TUI_CONFIG
   }
 
   const state = Instance.state(async () => {
-    let projectFiles = Flag.ARGUS_DISABLE_PROJECT_CONFIG
+    let projectFiles = Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
       ? []
       : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
@@ -34,7 +34,7 @@ export namespace TuiConfig {
     const managed = Config.managedConfigDir()
     await migrateTuiConfig({ directories, custom, managed })
     // Re-compute after migration since migrateTuiConfig may have created new tui.json files
-    projectFiles = Flag.ARGUS_DISABLE_PROJECT_CONFIG
+    projectFiles = Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
       ? []
       : await ConfigPaths.projectFiles("tui", Instance.directory, Instance.worktree)
 
@@ -54,7 +54,7 @@ export namespace TuiConfig {
     }
 
     for (const dir of unique(directories)) {
-      if (!dir.endsWith(".opencorvus") && !dir.endsWith(".argus") && dir !== Flag.ARGUS_CONFIG_DIR) continue
+      if (!dir.endsWith(".opencorvus") && !dir.endsWith(".opencorvus") && dir !== Flag.OPENCORVUS_CONFIG_DIR) continue
       for (const file of ConfigPaths.fileInDirectory(dir, "tui")) {
         result = mergeInfo(result, await loadFile(file))
       }
@@ -91,7 +91,7 @@ export namespace TuiConfig {
     if (!data || typeof data !== "object" || Array.isArray(data)) return {}
 
     // Flatten a nested "tui" key so users who wrote `{ "tui": { ... } }` inside tui.json
-    // (mirroring the old argus.json shape) still get their settings applied.
+    // (mirroring the old opencorvus.json shape) still get their settings applied.
     const normalized = (() => {
       const copy = { ...(data as Record<string, unknown>) }
       if (!("tui" in copy)) return copy

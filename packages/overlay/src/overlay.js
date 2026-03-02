@@ -12,7 +12,7 @@ const ACTION_ICONS = {
 }
 
 const POINTER_ACTIONS = new Set(["click", "double", "right", "middle", "drag", "move"])
-const bridge = window.argusBridge
+const bridge = window.opencorvusBridge
 
 const popup = document.getElementById("popup")
 const focus = document.getElementById("focus")

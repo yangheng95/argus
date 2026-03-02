@@ -1,4 +1,4 @@
-const bridge = window.argusBridge
+const bridge = window.opencorvusBridge
 const invoke = bridge.invoke
 
 const els = {
@@ -55,7 +55,7 @@ function textToEnv(input) {
 
 function fillConfig(config) {
   if (!config) return
-  els.commandInput.value = config.command ?? "argus"
+  els.commandInput.value = config.command ?? "opencorvus"
   els.cwdInput.value = config.cwd ?? ""
   els.serveArgsInput.value = Array.isArray(config.serve_args) ? config.serve_args.join("\n") : ""
   els.runArgsInput.value = Array.isArray(config.run_args) ? config.run_args.join("\n") : ""
@@ -65,7 +65,7 @@ function fillConfig(config) {
 
 function readConfig() {
   return {
-    command: (els.commandInput.value || "argus").trim(),
+    command: (els.commandInput.value || "opencorvus").trim(),
     cwd: els.cwdInput.value.trim(),
     serve_args: readLines(els.serveArgsInput.value),
     run_args: readLines(els.runArgsInput.value),
@@ -222,7 +222,7 @@ function bindTauriEvents() {
 async function boot() {
   bindEvents()
   bindTauriEvents()
-  addMessage("system", "Argus manager is ready.")
+  addMessage("system", "OpenCorvus manager is ready.")
   await refreshState()
 }
 

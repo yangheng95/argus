@@ -15,7 +15,7 @@ process.chdir(dir)
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 
-const modelsUrl = process.env.ARGUS_MODELS_URL || "https://models.dev"
+const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
 const modelsData = process.env.MODELS_DEV_API_JSON
   ? await Bun.file(process.env.MODELS_DEV_API_JSON).text()
@@ -179,8 +179,8 @@ for (const item of targets) {
       autoloadTsconfig: true,
       autoloadPackageJson: true,
       target: name.replace(pkg.name, "bun") as any,
-      outfile: `dist/${name}/bin/argus`,
-      execArgv: [`--user-agent=argus/${Script.version}`, "--use-system-ca", "--"],
+      outfile: `dist/${name}/bin/opencorvus`,
+      execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
     },
     entrypoints: ["./src/index.ts", parserWorker, workerPath],
@@ -188,9 +188,9 @@ for (const item of targets) {
       OPENCORVUS_VERSION: `'${Script.version}'`,
       OPENCORVUS_MIGRATIONS: JSON.stringify(migrations),
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + workerRelativePath,
-      ARGUS_WORKER_PATH: workerPath,
+      OPENCORVUS_WORKER_PATH: workerPath,
       OPENCORVUS_CHANNEL: `'${Script.channel}'`,
-      ARGUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
+      OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
     },
   })
 

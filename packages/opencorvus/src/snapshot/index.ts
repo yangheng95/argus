@@ -14,9 +14,9 @@ export namespace Snapshot {
   const hour = 60 * 60 * 1000
   const prune = "7.days"
   const coreAutocrlf =
-    process.env.ARGUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
+    process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSymlinks =
-    process.env.ARGUS_SNAPSHOT_CORE_SYMLINKS || (process.platform === "win32" ? "false" : "true")
+    process.env.OPENCORVUS_SNAPSHOT_CORE_SYMLINKS || (process.platform === "win32" ? "false" : "true")
 
   export function init() {
     Scheduler.register({
@@ -28,7 +28,7 @@ export namespace Snapshot {
   }
 
   export async function cleanup() {
-    if (Instance.project.vcs !== "git" || Flag.ARGUS_CLIENT === "acp") return
+    if (Instance.project.vcs !== "git" || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
     const git = gitdir()
@@ -53,7 +53,7 @@ export namespace Snapshot {
   }
 
   export async function track() {
-    if (Instance.project.vcs !== "git" || Flag.ARGUS_CLIENT === "acp") return
+    if (Instance.project.vcs !== "git" || Flag.OPENCORVUS_CLIENT === "acp") return
     const cfg = await Config.get()
     if (cfg.snapshot === false) return
     const git = gitdir()

@@ -161,7 +161,7 @@ ${lineCommentStyles}
 
 export function createDefaultOptions<T>(style: FileDiffOptions<T>["diffStyle"]) {
   return {
-    theme: "Argus",
+    theme: "OpenCorvus",
     themeType: "system",
     disableLineNumbers: false,
     overflow: "wrap",

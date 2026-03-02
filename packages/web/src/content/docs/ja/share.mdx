@@ -1,9 +1,9 @@
 ---
 title: 共有
-description: Argus での会話を共有します。
+description: OpenCorvus での会話を共有します。
 ---
 
-Argus の共有機能を使用すると、Argus の会話への公開リンクを作成できるため、チームメイトと共同作業したり、他の人から助けを得ることができます。
+OpenCorvus の共有機能を使用すると、OpenCorvus の会話への公開リンクを作成できるため、チームメイトと共同作業したり、他の人から助けを得ることができます。
 
 :::note
 共有された会話は、リンクを知っている人なら誰でも公開してアクセスできます。
@@ -13,7 +13,7 @@ Argus の共有機能を使用すると、Argus の会話への公開リンク�
 
 ## 仕組み
 
-会話を共有するとき、Argus は次のことを行います。
+会話を共有するとき、OpenCorvus は次のことを行います。
 
 1. セッション用の一意のパブリック URL を作成します
 2. 会話履歴をサーバーに同期します
@@ -23,13 +23,13 @@ Argus の共有機能を使用すると、Argus の会話への公開リンク�
 
 ## 共有
 
-Argus は、会話の共有方法を制御する 3 つの共有モードをサポートしています。
+OpenCorvus は、会話の共有方法を制御する 3 つの共有モードをサポートしています。
 
 ---
 
 ### 手動（デフォルト）
 
-デフォルトでは、Argus は手動共有モードを使用します。セッションは自動的には共有されませんが、`/share` コマンドを使用して手動で共有できます。
+デフォルトでは、OpenCorvus は手動共有モードを使用します。セッションは自動的には共有されませんが、`/share` コマンドを使用して手動で共有できます。
 
 ```
 /share
@@ -39,9 +39,9 @@ Argus は、会話の共有方法を制御する 3 つの共有モードをサ�
 
 [設定ファイル](/docs/config): で手動モードを明示的に設定するには:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "share": "manual"
 }
 ```
@@ -52,9 +52,9 @@ Argus は、会話の共有方法を制御する 3 つの共有モードをサ�
 
 [設定ファイル](/docs/config): で `share` オプションを `"auto"` に設定することで、すべての新しい会話の自動共有を有効にできます。
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "share": "auto"
 }
 ```
@@ -67,14 +67,14 @@ Argus は、会話の共有方法を制御する 3 つの共有モードをサ�
 
 [設定ファイル](/docs/config): で `share` オプションを `"disabled"` に設定することで、共有を完全に無効にすることができます。
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "share": "disabled"
 }
 ```
 
-これを特定のプロジェクトのチーム全体に強制するには、それをプロジェクトの `argus.json` に追加し、Git にチェックインします。
+これを特定のプロジェクトのチーム全体に強制するには、それをプロジェクトの `opencorvus.json` に追加し、Git にチェックインします。
 
 ---
 
@@ -125,4 +125,4 @@ Argus は、会話の共有方法を制御する 3 つの共有モードをサ�
 - **SSO を通じて認証されたユーザーのみに制限**
 - 独自のインフラストラクチャで **セルフホスト**
 
-[組織内での Argus の使用について詳しくは、](/docs/enterprise) をご覧ください。
+[組織内での OpenCorvus の使用について詳しくは、](/docs/enterprise) をご覧ください。

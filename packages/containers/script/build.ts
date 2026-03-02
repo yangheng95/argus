@@ -22,11 +22,11 @@ const images = ["base", "bun-node", "rust", "tauri-linux", "publish"]
 const setup = async () => {
   if (!push) return
   const list = await $`docker buildx ls`.text()
-  if (list.includes("argus")) {
-    await $`docker buildx use argus`
+  if (list.includes("opencorvus")) {
+    await $`docker buildx use opencorvus`
     return
   }
-  await $`docker buildx create --name argus --use`
+  await $`docker buildx create --name opencorvus --use`
 }
 
 await setup()

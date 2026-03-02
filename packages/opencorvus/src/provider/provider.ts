@@ -129,13 +129,13 @@ export namespace Provider {
         },
       }
     },
-    async argus(input) {
+    async opencorvus(input) {
       const hasKey = await (async () => {
         const env = Env.all()
         if (input.env.some((item) => env[item])) return true
         if (await Auth.get(input.id)) return true
         const config = await Config.get()
-        if (config.provider?.["argus"]?.options?.apiKey) return true
+        if (config.provider?.["opencorvus"]?.options?.apiKey) return true
         return false
       })()
 
@@ -279,7 +279,7 @@ export namespace Provider {
           }
 
           // Region resolution precedence (highest to lowest):
-          // 1. options.region from argus.json provider config
+          // 1. options.region from opencorvus.json provider config
           // 2. defaultRegion from AWS_REGION environment variable
           // 3. Default "us-east-1" (baked into defaultRegion)
           const region = options?.region ?? defaultRegion
@@ -363,7 +363,7 @@ export namespace Provider {
         options: {
           headers: {
             "HTTP-Referer": "https://opencode.ai/",
-            "X-Title": "argus",
+            "X-Title": "opencorvus",
           },
         },
       }
@@ -374,7 +374,7 @@ export namespace Provider {
         options: {
           headers: {
             "http-referer": "https://opencode.ai/",
-            "x-title": "argus",
+            "x-title": "opencorvus",
           },
         },
       }
@@ -460,7 +460,7 @@ export namespace Provider {
         options: {
           headers: {
             "HTTP-Referer": "https://opencode.ai/",
-            "X-Title": "argus",
+            "X-Title": "opencorvus",
           },
         },
       }
@@ -479,7 +479,7 @@ export namespace Provider {
       const providerConfig = config.provider?.["gitlab"]
 
       const aiGatewayHeaders = {
-        "User-Agent": `argus/${Installation.VERSION} gitlab-ai-provider/${GITLAB_PROVIDER_VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
+        "User-Agent": `opencorvus/${Installation.VERSION} gitlab-ai-provider/${GITLAB_PROVIDER_VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`,
         ...(providerConfig?.options?.aiGatewayHeaders || {}),
       }
 
@@ -548,7 +548,7 @@ export namespace Provider {
       if (!apiToken) {
         throw new Error(
           "CLOUDFLARE_API_TOKEN (or CF_AIG_TOKEN) is required for Cloudflare AI Gateway. " +
-            "Set it via environment variable or run `argus auth cloudflare-ai-gateway`.",
+            "Set it via environment variable or run `opencorvus auth cloudflare-ai-gateway`.",
         )
       }
 
@@ -573,7 +573,7 @@ export namespace Provider {
         autoload: false,
         options: {
           headers: {
-            "X-Cerebras-3rd-Party-Integration": "argus",
+            "X-Cerebras-3rd-Party-Integration": "opencorvus",
           },
         },
       }
@@ -584,7 +584,7 @@ export namespace Provider {
         options: {
           headers: {
             "HTTP-Referer": "https://opencode.ai/",
-            "X-Title": "argus",
+            "X-Title": "opencorvus",
           },
         },
       }
@@ -999,7 +999,7 @@ export namespace Provider {
         model.api.id = model.api.id ?? model.id ?? modelID
         if (modelID === "gpt-5-chat-latest" || (providerID === "openrouter" && modelID === "openai/gpt-5-chat"))
           delete provider.models[modelID]
-        if (model.status === "alpha" && !Flag.ARGUS_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
+        if (model.status === "alpha" && !Flag.OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS) delete provider.models[modelID]
         if (model.status === "deprecated") delete provider.models[modelID]
         if (
           (configProvider?.blacklist && configProvider.blacklist.includes(modelID)) ||
@@ -1231,7 +1231,7 @@ export namespace Provider {
         "gemini-2.5-flash",
         "gpt-5-nano",
       ]
-      if (providerID.startsWith("argus")) {
+      if (providerID.startsWith("opencorvus")) {
         priority = ["gpt-5-nano"]
       }
       if (providerID.startsWith("github-copilot")) {
@@ -1269,10 +1269,10 @@ export namespace Provider {
       }
     }
 
-    // Check if argus provider is available before using it
-    const argusProvider = await state().then((state) => state.providers["argus"])
-    if (argusProvider && argusProvider.models["gpt-5-nano"]) {
-      return getModel("argus", "gpt-5-nano")
+    // Check if opencorvus provider is available before using it
+    const opencorvusProvider = await state().then((state) => state.providers["opencorvus"])
+    if (opencorvusProvider && opencorvusProvider.models["gpt-5-nano"]) {
+      return getModel("opencorvus", "gpt-5-nano")
     }
 
     return undefined

@@ -27,11 +27,11 @@ This skill is loaded from the global home directory.
   )
 }
 
-test("discovers skills from .argus/skill/ directory", async () => {
+test("discovers skills from .opencorvus/skill/ directory", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
-      const skillDir = path.join(dir, ".argus", "skill", "test-skill")
+      const skillDir = path.join(dir, ".opencorvus", "skill", "test-skill")
       await Bun.write(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -64,7 +64,7 @@ test("returns skill directories from Skill.dirs", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
-      const skillDir = path.join(dir, ".argus", "skill", "dir-skill")
+      const skillDir = path.join(dir, ".opencorvus", "skill", "dir-skill")
       await Bun.write(
         path.join(skillDir, "SKILL.md"),
         `---
@@ -78,30 +78,30 @@ description: Skill for dirs test.
     },
   })
 
-  const home = process.env.ARGUS_TEST_HOME
-  process.env.ARGUS_TEST_HOME = tmp.path
+  const home = process.env.OPENCORVUS_TEST_HOME
+  process.env.OPENCORVUS_TEST_HOME = tmp.path
 
   try {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const dirs = await Skill.dirs()
-        const skillDir = path.join(tmp.path, ".argus", "skill", "dir-skill")
+        const skillDir = path.join(tmp.path, ".opencorvus", "skill", "dir-skill")
         expect(dirs).toContain(skillDir)
         expect(dirs.length).toBe(1)
       },
     })
   } finally {
-    process.env.ARGUS_TEST_HOME = home
+    process.env.OPENCORVUS_TEST_HOME = home
   }
 })
 
-test("discovers multiple skills from .argus/skill/ directory", async () => {
+test("discovers multiple skills from .opencorvus/skill/ directory", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
-      const skillDir1 = path.join(dir, ".argus", "skill", "skill-one")
-      const skillDir2 = path.join(dir, ".argus", "skill", "skill-two")
+      const skillDir1 = path.join(dir, ".opencorvus", "skill", "skill-one")
+      const skillDir2 = path.join(dir, ".opencorvus", "skill", "skill-two")
       await Bun.write(
         path.join(skillDir1, "SKILL.md"),
         `---
@@ -140,7 +140,7 @@ test("skips skills with missing frontmatter", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
-      const skillDir = path.join(dir, ".argus", "skill", "no-frontmatter")
+      const skillDir = path.join(dir, ".opencorvus", "skill", "no-frontmatter")
       await Bun.write(
         path.join(skillDir, "SKILL.md"),
         `# No Frontmatter
@@ -193,8 +193,8 @@ description: A skill in the .claude/skills directory.
 test("discovers global skills from ~/.claude/skills/ directory", async () => {
   await using tmp = await tmpdir({ git: true })
 
-  const originalHome = process.env.ARGUS_TEST_HOME
-  process.env.ARGUS_TEST_HOME = tmp.path
+  const originalHome = process.env.OPENCORVUS_TEST_HOME
+  process.env.OPENCORVUS_TEST_HOME = tmp.path
 
   try {
     await createGlobalSkill(tmp.path)
@@ -210,7 +210,7 @@ test("discovers global skills from ~/.claude/skills/ directory", async () => {
       },
     })
   } finally {
-    process.env.ARGUS_TEST_HOME = originalHome
+    process.env.OPENCORVUS_TEST_HOME = originalHome
   }
 })
 
@@ -259,8 +259,8 @@ description: A skill in the .agents/skills directory.
 test("discovers global skills from ~/.agents/skills/ directory", async () => {
   await using tmp = await tmpdir({ git: true })
 
-  const originalHome = process.env.ARGUS_TEST_HOME
-  process.env.ARGUS_TEST_HOME = tmp.path
+  const originalHome = process.env.OPENCORVUS_TEST_HOME
+  process.env.OPENCORVUS_TEST_HOME = tmp.path
 
   try {
     const skillDir = path.join(tmp.path, ".agents", "skills", "global-agent-skill")
@@ -290,7 +290,7 @@ This skill is loaded from the global home directory.
       },
     })
   } finally {
-    process.env.ARGUS_TEST_HOME = originalHome
+    process.env.OPENCORVUS_TEST_HOME = originalHome
   }
 })
 
@@ -338,8 +338,8 @@ test("properly resolves directories that skills live in", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
-      const argusSkillDir = path.join(dir, ".argus", "skill", "agent-skill")
-      const argusSkillsDir = path.join(dir, ".argus", "skills", "agent-skill")
+      const opencorvusSkillDir = path.join(dir, ".opencorvus", "skill", "agent-skill")
+      const opencorvusSkillsDir = path.join(dir, ".opencorvus", "skills", "agent-skill")
       const claudeDir = path.join(dir, ".claude", "skills", "claude-skill")
       const agentDir = path.join(dir, ".agents", "skills", "agent-skill")
       await Bun.write(
@@ -363,23 +363,23 @@ description: A skill in the .agents/skills directory.
 `,
       )
       await Bun.write(
-        path.join(argusSkillDir, "SKILL.md"),
+        path.join(opencorvusSkillDir, "SKILL.md"),
         `---
-name: argus-skill
-description: A skill in the .argus/skill directory.
+name: opencorvus-skill
+description: A skill in the .opencorvus/skill directory.
 ---
 
-# Argus Skill
+# OpenCorvus Skill
 `,
       )
       await Bun.write(
-        path.join(argusSkillsDir, "SKILL.md"),
+        path.join(opencorvusSkillsDir, "SKILL.md"),
         `---
-name: argus-skill
-description: A skill in the .argus/skills directory.
+name: opencorvus-skill
+description: A skill in the .opencorvus/skills directory.
 ---
 
-# Argus Skill
+# OpenCorvus Skill
 `,
       )
     },

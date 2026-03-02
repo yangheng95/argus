@@ -1,14 +1,14 @@
 ---
 title: Windows (WSL)
-description: Execute o argus no Windows com WSL para melhor experiência.
+description: Execute o opencorvus no Windows com WSL para melhor experiência.
 ---
 
 import { Steps } from "@astrojs/starlight/components"
 
-Embora o argus possa rodar direto no Windows, recomendamos usar [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install) para a melhor experiência. O WSL oferece um ambiente Linux que funciona de forma integrada com os recursos do argus.
+Embora o opencorvus possa rodar direto no Windows, recomendamos usar [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install) para a melhor experiência. O WSL oferece um ambiente Linux que funciona de forma integrada com os recursos do opencorvus.
 
 :::tip[Por que WSL?]
-O WSL oferece melhor desempenho de sistema de arquivos, suporte completo a terminal e compatibilidade com as ferramentas de desenvolvimento das quais o argus depende.
+O WSL oferece melhor desempenho de sistema de arquivos, suporte completo a terminal e compatibilidade com as ferramentas de desenvolvimento das quais o opencorvus depende.
 :::
 
 ---
@@ -21,21 +21,21 @@ O WSL oferece melhor desempenho de sistema de arquivos, suporte completo a termi
 
    Se ainda não instalou, [instale o WSL](https://learn.microsoft.com/en-us/windows/wsl/install) usando o guia oficial da Microsoft.
 
-2. **Instale o argus no WSL**
+2. **Instale o opencorvus no WSL**
 
-   Depois de configurar o WSL, abra o terminal do WSL e instale o argus usando um dos [métodos de instalação](/docs/).
+   Depois de configurar o WSL, abra o terminal do WSL e instale o opencorvus usando um dos [métodos de instalação](/docs/).
 
    ```bash
-   curl -fsSL https://argus.ai/install | bash
+   curl -fsSL https://opencorvus.ai/install | bash
    ```
 
-3. **Use o argus pelo WSL**
+3. **Use o opencorvus pelo WSL**
 
-   Vá para o diretório do seu projeto (acesse arquivos do Windows via `/mnt/c/`, `/mnt/d/` etc.) e execute o argus.
+   Vá para o diretório do seu projeto (acesse arquivos do Windows via `/mnt/c/`, `/mnt/d/` etc.) e execute o opencorvus.
 
    ```bash
    cd /mnt/c/Users/YourName/project
-   argus
+   opencorvus
    ```
 
 </Steps>
@@ -44,12 +44,12 @@ O WSL oferece melhor desempenho de sistema de arquivos, suporte completo a termi
 
 ## App desktop + servidor WSL
 
-Se você prefere usar o app desktop do argus, mas quer rodar o servidor no WSL:
+Se você prefere usar o app desktop do opencorvus, mas quer rodar o servidor no WSL:
 
 1. **Inicie o servidor no WSL** com `--hostname 0.0.0.0` para permitir conexões externas:
 
    ```bash
-   argus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 4096
    ```
 
 2. **Conecte o app desktop** em `http://localhost:4096`
@@ -62,7 +62,7 @@ Se `localhost` não funcionar no seu ambiente, conecte usando o IP do WSL (no WS
 Ao usar `--hostname 0.0.0.0`, defina `OPENCODE_SERVER_PASSWORD` para proteger o servidor.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve --hostname 0.0.0.0
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve --hostname 0.0.0.0
 ```
 
 :::
@@ -73,15 +73,15 @@ OPENCODE_SERVER_PASSWORD=your-password argus serve --hostname 0.0.0.0
 
 Para a melhor experiência web no Windows:
 
-1. **Execute `argus web` no terminal WSL** em vez do PowerShell:
+1. **Execute `opencorvus web` no terminal WSL** em vez do PowerShell:
 
    ```bash
-   argus web --hostname 0.0.0.0
+   opencorvus web --hostname 0.0.0.0
    ```
 
-2. **Acesse pelo navegador do Windows** em `http://localhost:<port>` (o argus mostra a URL)
+2. **Acesse pelo navegador do Windows** em `http://localhost:<port>` (o opencorvus mostra a URL)
 
-Executar `argus web` a partir do WSL garante acesso correto ao sistema de arquivos e integração com o terminal, continuando acessível no navegador do Windows.
+Executar `opencorvus web` a partir do WSL garante acesso correto ao sistema de arquivos e integração com o terminal, continuando acessível no navegador do Windows.
 
 ---
 
@@ -97,17 +97,17 @@ Exemplo:
 
 ```bash
 cd /mnt/c/Users/YourName/Documents/project
-argus
+opencorvus
 ```
 
 :::tip
-Para uma experiência mais fluida, considere clonar/copiar seu repositório para o sistema de arquivos do WSL (por exemplo em `~/code/`) e executar o argus por lá.
+Para uma experiência mais fluida, considere clonar/copiar seu repositório para o sistema de arquivos do WSL (por exemplo em `~/code/`) e executar o opencorvus por lá.
 :::
 
 ---
 
 ## Dicas
 
-- Mantenha o argus rodando no WSL para projetos armazenados em unidades do Windows - o acesso aos arquivos fica fluido
-- Use a [extensão WSL do VS Code](https://code.visualstudio.com/docs/remote/wsl) junto com o argus para um fluxo de desenvolvimento integrado
-- Sua configuração e suas sessões do argus ficam armazenadas no ambiente WSL em `~/.local/share/argus/`
+- Mantenha o opencorvus rodando no WSL para projetos armazenados em unidades do Windows - o acesso aos arquivos fica fluido
+- Use a [extensão WSL do VS Code](https://code.visualstudio.com/docs/remote/wsl) junto com o opencorvus para um fluxo de desenvolvimento integrado
+- Sua configuração e suas sessões do opencorvus ficam armazenadas no ambiente WSL em `~/.local/share/opencorvus/`

@@ -1,13 +1,13 @@
 ---
 title: LSP serveri
-description: Argus se integriše sa vašim LSP serverima.
+description: OpenCorvus se integriše sa vašim LSP serverima.
 ---
 
-Argus se integriše sa vašim Language Server Protocol (LSP) serverima kako bi pomogao LLM-u u interakciji s kodnom bazom. Koristi dijagnostiku za slanje povratnih informacija modelu.
+OpenCorvus se integriše sa vašim Language Server Protocol (LSP) serverima kako bi pomogao LLM-u u interakciji s kodnom bazom. Koristi dijagnostiku za slanje povratnih informacija modelu.
 
 ## Ugrađeni
 
-Argus dolazi sa nekoliko ugrađenih LSP servera za popularne jezike:
+OpenCorvus dolazi sa nekoliko ugrađenih LSP servera za popularne jezike:
 | LSP server | Ekstenzije | Zahtjevi
 |------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
 | astro | .astro | Automatske instalacije za Astro projekte |
@@ -51,7 +51,7 @@ Možete onemogućiti automatska preuzimanja LSP servera tako što ćete postavit
 
 ## Kako radi
 
-Kada argus otvori fajl, on:
+Kada opencorvus otvori fajl, on:
 
 1. Provjerava ekstenziju datoteke u odnosu na sve omogućene LSP servere.
 2. Pokreće odgovarajući LSP server ako već nije pokrenut.
@@ -60,11 +60,11 @@ Kada argus otvori fajl, on:
 
 ## Konfiguracija
 
-Možete prilagoditi LSP servere kroz `lsp` odjeljak u vašoj argus konfiguraciji.
+Možete prilagoditi LSP servere kroz `lsp` odjeljak u vašoj opencorvus konfiguraciji.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "lsp": {}
 }
 ```
@@ -85,9 +85,9 @@ Pogledajmo neke primjere.
 
 Koristite svojstvo `env` za postavljanje varijabli okruženja prilikom pokretanja LSP servera:
 
-```json title="argus.json" {5-7}
+```json title="opencorvus.json" {5-7}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "lsp": {
     "rust": {
       "env": {
@@ -104,9 +104,9 @@ Koristite svojstvo `env` za postavljanje varijabli okruženja prilikom pokretanj
 
 Koristite svojstvo `initialization` da prosledite opcije inicijalizacije na LSP server. Ovo su postavke specifične za server poslane tokom LSP `initialize` zahtjeva:
 
-```json title="argus.json" {5-9}
+```json title="opencorvus.json" {5-9}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "lsp": {
     "typescript": {
       "initialization": {
@@ -129,18 +129,18 @@ Opcije inicijalizacije razlikuju se od LSP servera. Provjerite dokumentaciju va�
 
 Da biste onemogućili **sve** LSP servere globalno, postavite `lsp` na `false`:
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "lsp": false
 }
 ```
 
 Da onemogućite **specifičan** LSP server, postavite `disabled` na `true`:
 
-```json title="argus.json" {5}
+```json title="opencorvus.json" {5}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "lsp": {
     "typescript": {
       "disabled": true
@@ -155,9 +155,9 @@ Da onemogućite **specifičan** LSP server, postavite `disabled` na `true`:
 
 Možete dodati prilagođene LSP servere navodeći ekstenzije naredbe i datoteke:
 
-```json title="argus.json" {4-7}
+```json title="opencorvus.json" {4-7}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "lsp": {
     "custom-lsp": {
       "command": ["custom-lsp-server", "--stdio"],

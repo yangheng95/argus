@@ -3,7 +3,7 @@ title: Risoluzione dei problemi
 description: Problemi comuni e come risolverli.
 ---
 
-Per diagnosticare problemi con Argus, inizia controllando i log e i dati locali che salva su disco.
+Per diagnosticare problemi con OpenCorvus, inizia controllando i log e i dati locali che salva su disco.
 
 ---
 
@@ -11,21 +11,21 @@ Per diagnosticare problemi con Argus, inizia controllando i log e i dati locali 
 
 I file di log vengono scritti in:
 
-- **macOS/Linux**: `~/.local/share/argus/log/`
-- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.local\share\argus\log`
+- **macOS/Linux**: `~/.local/share/opencorvus/log/`
+- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.local\share\opencorvus\log`
 
 I file di log hanno nomi con timestamp (ad es. `2025-01-09T123456.log`) e vengono conservati i 10 file di log piu recenti.
 
-Puoi impostare il livello di log con l'opzione a riga di comando `--log-level` per ottenere informazioni di debug piu dettagliate. Per esempio: `argus --log-level DEBUG`.
+Puoi impostare il livello di log con l'opzione a riga di comando `--log-level` per ottenere informazioni di debug piu dettagliate. Per esempio: `opencorvus --log-level DEBUG`.
 
 ---
 
 ## Archiviazione
 
-argus salva i dati delle sessioni e altri dati dell'applicazione su disco in:
+opencorvus salva i dati delle sessioni e altri dati dell'applicazione su disco in:
 
-- **macOS/Linux**: `~/.local/share/argus/`
-- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.local\share\argus`
+- **macOS/Linux**: `~/.local/share/opencorvus/`
+- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.local\share\opencorvus`
 
 Questa directory contiene:
 
@@ -39,13 +39,13 @@ Questa directory contiene:
 
 ## App desktop
 
-Argus Desktop esegue in background un server locale di Argus (il sidecar `argus-cli`). La maggior parte dei problemi e causata da un plugin che si comporta male, da una cache corrotta o da un'impostazione del server errata.
+OpenCorvus Desktop esegue in background un server locale di OpenCorvus (il sidecar `opencorvus-cli`). La maggior parte dei problemi e causata da un plugin che si comporta male, da una cache corrotta o da un'impostazione del server errata.
 
 ### Controlli rapidi
 
 - Chiudi completamente l'app e riaprila.
 - Se l'app mostra una schermata di errore, fai clic su **Restart** e copia i dettagli dell'errore.
-- Solo macOS: menu `Argus` -> **Reload Webview** (utile se l'interfaccia e vuota o bloccata).
+- Solo macOS: menu `OpenCorvus` -> **Reload Webview** (utile se l'interfaccia e vuota o bloccata).
 
 ---
 
@@ -57,28 +57,28 @@ Se l'app desktop va in crash all'avvio, si blocca o si comporta in modo strano, 
 
 Apri il tuo file di configurazione globale e cerca la chiave `plugin`.
 
-- **macOS/Linux**: `~/.config/argus/argus.jsonc` (or `~/.config/argus/argus.json`)
-- **macOS/Linux** (older installs): `~/.local/share/argus/argus.jsonc`
-- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.config\argus\argus.jsonc`
+- **macOS/Linux**: `~/.config/opencorvus/opencorvus.jsonc` (or `~/.config/opencorvus/opencorvus.json`)
+- **macOS/Linux** (older installs): `~/.local/share/opencorvus/opencorvus.jsonc`
+- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.config\opencorvus\opencorvus.jsonc`
 
 Se hai plugin configurati, disabilitali temporaneamente rimuovendo la chiave o impostandola a un array vuoto:
 
 ```jsonc
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "plugin": [],
 }
 ```
 
 #### Controlla le directory dei plugin
 
-Argus puo anche caricare plugin locali dal disco. Spostali temporaneamente altrove (o rinomina la cartella) e riavvia l'app desktop:
+OpenCorvus puo anche caricare plugin locali dal disco. Spostali temporaneamente altrove (o rinomina la cartella) e riavvia l'app desktop:
 
 - **Plugin globali**
-  - **macOS/Linux**: `~/.config/argus/plugins/`
-- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.config\argus\plugins`
+  - **macOS/Linux**: `~/.config/opencorvus/plugins/`
+- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.config\opencorvus\plugins`
 - **Plugin del progetto** (solo se usi una configurazione per progetto)
-  - `<your-project>/.argus/plugins/`
+  - `<your-project>/.opencorvus/plugins/`
 
 Se l'app ricomincia a funzionare, riabilita i plugin uno alla volta per capire quale stia causando il problema.
 
@@ -86,22 +86,22 @@ Se l'app ricomincia a funzionare, riabilita i plugin uno alla volta per capire q
 
 ### Svuota la cache
 
-Se disabilitare i plugin non aiuta (o l'installazione di un plugin e bloccata), svuota la cache in modo che Argus possa ricostruirla.
+Se disabilitare i plugin non aiuta (o l'installazione di un plugin e bloccata), svuota la cache in modo che OpenCorvus possa ricostruirla.
 
-1. Quit Argus Desktop completely.
+1. Quit OpenCorvus Desktop completely.
 2. Elimina la directory della cache:
 
-- **macOS**: Finder -> `Cmd+Shift+G` -> paste `~/.cache/argus`
-- **Linux**: elimina `~/.cache/argus` (oppure esegui `rm -rf ~/.cache/argus`)
-- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.cache\argus`
+- **macOS**: Finder -> `Cmd+Shift+G` -> paste `~/.cache/opencorvus`
+- **Linux**: elimina `~/.cache/opencorvus` (oppure esegui `rm -rf ~/.cache/opencorvus`)
+- **Windows**: premi `WIN+R` e incolla `%USERPROFILE%\.cache\opencorvus`
 
-3. Restart Argus Desktop.
+3. Restart OpenCorvus Desktop.
 
 ---
 
 ### Risolvi problemi di connessione al server
 
-Argus Desktop puo avviare il proprio server locale (predefinito) oppure connettersi a un URL server che hai configurato.
+OpenCorvus Desktop puo avviare il proprio server locale (predefinito) oppure connettersi a un URL server che hai configurato.
 
 Se vedi una finestra **"Connection Failed"** (o l'app non supera mai la schermata di avvio), controlla se hai impostato un URL server personalizzato.
 
@@ -111,7 +111,7 @@ Dalla schermata Home, fai clic sul nome del server (con il pallino di stato) per
 
 #### Rimuovi `server.port` / `server.hostname` dalla tua configurazione
 
-Se il tuo `argus.json(c)` contiene una sezione `server`, rimuovila temporaneamente e riavvia l'app desktop.
+Se il tuo `opencorvus.json(c)` contiene una sezione `server`, rimuovila temporaneamente e riavvia l'app desktop.
 
 #### Controlla le variabili d'ambiente
 
@@ -132,21 +132,21 @@ Su Linux, alcune configurazioni Wayland possono causare finestre vuote o errori 
 
 ### Windows: runtime WebView2
 
-Su Windows, Argus Desktop richiede **WebView2 Runtime** di Microsoft Edge. Se l'app si apre su una finestra vuota o non parte, installa/aggiorna WebView2 e riprova.
+Su Windows, OpenCorvus Desktop richiede **WebView2 Runtime** di Microsoft Edge. Se l'app si apre su una finestra vuota o non parte, installa/aggiorna WebView2 e riprova.
 
 ---
 
 ### Windows: problemi generali di prestazioni
 
-Se riscontri prestazioni lente, problemi di accesso ai file o problemi del terminale su Windows, prova a usare [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL fornisce un ambiente Linux che funziona in modo piu fluido con le funzionalita di Argus.
+Se riscontri prestazioni lente, problemi di accesso ai file o problemi del terminale su Windows, prova a usare [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL fornisce un ambiente Linux che funziona in modo piu fluido con le funzionalita di OpenCorvus.
 
 ---
 
 ### Notifiche non visualizzate
 
-Argus Desktop mostra le notifiche di sistema solo quando:
+OpenCorvus Desktop mostra le notifiche di sistema solo quando:
 
-- le notifiche sono abilitate per Argus nelle impostazioni del sistema operativo, e
+- le notifiche sono abilitate per OpenCorvus nelle impostazioni del sistema operativo, e
 - la finestra dell'app non e in primo piano.
 
 ---
@@ -155,11 +155,11 @@ Argus Desktop mostra le notifiche di sistema solo quando:
 
 Se l'app non si avvia e non riesci a ripulire le impostazioni dall'interfaccia, reimposta lo stato salvato dell'app desktop.
 
-1. Quit Argus Desktop.
-2. Trova ed elimina questi file (si trovano nella directory dati dell'app Argus Desktop):
+1. Quit OpenCorvus Desktop.
+2. Trova ed elimina questi file (si trovano nella directory dati dell'app OpenCorvus Desktop):
 
-- `argus.settings.dat` (desktop default server URL)
-- `argus.global.dat` e `argus.workspace.*.dat` (stato dell'interfaccia come server/progetti recenti)
+- `opencorvus.settings.dat` (desktop default server URL)
+- `opencorvus.global.dat` e `opencorvus.workspace.*.dat` (stato dell'interfaccia come server/progetti recenti)
 
 Per trovare rapidamente la directory:
 
@@ -171,13 +171,13 @@ Per trovare rapidamente la directory:
 
 ## Ottenere aiuto
 
-Se riscontri problemi con Argus:
+Se riscontri problemi con OpenCorvus:
 
 1. **Segnala i problemi su GitHub**
 
    Il modo migliore per segnalare bug o richiedere funzionalita e tramite il nostro repository GitHub:
 
-   [**github.com/yangheng95/argus/issues**](https://github.com/yangheng95/argus/issues)
+   [**github.com/yangheng95/opencorvus/issues**](https://github.com/yangheng95/opencorvus/issues)
 
    Prima di creare una nuova issue, cerca tra quelle esistenti per vedere se il problema e gia stato segnalato.
 
@@ -185,7 +185,7 @@ Se riscontri problemi con Argus:
 
    Per supporto in tempo reale e discussioni con la community, unisciti al nostro server Discord:
 
-   [**argus.ai/discord**](https://argus.ai/discord)
+   [**opencorvus.ai/discord**](https://opencorvus.ai/discord)
 
 ---
 
@@ -195,11 +195,11 @@ Ecco alcuni problemi comuni e come risolverli.
 
 ---
 
-### Argus non si avvia
+### OpenCorvus non si avvia
 
 1. Controlla i log per eventuali messaggi di errore
 2. Prova a eseguire con `--print-logs` per vedere l'output nel terminale
-3. Assicurati di avere l'ultima versione con `argus upgrade`
+3. Assicurati di avere l'ultima versione con `opencorvus upgrade`
 
 ---
 
@@ -224,9 +224,9 @@ Esempi:
 
 - `openai/gpt-4.1`
 - `openrouter/google/gemini-2.5-flash`
-- `argus/kimi-k2`
+- `opencorvus/kimi-k2`
 
-Per capire a quali modelli hai accesso, esegui `argus models`
+Per capire a quali modelli hai accesso, esegui `opencorvus models`
 
 ---
 
@@ -240,10 +240,10 @@ Per risolvere:
 2. Se il problema persiste, prova a cancellare la configurazione salvata:
 
    ```bash
-   rm -rf ~/.local/share/argus
+   rm -rf ~/.local/share/opencorvus
    ```
 
-   Su Windows, premi `WIN+R` ed elimina: `%USERPROFILE%\.local\share\argus`
+   Su Windows, premi `WIN+R` ed elimina: `%USERPROFILE%\.local\share\opencorvus`
 
 3. Riautenticati con il provider usando il comando `/connect` nella TUI.
 
@@ -251,21 +251,21 @@ Per risolvere:
 
 ### AI_APICallError e problemi dei pacchetti provider
 
-Se incontri errori nelle chiamate API, potrebbe dipendere da pacchetti provider non aggiornati. argus installa dinamicamente i pacchetti provider (OpenAI, Anthropic, Google, ecc.) quando servono e li mette in cache localmente.
+Se incontri errori nelle chiamate API, potrebbe dipendere da pacchetti provider non aggiornati. opencorvus installa dinamicamente i pacchetti provider (OpenAI, Anthropic, Google, ecc.) quando servono e li mette in cache localmente.
 
 Per risolvere problemi coi pacchetti provider:
 
 1. Svuota la cache dei pacchetti provider:
 
    ```bash
-   rm -rf ~/.cache/argus
+   rm -rf ~/.cache/opencorvus
    ```
 
-   Su Windows, premi `WIN+R` ed elimina: `%USERPROFILE%\.cache\argus`
+   Su Windows, premi `WIN+R` ed elimina: `%USERPROFILE%\.cache\opencorvus`
 
-2. Riavvia argus per reinstallare i pacchetti provider piu recenti
+2. Riavvia opencorvus per reinstallare i pacchetti provider piu recenti
 
-Questo forzera argus a scaricare le versioni piu recenti dei pacchetti provider, cosa che spesso risolve problemi di compatibilita con parametri dei modelli e cambiamenti delle API.
+Questo forzera opencorvus a scaricare le versioni piu recenti dei pacchetti provider, cosa che spesso risolve problemi di compatibilita con parametri dei modelli e cambiamenti delle API.
 
 ---
 
@@ -296,4 +296,4 @@ Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
 export DISPLAY=:99.0
 ```
 
-argus rilevera se stai usando Wayland e preferira `wl-clipboard`; altrimenti provera a trovare gli strumenti per gli appunti nell'ordine: `xclip` e `xsel`.
+opencorvus rilevera se stai usando Wayland e preferira `wl-clipboard`; altrimenti provera a trovare gli strumenti per gli appunti nell'ordine: `xclip` e `xsel`.

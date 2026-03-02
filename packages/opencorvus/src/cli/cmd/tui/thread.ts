@@ -19,7 +19,7 @@ import { ModelsDev } from "@/provider/models"
 import { Auth } from "@/auth"
 
 declare global {
-  const ARGUS_WORKER_PATH: string
+  const OPENCORVUS_WORKER_PATH: string
 }
 
 const PROVIDER_PRIORITY: Record<string, number> = {
@@ -133,12 +133,12 @@ function createEventSource(client: RpcClient): EventSource {
 
 export const TuiThreadCommand = cmd({
   command: "$0 [project]",
-  describe: "start argus tui",
+  describe: "start opencorvus tui",
   builder: (yargs) =>
     withNetworkOptions(yargs)
       .positional("project", {
         type: "string",
-        describe: "path to start argus in",
+        describe: "path to start opencorvus in",
       })
       .option("model", {
         type: "string",
@@ -195,7 +195,7 @@ export const TuiThreadCommand = cmd({
       const localWorker = new URL("./worker.ts", import.meta.url)
       const distWorker = new URL("./cli/cmd/tui/worker.js", import.meta.url)
       const workerPath = await iife(async () => {
-        if (typeof ARGUS_WORKER_PATH !== "undefined") return ARGUS_WORKER_PATH
+        if (typeof OPENCORVUS_WORKER_PATH !== "undefined") return OPENCORVUS_WORKER_PATH
         if (await Filesystem.exists(fileURLToPath(distWorker))) return distWorker
         return localWorker
       })
@@ -255,7 +255,7 @@ export const TuiThreadCommand = cmd({
         url = server.url
       } else {
         // Use direct RPC communication (no HTTP)
-        url = "http://argus.internal"
+        url = "http://opencorvus.internal"
         customFetch = createWorkerFetch(client)
         events = createEventSource(client)
       }

@@ -1,68 +1,68 @@
 ---
 title: GitLab
-description: Используйте argus в задачах GitLab и мерж-реквестах.
+description: Используйте opencorvus в задачах GitLab и мерж-реквестах.
 ---
 
-argus интегрируется с вашим рабочим процессом GitLab через конвейер GitLab CI/CD или с GitLab Duo.
+opencorvus интегрируется с вашим рабочим процессом GitLab через конвейер GitLab CI/CD или с GitLab Duo.
 
-В обоих случаях argus будет работать на ваших программах GitLab.
+В обоих случаях opencorvus будет работать на ваших программах GitLab.
 
 ---
 
 ## GitLab
 
-argus работает в обычном конвейере GitLab. Вы можете встроить его в конвейер как [CI-компонент](https://docs.gitlab.com/ee/ci/components/)
+opencorvus работает в обычном конвейере GitLab. Вы можете встроить его в конвейер как [CI-компонент](https://docs.gitlab.com/ee/ci/components/)
 
-Здесь мы используем созданный сообществом компонент CI/CD для argus — [nagyv/gitlab-argus](https://gitlab.com/nagyv/gitlab-argus).
+Здесь мы используем созданный сообществом компонент CI/CD для opencorvus — [nagyv/gitlab-opencorvus](https://gitlab.com/nagyv/gitlab-opencorvus).
 
 ---
 
 ### Функции
 
-- **Использовать пользовательскую конфигурацию для каждого задания**. Настройте argus с помощью пользовательского каталога конфигурации, например `./config/#custom-directory`, чтобы включать или отключать функциональность для каждого вызова argus.
-- **Минимальная настройка**: компонент CI настраивает argus в фоновом режиме, вам нужно только создать конфигурацию argus и начальное приглашение.
+- **Использовать пользовательскую конфигурацию для каждого задания**. Настройте opencorvus с помощью пользовательского каталога конфигурации, например `./config/#custom-directory`, чтобы включать или отключать функциональность для каждого вызова opencorvus.
+- **Минимальная настройка**: компонент CI настраивает opencorvus в фоновом режиме, вам нужно только создать конфигурацию opencorvus и начальное приглашение.
 - **Гибкость**: компонент CI поддерживает несколько входных данных для настройки его поведения.
 
 ---
 
 ### Настройка
 
-1. Сохраните JSON аутентификации argus как переменные среды CI типа файла в разделе **Настройки** > **CI/CD** > **Переменные**. Обязательно пометьте их как «Замаскированные и скрытые».
+1. Сохраните JSON аутентификации opencorvus как переменные среды CI типа файла в разделе **Настройки** > **CI/CD** > **Переменные**. Обязательно пометьте их как «Замаскированные и скрытые».
 2. Добавьте следующее в файл `.gitlab-ci.yml`.
 
    ```yaml title=".gitlab-ci.yml"
    include:
-     - component: $CI_SERVER_FQDN/nagyv/gitlab-argus/argus@2
+     - component: $CI_SERVER_FQDN/nagyv/gitlab-opencorvus/opencorvus@2
        inputs:
-         config_dir: ${CI_PROJECT_DIR}/argus-config
-         auth_json: $OPENCODE_AUTH_JSON # The variable name for your Argus authentication JSON
+         config_dir: ${CI_PROJECT_DIR}/opencorvus-config
+         auth_json: $OPENCODE_AUTH_JSON # The variable name for your OpenCorvus authentication JSON
          command: optional-custom-command
          message: "Your prompt here"
    ```
 
-Дополнительные сведения и варианты использования см. в документации ](https://gitlab.com/explore/catalog/nagyv/gitlab-argus) для этого компонента.
+Дополнительные сведения и варианты использования см. в документации ](https://gitlab.com/explore/catalog/nagyv/gitlab-opencorvus) для этого компонента.
 
 ---
 
 ## GitLab Duo
 
-argus интегрируется с вашим рабочим процессом GitLab.
-Упомяните `@argus` в комментарии, и argus выполнит задачи в вашем конвейере GitLab CI.
+opencorvus интегрируется с вашим рабочим процессом GitLab.
+Упомяните `@opencorvus` в комментарии, и opencorvus выполнит задачи в вашем конвейере GitLab CI.
 
 ---
 
 ### Функции
 
-- **Триаж задач (Issue Triage)**. Попросите argus разобраться в проблеме и объяснить ее вам.
-- **Исправление и реализация**. Попросите argus исправить проблему или реализовать функцию.
+- **Триаж задач (Issue Triage)**. Попросите opencorvus разобраться в проблеме и объяснить ее вам.
+- **Исправление и реализация**. Попросите opencorvus исправить проблему или реализовать функцию.
   Он создаст новую ветку и создаст мерж-реквест с изменениями.
-- **Безопасность**: argus работает на ваших программах GitLab.
+- **Безопасность**: opencorvus работает на ваших программах GitLab.
 
 ---
 
 ### Настройка
 
-argus работает в вашем конвейере GitLab CI/CD. Вот что вам понадобится для его настройки:
+opencorvus работает в вашем конвейере GitLab CI/CD. Вот что вам понадобится для его настройки:
 
 :::tip
 Ознакомьтесь с [**документацией GitLab**](https://docs.gitlab.com/user/duo_agent_platform/agent_assistant/) для получения актуальных инструкций.
@@ -82,8 +82,8 @@ argus работает в вашем конвейере GitLab CI/CD. Вот ч�
     ```yaml
     image: node:22-slim
     commands:
-      - echo "Installing argus"
-      - npm install --global argus-ai
+      - echo "Installing opencorvus"
+      - npm install --global opencorvus-ai
       - echo "Installing glab"
       - export GITLAB_TOKEN=$GITLAB_TOKEN_OPENCODE
       - apt-get update --quiet && apt-get install --yes curl wget gpg git && rm --recursive --force /var/lib/apt/lists/*
@@ -91,10 +91,10 @@ argus работает в вашем конвейере GitLab CI/CD. Вот ч�
       - apt-get install --yes glab
       - echo "Configuring glab"
       - echo $GITLAB_HOST
-      - echo "Creating Argus auth configuration"
-      - mkdir --parents ~/.local/share/argus
+      - echo "Creating OpenCorvus auth configuration"
+      - mkdir --parents ~/.local/share/opencorvus
       - |
-        cat > ~/.local/share/argus/auth.json << EOF
+        cat > ~/.local/share/opencorvus/auth.json << EOF
         {
           "anthropic": {
             "type": "api",
@@ -103,13 +103,13 @@ argus работает в вашем конвейере GitLab CI/CD. Вот ч�
         }
         EOF
       - echo "Configuring git"
-      - git config --global user.email "argus@gitlab.com"
-      - git config --global user.name "Argus"
+      - git config --global user.email "opencorvus@gitlab.com"
+      - git config --global user.name "OpenCorvus"
       - echo "Testing glab"
       - glab issue list
-      - echo "Running Argus"
+      - echo "Running OpenCorvus"
       - |
-        argus run "
+        opencorvus run "
         You are an AI assistant helping with GitLab operations.
 
         Context: $AI_FLOW_CONTEXT
@@ -158,10 +158,10 @@ argus работает в вашем конвейере GitLab CI/CD. Вот ч�
 
 ### Примеры
 
-Вот несколько примеров того, как вы можете использовать argus в GitLab.
+Вот несколько примеров того, как вы можете использовать opencorvus в GitLab.
 
 :::tip
-Вы можете настроить использование триггерной фразы, отличной от `@argus`.
+Вы можете настроить использование триггерной фразы, отличной от `@opencorvus`.
 :::
 
 - **Объяснение проблемы**
@@ -169,27 +169,27 @@ argus работает в вашем конвейере GitLab CI/CD. Вот ч�
   Добавьте этот комментарий в issue GitLab.
 
   ```
-  @argus explain this issue
+  @opencorvus explain this issue
   ```
 
-  argus прочитает проблему и ответит с четким объяснением.
+  opencorvus прочитает проблему и ответит с четким объяснением.
 
 - **Исправление проблемы**
 
   В issue GitLab напишите:
 
   ```
-  @argus fix this
+  @opencorvus fix this
   ```
 
-  argus создаст новую ветку, внедрит изменения и откроет мерж-реквест с изменениями.
+  opencorvus создаст новую ветку, внедрит изменения и откроет мерж-реквест с изменениями.
 
 - **Проверка Merge Request**
 
   Оставьте следующий комментарий к мерж-реквесту GitLab.
 
   ```
-  @argus review this merge request
+  @opencorvus review this merge request
   ```
 
-  argus рассмотрит мерж-реквест и предоставит отзыв.
+  opencorvus рассмотрит мерж-реквест и предоставит отзыв.

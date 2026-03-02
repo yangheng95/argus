@@ -10,18 +10,18 @@ import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
 
 // Get managed config directory from environment (set in preload.ts)
-const managedConfigDir = process.env.ARGUS_TEST_MANAGED_CONFIG_DIR!
+const managedConfigDir = process.env.OPENCORVUS_TEST_MANAGED_CONFIG_DIR!
 
 afterEach(async () => {
   await fs.rm(managedConfigDir, { force: true, recursive: true }).catch(() => {})
 })
 
-async function writeManagedSettings(settings: object, filename = "argus.json") {
+async function writeManagedSettings(settings: object, filename = "opencorvus.json") {
   await fs.mkdir(managedConfigDir, { recursive: true })
   await Filesystem.write(path.join(managedConfigDir, filename), JSON.stringify(settings))
 }
 
-async function writeConfig(dir: string, config: object, name = "argus.json") {
+async function writeConfig(dir: string, config: object, name = "opencorvus.json") {
   await Filesystem.write(path.join(dir, name), JSON.stringify(config))
 }
 
@@ -56,7 +56,7 @@ test("loads JSON config file", async () => {
   })
 })
 
-test("ignores legacy tui keys in argus config", async () => {
+test("ignores legacy tui keys in opencorvus config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await writeConfig(dir, {
@@ -82,7 +82,7 @@ test("loads JSONC config file", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.jsonc"),
+        path.join(dir, "opencorvus.jsonc"),
         `{
         // This is a comment
         "$schema": "https://opencode.ai/config.json",
@@ -112,7 +112,7 @@ test("merges multiple config files with correct precedence", async () => {
           model: "base",
           username: "base",
         },
-        "argus.jsonc",
+        "opencorvus.jsonc",
       )
       await writeConfig(dir, {
         $schema: "https://opencode.ai/config.json",
@@ -168,7 +168,7 @@ test("preserves env variables when adding $schema to config", async () => {
       init: async (dir) => {
         // Config without $schema - should trigger auto-add
         await Filesystem.write(
-          path.join(dir, "argus.json"),
+          path.join(dir, "opencorvus.json"),
           JSON.stringify({
             username: "{env:PRESERVE_VAR}",
           }),
@@ -182,7 +182,7 @@ test("preserves env variables when adding $schema to config", async () => {
         expect(config.username).toBe("secret_value")
 
         // Read the file to verify the env variable was preserved
-        const content = await Filesystem.readText(path.join(tmp.path, "argus.json"))
+        const content = await Filesystem.readText(path.join(tmp.path, "opencorvus.json"))
         expect(content).toContain("{env:PRESERVE_VAR}")
         expect(content).not.toContain("secret_value")
         expect(content).toContain("$schema")
@@ -256,7 +256,7 @@ test("validates config schema and throws on invalid fields", async () => {
 test("throws error for invalid JSON", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      await Filesystem.write(path.join(dir, "argus.json"), "{ invalid json }")
+      await Filesystem.write(path.join(dir, "opencorvus.json"), "{ invalid json }")
     },
   })
   await Instance.provide({
@@ -360,7 +360,7 @@ test("migrates autoshare to share field", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           autoshare: true,
@@ -382,7 +382,7 @@ test("migrates mode field to agent field", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mode: {
@@ -410,12 +410,12 @@ test("migrates mode field to agent field", async () => {
   })
 })
 
-test("loads config from .argus directory", async () => {
+test("loads config from .opencorvus directory", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const argusDir = path.join(dir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
-      const agentDir = path.join(argusDir, "agent")
+      const opencorvusDir = path.join(dir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
+      const agentDir = path.join(opencorvusDir, "agent")
       await fs.mkdir(agentDir, { recursive: true })
 
       await Filesystem.write(
@@ -442,13 +442,13 @@ Test agent prompt`,
   })
 })
 
-test("loads agents from .argus/agents (plural)", async () => {
+test("loads agents from .opencorvus/agents (plural)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const argusDir = path.join(dir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      const opencorvusDir = path.join(dir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
 
-      const agentsDir = path.join(argusDir, "agents")
+      const agentsDir = path.join(opencorvusDir, "agents")
       await fs.mkdir(path.join(agentsDir, "nested"), { recursive: true })
 
       await Filesystem.write(
@@ -493,13 +493,13 @@ Nested agent prompt`,
   })
 })
 
-test("loads commands from .argus/command (singular)", async () => {
+test("loads commands from .opencorvus/command (singular)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const argusDir = path.join(dir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      const opencorvusDir = path.join(dir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
 
-      const commandDir = path.join(argusDir, "command")
+      const commandDir = path.join(opencorvusDir, "command")
       await fs.mkdir(path.join(commandDir, "nested"), { recursive: true })
 
       await Filesystem.write(
@@ -538,13 +538,13 @@ Nested command template`,
   })
 })
 
-test("loads commands from .argus/commands (plural)", async () => {
+test("loads commands from .opencorvus/commands (plural)", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const argusDir = path.join(dir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      const opencorvusDir = path.join(dir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
 
-      const commandsDir = path.join(argusDir, "commands")
+      const commandsDir = path.join(opencorvusDir, "commands")
       await fs.mkdir(path.join(commandsDir, "nested"), { recursive: true })
 
       await Filesystem.write(
@@ -608,7 +608,7 @@ test("gets config directories", async () => {
   })
 })
 
-test("does not try to install dependencies in read-only ARGUS_CONFIG_DIR", async () => {
+test("does not try to install dependencies in read-only OPENCORVUS_CONFIG_DIR", async () => {
   if (process.platform === "win32") return
 
   await using tmp = await tmpdir<string>({
@@ -625,8 +625,8 @@ test("does not try to install dependencies in read-only ARGUS_CONFIG_DIR", async
     },
   })
 
-  const prev = process.env.ARGUS_CONFIG_DIR
-  process.env.ARGUS_CONFIG_DIR = tmp.extra
+  const prev = process.env.OPENCORVUS_CONFIG_DIR
+  process.env.OPENCORVUS_CONFIG_DIR = tmp.extra
 
   try {
     await Instance.provide({
@@ -636,12 +636,12 @@ test("does not try to install dependencies in read-only ARGUS_CONFIG_DIR", async
       },
     })
   } finally {
-    if (prev === undefined) delete process.env.ARGUS_CONFIG_DIR
-    else process.env.ARGUS_CONFIG_DIR = prev
+    if (prev === undefined) delete process.env.OPENCORVUS_CONFIG_DIR
+    else process.env.OPENCORVUS_CONFIG_DIR = prev
   }
 })
 
-test("installs dependencies in writable ARGUS_CONFIG_DIR", async () => {
+test("installs dependencies in writable OPENCORVUS_CONFIG_DIR", async () => {
   await using tmp = await tmpdir<string>({
     init: async (dir) => {
       const cfg = path.join(dir, "configdir")
@@ -650,8 +650,8 @@ test("installs dependencies in writable ARGUS_CONFIG_DIR", async () => {
     },
   })
 
-  const prev = process.env.ARGUS_CONFIG_DIR
-  process.env.ARGUS_CONFIG_DIR = tmp.extra
+  const prev = process.env.OPENCORVUS_CONFIG_DIR
+  process.env.OPENCORVUS_CONFIG_DIR = tmp.extra
 
   try {
     await Instance.provide({
@@ -665,8 +665,8 @@ test("installs dependencies in writable ARGUS_CONFIG_DIR", async () => {
     expect(await Filesystem.exists(path.join(tmp.extra, "package.json"))).toBe(true)
     expect(await Filesystem.exists(path.join(tmp.extra, ".gitignore"))).toBe(true)
   } finally {
-    if (prev === undefined) delete process.env.ARGUS_CONFIG_DIR
-    else process.env.ARGUS_CONFIG_DIR = prev
+    if (prev === undefined) delete process.env.OPENCORVUS_CONFIG_DIR
+    else process.env.OPENCORVUS_CONFIG_DIR = prev
   }
 })
 
@@ -698,7 +698,7 @@ test("resolves scoped npm plugins in config", async () => {
       await Filesystem.write(path.join(pluginDir, "index.js"), "export default {}\n")
 
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: ["@scope/plugin"] }, null, 2),
       )
     },
@@ -710,7 +710,7 @@ test("resolves scoped npm plugins in config", async () => {
       const config = await Config.get()
       const pluginEntries = config.plugin ?? []
 
-      const baseUrl = pathToFileURL(path.join(tmp.path, "argus.json")).href
+      const baseUrl = pathToFileURL(path.join(tmp.path, "opencorvus.json")).href
       const expected = pathToFileURL(path.join(tmp.path, "node_modules", "@scope", "plugin", "index.js")).href
 
       expect(pluginEntries.includes(expected)).toBe(true)
@@ -725,23 +725,23 @@ test("resolves scoped npm plugins in config", async () => {
 test("merges plugin arrays from global and local configs", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      // Create a nested project structure with local .argus config
+      // Create a nested project structure with local .opencorvus config
       const projectDir = path.join(dir, "project")
-      const argusDir = path.join(projectDir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      const opencorvusDir = path.join(projectDir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
 
       // Global config with plugins
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["global-plugin-1", "global-plugin-2"],
         }),
       )
 
-      // Local .argus config with different plugins
+      // Local .opencorvus config with different plugins
       await Filesystem.write(
-        path.join(argusDir, "argus.json"),
+        path.join(opencorvusDir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["local-plugin-1"],
@@ -771,9 +771,9 @@ test("merges plugin arrays from global and local configs", async () => {
 test("does not error when only custom agent is a subagent", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      const argusDir = path.join(dir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
-      const agentDir = path.join(argusDir, "agent")
+      const opencorvusDir = path.join(dir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
+      const agentDir = path.join(opencorvusDir, "agent")
       await fs.mkdir(agentDir, { recursive: true })
 
       await Filesystem.write(
@@ -804,11 +804,11 @@ test("merges instructions arrays from global and local configs", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       const projectDir = path.join(dir, "project")
-      const argusDir = path.join(projectDir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      const opencorvusDir = path.join(projectDir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
 
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["global-instructions.md", "shared-rules.md"],
@@ -816,7 +816,7 @@ test("merges instructions arrays from global and local configs", async () => {
       )
 
       await Filesystem.write(
-        path.join(argusDir, "argus.json"),
+        path.join(opencorvusDir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["local-instructions.md"],
@@ -843,11 +843,11 @@ test("deduplicates duplicate instructions from global and local configs", async 
   await using tmp = await tmpdir({
     init: async (dir) => {
       const projectDir = path.join(dir, "project")
-      const argusDir = path.join(projectDir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      const opencorvusDir = path.join(projectDir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
 
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["duplicate.md", "global-only.md"],
@@ -855,7 +855,7 @@ test("deduplicates duplicate instructions from global and local configs", async 
       )
 
       await Filesystem.write(
-        path.join(argusDir, "argus.json"),
+        path.join(opencorvusDir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           instructions: ["duplicate.md", "local-only.md"],
@@ -884,23 +884,23 @@ test("deduplicates duplicate instructions from global and local configs", async 
 test("deduplicates duplicate plugins from global and local configs", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
-      // Create a nested project structure with local .argus config
+      // Create a nested project structure with local .opencorvus config
       const projectDir = path.join(dir, "project")
-      const argusDir = path.join(projectDir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      const opencorvusDir = path.join(projectDir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
 
       // Global config with plugins
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["duplicate-plugin", "global-plugin-1"],
         }),
       )
 
-      // Local .argus config with some overlapping plugins
+      // Local .opencorvus config with some overlapping plugins
       await Filesystem.write(
-        path.join(argusDir, "argus.json"),
+        path.join(opencorvusDir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           plugin: ["duplicate-plugin", "local-plugin-1"],
@@ -939,7 +939,7 @@ test("migrates legacy tools config to permissions - allow", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -970,7 +970,7 @@ test("migrates legacy tools config to permissions - deny", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1001,7 +1001,7 @@ test("migrates legacy write tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1027,7 +1027,7 @@ test("migrates legacy write tool to edit permission", async () => {
 })
 
 // Managed settings tests
-// Note: preload.ts sets ARGUS_TEST_MANAGED_CONFIG which Global.Path.managedConfig uses
+// Note: preload.ts sets OPENCORVUS_TEST_MANAGED_CONFIG which Global.Path.managedConfig uses
 
 test("managed settings override user settings", async () => {
   await using tmp = await tmpdir({
@@ -1108,7 +1108,7 @@ test("migrates legacy edit tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1137,7 +1137,7 @@ test("migrates legacy patch tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1166,7 +1166,7 @@ test("migrates legacy multiedit tool to edit permission", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1195,7 +1195,7 @@ test("migrates mixed legacy tools config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1230,7 +1230,7 @@ test("merges legacy tools with existing permission config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           agent: {
@@ -1263,7 +1263,7 @@ test("permission config preserves key order", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           permission: {
@@ -1311,7 +1311,7 @@ test("project config can override MCP server enabled status", async () => {
     init: async (dir) => {
       // Simulates a base config (like from remote .well-known) with disabled MCP
       await Filesystem.write(
-        path.join(dir, "argus.jsonc"),
+        path.join(dir, "opencorvus.jsonc"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1330,7 +1330,7 @@ test("project config can override MCP server enabled status", async () => {
       )
       // Project config enables just jira
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1369,7 +1369,7 @@ test("MCP config deep merges preserving base config properties", async () => {
     init: async (dir) => {
       // Base config with full MCP definition
       await Filesystem.write(
-        path.join(dir, "argus.jsonc"),
+        path.join(dir, "opencorvus.jsonc"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1386,7 +1386,7 @@ test("MCP config deep merges preserving base config properties", async () => {
       )
       // Override just enables it, should preserve other properties
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1416,12 +1416,12 @@ test("MCP config deep merges preserving base config properties", async () => {
   })
 })
 
-test("local .argus config can override MCP from project config", async () => {
+test("local .opencorvus config can override MCP from project config", async () => {
   await using tmp = await tmpdir({
     init: async (dir) => {
       // Project config with disabled MCP
       await Filesystem.write(
-        path.join(dir, "argus.json"),
+        path.join(dir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1433,11 +1433,11 @@ test("local .argus config can override MCP from project config", async () => {
           },
         }),
       )
-      // Local .argus directory config enables it
-      const argusDir = path.join(dir, ".argus")
-      await fs.mkdir(argusDir, { recursive: true })
+      // Local .opencorvus directory config enables it
+      const opencorvusDir = path.join(dir, ".opencorvus")
+      await fs.mkdir(opencorvusDir, { recursive: true })
       await Filesystem.write(
-        path.join(argusDir, "argus.json"),
+        path.join(opencorvusDir, "opencorvus.json"),
         JSON.stringify({
           $schema: "https://opencode.ai/config.json",
           mcp: {
@@ -1465,7 +1465,7 @@ test("project config overrides remote well-known config", async () => {
   let fetchedUrl: string | undefined
   const mockFetch = mock((url: string | URL | Request) => {
     const urlStr = url.toString()
-    if (urlStr.includes(".well-known/argus")) {
+    if (urlStr.includes(".well-known/opencorvus")) {
       fetchedUrl = urlStr
       return Promise.resolve(
         new Response(
@@ -1505,7 +1505,7 @@ test("project config overrides remote well-known config", async () => {
       init: async (dir) => {
         // Project config enables jira (overriding remote default)
         await Filesystem.write(
-          path.join(dir, "argus.json"),
+          path.join(dir, "opencorvus.json"),
           JSON.stringify({
             $schema: "https://opencode.ai/config.json",
             mcp: {
@@ -1524,7 +1524,7 @@ test("project config overrides remote well-known config", async () => {
       fn: async () => {
         const config = await Config.get()
         // Verify fetch was called for wellknown config
-        expect(fetchedUrl).toBe("https://example.com/.well-known/argus")
+        expect(fetchedUrl).toBe("https://example.com/.well-known/opencorvus")
         // Project config (enabled: true) should override remote (enabled: false)
         expect(config.mcp?.jira?.enabled).toBe(true)
       },
@@ -1543,14 +1543,14 @@ describe("getPluginName", () => {
   })
 
   test("extracts name from npm package with version", () => {
-    expect(Config.getPluginName("oh-my-argus@2.4.3")).toBe("oh-my-argus")
+    expect(Config.getPluginName("oh-my-opencorvus@2.4.3")).toBe("oh-my-opencorvus")
     expect(Config.getPluginName("some-plugin@1.0.0")).toBe("some-plugin")
     expect(Config.getPluginName("plugin@latest")).toBe("plugin")
   })
 
   test("extracts name from scoped npm package", () => {
     expect(Config.getPluginName("@scope/pkg@1.0.0")).toBe("@scope/pkg")
-    expect(Config.getPluginName("@argus/plugin@2.0.0")).toBe("@argus/plugin")
+    expect(Config.getPluginName("@opencorvus/plugin@2.0.0")).toBe("@opencorvus/plugin")
   })
 
   test("returns full string for package without version", () => {
@@ -1573,12 +1573,12 @@ describe("deduplicatePlugins", () => {
   })
 
   test("prefers local file over npm package with same name", () => {
-    const plugins = ["oh-my-argus@2.4.3", "file:///project/.argus/plugin/oh-my-argus.js"]
+    const plugins = ["oh-my-opencorvus@2.4.3", "file:///project/.opencorvus/plugin/oh-my-opencorvus.js"]
 
     const result = Config.deduplicatePlugins(plugins)
 
     expect(result.length).toBe(1)
-    expect(result[0]).toBe("file:///project/.argus/plugin/oh-my-argus.js")
+    expect(result[0]).toBe("file:///project/.opencorvus/plugin/oh-my-opencorvus.js")
   })
 
   test("preserves order of remaining plugins", () => {
@@ -1589,16 +1589,16 @@ describe("deduplicatePlugins", () => {
     expect(result).toEqual(["a-plugin@1.0.0", "b-plugin@1.0.0", "c-plugin@1.0.0"])
   })
 
-  test("local plugin directory overrides global argus.json plugin", async () => {
+  test("local plugin directory overrides global opencorvus.json plugin", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
         const projectDir = path.join(dir, "project")
-        const argusDir = path.join(projectDir, ".argus")
-        const pluginDir = path.join(argusDir, "plugin")
+        const opencorvusDir = path.join(projectDir, ".opencorvus")
+        const pluginDir = path.join(opencorvusDir, "plugin")
         await fs.mkdir(pluginDir, { recursive: true })
 
         await Filesystem.write(
-          path.join(dir, "argus.json"),
+          path.join(dir, "opencorvus.json"),
           JSON.stringify({
             $schema: "https://opencode.ai/config.json",
             plugin: ["my-plugin@1.0.0"],
@@ -1623,17 +1623,17 @@ describe("deduplicatePlugins", () => {
   })
 })
 
-describe("ARGUS_DISABLE_PROJECT_CONFIG", () => {
+describe("OPENCORVUS_DISABLE_PROJECT_CONFIG", () => {
   test("skips project config files when flag is set", async () => {
-    const originalEnv = process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
-    process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = "true"
+    const originalEnv = process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
+    process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = "true"
 
     try {
       await using tmp = await tmpdir({
         init: async (dir) => {
           // Create a project config that would normally be loaded
           await Filesystem.write(
-            path.join(dir, "argus.json"),
+            path.join(dir, "opencorvus.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               model: "project/model",
@@ -1653,47 +1653,47 @@ describe("ARGUS_DISABLE_PROJECT_CONFIG", () => {
       })
     } finally {
       if (originalEnv === undefined) {
-        delete process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
+        delete process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
       } else {
-        process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = originalEnv
+        process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = originalEnv
       }
     }
   })
 
-  test("skips project .argus/ directories when flag is set", async () => {
-    const originalEnv = process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
-    process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = "true"
+  test("skips project .opencorvus/ directories when flag is set", async () => {
+    const originalEnv = process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
+    process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = "true"
 
     try {
       await using tmp = await tmpdir({
         init: async (dir) => {
-          // Create a .argus directory with a command
-          const argusDir = path.join(dir, ".argus", "command")
-          await fs.mkdir(argusDir, { recursive: true })
-          await Filesystem.write(path.join(argusDir, "test-cmd.md"), "# Test Command\nThis is a test command.")
+          // Create a .opencorvus directory with a command
+          const opencorvusDir = path.join(dir, ".opencorvus", "command")
+          await fs.mkdir(opencorvusDir, { recursive: true })
+          await Filesystem.write(path.join(opencorvusDir, "test-cmd.md"), "# Test Command\nThis is a test command.")
         },
       })
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
           const directories = await Config.directories()
-          // Project .argus should NOT be in directories list
-          const hasProjectArgus = directories.some((d) => d.startsWith(tmp.path))
-          expect(hasProjectArgus).toBe(false)
+          // Project .opencorvus should NOT be in directories list
+          const hasProjectOpenCorvus = directories.some((d) => d.startsWith(tmp.path))
+          expect(hasProjectOpenCorvus).toBe(false)
         },
       })
     } finally {
       if (originalEnv === undefined) {
-        delete process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
+        delete process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
       } else {
-        process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = originalEnv
+        process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = originalEnv
       }
     }
   })
 
   test("still loads global config when flag is set", async () => {
-    const originalEnv = process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
-    process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = "true"
+    const originalEnv = process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
+    process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = "true"
 
     try {
       await using tmp = await tmpdir()
@@ -1708,27 +1708,27 @@ describe("ARGUS_DISABLE_PROJECT_CONFIG", () => {
       })
     } finally {
       if (originalEnv === undefined) {
-        delete process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
+        delete process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
       } else {
-        process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = originalEnv
+        process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = originalEnv
       }
     }
   })
 
   test("skips relative instructions with warning when flag is set but no config dir", async () => {
-    const originalDisable = process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
-    const originalConfigDir = process.env["ARGUS_CONFIG_DIR"]
+    const originalDisable = process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
+    const originalConfigDir = process.env["OPENCORVUS_CONFIG_DIR"]
 
     try {
       // Ensure no config dir is set
-      delete process.env["ARGUS_CONFIG_DIR"]
-      process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = "true"
+      delete process.env["OPENCORVUS_CONFIG_DIR"]
+      process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = "true"
 
       await using tmp = await tmpdir({
         init: async (dir) => {
           // Create a config with relative instruction path
           await Filesystem.write(
-            path.join(dir, "argus.json"),
+            path.join(dir, "opencorvus.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               instructions: ["./CUSTOM.md"],
@@ -1753,28 +1753,28 @@ describe("ARGUS_DISABLE_PROJECT_CONFIG", () => {
       })
     } finally {
       if (originalDisable === undefined) {
-        delete process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
+        delete process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
       } else {
-        process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = originalDisable
+        process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = originalDisable
       }
       if (originalConfigDir === undefined) {
-        delete process.env["ARGUS_CONFIG_DIR"]
+        delete process.env["OPENCORVUS_CONFIG_DIR"]
       } else {
-        process.env["ARGUS_CONFIG_DIR"] = originalConfigDir
+        process.env["OPENCORVUS_CONFIG_DIR"] = originalConfigDir
       }
     }
   })
 
-  test("ARGUS_CONFIG_DIR still works when flag is set", async () => {
-    const originalDisable = process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
-    const originalConfigDir = process.env["ARGUS_CONFIG_DIR"]
+  test("OPENCORVUS_CONFIG_DIR still works when flag is set", async () => {
+    const originalDisable = process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
+    const originalConfigDir = process.env["OPENCORVUS_CONFIG_DIR"]
 
     try {
       await using configDirTmp = await tmpdir({
         init: async (dir) => {
           // Create config in the custom config dir
           await Filesystem.write(
-            path.join(dir, "argus.json"),
+            path.join(dir, "opencorvus.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               model: "configdir/model",
@@ -1787,7 +1787,7 @@ describe("ARGUS_DISABLE_PROJECT_CONFIG", () => {
         init: async (dir) => {
           // Create config in project (should be ignored)
           await Filesystem.write(
-            path.join(dir, "argus.json"),
+            path.join(dir, "opencorvus.json"),
             JSON.stringify({
               $schema: "https://opencode.ai/config.json",
               model: "project/model",
@@ -1796,38 +1796,38 @@ describe("ARGUS_DISABLE_PROJECT_CONFIG", () => {
         },
       })
 
-      process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = "true"
-      process.env["ARGUS_CONFIG_DIR"] = configDirTmp.path
+      process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = "true"
+      process.env["OPENCORVUS_CONFIG_DIR"] = configDirTmp.path
 
       await Instance.provide({
         directory: projectTmp.path,
         fn: async () => {
           const config = await Config.get()
-          // Should load from ARGUS_CONFIG_DIR, not project
+          // Should load from OPENCORVUS_CONFIG_DIR, not project
           expect(config.model).toBe("configdir/model")
         },
       })
     } finally {
       if (originalDisable === undefined) {
-        delete process.env["ARGUS_DISABLE_PROJECT_CONFIG"]
+        delete process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"]
       } else {
-        process.env["ARGUS_DISABLE_PROJECT_CONFIG"] = originalDisable
+        process.env["OPENCORVUS_DISABLE_PROJECT_CONFIG"] = originalDisable
       }
       if (originalConfigDir === undefined) {
-        delete process.env["ARGUS_CONFIG_DIR"]
+        delete process.env["OPENCORVUS_CONFIG_DIR"]
       } else {
-        process.env["ARGUS_CONFIG_DIR"] = originalConfigDir
+        process.env["OPENCORVUS_CONFIG_DIR"] = originalConfigDir
       }
     }
   })
 })
 
-describe("ARGUS_CONFIG_CONTENT token substitution", () => {
-  test("substitutes {env:} tokens in ARGUS_CONFIG_CONTENT", async () => {
-    const originalEnv = process.env["ARGUS_CONFIG_CONTENT"]
+describe("OPENCORVUS_CONFIG_CONTENT token substitution", () => {
+  test("substitutes {env:} tokens in OPENCORVUS_CONFIG_CONTENT", async () => {
+    const originalEnv = process.env["OPENCORVUS_CONFIG_CONTENT"]
     const originalTestVar = process.env["TEST_CONFIG_VAR"]
     process.env["TEST_CONFIG_VAR"] = "test_api_key_12345"
-    process.env["ARGUS_CONFIG_CONTENT"] = JSON.stringify({
+    process.env["OPENCORVUS_CONFIG_CONTENT"] = JSON.stringify({
       $schema: "https://opencode.ai/config.json",
       username: "{env:TEST_CONFIG_VAR}",
     })
@@ -1843,9 +1843,9 @@ describe("ARGUS_CONFIG_CONTENT token substitution", () => {
       })
     } finally {
       if (originalEnv !== undefined) {
-        process.env["ARGUS_CONFIG_CONTENT"] = originalEnv
+        process.env["OPENCORVUS_CONFIG_CONTENT"] = originalEnv
       } else {
-        delete process.env["ARGUS_CONFIG_CONTENT"]
+        delete process.env["OPENCORVUS_CONFIG_CONTENT"]
       }
       if (originalTestVar !== undefined) {
         process.env["TEST_CONFIG_VAR"] = originalTestVar
@@ -1855,14 +1855,14 @@ describe("ARGUS_CONFIG_CONTENT token substitution", () => {
     }
   })
 
-  test("substitutes {file:} tokens in ARGUS_CONFIG_CONTENT", async () => {
-    const originalEnv = process.env["ARGUS_CONFIG_CONTENT"]
+  test("substitutes {file:} tokens in OPENCORVUS_CONFIG_CONTENT", async () => {
+    const originalEnv = process.env["OPENCORVUS_CONFIG_CONTENT"]
 
     try {
       await using tmp = await tmpdir({
         init: async (dir) => {
           await Filesystem.write(path.join(dir, "api_key.txt"), "secret_key_from_file")
-          process.env["ARGUS_CONFIG_CONTENT"] = JSON.stringify({
+          process.env["OPENCORVUS_CONFIG_CONTENT"] = JSON.stringify({
             $schema: "https://opencode.ai/config.json",
             username: "{file:./api_key.txt}",
           })
@@ -1877,9 +1877,9 @@ describe("ARGUS_CONFIG_CONTENT token substitution", () => {
       })
     } finally {
       if (originalEnv !== undefined) {
-        process.env["ARGUS_CONFIG_CONTENT"] = originalEnv
+        process.env["OPENCORVUS_CONFIG_CONTENT"] = originalEnv
       } else {
-        delete process.env["ARGUS_CONFIG_CONTENT"]
+        delete process.env["OPENCORVUS_CONFIG_CONTENT"]
       }
     }
   })

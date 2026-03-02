@@ -1,15 +1,15 @@
 ---
 title: Biçimlendiriciler
-description: argus dile özgü biçimlendiriciler kullanır.
+description: opencorvus dile özgü biçimlendiriciler kullanır.
 ---
 
-argus, dosyaları dile özgü formatlayıcılar kullanılarak yazıldıktan veya düzenlendikten sonra otomatik olarak formatlar. Bu, oluşturulan kodun projenizin kod stillerine uymasını sağlar.
+opencorvus, dosyaları dile özgü formatlayıcılar kullanılarak yazıldıktan veya düzenlendikten sonra otomatik olarak formatlar. Bu, oluşturulan kodun projenizin kod stillerine uymasını sağlar.
 
 ---
 
 ## Yerleşik
 
-argus, popüler diller ve çerçeveler için çeşitli yerleşik biçimlendiricilerle birlikte gelir. Aşağıda ihtiyaç duyduğu biçimlendiricilerin, desteklenen dosya uzantılarının ve komutların veya yapılandırma seçeneklerinin bir listesi bulunmaktadır.
+opencorvus, popüler diller ve çerçeveler için çeşitli yerleşik biçimlendiricilerle birlikte gelir. Aşağıda ihtiyaç duyduğu biçimlendiricilerin, desteklenen dosya uzantılarının ve komutların veya yapılandırma seçeneklerinin bir listesi bulunmaktadır.
 
 | Biçimlendirici   | Uzantılar                                                                                                    | Gereksinimler                                                                                          |
 | ---------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
@@ -39,13 +39,13 @@ argus, popüler diller ve çerçeveler için çeşitli yerleşik biçimlendirici
 | oxfmt (Deneysel) | .js, .jsx, .ts, .tsx                                                                                         | `package.json` içinde `oxfmt` bağımlılığı ve [experimental env variable flag](/docs/cli/#experimental) |
 | ormolu           | .hs                                                                                                          | `ormolu` komutu mevcut                                                                                 |
 
-Yani eğer projenizin `package.json` dosyasında `prettier` varsa, argus bunu otomatik olarak kullanacaktır.
+Yani eğer projenizin `package.json` dosyasında `prettier` varsa, opencorvus bunu otomatik olarak kullanacaktır.
 
 ---
 
 ## Nasıl çalışır?
 
-argus bir dosyayı yazdığında veya düzenlediğinde:
+opencorvus bir dosyayı yazdığında veya düzenlediğinde:
 
 1. Dosya uzantısını tüm etkin formatlayıcılara göre kontrol eder.
 2. Dosyada uygun biçimlendirici komutunu çalıştırır.
@@ -57,11 +57,11 @@ Bu işlem arka planda gerçekleşir ve kod stillerinizin herhangi bir manuel ad�
 
 ## Yapılandırma
 
-Biçimlendiricileri argus yapılandırmanızdaki `formatter` bölümü aracılığıyla özelleştirebilirsiniz.
+Biçimlendiricileri opencorvus yapılandırmanızdaki `formatter` bölümü aracılığıyla özelleştirebilirsiniz.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {}
 }
 ```
@@ -83,18 +83,18 @@ Bazı örneklere bakalım.
 
 **tüm** biçimlendiricileri genel olarak devre dışı bırakmak için `formatter` değerini `false` olarak ayarlayın:
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": false
 }
 ```
 
 **Belirli** bir biçimlendiriciyi devre dışı bırakmak için `disabled` değerini `true` olarak ayarlayın:
 
-```json title="argus.json" {5}
+```json title="opencorvus.json" {5}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": true
@@ -109,9 +109,9 @@ Bazı örneklere bakalım.
 
 Komutu, ortam değişkenlerini ve dosya uzantılarını belirterek yerleşik biçimlendiricileri geçersiz kılabilir veya yenilerini ekleyebilirsiniz:
 
-```json title="argus.json" {4-14}
+```json title="opencorvus.json" {4-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],

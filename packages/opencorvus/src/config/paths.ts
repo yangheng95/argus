@@ -22,10 +22,10 @@ export namespace ConfigPaths {
   export async function directories(directory: string, worktree: string) {
     return [
       Global.Path.config,
-      ...(!Flag.ARGUS_DISABLE_PROJECT_CONFIG
+      ...(!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
         ? await Array.fromAsync(
             Filesystem.up({
-              targets: [".opencorvus", ".argus"],
+              targets: [".opencorvus", ".opencorvus"],
               start: directory,
               stop: worktree,
             }),
@@ -33,12 +33,12 @@ export namespace ConfigPaths {
         : []),
       ...(await Array.fromAsync(
         Filesystem.up({
-          targets: [".opencorvus", ".argus"],
+          targets: [".opencorvus", ".opencorvus"],
           start: Global.Path.home,
           stop: Global.Path.home,
         }),
       )),
-      ...(Flag.ARGUS_CONFIG_DIR ? [Flag.ARGUS_CONFIG_DIR] : []),
+      ...(Flag.OPENCORVUS_CONFIG_DIR ? [Flag.OPENCORVUS_CONFIG_DIR] : []),
     ]
   }
 

@@ -1,13 +1,13 @@
 ---
 title: مجموعة تطوير البرمجيات (SDK)
-description: عميل JavaScript آمن الأنواع لخادم argus.
+description: عميل JavaScript آمن الأنواع لخادم opencorvus.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-توفر SDK الخاصة بـ argus لـ JS/TS عميلا آمنا للأنواع للتفاعل مع الخادم.
-استخدمها لبناء التكاملات والتحكم في argus برمجيا.
+توفر SDK الخاصة بـ opencorvus لـ JS/TS عميلا آمنا للأنواع للتفاعل مع الخادم.
+استخدمها لبناء التكاملات والتحكم في opencorvus برمجيا.
 
 [اعرف المزيد](/docs/server) حول كيفية عمل الخادم. للاطلاع على أمثلة، تفقد [المشاريع](/docs/ecosystem#projects) التي أنشأها المجتمع.
 
@@ -18,17 +18,17 @@ export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types
 ثبّت SDK من npm:
 
 ```bash
-npm install @argus-ai/sdk
+npm install @opencorvus-ai/sdk
 ```
 
 ---
 
 ## إنشاء عميل
 
-أنشئ مثيلا من argus:
+أنشئ مثيلا من opencorvus:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
 const { client } = await createOpenCorvus()
 ```
@@ -49,12 +49,12 @@ const { client } = await createOpenCorvus()
 
 ## الإعدادات
 
-يمكنك تمرير كائن إعدادات لتخصيص السلوك. سيستمر المثيل في التقاط `argus.json` لديك، لكن يمكنك تجاوز الإعدادات أو إضافة إعدادات مباشرة:
+يمكنك تمرير كائن إعدادات لتخصيص السلوك. سيستمر المثيل في التقاط `opencorvus.json` لديك، لكن يمكنك تجاوز الإعدادات أو إضافة إعدادات مباشرة:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
-const argus = await createOpenCorvus({
+const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -62,17 +62,17 @@ const argus = await createOpenCorvus({
   },
 })
 
-console.log(`Server running at ${argus.server.url}`)
+console.log(`Server running at ${opencorvus.server.url}`)
 
-argus.server.close()
+opencorvus.server.close()
 ```
 
 ## العميل فقط
 
-إذا كان لديك مثيل argus يعمل بالفعل، يمكنك إنشاء مثيل عميل للاتصال به:
+إذا كان لديك مثيل opencorvus يعمل بالفعل، يمكنك إنشاء مثيل عميل للاتصال به:
 
 ```javascript
-import { createOpenCorvusClient } from "@argus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 تتضمن SDK تعريفات TypeScript لجميع أنواع API. استوردها مباشرة:
 
 ```typescript
-import type { Session, Message, Part } from "@argus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk"
 ```
 
 جميع الأنواع مولّدة من مواصفات OpenAPI الخاصة بالخادم ومتاحة في <a href={typesUrl}>ملف الأنواع</a>.
@@ -304,7 +304,7 @@ await client.session.prompt({
 ```javascript
 // Search and read files
 const textResults = await client.find.text({
-  query: { pattern: "function.*argus" },
+  query: { pattern: "function.*opencorvus" },
 })
 
 const files = await client.find.files({

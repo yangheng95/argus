@@ -1,21 +1,21 @@
 ---
 title: Конфигурация
-description: Использование конфигурации argus JSON.
+description: Использование конфигурации opencorvus JSON.
 ---
 
-Вы можете настроить argus, используя файл конфигурации JSON.
+Вы можете настроить opencorvus, используя файл конфигурации JSON.
 
 ---
 
 ## Формат
 
-argus поддерживает форматы **JSON** и **JSONC** (JSON с комментариями).
+opencorvus поддерживает форматы **JSON** и **JSONC** (JSON с комментариями).
 
-```jsonc title="argus.jsonc"
+```jsonc title="opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   // Theme configuration
-  "theme": "argus",
+  "theme": "opencorvus",
   "model": "anthropic/claude-sonnet-4-5",
   "autoupdate": true,
 }
@@ -34,7 +34,7 @@ argus поддерживает форматы **JSON** и **JSONC** (JSON с к�
 
 Файлы конфигурации объединяются, а не заменяются. Настройки из следующих мест конфигурации объединяются. Более поздние конфигурации переопределяют предыдущие только в случае конфликта ключей. Неконфликтные настройки из всех конфигов сохраняются.
 
-Например, если ваша глобальная конфигурация устанавливает `theme: "argus"` и `autoupdate: true`, а конфигурация вашего проекта устанавливает `model: "anthropic/claude-sonnet-4-5"`, окончательная конфигурация будет включать все три параметра.
+Например, если ваша глобальная конфигурация устанавливает `theme: "opencorvus"` и `autoupdate: true`, а конфигурация вашего проекта устанавливает `model: "anthropic/claude-sonnet-4-5"`, окончательная конфигурация будет включать все три параметра.
 
 ---
 
@@ -42,30 +42,30 @@ argus поддерживает форматы **JSON** и **JSONC** (JSON с к�
 
 Источники конфигурации загружаются в следующем порядке (более поздние источники переопределяют более ранние):
 
-1. **Удаленная конфигурация** (от `.well-known/argus`) – организационные настройки по умолчанию.
-2. **Глобальная конфигурация** (`~/.config/argus/argus.json`) — настройки пользователя.
+1. **Удаленная конфигурация** (от `.well-known/opencorvus`) – организационные настройки по умолчанию.
+2. **Глобальная конфигурация** (`~/.config/opencorvus/opencorvus.json`) — настройки пользователя.
 3. **Пользовательская конфигурация** (`OPENCODE_CONFIG` env var) – пользовательские переопределения
-4. **Конфигурация проекта** (`argus.json` в проекте) — настройки, специфичные для проекта.
-5. **Каталоги `.argus`** — агенты, команды, плагины
+4. **Конфигурация проекта** (`opencorvus.json` в проекте) — настройки, специфичные для проекта.
+5. **Каталоги `.opencorvus`** — агенты, команды, плагины
 6. **Встроенная конфигурация** (`OPENCODE_CONFIG_CONTENT` env var) – переопределяет время выполнения
 
 Это означает, что конфигурации проекта могут переопределять глобальные настройки по умолчанию, а глобальные конфигурации могут переопределять настройки по умолчанию для удаленной организации.
 
 :::note
-В каталогах `.argus` и `~/.config/argus` для подкаталогов используются **множественные имена**: `agents/`, `commands/`, `modes/`, `plugins/`, `skills/`, `tools/` и `themes/`. Единственные имена (например, `agent/`) также поддерживаются для обратной совместимости.
+В каталогах `.opencorvus` и `~/.config/opencorvus` для подкаталогов используются **множественные имена**: `agents/`, `commands/`, `modes/`, `plugins/`, `skills/`, `tools/` и `themes/`. Единственные имена (например, `agent/`) также поддерживаются для обратной совместимости.
 :::
 
 ---
 
 ### Удаленная
 
-Организации могут предоставить конфигурацию по умолчанию через конечную точку `.well-known/argus`. Он извлекается автоматически при аутентификации у провайдера, который его поддерживает.
+Организации могут предоставить конфигурацию по умолчанию через конечную точку `.well-known/opencorvus`. Он извлекается автоматически при аутентификации у провайдера, который его поддерживает.
 
 Удаленная конфигурация загружается первой и служит базовым слоем. Все остальные источники конфигурации (глобальные, проектные) могут переопределить эти значения по умолчанию.
 
 Например, если ваша организация предоставляет серверы MCP, которые по умолчанию отключены:
 
-```json title="Remote config from .well-known/argus"
+```json title="Remote config from .well-known/opencorvus"
 {
   "mcp": {
     "jira": {
@@ -79,7 +79,7 @@ argus поддерживает форматы **JSON** и **JSONC** (JSON с к�
 
 Вы можете включить определенные серверы в локальной конфигурации:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mcp": {
     "jira": {
@@ -95,7 +95,7 @@ argus поддерживает форматы **JSON** и **JSONC** (JSON с к�
 
 ### Глобальная
 
-Поместите глобальную конфигурацию argus в `~/.config/argus/argus.json`. Используйте глобальную конфигурацию для общепользовательских настроек, таких как темы, поставщики или привязки клавиш.
+Поместите глобальную конфигурацию opencorvus в `~/.config/opencorvus/opencorvus.json`. Используйте глобальную конфигурацию для общепользовательских настроек, таких как темы, поставщики или привязки клавиш.
 
 Глобальная конфигурация переопределяет настройки по умолчанию для удаленной организации.
 
@@ -103,13 +103,13 @@ argus поддерживает форматы **JSON** и **JSONC** (JSON с к�
 
 ### Проектная
 
-Добавьте `argus.json` в корень вашего проекта. Конфигурация проекта имеет наивысший приоритет среди стандартных файлов конфигурации — она переопределяет как глобальные, так и удаленные конфигурации.
+Добавьте `opencorvus.json` в корень вашего проекта. Конфигурация проекта имеет наивысший приоритет среди стандартных файлов конфигурации — она переопределяет как глобальные, так и удаленные конфигурации.
 
 :::tip
 Поместите конфигурацию конкретного проекта в корень вашего проекта.
 :::
 
-Когда argus запускается, он ищет файл конфигурации в текущем каталоге или переходит к ближайшему каталогу Git.
+Когда opencorvus запускается, он ищет файл конфигурации в текущем каталоге или переходит к ближайшему каталогу Git.
 
 Его также можно безопасно зарегистрировать в Git, и он использует ту же схему, что и глобальная.
 
@@ -121,7 +121,7 @@ argus поддерживает форматы **JSON** и **JSONC** (JSON с к�
 
 ```bash
 export OPENCODE_CONFIG=/path/to/my/custom-config.json
-argus run "Hello world"
+opencorvus run "Hello world"
 ```
 
 Пользовательская конфигурация загружается между глобальными и проектными конфигурациями в порядке приоритета.
@@ -130,20 +130,20 @@ argus run "Hello world"
 
 ### Пользовательский каталог
 
-Укажите пользовательский каталог конфигурации, используя переменную среды `OPENCODE_CONFIG_DIR`. В этом каталоге будет выполняться поиск агентов, команд, режимов и плагинов (аналогично стандартному каталогу `.argus`), и он должен иметь ту же структуру.
+Укажите пользовательский каталог конфигурации, используя переменную среды `OPENCODE_CONFIG_DIR`. В этом каталоге будет выполняться поиск агентов, команд, режимов и плагинов (аналогично стандартному каталогу `.opencorvus`), и он должен иметь ту же структуру.
 
 ```bash
 export OPENCODE_CONFIG_DIR=/path/to/my/config-directory
-argus run "Hello world"
+opencorvus run "Hello world"
 ```
 
-Пользовательский каталог загружается после каталогов global config и `.argus`, поэтому он **может переопределить** их настройки.
+Пользовательский каталог загружается после каталогов global config и `.opencorvus`, поэтому он **может переопределить** их настройки.
 
 ---
 
 ## Схема
 
-Файл конфигурации имеет схему, определенную в [**`argus.ai/config.json`**](https://argus.ai/config.json).
+Файл конфигурации имеет схему, определенную в [**`opencorvus.ai/config.json`**](https://opencorvus.ai/config.json).
 
 Ваш редактор должен иметь возможность проверять и автозаполнять данные на основе схемы.
 
@@ -153,9 +153,9 @@ argus run "Hello world"
 
 Вы можете настроить параметры TUI с помощью опции `tui`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "tui": {
     "scroll_speed": 3,
     "scroll_acceleration": {
@@ -178,11 +178,11 @@ argus run "Hello world"
 
 ### Сервер
 
-Вы можете настроить параметры сервера для команд `argus serve` и `argus web` с помощью опции `server`.
+Вы можете настроить параметры сервера для команд `opencorvus serve` и `opencorvus web` с помощью опции `server`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "server": {
     "port": 4096,
     "hostname": "0.0.0.0",
@@ -197,8 +197,8 @@ argus run "Hello world"
 
 - `port` — порт для прослушивания.
 - `hostname` — имя хоста для прослушивания. Если `mdns` включен и имя хоста не задано, по умолчанию используется `0.0.0.0`.
-- `mdns` — включить обнаружение службы mDNS. Это позволит другим устройствам в сети обнаружить ваш сервер argus.
-- `mdnsDomain` — собственное доменное имя для службы mDNS. По умолчанию `argus.local`. Полезно для запуска нескольких экземпляров в одной сети.
+- `mdns` — включить обнаружение службы mDNS. Это позволит другим устройствам в сети обнаружить ваш сервер opencorvus.
+- `mdnsDomain` — собственное доменное имя для службы mDNS. По умолчанию `opencorvus.local`. Полезно для запуска нескольких экземпляров в одной сети.
 - `cors` — дополнительные источники, позволяющие использовать CORS при использовании HTTP-сервера из браузерного клиента. Значения должны быть полными источниками (схема + хост + дополнительный порт), например `https://app.example.com`.
 
 [Подробнее о сервере можно узнать здесь](/docs/server).
@@ -209,9 +209,9 @@ argus run "Hello world"
 
 Вы можете управлять инструментами, которые LLM может использовать, с помощью опции `tools`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "tools": {
     "write": false,
     "bash": false
@@ -225,24 +225,24 @@ argus run "Hello world"
 
 ### models
 
-Вы можете настроить поставщиков и модели, которые хотите использовать в своей конфигурации argus, с помощью параметров `provider`, `model` и `small_model`.
+Вы можете настроить поставщиков и модели, которые хотите использовать в своей конфигурации opencorvus, с помощью параметров `provider`, `model` и `small_model`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {},
   "model": "anthropic/claude-sonnet-4-5",
   "small_model": "anthropic/claude-haiku-4-5"
 }
 ```
 
-Опция `small_model` настраивает отдельную модель для облегченных задач, таких как создание заголовков. По умолчанию argus пытается использовать более дешевую модель, если она доступна у вашего провайдера, в противном случае он возвращается к вашей основной модели.
+Опция `small_model` настраивает отдельную модель для облегченных задач, таких как создание заголовков. По умолчанию opencorvus пытается использовать более дешевую модель, если она доступна у вашего провайдера, в противном случае он возвращается к вашей основной модели.
 
 Опции провайдера могут включать `timeout` и `setCacheKey`:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "anthropic": {
       "options": {
@@ -269,9 +269,9 @@ argus run "Hello world"
 
 Amazon Bedrock поддерживает конфигурацию, специфичную для AWS:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "amazon-bedrock": {
       "options": {
@@ -298,11 +298,11 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 
 ### theme
 
-Вы можете настроить тему, которую хотите использовать, в конфигурации argus с помощью опции `theme`.
+Вы можете настроить тему, которую хотите использовать, в конфигурации opencorvus с помощью опции `theme`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "theme": ""
 }
 ```
@@ -315,9 +315,9 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 
 Вы можете настроить специализированные агенты для конкретных задач с помощью опции `agent`.
 
-```jsonc title="argus.jsonc"
+```jsonc title="opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "agent": {
     "code-reviewer": {
       "description": "Reviews code for best practices and potential issues",
@@ -333,7 +333,7 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 }
 ```
 
-Вы также можете определить агентов, используя файлы Markdown в `~/.config/argus/agents/` или `.argus/agents/`. [Подробнее здесь](/docs/agents).
+Вы также можете определить агентов, используя файлы Markdown в `~/.config/opencorvus/agents/` или `.opencorvus/agents/`. [Подробнее здесь](/docs/agents).
 
 ---
 
@@ -341,16 +341,16 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 
 Вы можете установить агента по умолчанию, используя опцию `default_agent`. Это определяет, какой агент используется, если ни один из них не указан явно.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "default_agent": "plan"
 }
 ```
 
-Агент по умолчанию должен быть основным агентом (а не субагентом). Это может быть встроенный агент, например `"build"` или `"plan"`, или [пользовательский агент](/docs/agents), который вы определили. Если указанный агент не существует или является субагентом, argus вернется к `"build"` с предупреждением.
+Агент по умолчанию должен быть основным агентом (а не субагентом). Это может быть встроенный агент, например `"build"` или `"plan"`, или [пользовательский агент](/docs/agents), который вы определили. Если указанный агент не существует или является субагентом, opencorvus вернется к `"build"` с предупреждением.
 
-Этот параметр применяется ко всем интерфейсам: TUI, CLI (`argus run`), настольному приложению и действию GitHub.
+Этот параметр применяется ко всем интерфейсам: TUI, CLI (`opencorvus run`), настольному приложению и действию GitHub.
 
 ---
 
@@ -358,9 +358,9 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 
 Функцию [share](/docs/share) можно настроить с помощью опции `share`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "share": "manual"
 }
 ```
@@ -379,9 +379,9 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 
 Вы можете настроить собственные команды для повторяющихся задач с помощью опции `command`.
 
-```jsonc title="argus.jsonc"
+```jsonc title="opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "command": {
     "test": {
       "template": "Run the full test suite with coverage report and show any failures.\nFocus on the failing tests and suggest fixes.",
@@ -397,7 +397,7 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 }
 ```
 
-Вы также можете определять команды, используя файлы Markdown в `~/.config/argus/commands/` или `.argus/commands/`. [Подробнее здесь](/docs/commands).
+Вы также можете определять команды, используя файлы Markdown в `~/.config/opencorvus/commands/` или `.opencorvus/commands/`. [Подробнее здесь](/docs/commands).
 
 ---
 
@@ -405,9 +405,9 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 
 Вы можете настроить привязки клавиш с помощью опции `keybinds`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {}
 }
 ```
@@ -418,11 +418,11 @@ Amazon Bedrock поддерживает конфигурацию, специфи
 
 ### Автообновление
 
-argus автоматически загрузит все новые обновления при запуске. Вы можете отключить это с помощью опции `autoupdate`.
+opencorvus автоматически загрузит все новые обновления при запуске. Вы можете отключить это с помощью опции `autoupdate`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "autoupdate": false
 }
 ```
@@ -436,9 +436,9 @@ argus автоматически загрузит все новые обновл
 
 Вы можете настроить форматировщики кода с помощью опции `formatter`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": true
@@ -460,13 +460,13 @@ argus автоматически загрузит все новые обновл
 
 ### permission
 
-По умолчанию argus **разрешает все операции**, не требуя явного разрешения. Вы можете изменить это, используя опцию `permission`.
+По умолчанию opencorvus **разрешает все операции**, не требуя явного разрешения. Вы можете изменить это, используя опцию `permission`.
 
 Например, чтобы гарантировать, что инструменты `edit` и `bash` требуют одобрения пользователя:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "permission": {
     "edit": "ask",
     "bash": "ask"
@@ -482,9 +482,9 @@ argus автоматически загрузит все новые обновл
 
 Вы можете управлять поведением сжатия контекста с помощью опции `compaction`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "compaction": {
     "auto": true,
     "prune": true
@@ -501,9 +501,9 @@ argus автоматически загрузит все новые обновл
 
 Вы можете настроить шаблоны игнорирования средства отслеживания файлов с помощью опции `watcher`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "watcher": {
     "ignore": ["node_modules/**", "dist/**", ".git/**"]
   }
@@ -518,9 +518,9 @@ argus автоматически загрузит все новые обновл
 
 Вы можете настроить серверы MCP, которые хотите использовать, с помощью опции `mcp`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {}
 }
 ```
@@ -531,14 +531,14 @@ argus автоматически загрузит все новые обновл
 
 ### Плагины
 
-[Плагины](/docs/plugins) расширяют argus с помощью пользовательских инструментов, перехватчиков и интеграций.
+[Плагины](/docs/plugins) расширяют opencorvus с помощью пользовательских инструментов, перехватчиков и интеграций.
 
-Поместите файлы плагина в `.argus/plugins/` или `~/.config/argus/plugins/`. Вы также можете загружать плагины из npm с помощью опции `plugin`.
+Поместите файлы плагина в `.opencorvus/plugins/` или `~/.config/opencorvus/plugins/`. Вы также можете загружать плагины из npm с помощью опции `plugin`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
-  "plugin": ["argus-helicone-session", "@my-org/custom-plugin"]
+  "$schema": "https://opencorvus.ai/config.json",
+  "plugin": ["opencorvus-helicone-session", "@my-org/custom-plugin"]
 }
 ```
 
@@ -550,9 +550,9 @@ argus автоматически загрузит все новые обновл
 
 Вы можете настроить инструкции для используемой вами модели с помощью опции `instructions`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"]
 }
 ```
@@ -565,9 +565,9 @@ argus автоматически загрузит все новые обновл
 
 Вы можете отключить поставщиков, которые загружаются автоматически, с помощью опции `disabled_providers`. Это полезно, если вы хотите запретить загрузку определенных поставщиков, даже если их учетные данные доступны.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "disabled_providers": ["openai", "gemini"]
 }
 ```
@@ -588,14 +588,14 @@ argus автоматически загрузит все новые обновл
 
 Вы можете указать белый список поставщиков с помощью опции `enabled_providers`. Если этот параметр установлен, будут включены только указанные поставщики, а все остальные будут игнорироваться.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "enabled_providers": ["anthropic", "openai"]
 }
 ```
 
-Это полезно, если вы хотите ограничить argus использованием только определенных поставщиков, а не отключать их по одному.
+Это полезно, если вы хотите ограничить opencorvus использованием только определенных поставщиков, а не отключать их по одному.
 
 :::note
 `disabled_providers` имеет приоритет над `enabled_providers`.
@@ -609,9 +609,9 @@ argus автоматически загрузит все новые обновл
 
 Ключ `experimental` содержит параметры, находящиеся в активной разработке.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "experimental": {}
 }
 ```
@@ -632,9 +632,9 @@ argus автоматически загрузит все новые обновл
 
 Используйте `{env:VARIABLE_NAME}` для замены переменных среды:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "model": "{env:OPENCODE_MODEL}",
   "provider": {
     "anthropic": {
@@ -655,9 +655,9 @@ argus автоматически загрузит все новые обновл
 
 Используйте `{file:path/to/file}` для замены содержимого файла:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "instructions": ["./custom-instructions.md"],
   "provider": {
     "openai": {

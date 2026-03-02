@@ -1,17 +1,17 @@
 ---
 title: GitHub
-description: Koristite Argus u GitHub problemima i zahtjevima za povlačenjem.
+description: Koristite OpenCorvus u GitHub problemima i zahtjevima za povlačenjem.
 ---
 
-Argus se integriše sa vašim GitHub tokovom rada. Spomenite `/argus` ili `/oc` u svom komentaru i Argus će izvršiti zadatke unutar vašeg GitHub Actions runnera.
+OpenCorvus se integriše sa vašim GitHub tokovom rada. Spomenite `/opencorvus` ili `/oc` u svom komentaru i OpenCorvus će izvršiti zadatke unutar vašeg GitHub Actions runnera.
 
 ---
 
 ## Funkcije
 
-- **Problemi trijaže**: Zamolite Argus da ispita problem i objasni vam ga.
-- **Popravi i implementiraj**: Zamolite Argus da popravi problem ili implementira funkciju. I radit će u novoj poslovnici i dostavljati PR sa svim promjenama.
-- **Secure**: Argus se pokreće unutar pokretača vašeg GitHub-a.
+- **Problemi trijaže**: Zamolite OpenCorvus da ispita problem i objasni vam ga.
+- **Popravi i implementiraj**: Zamolite OpenCorvus da popravi problem ili implementira funkciju. I radit će u novoj poslovnici i dostavljati PR sa svim promjenama.
+- **Secure**: OpenCorvus se pokreće unutar pokretača vašeg GitHub-a.
 
 ---
 
@@ -20,7 +20,7 @@ Argus se integriše sa vašim GitHub tokovom rada. Spomenite `/argus` ili `/oc` 
 Pokrenite sljedeću naredbu u projektu koji se nalazi u GitHub repo:
 
 ```bash
-argus github install
+opencorvus github install
 ```
 
 Ovo će vas provesti kroz instalaciju GitHub aplikacije, kreiranje toka posla i postavljanje tajni.
@@ -34,10 +34,10 @@ Ili ga možete postaviti ručno.
 1. **Instalirajte GitHub aplikaciju**
    Idite na [**github.com/apps/opencodegent**](https://github.com/apps/opencodegent). Uvjerite se da je instaliran na ciljnom spremištu.
 2. **Dodajte radni tok**
-   Dodajte sljedeći fajl toka posla u `.github/workflows/argus.yml` u svoj repo. Obavezno postavite odgovarajuće `model` i potrebne API ključeve u `env`.
+   Dodajte sljedeći fajl toka posla u `.github/workflows/opencorvus.yml` u svoj repo. Obavezno postavite odgovarajuće `model` i potrebne API ključeve u `env`.
 
-```yml title=".github/workflows/argus.yml" {24,26}
-   name: argus
+```yml title=".github/workflows/opencorvus.yml" {24,26}
+   name: opencorvus
 
    on:
      issue_comment:
@@ -46,10 +46,10 @@ Ili ga možete postaviti ručno.
        types: [created]
 
    jobs:
-     argus:
+     opencorvus:
        if: |
          contains(github.event.comment.body, '/oc') ||
-         contains(github.event.comment.body, '/argus')
+         contains(github.event.comment.body, '/opencorvus')
        runs-on: ubuntu-latest
        permissions:
          id-token: write
@@ -60,8 +60,8 @@ Ili ga možete postaviti ručno.
               fetch-depth: 1
               persist-credentials: false
 
-          - name: Run Argus
-           uses: yangheng95/argus/github@latest
+          - name: Run OpenCorvus
+           uses: yangheng95/opencorvus/github@latest
            env:
              ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
            with:
@@ -77,12 +77,12 @@ Ili ga možete postaviti ručno.
 
 ## Konfiguracija
 
-- `model`: Model za korištenje s Argus. Uzima format `provider/model`. Ovo je **obavezno**.
+- `model`: Model za korištenje s OpenCorvus. Uzima format `provider/model`. Ovo je **obavezno**.
 - `agent`: Agent za korištenje. Mora biti primarni agent. Vraća se na `default_agent` iz konfiguracije ili `"build"` ako nije pronađen.
-- `share`: Da li dijeliti Argus sesiju. Podrazumevano je **true** za javna spremišta.
-- `prompt`: Opcioni prilagođeni upit za nadjačavanje zadanog ponašanja. Koristite ovo da prilagodite kako Argus obrađuje zahtjeve.
-- `token`: Opcionalni GitHub pristupni token za izvođenje operacija kao što su kreiranje komentara, upisivanje promjena i otvaranje zahtjeva za povlačenjem. Argus prema zadanim postavkama koristi token za pristup instalaciji iz aplikacije Argus GitHub, tako da se urezivanje, komentari i zahtjevi za povlačenjem pojavljuju kao da dolaze iz aplikacije.
-  Alternativno, možete koristiti GitHub Action runner [ugrađeni `GITHUB_TOKEN`](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token) bez instaliranja Argus GitHub aplikacije. Samo se pobrinite da date potrebna odobrenja u svom toku rada:
+- `share`: Da li dijeliti OpenCorvus sesiju. Podrazumevano je **true** za javna spremišta.
+- `prompt`: Opcioni prilagođeni upit za nadjačavanje zadanog ponašanja. Koristite ovo da prilagodite kako OpenCorvus obrađuje zahtjeve.
+- `token`: Opcionalni GitHub pristupni token za izvođenje operacija kao što su kreiranje komentara, upisivanje promjena i otvaranje zahtjeva za povlačenjem. OpenCorvus prema zadanim postavkama koristi token za pristup instalaciji iz aplikacije OpenCorvus GitHub, tako da se urezivanje, komentari i zahtjevi za povlačenjem pojavljuju kao da dolaze iz aplikacije.
+  Alternativno, možete koristiti GitHub Action runner [ugrađeni `GITHUB_TOKEN`](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token) bez instaliranja OpenCorvus GitHub aplikacije. Samo se pobrinite da date potrebna odobrenja u svom toku rada:
 
 ```yaml
 permissions:
@@ -98,29 +98,29 @@ Također možete koristiti [Personal Access Tokens](https://docs.github.com/en/a
 
 ## Podržani događaji
 
-Argus se može pokrenuti sljedećim GitHub događajima:
+OpenCorvus se može pokrenuti sljedećim GitHub događajima:
 | Vrsta događaja | Pokrenuo | Detalji
 |----------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `issue_comment` | Komentirajte problem ili PR | Navedite `/argus` ili `/oc` u svom komentaru. Argus čita kontekst i može kreirati grane, otvarati PR-ove ili odgovarati. |
-| `pull_request_review_comment` | Komentirajte određene linije koda u PR-u | Navedite `/argus` ili `/oc` dok pregledavate kod. Argus prima putanju datoteke, brojeve redova i kontekst razlike. |
-| `issues` | Broj otvoren ili uređen | Automatski pokrenite Argus kada se problemi kreiraju ili modificiraju. Zahtijeva `prompt` unos. |
-| `pull_request` | PR otvoren ili ažuriran | Automatski pokrenite Argus kada se PR-ovi otvore, sinkroniziraju ili ponovo otvore. Korisno za automatske recenzije. |
-| `schedule` | Cron baziran raspored | Pokrenite Argus prema rasporedu. Zahtijeva `prompt` unos. Izlaz ide u dnevnike i PR-ove (nema problema za komentarisanje). |
-| `workflow_dispatch` | Ručni okidač iz GitHub korisničkog sučelja | Aktivirajte Argus na zahtjev preko kartice Akcije. Zahtijeva `prompt` unos. Izlaz ide u dnevnike i PR-ove. |
+| `issue_comment` | Komentirajte problem ili PR | Navedite `/opencorvus` ili `/oc` u svom komentaru. OpenCorvus čita kontekst i može kreirati grane, otvarati PR-ove ili odgovarati. |
+| `pull_request_review_comment` | Komentirajte određene linije koda u PR-u | Navedite `/opencorvus` ili `/oc` dok pregledavate kod. OpenCorvus prima putanju datoteke, brojeve redova i kontekst razlike. |
+| `issues` | Broj otvoren ili uređen | Automatski pokrenite OpenCorvus kada se problemi kreiraju ili modificiraju. Zahtijeva `prompt` unos. |
+| `pull_request` | PR otvoren ili ažuriran | Automatski pokrenite OpenCorvus kada se PR-ovi otvore, sinkroniziraju ili ponovo otvore. Korisno za automatske recenzije. |
+| `schedule` | Cron baziran raspored | Pokrenite OpenCorvus prema rasporedu. Zahtijeva `prompt` unos. Izlaz ide u dnevnike i PR-ove (nema problema za komentarisanje). |
+| `workflow_dispatch` | Ručni okidač iz GitHub korisničkog sučelja | Aktivirajte OpenCorvus na zahtjev preko kartice Akcije. Zahtijeva `prompt` unos. Izlaz ide u dnevnike i PR-ove. |
 
 ### Primjer rasporeda
 
-Pokrenite Argus po rasporedu za obavljanje automatiziranih zadataka:
+Pokrenite OpenCorvus po rasporedu za obavljanje automatiziranih zadataka:
 
-```yaml title=".github/workflows/argus-scheduled.yml"
-name: Scheduled Argus Task
+```yaml title=".github/workflows/opencorvus-scheduled.yml"
+name: Scheduled OpenCorvus Task
 
 on:
   schedule:
     - cron: "0 9 * * 1" # Every Monday at 9am UTC
 
 jobs:
-  argus:
+  opencorvus:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -133,8 +133,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run Argus
-        uses: yangheng95/argus/github@latest
+      - name: Run OpenCorvus
+        uses: yangheng95/opencorvus/github@latest
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
@@ -144,7 +144,7 @@ jobs:
             If you find issues worth addressing, open an issue to track them.
 ```
 
-Za zakazane događaje, unos `prompt` je **potreban** jer nema komentara za izvlačenje instrukcija. Planirani tokovi posla se pokreću bez korisničkog konteksta za provjeru dozvola, tako da tok posla mora odobriti `contents: write` i `pull-requests: write` ako očekujete da će Argus kreirati grane ili PR-ove.
+Za zakazane događaje, unos `prompt` je **potreban** jer nema komentara za izvlačenje instrukcija. Planirani tokovi posla se pokreću bez korisničkog konteksta za provjeru dozvola, tako da tok posla mora odobriti `contents: write` i `pull-requests: write` ako očekujete da će OpenCorvus kreirati grane ili PR-ove.
 
 ---
 
@@ -152,8 +152,8 @@ Za zakazane događaje, unos `prompt` je **potreban** jer nema komentara za izvla
 
 Automatski pregledajte PR-ove kada se otvore ili ažuriraju:
 
-```yaml title=".github/workflows/argus-review.yml"
-name: argus-review
+```yaml title=".github/workflows/opencorvus-review.yml"
+name: opencorvus-review
 
 on:
   pull_request:
@@ -171,7 +171,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: yangheng95/argus/github@latest
+      - uses: yangheng95/opencorvus/github@latest
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -185,7 +185,7 @@ jobs:
             - Suggest improvements
 ```
 
-Za `pull_request` događaje, ako nije naveden `prompt`, Argus podrazumevano pregledava zahtjev za povlačenjem.
+Za `pull_request` događaje, ako nije naveden `prompt`, OpenCorvus podrazumevano pregledava zahtjev za povlačenjem.
 
 ---
 
@@ -193,7 +193,7 @@ Za `pull_request` događaje, ako nije naveden `prompt`, Argus podrazumevano preg
 
 Automatski triažirajte nove probleme. Ovaj primjer filtrira na račune starije od 30 dana radi smanjenja neželjene pošte:
 
-```yaml title=".github/workflows/argus-triage.yml"
+```yaml title=".github/workflows/opencorvus-triage.yml"
 name: Issue Triage
 
 on:
@@ -227,7 +227,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: yangheng95/argus/github@latest
+      - uses: yangheng95/opencorvus/github@latest
         if: steps.check.outputs.result == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -246,10 +246,10 @@ Za `issues` događaje, `prompt` unos je **potreban** jer nema komentara za izvla
 
 ## Prilagođeni upiti
 
-Zaobiđite zadani prompt da biste prilagodili ponašanje Argus za vaš tok posla.
+Zaobiđite zadani prompt da biste prilagodili ponašanje OpenCorvus za vaš tok posla.
 
-```yaml title=".github/workflows/argus.yml"
-- uses: yangheng95/argus/github@latest
+```yaml title=".github/workflows/opencorvus.yml"
+- uses: yangheng95/opencorvus/github@latest
   with:
     model: anthropic/claude-sonnet-4-5
     prompt: |
@@ -265,25 +265,25 @@ Ovo je korisno za provođenje specifičnih kriterija pregleda, standarda kodiran
 
 ## Primjeri
 
-Evo nekoliko primjera kako možete koristiti Argus u GitHub.
+Evo nekoliko primjera kako možete koristiti OpenCorvus u GitHub.
 
 - **Objasnite problem**
   Dodajte ovaj komentar u GitHub izdanje.
 
 ```
-  /argus explain this issue
+  /opencorvus explain this issue
 ```
 
-Argus će pročitati cijelu temu, uključujući sve komentare, i odgovoriti s jasnim objašnjenjem.
+OpenCorvus će pročitati cijelu temu, uključujući sve komentare, i odgovoriti s jasnim objašnjenjem.
 
 - **Popravi problem**
   U izdanju na GitHub-u recite:
 
 ```
-  /argus fix this
+  /opencorvus fix this
 ```
 
-I Argus će kreirati novu granu, implementirati promjene i otvoriti PR sa promjenama.
+I OpenCorvus će kreirati novu granu, implementirati promjene i otvoriti PR sa promjenama.
 
 - **Pregledajte PR-ove i izvršite izmjene**
   Ostavite sljedeći komentar na GitHub PR-u.
@@ -292,17 +292,17 @@ I Argus će kreirati novu granu, implementirati promjene i otvoriti PR sa promje
   Delete the attachment from S3 when the note is removed /oc
 ```
 
-Argus će implementirati traženu promjenu i posvetiti je istom PR-u.
+OpenCorvus će implementirati traženu promjenu i posvetiti je istom PR-u.
 
 - **Pregledajte određene linije koda**
-  Ostavite komentar direktno na linije koda u PR kartici "Files". Argus automatski detektuje datoteku, brojeve redova i kontekst razlike kako bi pružio precizne odgovore.
+  Ostavite komentar direktno na linije koda u PR kartici "Files". OpenCorvus automatski detektuje datoteku, brojeve redova i kontekst razlike kako bi pružio precizne odgovore.
 
 ```
   [Comment on specific lines in Files tab]
   /oc add error handling here
 ```
 
-Kada komentarišete određene linije, Argus prima:
+Kada komentarišete određene linije, OpenCorvus prima:
 
 - Tačan fajl se pregleda
 - Specifične linije koda

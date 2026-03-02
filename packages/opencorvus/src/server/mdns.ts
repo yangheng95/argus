@@ -12,8 +12,8 @@ export namespace MDNS {
     if (bonjour) unpublish()
 
     try {
-      const host = domain ?? "argus.local"
-      const name = `argus-${port}`
+      const host = domain ?? "opencorvus.local"
+      const name = `opencorvus-${port}`
       bonjour = new Bonjour()
       const service = bonjour.publish({
         name,

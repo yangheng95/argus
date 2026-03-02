@@ -3,9 +3,9 @@ title: Temi
 description: Seleziona un tema integrato o definiscine uno tuo.
 ---
 
-Con Argus puoi scegliere tra diversi temi integrati, usare un tema che si adatta al tema del tuo terminale oppure definire un tema personalizzato.
+Con OpenCorvus puoi scegliere tra diversi temi integrati, usare un tema che si adatta al tema del tuo terminale oppure definire un tema personalizzato.
 
-Per impostazione predefinita, Argus usa il tema `argus`.
+Per impostazione predefinita, OpenCorvus usa il tema `opencorvus`.
 
 ---
 
@@ -23,7 +23,7 @@ Senza truecolor, i temi potrebbero apparire con colori meno accurati oppure fare
 
 ## Temi integrati
 
-Argus include diversi temi integrati.
+OpenCorvus include diversi temi integrati.
 
 | Nome                   | Descrizione                                                               |
 | ---------------------- | ------------------------------------------------------------------------- |
@@ -53,7 +53,7 @@ Il tema `system` e progettato per adattarsi automaticamente allo schema colori d
 
 Il tema di sistema e pensato per chi:
 
-- Vuole che Argus corrisponda all'aspetto del terminale
+- Vuole che OpenCorvus corrisponda all'aspetto del terminale
 - Usa schemi colori personalizzati del terminale
 - Preferisce un aspetto coerente tra tutte le applicazioni da terminale
 
@@ -63,9 +63,9 @@ Il tema di sistema e pensato per chi:
 
 Puoi selezionare un tema aprendo la selezione temi con il comando `/theme`. In alternativa, puoi specificarlo nella tua [configurazione](/docs/config).
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "theme": "tokyonight"
 }
 ```
@@ -74,7 +74,7 @@ Puoi selezionare un tema aprendo la selezione temi con il comando `/theme`. In a
 
 ## Temi personalizzati
 
-Argus supporta un sistema di temi flessibile basato su JSON che permette di creare e personalizzare temi facilmente.
+OpenCorvus supporta un sistema di temi flessibile basato su JSON che permette di creare e personalizzare temi facilmente.
 
 ---
 
@@ -83,9 +83,9 @@ Argus supporta un sistema di temi flessibile basato su JSON che permette di crea
 I temi vengono caricati da piu directory nel seguente ordine, dove le directory successive sovrascrivono le precedenti:
 
 1. **Temi integrati** - incorporati nel binario
-2. **Directory di configurazione utente** - in `~/.config/argus/themes/*.json` o `$XDG_CONFIG_HOME/argus/themes/*.json`
-3. **Directory root del progetto** - in `<project-root>/.argus/themes/*.json`
-4. **Directory di lavoro corrente** - in `./.argus/themes/*.json`
+2. **Directory di configurazione utente** - in `~/.config/opencorvus/themes/*.json` o `$XDG_CONFIG_HOME/opencorvus/themes/*.json`
+3. **Directory root del progetto** - in `<project-root>/.opencorvus/themes/*.json`
+4. **Directory di lavoro corrente** - in `./.opencorvus/themes/*.json`
 
 Se piu directory contengono un tema con lo stesso nome, verra usato il tema della directory con priorita piu alta.
 
@@ -98,15 +98,15 @@ Per creare un tema personalizzato, crea un file JSON in una delle directory dei 
 Per temi a livello utente:
 
 ```bash no-frame
-mkdir -p ~/.config/argus/themes
-vim ~/.config/argus/themes/my-theme.json
+mkdir -p ~/.config/opencorvus/themes
+vim ~/.config/opencorvus/themes/my-theme.json
 ```
 
 E per temi specifici del progetto.
 
 ```bash no-frame
-mkdir -p .argus/themes
-vim .argus/themes/my-theme.json
+mkdir -p .opencorvus/themes
+vim .opencorvus/themes/my-theme.json
 ```
 
 ---
@@ -144,7 +144,7 @@ Ecco un esempio di tema personalizzato:
 
 ```json title="my-theme.json"
 {
-  "$schema": "https://argus.ai/theme.json",
+  "$schema": "https://opencorvus.ai/theme.json",
   "defs": {
     "nord0": "#2E3440",
     "nord1": "#3B4252",

@@ -7,7 +7,7 @@ export const config = {
 
   // GitHub
   github: {
-    repoUrl: "https://github.com/yangheng95/argus",
+    repoUrl: "https://github.com/yangheng95/opencorvus",
     starsFormatted: {
       compact: "100K",
       full: "100,000",

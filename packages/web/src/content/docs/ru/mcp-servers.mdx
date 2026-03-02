@@ -3,7 +3,7 @@ title: MCP-серверы
 description: Добавьте локальные и удаленные инструменты MCP.
 ---
 
-Вы можете добавить внешние инструменты в argus, используя _Model Context Protocol_ или MCP. argus поддерживает как локальные, так и удаленные серверы.
+Вы можете добавить внешние инструменты в opencorvus, используя _Model Context Protocol_ или MCP. opencorvus поддерживает как локальные, так и удаленные серверы.
 
 После добавления инструменты MCP автоматически становятся доступными для LLM наряду со встроенными инструментами.
 
@@ -23,11 +23,11 @@ description: Добавьте локальные и удаленные инст�
 
 ## Включение
 
-Вы можете определить серверы MCP в своем [argus Config](https://argus.ai/docs/config/) в разделе `mcp`. Добавьте каждому MCP уникальное имя. Вы можете обратиться к этому MCP по имени при запросе LLM.
+Вы можете определить серверы MCP в своем [opencorvus Config](https://opencorvus.ai/docs/config/) в разделе `mcp`. Добавьте каждому MCP уникальное имя. Вы можете обратиться к этому MCP по имени при запросе LLM.
 
-```jsonc title="argus.jsonc" {6}
+```jsonc title="opencorvus.jsonc" {6}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "name-of-mcp-server": {
       // ...
@@ -46,13 +46,13 @@ description: Добавьте локальные и удаленные инст�
 
 ### Переопределение удаленных настроек по умолчанию
 
-Организации могут предоставлять серверы MCP по умолчанию через свою конечную точку `.well-known/argus`. Эти серверы могут быть отключены по умолчанию, что позволяет пользователям выбирать те, которые им нужны.
+Организации могут предоставлять серверы MCP по умолчанию через свою конечную точку `.well-known/opencorvus`. Эти серверы могут быть отключены по умолчанию, что позволяет пользователям выбирать те, которые им нужны.
 
 Чтобы включить определенный сервер из удаленной конфигурации вашей организации, добавьте его в локальную конфигурацию с помощью `enabled: true`:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "jira": {
       "type": "remote",
@@ -71,9 +71,9 @@ description: Добавьте локальные и удаленные инст�
 
 Добавьте локальные серверы MCP с помощью `type` в `"local"` внутри объекта MCP.
 
-```jsonc title="argus.jsonc" {15}
+```jsonc title="opencorvus.jsonc" {15}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-local-mcp-server": {
       "type": "local",
@@ -92,9 +92,9 @@ description: Добавьте локальные и удаленные инст�
 
 Например, вот как можно добавить тестовый сервер [`@modelcontextprotocol/server-everything`](https://www.npmjs.com/package/@modelcontextprotocol/server-everything) MCP.
 
-```jsonc title="argus.jsonc"
+```jsonc title="opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "mcp_everything": {
       "type": "local",
@@ -130,9 +130,9 @@ use the mcp_everything tool to add the number 3 and 4
 
 Добавьте удаленные серверы MCP, установив для `type` значение `"remote"`.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-remote-mcp": {
       "type": "remote",
@@ -165,7 +165,7 @@ use the mcp_everything tool to add the number 3 and 4
 
 ## OAuth
 
-argus автоматически обрабатывает аутентификацию OAuth для удаленных серверов MCP. Когда серверу требуется аутентификация, argus:
+opencorvus автоматически обрабатывает аутентификацию OAuth для удаленных серверов MCP. Когда серверу требуется аутентификация, opencorvus:
 
 1. Обнаружьте ответ 401 и инициируйте поток OAuth.
 2. Используйте **Динамическую регистрацию клиента (RFC 7591)**, если это поддерживается сервером.
@@ -177,9 +177,9 @@ argus автоматически обрабатывает аутентифика
 
 Для большинства серверов MCP с поддержкой OAuth не требуется никакой специальной настройки. Просто настройте удаленный сервер:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-oauth-server": {
       "type": "remote",
@@ -189,7 +189,7 @@ argus автоматически обрабатывает аутентифика
 }
 ```
 
-Если сервер требует аутентификации, argus предложит вам пройти аутентификацию при первой попытке его использования. Если нет, вы можете [вручную запустить поток ](#authenticating) с помощью `argus mcp auth <server-name>`.
+Если сервер требует аутентификации, opencorvus предложит вам пройти аутентификацию при первой попытке его использования. Если нет, вы можете [вручную запустить поток ](#authenticating) с помощью `opencorvus mcp auth <server-name>`.
 
 ---
 
@@ -197,9 +197,9 @@ argus автоматически обрабатывает аутентифика
 
 Если у вас есть учетные данные клиента от поставщика сервера MCP, вы можете их настроить:
 
-```json title="argus.json" {7-11}
+```json title="opencorvus.json" {7-11}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-oauth-server": {
       "type": "remote",
@@ -223,22 +223,22 @@ argus автоматически обрабатывает аутентифика
 Аутентификация с помощью определенного сервера MCP:
 
 ```bash
-argus mcp auth my-oauth-server
+opencorvus mcp auth my-oauth-server
 ```
 
 Перечислите все серверы MCP и их статус аутентификации:
 
 ```bash
-argus mcp list
+opencorvus mcp list
 ```
 
 Удалить сохраненные учетные данные:
 
 ```bash
-argus mcp logout my-oauth-server
+opencorvus mcp logout my-oauth-server
 ```
 
-Команда `mcp auth` откроет ваш браузер для авторизации. После того как вы авторизуетесь, argus надежно сохранит токены в `~/.local/share/argus/mcp-auth.json`.
+Команда `mcp auth` откроет ваш браузер для авторизации. После того как вы авторизуетесь, opencorvus надежно сохранит токены в `~/.local/share/opencorvus/mcp-auth.json`.
 
 ---
 
@@ -246,9 +246,9 @@ argus mcp logout my-oauth-server
 
 Если вы хотите отключить автоматический OAuth для сервера (например, для серверов, которые вместо этого используют ключи API), установите для `oauth` значение `false`:
 
-```json title="argus.json" {7}
+```json title="opencorvus.json" {7}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-api-key-server": {
       "type": "remote",
@@ -279,10 +279,10 @@ argus mcp logout my-oauth-server
 
 ```bash
 # View auth status for all OAuth-capable servers
-argus mcp auth list
+opencorvus mcp auth list
 
 # Debug connection and OAuth flow for a specific server
-argus mcp debug my-oauth-server
+opencorvus mcp debug my-oauth-server
 ```
 
 Команда `mcp debug` показывает текущий статус аутентификации, проверяет соединение HTTP и пытается выполнить поток обнаружения OAuth.
@@ -291,7 +291,7 @@ argus mcp debug my-oauth-server
 
 ## Управление
 
-Ваши MCP доступны в виде инструментов argus наряду со встроенными инструментами. Таким образом, вы можете управлять ими через конфигурацию argus, как и любым другим инструментом.
+Ваши MCP доступны в виде инструментов opencorvus наряду со встроенными инструментами. Таким образом, вы можете управлять ими через конфигурацию opencorvus, как и любым другим инструментом.
 
 ---
 
@@ -299,9 +299,9 @@ argus mcp debug my-oauth-server
 
 Это означает, что вы можете включать или отключать их глобально.
 
-```json title="argus.json" {14}
+```json title="opencorvus.json" {14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-mcp-foo": {
       "type": "local",
@@ -320,9 +320,9 @@ argus mcp debug my-oauth-server
 
 Мы также можем использовать шаблон glob, чтобы отключить все соответствующие MCP.
 
-```json title="argus.json" {14}
+```json title="opencorvus.json" {14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-mcp-foo": {
       "type": "local",
@@ -350,9 +350,9 @@ argus mcp debug my-oauth-server
 1. Отключите его как инструмент глобально.
 2. В вашей [конфигурации агента](/docs/agents#tools) включите сервер MCP в качестве инструмента.
 
-```json title="argus.json" {11, 14-18}
+```json title="opencorvus.json" {11, 14-18}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "my-mcp": {
       "type": "local",
@@ -404,9 +404,9 @@ argus mcp debug my-oauth-server
 
 Добавьте [сервер Sentry MCP](https://mcp.sentry.dev) для взаимодействия с вашими проектами и проблемами Sentry.
 
-```json title="argus.json" {4-8}
+```json title="opencorvus.json" {4-8}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "sentry": {
       "type": "remote",
@@ -420,10 +420,10 @@ argus mcp debug my-oauth-server
 После добавления конфигурации пройдите аутентификацию с помощью Sentry:
 
 ```bash
-argus mcp auth sentry
+opencorvus mcp auth sentry
 ```
 
-Откроется окно браузера для завершения процесса OAuth и подключения argus к вашей учетной записи Sentry.
+Откроется окно браузера для завершения процесса OAuth и подключения opencorvus к вашей учетной записи Sentry.
 
 После аутентификации вы можете использовать инструменты Sentry в своих подсказках для запроса данных о проблемах, проектах и ​​ошибках.
 
@@ -437,9 +437,9 @@ Show me the latest unresolved issues in my project. use sentry
 
 Добавьте [сервер Context7 MCP](https://github.com/upstash/context7) для поиска в документах.
 
-```json title="argus.json" {4-7}
+```json title="opencorvus.json" {4-7}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "context7": {
       "type": "remote",
@@ -451,9 +451,9 @@ Show me the latest unresolved issues in my project. use sentry
 
 Если вы зарегистрировали бесплатную учетную запись, вы можете использовать свой ключ API и получить более высокие ограничения скорости.
 
-```json title="argus.json" {7-9}
+```json title="opencorvus.json" {7-9}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "context7": {
       "type": "remote",
@@ -486,9 +486,9 @@ When you need to search docs, use `context7` tools.
 
 Добавьте сервер MCP [Grep от Vercel](https://grep.app) для поиска по фрагментам кода на GitHub.
 
-```json title="argus.json" {4-7}
+```json title="opencorvus.json" {4-7}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mcp": {
     "gh_grep": {
       "type": "remote",

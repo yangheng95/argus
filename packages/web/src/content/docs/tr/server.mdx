@@ -1,19 +1,19 @@
 ---
 title: Sunucu
-description: argus sunucusuyla HTTP uzerinden etkilesin.
+description: opencorvus sunucusuyla HTTP uzerinden etkilesin.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-`argus serve` komutu, argus istemcisinin kullanabileceği bir OpenAPI endpoint'i açan headless bir HTTP sunucusu çalıştırır.
+`opencorvus serve` komutu, opencorvus istemcisinin kullanabileceği bir OpenAPI endpoint'i açan headless bir HTTP sunucusu çalıştırır.
 
 ---
 
 ### Kullanım
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### Seçenekler
@@ -23,39 +23,39 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | Dinlenecek bağlantı noktası                    | `4096`           |
 | `--hostname`    | Dinlenecek ana bilgisayar adı                  | `127.0.0.1`      |
 | `--mdns`        | mDNS keşfini etkinleştir                       | `false`          |
-| `--mdns-domain` | mDNS hizmeti için özel alan adı                | `argus.local` |
+| `--mdns-domain` | mDNS hizmeti için özel alan adı                | `opencorvus.local` |
 | `--cors`        | İzin verilecek ek tarayıcı kaynakları (origin) | `[]`             |
 
 `--cors` birden fazla kez geçilebilir:
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### Kimlik Doğrulama
 
-Sunucuyu HTTP temel kimlik doğrulama (basic auth) ile korumak için `OPENCODE_SERVER_PASSWORD` ayarlayın. Kullanıcı adı varsayılan olarak `argus` değeridir; değiştirmek isterseniz `OPENCODE_SERVER_USERNAME` ayarlayabilirsiniz. Bu ayar hem `argus serve` hem de `argus web` için geçerlidir.
+Sunucuyu HTTP temel kimlik doğrulama (basic auth) ile korumak için `OPENCODE_SERVER_PASSWORD` ayarlayın. Kullanıcı adı varsayılan olarak `opencorvus` değeridir; değiştirmek isterseniz `OPENCODE_SERVER_USERNAME` ayarlayabilirsiniz. Bu ayar hem `opencorvus serve` hem de `opencorvus web` için geçerlidir.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### Nasıl çalışır
 
-`argus` çalıştırdığınızda hem TUI hem de sunucu başlar. TUI, sunucuyla konuşan istemci tarafıdır.
+`opencorvus` çalıştırdığınızda hem TUI hem de sunucu başlar. TUI, sunucuyla konuşan istemci tarafıdır.
 Sunucu bir OpenAPI 3.1 spesifikasyon uç noktası açar. Bu uç nokta [SDK](/docs/sdk) üretiminde de kullanılır.
 
 :::tip
-argus ile programatik etkileşim için argus sunucusunu kullanın.
+opencorvus ile programatik etkileşim için opencorvus sunucusunu kullanın.
 :::
 
-Bu mimari, argus'un birden fazla istemciyi desteklemesini ve programatik kullanımları mümkün kılmasını sağlar.
+Bu mimari, opencorvus'un birden fazla istemciyi desteklemesini ve programatik kullanımları mümkün kılmasını sağlar.
 
-`argus serve` ile bağımsız bir sunucu başlatabilirsiniz. argus TUI açıksa, `argus serve` yeni bir sunucu başlatır.
+`opencorvus serve` ile bağımsız bir sunucu başlatabilirsiniz. opencorvus TUI açıksa, `opencorvus serve` yeni bir sunucu başlatır.
 
 ---
 
@@ -63,7 +63,7 @@ Bu mimari, argus'un birden fazla istemciyi desteklemesini ve programatik kullan�
 
 TUI başlarken rastgele bir port ve hostname atanır. Bunun yerine `--hostname` ve `--port` [bayraklarını](/docs/cli) verebilirsiniz.
 
-[`/tui`](#tui) uç noktası sunucu üzerinden TUI'yi sürmek için kullanılabilir. Örneğin bir istemi önceden doldurabilir veya çalıştırabilirsiniz. Bu kurulum argus [IDE](/docs/ide) eklentileri tarafından kullanılır.
+[`/tui`](#tui) uç noktası sunucu üzerinden TUI'yi sürmek için kullanılabilir. Örneğin bir istemi önceden doldurabilir veya çalıştırabilirsiniz. Bu kurulum opencorvus [IDE](/docs/ide) eklentileri tarafından kullanılır.
 
 ---
 
@@ -81,7 +81,7 @@ http://<hostname>:<port>/doc
 
 ## API'ler
 
-argus sunucusu aşağıdaki API'leri sunar.
+opencorvus sunucusu aşağıdaki API'leri sunar.
 
 ---
 

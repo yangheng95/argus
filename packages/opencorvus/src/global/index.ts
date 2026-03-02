@@ -4,7 +4,7 @@ import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
 
-const app = "argus"
+const app = "opencorvus"
 
 function resolveHome() {
   if (process.env.OPENCORVUS_TEST_HOME) return process.env.OPENCORVUS_TEST_HOME

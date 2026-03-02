@@ -1,66 +1,66 @@
 ---
 title: GitLab
-description: Koristite Argus u GitLab problemima i zahtjevima za spajanje.
+description: Koristite OpenCorvus u GitLab problemima i zahtjevima za spajanje.
 ---
 
-Argus se integriše sa vašim GitLab radnim tokom kroz vaš GitLab CI/CD cevovod ili sa GitLab Duo.
-U oba slučaja, Argus će se pokrenuti na vašim GitLab pokretačima.
+OpenCorvus se integriše sa vašim GitLab radnim tokom kroz vaš GitLab CI/CD cevovod ili sa GitLab Duo.
+U oba slučaja, OpenCorvus će se pokrenuti na vašim GitLab pokretačima.
 
 ---
 
 ## GitLab CI
 
-Argus radi u redovnom GitLab cevovodu. Možete ga ugraditi u cjevovod kao [CI komponenta](https://docs.gitlab.com/ee/ci/components/)
-Ovdje koristimo CI/CD komponentu kreiranu u zajednici za Argus — [nagyv/gitlab-argus](https://gitlab.com/nagyv/gitlab-argus).
+OpenCorvus radi u redovnom GitLab cevovodu. Možete ga ugraditi u cjevovod kao [CI komponenta](https://docs.gitlab.com/ee/ci/components/)
+Ovdje koristimo CI/CD komponentu kreiranu u zajednici za OpenCorvus — [nagyv/gitlab-opencorvus](https://gitlab.com/nagyv/gitlab-opencorvus).
 
 ---
 
 ### Funkcije
 
-- **Koristite prilagođenu konfiguraciju po poslu**: Konfigurirajte Argus s prilagođenim konfiguracijskim direktorijem, na primjer `./config/#custom-directory` da omogućite ili onemogućite funkcionalnost po Argus pozivanju.
-- **Minimalno podešavanje**: CI komponenta postavlja Argus u pozadini, samo trebate kreirati Argus konfiguraciju i početnu prompt.
+- **Koristite prilagođenu konfiguraciju po poslu**: Konfigurirajte OpenCorvus s prilagođenim konfiguracijskim direktorijem, na primjer `./config/#custom-directory` da omogućite ili onemogućite funkcionalnost po OpenCorvus pozivanju.
+- **Minimalno podešavanje**: CI komponenta postavlja OpenCorvus u pozadini, samo trebate kreirati OpenCorvus konfiguraciju i početnu prompt.
 - **Fleksibilno**: CI komponenta podržava nekoliko ulaza za prilagođavanje njenog ponašanja
 
 ---
 
 ### Podešavanje
 
-1. Sačuvajte JSON za autentifikaciju Argus kao CI varijable okruženja tipa datoteke pod **Postavke** > **CI/CD** > **Varijable**. Obavezno ih označite kao "Maskirane i skrivene".
+1. Sačuvajte JSON za autentifikaciju OpenCorvus kao CI varijable okruženja tipa datoteke pod **Postavke** > **CI/CD** > **Varijable**. Obavezno ih označite kao "Maskirane i skrivene".
 2. Dodajte sljedeće u svoju `.gitlab-ci.yml` datoteku.
 
 ```yaml title=".gitlab-ci.yml"
 include:
-  - component: $CI_SERVER_FQDN/nagyv/gitlab-argus/argus@2
+  - component: $CI_SERVER_FQDN/nagyv/gitlab-opencorvus/opencorvus@2
     inputs:
-      config_dir: ${CI_PROJECT_DIR}/argus-config
-      auth_json: $OPENCODE_AUTH_JSON # The variable name for your Argus authentication JSON
+      config_dir: ${CI_PROJECT_DIR}/opencorvus-config
+      auth_json: $OPENCODE_AUTH_JSON # The variable name for your OpenCorvus authentication JSON
       command: optional-custom-command
       message: "Your prompt here"
 ```
 
-Za više unosa i slučajeva upotrebe [pogledajte dokumente docs](https://gitlab.com/explore/catalog/nagyv/gitlab-argus) za ovu komponentu.
+Za više unosa i slučajeva upotrebe [pogledajte dokumente docs](https://gitlab.com/explore/catalog/nagyv/gitlab-opencorvus) za ovu komponentu.
 
 ---
 
 ## GitLab Duo
 
-Argus se integriše sa vašim GitLab tokovom rada.
-Spomenite `@argus` u komentaru i Argus će izvršiti zadatke unutar vašeg GitLab CI cevovoda.
+OpenCorvus se integriše sa vašim GitLab tokovom rada.
+Spomenite `@opencorvus` u komentaru i OpenCorvus će izvršiti zadatke unutar vašeg GitLab CI cevovoda.
 
 ---
 
 ### Funkcije
 
-- **Problemi trijaže**: Zamolite Argus da ispita problem i objasni vam ga.
-- **Popravi i implementiraj**: Zamolite Argus da popravi problem ili implementira funkciju.
+- **Problemi trijaže**: Zamolite OpenCorvus da ispita problem i objasni vam ga.
+- **Popravi i implementiraj**: Zamolite OpenCorvus da popravi problem ili implementira funkciju.
   To će kreirati novu granu i pokrenuti zahtjev za spajanje s promjenama.
-- **Secure**: Argus radi na vašim GitLab pokretačima.
+- **Secure**: OpenCorvus radi na vašim GitLab pokretačima.
 
 ---
 
 ### Podešavanje
 
-Argus radi u vašem GitLab CI/CD cevovodu, evo šta će vam trebati da ga postavite:
+OpenCorvus radi u vašem GitLab CI/CD cevovodu, evo šta će vam trebati da ga postavite:
 :::tip
 Pogledajte [**GitLab dokumente**](https://docs.gitlab.com/user/duo_agent_platform/agent_assistant/) za ažurirane upute.
 :::
@@ -79,8 +79,8 @@ Pogledajte [**GitLab dokumente**](https://docs.gitlab.com/user/duo_agent_platfor
     ```yaml
     image: node:22-slim
     commands:
-      - echo "Installing argus"
-      - npm install --global argus-ai
+      - echo "Installing opencorvus"
+      - npm install --global opencorvus-ai
       - echo "Installing glab"
       - export GITLAB_TOKEN=$GITLAB_TOKEN_OPENCODE
       - apt-get update --quiet && apt-get install --yes curl wget gpg git && rm --recursive --force /var/lib/apt/lists/*
@@ -88,10 +88,10 @@ Pogledajte [**GitLab dokumente**](https://docs.gitlab.com/user/duo_agent_platfor
       - apt-get install --yes glab
       - echo "Configuring glab"
       - echo $GITLAB_HOST
-      - echo "Creating Argus auth configuration"
-      - mkdir --parents ~/.local/share/argus
+      - echo "Creating OpenCorvus auth configuration"
+      - mkdir --parents ~/.local/share/opencorvus
       - |
-        cat > ~/.local/share/argus/auth.json << EOF
+        cat > ~/.local/share/opencorvus/auth.json << EOF
         {
           "anthropic": {
             "type": "api",
@@ -100,13 +100,13 @@ Pogledajte [**GitLab dokumente**](https://docs.gitlab.com/user/duo_agent_platfor
         }
         EOF
       - echo "Configuring git"
-      - git config --global user.email "argus@gitlab.com"
-      - git config --global user.name "Argus"
+      - git config --global user.email "opencorvus@gitlab.com"
+      - git config --global user.name "OpenCorvus"
       - echo "Testing glab"
       - glab issue list
-      - echo "Running Argus"
+      - echo "Running OpenCorvus"
       - |
-        argus run "
+        opencorvus run "
         You are an AI assistant helping with GitLab operations.
 
         Context: $AI_FLOW_CONTEXT
@@ -155,34 +155,34 @@ Možete vidjeti [GitLab CLI agenti docs](https://docs.gitlab.com/user/duo_agent_
 
 ### Primjeri
 
-Evo nekoliko primjera kako možete koristiti Argus u GitLab.
+Evo nekoliko primjera kako možete koristiti OpenCorvus u GitLab.
 :::tip
-Možete konfigurirati da koristite drugu frazu okidača od `@argus`.
+Možete konfigurirati da koristite drugu frazu okidača od `@opencorvus`.
 :::
 
 - **Objasnite problem**
   Dodajte ovaj komentar u izdanje GitLaba.
 
 ```
-  @argus explain this issue
+  @opencorvus explain this issue
 ```
 
-Argus će pročitati problem i odgovoriti jasnim objašnjenjem.
+OpenCorvus će pročitati problem i odgovoriti jasnim objašnjenjem.
 
 - **Reši problem**
   U izdanju GitLaba recite:
 
 ```
-  @argus fix this
+  @opencorvus fix this
 ```
 
-Argus će kreirati novu granu, implementirati promjene i otvoriti zahtjev za spajanje s promjenama.
+OpenCorvus će kreirati novu granu, implementirati promjene i otvoriti zahtjev za spajanje s promjenama.
 
 - **Pregledajte zahtjeve za pridruživanje**
   Ostavite sljedeći komentar na zahtjev za spajanje GitLab-a.
 
 ```
-  @argus review this merge request
+  @opencorvus review this merge request
 ```
 
-Argus će pregledati zahtjev za spajanje i dati povratne informacije.
+OpenCorvus će pregledati zahtjev za spajanje i dati povratne informacije.

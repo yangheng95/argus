@@ -1,6 +1,6 @@
 ---
 title: SDK
-description: Типобезопасный JS-клиент для сервера argus.
+description: Типобезопасный JS-клиент для сервера opencorvus.
 ---
 
 import config from "../../../../config.mjs"
@@ -18,17 +18,17 @@ SDK JS/TS с открытым кодом предоставляет типобе
 Установите SDK из npm:
 
 ```bash
-npm install @argus-ai/sdk
+npm install @opencorvus-ai/sdk
 ```
 
 ---
 
 ## Создать клиента
 
-Создайте экземпляр argus:
+Создайте экземпляр opencorvus:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
 const { client } = await createOpenCorvus()
 ```
@@ -49,12 +49,12 @@ const { client } = await createOpenCorvus()
 
 ## Конфигурация
 
-Вы можете передать объект конфигурации для настройки поведения. Экземпляр по-прежнему получает ваш `argus.json`, но вы можете переопределить или добавить встроенную конфигурацию:
+Вы можете передать объект конфигурации для настройки поведения. Экземпляр по-прежнему получает ваш `opencorvus.json`, но вы можете переопределить или добавить встроенную конфигурацию:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
-const argus = await createOpenCorvus({
+const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -62,17 +62,17 @@ const argus = await createOpenCorvus({
   },
 })
 
-console.log(`Server running at ${argus.server.url}`)
+console.log(`Server running at ${opencorvus.server.url}`)
 
-argus.server.close()
+opencorvus.server.close()
 ```
 
 ## Только клиент
 
-Если у вас уже есть работающий экземпляр argus, вы можете создать экземпляр клиента для подключения к нему:
+Если у вас уже есть работающий экземпляр opencorvus, вы можете создать экземпляр клиента для подключения к нему:
 
 ```javascript
-import { createOpenCorvusClient } from "@argus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 SDK включает определения TypeScript для всех типов API. Импортируйте их напрямую:
 
 ```typescript
-import type { Session, Message, Part } from "@argus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk"
 ```
 
 Все типы генерируются на основе спецификации OpenAPI сервера и доступны в файле <a href={typesUrl}>types</a>.
@@ -304,7 +304,7 @@ await client.session.prompt({
 ```javascript
 // Search and read files
 const textResults = await client.find.text({
-  query: { pattern: "function.*argus" },
+  query: { pattern: "function.*opencorvus" },
 })
 
 const files = await client.find.files({

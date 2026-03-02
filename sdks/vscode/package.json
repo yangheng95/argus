@@ -1,12 +1,12 @@
 {
-  "name": "argus",
-  "displayName": "argus",
-  "description": "argus for VS Code",
+  "name": "opencorvus",
+  "displayName": "opencorvus",
+  "description": "opencorvus for VS Code",
   "version": "1.2.15",
   "publisher": "sst-dev",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yangheng95/argus"
+    "url": "https://github.com/yangheng95/opencorvus"
   },
   "license": "MIT",
   "icon": "images/icon.png",
@@ -25,54 +25,54 @@
   "contributes": {
     "commands": [
       {
-        "command": "argus.openTerminal",
-        "title": "Open argus",
+        "command": "opencorvus.openTerminal",
+        "title": "Open opencorvus",
         "icon": {
           "light": "images/button-dark.svg",
           "dark": "images/button-light.svg"
         }
       },
       {
-        "command": "argus.openNewTerminal",
-        "title": "Open argus in new tab",
+        "command": "opencorvus.openNewTerminal",
+        "title": "Open opencorvus in new tab",
         "icon": {
           "light": "images/button-dark.svg",
           "dark": "images/button-light.svg"
         }
       },
       {
-        "command": "argus.addFilepathToTerminal",
+        "command": "opencorvus.addFilepathToTerminal",
         "title": "Add Filepath to Terminal"
       }
     ],
     "menus": {
       "editor/title": [
         {
-          "command": "argus.openNewTerminal",
+          "command": "opencorvus.openNewTerminal",
           "group": "navigation"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "argus.openTerminal",
-        "title": "Run argus",
+        "command": "opencorvus.openTerminal",
+        "title": "Run opencorvus",
         "key": "cmd+escape",
         "mac": "cmd+escape",
         "win": "ctrl+escape",
         "linux": "ctrl+escape"
       },
       {
-        "command": "argus.openNewTerminal",
-        "title": "Run argus",
+        "command": "opencorvus.openNewTerminal",
+        "title": "Run opencorvus",
         "key": "cmd+shift+escape",
         "mac": "cmd+shift+escape",
         "win": "ctrl+shift+escape",
         "linux": "ctrl+shift+escape"
       },
       {
-        "command": "argus.addFilepathToTerminal",
-        "title": "argus: Insert At-Mentioned",
+        "command": "opencorvus.addFilepathToTerminal",
+        "title": "opencorvus: Insert At-Mentioned",
         "key": "cmd+alt+k",
         "mac": "cmd+alt+k",
         "win": "ctrl+alt+K",

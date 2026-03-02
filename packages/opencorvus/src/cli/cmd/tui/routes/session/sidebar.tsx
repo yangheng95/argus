@@ -64,7 +64,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
   const kv = useKV()
 
   const hasProviders = createMemo(() =>
-    sync.data.provider.some((x) => x.id !== "argus" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
+    sync.data.provider.some((x) => x.id !== "opencorvus" || Object.values(x.models).some((y) => y.cost?.input !== 0)),
   )
   const gettingStartedDismissed = createMemo(() => kv.get("dismissed_getting_started", false))
 
@@ -292,7 +292,7 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
                     ✕
                   </text>
                 </box>
-                <text fg={theme.textMuted}>Argus includes free models so you can start immediately.</text>
+                <text fg={theme.textMuted}>OpenCorvus includes free models so you can start immediately.</text>
                 <text fg={theme.textMuted}>
                   Connect from 75+ providers to use other models, including Claude, GPT, Gemini etc
                 </text>

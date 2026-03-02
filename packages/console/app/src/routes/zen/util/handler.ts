@@ -75,7 +75,7 @@ export async function handler(
   const t = (key: Key, params?: Record<string, string | number>) => resolve(dict[key], params)
   const ADMIN_WORKSPACES = [
     "wrk_01K46JDFR0E75SG2Q8K172KF3Y", // frank
-    "wrk_01K6W1A3VE0KMNVSCQT43BG2SX", // argus bench
+    "wrk_01K6W1A3VE0KMNVSCQT43BG2SX", // opencorvus bench
   ]
 
   try {
@@ -84,10 +84,10 @@ export async function handler(
     const model = opts.parseModel(url, body)
     const isStream = opts.parseIsStream(url, body)
     const ip = input.request.headers.get("x-real-ip") ?? ""
-    const sessionId = input.request.headers.get("x-argus-session") ?? ""
-    const requestId = input.request.headers.get("x-argus-request") ?? ""
-    const projectId = input.request.headers.get("x-argus-project") ?? ""
-    const ocClient = input.request.headers.get("x-argus-client") ?? ""
+    const sessionId = input.request.headers.get("x-opencorvus-session") ?? ""
+    const requestId = input.request.headers.get("x-opencorvus-request") ?? ""
+    const projectId = input.request.headers.get("x-opencorvus-project") ?? ""
+    const ocClient = input.request.headers.get("x-opencorvus-client") ?? ""
     logger.metric({
       is_tream: isStream,
       session: sessionId,
@@ -149,10 +149,10 @@ export async function handler(
           })
           headers.delete("host")
           headers.delete("content-length")
-          headers.delete("x-argus-request")
-          headers.delete("x-argus-session")
-          headers.delete("x-argus-project")
-          headers.delete("x-argus-client")
+          headers.delete("x-opencorvus-request")
+          headers.delete("x-opencorvus-session")
+          headers.delete("x-opencorvus-project")
+          headers.delete("x-opencorvus-client")
           return headers
         })(),
         body: reqBody,

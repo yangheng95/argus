@@ -31,7 +31,7 @@ export default defineConfig({
     configSchema(),
     solidJs(),
     starlight({
-      title: "Argus",
+      title: "OpenCorvus",
       defaultLocale: "root",
       locales: {
         root: {

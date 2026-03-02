@@ -62,20 +62,20 @@ describe("ide", () => {
     expect(Ide.ide()).toBe("unknown")
   })
 
-  test("should recognize vscode-insiders ARGUS_CALLER", () => {
-    process.env["ARGUS_CALLER"] = "vscode-insiders"
+  test("should recognize vscode-insiders OPENCORVUS_CALLER", () => {
+    process.env["OPENCORVUS_CALLER"] = "vscode-insiders"
 
     expect(Ide.alreadyInstalled()).toBe(true)
   })
 
-  test("should recognize vscode ARGUS_CALLER", () => {
-    process.env["ARGUS_CALLER"] = "vscode"
+  test("should recognize vscode OPENCORVUS_CALLER", () => {
+    process.env["OPENCORVUS_CALLER"] = "vscode"
 
     expect(Ide.alreadyInstalled()).toBe(true)
   })
 
-  test("should return false for unknown ARGUS_CALLER", () => {
-    process.env["ARGUS_CALLER"] = "unknown"
+  test("should return false for unknown OPENCORVUS_CALLER", () => {
+    process.env["OPENCORVUS_CALLER"] = "unknown"
 
     expect(Ide.alreadyInstalled()).toBe(false)
   })

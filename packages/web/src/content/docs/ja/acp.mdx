@@ -1,9 +1,9 @@
 ---
 title: ACP サポート
-description: ACP 互換エディターで Argus を使用します。
+description: ACP 互換エディターで OpenCorvus を使用します。
 ---
 
-Argus は [Agent Client Protocol](https://agentclientprotocol.com) または (ACP) をサポートしているため、互換性のあるエディターや IDE で直接使用できます。
+OpenCorvus は [Agent Client Protocol](https://agentclientprotocol.com) または (ACP) をサポートしているため、互換性のあるエディターや IDE で直接使用できます。
 
 :::tip
 ACP をサポートするエディターとツールのリストについては、[ACP progress report](https://zed.dev/blog/acp-progress-report#available-now) を参照してください。
@@ -14,9 +14,9 @@ ACP は、コードエディターと AI コーディングエージェント間
 
 ## 設定
 
-ACP 経由で Argus を使用するには、`argus acp` コマンドを実行するようにエディタを設定します。
+ACP 経由で OpenCorvus を使用するには、`opencorvus acp` コマンドを実行するようにエディタを設定します。
 
-このコマンドは、stdio 経由で JSON-RPC 経由でエディターと通信する ACP 互換のサブプロセスとして Argus を開始します。
+このコマンドは、stdio 経由で JSON-RPC 経由でエディターと通信する ACP 互換のサブプロセスとして OpenCorvus を開始します。
 
 以下は、ACP をサポートする一般的なエディタの例です。
 
@@ -29,8 +29,8 @@ ACP 経由で Argus を使用するには、`argus acp` コマンドを実行す
 ```json title="~/.config/zed/settings.json"
 {
   "agent_servers": {
-    "Argus": {
-      "command": "argus",
+    "OpenCorvus": {
+      "command": "opencorvus",
       "args": ["acp"]
     }
   }
@@ -50,9 +50,9 @@ ACP 経由で Argus を使用するには、`argus acp` コマンドを実行す
         {
           "agent": {
             "custom": {
-              "name": "Argus",
+              "name": "OpenCorvus",
               "command": {
-                "command": "argus",
+                "command": "opencorvus",
                 "args": ["acp"]
               }
             }
@@ -73,15 +73,15 @@ ACP 経由で Argus を使用するには、`argus acp` コマンドを実行す
 ```json title="acp.json"
 {
   "agent_servers": {
-    "Argus": {
-      "command": "/absolute/path/bin/argus",
+    "OpenCorvus": {
+      "command": "/absolute/path/bin/opencorvus",
       "args": ["acp"]
     }
   }
 }
 ```
 
-これを開くには、AI Chat エージェントセレクターで新しい「Argus」エージェントを使用します。
+これを開くには、AI Chat エージェントセレクターで新しい「OpenCorvus」エージェントを使用します。
 
 ---
 
@@ -92,8 +92,8 @@ ACP 経由で Argus を使用するには、`argus acp` コマンドを実行す
 ```lua
 {
   acp_providers = {
-    ["argus"] = {
-      command = "argus",
+    ["opencorvus"] = {
+      command = "opencorvus",
       args = { "acp" }
     }
   }
@@ -105,8 +105,8 @@ ACP 経由で Argus を使用するには、`argus acp` コマンドを実行す
 ```lua {6-8}
 {
   acp_providers = {
-    ["argus"] = {
-      command = "argus",
+    ["opencorvus"] = {
+      command = "opencorvus",
       args = { "acp" },
       env = {
         OPENCODE_API_KEY = os.getenv("OPENCODE_API_KEY")
@@ -120,14 +120,14 @@ ACP 経由で Argus を使用するには、`argus acp` コマンドを実行す
 
 ### CodeCompanion.nvim
 
-[CodeCompanion.nvim](https://github.com/olimorris/codecompanion.nvim) で Argus を ACP エージェントとして使用するには、以下を Neovim 構成に追加します。
+[CodeCompanion.nvim](https://github.com/olimorris/codecompanion.nvim) で OpenCorvus を ACP エージェントとして使用するには、以下を Neovim 構成に追加します。
 
 ```lua
 require("codecompanion").setup({
   interactions = {
     chat = {
       adapter = {
-        name = "argus",
+        name = "opencorvus",
         model = "claude-sonnet-4",
       },
     },
@@ -135,13 +135,13 @@ require("codecompanion").setup({
 })
 ```
 
-この構成は、Argus をチャットの ACP エージェントとして使用するように CodeCompanion をセットアップします。
+この構成は、OpenCorvus をチャットの ACP エージェントとして使用するように CodeCompanion をセットアップします。
 
 環境変数 (`OPENCODE_API_KEY` など) を渡す必要がある場合、詳細については、CodeCompanion.nvim ドキュメントの「[アダプターの構成: 環境変数](https://codecompanion.olimorris.dev/getting-started#setting-an-api-key)」を参照してください。
 
 ## サポート
 
-Argus は、ACP 経由でもターミナル内で動作するのと同じように動作します。すべての機能がサポートされています。
+OpenCorvus は、ACP 経由でもターミナル内で動作するのと同じように動作します。すべての機能がサポートされています。
 
 :::note
 `/undo` や `/redo` などの一部の組み込みスラッシュコマンドは現在サポートされていません。
@@ -149,7 +149,7 @@ Argus は、ACP 経由でもターミナル内で動作するのと同じよう�
 
 - 組み込みツール (ファイル操作、ターミナルコマンドなど)
 - カスタムツールとスラッシュコマンド
-- Argus 設定で構成された MCP サーバー
+- OpenCorvus 設定で構成された MCP サーバー
 - `AGENTS.md` のプロジェクト固有のルール
 - カスタムフォーマッタとリンター
 - エージェントと権限システム

@@ -1,21 +1,21 @@
 ---
 title: Uvod
-description: Započnite sa Argus.
+description: Započnite sa OpenCorvus.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 import config from "../../../../config.mjs"
 export const console = config.console
 
-[**Argus**](/) je AI agent za kodiranje otvorenog koda. Dostupan je kao interfejs baziran na terminalu, desktop aplikacija ili IDE ekstenzija.
-![Argus TUI sa argus temom](../../../assets/lander/screenshot.png)
+[**OpenCorvus**](/) je AI agent za kodiranje otvorenog koda. Dostupan je kao interfejs baziran na terminalu, desktop aplikacija ili IDE ekstenzija.
+![OpenCorvus TUI sa opencorvus temom](../../../assets/lander/screenshot.png)
 Hajde da počnemo.
 
 ---
 
 #### Preduvjeti
 
-Da biste koristili Argus u svom terminalu, trebat će vam:
+Da biste koristili OpenCorvus u svom terminalu, trebat će vam:
 
 1. Moderan emulator terminala kao što su:
    - [WezTerm](https://wezterm.org), više platformi
@@ -28,10 +28,10 @@ Da biste koristili Argus u svom terminalu, trebat će vam:
 
 ## Instalacija
 
-Najlakši način za instaliranje Argus je putem instalacijske skripte.
+Najlakši način za instaliranje OpenCorvus je putem instalacijske skripte.
 
 ```bash
-curl -fsSL https://argus.ai/install | bash
+curl -fsSL https://opencorvus.ai/install | bash
 ```
 
 Također ga možete instalirati pomoću sljedećih naredbi:
@@ -42,28 +42,28 @@ Također ga možete instalirati pomoću sljedećih naredbi:
 
       <TabItem label="npm">
       ```bash
-      npm install -g argus-ai
+      npm install -g opencorvus-ai
       ```
 
           </TabItem>
 
         <TabItem label="Bun">
         ```bash
-        bun install -g argus-ai
+        bun install -g opencorvus-ai
         ```
 
           </TabItem>
 
         <TabItem label="pnpm">
         ```bash
-        pnpm install -g argus-ai
+        pnpm install -g opencorvus-ai
         ```
 
           </TabItem>
 
         <TabItem label="Yarn">
         ```bash
-        yarn global add argus-ai
+        yarn global add opencorvus-ai
         ```
 
       </TabItem>
@@ -73,65 +73,65 @@ Također ga možete instalirati pomoću sljedećih naredbi:
 - **Korištenje Homebrew-a na macOS-u i Linux-u**
 
 ```bash
-  brew install anomalyco/tap/argus
+  brew install anomalyco/tap/opencorvus
 ```
 
-> Preporučujemo korištenje Argus tap za najnovija izdanja. Službenu formulu `brew install argus` održava Homebrew tim i ažurira se rjeđe.
+> Preporučujemo korištenje OpenCorvus tap za najnovija izdanja. Službenu formulu `brew install opencorvus` održava Homebrew tim i ažurira se rjeđe.
 
 - **Korištenje Parua na Arch Linuxu**
 
 ```bash
-  paru -S argus-bin
+  paru -S opencorvus-bin
 ```
 
 #### Windows
 
 :::tip[Preporučeno: Koristite WSL]
-Za najbolje iskustvo na Windows-u preporučujemo korištenje [Windows Subsystem for Linux (WSL)](/docs/windows-wsl). Pruža bolje performanse i potpunu kompatibilnost sa Argus funkcijama.
+Za najbolje iskustvo na Windows-u preporučujemo korištenje [Windows Subsystem for Linux (WSL)](/docs/windows-wsl). Pruža bolje performanse i potpunu kompatibilnost sa OpenCorvus funkcijama.
 :::
 
 - **Korištenje Chocolatey-a**
 
 ```bash
-  choco install argus
+  choco install opencorvus
 ```
 
 - **Korištenje Scoop-a**
 
 ```bash
-  scoop install argus
+  scoop install opencorvus
 ```
 
 - **Korištenje NPM-a**
 
 ```bash
-  npm install -g argus-ai
+  npm install -g opencorvus-ai
 ```
 
 - **Korištenje Mise**
 
 ```bash
-  mise use -g github:yangheng95/argus
+  mise use -g github:yangheng95/opencorvus
 ```
 
 - **Korištenje Dockera**
 
 ```bash
-  docker run -it --rm ghcr.io/yangheng95/argus
+  docker run -it --rm ghcr.io/yangheng95/opencorvus
 ```
 
-Podrška za instaliranje Argus na Windows koristeći Bun je trenutno u toku.
-Također možete preuzeti binarnu datoteku iz [Releases](https://github.com/yangheng95/argus/releases).
+Podrška za instaliranje OpenCorvus na Windows koristeći Bun je trenutno u toku.
+Također možete preuzeti binarnu datoteku iz [Releases](https://github.com/yangheng95/opencorvus/releases).
 
 ---
 
 ## Konfiguracija
 
-Uz Argus možete koristiti bilo kojeg LLM provajdera tako što ćete konfigurirati njihove API ključeve.
-Ako ste tek počeli koristiti LLM provajdere, preporučujemo korištenje [Argus Zen](/docs/zen).
-To je kurirana lista modela koji su testirani i verifikovani od strane Argus tima.
+Uz OpenCorvus možete koristiti bilo kojeg LLM provajdera tako što ćete konfigurirati njihove API ključeve.
+Ako ste tek počeli koristiti LLM provajdere, preporučujemo korištenje [OpenCorvus Zen](/docs/zen).
+To je kurirana lista modela koji su testirani i verifikovani od strane OpenCorvus tima.
 
-1. Pokrenite naredbu `/connect` u TUI-u, odaberite argus i idite na [argus.ai/auth](https://argus.ai/auth).
+1. Pokrenite naredbu `/connect` u TUI-u, odaberite opencorvus i idite na [opencorvus.ai/auth](https://opencorvus.ai/auth).
 
 ```txt
    /connect
@@ -159,36 +159,36 @@ Sada kada ste konfigurisali provajdera, možete se kretati do projekta na kojem 
 cd /path/to/project
 ```
 
-I pokrenite Argus.
+I pokrenite OpenCorvus.
 
 ```bash
-argus
+opencorvus
 ```
 
-Zatim inicijalizirajte Argus za projekat pokretanjem sljedeće naredbe.
+Zatim inicijalizirajte OpenCorvus za projekat pokretanjem sljedeće naredbe.
 
 ```bash frame="none"
 /init
 ```
 
-Ovo će omogućiti Argus da analizira vaš projekat i kreira `AGENTS.md` fajl u korijenu projekta.
+Ovo će omogućiti OpenCorvus da analizira vaš projekat i kreira `AGENTS.md` fajl u korijenu projekta.
 :::tip
 Trebali biste komitovati datoteku `AGENTS.md` vašeg projekta u Git.
 :::
-Ovo pomaže Argus da razumije strukturu projekta i obrasce kodiranja koji se koriste.
+Ovo pomaže OpenCorvus da razumije strukturu projekta i obrasce kodiranja koji se koriste.
 
 ---
 
 ## Korištenje
 
-Sada ste spremni da koristite Argus za rad na svom projektu. Slobodno pitajte bilo šta!
+Sada ste spremni da koristite OpenCorvus za rad na svom projektu. Slobodno pitajte bilo šta!
 Ako ste novi u korištenju agenta za AI kodiranje, evo nekoliko primjera koji bi mogli pomoći.
 
 ---
 
 ### Postavljanje pitanja
 
-Možete zamoliti Argus da vam objasni kodnu bazu.
+Možete zamoliti OpenCorvus da vam objasni kodnu bazu.
 :::tip
 Koristite tipku `@` za nejasnu pretragu datoteka u projektu.
 :::
@@ -203,10 +203,10 @@ Ovo je korisno ako postoji dio kodne baze na kojem niste radili.
 
 ### Dodavanje funkcija
 
-Možete zamoliti Argus da vašem projektu doda nove funkcije. Iako preporučujemo da ga prvo zamolite da napravi plan.
+Možete zamoliti OpenCorvus da vašem projektu doda nove funkcije. Iako preporučujemo da ga prvo zamolite da napravi plan.
 
 1. **Kreirajte plan**
-   Argus ima _Plan mod_ koji onemogućuje njegovu sposobnost da pravi promjene i umjesto toga predlaže _kako_ će implementirati ovu funkciju.
+   OpenCorvus ima _Plan mod_ koji onemogućuje njegovu sposobnost da pravi promjene i umjesto toga predlaže _kako_ će implementirati ovu funkciju.
    Prebacite se na njega pomoću tipke **Tab**. Vidjet ćete indikator za ovo u donjem desnom uglu.
 
 ```bash frame="none" title="Switch to Plan mode"
@@ -221,9 +221,9 @@ Hajde sada da opišemo šta želimo da uradi.
     From this screen, the user can undelete a note or permanently delete it.
 ```
 
-Želite da date Argus dovoljno detalja da razumije šta želite. Pomaže da razgovarate s njim kao da razgovarate sa mlađim programerom u svom timu.
+Želite da date OpenCorvus dovoljno detalja da razumije šta želite. Pomaže da razgovarate s njim kao da razgovarate sa mlađim programerom u svom timu.
 :::tip
-Dajte Argus dosta konteksta i primjera koji će mu pomoći da razumije šta vi želite.
+Dajte OpenCorvus dosta konteksta i primjera koji će mu pomoći da razumije šta vi želite.
 :::
 
 2. **Ponovite plan**
@@ -237,7 +237,7 @@ Dajte Argus dosta konteksta i primjera koji će mu pomoći da razumije šta vi �
 :::tip
 Prevucite i ispustite slike u terminal da biste ih dodali u prompt.
 :::
-Argus može skenirati sve slike koje mu date i dodati ih u prompt. Možete to učiniti povlačenjem i ispuštanjem slike u terminal.
+OpenCorvus može skenirati sve slike koje mu date i dodati ih u prompt. Možete to učiniti povlačenjem i ispuštanjem slike u terminal.
 
 3. **Izgradite funkciju**
    Kada se osjećate ugodno s planom, vratite se na _Build mode_ ponovnim pritiskom na taster **Tab**.
@@ -256,7 +256,7 @@ I tražeći od njega da napravi promjene.
 
 ### Pravljenje izmjena
 
-Za jednostavnije promjene, možete zamoliti Argus da ga direktno izgradi bez potrebe da prvo pregledate plan.
+Za jednostavnije promjene, možete zamoliti OpenCorvus da ga direktno izgradi bez potrebe da prvo pregledate plan.
 
 ```txt frame="none" "@packages/functions/src/settings.ts" "@packages/functions/src/notes.ts"
 We need to add authentication to the /settings route. Take a look at how this is
@@ -264,13 +264,13 @@ handled in the /notes route in @packages/functions/src/notes.ts and implement
 the same logic in @packages/functions/src/settings.ts
 ```
 
-Želite da budete sigurni da ste pružili dobru količinu detalja kako bi Argus napravio ispravne promjene.
+Želite da budete sigurni da ste pružili dobru količinu detalja kako bi OpenCorvus napravio ispravne promjene.
 
 ---
 
 ### Poništavanje izmjena
 
-Recimo da tražite od Argus da izvrši neke promjene.
+Recimo da tražite od OpenCorvus da izvrši neke promjene.
 
 ```txt frame="none" "@packages/functions/src/api/index.ts"
 Can you refactor the function in @packages/functions/src/api/index.ts?
@@ -282,13 +282,13 @@ Ali shvatate da to nije ono što ste željeli. Možete **poništiti** promjene k
 /undo
 ```
 
-Argus će sada poništiti promjene koje ste napravili i ponovo prikazati vašu originalnu poruku.
+OpenCorvus će sada poništiti promjene koje ste napravili i ponovo prikazati vašu originalnu poruku.
 
 ```txt frame="none" "@packages/functions/src/api/index.ts"
 Can you refactor the function in @packages/functions/src/api/index.ts?
 ```
 
-Odavde možete podesiti prompt i zamoliti Argus da pokuša ponovo.
+Odavde možete podesiti prompt i zamoliti OpenCorvus da pokuša ponovo.
 :::tip
 Možete pokrenuti `/undo` više puta da poništite više promjena.
 :::
@@ -302,7 +302,7 @@ Ili **možete ponoviti** promjene koristeći naredbu `/redo`.
 
 ## Dijeljenje
 
-Razgovore koje imate sa Argus možete [dijeliti sa vašim timom](/docs/share).
+Razgovore koje imate sa OpenCorvus možete [dijeliti sa vašim timom](/docs/share).
 
 ```bash frame="none"
 /share
@@ -312,11 +312,11 @@ Ovo će kreirati vezu do trenutnog razgovora i kopirati je u međuspremnik.
 :::note
 Razgovori se ne dijele prema zadanim postavkama.
 :::
-Evo [primjer razgovora](https://argus.ai/s/4XP1fce5) sa Argus.
+Evo [primjer razgovora](https://opencorvus.ai/s/4XP1fce5) sa OpenCorvus.
 
 ---
 
 ## Prilagođavanje
 
-I to je to! Sada ste profesionalac u korištenju Argus.
-Da biste to učinili svojim, preporučujemo [odabir teme](/docs/themes), [prilagođavanje povezivanja tipki](/docs/keybinds), [konfiguriranje formatera koda](/docs/formatters), [kreiranje prilagođenih komandi](/docs/commands), ili igranje sa [Argus config](/docs/config).
+I to je to! Sada ste profesionalac u korištenju OpenCorvus.
+Da biste to učinili svojim, preporučujemo [odabir teme](/docs/themes), [prilagođavanje povezivanja tipki](/docs/keybinds), [konfiguriranje formatera koda](/docs/formatters), [kreiranje prilagođenih komandi](/docs/commands), ili igranje sa [OpenCorvus config](/docs/config).

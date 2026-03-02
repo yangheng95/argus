@@ -206,16 +206,16 @@ export namespace LLM {
       maxOutputTokens,
       abortSignal: input.abort,
       headers: {
-        ...(input.model.providerID.startsWith("argus")
+        ...(input.model.providerID.startsWith("opencorvus")
           ? {
-              "x-argus-project": Instance.project.id,
-              "x-argus-session": input.sessionID,
-              "x-argus-request": input.user.id,
-              "x-argus-client": Flag.ARGUS_CLIENT,
+              "x-opencorvus-project": Instance.project.id,
+              "x-opencorvus-session": input.sessionID,
+              "x-opencorvus-request": input.user.id,
+              "x-opencorvus-client": Flag.OPENCORVUS_CLIENT,
             }
           : input.model.providerID !== "anthropic"
             ? {
-                "User-Agent": `argus/${Installation.VERSION}`,
+                "User-Agent": `opencorvus/${Installation.VERSION}`,
               }
             : undefined),
         ...input.model.headers,

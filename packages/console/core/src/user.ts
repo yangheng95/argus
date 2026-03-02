@@ -141,7 +141,7 @@ export namespace User {
         const { InviteEmail } = await import("@opencorvus-ai/console-mail/InviteEmail.jsx")
         await AWS.sendEmail({
           to: email,
-          subject: `You've been invited to join the ${emailInfo.workspaceName} workspace on Argus`,
+          subject: `You've been invited to join the ${emailInfo.workspaceName} workspace on OpenCorvus`,
           body: render(
             // @ts-ignore
             InviteEmail({

@@ -1,68 +1,68 @@
 ---
 title: GitLab
-description: Use Argus in GitLab issues and merge requests.
+description: Use OpenCorvus in GitLab issues and merge requests.
 ---
 
-Argus integrates with your GitLab workflow through your GitLab CI/CD pipeline or with GitLab Duo.
+OpenCorvus integrates with your GitLab workflow through your GitLab CI/CD pipeline or with GitLab Duo.
 
-In both cases, Argus will run on your GitLab runners.
+In both cases, OpenCorvus will run on your GitLab runners.
 
 ---
 
 ## GitLab CI
 
-Argus works in a regular GitLab pipeline. You can build it into a pipeline as a [CI component](https://docs.gitlab.com/ee/ci/components/)
+OpenCorvus works in a regular GitLab pipeline. You can build it into a pipeline as a [CI component](https://docs.gitlab.com/ee/ci/components/)
 
-Here we are using a community-created CI/CD component for Argus — [nagyv/gitlab-argus](https://gitlab.com/nagyv/gitlab-argus).
+Here we are using a community-created CI/CD component for OpenCorvus — [nagyv/gitlab-opencorvus](https://gitlab.com/nagyv/gitlab-opencorvus).
 
 ---
 
 ### Features
 
-- **Use custom configuration per job**: Configure Argus with a custom configuration directory, for example `./config/#custom-directory` to enable or disable functionality per Argus invocation.
-- **Minimal setup**: The CI component sets up Argus in the background, you only need to create the Argus configuration and the initial prompt.
+- **Use custom configuration per job**: Configure OpenCorvus with a custom configuration directory, for example `./config/#custom-directory` to enable or disable functionality per OpenCorvus invocation.
+- **Minimal setup**: The CI component sets up OpenCorvus in the background, you only need to create the OpenCorvus configuration and the initial prompt.
 - **Flexible**: The CI component supports several inputs for customizing its behavior
 
 ---
 
 ### Setup
 
-1. Store your Argus authentication JSON as a File type CI environment variables under **Settings** > **CI/CD** > **Variables**. Make sure to mark them as "Masked and hidden".
+1. Store your OpenCorvus authentication JSON as a File type CI environment variables under **Settings** > **CI/CD** > **Variables**. Make sure to mark them as "Masked and hidden".
 2. Add the following to your `.gitlab-ci.yml` file.
 
    ```yaml title=".gitlab-ci.yml"
    include:
-     - component: $CI_SERVER_FQDN/nagyv/gitlab-argus/argus@2
+     - component: $CI_SERVER_FQDN/nagyv/gitlab-opencorvus/opencorvus@2
        inputs:
-         config_dir: ${CI_PROJECT_DIR}/argus-config
-         auth_json: $OPENCODE_AUTH_JSON # The variable name for your Argus authentication JSON
+         config_dir: ${CI_PROJECT_DIR}/opencorvus-config
+         auth_json: $OPENCODE_AUTH_JSON # The variable name for your OpenCorvus authentication JSON
          command: optional-custom-command
          message: "Your prompt here"
    ```
 
-For more inputs and use cases [check out the docs](https://gitlab.com/explore/catalog/nagyv/gitlab-argus) for this component.
+For more inputs and use cases [check out the docs](https://gitlab.com/explore/catalog/nagyv/gitlab-opencorvus) for this component.
 
 ---
 
 ## GitLab Duo
 
-Argus integrates with your GitLab workflow.
-Mention `@argus` in a comment, and Argus will execute tasks within your GitLab CI pipeline.
+OpenCorvus integrates with your GitLab workflow.
+Mention `@opencorvus` in a comment, and OpenCorvus will execute tasks within your GitLab CI pipeline.
 
 ---
 
 ### Features
 
-- **Triage issues**: Ask Argus to look into an issue and explain it to you.
-- **Fix and implement**: Ask Argus to fix an issue or implement a feature.
+- **Triage issues**: Ask OpenCorvus to look into an issue and explain it to you.
+- **Fix and implement**: Ask OpenCorvus to fix an issue or implement a feature.
   It will create a new branch and raise a merge request with the changes.
-- **Secure**: Argus runs on your GitLab runners.
+- **Secure**: OpenCorvus runs on your GitLab runners.
 
 ---
 
 ### Setup
 
-Argus runs in your GitLab CI/CD pipeline, here's what you'll need to set it up:
+OpenCorvus runs in your GitLab CI/CD pipeline, here's what you'll need to set it up:
 
 :::tip
 Check out the [**GitLab docs**](https://docs.gitlab.com/user/duo_agent_platform/agent_assistant/) for up to date instructions.
@@ -82,8 +82,8 @@ Check out the [**GitLab docs**](https://docs.gitlab.com/user/duo_agent_platform/
     ```yaml
     image: node:22-slim
     commands:
-      - echo "Installing argus"
-      - npm install --global argus-ai
+      - echo "Installing opencorvus"
+      - npm install --global opencorvus-ai
       - echo "Installing glab"
       - export GITLAB_TOKEN=$GITLAB_TOKEN_OPENCODE
       - apt-get update --quiet && apt-get install --yes curl wget gpg git && rm --recursive --force /var/lib/apt/lists/*
@@ -91,10 +91,10 @@ Check out the [**GitLab docs**](https://docs.gitlab.com/user/duo_agent_platform/
       - apt-get install --yes glab
       - echo "Configuring glab"
       - echo $GITLAB_HOST
-      - echo "Creating Argus auth configuration"
-      - mkdir --parents ~/.local/share/argus
+      - echo "Creating OpenCorvus auth configuration"
+      - mkdir --parents ~/.local/share/opencorvus
       - |
-        cat > ~/.local/share/argus/auth.json << EOF
+        cat > ~/.local/share/opencorvus/auth.json << EOF
         {
           "anthropic": {
             "type": "api",
@@ -103,13 +103,13 @@ Check out the [**GitLab docs**](https://docs.gitlab.com/user/duo_agent_platform/
         }
         EOF
       - echo "Configuring git"
-      - git config --global user.email "argus@gitlab.com"
-      - git config --global user.name "Argus"
+      - git config --global user.email "opencorvus@gitlab.com"
+      - git config --global user.name "OpenCorvus"
       - echo "Testing glab"
       - glab issue list
-      - echo "Running Argus"
+      - echo "Running OpenCorvus"
       - |
-        argus run "
+        opencorvus run "
         You are an AI assistant helping with GitLab operations.
 
         Context: $AI_FLOW_CONTEXT
@@ -158,10 +158,10 @@ You can refer to the [GitLab CLI agents docs](https://docs.gitlab.com/user/duo_a
 
 ### Examples
 
-Here are some examples of how you can use Argus in GitLab.
+Here are some examples of how you can use OpenCorvus in GitLab.
 
 :::tip
-You can configure to use a different trigger phrase than `@argus`.
+You can configure to use a different trigger phrase than `@opencorvus`.
 :::
 
 - **Explain an issue**
@@ -169,27 +169,27 @@ You can configure to use a different trigger phrase than `@argus`.
   Add this comment in a GitLab issue.
 
   ```
-  @argus explain this issue
+  @opencorvus explain this issue
   ```
 
-  Argus will read the issue and reply with a clear explanation.
+  OpenCorvus will read the issue and reply with a clear explanation.
 
 - **Fix an issue**
 
   In a GitLab issue, say:
 
   ```
-  @argus fix this
+  @opencorvus fix this
   ```
 
-  Argus will create a new branch, implement the changes, and open a merge request with the changes.
+  OpenCorvus will create a new branch, implement the changes, and open a merge request with the changes.
 
 - **Review merge requests**
 
   Leave the following comment on a GitLab merge request.
 
   ```
-  @argus review this merge request
+  @opencorvus review this merge request
   ```
 
-  Argus will review the merge request and provide feedback.
+  OpenCorvus will review the merge request and provide feedback.

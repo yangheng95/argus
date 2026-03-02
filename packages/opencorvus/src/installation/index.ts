@@ -59,7 +59,7 @@ export namespace Installation {
 
   export async function method() {
     if (process.execPath.includes(path.join(".opencorvus", "bin"))) return "curl"
-    if (process.execPath.includes(path.join(".argus", "bin"))) return "curl"
+    if (process.execPath.includes(path.join(".opencorvus", "bin"))) return "curl"
     if (process.execPath.includes(path.join(".local", "bin"))) return "curl"
     const exec = process.execPath.toLowerCase()
 
@@ -82,15 +82,15 @@ export namespace Installation {
       },
       {
         name: "brew" as const,
-        command: () => $`brew list --formula argus`.throws(false).quiet().text(),
+        command: () => $`brew list --formula opencorvus`.throws(false).quiet().text(),
       },
       {
         name: "scoop" as const,
-        command: () => $`scoop list argus`.throws(false).quiet().text(),
+        command: () => $`scoop list opencorvus`.throws(false).quiet().text(),
       },
       {
         name: "choco" as const,
-        command: () => $`choco list --limit-output argus`.throws(false).quiet().text(),
+        command: () => $`choco list --limit-output opencorvus`.throws(false).quiet().text(),
       },
     ]
 
@@ -105,7 +105,7 @@ export namespace Installation {
     for (const check of checks) {
       const output = await check.command()
       const installedName =
-        check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "argus" : "argus-ai"
+        check.name === "brew" || check.name === "choco" || check.name === "scoop" ? "opencorvus" : "opencorvus-ai"
       if (output.includes(installedName)) {
         return check.name
       }
@@ -122,11 +122,11 @@ export namespace Installation {
   )
 
   async function getBrewFormula() {
-    const tapFormula = await $`brew list --formula yangheng95/tap/argus`.throws(false).quiet().text()
-    if (tapFormula.includes("argus")) return "yangheng95/tap/argus"
-    const coreFormula = await $`brew list --formula argus`.throws(false).quiet().text()
-    if (coreFormula.includes("argus")) return "argus"
-    return "argus"
+    const tapFormula = await $`brew list --formula yangheng95/tap/opencorvus`.throws(false).quiet().text()
+    if (tapFormula.includes("opencorvus")) return "yangheng95/tap/opencorvus"
+    const coreFormula = await $`brew list --formula opencorvus`.throws(false).quiet().text()
+    if (coreFormula.includes("opencorvus")) return "opencorvus"
+    return "opencorvus"
   }
 
   export async function upgrade(method: Method, target: string) {
@@ -139,13 +139,13 @@ export namespace Installation {
         })
         break
       case "npm":
-        cmd = $`npm install -g argus-ai@${target}`
+        cmd = $`npm install -g opencorvus-ai@${target}`
         break
       case "pnpm":
-        cmd = $`pnpm install -g argus-ai@${target}`
+        cmd = $`pnpm install -g opencorvus-ai@${target}`
         break
       case "bun":
-        cmd = $`bun install -g argus-ai@${target}`
+        cmd = $`bun install -g opencorvus-ai@${target}`
         break
       case "brew": {
         const formula = await getBrewFormula()
@@ -166,10 +166,10 @@ export namespace Installation {
         break
       }
       case "choco":
-        cmd = $`echo Y | choco upgrade argus --version=${target}`
+        cmd = $`echo Y | choco upgrade opencorvus --version=${target}`
         break
       case "scoop":
-        cmd = $`scoop install argus@${target}`
+        cmd = $`scoop install opencorvus@${target}`
         break
       default:
         throw new Error(`Unknown method: ${method}`)
@@ -192,7 +192,7 @@ export namespace Installation {
 
   export const VERSION = typeof OPENCORVUS_VERSION === "string" ? OPENCORVUS_VERSION : "local"
   export const CHANNEL = typeof OPENCORVUS_CHANNEL === "string" ? OPENCORVUS_CHANNEL : "local"
-  export const USER_AGENT = `argus/${CHANNEL}/${VERSION}/${Flag.ARGUS_CLIENT}`
+  export const USER_AGENT = `opencorvus/${CHANNEL}/${VERSION}/${Flag.OPENCORVUS_CLIENT}`
 
   export async function latest(installMethod?: Method) {
     const detectedMethod = installMethod || (await method())
@@ -206,7 +206,7 @@ export namespace Installation {
         if (!version) throw new Error(`Could not detect version for tap formula: ${formula}`)
         return version
       }
-      return fetch("https://formulae.brew.sh/api/formula/argus.json")
+      return fetch("https://formulae.brew.sh/api/formula/opencorvus.json")
         .then((res) => {
           if (!res.ok) throw new Error(res.statusText)
           return res.json()
@@ -221,7 +221,7 @@ export namespace Installation {
         return reg.endsWith("/") ? reg.slice(0, -1) : reg
       })
       const channel = CHANNEL
-      return fetch(`${registry}/argus-ai/${channel}`)
+      return fetch(`${registry}/opencorvus-ai/${channel}`)
         .then((res) => {
           if (!res.ok) throw new Error(res.statusText)
           return res.json()
@@ -231,7 +231,7 @@ export namespace Installation {
 
     if (detectedMethod === "choco") {
       return fetch(
-        "https://community.chocolatey.org/api/v2/Packages?$filter=Id%20eq%20%27argus%27%20and%20IsLatestVersion&$select=Version",
+        "https://community.chocolatey.org/api/v2/Packages?$filter=Id%20eq%20%27opencorvus%27%20and%20IsLatestVersion&$select=Version",
         { headers: { Accept: "application/json;odata=verbose" } },
       )
         .then((res) => {
@@ -242,7 +242,7 @@ export namespace Installation {
     }
 
     if (detectedMethod === "scoop") {
-      return fetch("https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/argus.json", {
+      return fetch("https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/opencorvus.json", {
         headers: { Accept: "application/json" },
       })
         .then((res) => {
@@ -252,7 +252,7 @@ export namespace Installation {
         .then((data: any) => data.version)
     }
 
-    return fetch("https://api.github.com/repos/yangheng95/argus/releases/latest")
+    return fetch("https://api.github.com/repos/yangheng95/opencorvus/releases/latest")
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()

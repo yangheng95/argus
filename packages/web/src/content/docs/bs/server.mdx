@@ -1,19 +1,19 @@
 ---
 title: Server
-description: Komunicirajte s argus serverom preko HTTP-a.
+description: Komunicirajte s opencorvus serverom preko HTTP-a.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-Komanda `argus serve` pokrece headless HTTP server koji izlaže OpenAPI endpoint koji argus klijent moze koristiti.
+Komanda `opencorvus serve` pokrece headless HTTP server koji izlaže OpenAPI endpoint koji opencorvus klijent moze koristiti.
 
 ---
 
 ### Korištenje
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### Opcije
@@ -23,38 +23,38 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | Port na kojem slusa                 | `4096`           |
 | `--hostname`    | Hostname na kojem slusa             | `127.0.0.1`      |
 | `--mdns`        | Ukljuci mDNS otkrivanje             | `false`          |
-| `--mdns-domain` | Prilagodeni domen za mDNS servis    | `argus.local` |
+| `--mdns-domain` | Prilagodeni domen za mDNS servis    | `opencorvus.local` |
 | `--cors`        | Dodatni browser origin-i koje dozv. | `[]`             |
 
 `--cors` mozete navesti vise puta:
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### Autentifikacija
 
-Postavite `OPENCODE_SERVER_PASSWORD` da zastitite server HTTP basic auth mehanizmom. Korisnicko ime je po defaultu `argus`, ili postavite `OPENCODE_SERVER_USERNAME` za nadjacavanje. Ovo vazi i za `argus serve` i za `argus web`.
+Postavite `OPENCODE_SERVER_PASSWORD` da zastitite server HTTP basic auth mehanizmom. Korisnicko ime je po defaultu `opencorvus`, ili postavite `OPENCODE_SERVER_USERNAME` za nadjacavanje. Ovo vazi i za `opencorvus serve` i za `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### Kako radi
 
-Kada pokrenete `argus`, pokrecu se TUI i server. TUI je klijent koji komunicira sa serverom. Server izlaže OpenAPI 3.1 spec endpoint koji se koristi i za generisanje [SDK-a](/docs/sdk).
+Kada pokrenete `opencorvus`, pokrecu se TUI i server. TUI je klijent koji komunicira sa serverom. Server izlaže OpenAPI 3.1 spec endpoint koji se koristi i za generisanje [SDK-a](/docs/sdk).
 
 :::tip
-Koristite argus server za programsku interakciju sa argus-om.
+Koristite opencorvus server za programsku interakciju sa opencorvus-om.
 :::
 
-Ova arhitektura omogucava argus podrsku za vise klijenata i programsku interakciju.
+Ova arhitektura omogucava opencorvus podrsku za vise klijenata i programsku interakciju.
 
-Mozete pokrenuti `argus serve` da startate standalone server. Ako je argus TUI vec pokrenut, `argus serve` ce pokrenuti novi server.
+Mozete pokrenuti `opencorvus serve` da startate standalone server. Ako je opencorvus TUI vec pokrenut, `opencorvus serve` ce pokrenuti novi server.
 
 ---
 
@@ -62,7 +62,7 @@ Mozete pokrenuti `argus serve` da startate standalone server. Ako je argus TUI v
 
 Kada pokrenete TUI, port i hostname se nasumicno dodijele. Umjesto toga, mozete zadati `--hostname` i `--port` [zastave](/docs/cli), pa se povezati na taj server.
 
-Endpoint [`/tui`](#tui) mozete koristiti za upravljanje TUI-jem kroz server. Na primjer, mozete unaprijed popuniti ili pokrenuti prompt. Ovaj setup koriste Argus [IDE](/docs/ide) pluginovi.
+Endpoint [`/tui`](#tui) mozete koristiti za upravljanje TUI-jem kroz server. Na primjer, mozete unaprijed popuniti ili pokrenuti prompt. Ovaj setup koriste OpenCorvus [IDE](/docs/ide) pluginovi.
 
 ---
 
@@ -80,7 +80,7 @@ Na primjer, `http://localhost:4096/doc`. Koristite specifikaciju da generisete k
 
 ## API-ji
 
-argus server izlaže sljedece API-je.
+opencorvus server izlaže sljedece API-je.
 
 ---
 

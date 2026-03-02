@@ -47,7 +47,7 @@ export default function Home() {
   }
 
   return (
-    <main data-page="argus">
+    <main data-page="opencorvus">
       {/*<HttpHeader name="Cache-Control" value="public, max-age=1, s-maxage=3600, stale-while-revalidate=86400" />*/}
       <Title>{i18n.t("home.title")}</Title>
       <LocaleLinks path="/" />
@@ -129,7 +129,7 @@ export default function Home() {
                     <button data-copy data-slot="command" onClick={handleCopyClick}>
                       <span>
                         <span data-slot="protocol">npm i -g </span>
-                        <span data-slot="highlight">argus-ai</span>
+                        <span data-slot="highlight">opencorvus-ai</span>
                       </span>
                       <CopyStatus />
                     </button>
@@ -138,7 +138,7 @@ export default function Home() {
                     <button data-copy data-slot="command" onClick={handleCopyClick}>
                       <span>
                         <span data-slot="protocol">bun add -g </span>
-                        <span data-slot="highlight">argus-ai</span>
+                        <span data-slot="highlight">opencorvus-ai</span>
                       </span>
                       <CopyStatus />
                     </button>
@@ -147,7 +147,7 @@ export default function Home() {
                     <button data-copy data-slot="command" onClick={handleCopyClick}>
                       <span>
                         <span data-slot="protocol">brew install </span>
-                        <span data-slot="highlight">argus</span>
+                        <span data-slot="highlight">opencorvus</span>
                       </span>
                       <CopyStatus />
                     </button>
@@ -156,7 +156,7 @@ export default function Home() {
                     <button data-copy data-slot="command" onClick={handleCopyClick}>
                       <span>
                         <span data-slot="protocol">paru -S </span>
-                        <span data-slot="highlight">argus-bin</span>
+                        <span data-slot="highlight">opencorvus-bin</span>
                       </span>
                       <CopyStatus />
                     </button>
@@ -167,7 +167,7 @@ export default function Home() {
           </section>
 
           <section data-component="mascot">
-            <img src={mascotIdle} alt="Ar — Argus mascot" data-slot="mascot-image" />
+            <img src={mascotIdle} alt="Ar — OpenCorvus mascot" data-slot="mascot-image" />
           </section>
 
           <section data-component="video">

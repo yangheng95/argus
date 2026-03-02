@@ -3,11 +3,11 @@ title: キーバインド
 description: キーバインドをカスタマイズします。
 ---
 
-Argus には、Argus 設定を通じてカスタマイズできるキーバインドのリストがあります。
+OpenCorvus には、OpenCorvus 設定を通じてカスタマイズできるキーバインドのリストがあります。
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "leader": "ctrl+x",
     "app_exit": "ctrl+c,ctrl+d,<leader>q",
@@ -107,7 +107,7 @@ Argus には、Argus 設定を通じてカスタマイズできるキーバイ�
 
 ## リーダーキー
 
-Argus は、ほとんどのキーバインドに `leader` キーを使用します。これにより、ターミナルでの競合が回避されます。
+OpenCorvus は、ほとんどのキーバインドに `leader` キーを使用します。これにより、ターミナルでの競合が回避されます。
 
 デフォルトでは、`ctrl+x` がリーダーキーであり、ほとんどの操作では、最初にリーダーキーを押してからショートカットを押す必要があります。たとえば、新しいセッションを開始するには、まず `ctrl+x` を押してから、`n` を押します。
 
@@ -119,9 +119,9 @@ Argus は、ほとんどのキーバインドに `leader` キーを使用しま�
 
 キーバインドを無効にするには、値「none」を指定してキーを構成に追加します。
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "session_compact": "none"
   }
@@ -132,7 +132,7 @@ Argus は、ほとんどのキーバインドに `leader` キーを使用しま�
 
 ## デスクトッププロンプトのショートカット
 
-Argus デスクトップアプリのプロンプト入力は、テキストを編集するための一般的な Readline/Emacs スタイルのショートカットをサポートしています。これらは組み込みであり、現在 `argus.json` を介して構成することはできません。
+OpenCorvus デスクトップアプリのプロンプト入力は、テキストを編集するための一般的な Readline/Emacs スタイルのショートカットをサポートしています。これらは組み込みであり、現在 `opencorvus.json` を介して構成することはできません。
 
 | ショートカット | アクション                                        |
 | -------------- | ------------------------------------------------- |

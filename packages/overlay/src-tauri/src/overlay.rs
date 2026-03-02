@@ -107,7 +107,7 @@ pub fn apply_overlay_window_style(app: &tauri::App) {
 
 pub fn start_stdin_bridge(app: &tauri::App) {
     let handle: AppHandle = app.handle().clone();
-    let exit_on_eof = std::env::var("ARGUS_OVERLAY_STDIN_EXIT")
+    let exit_on_eof = std::env::var("OPENCORVUS_OVERLAY_STDIN_EXIT")
         .ok()
         .map(|item| item == "1")
         .unwrap_or(false);

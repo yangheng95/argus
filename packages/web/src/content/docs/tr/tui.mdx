@@ -1,22 +1,22 @@
 ---
 title: TUI
-description: argus terminal arayuzunu kullanin.
+description: opencorvus terminal arayuzunu kullanin.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-argus, projelerinizde LLM ile calismak icin etkilesimli bir terminal arayuzu (TUI) sunar.
+opencorvus, projelerinizde LLM ile calismak icin etkilesimli bir terminal arayuzu (TUI) sunar.
 
-argus'u calistirdiginizda mevcut dizin icin TUI baslar.
+opencorvus'u calistirdiginizda mevcut dizin icin TUI baslar.
 
 ```bash
-argus
+opencorvus
 ```
 
 Isterseniz belirli bir calisma dizini icin de baslatabilirsiniz.
 
 ```bash
-argus /path/to/project
+opencorvus /path/to/project
 ```
 
 TUI icinde bir mesaj yazarak istem gonderebilirsiniz.
@@ -57,7 +57,7 @@ Komut ciktiisi bir arac sonucu olarak konusmaya eklenir.
 
 ## Komutlar
 
-argus TUI kullanirken `/` ve komut adini yazarak hizli eylemler calistirabilirsiniz. Ornek:
+opencorvus TUI kullanirken `/` ve komut adini yazarak hizli eylemler calistirabilirsiniz. Ornek:
 
 ```bash frame="none"
 /help
@@ -71,7 +71,7 @@ Mevcut slash komutlarinin tam listesi:
 
 ### connect
 
-argus'a bir provider ekler. Mevcut provider'lari secip API anahtarlari eklemenizi saglar.
+opencorvus'a bir provider ekler. Mevcut provider'lari secip API anahtarlari eklemenizi saglar.
 
 ```bash frame="none"
 /connect
@@ -117,7 +117,7 @@ Mesaj yazmak icin harici editor acar. `EDITOR` ortam degiskeninde ayarli editoru
 
 ### exit
 
-argus'dan cikar. _Takma adlar_: `/quit`, `/q`
+opencorvus'dan cikar. _Takma adlar_: `/quit`, `/q`
 
 ```bash frame="none"
 /exit
@@ -352,11 +352,11 @@ Bazi editorler bloklayici modda calismak icin komut satiri argumanlari ister. `-
 
 ## Yapilandirin
 
-TUI davranisini argus config dosyanizdan ozellestirebilirsiniz.
+TUI davranisini opencorvus config dosyanizdan ozellestirebilirsiniz.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "tui": {
     "scroll_speed": 3,
     "scroll_acceleration": {

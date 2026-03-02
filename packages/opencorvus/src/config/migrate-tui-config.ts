@@ -32,13 +32,13 @@ interface MigrateInput {
 }
 
 /**
- * Migrates tui-specific keys (theme, keybinds, tui) from argus.json files
+ * Migrates tui-specific keys (theme, keybinds, tui) from opencorvus.json files
  * into dedicated tui.json files. Migration is performed per-directory and
  * skips only locations where a tui.json already exists.
  */
 export async function migrateTuiConfig(input: MigrateInput) {
-  const argus = await argusFiles(input)
-  for (const file of argus) {
+  const opencorvus = await opencorvusFiles(input)
+  for (const file of opencorvus) {
     const source = await Filesystem.readText(file).catch((error) => {
       log.warn("failed to read config for tui migration", { path: file, error })
       return undefined
@@ -134,16 +134,16 @@ async function backupAndStripLegacy(file: string, source: string) {
     })
 }
 
-async function argusFiles(input: { directories: string[]; managed: string }) {
-  const project = Flag.ARGUS_DISABLE_PROJECT_CONFIG
+async function opencorvusFiles(input: { directories: string[]; managed: string }) {
+  const project = Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
     ? []
-    : await ConfigPaths.projectFiles("argus", Instance.directory, Instance.worktree)
-  const files = [...project, ...ConfigPaths.fileInDirectory(Global.Path.config, "argus")]
+    : await ConfigPaths.projectFiles("opencorvus", Instance.directory, Instance.worktree)
+  const files = [...project, ...ConfigPaths.fileInDirectory(Global.Path.config, "opencorvus")]
   for (const dir of unique(input.directories)) {
-    files.push(...ConfigPaths.fileInDirectory(dir, "argus"))
+    files.push(...ConfigPaths.fileInDirectory(dir, "opencorvus"))
   }
-  if (Flag.ARGUS_CONFIG) files.push(Flag.ARGUS_CONFIG)
-  files.push(...ConfigPaths.fileInDirectory(input.managed, "argus"))
+  if (Flag.OPENCORVUS_CONFIG) files.push(Flag.OPENCORVUS_CONFIG)
+  files.push(...ConfigPaths.fileInDirectory(input.managed, "opencorvus"))
 
   const existing = await Promise.all(
     unique(files).map(async (file) => {

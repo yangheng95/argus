@@ -1,8 +1,8 @@
-[Bot] Model/provider config source: argus auth + argus.json + ARGUS_CONFIG_CONTENT
-[Bot] DashScope runtime: sk-sp-* (Coding Plan), baseURL: https://coding.dashscope.aliyuncs.com/v1, source: auth:alibaba-cn @ C:\Users\chuan\.local\share\argus\auth.json
+[Bot] Model/provider config source: opencorvus auth + opencorvus.json + OPENCORVUS_CONFIG_CONTENT
+[Bot] DashScope runtime: sk-sp-* (Coding Plan), baseURL: https://coding.dashscope.aliyuncs.com/v1, source: auth:alibaba-cn @ C:\Users\chuan\.local\share\opencorvus\auth.json
 [STT] Pipeline initialized: (none)
-[Bot] Vision pipeline enabled (model: qwen3.5-plus, key: argus auth (coding plan), baseURL: https://coding.dashscope.aliyuncs.com/v1)
-[BotCore] Argus server running at http://127.0.0.1:54885
+[Bot] Vision pipeline enabled (model: qwen3.5-plus, key: opencorvus auth (coding plan), baseURL: https://coding.dashscope.aliyuncs.com/v1)
+[BotCore] OpenCorvus server running at http://127.0.0.1:54885
 [Slack] Bot user ID: U0AJC6JDA72
 Bot is running
 [Test] Injecting prompt into channel C0AHFU59LVC

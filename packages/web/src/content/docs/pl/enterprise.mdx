@@ -1,18 +1,18 @@
 ---
 title: Przedsiębiorstwo
-description: Bezpieczne korzystanie z argus w Twojej organizacji.
+description: Bezpieczne korzystanie z opencorvus w Twojej organizacji.
 ---
 
 import config from "../../../../config.mjs"
 export const email = `mailto:${config.email}`
 
-argus Przedsiębiorstwo jest przeznaczone dla organizacji, która ma dostęp do zasobów, że ich kod i dane nigdy nie opuszczą infrastruktury. Może zostać zarejestrowany za pomocą zapachuralizowanej konfiguracji, która integruje się z logowaniem jednokrotnym i uruchomieniem bramą AI.
+opencorvus Przedsiębiorstwo jest przeznaczone dla organizacji, która ma dostęp do zasobów, że ich kod i dane nigdy nie opuszczą infrastruktury. Może zostać zarejestrowany za pomocą zapachuralizowanej konfiguracji, która integruje się z logowaniem jednokrotnym i uruchomieniem bramą AI.
 
 :::note
-argus nie przechowuje żadnego kodu ani danych kontekstowych.
+opencorvus nie przechowuje żadnego kodu ani danych kontekstowych.
 :::
 
-Aby skorzystać z pracy z argus Przedsiębiorstwo:
+Aby skorzystać z pracy z opencorvus Przedsiębiorstwo:
 
 1. Przeprowadź próbę wewnętrzną ze swoim systemem.
 2. **<a href={email}>Skontaktuj się z nami</a>**, aby omówić ceny i opcję konfiguracji.
@@ -21,16 +21,16 @@ Aby skorzystać z pracy z argus Przedsiębiorstwo:
 
 ## Test
 
-argus jest oprogramowaniem typu open source i nie przechowuje żadnego kodu ani danych kontekstowych, więc programiści mogą po prostu [zacząć](/docs/) i próbować próbną.
+opencorvus jest oprogramowaniem typu open source i nie przechowuje żadnego kodu ani danych kontekstowych, więc programiści mogą po prostu [zacząć](/docs/) i próbować próbną.
 
 ---
 
 ### Obsługa danych
 
-**argus nie dotyczy kodu źródłowego ani danych kontekstowych.** Całe zdarzenie odbywa się lokalnie lub poprzez bezpośrednio wywołane API do twojego dostawcy AI.
+**opencorvus nie dotyczy kodu źródłowego ani danych kontekstowych.** Całe zdarzenie odbywa się lokalnie lub poprzez bezpośrednio wywołane API do twojego dostawcy AI.
 
 to, że korzystasz z usług dostawcy, lub dostawcy zaufania
-Brama AI, możesz bezpłatnie korzystać z argus.
+Brama AI, możesz bezpłatnie korzystać z opencorvus.
 
 Zastrzeżeniem jest opcjonalna funkcja `/share`.
 
@@ -38,15 +38,15 @@ Zastrzeżeniem jest opcjonalna funkcja `/share`.
 
 #### Dzielenie się rozmowami
 
-Jeśli użytkownicy są połączeni z `/share`, połączenie jest połączone z danymi, które zostały przesłane do usług, które są udostępniane przez hosty tych użytkowników w argus.ai.
+Jeśli użytkownicy są połączeni z `/share`, połączenie jest połączone z danymi, które zostały przesłane do usług, które są udostępniane przez hosty tych użytkowników w opencorvus.ai.
 
 Dane są aktualnie dostępne przez sieć brzegową naszego CDN i są buforowane na brzegu w pobliżu Twoich użytkowników.
 
 Zalecamy tę opcję na okres próbny.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "share": "disabled"
 }
 ```
@@ -57,19 +57,19 @@ Zalecamy tę opcję na okres próbny.
 
 ### Własność kodu
 
-**Jesteś właścicielem całości kodu źródłowego przez argus.** Nie ma żadnych ograniczeń licencyjnych ani należących do własności.
+**Jesteś właścicielem całości kodu źródłowego przez opencorvus.** Nie ma żadnych ograniczeń licencyjnych ani należących do własności.
 
 ---
 
 ## Wycena
 
-W przypadku argus Enterprise model per-seat. Jeśli posiadasz własną bramkę LLM, nie pobieramy opłat za korzystanie z tokenów. Aby uzyskać więcej informacji na temat, jeśli jest możliwe, **<a href={email}>skontaktuj się z nami</a>**.
+W przypadku opencorvus Enterprise model per-seat. Jeśli posiadasz własną bramkę LLM, nie pobieramy opłat za korzystanie z tokenów. Aby uzyskać więcej informacji na temat, jeśli jest możliwe, **<a href={email}>skontaktuj się z nami</a>**.
 
 ---
 
 ## Zastosowanie
 
-Gdy zasięgsz okres próbny i nadzorujesz użytkowanie z argus na
+Gdy zasięgsz okres próbny i nadzorujesz użytkowanie z opencorvus na
 swoją organizację, możesz **<a href={email}>skontaktować się z nami</a>**, aby omówić te dźwięki
 opcja cenowa i wdrożeniowa.
 
@@ -77,7 +77,7 @@ opcja cenowa i wdrożeniowa.
 
 ### Konfiguracja centralna
 
-Możliwości wykorzystania argus tak, aby skorzystać z jednego zastosowania dla całej organizacji.
+Możliwości wykorzystania opencorvus tak, aby skorzystać z jednego zastosowania dla całej organizacji.
 
 Tę zapachową konfigurację można zintegrować z dostawcą SSO i specyfikacje wszyscy użytkownicy mają dostęp wyłącznie do bram wewnętrznych AI.
 
@@ -85,15 +85,15 @@ Tę zapachową konfigurację można zintegrować z dostawcą SSO i specyfikacje 
 
 ### Integracja SSO
 
-Dzięki zastosowaniu konfiguracji argus może zostać włączone z dostawcą SSO Twojej organizacji w celu uwierzytelnienia.
+Dzięki zastosowaniu konfiguracji opencorvus może zostać włączone z dostawcą SSO Twojej organizacji w celu uwierzytelnienia.
 
-Dzięki temu argus może uzyskać dane uwierzytelniające dla wewnętrznej bramy AI za pośrednictwem transmisji systemu zarządzania tożsamością.
+Dzięki temu opencorvus może uzyskać dane uwierzytelniające dla wewnętrznej bramy AI za pośrednictwem transmisji systemu zarządzania tożsamością.
 
 ---
 
 ### Wewnętrzna bramka AI
 
-Dzięki zastosowaniu konfiguracji argus można również skorzystać z tego, że można korzystać tylko z wewnętrznych bram AI.
+Dzięki zastosowaniu konfiguracji opencorvus można również skorzystać z tego, że można korzystać tylko z wewnętrznych bram AI.
 
 Możesz także dołączyć do wszystkich innych dostawców sztucznej inteligencji, upewniając się, że wszystkie elementy przechodzą przez zatwierdzenie wykorzystania Twojej organizacji.
 
@@ -111,16 +111,16 @@ Jest to obecnie w naszym planie działania. Jeśli jesteś zainteresowany, **<a 
 ## Często zadawane pytania
 
 <details>
-<summary>What is argus Enterprise?</summary>
+<summary>What is opencorvus Enterprise?</summary>
 
-argus Przedsiębiorstwo jest przeznaczone dla organizacji, która ma dostęp do zasobów, że ich kod i dane nigdy nie opuszczą infrastruktury. Może zostać zarejestrowany za pomocą zapachuralizowanej konfiguracji, która integruje się z logowaniem jednokrotnym i uruchomieniem bramą AI.
+opencorvus Przedsiębiorstwo jest przeznaczone dla organizacji, która ma dostęp do zasobów, że ich kod i dane nigdy nie opuszczą infrastruktury. Może zostać zarejestrowany za pomocą zapachuralizowanej konfiguracji, która integruje się z logowaniem jednokrotnym i uruchomieniem bramą AI.
 
 </details>
 
 <details>
-<summary>How do I get started with argus Enterprise?</summary>
+<summary>How do I get started with opencorvus Enterprise?</summary>
 
-Po prostu uruchom wersję próbną ze swoim. argus urządzenia niezabezpieczone kodu ani danych kontekstowych, co ułatwia uruchomienie pracy.
+Po prostu uruchom wersję próbną ze swoim. opencorvus urządzenia niezabezpieczone kodu ani danych kontekstowych, co ułatwia uruchomienie pracy.
 
 **<a href={email}>skontaktuj się z nami</a>**, aby omówić ceny i wybrać opcję.
 
@@ -134,16 +134,16 @@ Oferujemy ceny korporacyjne za jedno stanowisko. Jeśli posiadasz własną bramk
 </details>
 
 <details>
-<summary>Is my data secure with argus Enterprise?</summary>
+<summary>Is my data secure with opencorvus Enterprise?</summary>
 
-Tak. argus nie przechowuje kodu ani danych kontekstowych. Całe zdarzenie odbywa się lokalnie lub poprzez bezpośrednie wywołanie API przez dostawcę AI. Dostęp do konfiguracji i integracji z logowaniem jednokrotnym Twoje dane pozostają bezpieczne w infrastrukturze organizacji.
+Tak. opencorvus nie przechowuje kodu ani danych kontekstowych. Całe zdarzenie odbywa się lokalnie lub poprzez bezpośrednie wywołanie API przez dostawcę AI. Dostęp do konfiguracji i integracji z logowaniem jednokrotnym Twoje dane pozostają bezpieczne w infrastrukturze organizacji.
 
 </details>
 
 <details>
 <summary>Can we use our own private NPM registry?</summary>
 
-argus obsługuje prywatny rejestry npm poprzez natywną usługę plików `.npmrc` Buna. Jeśli Twoja organizacja korzysta z rejestru prywatnego, takiego jak JFrog Artifactory, Nexus lub wylot, przed uruchomieniem argus się, że programiści zostali uwierzytelnieni.
+opencorvus obsługuje prywatny rejestry npm poprzez natywną usługę plików `.npmrc` Buna. Jeśli Twoja organizacja korzysta z rejestru prywatnego, takiego jak JFrog Artifactory, Nexus lub wylot, przed uruchomieniem opencorvus się, że programiści zostali uwierzytelnieni.
 
 Aby zapewnić uwierzytelnianie w rejestrze prywatnym:
 
@@ -151,11 +151,11 @@ Aby zapewnić uwierzytelnianie w rejestrze prywatnym:
 npm login --registry=https://your-company.jfrog.io/api/npm/npm-virtual/
 ```
 
-Spowoduje to do `~/.npmrc` ze szczegółami uwierzytelniania. argus zrobi to automatycznie
+Spowoduje to do `~/.npmrc` ze szczegółami uwierzytelniania. opencorvus zrobi to automatycznie
 podniesc do.
 
 :::caution
-Przed uruchomieniem argus musisz być zalogowany do rejestru prywatnego.
+Przed uruchomieniem opencorvus musisz być zalogowany do rejestru prywatnego.
 :::
 
 Alternatywnie możesz skorzystać z pliku `.npmrc`:
@@ -165,6 +165,6 @@ registry=https://your-company.jfrog.io/api/npm/npm-virtual/
 //your-company.jfrog.io/api/npm/npm-virtual/:_authToken=${NPM_AUTH_TOKEN}
 ```
 
-Programiści muszą się zgłosić do rejestru prywatnego przed uruchomieniem argus, aby mieć dostęp, że pakiety będą dostępne z rejestru przedsiębiorstwa.
+Programiści muszą się zgłosić do rejestru prywatnego przed uruchomieniem opencorvus, aby mieć dostęp, że pakiety będą dostępne z rejestru przedsiębiorstwa.
 
 </details>

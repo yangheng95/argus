@@ -1,6 +1,6 @@
 const frame = document.getElementById("frame")
 const labelEl = document.getElementById("label")
-const bridge = window.argusBridge
+const bridge = window.opencorvusBridge
 
 let timer = null
 let hideTimer = null
@@ -27,7 +27,7 @@ bridge.listen(bridge.events.showWindowHighlight, (payload) => {
   clearTimers()
   labelEl.textContent = typeof data.label === "string" && data.label.trim()
     ? data.label
-    : "Argus target window"
+    : "OpenCorvus target window"
   frame.classList.remove("visible")
   void frame.offsetWidth
   frame.classList.add("visible")

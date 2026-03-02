@@ -3,7 +3,7 @@ title: استكشاف الأخطاء وإصلاحها
 description: المشكلات الشائعة وكيفية حلها.
 ---
 
-لاستكشاف المشكلات في Argus وإصلاحها، ابدأ بالتحقق من السجلات والبيانات المحلية التي يخزنها على القرص.
+لاستكشاف المشكلات في OpenCorvus وإصلاحها، ابدأ بالتحقق من السجلات والبيانات المحلية التي يخزنها على القرص.
 
 ---
 
@@ -11,21 +11,21 @@ description: المشكلات الشائعة وكيفية حلها.
 
 يتم حفظ ملفات السجل في:
 
-- **macOS/Linux**: `~/.local/share/argus/log/`
-- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.local\share\argus\log`
+- **macOS/Linux**: `~/.local/share/opencorvus/log/`
+- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.local\share\opencorvus\log`
 
 تتم تسمية ملفات السجل بطوابع زمنية (مثل `2025-01-09T123456.log`) ويتم الاحتفاظ بأحدث 10 ملفات سجل.
 
-يمكنك ضبط مستوى السجل باستخدام خيار CLI `--log-level` للحصول على معلومات تصحيح أكثر تفصيلا. على سبيل المثال: `argus --log-level DEBUG`.
+يمكنك ضبط مستوى السجل باستخدام خيار CLI `--log-level` للحصول على معلومات تصحيح أكثر تفصيلا. على سبيل المثال: `opencorvus --log-level DEBUG`.
 
 ---
 
 ## التخزين
 
-يخزن argus بيانات الجلسات وبيانات التطبيق الأخرى على القرص في:
+يخزن opencorvus بيانات الجلسات وبيانات التطبيق الأخرى على القرص في:
 
-- **macOS/Linux**: `~/.local/share/argus/`
-- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.local\share\argus`
+- **macOS/Linux**: `~/.local/share/opencorvus/`
+- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.local\share\opencorvus`
 
 يحتوي هذا الدليل على:
 
@@ -39,13 +39,13 @@ description: المشكلات الشائعة وكيفية حلها.
 
 ## تطبيق سطح المكتب
 
-يشغل Argus Desktop خادما محليا لـ Argus (العملية الجانبية `argus-cli`) في الخلفية. معظم المشكلات سببها إضافة لا تعمل بشكل صحيح، أو ذاكرة تخزين مؤقت تالفة، أو إعداد خادم غير صحيح.
+يشغل OpenCorvus Desktop خادما محليا لـ OpenCorvus (العملية الجانبية `opencorvus-cli`) في الخلفية. معظم المشكلات سببها إضافة لا تعمل بشكل صحيح، أو ذاكرة تخزين مؤقت تالفة، أو إعداد خادم غير صحيح.
 
 ### فحوصات سريعة
 
 - أغلق التطبيق تماما ثم أعد تشغيله.
 - إذا عرض التطبيق شاشة خطأ، انقر **Restart** وانسخ تفاصيل الخطأ.
-- على macOS فقط: قائمة `Argus` -> **Reload Webview** (يفيد إذا كانت الواجهة فارغة/متجمدة).
+- على macOS فقط: قائمة `OpenCorvus` -> **Reload Webview** (يفيد إذا كانت الواجهة فارغة/متجمدة).
 
 ---
 
@@ -57,28 +57,28 @@ description: المشكلات الشائعة وكيفية حلها.
 
 افتح ملف الإعدادات العام وابحث عن المفتاح `plugin`.
 
-- **macOS/Linux**: `~/.config/argus/argus.jsonc` (أو `~/.config/argus/argus.json`)
-- **macOS/Linux** (عمليات تثبيت أقدم): `~/.local/share/argus/argus.jsonc`
-- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.config\argus\argus.jsonc`
+- **macOS/Linux**: `~/.config/opencorvus/opencorvus.jsonc` (أو `~/.config/opencorvus/opencorvus.json`)
+- **macOS/Linux** (عمليات تثبيت أقدم): `~/.local/share/opencorvus/opencorvus.jsonc`
+- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.config\opencorvus\opencorvus.jsonc`
 
 إذا كانت لديك إضافات مضبوطة، فقم بتعطيلها مؤقتا بإزالة المفتاح أو ضبطه على مصفوفة فارغة:
 
 ```jsonc
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "plugin": [],
 }
 ```
 
 #### تحقق من أدلة الإضافات
 
-يمكن لـ Argus أيضا تحميل إضافات محلية من القرص. انقلها مؤقتا إلى مكان آخر (أو أعد تسمية المجلد) ثم أعد تشغيل تطبيق سطح المكتب:
+يمكن لـ OpenCorvus أيضا تحميل إضافات محلية من القرص. انقلها مؤقتا إلى مكان آخر (أو أعد تسمية المجلد) ثم أعد تشغيل تطبيق سطح المكتب:
 
 - **إضافات عامة**
-  - **macOS/Linux**: `~/.config/argus/plugins/`
-  - **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.config\argus\plugins`
+  - **macOS/Linux**: `~/.config/opencorvus/plugins/`
+  - **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.config\opencorvus\plugins`
 - **إضافات المشروع** (فقط إذا كنت تستخدم إعدادات لكل مشروع)
-  - `<your-project>/.argus/plugins/`
+  - `<your-project>/.opencorvus/plugins/`
 
 إذا عاد التطبيق للعمل، فأعد تفعيل الإضافات واحدة تلو الأخرى لمعرفة أيها يسبب المشكلة.
 
@@ -86,22 +86,22 @@ description: المشكلات الشائعة وكيفية حلها.
 
 ### مسح ذاكرة التخزين المؤقت
 
-إذا لم يساعد تعطيل الإضافات (أو كانت عملية تثبيت إضافة عالقة)، فامسح ذاكرة التخزين المؤقت حتى يتمكن Argus من إعادة بنائها.
+إذا لم يساعد تعطيل الإضافات (أو كانت عملية تثبيت إضافة عالقة)، فامسح ذاكرة التخزين المؤقت حتى يتمكن OpenCorvus من إعادة بنائها.
 
-1. أغلق Argus Desktop تماما.
+1. أغلق OpenCorvus Desktop تماما.
 2. احذف دليل ذاكرة التخزين المؤقت:
 
-- **macOS**: Finder -> `Cmd+Shift+G` -> الصق `~/.cache/argus`
-- **Linux**: احذف `~/.cache/argus` (أو شغّل `rm -rf ~/.cache/argus`)
-- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.cache\argus`
+- **macOS**: Finder -> `Cmd+Shift+G` -> الصق `~/.cache/opencorvus`
+- **Linux**: احذف `~/.cache/opencorvus` (أو شغّل `rm -rf ~/.cache/opencorvus`)
+- **Windows**: اضغط `WIN+R` والصق `%USERPROFILE%\.cache\opencorvus`
 
-3. أعد تشغيل Argus Desktop.
+3. أعد تشغيل OpenCorvus Desktop.
 
 ---
 
 ### إصلاح مشكلات اتصال الخادم
 
-يمكن لـ Argus Desktop إما تشغيل خادمه المحلي (افتراضيا) أو الاتصال بعنوان URL لخادم قمت بتهيئته.
+يمكن لـ OpenCorvus Desktop إما تشغيل خادمه المحلي (افتراضيا) أو الاتصال بعنوان URL لخادم قمت بتهيئته.
 
 إذا ظهرت نافذة **"Connection Failed"** (أو لم يتجاوز التطبيق شاشة البداية)، فتحقق مما إذا كان هناك عنوان URL مخصص للخادم.
 
@@ -111,7 +111,7 @@ description: المشكلات الشائعة وكيفية حلها.
 
 #### إزالة `server.port` / `server.hostname` من الإعدادات
 
-إذا كان `argus.json(c)` يحتوي على قسم `server`، فأزله مؤقتا ثم أعد تشغيل تطبيق سطح المكتب.
+إذا كان `opencorvus.json(c)` يحتوي على قسم `server`، فأزله مؤقتا ثم أعد تشغيل تطبيق سطح المكتب.
 
 #### تحقق من متغيرات البيئة
 
@@ -132,21 +132,21 @@ description: المشكلات الشائعة وكيفية حلها.
 
 ### Windows: بيئة تشغيل WebView2
 
-على Windows، يتطلب Argus Desktop وجود **WebView2 Runtime** الخاصة بـ Microsoft Edge. إذا فتح التطبيق نافذة فارغة أو لم يبدأ، فقم بتثبيت/تحديث WebView2 ثم جرّب مجددا.
+على Windows، يتطلب OpenCorvus Desktop وجود **WebView2 Runtime** الخاصة بـ Microsoft Edge. إذا فتح التطبيق نافذة فارغة أو لم يبدأ، فقم بتثبيت/تحديث WebView2 ثم جرّب مجددا.
 
 ---
 
 ### Windows: مشكلات الأداء العامة
 
-إذا كنت تواجه بطءا في الأداء، أو مشكلات في الوصول إلى الملفات، أو مشكلات في terminal على Windows، فجرّب استخدام [WSL (نظام Windows الفرعي لـ Linux)](/docs/windows-wsl). يوفر WSL بيئة Linux تعمل بسلاسة أكبر مع ميزات Argus.
+إذا كنت تواجه بطءا في الأداء، أو مشكلات في الوصول إلى الملفات، أو مشكلات في terminal على Windows، فجرّب استخدام [WSL (نظام Windows الفرعي لـ Linux)](/docs/windows-wsl). يوفر WSL بيئة Linux تعمل بسلاسة أكبر مع ميزات OpenCorvus.
 
 ---
 
 ### الإشعارات لا تظهر
 
-لا يعرض Argus Desktop إشعارات النظام إلا عندما:
+لا يعرض OpenCorvus Desktop إشعارات النظام إلا عندما:
 
-- تكون الإشعارات مفعلة لـ Argus في إعدادات نظام التشغيل، و
+- تكون الإشعارات مفعلة لـ OpenCorvus في إعدادات نظام التشغيل، و
 - تكون نافذة التطبيق غير نشطة.
 
 ---
@@ -155,11 +155,11 @@ description: المشكلات الشائعة وكيفية حلها.
 
 إذا لم يبدأ التطبيق ولم تتمكن من مسح الإعدادات من داخل الواجهة، فأعد تعيين الحالة المحفوظة لتطبيق سطح المكتب.
 
-1. أغلق Argus Desktop.
-2. اعثر على هذه الملفات واحذفها (توجد في دليل بيانات تطبيق Argus Desktop):
+1. أغلق OpenCorvus Desktop.
+2. اعثر على هذه الملفات واحذفها (توجد في دليل بيانات تطبيق OpenCorvus Desktop):
 
-- `argus.settings.dat` (عنوان URL الافتراضي لخادم سطح المكتب)
-- `argus.global.dat` و `argus.workspace.*.dat` (حالة الواجهة مثل الخوادم/المشاريع الأخيرة)
+- `opencorvus.settings.dat` (عنوان URL الافتراضي لخادم سطح المكتب)
+- `opencorvus.global.dat` و `opencorvus.workspace.*.dat` (حالة الواجهة مثل الخوادم/المشاريع الأخيرة)
 
 للعثور على الدليل بسرعة:
 
@@ -171,13 +171,13 @@ description: المشكلات الشائعة وكيفية حلها.
 
 ## الحصول على المساعدة
 
-إذا كنت تواجه مشكلات مع Argus:
+إذا كنت تواجه مشكلات مع OpenCorvus:
 
 1. **الإبلاغ عن المشكلات على GitHub**
 
    أفضل طريقة للإبلاغ عن الأخطاء أو طلب الميزات هي عبر مستودعنا على GitHub:
 
-   [**github.com/yangheng95/argus/issues**](https://github.com/yangheng95/argus/issues)
+   [**github.com/yangheng95/opencorvus/issues**](https://github.com/yangheng95/opencorvus/issues)
 
    قبل إنشاء مشكلة جديدة، ابحث في المشكلات الموجودة لمعرفة ما إذا كانت مشكلتك قد تم الإبلاغ عنها بالفعل.
 
@@ -185,7 +185,7 @@ description: المشكلات الشائعة وكيفية حلها.
 
    للحصول على مساعدة فورية ونقاشات المجتمع، انضم إلى خادم Discord الخاص بنا:
 
-   [**argus.ai/discord**](https://argus.ai/discord)
+   [**opencorvus.ai/discord**](https://opencorvus.ai/discord)
 
 ---
 
@@ -195,11 +195,11 @@ description: المشكلات الشائعة وكيفية حلها.
 
 ---
 
-### Argus لا يبدأ
+### OpenCorvus لا يبدأ
 
 1. تحقق من السجلات بحثا عن رسائل الخطأ
 2. جرّب التشغيل مع `--print-logs` لرؤية المخرجات في terminal
-3. تأكد من أنك تستخدم أحدث إصدار عبر `argus upgrade`
+3. تأكد من أنك تستخدم أحدث إصدار عبر `opencorvus upgrade`
 
 ---
 
@@ -224,9 +224,9 @@ description: المشكلات الشائعة وكيفية حلها.
 
 - `openai/gpt-4.1`
 - `openrouter/google/gemini-2.5-flash`
-- `argus/kimi-k2`
+- `opencorvus/kimi-k2`
 
-لمعرفة النماذج التي لديك صلاحية الوصول إليها، شغّل `argus models`
+لمعرفة النماذج التي لديك صلاحية الوصول إليها، شغّل `opencorvus models`
 
 ---
 
@@ -240,10 +240,10 @@ description: المشكلات الشائعة وكيفية حلها.
 2. إذا استمرت المشكلة، فجرّب مسح الإعدادات المخزنة لديك:
 
    ```bash
-   rm -rf ~/.local/share/argus
+   rm -rf ~/.local/share/opencorvus
    ```
 
-   على Windows، اضغط `WIN+R` واحذف: `%USERPROFILE%\.local\share\argus`
+   على Windows، اضغط `WIN+R` واحذف: `%USERPROFILE%\.local\share\opencorvus`
 
 3. أعد المصادقة مع المزوّد باستخدام الأمر `/connect` في واجهة TUI.
 
@@ -251,21 +251,21 @@ description: المشكلات الشائعة وكيفية حلها.
 
 ### AI_APICallError ومشكلات حزم المزوّد
 
-إذا واجهت أخطاء في استدعاءات API، فقد يكون السبب حزم مزوّد قديمة. يقوم argus بتثبيت حزم المزوّد (OpenAI و Anthropic و Google وغير ذلك) ديناميكيا عند الحاجة ويقوم بتخزينها مؤقتا محليا.
+إذا واجهت أخطاء في استدعاءات API، فقد يكون السبب حزم مزوّد قديمة. يقوم opencorvus بتثبيت حزم المزوّد (OpenAI و Anthropic و Google وغير ذلك) ديناميكيا عند الحاجة ويقوم بتخزينها مؤقتا محليا.
 
 لحل مشكلات حزم المزوّد:
 
 1. امسح ذاكرة التخزين المؤقت لحزم المزوّد:
 
    ```bash
-   rm -rf ~/.cache/argus
+   rm -rf ~/.cache/opencorvus
    ```
 
-   على Windows، اضغط `WIN+R` واحذف: `%USERPROFILE%\.cache\argus`
+   على Windows، اضغط `WIN+R` واحذف: `%USERPROFILE%\.cache\opencorvus`
 
-2. أعد تشغيل argus لإعادة تثبيت أحدث حزم المزوّد
+2. أعد تشغيل opencorvus لإعادة تثبيت أحدث حزم المزوّد
 
-سيجبر ذلك argus على تنزيل أحدث إصدارات حزم المزوّد، وهو ما يحل غالبا مشكلات التوافق مع معاملات النماذج وتغييرات API.
+سيجبر ذلك opencorvus على تنزيل أحدث إصدارات حزم المزوّد، وهو ما يحل غالبا مشكلات التوافق مع معاملات النماذج وتغييرات API.
 
 ---
 
@@ -296,4 +296,4 @@ Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
 export DISPLAY=:99.0
 ```
 
-سيكتشف argus ما إذا كنت تستخدم Wayland ويفضل `wl-clipboard`، وإلا فسيحاول العثور على أدوات الحافظة بالترتيب التالي: `xclip` ثم `xsel`.
+سيكتشف opencorvus ما إذا كنت تستخدم Wayland ويفضل `wl-clipboard`، وإلا فسيحاول العثور على أدوات الحافظة بالترتيب التالي: `xclip` ثم `xsel`.

@@ -315,7 +315,7 @@ export namespace Session {
       )
     })
     const cfg = await Config.get()
-    if (!result.parentID && (Flag.ARGUS_AUTO_SHARE || cfg.share === "auto"))
+    if (!result.parentID && (Flag.OPENCORVUS_AUTO_SHARE || cfg.share === "auto"))
       share(result.id).catch(() => {
         // Silently ignore sharing errors during session creation
       })
@@ -814,7 +814,7 @@ export namespace Session {
       // OpenRouter provides inputTokens as the total count of input tokens (including cached).
       // AFAIK other providers (OpenRouter/OpenAI/Gemini etc.) do it the same way e.g. vercel/ai#8794 (comment)
       // Anthropic does it differently though - inputTokens doesn't include cached tokens.
-      // It looks like Argus's cost calculation assumes all providers return inputTokens the same way Anthropic does (I'm guessing getUsage logic was originally implemented with anthropic), so it's causing incorrect cost calculation for OpenRouter and others.
+      // It looks like OpenCorvus's cost calculation assumes all providers return inputTokens the same way Anthropic does (I'm guessing getUsage logic was originally implemented with anthropic), so it's causing incorrect cost calculation for OpenRouter and others.
       const excludesCachedTokens = !!(input.metadata?.["anthropic"] || input.metadata?.["bedrock"])
       const adjustedInputTokens = safe(
         excludesCachedTokens ? inputTokens : inputTokens - cacheReadInputTokens - cacheWriteInputTokens,

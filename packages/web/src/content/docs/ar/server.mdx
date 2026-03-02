@@ -1,19 +1,19 @@
 ---
 title: الخادم
-description: تفاعل مع خادم argus عبر HTTP.
+description: تفاعل مع خادم opencorvus عبر HTTP.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-يشغّل الأمر `argus serve` خادما HTTP دون واجهة ويعرض نقطة نهاية OpenAPI يمكن لعميل argus استخدامها.
+يشغّل الأمر `opencorvus serve` خادما HTTP دون واجهة ويعرض نقطة نهاية OpenAPI يمكن لعميل opencorvus استخدامها.
 
 ---
 
 ### الاستخدام
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### الخيارات
@@ -23,41 +23,41 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | المنفذ الذي يستمع عليه                | `4096`           |
 | `--hostname`    | اسم المضيف الذي يستمع عليه            | `127.0.0.1`      |
 | `--mdns`        | تفعيل اكتشاف mDNS                     | `false`          |
-| `--mdns-domain` | اسم نطاق مخصص لخدمة mDNS              | `argus.local` |
+| `--mdns-domain` | اسم نطاق مخصص لخدمة mDNS              | `opencorvus.local` |
 | `--cors`        | أصول (Origins) متصفح إضافية مسموح بها | `[]`             |
 
 يمكن تمرير `--cors` عدة مرات:
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### المصادقة
 
-عيّن `OPENCODE_SERVER_PASSWORD` لحماية الخادم باستخدام مصادقة HTTP الأساسية. اسم المستخدم افتراضيا هو `argus`، أو عيّن `OPENCODE_SERVER_USERNAME` لتغييره. ينطبق ذلك على كل من `argus serve` و `argus web`.
+عيّن `OPENCODE_SERVER_PASSWORD` لحماية الخادم باستخدام مصادقة HTTP الأساسية. اسم المستخدم افتراضيا هو `opencorvus`، أو عيّن `OPENCODE_SERVER_USERNAME` لتغييره. ينطبق ذلك على كل من `opencorvus serve` و `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### كيف يعمل
 
-عند تشغيل `argus` يبدأ تشغيل واجهة terminal تفاعلية (TUI) وخادما. تكون الـ TUI هي
+عند تشغيل `opencorvus` يبدأ تشغيل واجهة terminal تفاعلية (TUI) وخادما. تكون الـ TUI هي
 العميل الذي يتحدث إلى الخادم. يوفّر الخادم نقطة نهاية لمواصفة OpenAPI 3.1.
 وتُستخدم هذه النقطة أيضا لتوليد [SDK](/docs/sdk).
 
 :::tip
-استخدم خادم argus للتفاعل مع argus برمجيا.
+استخدم خادم opencorvus للتفاعل مع opencorvus برمجيا.
 :::
 
-تتيح هذه البنية لـ argus دعم عدة عملاء وتمكّنك من التفاعل مع argus برمجيا.
+تتيح هذه البنية لـ opencorvus دعم عدة عملاء وتمكّنك من التفاعل مع opencorvus برمجيا.
 
-يمكنك تشغيل `argus serve` لبدء خادم مستقل. إذا كانت واجهة argus في terminal (TUI)
-قيد التشغيل، فسيبدأ `argus serve` خادما جديدا.
+يمكنك تشغيل `opencorvus serve` لبدء خادم مستقل. إذا كانت واجهة opencorvus في terminal (TUI)
+قيد التشغيل، فسيبدأ `opencorvus serve` خادما جديدا.
 
 ---
 
@@ -65,7 +65,7 @@ OPENCODE_SERVER_PASSWORD=your-password argus serve
 
 عند بدء الـ TUI تقوم بتعيين منفذ واسم مضيف عشوائيا. يمكنك بدلا من ذلك تمرير [الخيارات](/docs/cli) `--hostname` و `--port`، ثم استخدامهما للاتصال بخادمها.
 
-يمكن استخدام نقطة النهاية [`/tui`](#tui) للتحكم في الـ TUI عبر الخادم. على سبيل المثال، يمكنك تعبئة الموجّه مسبقا أو تشغيله. يُستخدم هذا الإعداد بواسطة ملحقات Argus لـ [IDE](/docs/ide).
+يمكن استخدام نقطة النهاية [`/tui`](#tui) للتحكم في الـ TUI عبر الخادم. على سبيل المثال، يمكنك تعبئة الموجّه مسبقا أو تشغيله. يُستخدم هذا الإعداد بواسطة ملحقات OpenCorvus لـ [IDE](/docs/ide).
 
 ---
 
@@ -83,7 +83,7 @@ http://<hostname>:<port>/doc
 
 ## واجهات API
 
-يعرض خادم argus واجهات API التالية.
+يعرض خادم opencorvus واجهات API التالية.
 
 ---
 

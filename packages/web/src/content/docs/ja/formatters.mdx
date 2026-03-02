@@ -1,15 +1,15 @@
 ---
 title: フォーマッタ
-description: Argus は言語固有のフォーマッタを使用します。
+description: OpenCorvus は言語固有のフォーマッタを使用します。
 ---
 
-Argus は、言語固有のフォーマッタを使用してファイルを作成または編集した後、ファイルを自動的にフォーマットします。これにより、生成されるコードがプロジェクトのコードスタイルに従っていることが保証されます。
+OpenCorvus は、言語固有のフォーマッタを使用してファイルを作成または編集した後、ファイルを自動的にフォーマットします。これにより、生成されるコードがプロジェクトのコードスタイルに従っていることが保証されます。
 
 ---
 
 ## 組み込み
 
-Argus には、一般的な言語およびフレームワーク用のいくつかの組み込みフォーマッタが付属しています。以下は、フォーマッタ、サポートされているファイル拡張子、および必要なコマンドまたは構成オプションのリストです。
+OpenCorvus には、一般的な言語およびフレームワーク用のいくつかの組み込みフォーマッタが付属しています。以下は、フォーマッタ、サポートされているファイル拡張子、および必要なコマンドまたは構成オプションのリストです。
 
 | Formatter            | Extensions                                                                                               | Requirements                                                                                          |
 | -------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -39,13 +39,13 @@ Argus には、一般的な言語およびフレームワーク用のいくつ�
 | oxfmt (Experimental) | .js, .jsx, .ts, .tsx                                                                                     | `oxfmt` dependency in `package.json` and an [experimental env variable flag](/docs/cli/#experimental) |
 | ormolu               | .hs                                                                                                      | `ormolu` command available                                                                            |
 
-したがって、プロジェクトの `prettier` に `package.json` が含まれている場合、Argus は自動的にそれを使用します。
+したがって、プロジェクトの `prettier` に `package.json` が含まれている場合、OpenCorvus は自動的にそれを使用します。
 
 ---
 
 ## 仕組み
 
-Argus がファイルを書き込んだり編集したりすると、次のことが行われます。
+OpenCorvus がファイルを書き込んだり編集したりすると、次のことが行われます。
 
 1. 有効なすべてのフォーマッタに対してファイル拡張子をチェックします。
 2. ファイルに対して適切なフォーマッタコマンドを実行します。
@@ -57,11 +57,11 @@ Argus がファイルを書き込んだり編集したりすると、次のこ�
 
 ## 設定
 
-Argus 設定の `formatter` セクションを通じてフォーマッタをカスタマイズできます。
+OpenCorvus 設定の `formatter` セクションを通じてフォーマッタをカスタマイズできます。
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {}
 }
 ```
@@ -83,18 +83,18 @@ Argus 設定の `formatter` セクションを通じてフォーマッタをカ�
 
 **すべて**のフォーマッタをグローバルに無効にするには、`formatter` を `false` に設定します。
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": false
 }
 ```
 
 **特定**のフォーマッタを無効にするには、`disabled` を `true` に設定します。
 
-```json title="argus.json" {5}
+```json title="opencorvus.json" {5}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": true
@@ -109,9 +109,9 @@ Argus 設定の `formatter` セクションを通じてフォーマッタをカ�
 
 コマンド、環境変数、ファイル拡張子を指定することで、組み込みフォーマッタをオーバーライドしたり、新しいフォーマッタを追加したりできます。
 
-```json title="argus.json" {4-14}
+```json title="opencorvus.json" {4-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],

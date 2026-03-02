@@ -22,7 +22,7 @@ export function createOpenCorvusClient(config?: Config & { directory?: string })
   if (config?.directory) {
     config.headers = {
       ...config.headers,
-      "x-argus-directory": encodeURIComponent(config.directory),
+      "x-opencorvus-directory": encodeURIComponent(config.directory),
     }
   }
 

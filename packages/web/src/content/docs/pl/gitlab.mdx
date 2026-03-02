@@ -1,68 +1,68 @@
 ---
 title: GitLab
-description: użyj argus w problemach z GitLabem i zastosujch scalania.
+description: użyj opencorvus w problemach z GitLabem i zastosujch scalania.
 ---
 
-argus integruje się z przepływem pracy GitLab poprzez potok GitLab CI/CD lub z GitLab Duo.
+opencorvus integruje się z przepływem pracy GitLab poprzez potok GitLab CI/CD lub z GitLab Duo.
 
-W obu przypadkach argus będzie modułem GitLab.
+W obu przypadkach opencorvus będzie modułem GitLab.
 
 ---
 
 ## GitLab CI
 
-argus działa w zwykłym potoku GitLab. Możesz wbudować go w potok jako [komponent CI](https://docs.gitlab.com/ee/ci/components/)
+opencorvus działa w zwykłym potoku GitLab. Możesz wbudować go w potok jako [komponent CI](https://docs.gitlab.com/ee/ci/components/)
 
-Tutaj obowiązkowego przez społeczność komponentu CI/CD dla argus — [nagyv/gitlab-argus](https://gitlab.com/nagyv/gitlab-argus).
+Tutaj obowiązkowego przez społeczność komponentu CI/CD dla opencorvus — [nagyv/gitlab-opencorvus](https://gitlab.com/nagyv/gitlab-opencorvus).
 
 ---
 
 ### Cechy
 
-- **Użyj konfiguracji dla każdego zadania**: Skonfiguruj argus z niestandardowym katalogiem konfiguracyjnym, na przykładzie `./config/#custom-directory`, aby włączyć lub funkcjonalności na każde wywołanie argus.
-- **Konfiguracja minimalna**: Komponent CI konfiguruje argus w tle, wystarczy skonfigurować argus i początkowy monit.
+- **Użyj konfiguracji dla każdego zadania**: Skonfiguruj opencorvus z niestandardowym katalogiem konfiguracyjnym, na przykładzie `./config/#custom-directory`, aby włączyć lub funkcjonalności na każde wywołanie opencorvus.
+- **Konfiguracja minimalna**: Komponent CI konfiguruje opencorvus w tle, wystarczy skonfigurować opencorvus i początkowy monit.
 - **Elastyczny**: Komponent CI obsługuje kilka danych, które są stosowane w celu dostosowania jego zachowania
 
 ---
 
 ### Organizować coś
 
-1. Przechowuj dane uwierzytelniające argus w formacie JSON jako zmienne parametry CI typu pliku w specyfikacji **Ustawienia** > **CI/CD** > **Zmienne**. Zachowaj, aby być oznaczony jako „Zamaskowane i ukryte”.
+1. Przechowuj dane uwierzytelniające opencorvus w formacie JSON jako zmienne parametry CI typu pliku w specyfikacji **Ustawienia** > **CI/CD** > **Zmienne**. Zachowaj, aby być oznaczony jako „Zamaskowane i ukryte”.
 2. Dodaj elementy do swojego pliku `.gitlab-ci.yml`.
 
    ```yaml title=".gitlab-ci.yml"
    include:
-     - component: $CI_SERVER_FQDN/nagyv/gitlab-argus/argus@2
+     - component: $CI_SERVER_FQDN/nagyv/gitlab-opencorvus/opencorvus@2
        inputs:
-         config_dir: ${CI_PROJECT_DIR}/argus-config
-         auth_json: $OPENCODE_AUTH_JSON # The variable name for your Argus authentication JSON
+         config_dir: ${CI_PROJECT_DIR}/opencorvus-config
+         auth_json: $OPENCODE_AUTH_JSON # The variable name for your OpenCorvus authentication JSON
          command: optional-custom-command
          message: "Your prompt here"
    ```
 
-Więcej danych dotyczących użycia [sprawdź opis](https://gitlab.com/explore/catalog/nagyv/gitlab-argus) tego komponentu.
+Więcej danych dotyczących użycia [sprawdź opis](https://gitlab.com/explore/catalog/nagyv/gitlab-opencorvus) tego komponentu.
 
 ---
 
 ## Duet GitLab
 
-argus integruje się z przepływem pracy GitLab.
-Wspomnij o `@argus` w komentarzu, a argus wykonaj zadania w ramach swojego potoku GitLab CI.
+opencorvus integruje się z przepływem pracy GitLab.
+Wspomnij o `@opencorvus` w komentarzu, a opencorvus wykonaj zadania w ramach swojego potoku GitLab CI.
 
 ---
 
 ### Cechy
 
-- **Problem związany z segregacją**: Poproś argus o szczegółowe wyjaśnienie problemu i wyjaśnienie go.
-- **Napraw i zaimplementuj**: Poproś argus o naprawienie problemu lub zaimplementowanie funkcji.
+- **Problem związany z segregacją**: Poproś opencorvus o szczegółowe wyjaśnienie problemu i wyjaśnienie go.
+- **Napraw i zaimplementuj**: Poproś opencorvus o naprawienie problemu lub zaimplementowanie funkcji.
   Utworzył nowy oddział i zgłosi ataku ze sobą.
-- **Bezpieczny**: argus działa na modułach GitLab.
+- **Bezpieczny**: opencorvus działa na modułach GitLab.
 
 ---
 
 ### Organizować coś
 
-argus działa w potoku CI/CD GitLab. Oto, czego potrzebujesz, aby przejść do:
+opencorvus działa w potoku CI/CD GitLab. Oto, czego potrzebujesz, aby przejść do:
 
 :::tip
 Aktualne instrukcje dotyczące [**dokumentacji GitLab**](https://docs.gitlab.com/user/duo_agent_platform/agent_assistant/).
@@ -82,8 +82,8 @@ Aktualne instrukcje dotyczące [**dokumentacji GitLab**](https://docs.gitlab.com
     ```yaml
     image: node:22-slim
     commands:
-      - echo "Installing argus"
-      - npm install --global argus-ai
+      - echo "Installing opencorvus"
+      - npm install --global opencorvus-ai
       - echo "Installing glab"
       - export GITLAB_TOKEN=$GITLAB_TOKEN_OPENCODE
       - apt-get update --quiet && apt-get install --yes curl wget gpg git && rm --recursive --force /var/lib/apt/lists/*
@@ -91,10 +91,10 @@ Aktualne instrukcje dotyczące [**dokumentacji GitLab**](https://docs.gitlab.com
       - apt-get install --yes glab
       - echo "Configuring glab"
       - echo $GITLAB_HOST
-      - echo "Creating Argus auth configuration"
-      - mkdir --parents ~/.local/share/argus
+      - echo "Creating OpenCorvus auth configuration"
+      - mkdir --parents ~/.local/share/opencorvus
       - |
-        cat > ~/.local/share/argus/auth.json << EOF
+        cat > ~/.local/share/opencorvus/auth.json << EOF
         {
           "anthropic": {
             "type": "api",
@@ -103,13 +103,13 @@ Aktualne instrukcje dotyczące [**dokumentacji GitLab**](https://docs.gitlab.com
         }
         EOF
       - echo "Configuring git"
-      - git config --global user.email "argus@gitlab.com"
-      - git config --global user.name "Argus"
+      - git config --global user.email "opencorvus@gitlab.com"
+      - git config --global user.name "OpenCorvus"
       - echo "Testing glab"
       - glab issue list
-      - echo "Running Argus"
+      - echo "Running OpenCorvus"
       - |
-        argus run "
+        opencorvus run "
         You are an AI assistant helping with GitLab operations.
 
         Context: $AI_FLOW_CONTEXT
@@ -158,10 +158,10 @@ Szczegółowe instrukcje w [dokumentacji agentów GitLab CLI](https://docs.gitla
 
 ### Przykłady
 
-Oto kilka możliwości wykorzystania argus w GitLabie.
+Oto kilka możliwości wykorzystania opencorvus w GitLabie.
 
 :::tip
-Można zastosować inną metodę ograniczającą niż `@argus`.
+Można zastosować inną metodę ograniczającą niż `@opencorvus`.
 :::
 
 - **Wyjaśnij problem**
@@ -169,27 +169,27 @@ Można zastosować inną metodę ograniczającą niż `@argus`.
   Dodaj dziesięć komentarzy w numerze GitLab.
 
   ```
-  @argus explain this issue
+  @opencorvus explain this issue
   ```
 
-  argus przeczytaj problem i odpowiedź z wyjaśnieniem.
+  opencorvus przeczytaj problem i odpowiedź z wyjaśnieniem.
 
 - **Napraw problem**
 
   W numerze GitLab powiedz:
 
   ```
-  @argus fix this
+  @opencorvus fix this
   ```
 
-  argus utworzy nową podstawę, zaimplementuje zmiany i spowoduje, że skalowanie będzie możliwe.
+  opencorvus utworzy nową podstawę, zaimplementuje zmiany i spowoduje, że skalowanie będzie możliwe.
 
 - **Przejrzyj prośby o połączenie**
 
   Zostaw komentarz w sprawie rozwiązania połączenia GitLab.
 
   ```
-  @argus review this merge request
+  @opencorvus review this merge request
   ```
 
-  argus sprawdzenie rozwiązania i przepuszczenie.
+  opencorvus sprawdzenie rozwiązania i przepuszczenie.

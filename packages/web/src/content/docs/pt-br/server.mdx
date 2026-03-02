@@ -1,19 +1,19 @@
 ---
 title: Servidor
-description: Interaja com o servidor argus via HTTP.
+description: Interaja com o servidor opencorvus via HTTP.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-O comando `argus serve` executa um servidor HTTP sem cabeça que expõe um endpoint OpenAPI que um cliente argus pode usar.
+O comando `opencorvus serve` executa um servidor HTTP sem cabeça que expõe um endpoint OpenAPI que um cliente opencorvus pode usar.
 
 ---
 
 ### Uso
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### Opções
@@ -23,38 +23,38 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | Porta para escutar                                | `4096`           |
 | `--hostname`    | Nome do host para escutar                         | `127.0.0.1`      |
 | `--mdns`        | Habilitar descoberta mDNS                         | `false`          |
-| `--mdns-domain` | Nome de domínio personalizado para o serviço mDNS | `argus.local` |
+| `--mdns-domain` | Nome de domínio personalizado para o serviço mDNS | `opencorvus.local` |
 | `--cors`        | Origens adicionais de navegador a permitir        | `[]`             |
 
 `--cors` pode ser passado várias vezes:
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### Autenticação
 
-Defina `OPENCODE_SERVER_PASSWORD` para proteger o servidor com autenticação básica HTTP. O nome de usuário padrão é `argus`, ou defina `OPENCODE_SERVER_USERNAME` para substituí-lo. Isso se aplica tanto ao `argus serve` quanto ao `argus web`.
+Defina `OPENCODE_SERVER_PASSWORD` para proteger o servidor com autenticação básica HTTP. O nome de usuário padrão é `opencorvus`, ou defina `OPENCODE_SERVER_USERNAME` para substituí-lo. Isso se aplica tanto ao `opencorvus serve` quanto ao `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### Como funciona
 
-Quando você executa `argus`, ele inicia um TUI e um servidor. Onde o TUI é o cliente que se comunica com o servidor. O servidor expõe um endpoint de especificação OpenAPI 3.1. Este endpoint também é usado para gerar um [SDK](/docs/sdk).
+Quando você executa `opencorvus`, ele inicia um TUI e um servidor. Onde o TUI é o cliente que se comunica com o servidor. O servidor expõe um endpoint de especificação OpenAPI 3.1. Este endpoint também é usado para gerar um [SDK](/docs/sdk).
 
 :::tip
-Use o servidor argus para interagir com o argus programaticamente.
+Use o servidor opencorvus para interagir com o opencorvus programaticamente.
 :::
 
-Essa arquitetura permite que o argus suporte múltiplos clientes e permite que você interaja com o argus programaticamente.
+Essa arquitetura permite que o opencorvus suporte múltiplos clientes e permite que você interaja com o opencorvus programaticamente.
 
-Você pode executar `argus serve` para iniciar um servidor autônomo. Se você tiver o TUI do argus em execução, `argus serve` iniciará um novo servidor.
+Você pode executar `opencorvus serve` para iniciar um servidor autônomo. Se você tiver o TUI do opencorvus em execução, `opencorvus serve` iniciará um novo servidor.
 
 ---
 
@@ -62,7 +62,7 @@ Você pode executar `argus serve` para iniciar um servidor autônomo. Se você t
 
 Quando você inicia o TUI, ele atribui aleatoriamente uma porta e um nome de host. Você pode passar os [flags](/docs/cli) `--hostname` e `--port`. Em seguida, use isso para se conectar ao seu servidor.
 
-O endpoint [`/tui`](#tui) pode ser usado para controlar o TUI através do servidor. Por exemplo, você pode preencher ou executar um prompt. Essa configuração é usada pelos plugins do argus [IDE](/docs/ide).
+O endpoint [`/tui`](#tui) pode ser usado para controlar o TUI através do servidor. Por exemplo, você pode preencher ou executar um prompt. Essa configuração é usada pelos plugins do opencorvus [IDE](/docs/ide).
 
 ---
 
@@ -80,7 +80,7 @@ Por exemplo, `http://localhost:4096/doc`. Use a especificação para gerar clien
 
 ## APIs
 
-O servidor argus expõe as seguintes APIs.
+O servidor opencorvus expõe as seguintes APIs.
 
 ---
 

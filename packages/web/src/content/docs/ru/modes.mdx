@@ -4,14 +4,14 @@ description: Различные режимы для разных случаев 
 ---
 
 :::caution
-Режимы теперь настраиваются с помощью опции `agent` в конфигурации argus.
+Режимы теперь настраиваются с помощью опции `agent` в конфигурации opencorvus.
 Опция `mode` устарела. [Подробнее ](/docs/agents).
 :::
 
-Режимы в argus позволяют настраивать поведение, инструменты и подсказки для различных вариантов использования.
+Режимы в opencorvus позволяют настраивать поведение, инструменты и подсказки для различных вариантов использования.
 
 Он имеет два встроенных режима: **сборка** и **планирование**. Вы можете настроить
-эти или настройте свои собственные через конфигурацию argus.
+эти или настройте свои собственные через конфигурацию opencorvus.
 
 Вы можете переключаться между режимами во время сеанса или настраивать их в своем файле конфигурации.
 
@@ -19,7 +19,7 @@ description: Различные режимы для разных случаев 
 
 ## Встроенный
 
-argus имеет два встроенных режима.
+opencorvus имеет два встроенных режима.
 
 ---
 
@@ -34,7 +34,7 @@ Build — это режим **по умолчанию** со всеми вклю
 Ограниченный режим, предназначенный для планирования и анализа. В режиме Plan по умолчанию отключены следующие инструменты:
 
 - `write` – невозможно создавать новые файлы.
-- `edit` – невозможно изменить существующие файлы, за исключением файлов, расположенных по адресу `.argus/plans/*.md`, для детализации самого плана.
+- `edit` – невозможно изменить существующие файлы, за исключением файлов, расположенных по адресу `.opencorvus/plans/*.md`, для детализации самого плана.
 - `patch` – невозможно применить исправления.
 - `bash` — невозможно выполнить shell-команды.
 
@@ -56,11 +56,11 @@ Build — это режим **по умолчанию** со всеми вклю
 
 ### Конфигурация JSON
 
-Настройте режимы в файле конфигурации `argus.json`:
+Настройте режимы в файле конфигурации `opencorvus.json`:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mode": {
     "build": {
       "model": "anthropic/claude-sonnet-4-20250514",
@@ -87,10 +87,10 @@ Build — это режим **по умолчанию** со всеми вклю
 
 Вы также можете определить режимы, используя файлы Markdown. Поместите их в:
 
-- Глобальный: `~/.config/argus/modes/`
-- Проект: `.argus/modes/`
+- Глобальный: `~/.config/opencorvus/modes/`
+- Проект: `.opencorvus/modes/`
 
-```markdown title="~/.config/argus/modes/review.md"
+```markdown title="~/.config/opencorvus/modes/review.md"
 ---
 model: anthropic/claude-sonnet-4-20250514
 temperature: 0.1
@@ -120,7 +120,7 @@ Provide constructive feedback without making direct changes.
 
 Используйте конфигурацию `model`, чтобы переопределить модель по умолчанию для этого режима. Полезно для использования разных моделей, оптимизированных под разные задачи. Например, более быстрая модель планирования и более эффективная модель реализации.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "plan": {
@@ -136,7 +136,7 @@ Provide constructive feedback without making direct changes.
 
 Управляйте случайностью и креативностью ответов ИИ с помощью конфигурации `temperature`. Более низкие значения делают ответы более целенаправленными и детерминированными, а более высокие значения повышают креативность и вариативность.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "plan": {
@@ -155,7 +155,7 @@ Provide constructive feedback without making direct changes.
 - **0,3–0,5**: сбалансированные ответы с некоторой креативностью, подходят для общих задач развития.
 - **0,6–1,0**: более творческие и разнообразные ответы, полезные для мозгового штурма и исследования.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "analyze": {
@@ -173,7 +173,7 @@ Provide constructive feedback without making direct changes.
 }
 ```
 
-Если температура не указана, argus использует значения по умолчанию для конкретной модели (обычно 0 для большинства моделей, 0,55 для моделей Qwen).
+Если температура не указана, opencorvus использует значения по умолчанию для конкретной модели (обычно 0 для большинства моделей, 0,55 для моделей Qwen).
 
 ---
 
@@ -181,7 +181,7 @@ Provide constructive feedback without making direct changes.
 
 Укажите собственный файл системных подсказок для этого режима с помощью конфигурации `prompt`. Файл подсказки должен содержать инструкции, специфичные для целей режима.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "review": {
@@ -192,7 +192,7 @@ Provide constructive feedback without making direct changes.
 ```
 
 Этот путь указан относительно того, где находится файл конфигурации. Так что это работает для
-как глобальная конфигурация argus, так и конфигурация конкретного проекта.
+как глобальная конфигурация opencorvus, так и конфигурация конкретного проекта.
 
 ---
 
@@ -247,9 +247,9 @@ Provide constructive feedback without making direct changes.
 
 ### Использование конфигурации JSON
 
-```json title="argus.json" {4-14}
+```json title="opencorvus.json" {4-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mode": {
     "docs": {
       "prompt": "{file:./prompts/documentation.txt}",
@@ -268,9 +268,9 @@ Provide constructive feedback without making direct changes.
 
 ### Использование файлов Markdown
 
-Создайте файлы режимов в `.argus/modes/` для режимов, специфичных для проекта, или в `~/.config/argus/modes/` для глобальных режимов:
+Создайте файлы режимов в `.opencorvus/modes/` для режимов, специфичных для проекта, или в `~/.config/opencorvus/modes/` для глобальных режимов:
 
-```markdown title=".argus/modes/debug.md"
+```markdown title=".opencorvus/modes/debug.md"
 ---
 temperature: 0.1
 tools:
@@ -294,7 +294,7 @@ Focus on:
 Do not make any changes to files. Only investigate and report.
 ```
 
-```markdown title="~/.config/argus/modes/refactor.md"
+```markdown title="~/.config/opencorvus/modes/refactor.md"
 ---
 model: anthropic/claude-sonnet-4-20250514
 temperature: 0.2

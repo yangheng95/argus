@@ -1,30 +1,30 @@
 ---
 title: CLI
-description: Argus CLI opcije i naredbe.
+description: OpenCorvus CLI opcije i naredbe.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-Argus CLI po defaultu pokreće [TUI](/docs/tui) kada se pokrene bez ikakvih argumenata.
+OpenCorvus CLI po defaultu pokreće [TUI](/docs/tui) kada se pokrene bez ikakvih argumenata.
 
 ```bash
-argus
+opencorvus
 ```
 
-Ali takođe prihvata naredbe kao što je dokumentovano na ovoj stranici. Ovo vam omogućava programsku interakciju sa Argus.
+Ali takođe prihvata naredbe kao što je dokumentovano na ovoj stranici. Ovo vam omogućava programsku interakciju sa OpenCorvus.
 
 ```bash
-argus run "Explain how closures work in JavaScript"
+opencorvus run "Explain how closures work in JavaScript"
 ```
 
 ---
 
 ### tui
 
-Pokrenite Argus terminalski korisnički interfejs.
+Pokrenite OpenCorvus terminalski korisnički interfejs.
 
 ```bash
-argus [project]
+opencorvus [project]
 ```
 
 #### Opcije
@@ -44,36 +44,36 @@ argus [project]
 
 ## Naredbe
 
-Argus CLI takođe ima sljedeće naredbe.
+OpenCorvus CLI takođe ima sljedeće naredbe.
 
 ---
 
 ### agent
 
-Upravljajte Argus agentima.
+Upravljajte OpenCorvus agentima.
 
 ```bash
-argus agent [command]
+opencorvus agent [command]
 ```
 
 ---
 
 ### attach
 
-Priključite terminal na već pokrenut Argus backend server pokrenut putem `serve` ili `web` naredbi.
+Priključite terminal na već pokrenut OpenCorvus backend server pokrenut putem `serve` ili `web` naredbi.
 
 ```bash
-argus attach [url]
+opencorvus attach [url]
 ```
 
-Ovo omogućava korištenje TUI-ja sa udaljenim Argus backend-om. Na primjer:
+Ovo omogućava korištenje TUI-ja sa udaljenim OpenCorvus backend-om. Na primjer:
 
 ```bash
 # Start the backend server for web/mobile access
-argus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 4096 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-argus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:4096
 ```
 
 #### Opcije
@@ -90,7 +90,7 @@ argus attach http://10.20.30.40:4096
 Kreirajte novog agenta s prilagođenom konfiguracijom.
 
 ```bash
-argus agent create
+opencorvus agent create
 ```
 
 Ova naredba će vas voditi kroz kreiranje novog agenta sa prilagođenim sistemskim promptom i konfiguracijom alata.
@@ -102,7 +102,7 @@ Ova naredba će vas voditi kroz kreiranje novog agenta sa prilagođenim sistemsk
 Navedite sve dostupne agente.
 
 ```bash
-argus agent list
+opencorvus agent list
 ```
 
 ---
@@ -112,20 +112,20 @@ argus agent list
 Naredba za upravljanje vjerodajnicama i prijavom za provajdere.
 
 ```bash
-argus auth [command]
+opencorvus auth [command]
 ```
 
 ---
 
 #### login
 
-Argus pokreće lista provajdera na [Models.dev](https://models.dev), tako da možete koristiti `argus auth login` da konfigurirate API ključeve za bilo kojeg provajdera kojeg želite koristiti. Ovo je pohranjeno u `~/.local/share/argus/auth.json`.
+OpenCorvus pokreće lista provajdera na [Models.dev](https://models.dev), tako da možete koristiti `opencorvus auth login` da konfigurirate API ključeve za bilo kojeg provajdera kojeg želite koristiti. Ovo je pohranjeno u `~/.local/share/opencorvus/auth.json`.
 
 ```bash
-argus auth login
+opencorvus auth login
 ```
 
-Kada se Argus pokrene, učitava dobavljače iz datoteke vjerodajnica. I ako postoje neki ključevi definirani u vašim okruženjima ili `.env` fajl u vašem projektu.
+Kada se OpenCorvus pokrene, učitava dobavljače iz datoteke vjerodajnica. I ako postoje neki ključevi definirani u vašim okruženjima ili `.env` fajl u vašem projektu.
 
 ---
 
@@ -134,13 +134,13 @@ Kada se Argus pokrene, učitava dobavljače iz datoteke vjerodajnica. I ako post
 Navodi sve autentifikovane dobavljače pohranjene u datoteci vjerodajnica.
 
 ```bash
-argus auth list
+opencorvus auth list
 ```
 
 Ili kratka verzija.
 
 ```bash
-argus auth ls
+opencorvus auth ls
 ```
 
 ---
@@ -150,7 +150,7 @@ argus auth ls
 Odjavljuje vas s provajdera tako što ga briše iz datoteke vjerodajnica.
 
 ```bash
-argus auth logout
+opencorvus auth logout
 ```
 
 ---
@@ -160,7 +160,7 @@ argus auth logout
 Upravljajte GitHub agentom za automatizaciju repozitorija.
 
 ```bash
-argus github [command]
+opencorvus github [command]
 ```
 
 ---
@@ -170,7 +170,7 @@ argus github [command]
 Instalirajte GitHub agenta u svoj repozitorij.
 
 ```bash
-argus github install
+opencorvus github install
 ```
 
 Ovo postavlja neophodni tok rada GitHub Actions i vodi vas kroz proces konfiguracije. [Saznajte više](/docs/github).
@@ -182,7 +182,7 @@ Ovo postavlja neophodni tok rada GitHub Actions i vodi vas kroz proces konfigura
 Pokrenite GitHub agent. Ovo se obično koristi u GitHub Actions.
 
 ```bash
-argus github run
+opencorvus github run
 ```
 
 ##### Opcije
@@ -199,7 +199,7 @@ argus github run
 Upravljajte Model Context Protocol (MCP) serverima.
 
 ```bash
-argus mcp [command]
+opencorvus mcp [command]
 ```
 
 ---
@@ -209,7 +209,7 @@ argus mcp [command]
 Dodajte MCP server svojoj konfiguraciji.
 
 ```bash
-argus mcp add
+opencorvus mcp add
 ```
 
 Ova naredba će vas voditi kroz dodavanje lokalnog ili udaljenog MCP servera.
@@ -221,13 +221,13 @@ Ova naredba će vas voditi kroz dodavanje lokalnog ili udaljenog MCP servera.
 Navedite sve konfigurirane MCP servere i njihov status veze.
 
 ```bash
-argus mcp list
+opencorvus mcp list
 ```
 
 Ili koristite kratku verziju.
 
 ```bash
-argus mcp ls
+opencorvus mcp ls
 ```
 
 ---
@@ -237,20 +237,20 @@ argus mcp ls
 Autentifikujte se sa MCP serverom koji je omogućen za OAuth.
 
 ```bash
-argus mcp auth [name]
+opencorvus mcp auth [name]
 ```
 
 Ako ne navedete ime servera, od vas će biti zatraženo da izaberete neki od dostupnih servera koji podržavaju OAuth.
 Također možete navesti servere koji podržavaju OAuth i njihov status autentifikacije.
 
 ```bash
-argus mcp auth list
+opencorvus mcp auth list
 ```
 
 Ili koristite kratku verziju.
 
 ```bash
-argus mcp auth ls
+opencorvus mcp auth ls
 ```
 
 ---
@@ -260,7 +260,7 @@ argus mcp auth ls
 Uklonite OAuth vjerodajnice za MCP server.
 
 ```bash
-argus mcp logout [name]
+opencorvus mcp logout [name]
 ```
 
 ---
@@ -270,7 +270,7 @@ argus mcp logout [name]
 Otklanjanje grešaka (debug) OAuth veze sa MCP serverom.
 
 ```bash
-argus mcp debug <name>
+opencorvus mcp debug <name>
 ```
 
 ---
@@ -280,7 +280,7 @@ argus mcp debug <name>
 Navedite sve dostupne modele konfiguriranih provajdera.
 
 ```bash
-argus models [provider]
+opencorvus models [provider]
 ```
 
 Ova naredba prikazuje sve modele dostupne kod vaših konfiguriranih provajdera u formatu `provider/model`.
@@ -288,7 +288,7 @@ Ovo je korisno za pronalaženje tačnog naziva modela za korištenje u [vašoj k
 Opciono možete proslijediti ID provajdera za filtriranje modela po tom dobavljaču.
 
 ```bash
-argus models anthropic
+opencorvus models anthropic
 ```
 
 #### Opcije
@@ -298,36 +298,36 @@ argus models anthropic
 | `--refresh` | Osvježite keš modela sa models.dev                                       |
 | `--verbose` | Koristite detaljniji izlaz modela (uključuje metapodatke poput troškova) |
 
-Koristite `--refresh` zastavicu da ažurirate keširanu listu modela. Ovo je korisno kada su novi modeli dodani provajderu i želite da ih vidite u Argus.
+Koristite `--refresh` zastavicu da ažurirate keširanu listu modela. Ovo je korisno kada su novi modeli dodani provajderu i želite da ih vidite u OpenCorvus.
 
 ```bash
-argus models --refresh
+opencorvus models --refresh
 ```
 
 ---
 
 ### run
 
-Pokrenite Argus u neinteraktivnom modu tako što ćete direktno proslijediti prompt.
+Pokrenite OpenCorvus u neinteraktivnom modu tako što ćete direktno proslijediti prompt.
 
 ```bash
-argus run [message..]
+opencorvus run [message..]
 ```
 
 Ovo je korisno za skriptiranje, automatizaciju ili kada želite brz odgovor bez pokretanja punog TUI-ja. Na primjer:
 
-```bash "argus run"
-argus run Explain the use of context in Go
+```bash "opencorvus run"
+opencorvus run Explain the use of context in Go
 ```
 
-Također možete priključiti pokrenutu `argus serve` instancu kako biste izbjegli vrijeme hladnog pokretanja MCP servera pri svakom pokretanju:
+Također možete priključiti pokrenutu `opencorvus serve` instancu kako biste izbjegli vrijeme hladnog pokretanja MCP servera pri svakom pokretanju:
 
 ```bash
 # Start a headless server in one terminal
-argus serve
+opencorvus serve
 
 # In another terminal, run commands that attach to it
-argus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
 ```
 
 #### Opcije
@@ -344,20 +344,20 @@ argus run --attach http://localhost:4096 "Explain async/await in JavaScript"
 | `--file`     | `-f`   | Fajlovi koje treba priložiti poruci                                      |
 | `--format`   |        | Format: default (formatiran) ili json (sirovi JSON događaji)             |
 | `--title`    |        | Naslov sesije (koristi skraćeni prompt ako nije navedena vrijednost)     |
-| `--attach`   |        | Priključite na pokrenuti Argus server (npr. http://localhost:4096)    |
+| `--attach`   |        | Priključite na pokrenuti OpenCorvus server (npr. http://localhost:4096)    |
 | `--port`     |        | Port za lokalni server (zadano na nasumični port)                        |
 
 ---
 
 ### serve
 
-Pokrenite Argus headless server za API pristup. Pogledajte [server docs](/docs/server) za kompletan HTTP interfejs.
+Pokrenite OpenCorvus headless server za API pristup. Pogledajte [server docs](/docs/server) za kompletan HTTP interfejs.
 
 ```bash
-argus serve
+opencorvus serve
 ```
 
-Ovo pokreće HTTP server koji pruža API pristup funkcionalnosti Argus-a bez TUI interfejsa. Postavite `OPENCODE_SERVER_PASSWORD` da omogućite HTTP osnovnu auth (korisničko ime je zadano na `argus`).
+Ovo pokreće HTTP server koji pruža API pristup funkcionalnosti OpenCorvus-a bez TUI interfejsa. Postavite `OPENCODE_SERVER_PASSWORD` da omogućite HTTP osnovnu auth (korisničko ime je zadano na `opencorvus`).
 
 #### Opcije
 
@@ -372,20 +372,20 @@ Ovo pokreće HTTP server koji pruža API pristup funkcionalnosti Argus-a bez TUI
 
 ### session
 
-Upravljajte Argus sesijama.
+Upravljajte OpenCorvus sesijama.
 
 ```bash
-argus session [command]
+opencorvus session [command]
 ```
 
 ---
 
 #### list
 
-Navedite sve Argus sesije.
+Navedite sve OpenCorvus sesije.
 
 ```bash
-argus session list
+opencorvus session list
 ```
 
 ##### Opcije
@@ -399,10 +399,10 @@ argus session list
 
 ### stats
 
-Prikaži statistiku upotrebe tokena i troškova za vaše Argus sesije.
+Prikaži statistiku upotrebe tokena i troškova za vaše OpenCorvus sesije.
 
 ```bash
-argus stats
+opencorvus stats
 ```
 
 #### Opcije
@@ -421,7 +421,7 @@ argus stats
 Izvezite podatke sesije kao JSON.
 
 ```bash
-argus export [sessionID]
+opencorvus export [sessionID]
 ```
 
 Ako ne unesete ID sesije, od vas će biti zatraženo da odaberete neku od dostupnih sesija.
@@ -430,30 +430,30 @@ Ako ne unesete ID sesije, od vas će biti zatraženo da odaberete neku od dostup
 
 ### import
 
-Uvezite podatke sesije iz JSON datoteke ili Argus dijeljenog URL-a.
+Uvezite podatke sesije iz JSON datoteke ili OpenCorvus dijeljenog URL-a.
 
 ```bash
-argus import <file>
+opencorvus import <file>
 ```
 
-Možete uvesti iz lokalne datoteke ili Argus dijeljenog URL-a.
+Možete uvesti iz lokalne datoteke ili OpenCorvus dijeljenog URL-a.
 
 ```bash
-argus import session.json
-argus import https://opncd.ai/s/abc123
+opencorvus import session.json
+opencorvus import https://opncd.ai/s/abc123
 ```
 
 ---
 
 ### web
 
-Pokrenite Argus headless server sa web interfejsom.
+Pokrenite OpenCorvus headless server sa web interfejsom.
 
 ```bash
-argus web
+opencorvus web
 ```
 
-Ovo pokreće HTTP server i otvara web pretraživač za pristup Argus-u preko web interfejsa. Postavite `OPENCODE_SERVER_PASSWORD` da omogućite HTTP osnovnu auth (korisničko ime je zadano na `argus`).
+Ovo pokreće HTTP server i otvara web pretraživač za pristup OpenCorvus-u preko web interfejsa. Postavite `OPENCODE_SERVER_PASSWORD` da omogućite HTTP osnovnu auth (korisničko ime je zadano na `opencorvus`).
 
 #### Opcije
 
@@ -471,7 +471,7 @@ Ovo pokreće HTTP server i otvara web pretraživač za pristup Argus-u preko web
 Pokrenite ACP (Agent Client Protocol) server.
 
 ```bash
-argus acp
+opencorvus acp
 ```
 
 Ova naredba pokreće ACP server koji komunicira preko stdin/stdout koristeći nd-JSON.
@@ -488,10 +488,10 @@ Ova naredba pokreće ACP server koji komunicira preko stdin/stdout koristeći nd
 
 ### uninstall
 
-Deinstalirajte Argus i uklonite sve povezane datoteke.
+Deinstalirajte OpenCorvus i uklonite sve povezane datoteke.
 
 ```bash
-argus uninstall
+opencorvus uninstall
 ```
 
 #### Opcije
@@ -507,22 +507,22 @@ argus uninstall
 
 ### upgrade
 
-Ažurira Argus na najnoviju verziju ili određenu verziju.
+Ažurira OpenCorvus na najnoviju verziju ili određenu verziju.
 
 ```bash
-argus upgrade [target]
+opencorvus upgrade [target]
 ```
 
 Za nadogradnju na najnoviju verziju.
 
 ```bash
-argus upgrade
+opencorvus upgrade
 ```
 
 Za nadogradnju na određenu verziju.
 
 ```bash
-argus upgrade v0.1.48
+opencorvus upgrade v0.1.48
 ```
 
 #### Opcije
@@ -535,7 +535,7 @@ argus upgrade v0.1.48
 
 ## Globalne opcije
 
-Argus CLI prihvata sljedeće globalne zastavice.
+OpenCorvus CLI prihvata sljedeće globalne zastavice.
 
 | Opcija         | Kratko | Opis                                      |
 | -------------- | ------ | ----------------------------------------- |
@@ -548,7 +548,7 @@ Argus CLI prihvata sljedeće globalne zastavice.
 
 ## Varijable okruženja
 
-Argus se može konfigurirati pomoću varijabli okruženja.
+OpenCorvus se može konfigurirati pomoću varijabli okruženja.
 
 | Varijabla                             | Tip     | Opis                                                               |
 | ------------------------------------- | ------- | ------------------------------------------------------------------ |
@@ -574,7 +574,7 @@ Argus se može konfigurirati pomoću varijabli okruženja.
 | `OPENCODE_CLIENT`                     | string  | Identifikator klijenta (zadano na `cli`)                           |
 | `OPENCODE_ENABLE_EXA`                 | boolean | Omogući Exa alate za web pretraživanje                             |
 | `OPENCODE_SERVER_PASSWORD`            | string  | Omogući osnovnu autentifikaciju za `serve`/`web`                   |
-| `OPENCODE_SERVER_USERNAME`            | string  | Poništi osnovno korisničko ime autentifikacije (zadano `argus`) |
+| `OPENCODE_SERVER_USERNAME`            | string  | Poništi osnovno korisničko ime autentifikacije (zadano `opencorvus`) |
 | `OPENCODE_MODELS_URL`                 | string  | Prilagođeni URL za dohvaćanje konfiguracije modela                 |
 
 ---

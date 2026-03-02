@@ -1,15 +1,15 @@
 ---
 title: Formatters
-description: Argus uses language specific formatters.
+description: OpenCorvus uses language specific formatters.
 ---
 
-Argus automatically formats files after they are written or edited using language-specific formatters. This ensures that the code that is generated follows the code styles of your project.
+OpenCorvus automatically formats files after they are written or edited using language-specific formatters. This ensures that the code that is generated follows the code styles of your project.
 
 ---
 
 ## Built-in
 
-Argus comes with several built-in formatters for popular languages and frameworks. Below is a list of the formatters, supported file extensions, and commands or config options it needs.
+OpenCorvus comes with several built-in formatters for popular languages and frameworks. Below is a list of the formatters, supported file extensions, and commands or config options it needs.
 
 | Formatter            | Extensions                                                                                               | Requirements                                                                                          |
 | -------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
@@ -40,13 +40,13 @@ Argus comes with several built-in formatters for popular languages and framework
 | uv                   | .py, .pyi                                                                                                | `uv` command available                                                                                |
 | zig                  | .zig, .zon                                                                                               | `zig` command available                                                                               |
 
-So if your project has `prettier` in your `package.json`, Argus will automatically use it.
+So if your project has `prettier` in your `package.json`, OpenCorvus will automatically use it.
 
 ---
 
 ## How it works
 
-When Argus writes or edits a file, it:
+When OpenCorvus writes or edits a file, it:
 
 1. Checks the file extension against all enabled formatters.
 2. Runs the appropriate formatter command on the file.
@@ -58,11 +58,11 @@ This process happens in the background, ensuring your code styles are maintained
 
 ## Configure
 
-You can customize formatters through the `formatter` section in your Argus config.
+You can customize formatters through the `formatter` section in your OpenCorvus config.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {}
 }
 ```
@@ -84,18 +84,18 @@ Let's look at some examples.
 
 To disable **all** formatters globally, set `formatter` to `false`:
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": false
 }
 ```
 
 To disable a **specific** formatter, set `disabled` to `true`:
 
-```json title="argus.json" {5}
+```json title="opencorvus.json" {5}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": true
@@ -110,9 +110,9 @@ To disable a **specific** formatter, set `disabled` to `true`:
 
 You can override the built-in formatters or add new ones by specifying the command, environment variables, and file extensions:
 
-```json title="argus.json" {4-14}
+```json title="opencorvus.json" {4-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],

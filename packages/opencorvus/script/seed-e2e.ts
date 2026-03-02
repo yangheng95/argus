@@ -1,9 +1,9 @@
-const dir = process.env.ARGUS_E2E_PROJECT_DIR ?? process.cwd()
-const title = process.env.ARGUS_E2E_SESSION_TITLE ?? "E2E Session"
-const text = process.env.ARGUS_E2E_MESSAGE ?? "Seeded for UI e2e"
-const model = process.env.ARGUS_E2E_MODEL ?? "argus/gpt-5-nano"
+const dir = process.env.OPENCORVUS_E2E_PROJECT_DIR ?? process.cwd()
+const title = process.env.OPENCORVUS_E2E_SESSION_TITLE ?? "E2E Session"
+const text = process.env.OPENCORVUS_E2E_MESSAGE ?? "Seeded for UI e2e"
+const model = process.env.OPENCORVUS_E2E_MODEL ?? "opencorvus/gpt-5-nano"
 const parts = model.split("/")
-const providerID = parts[0] ?? "argus"
+const providerID = parts[0] ?? "opencorvus"
 const modelID = parts[1] ?? "gpt-5-nano"
 const now = Date.now()
 

@@ -28,10 +28,10 @@ jobs:
       - uses: ./.github/actions/setup-bun
 
       - name: Run OpenCorvus
-        uses: yangheng95/argus/github@latest
+        uses: yangheng95/opencorvus/github@latest
         env:
           DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
-          ARGUS_CONFIG_CONTENT: '{"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
+          OPENCORVUS_CONFIG_CONTENT: '{"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
           OPENCORVUS_PERMISSION: '{"bash": "deny"}'
           OPENCODE_PERMISSION: '{"bash": "deny"}'
         with:

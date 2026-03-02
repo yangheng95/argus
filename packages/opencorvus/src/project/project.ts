@@ -100,7 +100,7 @@ export namespace Project {
         const gitBinary = Bun.which("git")
 
         // cached id calculation
-        let id = await Filesystem.readText(path.join(dotgit, "argus"))
+        let id = await Filesystem.readText(path.join(dotgit, "opencorvus"))
           .then((x) => x.trim())
           .catch(() => undefined)
 
@@ -109,7 +109,7 @@ export namespace Project {
             id: id ?? "global",
             worktree: sandbox,
             sandbox: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.ARGUS_FAKE_VCS),
+            vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
           }
         }
 
@@ -132,13 +132,13 @@ export namespace Project {
               id: "global",
               worktree: sandbox,
               sandbox: sandbox,
-              vcs: Info.shape.vcs.parse(Flag.ARGUS_FAKE_VCS),
+              vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
             }
           }
 
           id = roots[0]
           if (id) {
-            await Filesystem.write(path.join(dotgit, "argus"), id).catch(() => undefined)
+            await Filesystem.write(path.join(dotgit, "opencorvus"), id).catch(() => undefined)
           }
         }
 
@@ -162,7 +162,7 @@ export namespace Project {
             id,
             sandbox,
             worktree: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.ARGUS_FAKE_VCS),
+            vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
           }
         }
 
@@ -183,7 +183,7 @@ export namespace Project {
             id,
             sandbox,
             worktree: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.ARGUS_FAKE_VCS),
+            vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
           }
         }
 
@@ -199,7 +199,7 @@ export namespace Project {
         id: "global",
         worktree: "/",
         sandbox: "/",
-        vcs: Info.shape.vcs.parse(Flag.ARGUS_FAKE_VCS),
+        vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
       }
     })
 
@@ -222,7 +222,7 @@ export namespace Project {
       return fresh
     })
 
-    if (Flag.ARGUS_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
+    if (Flag.OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY) discover(existing)
 
     const result: Info = {
       ...existing,

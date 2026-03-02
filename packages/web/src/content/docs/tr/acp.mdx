@@ -1,9 +1,9 @@
 ---
 title: ACP Desteği
-description: argus'u ACP uyumlu herhangi bir editörde kullanın.
+description: opencorvus'u ACP uyumlu herhangi bir editörde kullanın.
 ---
 
-argus, [Agent Client Protocol](https://agentclientprotocol.com) veya (ACP) dosyalarını destekleyerek onu doğrudan uyumlu editörlerde ve IDE'lerde kullanmanızı sağlar.
+opencorvus, [Agent Client Protocol](https://agentclientprotocol.com) veya (ACP) dosyalarını destekleyerek onu doğrudan uyumlu editörlerde ve IDE'lerde kullanmanızı sağlar.
 
 :::tip
 ACP'yi destekleyen editörlerin ve araçların listesi için [ACP progress report](https://zed.dev/blog/acp-progress-report#available-now)'e bakın.
@@ -15,9 +15,9 @@ ACP, kod editörleri ile AI kodlama ajanları arasındaki iletişimi standartla�
 
 ## Yapılandırma
 
-argus'u ACP aracılığıyla kullanmak için düzenleyicinizi `argus acp` komutunu çalıştıracak şekilde yapılandırın.
+opencorvus'u ACP aracılığıyla kullanmak için düzenleyicinizi `opencorvus acp` komutunu çalıştıracak şekilde yapılandırın.
 
-Komut, argus'u, editörünüzle stdio aracılığıyla JSON-RPC üzerinden iletişim kuran ACP uyumlu bir alt süreç olarak başlatır.
+Komut, opencorvus'u, editörünüzle stdio aracılığıyla JSON-RPC üzerinden iletişim kuran ACP uyumlu bir alt süreç olarak başlatır.
 
 Aşağıda ACP'yi destekleyen popüler düzenleyicilere ilişkin örnekler verilmiştir.
 
@@ -30,8 +30,8 @@ Aşağıda ACP'yi destekleyen popüler düzenleyicilere ilişkin örnekler veril
 ```json title="~/.config/zed/settings.json"
 {
   "agent_servers": {
-    "Argus": {
-      "command": "argus",
+    "OpenCorvus": {
+      "command": "opencorvus",
       "args": ["acp"]
     }
   }
@@ -51,9 +51,9 @@ Açmak için **Komut Paleti**'ndeki `agent: new thread` eylemini kullanın.
         {
           "agent": {
             "custom": {
-              "name": "Argus",
+              "name": "OpenCorvus",
               "command": {
-                "command": "argus",
+                "command": "opencorvus",
                 "args": ["acp"]
               }
             }
@@ -74,15 +74,15 @@ Açmak için **Komut Paleti**'ndeki `agent: new thread` eylemini kullanın.
 ```json title="acp.json"
 {
   "agent_servers": {
-    "Argus": {
-      "command": "/absolute/path/bin/argus",
+    "OpenCorvus": {
+      "command": "/absolute/path/bin/opencorvus",
       "args": ["acp"]
     }
   }
 }
 ```
 
-Açmak için AI Chat agent seçicisindeki yeni 'Argus' ajanını kullanın.
+Açmak için AI Chat agent seçicisindeki yeni 'OpenCorvus' ajanını kullanın.
 
 ---
 
@@ -93,8 +93,8 @@ Açmak için AI Chat agent seçicisindeki yeni 'Argus' ajanını kullanın.
 ```lua
 {
   acp_providers = {
-    ["argus"] = {
-      command = "argus",
+    ["opencorvus"] = {
+      command = "opencorvus",
       args = { "acp" }
     }
   }
@@ -106,8 +106,8 @@ Ortam değişkenlerini iletmeniz gerekiyor:
 ```lua {6-8}
 {
   acp_providers = {
-    ["argus"] = {
-      command = "argus",
+    ["opencorvus"] = {
+      command = "opencorvus",
       args = { "acp" },
       env = {
         OPENCODE_API_KEY = os.getenv("OPENCODE_API_KEY")
@@ -121,14 +121,14 @@ Ortam değişkenlerini iletmeniz gerekiyor:
 
 ### CodeCompanion.nvim
 
-argus'u [CodeCompanion.nvim](https://github.com/olimorris/codecompanion.nvim)'de ACP ajanı olarak kullanmak için Neovim yapılandırmanıza aşağıdakileri ekleyin:
+opencorvus'u [CodeCompanion.nvim](https://github.com/olimorris/codecompanion.nvim)'de ACP ajanı olarak kullanmak için Neovim yapılandırmanıza aşağıdakileri ekleyin:
 
 ```lua
 require("codecompanion").setup({
   interactions = {
     chat = {
       adapter = {
-        name = "argus",
+        name = "opencorvus",
         model = "claude-sonnet-4",
       },
     },
@@ -136,13 +136,13 @@ require("codecompanion").setup({
 })
 ```
 
-Bu yapılandırma, CodeCompanion'ı argus'u sohbet için ACP ajanı olarak kullanacak şekilde ayarlar.
+Bu yapılandırma, CodeCompanion'ı opencorvus'u sohbet için ACP ajanı olarak kullanacak şekilde ayarlar.
 
 Ortam değişkenlerini (`OPENCODE_API_KEY` gibi) iletmeniz gerekiyorsa, tüm ayrıntılar için CodeCompanion.nvim belgelerindeki [Configuring Adapters: Environment Variables](https://codecompanion.olimorris.dev/getting-started#setting-an-api-key)'ye bakın.
 
 ## Destek
 
-argus, terminalde olduğu gibi ACP aracılığıyla aynı şekilde çalışır. Tüm özellikler desteklenir:
+opencorvus, terminalde olduğu gibi ACP aracılığıyla aynı şekilde çalışır. Tüm özellikler desteklenir:
 
 :::note
 `/undo` ve `/redo` gibi bazı yerleşik slash komutları şu anda desteklenmemektedir.
@@ -150,7 +150,7 @@ argus, terminalde olduğu gibi ACP aracılığıyla aynı şekilde çalışır. 
 
 - Yerleşik araçlar (dosya işlemleri, terminal komutları vb.)
 - Özel araçlar ve slash komutları
-- argus yapılandırmanızda yapılandırılmış MCP sunucuları
+- opencorvus yapılandırmanızda yapılandırılmış MCP sunucuları
 - `AGENTS.md`'dan projeye özel kurallar
 - Özel biçimlendiriciler ve linter'lar
 - Aracılar ve izin sistemi

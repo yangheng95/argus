@@ -85,7 +85,7 @@ export namespace Shell {
 
   function fallback() {
     if (process.platform === "win32") {
-      const bash = firstExisting([Flag.ARGUS_GIT_BASH_PATH, ...gitBashCandidates()])
+      const bash = firstExisting([Flag.OPENCORVUS_GIT_BASH_PATH, ...gitBashCandidates()])
       if (bash) return bash
       return process.env.COMSPEC || "cmd.exe"
     }

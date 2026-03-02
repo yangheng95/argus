@@ -220,7 +220,7 @@ function normalizePath(input?: string) {
 
 export const RunCommand = cmd({
   command: "run [message..]",
-  describe: "run argus with a message",
+  describe: "run opencorvus with a message",
   builder: (yargs: Argv) => {
     return yargs
       .positional("message", {
@@ -278,7 +278,7 @@ export const RunCommand = cmd({
       })
       .option("attach", {
         type: "string",
-        describe: "attach to a running argus server (e.g., http://localhost:4096)",
+        describe: "attach to a running opencorvus server (e.g., http://localhost:4096)",
       })
       .option("dir", {
         type: "string",
@@ -381,7 +381,7 @@ export const RunCommand = cmd({
     async function share(sdk: OpencodeClient, sessionID: string) {
       const cfg = await sdk.config.get()
       if (!cfg.data) return
-      if (cfg.data.share !== "auto" && !Flag.ARGUS_AUTO_SHARE && !args.share) return
+      if (cfg.data.share !== "auto" && !Flag.OPENCORVUS_AUTO_SHARE && !args.share) return
       const res = await sdk.session.share({ sessionID }).catch((error) => {
         if (error instanceof Error && error.message.includes("disabled")) {
           UI.println(UI.Style.TEXT_DANGER_BOLD + "!  " + error.message)
@@ -608,7 +608,7 @@ export const RunCommand = cmd({
         const request = new Request(input, init)
         return Server.App().fetch(request)
       }) as typeof globalThis.fetch
-      const sdk = createOpencodeClient({ baseUrl: "http://argus.internal", fetch: fetchFn })
+      const sdk = createOpencodeClient({ baseUrl: "http://opencorvus.internal", fetch: fetchFn })
       await execute(sdk)
     })
   },

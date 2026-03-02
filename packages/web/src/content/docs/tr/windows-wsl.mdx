@@ -1,14 +1,14 @@
 ---
 title: Windows (WSL)
-description: En iyi deneyim icin argus'u WSL'de calistirin.
+description: En iyi deneyim icin opencorvus'u WSL'de calistirin.
 ---
 
 import { Steps } from "@astrojs/starlight/components"
 
-argus Windows'ta dogrudan calisabilir, ancak en iyi deneyim icin [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install) kullanmanizi oneriyoruz. WSL, argus ozellikleriyle sorunsuz calisan bir Linux ortami saglar.
+opencorvus Windows'ta dogrudan calisabilir, ancak en iyi deneyim icin [Windows Subsystem for Linux (WSL)](https://learn.microsoft.com/en-us/windows/wsl/install) kullanmanizi oneriyoruz. WSL, opencorvus ozellikleriyle sorunsuz calisan bir Linux ortami saglar.
 
 :::tip[Neden WSL?]
-WSL, daha iyi dosya sistemi performansi, tam terminal destegi ve argus'un dayandigi gelistirme araclariyla uyumluluk sunar.
+WSL, daha iyi dosya sistemi performansi, tam terminal destegi ve opencorvus'un dayandigi gelistirme araclariyla uyumluluk sunar.
 :::
 
 ---
@@ -21,21 +21,21 @@ WSL, daha iyi dosya sistemi performansi, tam terminal destegi ve argus'un dayand
 
    Henuz yuklemediyseniz resmi Microsoft rehberini kullanarak [WSL kurulumunu](https://learn.microsoft.com/en-us/windows/wsl/install) yapin.
 
-2. **argus'u WSL icine yukleyin**
+2. **opencorvus'u WSL icine yukleyin**
 
-   WSL hazir olduktan sonra WSL terminalini acin ve argus'u [kurulum yontemlerinden](/docs/) biriyle yukleyin.
+   WSL hazir olduktan sonra WSL terminalini acin ve opencorvus'u [kurulum yontemlerinden](/docs/) biriyle yukleyin.
 
    ```bash
-   curl -fsSL https://argus.ai/install | bash
+   curl -fsSL https://opencorvus.ai/install | bash
    ```
 
-3. **argus'u WSL icinden kullanin**
+3. **opencorvus'u WSL icinden kullanin**
 
-   Proje dizininize gidin (`/mnt/c/`, `/mnt/d/` vb. ile Windows dosyalarina erisebilirsiniz) ve argus'u calistirin.
+   Proje dizininize gidin (`/mnt/c/`, `/mnt/d/` vb. ile Windows dosyalarina erisebilirsiniz) ve opencorvus'u calistirin.
 
    ```bash
    cd /mnt/c/Users/YourName/project
-   argus
+   opencorvus
    ```
 
 </Steps>
@@ -44,12 +44,12 @@ WSL, daha iyi dosya sistemi performansi, tam terminal destegi ve argus'un dayand
 
 ## Masaüstü uygulaması + WSL sunucusu
 
-argus Desktop kullanmak isteyip sunucuyu WSL'de calistirmak istiyorsaniz:
+opencorvus Desktop kullanmak isteyip sunucuyu WSL'de calistirmak istiyorsaniz:
 
 1. **Sunucuyu WSL'de baslatin** ve dis baglantilara izin vermek icin `--hostname 0.0.0.0` kullanin:
 
    ```bash
-   argus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 4096
    ```
 
 2. **Desktop uygulamasini** `http://localhost:4096` adresine baglayin
@@ -62,7 +62,7 @@ Kurulumunuzda `localhost` calismiyorsa bunun yerine WSL IP adresini kullanin (WS
 `--hostname 0.0.0.0` kullaniyorsaniz sunucuyu guvene almak icin `OPENCODE_SERVER_PASSWORD` ayarlayin.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve --hostname 0.0.0.0
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve --hostname 0.0.0.0
 ```
 
 :::
@@ -73,15 +73,15 @@ OPENCODE_SERVER_PASSWORD=your-password argus serve --hostname 0.0.0.0
 
 Windows'ta en iyi web deneyimi icin:
 
-1. **`argus web` komutunu PowerShell yerine WSL terminalinde calistirin**:
+1. **`opencorvus web` komutunu PowerShell yerine WSL terminalinde calistirin**:
 
    ```bash
-   argus web --hostname 0.0.0.0
+   opencorvus web --hostname 0.0.0.0
    ```
 
-2. **Windows tarayicinizdan** `http://localhost:<port>` adresini acin (argus URL'yi yazdirir)
+2. **Windows tarayicinizdan** `http://localhost:<port>` adresini acin (opencorvus URL'yi yazdirir)
 
-`argus web` komutunu WSL'den calistirmak, dosya sistemi erisimi ve terminal entegrasyonunu daha tutarli hale getirirken tarayicidan erisimi korur.
+`opencorvus web` komutunu WSL'den calistirmak, dosya sistemi erisimi ve terminal entegrasyonunu daha tutarli hale getirirken tarayicidan erisimi korur.
 
 ---
 
@@ -97,17 +97,17 @@ Ornek:
 
 ```bash
 cd /mnt/c/Users/YourName/Documents/project
-argus
+opencorvus
 ```
 
 :::tip
-En sorunsuz deneyim icin deponuzu WSL dosya sistemine (ornegin `~/code/` altina) klonlayip argus'u orada calistirmayi dusunun.
+En sorunsuz deneyim icin deponuzu WSL dosya sistemine (ornegin `~/code/` altina) klonlayip opencorvus'u orada calistirmayi dusunun.
 :::
 
 ---
 
 ## İpuçları
 
-- Windows suruculerinde duran projelerde argus'u WSL icinde calistirin - dosya erisimi daha sorunsuz olur
-- Butunlesik bir gelistirme akisi icin argus ile birlikte VS Code [WSL eklentisini](https://code.visualstudio.com/docs/remote/wsl) kullanin
-- argus konfigurasyonunuz ve oturumlariniz WSL ortaminda `~/.local/share/argus/` konumunda saklanir
+- Windows suruculerinde duran projelerde opencorvus'u WSL icinde calistirin - dosya erisimi daha sorunsuz olur
+- Butunlesik bir gelistirme akisi icin opencorvus ile birlikte VS Code [WSL eklentisini](https://code.visualstudio.com/docs/remote/wsl) kullanin
+- opencorvus konfigurasyonunuz ve oturumlariniz WSL ortaminda `~/.local/share/opencorvus/` konumunda saklanir

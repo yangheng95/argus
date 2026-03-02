@@ -5,9 +5,9 @@ import { IconArrowDown } from "./icons"
 import { IconOpencode } from "./icons/custom"
 import { ShareI18nProvider, formatCurrency, formatNumber, normalizeLocale } from "./share/common"
 import styles from "./share.module.css"
-import type { MessageV2 } from "argus/session/message"
-import type { Message } from "argus/session/message-v1"
-import type { Session } from "argus/session/index"
+import type { MessageV2 } from "opencorvus/session/message"
+import type { Message } from "opencorvus/session/message-v1"
+import type { Session } from "opencorvus/session/index"
 import { Part, ProviderIcon } from "./share/part"
 
 type MessageWithParts = MessageV2.Info & { parts: MessageV2.Part[] }
@@ -303,8 +303,8 @@ export default function Share(props: {
             <h1 data-component="header-title">{store.info?.title}</h1>
             <div data-component="header-details">
               <ul data-component="header-stats">
-                <li title={props.messages.argus_version} data-slot="item">
-                  <div data-slot="icon" title={props.messages.argus_name}>
+                <li title={props.messages.opencorvus_version} data-slot="item">
+                  <div data-slot="icon" title={props.messages.opencorvus_name}>
                     <IconOpencode width={16} height={16} />
                   </div>
                   <Show when={store.info?.version} fallback="v0.0.1">

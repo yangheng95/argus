@@ -78,8 +78,8 @@ describe("Project.fromDirectory", () => {
     expect(project.vcs).toBe("git")
     expect(project.worktree).toBe(tmp.path)
 
-    const argusFile = path.join(tmp.path, ".git", "argus")
-    const fileExists = await Filesystem.exists(argusFile)
+    const opencorvusFile = path.join(tmp.path, ".git", "opencorvus")
+    const fileExists = await Filesystem.exists(opencorvusFile)
     expect(fileExists).toBe(false)
   })
 
@@ -94,8 +94,8 @@ describe("Project.fromDirectory", () => {
     expect(project.vcs).toBe("git")
     expect(project.worktree).toBe(tmp.path)
 
-    const argusFile = path.join(tmp.path, ".git", "argus")
-    const fileExists = await Filesystem.exists(argusFile)
+    const opencorvusFile = path.join(tmp.path, ".git", "opencorvus")
+    const fileExists = await Filesystem.exists(opencorvusFile)
     expect(fileExists).toBe(true)
   })
 

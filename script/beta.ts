@@ -60,9 +60,9 @@ async function fix(pr: PR, files: string[]) {
   ].join("\n")
 
   try {
-    await $`argus run -m alibaba-cn/qwen3.5-plus ${prompt}`
+    await $`opencorvus run -m alibaba-cn/qwen3.5-plus ${prompt}`
   } catch (err) {
-    console.log(`  argus failed: ${err}`)
+    console.log(`  opencorvus failed: ${err}`)
     return false
   }
 
@@ -72,7 +72,7 @@ async function fix(pr: PR, files: string[]) {
     return false
   }
 
-  console.log("  Conflicts resolved with argus")
+  console.log("  Conflicts resolved with opencorvus")
   return true
 }
 

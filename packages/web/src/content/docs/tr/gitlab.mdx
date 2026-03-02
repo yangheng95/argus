@@ -1,68 +1,68 @@
 ---
 title: GitLab
-description: GitLab sorunlarında ve birleştirme isteklerinde argus'u kullanın.
+description: GitLab sorunlarında ve birleştirme isteklerinde opencorvus'u kullanın.
 ---
 
-argus, GitLab CI/CD işlem hattınız veya GitLab Duo aracılığıyla GitLab iş akışınızla bütünleşir.
+opencorvus, GitLab CI/CD işlem hattınız veya GitLab Duo aracılığıyla GitLab iş akışınızla bütünleşir.
 
-Her iki durumda da argus, GitLab çalıştırıcılarınızda çalışacaktır.
+Her iki durumda da opencorvus, GitLab çalıştırıcılarınızda çalışacaktır.
 
 ---
 
 ## GitLab CI
 
-argus normal bir GitLab işlem hattında çalışır. Bunu bir [CI component](https://docs.gitlab.com/ee/ci/components/) olarak bir işlem hattına oluşturabilirsiniz.
+opencorvus normal bir GitLab işlem hattında çalışır. Bunu bir [CI component](https://docs.gitlab.com/ee/ci/components/) olarak bir işlem hattına oluşturabilirsiniz.
 
-Burada argus için topluluk tarafından oluşturulan bir CI/CD bileşeni kullanıyoruz — [nagyv/gitlab-argus](https://gitlab.com/nagyv/gitlab-argus).
+Burada opencorvus için topluluk tarafından oluşturulan bir CI/CD bileşeni kullanıyoruz — [nagyv/gitlab-opencorvus](https://gitlab.com/nagyv/gitlab-opencorvus).
 
 ---
 
 ### Özellikler
 
-- **İş başına özel işlemleri kullanın**: argus parçalarının kullanıma veya devre dışı bırakmak için argus'u özel bir yapılandırma dizini ile yapılandırın; örneğin `./config/#custom-directory`.
-- **Minimum kurulum**: CI bileşeni argus'u arka planda kurar; yalnızca argus yapılandırmasını ve ilk istemi oluşturmanız gerekir.
+- **İş başına özel işlemleri kullanın**: opencorvus parçalarının kullanıma veya devre dışı bırakmak için opencorvus'u özel bir yapılandırma dizini ile yapılandırın; örneğin `./config/#custom-directory`.
+- **Minimum kurulum**: CI bileşeni opencorvus'u arka planda kurar; yalnızca opencorvus yapılandırmasını ve ilk istemi oluşturmanız gerekir.
 - **Esnek**: CI bileşeni, davranışını özelleştirmek için çeşitli girişleri destekler
 
 ---
 
 ### Kurulum
 
-1. argus kimlik doğrulamanızı JSON **Ayarlar** > **CI/CD** > **Değişkenler** altında Dosya türü CI ortam değişkenleri olarak saklayın. Bunları "Maskeli ve gizli" olarak işaretlediğinizden emin olun.
+1. opencorvus kimlik doğrulamanızı JSON **Ayarlar** > **CI/CD** > **Değişkenler** altında Dosya türü CI ortam değişkenleri olarak saklayın. Bunları "Maskeli ve gizli" olarak işaretlediğinizden emin olun.
 2. Aşağıdakileri `.gitlab-ci.yml` dosyanıza ekleyin.
 
    ```yaml title=".gitlab-ci.yml"
    include:
-     - component: $CI_SERVER_FQDN/nagyv/gitlab-argus/argus@2
+     - component: $CI_SERVER_FQDN/nagyv/gitlab-opencorvus/opencorvus@2
        inputs:
-         config_dir: ${CI_PROJECT_DIR}/argus-config
-         auth_json: $OPENCODE_AUTH_JSON # The variable name for your Argus authentication JSON
+         config_dir: ${CI_PROJECT_DIR}/opencorvus-config
+         auth_json: $OPENCODE_AUTH_JSON # The variable name for your OpenCorvus authentication JSON
          command: optional-custom-command
          message: "Your prompt here"
    ```
 
-Daha fazla girdi ve bu bileşene yönelik kullanım durumları için [check out the docs](https://gitlab.com/explore/catalog/nagyv/gitlab-argus).
+Daha fazla girdi ve bu bileşene yönelik kullanım durumları için [check out the docs](https://gitlab.com/explore/catalog/nagyv/gitlab-opencorvus).
 
 ---
 
 ## GitLab Duo
 
-argus, GitLab iş akışınızla bütünleşir.
-Bir yorumda `@argus`'dan bahsedin; argus, GitLab CI işlem hattınızdaki görevleri yürütecektir.
+opencorvus, GitLab iş akışınızla bütünleşir.
+Bir yorumda `@opencorvus`'dan bahsedin; opencorvus, GitLab CI işlem hattınızdaki görevleri yürütecektir.
 
 ---
 
 ### Özellikler
 
-- **Sorunları önceliklendirin**: argus'dan bir sorunu araştırıp size açıklamasını isteyin.
-- **Düzelt ve uygula**: argus'dan bir sorunu düzeltmesini veya bir özelliği uygulamasını isteyin.
+- **Sorunları önceliklendirin**: opencorvus'dan bir sorunu araştırıp size açıklamasını isteyin.
+- **Düzelt ve uygula**: opencorvus'dan bir sorunu düzeltmesini veya bir özelliği uygulamasını isteyin.
   Yeni bir dal oluşturacak ve değişikliklerle birlikte bir birleştirme isteği oluşturacaktır.
-- **Güvenli**: argus, GitLab çalıştırıcılarınızda çalışır.
+- **Güvenli**: opencorvus, GitLab çalıştırıcılarınızda çalışır.
 
 ---
 
 ### Yapılandırma
 
-argus, GitLab CI/CD işlem hattınızda çalışır; bunu ayarlamak için ihtiyacınız olacaklar:
+opencorvus, GitLab CI/CD işlem hattınızda çalışır; bunu ayarlamak için ihtiyacınız olacaklar:
 
 :::tip
 Güncel talimatlar için [**GitLab docs**](https://docs.gitlab.com/user/duo_agent_platform/agent_assistant/)'a göz atın.
@@ -82,8 +82,8 @@ Güncel talimatlar için [**GitLab docs**](https://docs.gitlab.com/user/duo_agen
     ```yaml
     image: node:22-slim
     commands:
-      - echo "Installing argus"
-      - npm install --global argus-ai
+      - echo "Installing opencorvus"
+      - npm install --global opencorvus-ai
       - echo "Installing glab"
       - export GITLAB_TOKEN=$GITLAB_TOKEN_OPENCODE
       - apt-get update --quiet && apt-get install --yes curl wget gpg git && rm --recursive --force /var/lib/apt/lists/*
@@ -91,10 +91,10 @@ Güncel talimatlar için [**GitLab docs**](https://docs.gitlab.com/user/duo_agen
       - apt-get install --yes glab
       - echo "Configuring glab"
       - echo $GITLAB_HOST
-      - echo "Creating Argus auth configuration"
-      - mkdir --parents ~/.local/share/argus
+      - echo "Creating OpenCorvus auth configuration"
+      - mkdir --parents ~/.local/share/opencorvus
       - |
-        cat > ~/.local/share/argus/auth.json << EOF
+        cat > ~/.local/share/opencorvus/auth.json << EOF
         {
           "anthropic": {
             "type": "api",
@@ -103,13 +103,13 @@ Güncel talimatlar için [**GitLab docs**](https://docs.gitlab.com/user/duo_agen
         }
         EOF
       - echo "Configuring git"
-      - git config --global user.email "argus@gitlab.com"
-      - git config --global user.name "Argus"
+      - git config --global user.email "opencorvus@gitlab.com"
+      - git config --global user.name "OpenCorvus"
       - echo "Testing glab"
       - glab issue list
-      - echo "Running Argus"
+      - echo "Running OpenCorvus"
       - |
-        argus run "
+        opencorvus run "
         You are an AI assistant helping with GitLab operations.
 
         Context: $AI_FLOW_CONTEXT
@@ -158,10 +158,10 @@ Ayrıntılı talimatlar için [GitLab CLI agents docs](https://docs.gitlab.com/u
 
 ### Örnekler
 
-GitLab'da argus'u nasıl kullanabileceğinize dair bazı örnekleri burada bulabilirsiniz.
+GitLab'da opencorvus'u nasıl kullanabileceğinize dair bazı örnekleri burada bulabilirsiniz.
 
 :::tip
-`@argus`'dan farklı bir tetikleyici ifade kullanacak şekilde yapılandırabilirsiniz.
+`@opencorvus`'dan farklı bir tetikleyici ifade kullanacak şekilde yapılandırabilirsiniz.
 :::
 
 - **Bir sorunu açıklama**
@@ -169,27 +169,27 @@ GitLab'da argus'u nasıl kullanabileceğinize dair bazı örnekleri burada bulab
   Bu yorumu bir GitLab sayısına ekleyin.
 
   ```
-  @argus explain this issue
+  @opencorvus explain this issue
   ```
 
-  argus konuyu okuyacak ve net bir açıklama ile yanıt verecektir.
+  opencorvus konuyu okuyacak ve net bir açıklama ile yanıt verecektir.
 
 - **Bir sorunu düzeltme**
 
   In a GitLab issue, say:
 
   ```
-  @argus fix this
+  @opencorvus fix this
   ```
 
-  argus yeni bir dal oluşturacak, değişiklikleri uygulayacak ve değişiklikleri içeren bir birleştirme isteği açacaktır.
+  opencorvus yeni bir dal oluşturacak, değişiklikleri uygulayacak ve değişiklikleri içeren bir birleştirme isteği açacaktır.
 
 - **Birleştirme isteklerini inceleme**
 
   GitLab birleştirme isteğine aşağıdaki yorumu bırakın.
 
   ```
-  @argus review this merge request
+  @opencorvus review this merge request
   ```
 
-  argus, birleştirme isteğini inceleyecek ve geri bildirim sağlayacaktır.
+  opencorvus, birleştirme isteğini inceleyecek ve geri bildirim sağlayacaktır.

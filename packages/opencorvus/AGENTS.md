@@ -1,4 +1,4 @@
-# argus database guide
+# opencorvus database guide
 
 ## Database
 

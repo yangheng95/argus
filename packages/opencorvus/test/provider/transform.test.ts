@@ -1205,11 +1205,11 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
   })
 
   test("preserves metadata using providerID key when store is false", () => {
-    const argusModel = {
+    const opencorvusModel = {
       ...openaiModel,
-      providerID: "argus",
+      providerID: "opencorvus",
       api: {
-        id: "argus-test",
+        id: "opencorvus-test",
         url: "https://api.opencode.ai",
         npm: "@ai-sdk/openai-compatible",
       },
@@ -1222,7 +1222,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
             type: "text",
             text: "Hello",
             providerOptions: {
-              argus: {
+              opencorvus: {
                 itemId: "msg_123",
                 otherOption: "value",
               },
@@ -1232,18 +1232,18 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = ProviderTransform.message(msgs, argusModel, { store: false }) as any[]
+    const result = ProviderTransform.message(msgs, opencorvusModel, { store: false }) as any[]
 
-    expect(result[0].content[0].providerOptions?.argus?.itemId).toBe("msg_123")
-    expect(result[0].content[0].providerOptions?.argus?.otherOption).toBe("value")
+    expect(result[0].content[0].providerOptions?.opencorvus?.itemId).toBe("msg_123")
+    expect(result[0].content[0].providerOptions?.opencorvus?.otherOption).toBe("value")
   })
 
   test("preserves itemId across all providerOptions keys", () => {
-    const argusModel = {
+    const opencorvusModel = {
       ...openaiModel,
-      providerID: "argus",
+      providerID: "opencorvus",
       api: {
-        id: "argus-test",
+        id: "opencorvus-test",
         url: "https://api.opencode.ai",
         npm: "@ai-sdk/openai-compatible",
       },
@@ -1253,7 +1253,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
         role: "assistant",
         providerOptions: {
           openai: { itemId: "msg_root" },
-          argus: { itemId: "msg_argus" },
+          opencorvus: { itemId: "msg_opencorvus" },
           extra: { itemId: "msg_extra" },
         },
         content: [
@@ -1262,7 +1262,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
             text: "Hello",
             providerOptions: {
               openai: { itemId: "msg_openai_part" },
-              argus: { itemId: "msg_argus_part" },
+              opencorvus: { itemId: "msg_opencorvus_part" },
               extra: { itemId: "msg_extra_part" },
             },
           },
@@ -1270,13 +1270,13 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       },
     ] as any[]
 
-    const result = ProviderTransform.message(msgs, argusModel, { store: false }) as any[]
+    const result = ProviderTransform.message(msgs, opencorvusModel, { store: false }) as any[]
 
     expect(result[0].providerOptions?.openai?.itemId).toBe("msg_root")
-    expect(result[0].providerOptions?.argus?.itemId).toBe("msg_argus")
+    expect(result[0].providerOptions?.opencorvus?.itemId).toBe("msg_opencorvus")
     expect(result[0].providerOptions?.extra?.itemId).toBe("msg_extra")
     expect(result[0].content[0].providerOptions?.openai?.itemId).toBe("msg_openai_part")
-    expect(result[0].content[0].providerOptions?.argus?.itemId).toBe("msg_argus_part")
+    expect(result[0].content[0].providerOptions?.opencorvus?.itemId).toBe("msg_opencorvus_part")
     expect(result[0].content[0].providerOptions?.extra?.itemId).toBe("msg_extra_part")
   })
 

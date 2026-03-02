@@ -7,8 +7,8 @@
   "packageManager": "bun@1.3.10",
   "scripts": {
     "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun run packages/bot/src/main.ts",
-    "dev:tui": "bun run --cwd packages/argus --conditions=browser src/index.ts",
-    "dev:server": "bun run --cwd packages/argus --conditions=browser src/index.ts serve",
+    "dev:tui": "bun run --cwd packages/opencorvus --conditions=browser src/index.ts",
+    "dev:server": "bun run --cwd packages/opencorvus --conditions=browser src/index.ts serve",
     "typecheck": "bunx turbo run typecheck",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"

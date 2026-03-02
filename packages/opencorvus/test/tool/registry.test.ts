@@ -6,13 +6,13 @@ import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
 
 describe("tool.registry", () => {
-  test("loads tools from .argus/tool (singular)", async () => {
+  test("loads tools from .opencorvus/tool (singular)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        const argusDir = path.join(dir, ".argus")
-        await fs.mkdir(argusDir, { recursive: true })
+        const opencorvusDir = path.join(dir, ".opencorvus")
+        await fs.mkdir(opencorvusDir, { recursive: true })
 
-        const toolDir = path.join(argusDir, "tool")
+        const toolDir = path.join(opencorvusDir, "tool")
         await fs.mkdir(toolDir, { recursive: true })
 
         await Bun.write(
@@ -40,13 +40,13 @@ describe("tool.registry", () => {
     })
   })
 
-  test("loads tools from .argus/tools (plural)", async () => {
+  test("loads tools from .opencorvus/tools (plural)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        const argusDir = path.join(dir, ".argus")
-        await fs.mkdir(argusDir, { recursive: true })
+        const opencorvusDir = path.join(dir, ".opencorvus")
+        await fs.mkdir(opencorvusDir, { recursive: true })
 
-        const toolsDir = path.join(argusDir, "tools")
+        const toolsDir = path.join(opencorvusDir, "tools")
         await fs.mkdir(toolsDir, { recursive: true })
 
         await Bun.write(
@@ -77,14 +77,14 @@ describe("tool.registry", () => {
   test("loads tools with external dependencies without crashing", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {
-        const argusDir = path.join(dir, ".argus")
-        await fs.mkdir(argusDir, { recursive: true })
+        const opencorvusDir = path.join(dir, ".opencorvus")
+        await fs.mkdir(opencorvusDir, { recursive: true })
 
-        const toolsDir = path.join(argusDir, "tools")
+        const toolsDir = path.join(opencorvusDir, "tools")
         await fs.mkdir(toolsDir, { recursive: true })
 
         await Bun.write(
-          path.join(argusDir, "package.json"),
+          path.join(opencorvusDir, "package.json"),
           JSON.stringify({
             name: "custom-tools",
             dependencies: {

@@ -2,7 +2,7 @@ const titleEl = document.getElementById("title")
 const msgEl = document.getElementById("msg")
 const okEl = document.getElementById("ok")
 const cancelEl = document.getElementById("cancel")
-const bridge = window.argusBridge
+const bridge = window.opencorvusBridge
 
 let currentID = ""
 let timeoutTimer = null

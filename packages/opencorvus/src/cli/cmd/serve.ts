@@ -9,14 +9,14 @@ import { Installation } from "../../installation"
 export const ServeCommand = cmd({
   command: "serve",
   builder: (yargs) => withNetworkOptions(yargs),
-  describe: "starts a headless argus server",
+  describe: "starts a headless opencorvus server",
   handler: async (args) => {
-    if (!Flag.ARGUS_SERVER_PASSWORD) {
-      console.log("Warning: ARGUS_SERVER_PASSWORD is not set; server is unsecured.")
+    if (!Flag.OPENCORVUS_SERVER_PASSWORD) {
+      console.log("Warning: OPENCORVUS_SERVER_PASSWORD is not set; server is unsecured.")
     }
     const opts = await resolveNetworkOptions(args)
     const server = Server.listen(opts)
-    console.log(`argus server listening on http://${server.hostname}:${server.port}`)
+    console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
 
     let workspaceSync: Array<ReturnType<typeof Workspace.startSyncing>> = []
     // Only available in development right now

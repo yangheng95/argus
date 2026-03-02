@@ -1,17 +1,17 @@
 ---
 title: GitHub
-description: Use Argus in GitHub issues and pull-requests.
+description: Use OpenCorvus in GitHub issues and pull-requests.
 ---
 
-Argus integrates with your GitHub workflow. Mention `/argus` or `/oc` in your comment, and Argus will execute tasks within your GitHub Actions runner.
+OpenCorvus integrates with your GitHub workflow. Mention `/opencorvus` or `/oc` in your comment, and OpenCorvus will execute tasks within your GitHub Actions runner.
 
 ---
 
 ## Features
 
-- **Triage issues**: Ask Argus to look into an issue and explain it to you.
-- **Fix and implement**: Ask Argus to fix an issue or implement a feature. And it will work in a new branch and submits a PR with all the changes.
-- **Secure**: Argus runs inside your GitHub's runners.
+- **Triage issues**: Ask OpenCorvus to look into an issue and explain it to you.
+- **Fix and implement**: Ask OpenCorvus to fix an issue or implement a feature. And it will work in a new branch and submits a PR with all the changes.
+- **Secure**: OpenCorvus runs inside your GitHub's runners.
 
 ---
 
@@ -20,7 +20,7 @@ Argus integrates with your GitHub workflow. Mention `/argus` or `/oc` in your co
 Run the following command in a project that is in a GitHub repo:
 
 ```bash
-argus github install
+opencorvus github install
 ```
 
 This will walk you through installing the GitHub app, creating the workflow, and setting up secrets.
@@ -33,14 +33,14 @@ Or you can set it up manually.
 
 1. **Install the GitHub app**
 
-   Head over to [**github.com/apps/argus-agent**](https://github.com/apps/argus-agent). Make sure it's installed on the target repository.
+   Head over to [**github.com/apps/opencorvus-agent**](https://github.com/apps/opencorvus-agent). Make sure it's installed on the target repository.
 
 2. **Add the workflow**
 
-   Add the following workflow file to `.github/workflows/argus.yml` in your repo. Make sure to set the appropriate `model` and required API keys in `env`.
+   Add the following workflow file to `.github/workflows/opencorvus.yml` in your repo. Make sure to set the appropriate `model` and required API keys in `env`.
 
-   ```yml title=".github/workflows/argus.yml" {24,26}
-   name: argus
+   ```yml title=".github/workflows/opencorvus.yml" {24,26}
+   name: opencorvus
 
    on:
      issue_comment:
@@ -49,10 +49,10 @@ Or you can set it up manually.
        types: [created]
 
    jobs:
-     argus:
+     opencorvus:
        if: |
          contains(github.event.comment.body, '/oc') ||
-         contains(github.event.comment.body, '/argus')
+         contains(github.event.comment.body, '/opencorvus')
        runs-on: ubuntu-latest
        permissions:
          id-token: write
@@ -63,8 +63,8 @@ Or you can set it up manually.
               fetch-depth: 1
               persist-credentials: false
 
-          - name: Run Argus
-           uses: yangheng95/argus/github@latest
+          - name: Run OpenCorvus
+           uses: yangheng95/opencorvus/github@latest
            env:
              ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
            with:
@@ -81,13 +81,13 @@ Or you can set it up manually.
 
 ## Configuration
 
-- `model`: The model to use with Argus. Takes the format of `provider/model`. This is **required**.
+- `model`: The model to use with OpenCorvus. Takes the format of `provider/model`. This is **required**.
 - `agent`: The agent to use. Must be a primary agent. Falls back to `default_agent` from config or `"build"` if not found.
-- `share`: Whether to share the Argus session. Defaults to **true** for public repositories.
-- `prompt`: Optional custom prompt to override the default behavior. Use this to customize how Argus processes requests.
-- `token`: Optional GitHub access token for performing operations such as creating comments, committing changes, and opening pull requests. By default, Argus uses the installation access token from the Argus GitHub App, so commits, comments, and pull requests appear as coming from the app.
+- `share`: Whether to share the OpenCorvus session. Defaults to **true** for public repositories.
+- `prompt`: Optional custom prompt to override the default behavior. Use this to customize how OpenCorvus processes requests.
+- `token`: Optional GitHub access token for performing operations such as creating comments, committing changes, and opening pull requests. By default, OpenCorvus uses the installation access token from the OpenCorvus GitHub App, so commits, comments, and pull requests appear as coming from the app.
 
-  Alternatively, you can use the GitHub Action runner's [built-in `GITHUB_TOKEN`](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token) without installing the Argus GitHub App. Just make sure to grant the required permissions in your workflow:
+  Alternatively, you can use the GitHub Action runner's [built-in `GITHUB_TOKEN`](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token) without installing the OpenCorvus GitHub App. Just make sure to grant the required permissions in your workflow:
 
   ```yaml
   permissions:
@@ -103,30 +103,30 @@ Or you can set it up manually.
 
 ## Supported Events
 
-Argus can be triggered by the following GitHub events:
+OpenCorvus can be triggered by the following GitHub events:
 
 | Event Type                    | Triggered By                           | Details                                                                                                           |
 | ----------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `issue_comment`               | Comment on an issue or PR              | Mention `/argus` or `/oc` in your comment. Argus reads context and can create branches, open PRs, or reply. |
-| `pull_request_review_comment` | Comment on specific code lines in a PR | Mention `/argus` or `/oc` while reviewing code. Argus receives file path, line numbers, and diff context.   |
-| `issues`                      | Issue opened or edited                 | Automatically trigger Argus when issues are created or modified. Requires `prompt` input.                      |
-| `pull_request`                | PR opened or updated                   | Automatically trigger Argus when PRs are opened, synchronized, or reopened. Useful for automated reviews.      |
-| `schedule`                    | Cron-based schedule                    | Run Argus on a schedule. Requires `prompt` input. Output goes to logs and PRs (no issue to comment on).        |
-| `workflow_dispatch`           | Manual trigger from GitHub UI          | Trigger Argus on demand via Actions tab. Requires `prompt` input. Output goes to logs and PRs.                 |
+| `issue_comment`               | Comment on an issue or PR              | Mention `/opencorvus` or `/oc` in your comment. OpenCorvus reads context and can create branches, open PRs, or reply. |
+| `pull_request_review_comment` | Comment on specific code lines in a PR | Mention `/opencorvus` or `/oc` while reviewing code. OpenCorvus receives file path, line numbers, and diff context.   |
+| `issues`                      | Issue opened or edited                 | Automatically trigger OpenCorvus when issues are created or modified. Requires `prompt` input.                      |
+| `pull_request`                | PR opened or updated                   | Automatically trigger OpenCorvus when PRs are opened, synchronized, or reopened. Useful for automated reviews.      |
+| `schedule`                    | Cron-based schedule                    | Run OpenCorvus on a schedule. Requires `prompt` input. Output goes to logs and PRs (no issue to comment on).        |
+| `workflow_dispatch`           | Manual trigger from GitHub UI          | Trigger OpenCorvus on demand via Actions tab. Requires `prompt` input. Output goes to logs and PRs.                 |
 
 ### Schedule Example
 
-Run Argus on a schedule to perform automated tasks:
+Run OpenCorvus on a schedule to perform automated tasks:
 
-```yaml title=".github/workflows/argus-scheduled.yml"
-name: Scheduled Argus Task
+```yaml title=".github/workflows/opencorvus-scheduled.yml"
+name: Scheduled OpenCorvus Task
 
 on:
   schedule:
     - cron: "0 9 * * 1" # Every Monday at 9am UTC
 
 jobs:
-  argus:
+  opencorvus:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -139,8 +139,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run Argus
-        uses: yangheng95/argus/github@latest
+      - name: Run OpenCorvus
+        uses: yangheng95/opencorvus/github@latest
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
@@ -150,7 +150,7 @@ jobs:
             If you find issues worth addressing, open an issue to track them.
 ```
 
-For scheduled events, the `prompt` input is **required** since there's no comment to extract instructions from. Scheduled workflows run without a user context to permission-check, so the workflow must grant `contents: write` and `pull-requests: write` if you expect Argus to create branches or PRs.
+For scheduled events, the `prompt` input is **required** since there's no comment to extract instructions from. Scheduled workflows run without a user context to permission-check, so the workflow must grant `contents: write` and `pull-requests: write` if you expect OpenCorvus to create branches or PRs.
 
 ---
 
@@ -158,8 +158,8 @@ For scheduled events, the `prompt` input is **required** since there's no commen
 
 Automatically review PRs when they are opened or updated:
 
-```yaml title=".github/workflows/argus-review.yml"
-name: argus-review
+```yaml title=".github/workflows/opencorvus-review.yml"
+name: opencorvus-review
 
 on:
   pull_request:
@@ -177,7 +177,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: yangheng95/argus/github@latest
+      - uses: yangheng95/opencorvus/github@latest
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -191,7 +191,7 @@ jobs:
             - Suggest improvements
 ```
 
-For `pull_request` events, if no `prompt` is provided, Argus defaults to reviewing the pull request.
+For `pull_request` events, if no `prompt` is provided, OpenCorvus defaults to reviewing the pull request.
 
 ---
 
@@ -199,7 +199,7 @@ For `pull_request` events, if no `prompt` is provided, Argus defaults to reviewi
 
 Automatically triage new issues. This example filters to accounts older than 30 days to reduce spam:
 
-```yaml title=".github/workflows/argus-triage.yml"
+```yaml title=".github/workflows/opencorvus-triage.yml"
 name: Issue Triage
 
 on:
@@ -233,7 +233,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: yangheng95/argus/github@latest
+      - uses: yangheng95/opencorvus/github@latest
         if: steps.check.outputs.result == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -252,10 +252,10 @@ For `issues` events, the `prompt` input is **required** since there's no comment
 
 ## Custom prompts
 
-Override the default prompt to customize Argus's behavior for your workflow.
+Override the default prompt to customize OpenCorvus's behavior for your workflow.
 
-```yaml title=".github/workflows/argus.yml"
-- uses: yangheng95/argus/github@latest
+```yaml title=".github/workflows/opencorvus.yml"
+- uses: yangheng95/opencorvus/github@latest
   with:
     model: anthropic/claude-sonnet-4-5
     prompt: |
@@ -271,27 +271,27 @@ This is useful for enforcing specific review criteria, coding standards, or focu
 
 ## Examples
 
-Here are some examples of how you can use Argus in GitHub.
+Here are some examples of how you can use OpenCorvus in GitHub.
 
 - **Explain an issue**
 
   Add this comment in a GitHub issue.
 
   ```
-  /argus explain this issue
+  /opencorvus explain this issue
   ```
 
-  Argus will read the entire thread, including all comments, and reply with a clear explanation.
+  OpenCorvus will read the entire thread, including all comments, and reply with a clear explanation.
 
 - **Fix an issue**
 
   In a GitHub issue, say:
 
   ```
-  /argus fix this
+  /opencorvus fix this
   ```
 
-  And Argus will create a new branch, implement the changes, and open a PR with the changes.
+  And OpenCorvus will create a new branch, implement the changes, and open a PR with the changes.
 
 - **Review PRs and make changes**
 
@@ -301,18 +301,18 @@ Here are some examples of how you can use Argus in GitHub.
   Delete the attachment from S3 when the note is removed /oc
   ```
 
-  Argus will implement the requested change and commit it to the same PR.
+  OpenCorvus will implement the requested change and commit it to the same PR.
 
 - **Review specific code lines**
 
-  Leave a comment directly on code lines in the PR's "Files" tab. Argus automatically detects the file, line numbers, and diff context to provide precise responses.
+  Leave a comment directly on code lines in the PR's "Files" tab. OpenCorvus automatically detects the file, line numbers, and diff context to provide precise responses.
 
   ```
   [Comment on specific lines in Files tab]
   /oc add error handling here
   ```
 
-  When commenting on specific lines, Argus receives:
+  When commenting on specific lines, OpenCorvus receives:
   - The exact file being reviewed
   - The specific lines of code
   - The surrounding diff context

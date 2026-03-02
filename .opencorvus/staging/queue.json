@@ -3,7 +3,7 @@
     "id": "1",
     "trigger": {
       "type": "startup",
-      "message": "Argus Sidecar started. Monitoring screen for changes.",
+      "message": "OpenCorvus Sidecar started. Monitoring screen for changes.",
       "payload": {
         "config": {
           "captureInterval": 10,
@@ -14,7 +14,7 @@
     },
     "priority": 2,
     "status": "dispatched",
-    "prompt": "Argus Sidecar started. Monitoring screen for changes.",
+    "prompt": "OpenCorvus Sidecar started. Monitoring screen for changes.",
     "createdAt": 1772260346836,
     "ttlMs": 60000,
     "approvedAt": 1772260346836,

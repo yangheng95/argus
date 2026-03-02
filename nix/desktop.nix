@@ -24,7 +24,7 @@
   opencode,
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
-  pname = "argus-desktop";
+  pname = "opencorvus-desktop";
   inherit (opencode)
     version
     src
@@ -72,7 +72,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     patchShebangs packages/desktop/node_modules
 
     mkdir -p packages/desktop/src-tauri/sidecars
-    cp ${opencode}/bin/argus packages/desktop/src-tauri/sidecars/argus-cli-${stdenv.hostPlatform.rust.rustcTarget}
+    cp ${opencode}/bin/opencorvus packages/desktop/src-tauri/sidecars/opencorvus-cli-${stdenv.hostPlatform.rust.rustcTarget}
   '';
 
   # see publish-tauri job in .github/workflows/publish.yml
@@ -86,15 +86,15 @@ rustPlatform.buildRustPackage (finalAttrs: {
   # should be removed once binary is renamed or decided otherwise
   # darwin output is a .app bundle so no conflict
   postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
-    mv $out/bin/Argus $out/bin/argus-desktop
-    sed -i 's|^Exec=Argus$|Exec=argus-desktop|' $out/share/applications/Argus.desktop
+    mv $out/bin/OpenCorvus $out/bin/opencorvus-desktop
+    sed -i 's|^Exec=OpenCorvus$|Exec=opencorvus-desktop|' $out/share/applications/OpenCorvus.desktop
   '';
 
   meta = {
-    description = "Argus Desktop App";
+    description = "OpenCorvus Desktop App";
     homepage = "https://opencode.ai";
     license = lib.licenses.mit;
-    mainProgram = "argus-desktop";
+    mainProgram = "opencorvus-desktop";
     inherit (opencode.meta) platforms;
   };
 })

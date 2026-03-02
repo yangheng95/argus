@@ -217,7 +217,7 @@ function App() {
   const promptRef = usePromptRef()
 
   useKeyboard((evt) => {
-    if (!Flag.ARGUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+    if (!Flag.OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
     if (!renderer.getSelection()) return
 
     // Windows Terminal-like behavior:
@@ -263,17 +263,17 @@ function App() {
 
   // Update terminal window title based on current route and session
   createEffect(() => {
-    if (!terminalTitleEnabled() || Flag.ARGUS_DISABLE_TERMINAL_TITLE) return
+    if (!terminalTitleEnabled() || Flag.OPENCORVUS_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("Argus")
+      renderer.setTerminalTitle("OpenCorvus")
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || SessionApi.isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("Argus")
+        renderer.setTerminalTitle("OpenCorvus")
         return
       }
 
@@ -515,7 +515,7 @@ function App() {
     {
       title: "View status",
       keybind: "status_view",
-      value: "argus.status",
+      value: "opencorvus.status",
       slash: {
         name: "status",
       },
@@ -667,7 +667,7 @@ function App() {
         DialogAlert.show(
           dialog,
           "Warning",
-          "While openrouter is a convenient way to access LLMs your request will often be routed to subpar providers that do not work well in our testing.\n\nFor reliable access to models check out Argus Zen\nhttps://opencode.ai/zen",
+          "While openrouter is a convenient way to access LLMs your request will often be routed to subpar providers that do not work well in our testing.\n\nFor reliable access to models check out OpenCorvus Zen\nhttps://opencode.ai/zen",
         ).then(() => kv.set("openrouter_warning", true))
       })
     }
@@ -729,7 +729,7 @@ function App() {
     toast.show({
       variant: "info",
       title: "Update Available",
-      message: `Argus v${evt.properties.version} is available. Run 'argus upgrade' to update manually.`,
+      message: `OpenCorvus v${evt.properties.version} is available. Run 'opencorvus upgrade' to update manually.`,
       duration: 10000,
     })
   })
@@ -740,14 +740,14 @@ function App() {
       height={dimensions().height}
       backgroundColor={theme.background}
       onMouseDown={(evt) => {
-        if (!Flag.ARGUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
+        if (!Flag.OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT) return
         if (evt.button !== MouseButton.RIGHT) return
 
         if (!Selection.copy(renderer, toast)) return
         evt.preventDefault()
         evt.stopPropagation()
       }}
-      onMouseUp={Flag.ARGUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
+      onMouseUp={Flag.OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? undefined : () => Selection.copy(renderer, toast)}
     >
       <Switch>
         <Match when={route.data.type === "home"}>
@@ -784,7 +784,7 @@ function ErrorComponent(props: {
   })
   const [copied, setCopied] = createSignal(false)
 
-  const issueURL = new URL("https://github.com/yangheng95/argus/issues/new?template=bug-report.yml")
+  const issueURL = new URL("https://github.com/yangheng95/opencorvus/issues/new?template=bug-report.yml")
 
   // Choose safe fallback colors per mode since theme context may not be available
   const isLight = props.mode === "light"
@@ -806,7 +806,7 @@ function ErrorComponent(props: {
     )
   }
 
-  issueURL.searchParams.set("argus-version", Installation.VERSION)
+  issueURL.searchParams.set("opencorvus-version", Installation.VERSION)
 
   const copyIssueURL = () => {
     Clipboard.copy(issueURL.toString()).then(() => {

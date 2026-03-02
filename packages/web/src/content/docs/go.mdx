@@ -7,15 +7,15 @@ import config from "../../../config.mjs"
 export const console = config.console
 export const email = `mailto:${config.email}`
 
-Argus Go is a low cost **$10/month** subscription that gives you reliable access to popular open coding models.
+OpenCorvus Go is a low cost **$10/month** subscription that gives you reliable access to popular open coding models.
 
 :::note
-Argus Go is currently in beta.
+OpenCorvus Go is currently in beta.
 :::
 
-Go works like any other provider in Argus. You subscribe to Argus Go and
+Go works like any other provider in OpenCorvus. You subscribe to OpenCorvus Go and
 get your API key. It's **completely optional** and you don't need to use it to
-use Argus.
+use OpenCorvus.
 
 It is designed primarily for international users, with models hosted in the US, EU, and Singapore for stable global access.
 
@@ -31,7 +31,7 @@ However, getting reliable, low latency access to them can be difficult. Provider
 vary in quality and availability.
 
 :::tip
-We tested a select group of models and providers that work well with Argus.
+We tested a select group of models and providers that work well with OpenCorvus.
 :::
 
 To fix this, we did a couple of things:
@@ -43,22 +43,22 @@ To fix this, we did a couple of things:
 3. Finally, we benchmarked the combination of the model/provider and came up
    with a list that we feel good recommending.
 
-Argus Go gives you access to these models for **$10/month**.
+OpenCorvus Go gives you access to these models for **$10/month**.
 
 ---
 
 ## How it works
 
-Argus Go works like any other provider in Argus.
+OpenCorvus Go works like any other provider in OpenCorvus.
 
-1. You sign in to **<a href={console}>Argus Zen</a>**, subscribe to Go, and
+1. You sign in to **<a href={console}>OpenCorvus Zen</a>**, subscribe to Go, and
    copy your API key.
-2. You run the `/connect` command in the TUI, select `Argus Go`, and paste
+2. You run the `/connect` command in the TUI, select `OpenCorvus Go`, and paste
    your API key.
 3. Run `/models` in the TUI to see the list of models available through Go.
 
 :::note
-Only one member per workspace can subscribe to Argus Go.
+Only one member per workspace can subscribe to OpenCorvus Go.
 :::
 
 The current list of models includes:
@@ -73,7 +73,7 @@ The list of models may change as we test and add new ones.
 
 ## Usage limits
 
-Argus Go includes the following limits:
+OpenCorvus Go includes the following limits:
 
 - **5 hour limit** — $4 of usage
 - **Weekly limit** — $10 of usage
@@ -97,7 +97,7 @@ Usage limits may change as we learn from early usage and feedback.
 
 ### Pricing
 
-Argus Go is a **$10/month** subscription plan. Below are the prices **per 1M tokens**.
+OpenCorvus Go is a **$10/month** subscription plan. Below are the prices **per 1M tokens**.
 
 | Model        | Input | Output | Cached Read |
 | ------------ | ----- | ------ | ----------- |
@@ -121,13 +121,13 @@ You can also access Go models through the following API endpoints.
 
 | Model        | Model ID     | Endpoint                                         | AI SDK Package              |
 | ------------ | ------------ | ------------------------------------------------ | --------------------------- |
-| GLM-5        | glm-5        | `https://argus.ai/zen/go/v1/chat/completions` | `@ai-sdk/openai-compatible` |
-| Kimi K2.5    | kimi-k2.5    | `https://argus.ai/zen/go/v1/chat/completions` | `@ai-sdk/openai-compatible` |
-| MiniMax M2.5 | minimax-m2.5 | `https://argus.ai/zen/go/v1/messages`         | `@ai-sdk/anthropic`         |
+| GLM-5        | glm-5        | `https://opencorvus.ai/zen/go/v1/chat/completions` | `@ai-sdk/openai-compatible` |
+| Kimi K2.5    | kimi-k2.5    | `https://opencorvus.ai/zen/go/v1/chat/completions` | `@ai-sdk/openai-compatible` |
+| MiniMax M2.5 | minimax-m2.5 | `https://opencorvus.ai/zen/go/v1/messages`         | `@ai-sdk/anthropic`         |
 
-The [model id](/docs/config/#models) in your Argus config
-uses the format `argus-go/<model-id>`. For example, for Kimi K2.5, you would
-use `argus-go/kimi-k2.5` in your config.
+The [model id](/docs/config/#models) in your OpenCorvus config
+uses the format `opencorvus-go/<model-id>`. For example, for Kimi K2.5, you would
+use `opencorvus-go/kimi-k2.5` in your config.
 
 ---
 
@@ -141,9 +141,9 @@ The plan is designed primarily for international users, with models hosted in th
 
 ## Goals
 
-We created Argus Go to:
+We created OpenCorvus Go to:
 
 1. Make AI coding **accessible** to more people with a low cost subscription.
 2. Provide **reliable** access to the best open coding models.
 3. Curate models that are **tested and benchmarked** for coding agent use.
-4. Have **no lock-in** by allowing you to use any other provider with Argus as well.
+4. Have **no lock-in** by allowing you to use any other provider with OpenCorvus as well.

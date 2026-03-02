@@ -6,7 +6,7 @@ import { Log } from "../util/log"
 function resolveBinaryPath() {
   const dir = fileURLToPath(new URL(".", import.meta.url))
   const ext = process.platform === "win32" ? ".exe" : ""
-  const names = [`opencorvus-overlay${ext}`, `argus-overlay${ext}`, `openlens-overlay${ext}`]
+  const names = [`opencorvus-overlay${ext}`, `opencorvus-overlay${ext}`, `openlens-overlay${ext}`]
   for (const name of names) {
     const candidate = join(dir, "..", "..", "..", "overlay", "src-tauri", "target", "release", name)
     if (existsSync(candidate)) return candidate
@@ -157,8 +157,8 @@ async function watchOutput(target: ReturnType<typeof Bun.spawn>) {
 }
 
 function ensureProcess() {
-  if (process.env.ARGUS_OVERLAY_DISABLED === "1") {
-    markUnavailable("disabled", { env: "ARGUS_OVERLAY_DISABLED=1" })
+  if (process.env.OPENCORVUS_OVERLAY_DISABLED === "1") {
+    markUnavailable("disabled", { env: "OPENCORVUS_OVERLAY_DISABLED=1" })
     return null
   }
   if (!existsSync(BINARY_PATH)) {
@@ -174,7 +174,7 @@ function ensureProcess() {
       stderr: "ignore",
       env: {
         ...process.env,
-        ARGUS_OVERLAY_STDIN_EXIT: "1",
+        OPENCORVUS_OVERLAY_STDIN_EXIT: "1",
       },
     })
     dead = false

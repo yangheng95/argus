@@ -1,5 +1,5 @@
 /**
- * Argus Integration Bot — Full pipeline: Slack → Claude Code CLI → Slack
+ * OpenCorvus Integration Bot — Full pipeline: Slack → Claude Code CLI → Slack
  */
 import { App } from "@slack/bolt"
 import { spawn } from "node:child_process"
@@ -12,7 +12,7 @@ const ALLOWED_USERS = (() => {
   try { return JSON.parse(raw) as string[] } catch {}
   return raw.replace(/[\[\]"]/g, "").split(",").map(s => s.trim()).filter(Boolean)
 })()
-const PROJECT_DIR = process.env.ARGUS_PROJECT_DIR ?? path.resolve(import.meta.dirname, "../../..")
+const PROJECT_DIR = process.env.OPENCORVUS_PROJECT_DIR ?? path.resolve(import.meta.dirname, "../../..")
 
 if (!SLACK_BOT_TOKEN || !SLACK_APP_TOKEN) {
   console.error("Missing SLACK_BOT_TOKEN or SLACK_APP_TOKEN")
@@ -135,7 +135,7 @@ app.message(async ({ message }) => {
 })
 
 await app.start()
-console.log("🤖 Argus Claude Bot is running!")
+console.log("🤖 OpenCorvus Claude Bot is running!")
 console.log(`   Project dir: ${PROJECT_DIR}`)
 console.log(`   Allowed users: ${ALLOWED_USERS.length > 0 ? ALLOWED_USERS.join(", ") : "all"}`)
 console.log("   Waiting for Slack messages...\n")

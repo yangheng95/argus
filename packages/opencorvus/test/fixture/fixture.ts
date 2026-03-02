@@ -9,7 +9,7 @@ function sanitizePath(p: string): string {
   return p.replace(/\0/g, "")
 }
 
-// Schema URL written by config.ts when generating argus.json files.
+// Schema URL written by config.ts when generating opencorvus.json files.
 // Kept in one place so tests stay in sync with the source.
 export const CONFIG_SCHEMA_URL = "https://opencode.ai/config.json"
 
@@ -20,7 +20,7 @@ type TmpDirOptions<T> = {
   dispose?: (dir: string) => Promise<T>
 }
 export async function tmpdir<T>(options?: TmpDirOptions<T>) {
-  const dirpath = sanitizePath(path.join(os.tmpdir(), "argus-test-" + Math.random().toString(36).slice(2)))
+  const dirpath = sanitizePath(path.join(os.tmpdir(), "opencorvus-test-" + Math.random().toString(36).slice(2)))
   await fs.mkdir(dirpath, { recursive: true })
   if (options?.git) {
     await $`git init`.cwd(dirpath).quiet()
@@ -28,7 +28,7 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
   }
   if (options?.config) {
     await Bun.write(
-      path.join(dirpath, "argus.json"),
+      path.join(dirpath, "opencorvus.json"),
       JSON.stringify({
         $schema: CONFIG_SCHEMA_URL,
         ...options.config,

@@ -20,15 +20,15 @@ export type TuiOptions = {
   config?: Config
 }
 
-function resolveArgusCommand(): { cmd: string; prefix: string[]; cwd?: string } {
+function resolveOpenCorvusCommand(): { cmd: string; prefix: string[]; cwd?: string } {
   const root = path.resolve(import.meta.dirname ?? __dirname, "../../../..")
-  const argusDir = path.join(root, "packages/argus")
-  const localEntry = path.join(argusDir, "src/index.ts")
-  const preferLocal = process.env.ARGUS_USE_GLOBAL_BINARY !== "1"
+  const opencorvusDir = path.join(root, "packages/opencorvus")
+  const localEntry = path.join(opencorvusDir, "src/index.ts")
+  const preferLocal = process.env.OPENCORVUS_USE_GLOBAL_BINARY !== "1"
 
   // In monorepo/dev, prefer local source so server changes are picked up immediately.
   if (preferLocal && existsSync(localEntry)) {
-    return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: argusDir }
+    return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: opencorvusDir }
   }
 
   // Fallback to compiled binary if available.
@@ -37,12 +37,12 @@ function resolveArgusCommand(): { cmd: string; prefix: string[]; cwd?: string } 
     return { cmd: "opencorvus", prefix: [] }
   } catch {}
   try {
-    execSync("argus --version", { stdio: "ignore", timeout: 3000 })
-    return { cmd: "argus", prefix: [] }
+    execSync("opencorvus --version", { stdio: "ignore", timeout: 3000 })
+    return { cmd: "opencorvus", prefix: [] }
   } catch {}
 
   // Last fallback: local source mode.
-  return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: argusDir }
+  return { cmd: "bun", prefix: ["run", "--conditions=browser", "./src/index.ts"], cwd: opencorvusDir }
 }
 
 export async function createOpenCorvusServer(options?: ServerOptions) {
@@ -55,17 +55,17 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
     options ?? {},
   )
 
-  const { cmd, prefix, cwd } = resolveArgusCommand()
+  const { cmd, prefix, cwd } = resolveOpenCorvusCommand()
   const args = [...prefix, `serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
-  const config = options.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
+  const config = options.config === undefined ? process.env.OPENCORVUS_CONFIG_CONTENT : JSON.stringify(options.config)
 
   const proc = spawn(cmd, args, {
     signal: options.signal,
     cwd,
     env: {
       ...process.env,
-      ...(config === undefined ? {} : { ARGUS_CONFIG_CONTENT: config }),
+      ...(config === undefined ? {} : { OPENCORVUS_CONFIG_CONTENT: config }),
     },
   })
 
@@ -121,7 +121,7 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
 }
 
 export function createOpenCorvusTui(options?: TuiOptions) {
-  const { cmd, prefix, cwd } = resolveArgusCommand()
+  const { cmd, prefix, cwd } = resolveOpenCorvusCommand()
   const args = [...prefix]
 
   if (options?.project) {
@@ -137,14 +137,14 @@ export function createOpenCorvusTui(options?: TuiOptions) {
     args.push(`--agent=${options.agent}`)
   }
 
-  const config = options?.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
+  const config = options?.config === undefined ? process.env.OPENCORVUS_CONFIG_CONTENT : JSON.stringify(options.config)
   const proc = spawn(cmd, args, {
     signal: options?.signal,
     stdio: "inherit",
     cwd,
     env: {
       ...process.env,
-      ...(config === undefined ? {} : { ARGUS_CONFIG_CONTENT: config }),
+      ...(config === undefined ? {} : { OPENCORVUS_CONFIG_CONTENT: config }),
     },
   })
 

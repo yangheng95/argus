@@ -253,7 +253,7 @@ export const AuthLoginCommand = cmd({
   describe: "log in to a provider",
   builder: (yargs) =>
     yargs.positional("url", {
-      describe: "argus auth provider",
+      describe: "opencorvus auth provider",
       type: "string",
     }),
   async handler(args) {
@@ -263,7 +263,7 @@ export const AuthLoginCommand = cmd({
         UI.empty()
         prompts.intro("Add credential")
         if (args.url) {
-          const wellknown = await fetch(`${args.url}/.well-known/argus`).then((x) => x.json() as any)
+          const wellknown = await fetch(`${args.url}/.well-known/opencorvus`).then((x) => x.json() as any)
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
           const proc = Process.spawn(wellknown.auth.command, {
             stdout: "pipe",
@@ -306,7 +306,7 @@ export const AuthLoginCommand = cmd({
         })
 
         const priority: Record<string, number> = {
-          argus: 0,
+          opencorvus: 0,
           anthropic: 1,
           "github-copilot": 2,
           openai: 3,
@@ -336,7 +336,7 @@ export const AuthLoginCommand = cmd({
                 label: x.name,
                 value: x.id,
                 hint: {
-                  argus: "recommended",
+                  opencorvus: "recommended",
                   anthropic: "Claude Max or API key",
                   openai: "ChatGPT Plus/Pro or API key",
                 }[x.id],
@@ -379,7 +379,7 @@ export const AuthLoginCommand = cmd({
           }
 
           prompts.log.warn(
-            `This only stores a credential for ${provider} - you will need configure it in argus.json, check the docs for examples.`,
+            `This only stores a credential for ${provider} - you will need configure it in opencorvus.json, check the docs for examples.`,
           )
         }
 
@@ -388,12 +388,12 @@ export const AuthLoginCommand = cmd({
             "Amazon Bedrock authentication priority:\n" +
               "  1. Bearer token (AWS_BEARER_TOKEN_BEDROCK or /connect)\n" +
               "  2. AWS credential chain (profile, access keys, IAM roles, EKS IRSA)\n\n" +
-              "Configure via argus.json options (profile, region, endpoint) or\n" +
+              "Configure via opencorvus.json options (profile, region, endpoint) or\n" +
               "AWS environment variables (AWS_PROFILE, AWS_REGION, AWS_ACCESS_KEY_ID, AWS_WEB_IDENTITY_TOKEN_FILE).",
           )
         }
 
-        if (provider === "argus") {
+        if (provider === "opencorvus") {
           prompts.log.info("Create an api key at https://opencode.ai/auth")
         }
 

@@ -9,7 +9,7 @@ import path from "path"
 
 import { createClient } from "@hey-api/openapi-ts"
 
-await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../argus"))
+await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../opencorvus"))
 
 const generate = async (output: string) =>
   createClient({

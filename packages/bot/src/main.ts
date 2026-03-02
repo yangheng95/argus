@@ -34,9 +34,9 @@ const botPermission = {
 }
 
 function inlineConfig() {
-  if (!process.env.ARGUS_CONFIG_CONTENT) return {}
+  if (!process.env.OPENCORVUS_CONFIG_CONTENT) return {}
   try {
-    const parsed = JSON.parse(process.env.ARGUS_CONFIG_CONTENT)
+    const parsed = JSON.parse(process.env.OPENCORVUS_CONFIG_CONTENT)
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
     return parsed as Record<string, unknown>
   } catch {
@@ -53,7 +53,7 @@ const config = inlineConfig()
 const permission = config.permission
 const permissionMap =
   permission && typeof permission === "object" && !Array.isArray(permission) ? (permission as Record<string, unknown>) : {}
-process.env.ARGUS_CONFIG_CONTENT = JSON.stringify({
+process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
   ...config,
   permission: {
     ...permissionMap,
@@ -61,9 +61,9 @@ process.env.ARGUS_CONFIG_CONTENT = JSON.stringify({
   },
 })
 
-console.log("[Bot] Model/provider config source: argus auth + argus.json + ARGUS_CONFIG_CONTENT")
+console.log("[Bot] Model/provider config source: opencorvus auth + opencorvus.json + OPENCORVUS_CONFIG_CONTENT")
 if (!activeKey) {
-  console.log("[Bot] DashScope key not found in argus auth. Run: argus auth login (provider: alibaba-cn)")
+  console.log("[Bot] DashScope key not found in opencorvus auth. Run: opencorvus auth login (provider: alibaba-cn)")
 }
 if (activeKey) {
   const keyType = useCodingPlan ? "sk-sp-* (Coding Plan)" : "sk-* (DashScope)"
@@ -113,7 +113,7 @@ bot.setSTT(sttPipeline)
 
 // --- Vision Pipeline Setup ---
 if (activeKey) {
-  const visionModel = process.env.ARGUS_VISION_MODEL
+  const visionModel = process.env.OPENCORVUS_VISION_MODEL
   if (visionModel) {
     bot.setVision(
       new VisionPipeline({
@@ -122,10 +122,10 @@ if (activeKey) {
         model: visionModel,
       }),
     )
-    const keySource = useCodingPlan ? "argus auth (coding plan)" : "argus auth"
+    const keySource = useCodingPlan ? "opencorvus auth (coding plan)" : "opencorvus auth"
     console.log(`[Bot] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${baseURL})`)
   } else {
-    console.log("[Bot] Vision pipeline disabled (ARGUS_VISION_MODEL not set)")
+    console.log("[Bot] Vision pipeline disabled (OPENCORVUS_VISION_MODEL not set)")
   }
 }
 

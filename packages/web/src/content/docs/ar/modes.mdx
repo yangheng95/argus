@@ -4,14 +4,14 @@ description: أوضاع مختلفة لحالات استخدام مختلفة.
 ---
 
 :::caution
-يتم الآن ضبط الأوضاع عبر خيار `agent` في إعدادات argus. أصبح خيار
+يتم الآن ضبط الأوضاع عبر خيار `agent` في إعدادات opencorvus. أصبح خيار
 `mode` مُهمَلًا الآن. [اعرف المزيد](/docs/agents).
 :::
 
-تتيح لك الأوضاع في argus تخصيص السلوك والأدوات والمطالبات لحالات استخدام مختلفة.
+تتيح لك الأوضاع في opencorvus تخصيص السلوك والأدوات والمطالبات لحالات استخدام مختلفة.
 
 يأتي مع وضعين مدمجين: **build** و **plan**. يمكنك تخصيصهما أو إعداد
-أوضاعك الخاصة عبر إعدادات argus.
+أوضاعك الخاصة عبر إعدادات opencorvus.
 
 يمكنك التبديل بين الأوضاع أثناء الجلسة أو إعدادها في ملف الإعدادات لديك.
 
@@ -19,7 +19,7 @@ description: أوضاع مختلفة لحالات استخدام مختلفة.
 
 ## الأوضاع المدمجة
 
-يأتي argus مع وضعين مدمجين.
+يأتي opencorvus مع وضعين مدمجين.
 
 ---
 
@@ -34,7 +34,7 @@ description: أوضاع مختلفة لحالات استخدام مختلفة.
 وضع مقيَّد مُصمَّم للتخطيط والتحليل. في وضع plan، تكون الأدوات التالية مُعطَّلة افتراضيًا:
 
 - `write` - لا يمكن إنشاء ملفات جديدة
-- `edit` - لا يمكن تعديل الملفات الموجودة، باستثناء الملفات الموجودة في `.argus/plans/*.md` لتفصيل الخطة نفسها
+- `edit` - لا يمكن تعديل الملفات الموجودة، باستثناء الملفات الموجودة في `.opencorvus/plans/*.md` لتفصيل الخطة نفسها
 - `patch` - لا يمكن تطبيق التصحيحات
 - `bash` - لا يمكن تنفيذ أوامر shell
 
@@ -56,11 +56,11 @@ description: أوضاع مختلفة لحالات استخدام مختلفة.
 
 ### إعدادات JSON
 
-قم بإعداد الأوضاع في ملف الإعدادات `argus.json` لديك:
+قم بإعداد الأوضاع في ملف الإعدادات `opencorvus.json` لديك:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mode": {
     "build": {
       "model": "anthropic/claude-sonnet-4-20250514",
@@ -87,10 +87,10 @@ description: أوضاع مختلفة لحالات استخدام مختلفة.
 
 يمكنك أيضًا تعريف الأوضاع باستخدام ملفات markdown. ضعها في:
 
-- عالمي: `~/.config/argus/modes/`
-- للمشروع: `.argus/modes/`
+- عالمي: `~/.config/opencorvus/modes/`
+- للمشروع: `.opencorvus/modes/`
 
-```markdown title="~/.config/argus/modes/review.md"
+```markdown title="~/.config/opencorvus/modes/review.md"
 ---
 model: anthropic/claude-sonnet-4-20250514
 temperature: 0.1
@@ -120,7 +120,7 @@ Provide constructive feedback without making direct changes.
 
 استخدم إعداد `model` لتجاوز النموذج الافتراضي لهذا الوضع. يفيد ذلك عند استخدام نماذج مختلفة مُحسَّنة لمهام مختلفة؛ مثل نموذج أسرع للتخطيط ونموذج أكثر قدرة للتنفيذ.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "plan": {
@@ -136,7 +136,7 @@ Provide constructive feedback without making direct changes.
 
 تحكَّم في العشوائية والإبداع في ردود الذكاء الاصطناعي عبر إعداد `temperature`. القيم الأقل تجعل الردود أكثر تركيزًا وحتمية، بينما تزيد القيم الأعلى الإبداع والتنوّع.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "plan": {
@@ -155,7 +155,7 @@ Provide constructive feedback without making direct changes.
 - **0.3-0.5**: ردود متوازنة مع قدر من الإبداع، مناسبة لمهام التطوير العامة
 - **0.6-1.0**: ردود أكثر إبداعًا وتنوّعًا، مفيدة للعصف الذهني والاستكشاف
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "analyze": {
@@ -173,7 +173,7 @@ Provide constructive feedback without making direct changes.
 }
 ```
 
-إذا لم يتم تحديد درجة الحرارة، يستخدم argus القيم الافتراضية الخاصة بكل نموذج (عادةً 0 لمعظم النماذج و 0.55 لنماذج Qwen).
+إذا لم يتم تحديد درجة الحرارة، يستخدم opencorvus القيم الافتراضية الخاصة بكل نموذج (عادةً 0 لمعظم النماذج و 0.55 لنماذج Qwen).
 
 ---
 
@@ -181,7 +181,7 @@ Provide constructive feedback without making direct changes.
 
 حدِّد ملف موجّه نظام (system prompt) مخصص لهذا الوضع عبر إعداد `prompt`. ينبغي أن يحتوي ملف الموجّه على تعليمات مرتبطة بهدف هذا الوضع.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
   "mode": {
     "review": {
@@ -192,7 +192,7 @@ Provide constructive feedback without making direct changes.
 ```
 
 هذا المسار نسبي بالنسبة لموقع ملف الإعدادات. لذلك يعمل مع
-إعدادات argus العالمية وكذلك إعدادات المشروع.
+إعدادات opencorvus العالمية وكذلك إعدادات المشروع.
 
 ---
 
@@ -247,9 +247,9 @@ Provide constructive feedback without making direct changes.
 
 ### باستخدام إعدادات JSON
 
-```json title="argus.json" {4-14}
+```json title="opencorvus.json" {4-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "mode": {
     "docs": {
       "prompt": "{file:./prompts/documentation.txt}",
@@ -268,9 +268,9 @@ Provide constructive feedback without making direct changes.
 
 ### باستخدام ملفات markdown
 
-أنشئ ملفات الأوضاع في `.argus/modes/` لأوضاع خاصة بالمشروع أو في `~/.config/argus/modes/` لأوضاع عالمية:
+أنشئ ملفات الأوضاع في `.opencorvus/modes/` لأوضاع خاصة بالمشروع أو في `~/.config/opencorvus/modes/` لأوضاع عالمية:
 
-```markdown title=".argus/modes/debug.md"
+```markdown title=".opencorvus/modes/debug.md"
 ---
 temperature: 0.1
 tools:
@@ -294,7 +294,7 @@ Focus on:
 Do not make any changes to files. Only investigate and report.
 ```
 
-```markdown title="~/.config/argus/modes/refactor.md"
+```markdown title="~/.config/opencorvus/modes/refactor.md"
 ---
 model: anthropic/claude-sonnet-4-20250514
 temperature: 0.2

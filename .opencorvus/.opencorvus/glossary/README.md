@@ -1,6 +1,6 @@
 # Locale Glossaries
 
-Use this folder for locale-specific translation guidance that supplements `.argus/agent/translator.md`.
+Use this folder for locale-specific translation guidance that supplements `.opencorvus/agent/translator.md`.
 
 The global glossary in `translator.md` remains the source of truth for shared do-not-translate terms (commands, code, paths, product names, etc.). These locale files capture community learnings about phrasing and terminology preferences.
 
@@ -33,11 +33,11 @@ Prefer guidance that is:
 
 ## Sources
 
-- PR #12345: https://github.com/yangheng95/argus/pull/12345
+- PR #12345: https://github.com/yangheng95/opencorvus/pull/12345
 
 ## Do Not Translate (Locale Additions)
 
-- `Argus` (preserve casing)
+- `OpenCorvus` (preserve casing)
 
 ## Preferred Terms
 

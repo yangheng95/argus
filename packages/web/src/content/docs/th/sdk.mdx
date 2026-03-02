@@ -1,13 +1,13 @@
 ---
 title: SDK
-description: ไคลเอนต์ JS ประเภทที่ปลอดภัยสำหรับเซิร์ฟเวอร์ argus
+description: ไคลเอนต์ JS ประเภทที่ปลอดภัยสำหรับเซิร์ฟเวอร์ opencorvus
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-argus JS/TS SDK จัดเตรียมไคลเอ็นต์ประเภทที่ปลอดภัยสำหรับการโต้ตอบกับเซิร์ฟเวอร์
-ใช้เพื่อสร้างการบูรณาการและควบคุม argus โดยทางโปรแกรม
+opencorvus JS/TS SDK จัดเตรียมไคลเอ็นต์ประเภทที่ปลอดภัยสำหรับการโต้ตอบกับเซิร์ฟเวอร์
+ใช้เพื่อสร้างการบูรณาการและควบคุม opencorvus โดยทางโปรแกรม
 
 [เรียนรู้เพิ่มเติม](/docs/server) เกี่ยวกับวิธีการทำงานของเซิร์ฟเวอร์ ตัวอย่างเช่น ลองดู [โครงการ](/docs/ecosystem#โครงการ) ที่สร้างโดยชุมชน
 
@@ -18,17 +18,17 @@ argus JS/TS SDK จัดเตรียมไคลเอ็นต์ประ�
 ติดตั้ง SDK จาก npm:
 
 ```bash
-npm install @argus-ai/sdk
+npm install @opencorvus-ai/sdk
 ```
 
 ---
 
 ## สร้างไคลเอนต์
 
-สร้างอินสแตนซ์ของ argus:
+สร้างอินสแตนซ์ของ opencorvus:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
 const { client } = await createOpenCorvus()
 ```
@@ -49,12 +49,12 @@ const { client } = await createOpenCorvus()
 
 ## การกำหนดค่า
 
-คุณสามารถส่งผ่านออบเจ็กต์การกำหนดค่าเพื่อปรับแต่งลักษณะการทำงานได้ อินสแตนซ์ยังคงรับ `argus.json` ของคุณ แต่คุณสามารถแทนที่หรือเพิ่มการกำหนดค่าแบบอินไลน์ได้:
+คุณสามารถส่งผ่านออบเจ็กต์การกำหนดค่าเพื่อปรับแต่งลักษณะการทำงานได้ อินสแตนซ์ยังคงรับ `opencorvus.json` ของคุณ แต่คุณสามารถแทนที่หรือเพิ่มการกำหนดค่าแบบอินไลน์ได้:
 
 ```javascript
-import { createOpenCorvus } from "@argus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk"
 
-const argus = await createOpenCorvus({
+const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
   port: 4096,
   config: {
@@ -62,17 +62,17 @@ const argus = await createOpenCorvus({
   },
 })
 
-console.log(`Server running at ${argus.server.url}`)
+console.log(`Server running at ${opencorvus.server.url}`)
 
-argus.server.close()
+opencorvus.server.close()
 ```
 
 ## ลูกค้าเท่านั้น
 
-หากคุณมีอินสแตนซ์ argus ที่ทำงานอยู่แล้ว คุณสามารถสร้างอินสแตนซ์ไคลเอ็นต์เพื่อเชื่อมต่อได้:
+หากคุณมีอินสแตนซ์ opencorvus ที่ทำงานอยู่แล้ว คุณสามารถสร้างอินสแตนซ์ไคลเอ็นต์เพื่อเชื่อมต่อได้:
 
 ```javascript
-import { createOpenCorvusClient } from "@argus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 SDK มีคำจำกัดความ TypeScript สำหรับ API ประเภททั้งหมด นำเข้าโดยตรง:
 
 ```typescript
-import type { Session, Message, Part } from "@argus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk"
 ```
 
 ทุกประเภทสร้างขึ้นจากข้อกำหนด OpenAPI ของเซิร์ฟเวอร์และมีอยู่ใน <a href={typesUrl}>ไฟล์ประเภท</a>
@@ -304,7 +304,7 @@ await client.session.prompt({
 ```javascript
 // Search and read files
 const textResults = await client.find.text({
-  query: { pattern: "function.*argus" },
+  query: { pattern: "function.*opencorvus" },
 })
 
 const files = await client.find.files({

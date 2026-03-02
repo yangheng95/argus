@@ -1,9 +1,9 @@
 ---
 title: Egendefinerte verktøy
-description: Lag verktøy som LLM kan kalle inn Argus.
+description: Lag verktøy som LLM kan kalle inn OpenCorvus.
 ---
 
-Egendefinerte verktøy er funksjoner du oppretter som LLM kan kalle under samtaler. De fungerer sammen med Argus sine [innebygde verktøy](/docs/tools) som `read`, `write` og `bash`.
+Egendefinerte verktøy er funksjoner du oppretter som LLM kan kalle under samtaler. De fungerer sammen med OpenCorvus sine [innebygde verktøy](/docs/tools) som `read`, `write` og `bash`.
 
 ---
 
@@ -17,8 +17,8 @@ Verktøy er definert som **TypeScript**- eller **JavaScript**-filer. Verktøydef
 
 De kan defineres:
 
-- Lokalt ved å plassere dem i `.argus/tools/`-katalogen til prosjektet ditt.
-- Eller globalt, ved å plassere dem i `~/.config/argus/tools/`.
+- Lokalt ved å plassere dem i `.opencorvus/tools/`-katalogen til prosjektet ditt.
+- Eller globalt, ved å plassere dem i `~/.config/opencorvus/tools/`.
 
 ---
 
@@ -26,8 +26,8 @@ De kan defineres:
 
 Den enkleste måten å lage verktøy på er å bruke `tool()`-hjelperen som gir typesikkerhet og validering.
 
-```ts title=".argus/tools/database.ts" {1}
-import { tool } from "@argus-ai/plugin"
+```ts title=".opencorvus/tools/database.ts" {1}
+import { tool } from "@opencorvus-ai/plugin"
 
 export default tool({
   description: "Query the project database",
@@ -49,8 +49,8 @@ export default tool({
 
 Du kan også eksportere flere verktøy fra en enkelt fil. Hver eksport blir **et separat verktøy** med navnet **`<filename>_<exportname>`**:
 
-```ts title=".argus/tools/math.ts"
-import { tool } from "@argus-ai/plugin"
+```ts title=".opencorvus/tools/math.ts"
+import { tool } from "@opencorvus-ai/plugin"
 
 export const add = tool({
   description: "Add two numbers",
@@ -112,8 +112,8 @@ export default {
 
 Verktøy mottar kontekst om gjeldende økt:
 
-```ts title=".argus/tools/project.ts" {8}
-import { tool } from "@argus-ai/plugin"
+```ts title=".opencorvus/tools/project.ts" {8}
+import { tool } from "@opencorvus-ai/plugin"
 
 export default tool({
   description: "Get project information",
@@ -139,7 +139,7 @@ Du kan skrive verktøyene dine på hvilket som helst språk du vil. Her er et ek
 
 Først lager du verktøyet som et Python-skript:
 
-```python title=".argus/tools/add.py"
+```python title=".opencorvus/tools/add.py"
 import sys
 
 a = int(sys.argv[1])
@@ -149,8 +149,8 @@ print(a + b)
 
 Lag deretter verktøydefinisjonen som påkaller den:
 
-```ts title=".argus/tools/python-add.ts" {10}
-import { tool } from "@argus-ai/plugin"
+```ts title=".opencorvus/tools/python-add.ts" {10}
+import { tool } from "@opencorvus-ai/plugin"
 import path from "path"
 
 export default tool({
@@ -160,7 +160,7 @@ export default tool({
     b: tool.schema.number().describe("Second number"),
   },
   async execute(args, context) {
-    const script = path.join(context.worktree, ".argus/tools/add.py")
+    const script = path.join(context.worktree, ".opencorvus/tools/add.py")
     const result = await Bun.$`python3 ${script} ${args.a} ${args.b}`.text()
     return result.trim()
   },

@@ -328,17 +328,17 @@ describe("filesystem", () => {
     })
 
     test("supports custom Windows drive mounts", () => {
-      const previous = process.env.ARGUS_WINDOWS_DRIVE_MOUNTS
+      const previous = process.env.OPENCORVUS_WINDOWS_DRIVE_MOUNTS
       try {
-        process.env.ARGUS_WINDOWS_DRIVE_MOUNTS = "custommnt"
+        process.env.OPENCORVUS_WINDOWS_DRIVE_MOUNTS = "custommnt"
         if (process.platform === "win32") {
           expect(Filesystem.windowsPath("/custommnt/e/dev/project")).toBe("E:/dev/project")
         } else {
           expect(Filesystem.windowsPath("/custommnt/e/dev/project")).toBe("/custommnt/e/dev/project")
         }
       } finally {
-        if (previous === undefined) delete process.env.ARGUS_WINDOWS_DRIVE_MOUNTS
-        else process.env.ARGUS_WINDOWS_DRIVE_MOUNTS = previous
+        if (previous === undefined) delete process.env.OPENCORVUS_WINDOWS_DRIVE_MOUNTS
+        else process.env.OPENCORVUS_WINDOWS_DRIVE_MOUNTS = previous
       }
     })
   })

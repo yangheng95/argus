@@ -57,7 +57,7 @@ const startEventStream = (directory: string) => {
   }) as typeof globalThis.fetch
 
   const sdk = createOpenCorvusClient({
-    baseUrl: "http://argus.internal",
+    baseUrl: "http://opencorvus.internal",
     directory,
     fetch: fetchFn,
     signal,
@@ -150,9 +150,9 @@ export const rpc = {
 Rpc.listen(rpc)
 
 function getAuthorizationHeader(): string | undefined {
-  const password = Flag.ARGUS_SERVER_PASSWORD
+  const password = Flag.OPENCORVUS_SERVER_PASSWORD
   if (!password) return undefined
-  const username = Flag.ARGUS_SERVER_USERNAME ?? "argus"
+  const username = Flag.OPENCORVUS_SERVER_USERNAME ?? "opencorvus"
   return `Basic ${btoa(`${username}:${password}`)}`
 }
 

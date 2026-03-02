@@ -3,15 +3,15 @@ export function deactivate() {}
 
 import * as vscode from "vscode"
 
-const TERMINAL_NAME = "argus"
+const TERMINAL_NAME = "opencorvus"
 
 export function activate(context: vscode.ExtensionContext) {
-  let openNewTerminalDisposable = vscode.commands.registerCommand("argus.openNewTerminal", async () => {
+  let openNewTerminalDisposable = vscode.commands.registerCommand("opencorvus.openNewTerminal", async () => {
     await openTerminal()
   })
 
-  let openTerminalDisposable = vscode.commands.registerCommand("argus.openTerminal", async () => {
-    // An argus terminal already exists => focus it
+  let openTerminalDisposable = vscode.commands.registerCommand("opencorvus.openTerminal", async () => {
+    // An opencorvus terminal already exists => focus it
     const existingTerminal = vscode.window.terminals.find((t) => t.name === TERMINAL_NAME)
     if (existingTerminal) {
       existingTerminal.show()
@@ -21,7 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
     await openTerminal()
   })
 
-  let addFilepathDisposable = vscode.commands.registerCommand("argus.addFilepathToTerminal", async () => {
+  let addFilepathDisposable = vscode.commands.registerCommand("opencorvus.addFilepathToTerminal", async () => {
     const fileRef = getActiveFile()
     if (!fileRef) {
       return
@@ -62,7 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
 
     terminal.show()
-    terminal.sendText(`argus --port ${port}`)
+    terminal.sendText(`opencorvus --port ${port}`)
 
     const fileRef = getActiveFile()
     if (!fileRef) {

@@ -134,7 +134,7 @@ export namespace Pty {
       ...input.env,
       ...shellVars,
       TERM: term,
-      ARGUS_TERMINAL: "1",
+      OPENCORVUS_TERMINAL: "1",
     } as Record<string, string>
 
     if (process.platform === "win32") {

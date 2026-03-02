@@ -120,7 +120,7 @@ export namespace Filesystem {
     if (p.startsWith("//")) return p.replace(/\//g, "\\")
 
     const mounts = new Set(["mnt", "cygdrive"])
-    for (const item of (process.env.ARGUS_WINDOWS_DRIVE_MOUNTS || "").split(",")) {
+    for (const item of (process.env.OPENCORVUS_WINDOWS_DRIVE_MOUNTS || "").split(",")) {
       const value = item.trim().replace(/^\/+|\/+$/g, "")
       if (value) mounts.add(value)
     }

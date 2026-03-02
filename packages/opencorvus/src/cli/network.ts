@@ -19,8 +19,8 @@ const options = {
   },
   "mdns-domain": {
     type: "string" as const,
-    describe: "custom domain name for mDNS service (default: argus.local)",
-    default: "argus.local",
+    describe: "custom domain name for mDNS service (default: opencorvus.local)",
+    default: "opencorvus.local",
   },
   cors: {
     type: "string" as const,

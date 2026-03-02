@@ -3,7 +3,7 @@ import { Global } from "../global"
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 
-export const OAUTH_DUMMY_KEY = "argus-oauth-dummy-key"
+export const OAUTH_DUMMY_KEY = "opencorvus-oauth-dummy-key"
 
 export namespace Auth {
   export const Oauth = z

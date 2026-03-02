@@ -3,11 +3,11 @@ title: Tastebindinger
 description: Tilpass tastebindingene dine.
 ---
 
-Argus har en liste over tastebindinger som du kan tilpasse gjennom Argus-konfigurasjonen.
+OpenCorvus har en liste over tastebindinger som du kan tilpasse gjennom OpenCorvus-konfigurasjonen.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "leader": "ctrl+x",
     "app_exit": "ctrl+c,ctrl+d,<leader>q",
@@ -107,7 +107,7 @@ Argus har en liste over tastebindinger som du kan tilpasse gjennom Argus-konfigu
 
 ## Leader-tast
 
-Argus bruker en `leader`-tast for de fleste tastebindinger. Dette unngår konflikter i terminalen din.
+OpenCorvus bruker en `leader`-tast for de fleste tastebindinger. Dette unngår konflikter i terminalen din.
 
 Som standard er `ctrl+x` ledertasten, og de fleste handlinger krever at du først trykker på ledertasten og deretter snarveien. For å starte en ny økt, trykker du for eksempel først `ctrl+x` og deretter `n`.
 
@@ -119,9 +119,9 @@ Du trenger ikke å bruke en ledertast for tastebindingene dine, men vi anbefaler
 
 Du kan deaktivere en tastebinding ved å legge til tasten til konfigurasjonen med verdien "none".
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "session_compact": "none"
   }
@@ -132,7 +132,7 @@ Du kan deaktivere en tastebinding ved å legge til tasten til konfigurasjonen me
 
 ## Snarveier i skrivebordsappen
 
-Prompt-feltet for Argus-skrivebordsappen støtter vanlige snarveier i Readline/Emacs-stil for redigering av tekst. Disse er innebygd og foreløpig ikke konfigurerbare via `argus.json`.
+Prompt-feltet for OpenCorvus-skrivebordsappen støtter vanlige snarveier i Readline/Emacs-stil for redigering av tekst. Disse er innebygd og foreløpig ikke konfigurerbare via `opencorvus.json`.
 
 | Snarvei  | Handling                                 |
 | -------- | ---------------------------------------- |

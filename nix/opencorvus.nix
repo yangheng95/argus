@@ -13,7 +13,7 @@
   node_modules ? callPackage ./node-modules.nix { },
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
-  pname = "argus";
+  pname = "opencorvus";
   inherit (node_modules) version src;
   inherit node_modules;
 
@@ -41,7 +41,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   buildPhase = ''
     runHook preBuild
 
-    cd ./packages/argus
+    cd ./packages/opencorvus
     bun --bun ./script/build.ts --single --skip-install
     bun --bun ./script/schema.ts schema.json
 
@@ -51,10 +51,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
 
-    install -Dm755 dist/argus-*/bin/argus $out/bin/argus
-    install -Dm644 schema.json $out/share/argus/schema.json
+    install -Dm755 dist/opencorvus-*/bin/opencorvus $out/bin/opencorvus
+    install -Dm644 schema.json $out/share/opencorvus/schema.json
 
-    wrapProgram $out/bin/argus \
+    wrapProgram $out/bin/opencorvus \
       --prefix PATH : ${
         lib.makeBinPath (
           [
@@ -70,9 +70,9 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
   postInstall = lib.optionalString (stdenvNoCC.buildPlatform.canExecute stdenvNoCC.hostPlatform) ''
     # trick yargs into also generating zsh completions
-    installShellCompletion --cmd argus \
-      --bash <($out/bin/argus completion) \
-      --zsh <(SHELL=/bin/zsh $out/bin/argus completion)
+    installShellCompletion --cmd opencorvus \
+      --bash <($out/bin/opencorvus completion) \
+      --zsh <(SHELL=/bin/zsh $out/bin/opencorvus completion)
   '';
 
   nativeInstallCheckInputs = [
@@ -84,14 +84,14 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   versionCheckProgramArg = "--version";
 
   passthru = {
-    jsonschema = "${placeholder "out"}/share/argus/schema.json";
+    jsonschema = "${placeholder "out"}/share/opencorvus/schema.json";
   };
 
   meta = {
     description = "The open source coding agent";
     homepage = "https://opencode.ai/";
     license = lib.licenses.mit;
-    mainProgram = "argus";
+    mainProgram = "opencorvus";
     inherit (node_modules.meta) platforms;
   };
 })

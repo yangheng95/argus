@@ -85,7 +85,7 @@ export const McpListCommand = cmd({
 
         if (servers.length === 0) {
           prompts.log.warn("No MCP servers configured")
-          prompts.outro("Add servers with: argus mcp add")
+          prompts.outro("Add servers with: opencorvus mcp add")
           return
         }
 
@@ -162,7 +162,7 @@ export const McpAuthCommand = cmd({
 
         if (oauthServers.length === 0) {
           prompts.log.warn("No OAuth-capable MCP servers configured")
-          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in argus.json:")
+          prompts.log.info("Remote MCP servers support OAuth by default. Add a remote server in opencorvus.json:")
           prompts.log.info(`
   "mcp": {
     "my-server": {
@@ -381,15 +381,15 @@ export const McpLogoutCommand = cmd({
 })
 
 async function resolveConfigPath(baseDir: string, global = false) {
-  // Check for existing config files (prefer .jsonc over .json, check .opencorvus/ and .argus/ subdirectories too)
-  const candidates = [path.join(baseDir, "argus.json"), path.join(baseDir, "argus.jsonc")]
+  // Check for existing config files (prefer .jsonc over .json, check .opencorvus/ and .opencorvus/ subdirectories too)
+  const candidates = [path.join(baseDir, "opencorvus.json"), path.join(baseDir, "opencorvus.jsonc")]
 
   if (!global) {
     candidates.push(
-      path.join(baseDir, ".opencorvus", "argus.json"),
-      path.join(baseDir, ".opencorvus", "argus.jsonc"),
+      path.join(baseDir, ".opencorvus", "opencorvus.json"),
+      path.join(baseDir, ".opencorvus", "opencorvus.jsonc"),
     )
-    candidates.push(path.join(baseDir, ".argus", "argus.json"), path.join(baseDir, ".argus", "argus.jsonc"))
+    candidates.push(path.join(baseDir, ".opencorvus", "opencorvus.json"), path.join(baseDir, ".opencorvus", "opencorvus.jsonc"))
   }
 
   for (const candidate of candidates) {
@@ -398,7 +398,7 @@ async function resolveConfigPath(baseDir: string, global = false) {
     }
   }
 
-  // Default to argus.json if none exist
+  // Default to opencorvus.json if none exist
   return candidates[0]
 }
 
@@ -485,7 +485,7 @@ export const McpAddCommand = cmd({
         if (type === "local") {
           const command = await prompts.text({
             message: "Enter command to run",
-            placeholder: "e.g., argus x @modelcontextprotocol/server-filesystem",
+            placeholder: "e.g., opencorvus x @modelcontextprotocol/server-filesystem",
             validate: (x) => (x && x.length > 0 ? undefined : "Required"),
           })
           if (prompts.isCancel(command)) throw new UI.CancelledError()
@@ -666,7 +666,7 @@ export const McpDebugCommand = cmd({
               params: {
                 protocolVersion: "2024-11-05",
                 capabilities: {},
-                clientInfo: { name: "argus-debug", version: Installation.VERSION },
+                clientInfo: { name: "opencorvus-debug", version: Installation.VERSION },
               },
               id: 1,
             }),
@@ -707,7 +707,7 @@ export const McpDebugCommand = cmd({
 
             try {
               const client = new Client({
-                name: "argus-debug",
+                name: "opencorvus-debug",
                 version: Installation.VERSION,
               })
               await client.connect(transport)

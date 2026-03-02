@@ -24,7 +24,7 @@ interface RemovalTargets {
 
 export const UninstallCommand = {
   command: "uninstall",
-  describe: "uninstall argus and remove all related files",
+  describe: "uninstall opencorvus and remove all related files",
   builder: (yargs: Argv) =>
     yargs
       .option("keep-config", {
@@ -55,7 +55,7 @@ export const UninstallCommand = {
     UI.empty()
     UI.println(UI.logo("  "))
     UI.empty()
-    prompts.intro("Uninstall Argus")
+    prompts.intro("Uninstall OpenCorvus")
 
     const method = await Installation.method()
     prompts.log.info(`Installation method: ${method}`)
@@ -129,13 +129,13 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string> = {
-      npm: "npm uninstall -g argus-ai",
-      pnpm: "pnpm uninstall -g argus-ai",
-      bun: "bun remove -g argus-ai",
-      yarn: "yarn global remove argus-ai",
-      brew: "brew uninstall argus",
-      choco: "choco uninstall argus",
-      scoop: "scoop uninstall argus",
+      npm: "npm uninstall -g opencorvus-ai",
+      pnpm: "pnpm uninstall -g opencorvus-ai",
+      bun: "bun remove -g opencorvus-ai",
+      yarn: "yarn global remove opencorvus-ai",
+      brew: "brew uninstall opencorvus",
+      choco: "choco uninstall opencorvus",
+      scoop: "scoop uninstall opencorvus",
     }
     prompts.log.info(`  ✓ Package: ${cmds[method] || method}`)
   }
@@ -180,13 +180,13 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
 
   if (method !== "curl" && method !== "unknown") {
     const cmds: Record<string, string[]> = {
-      npm: ["npm", "uninstall", "-g", "argus-ai"],
-      pnpm: ["pnpm", "uninstall", "-g", "argus-ai"],
-      bun: ["bun", "remove", "-g", "argus-ai"],
-      yarn: ["yarn", "global", "remove", "argus-ai"],
-      brew: ["brew", "uninstall", "argus"],
-      choco: ["choco", "uninstall", "argus"],
-      scoop: ["scoop", "uninstall", "argus"],
+      npm: ["npm", "uninstall", "-g", "opencorvus-ai"],
+      pnpm: ["pnpm", "uninstall", "-g", "opencorvus-ai"],
+      bun: ["bun", "remove", "-g", "opencorvus-ai"],
+      yarn: ["yarn", "global", "remove", "opencorvus-ai"],
+      brew: ["brew", "uninstall", "opencorvus"],
+      choco: ["choco", "uninstall", "opencorvus"],
+      scoop: ["scoop", "uninstall", "opencorvus"],
     }
 
     const cmd = cmds[method]
@@ -194,7 +194,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
       spinner.start(`Running ${cmd.join(" ")}...`)
       const result =
         method === "choco"
-          ? await $`echo Y | choco uninstall argus -y -r`.quiet().nothrow()
+          ? await $`echo Y | choco uninstall opencorvus -y -r`.quiet().nothrow()
           : await $`${cmd}`.quiet().nothrow()
       if (result.exitCode !== 0) {
         spinner.stop(`Package manager uninstall failed: exit code ${result.exitCode}`, 1)
@@ -218,7 +218,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
     prompts.log.info(`  rm "${targets.binary}"`)
 
     const binDir = path.dirname(targets.binary)
-    if (binDir.includes(".opencorvus") || binDir.includes(".argus")) {
+    if (binDir.includes(".opencorvus") || binDir.includes(".opencorvus")) {
       prompts.log.info(`  rmdir "${binDir}" 2>/dev/null`)
     }
   }
@@ -232,7 +232,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   }
 
   UI.empty()
-  prompts.log.success("Thank you for using Argus!")
+  prompts.log.success("Thank you for using OpenCorvus!")
 }
 
 async function getShellConfigFile(): Promise<string | null> {
@@ -269,7 +269,7 @@ async function getShellConfigFile(): Promise<string | null> {
     if (!exists) continue
 
     const content = await Filesystem.readText(file).catch(() => "")
-    if (content.includes("# argus") || content.includes(".opencorvus/bin") || content.includes(".argus/bin")) {
+    if (content.includes("# opencorvus") || content.includes(".opencorvus/bin") || content.includes(".opencorvus/bin")) {
       return file
     }
   }
@@ -287,21 +287,21 @@ async function cleanShellConfig(file: string) {
   for (const line of lines) {
     const trimmed = line.trim()
 
-    if (trimmed === "# argus") {
+    if (trimmed === "# opencorvus") {
       skip = true
       continue
     }
 
     if (skip) {
       skip = false
-      if (trimmed.includes(".opencorvus/bin") || trimmed.includes(".argus/bin") || trimmed.includes("fish_add_path")) {
+      if (trimmed.includes(".opencorvus/bin") || trimmed.includes(".opencorvus/bin") || trimmed.includes("fish_add_path")) {
         continue
       }
     }
 
     if (
-      (trimmed.startsWith("export PATH=") && (trimmed.includes(".opencorvus/bin") || trimmed.includes(".argus/bin"))) ||
-      (trimmed.startsWith("fish_add_path") && (trimmed.includes(".opencorvus") || trimmed.includes(".argus")))
+      (trimmed.startsWith("export PATH=") && (trimmed.includes(".opencorvus/bin") || trimmed.includes(".opencorvus/bin"))) ||
+      (trimmed.startsWith("fish_add_path") && (trimmed.includes(".opencorvus") || trimmed.includes(".opencorvus")))
     ) {
       continue
     }

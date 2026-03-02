@@ -22,7 +22,7 @@ export namespace Tui {
     port?: number
     /** Hostname for the TUI HTTP server (defaults to 127.0.0.1) */
     hostname?: string
-    /** argus executable path (defaults to "argus") */
+    /** opencorvus executable path (defaults to "opencorvus") */
     bin?: string
   }
 
@@ -164,7 +164,7 @@ export namespace Tui {
   export async function spawn(opts: SpawnOptions = {}): Promise<Handle> {
     const port = opts.port ?? (await allocatePort())
     const hostname = opts.hostname ?? "127.0.0.1"
-    const bin = opts.bin ?? "argus"
+    const bin = opts.bin ?? "opencorvus"
     const cwd = opts.directory ?? process.cwd()
 
     const args: string[] = ["--port", String(port), "--hostname", hostname]

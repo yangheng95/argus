@@ -10,7 +10,7 @@ env:
 
 jobs:
   update-docs:
-    if: github.repository == 'yangheng95/argus'
+    if: github.repository == 'yangheng95/opencorvus'
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -41,12 +41,12 @@ jobs:
             } >> $GITHUB_OUTPUT
           fi
 
-      - name: Run argus
+      - name: Run opencorvus
         if: steps.commits.outputs.has_commits == 'true'
-        uses: yangheng95/argus/github@latest
+        uses: yangheng95/opencorvus/github@latest
         env:
           DASHSCOPE_API_KEY: ${{ secrets.CODING_DASHSCOPE_API_KEY }}
-          ARGUS_CONFIG_CONTENT: '{"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
+          OPENCORVUS_CONFIG_CONTENT: '{"provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
         with:
           model: alibaba-cn/qwen3.5-plus
           agent: docs

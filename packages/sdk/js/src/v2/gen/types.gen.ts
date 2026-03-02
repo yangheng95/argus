@@ -1059,7 +1059,7 @@ export type GlobalEvent = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Server configuration for argus serve and web commands
+ * Server configuration for opencorvus serve and web commands
  */
 export type ServerConfig = {
   /**
@@ -1075,7 +1075,7 @@ export type ServerConfig = {
    */
   mdns?: boolean
   /**
-   * Custom domain name for mDNS service (default: argus.local)
+   * Custom domain name for mDNS service (default: opencorvus.local)
    */
   mdnsDomain?: string
   /**

@@ -3,7 +3,7 @@ title: Feilsøking
 description: Vanlige problemer og hvordan de kan løses.
 ---
 
-For å feilsøke problemer med Argus, start med å sjekke loggene og lokale data den lagrer på disken.
+For å feilsøke problemer med OpenCorvus, start med å sjekke loggene og lokale data den lagrer på disken.
 
 ---
 
@@ -11,21 +11,21 @@ For å feilsøke problemer med Argus, start med å sjekke loggene og lokale data
 
 Loggfiler skrives til:
 
-- **macOS/Linux**: `~/.local/share/argus/log/`
-- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.local\share\argus\log`
+- **macOS/Linux**: `~/.local/share/opencorvus/log/`
+- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.local\share\opencorvus\log`
 
 Loggfiler navngis med tidsstempler (f.eks. `2025-01-09T123456.log`) og de siste 10 loggfilene beholdes.
 
-Du kan angi loggnivået med kommandolinjealternativet `--log-level` for å få mer detaljert feilsøkingsinformasjon. For eksempel `argus --log-level DEBUG`.
+Du kan angi loggnivået med kommandolinjealternativet `--log-level` for å få mer detaljert feilsøkingsinformasjon. For eksempel `opencorvus --log-level DEBUG`.
 
 ---
 
 ## Lagring
 
-Argus lagrer øktdata og andre applikasjonsdata på disken på:
+OpenCorvus lagrer øktdata og andre applikasjonsdata på disken på:
 
-- **macOS/Linux**: `~/.local/share/argus/`
-- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.local\share\argus`
+- **macOS/Linux**: `~/.local/share/opencorvus/`
+- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.local\share\opencorvus`
 
 Denne katalogen inneholder:
 
@@ -39,13 +39,13 @@ Denne katalogen inneholder:
 
 ## Skrivebordsapp
 
-Argus Desktop kjører en lokal Argus-server (`argus-cli` sidevognen) i bakgrunnen. De fleste problemene er forårsaket av en plugin som fungerer dårlig, en ødelagt cache eller en dårlig serverinnstilling.
+OpenCorvus Desktop kjører en lokal OpenCorvus-server (`opencorvus-cli` sidevognen) i bakgrunnen. De fleste problemene er forårsaket av en plugin som fungerer dårlig, en ødelagt cache eller en dårlig serverinnstilling.
 
 ### Raske sjekker
 
 - Avslutt og start appen på nytt.
 - Hvis appen viser en feilskjerm, klikker du på **Start på nytt** og kopierer feildetaljene.
-- Bare macOS: `Argus`-meny -> **Last nettvisning på nytt** (hjelper hvis UI er tom/frosset).
+- Bare macOS: `OpenCorvus`-meny -> **Last nettvisning på nytt** (hjelper hvis UI er tom/frosset).
 
 ---
 
@@ -57,28 +57,28 @@ Hvis skrivebordsappen krasjer ved oppstart, henger eller oppfører seg merkelig,
 
 Åpne den globale konfigurasjonsfilen og se etter en `plugin`-nøkkel.
 
-- **macOS/Linux**: `~/.config/argus/argus.jsonc` (eller `~/.config/argus/argus.json`)
-- **macOS/Linux** (eldre installasjoner): `~/.local/share/argus/argus.jsonc`
-- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.config\argus\argus.jsonc`
+- **macOS/Linux**: `~/.config/opencorvus/opencorvus.jsonc` (eller `~/.config/opencorvus/opencorvus.json`)
+- **macOS/Linux** (eldre installasjoner): `~/.local/share/opencorvus/opencorvus.jsonc`
+- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.config\opencorvus\opencorvus.jsonc`
 
 Hvis du har konfigurert plugins, deaktiver dem midlertidig ved å fjerne nøkkelen eller sette den til en tom matrise:
 
 ```jsonc
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "plugin": [],
 }
 ```
 
 #### Sjekk plugin-kataloger
 
-Argus kan også laste lokale plugins fra disken. Flytt disse midlertidig ut av veien (eller gi nytt navn til mappen) og start skrivebordsappen på nytt:
+OpenCorvus kan også laste lokale plugins fra disken. Flytt disse midlertidig ut av veien (eller gi nytt navn til mappen) og start skrivebordsappen på nytt:
 
 - **Globale plugins**
-  - **macOS/Linux**: `~/.config/argus/plugins/`
-  - **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.config\argus\plugins`
+  - **macOS/Linux**: `~/.config/opencorvus/plugins/`
+  - **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.config\opencorvus\plugins`
 - **Prosjektplugins** (bare hvis du bruker konfigurasjon per prosjekt)
-  - `<your-project>/.argus/plugins/`
+  - `<your-project>/.opencorvus/plugins/`
 
 Hvis appen begynner å fungere igjen, aktiverer du plugins én om gangen for å finne ut hvilken som forårsaker problemet.
 
@@ -86,22 +86,22 @@ Hvis appen begynner å fungere igjen, aktiverer du plugins én om gangen for å 
 
 ### Tøm hurtigbufferen
 
-Hvis deaktivering av plugins ikke hjelper (eller en plugin-installasjon sitter fast), tøm hurtigbufferen slik at Argus kan gjenoppbygge den.
+Hvis deaktivering av plugins ikke hjelper (eller en plugin-installasjon sitter fast), tøm hurtigbufferen slik at OpenCorvus kan gjenoppbygge den.
 
-1. Avslutt Argus Desktop helt.
+1. Avslutt OpenCorvus Desktop helt.
 2. Slett hurtigbufferkatalogen:
 
-- **macOS**: Finder -> `Cmd+Shift+G` -> lim inn `~/.cache/argus`
-- **Linux**: slett `~/.cache/argus` (eller kjør `rm -rf ~/.cache/argus`)
-- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.cache\argus`
+- **macOS**: Finder -> `Cmd+Shift+G` -> lim inn `~/.cache/opencorvus`
+- **Linux**: slett `~/.cache/opencorvus` (eller kjør `rm -rf ~/.cache/opencorvus`)
+- **Windows**: Trykk `WIN+R` og lim inn `%USERPROFILE%\.cache\opencorvus`
 
-3. Start Argus Desktop på nytt.
+3. Start OpenCorvus Desktop på nytt.
 
 ---
 
 ### Løs problemer med servertilkobling
 
-Argus Desktop kan enten starte sin egen lokale server (standard) eller koble til en server URL du har konfigurert.
+OpenCorvus Desktop kan enten starte sin egen lokale server (standard) eller koble til en server URL du har konfigurert.
 
 Hvis du ser en **"Tilkobling mislyktes"**-dialogboks (eller appen kommer aldri forbi splash-skjermen), se etter en tilpasset server URL.
 
@@ -111,7 +111,7 @@ Fra startskjermen klikker du på servernavnet (med statusprikken) for å åpne s
 
 #### Fjern `server.port` / `server.hostname` fra konfigurasjonen din
 
-Hvis `argus.json(c)` inneholder en `server`-del, fjern den midlertidig og start skrivebordsappen på nytt.
+Hvis `opencorvus.json(c)` inneholder en `server`-del, fjern den midlertidig og start skrivebordsappen på nytt.
 
 #### Sjekk miljøvariabler
 
@@ -132,21 +132,21 @@ På Linux kan noen Wayland-oppsett forårsake tomme vinduer eller kompositorfeil
 
 ### Windows: WebView2 kjøretid
 
-På Windows krever Argus Desktop Microsoft Edge **WebView2 Runtime**. Hvis appen åpnes i et tomt vindu eller ikke starter, installer/oppdater WebView2 og prøv igjen.
+På Windows krever OpenCorvus Desktop Microsoft Edge **WebView2 Runtime**. Hvis appen åpnes i et tomt vindu eller ikke starter, installer/oppdater WebView2 og prøv igjen.
 
 ---
 
 ### Windows: Generelle ytelsesproblemer
 
-Hvis du opplever treg ytelse, problemer med filtilgang eller terminalproblemer på Windows, kan du prøve å bruke [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL gir et Linux-miljø som fungerer mer sømløst med funksjonene til Argus.
+Hvis du opplever treg ytelse, problemer med filtilgang eller terminalproblemer på Windows, kan du prøve å bruke [WSL (Windows Subsystem for Linux)](/docs/windows-wsl). WSL gir et Linux-miljø som fungerer mer sømløst med funksjonene til OpenCorvus.
 
 ---
 
 ### Varsler vises ikke
 
-Argus Desktop viser bare systemvarsler når:
+OpenCorvus Desktop viser bare systemvarsler når:
 
-- varsler er aktivert for Argus i OS-innstillingene dine, og
+- varsler er aktivert for OpenCorvus i OS-innstillingene dine, og
 - appvinduet er ikke fokusert.
 
 ---
@@ -155,11 +155,11 @@ Argus Desktop viser bare systemvarsler når:
 
 Hvis appen ikke starter og du ikke kan slette innstillingene fra UI-et, tilbakestill skrivebordsappens lagrede tilstand.
 
-1. Avslutt Argus Desktop.
-2. Finn og slett disse filene (de finnes i Argus Desktop-appens datakatalog):
+1. Avslutt OpenCorvus Desktop.
+2. Finn og slett disse filene (de finnes i OpenCorvus Desktop-appens datakatalog):
 
-- `argus.settings.dat` (stasjonær standardserver URL)
-- `argus.global.dat` og `argus.workspace.*.dat` (UI tilstand som nylige servere/prosjekter)
+- `opencorvus.settings.dat` (stasjonær standardserver URL)
+- `opencorvus.global.dat` og `opencorvus.workspace.*.dat` (UI tilstand som nylige servere/prosjekter)
 
 ---
 
@@ -177,21 +177,21 @@ Modeller skal refereres slik: `<providerId>/<modelId>`
 
 ### AI_APICallError og leverandørpakkeproblemer
 
-Hvis du støter på API-anropsfeil, kan dette skyldes utdaterte provider-pakker. Argus installerer dynamisk provider-pakker (OpenAI, Anthropic, Google, etc.) etter behov og cacher dem lokalt.
+Hvis du støter på API-anropsfeil, kan dette skyldes utdaterte provider-pakker. OpenCorvus installerer dynamisk provider-pakker (OpenAI, Anthropic, Google, etc.) etter behov og cacher dem lokalt.
 
 For å løse problemer med leverandørpakke:
 
 1. Tøm leverandørens pakkebuffer:
 
    ```bash
-   rm -rf ~/.cache/argus
+   rm -rf ~/.cache/opencorvus
    ```
 
-   På Windows, trykk `WIN+R` og slett: `%USERPROFILE%\.cache\argus`
+   På Windows, trykk `WIN+R` og slett: `%USERPROFILE%\.cache\opencorvus`
 
-2. Start Argus på nytt for å installere de nyeste provider-pakkene på nytt
+2. Start OpenCorvus på nytt for å installere de nyeste provider-pakkene på nytt
 
-Dette vil tvinge Argus til å laste ned de nyeste versjonene av provider-pakkene, som ofte løser kompatibilitetsproblemer med modellparametere og API-endringer.
+Dette vil tvinge OpenCorvus til å laste ned de nyeste versjonene av provider-pakkene, som ofte løser kompatibilitetsproblemer med modellparametere og API-endringer.
 
 ---
 
@@ -222,4 +222,4 @@ Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
 export DISPLAY=:99.0
 ```
 
-Argus vil oppdage om du bruker Wayland og foretrekker `wl-clipboard`, ellers vil den prøve å finne utklippstavle-verktøy i rekkefølgen: `xclip` og `xsel`.
+OpenCorvus vil oppdage om du bruker Wayland og foretrekker `wl-clipboard`, ellers vil den prøve å finne utklippstavle-verktøy i rekkefølgen: `xclip` og `xsel`.

@@ -1,6 +1,6 @@
 ---
 description: git commit and push
-model: argus/kimi-k2.5
+model: opencorvus/kimi-k2.5
 subtask: true
 ---
 

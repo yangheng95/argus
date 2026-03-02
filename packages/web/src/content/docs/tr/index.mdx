@@ -1,15 +1,15 @@
 ---
 title: Giriş
-description: argus kullanmaya başlayın.
+description: opencorvus kullanmaya başlayın.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 import config from "../../../../config.mjs"
 export const console = config.console
 
-[**argus**](/) açık kaynaklı bir AI kodlama ajanıdır. Terminal tabanlı bir arayüz, masaüstü uygulaması veya IDE uzantısı olarak mevcuttur.
+[**opencorvus**](/) açık kaynaklı bir AI kodlama ajanıdır. Terminal tabanlı bir arayüz, masaüstü uygulaması veya IDE uzantısı olarak mevcuttur.
 
-![argus TUI with the argus theme](../../../assets/lander/screenshot.png)
+![opencorvus TUI with the opencorvus theme](../../../assets/lander/screenshot.png)
 
 Başlayalım.
 
@@ -17,7 +17,7 @@ Başlayalım.
 
 #### Ön koşullar
 
-argus'u terminalinizde kullanmak için ihtiyacınız olacak:
+opencorvus'u terminalinizde kullanmak için ihtiyacınız olacak:
 
 1. Şu gibi modern bir terminal emülatörü:
    - [WezTerm](https://wezterm.org), cross-platform
@@ -31,10 +31,10 @@ argus'u terminalinizde kullanmak için ihtiyacınız olacak:
 
 ## Kurulum
 
-argus'u kurmanın en kolay yolu kurulum betiğidir.
+opencorvus'u kurmanın en kolay yolu kurulum betiğidir.
 
 ```bash
-curl -fsSL https://argus.ai/install | bash
+curl -fsSL https://opencorvus.ai/install | bash
 ```
 
 Ayrıca aşağıdaki komutlarla da yükleyebilirsiniz:
@@ -45,28 +45,28 @@ Ayrıca aşağıdaki komutlarla da yükleyebilirsiniz:
 
       <TabItem label="npm">
       ```bash
-      npm install -g argus-ai
+      npm install -g opencorvus-ai
       ```
 
           </TabItem>
 
         <TabItem label="Bun">
         ```bash
-        bun install -g argus-ai
+        bun install -g opencorvus-ai
         ```
 
           </TabItem>
 
         <TabItem label="pnpm">
         ```bash
-        pnpm install -g argus-ai
+        pnpm install -g opencorvus-ai
         ```
 
           </TabItem>
 
         <TabItem label="Yarn">
         ```bash
-        yarn global add argus-ai
+        yarn global add opencorvus-ai
         ```
 
       </TabItem>
@@ -76,68 +76,68 @@ Ayrıca aşağıdaki komutlarla da yükleyebilirsiniz:
 - **Homebrew'u macOS ve Linux'ta kullanma**
 
   ```bash
-  brew install anomalyco/tap/argus
+  brew install anomalyco/tap/opencorvus
   ```
 
-  > En güncel sürümler için argus tap'ini kullanmanızı öneririz. Resmi `brew install argus` formülü Homebrew ekibi tarafından korunur ve daha sık güncellenir.
+  > En güncel sürümler için opencorvus tap'ini kullanmanızı öneririz. Resmi `brew install opencorvus` formülü Homebrew ekibi tarafından korunur ve daha sık güncellenir.
 
 - **Paru'yu Arch Linux'ta kullanma**
 
   ```bash
-  sudo pacman -S argus           # Arch Linux (Stable)
-  paru -S argus-bin              # Arch Linux (Latest from AUR)
+  sudo pacman -S opencorvus           # Arch Linux (Stable)
+  paru -S opencorvus-bin              # Arch Linux (Latest from AUR)
   ```
 
 #### Windows
 
 :::tip[Önerilen: WSL kullanın]
-Windows'ta en iyi deneyim için [Windows Subsystem for Linux (WSL)](/docs/windows-wsl) kullanılmasını öneririz. Daha iyi performans ve argus'un özellikleriyle tam uyumluluğu sağlar.
+Windows'ta en iyi deneyim için [Windows Subsystem for Linux (WSL)](/docs/windows-wsl) kullanılmasını öneririz. Daha iyi performans ve opencorvus'un özellikleriyle tam uyumluluğu sağlar.
 :::
 
 - **Chocolatey Kullanımı**
 
   ```bash
-  choco install argus
+  choco install opencorvus
   ```
 
 - **Scoop Kullanımı**
 
   ```bash
-  scoop install argus
+  scoop install opencorvus
   ```
 
 - **NPM kullanarak**
 
   ```bash
-  npm install -g argus-ai
+  npm install -g opencorvus-ai
   ```
 
 - **Mise Kullanımı**
 
   ```bash
-  mise use -g github:yangheng95/argus
+  mise use -g github:yangheng95/opencorvus
   ```
 
 - **Docker'ı kullanma**
 
   ```bash
-  docker run -it --rm ghcr.io/yangheng95/argus
+  docker run -it --rm ghcr.io/yangheng95/opencorvus
   ```
 
-argus'un Bun kullanılarak Windows'a yüklenmesine yönelik destek şu anda devam etmektedir.
+opencorvus'un Bun kullanılarak Windows'a yüklenmesine yönelik destek şu anda devam etmektedir.
 
-İkili dosyayı [Releases](https://github.com/yangheng95/argus/releases)'dan da alabilirsiniz.
+İkili dosyayı [Releases](https://github.com/yangheng95/opencorvus/releases)'dan da alabilirsiniz.
 
 ---
 
 ## Yapılandırma
 
-argus ile herhangi bir LLM sağlayıcısının API anahtarlarını yapılandırarak kullanabilirsiniz.
+opencorvus ile herhangi bir LLM sağlayıcısının API anahtarlarını yapılandırarak kullanabilirsiniz.
 
-LLM sağlayıcılarını kullanmaya yeni başlıyorsanız, [Argus Zen](/docs/zen) kullanmanızı öneririz.
-argus ekibi tarafından test edilmiş ve doğrulanmış modellerin seçilmiş bir listesidir.
+LLM sağlayıcılarını kullanmaya yeni başlıyorsanız, [OpenCorvus Zen](/docs/zen) kullanmanızı öneririz.
+opencorvus ekibi tarafından test edilmiş ve doğrulanmış modellerin seçilmiş bir listesidir.
 
-1. TUI'de `/connect` komutunu çalıştırın, argus'u seçin ve [argus.ai/auth](https://argus.ai/auth)'ye gidin.
+1. TUI'de `/connect` komutunu çalıştırın, opencorvus'u seçin ve [opencorvus.ai/auth](https://opencorvus.ai/auth)'ye gidin.
 
    ```txt
    /connect
@@ -167,32 +167,32 @@ Artık bir sağlayıcı yapılandırdığınıza göre, bir projeye gidebilirsin
 cd /path/to/project
 ```
 
-Ve argus'u çalıştırın.
+Ve opencorvus'u çalıştırın.
 
 ```bash
-argus
+opencorvus
 ```
 
-Daha sonra aşağıdaki komutu çalıştırarak proje için argus'u başlatın.
+Daha sonra aşağıdaki komutu çalıştırarak proje için opencorvus'u başlatın.
 
 ```bash frame="none"
 /init
 ```
 
-Bu, argus'un projenizi analiz etmesini ve bir `AGENTS.md` dosyası oluşturmasını sağlayacaktır.
+Bu, opencorvus'un projenizi analiz etmesini ve bir `AGENTS.md` dosyası oluşturmasını sağlayacaktır.
 proje kökü.
 
 :::tip
 Projenizin `AGENTS.md` dosyasını Git'e göndermelisiniz.
 :::
 
-Bu, argus'un proje yapısını ve kullanılan kodlama kalıplarını anlamasına yardımcı olur.
+Bu, opencorvus'un proje yapısını ve kullanılan kodlama kalıplarını anlamasına yardımcı olur.
 
 ---
 
 ## Kullanım
 
-Artık projeniz üzerinde çalışmak için argus'u kullanmaya hazırsınız. Dilediğiniz soruyu sorabilirsiniz.
+Artık projeniz üzerinde çalışmak için opencorvus'u kullanmaya hazırsınız. Dilediğiniz soruyu sorabilirsiniz.
 
 AI kodlama ajanını kullanmaya yeniyseniz aşağıdaki örnekler yardımcı olabilir.
 
@@ -200,7 +200,7 @@ AI kodlama ajanını kullanmaya yeniyseniz aşağıdaki örnekler yardımcı ola
 
 ### Soru Sorma
 
-argus'dan kod tabanını size açıklamasını isteyebilirsiniz.
+opencorvus'dan kod tabanını size açıklamasını isteyebilirsiniz.
 
 :::tip
 Projedeki dosyaları bulanık aramak için `@` tuşunu kullanın.
@@ -216,11 +216,11 @@ Kod tabanının üzerinde çalışmadığınız bir kısmı varsa bu yararlı ol
 
 ### Özellik Ekleme
 
-argus'dan projenize yeni özellikler eklemesini isteyebilirsiniz. Yine de öncelikle ondan bir plan oluşturmasını istemenizi öneririz.
+opencorvus'dan projenize yeni özellikler eklemesini isteyebilirsiniz. Yine de öncelikle ondan bir plan oluşturmasını istemenizi öneririz.
 
 1. **Bir plan oluşturun**
 
-   argus, değişiklik yapma özelliğini kapatan bir \_Plan modu_na sahiptir.
+   opencorvus, değişiklik yapma özelliğini kapatan bir \_Plan modu_na sahiptir.
    Bu modda, özelliğin nasıl uygulanacağını önerir.
 
    **Sekme** tuşunu kullanarak buna geçin. Bunun için sağ alt köşede bir gösterge göreceksiniz.
@@ -237,14 +237,14 @@ argus'dan projenize yeni özellikler eklemesini isteyebilirsiniz. Yine de öncel
    From this screen, the user can undelete a note or permanently delete it.
    ```
 
-   argus'un isteğinizi anlaması için yeterli ayrıntı verin.
+   opencorvus'un isteğinizi anlaması için yeterli ayrıntı verin.
    Ekibinizdeki junior bir geliştiriciyle konuşur gibi yazmak genelde iyi sonuç verir.
 
    :::tip
-   argus'a bol bağlam ve örnek verin.
+   opencorvus'a bol bağlam ve örnek verin.
    :::
 
-   argus verdiğiniz görselleri tarayıp prompt'a ekleyebilir.
+   opencorvus verdiğiniz görselleri tarayıp prompt'a ekleyebilir.
    Bunu bir görseli terminale sürükleyip bırakarak yapabilirsiniz.
 
 2. **Planı yineleyin**
@@ -260,7 +260,7 @@ argus'dan projenize yeni özellikler eklemesini isteyebilirsiniz. Yine de öncel
    İsteme eklemek için görüntüleri terminale sürükleyip bırakın.
    :::
 
-   argus verdiğiniz görselleri tarayıp prompt'a ekleyebilir.
+   opencorvus verdiğiniz görselleri tarayıp prompt'a ekleyebilir.
    Bunu bir görseli terminale sürükleyip bırakarak yapabilirsiniz.
 
 3. **Özelliği oluşturun**
@@ -281,7 +281,7 @@ argus'dan projenize yeni özellikler eklemesini isteyebilirsiniz. Yine de öncel
 
 ### Değişiklik Yapma
 
-Daha basit değişikliklerde, önce planı incelemeden argus'dan doğrudan değişiklik yapmasını isteyebilirsiniz.
+Daha basit değişikliklerde, önce planı incelemeden opencorvus'dan doğrudan değişiklik yapmasını isteyebilirsiniz.
 
 ```txt frame="none" "@packages/functions/src/settings.ts" "@packages/functions/src/notes.ts"
 We need to add authentication to the /settings route. Take a look at how this is
@@ -289,13 +289,13 @@ handled in the /notes route in @packages/functions/src/notes.ts and implement
 the same logic in @packages/functions/src/settings.ts
 ```
 
-argus'un doğru değişiklikleri yapması için yeterli ayrıntı verdiğinizden emin olun.
+opencorvus'un doğru değişiklikleri yapması için yeterli ayrıntı verdiğinizden emin olun.
 
 ---
 
 ### Değişiklikleri Geri Alma
 
-Diyelim ki argus'dan bazı değişiklikler yapmasını istediniz.
+Diyelim ki opencorvus'dan bazı değişiklikler yapmasını istediniz.
 
 ```txt frame="none" "@packages/functions/src/api/index.ts"
 Can you refactor the function in @packages/functions/src/api/index.ts?
@@ -308,13 +308,13 @@ Ama istediğinin bu olmadığını anlıyorsun. Değişiklikleri **geri alabilir
 /undo
 ```
 
-argus değişiklikleri geri alır ve orijinal mesajınızı tekrar gösterir.
+opencorvus değişiklikleri geri alır ve orijinal mesajınızı tekrar gösterir.
 
 ```txt frame="none" "@packages/functions/src/api/index.ts"
 Can you refactor the function in @packages/functions/src/api/index.ts?
 ```
 
-Buradan komut isteminde ince ayar yapabilir ve argus'dan tekrar denemesini isteyebilirsiniz.
+Buradan komut isteminde ince ayar yapabilir ve opencorvus'dan tekrar denemesini isteyebilirsiniz.
 
 :::tip
 Birden çok değişikliği geri almak için `/undo` komutunu birden çok kez çalıştırabilirsiniz.
@@ -330,7 +330,7 @@ Veya `/redo` komutunu kullanarak değişiklikleri **yeniden yapabilirsiniz**.
 
 ## Paylaşma
 
-argus ile yaptığınız görüşmeleri [ekibinizle paylaşabilirsiniz](/docs/share).
+opencorvus ile yaptığınız görüşmeleri [ekibinizle paylaşabilirsiniz](/docs/share).
 
 ```bash frame="none"
 /share
@@ -342,12 +342,12 @@ Bu, mevcut konuşmaya bir bağlantı oluşturacak ve bunu panonuza kopyalayacakt
 Konuşmalar varsayılan olarak paylaşılmaz.
 :::
 
-İşte argus'lu bir [örnek konuşma](https://argus.ai/s/4XP1fce5).
+İşte opencorvus'lu bir [örnek konuşma](https://opencorvus.ai/s/4XP1fce5).
 
 ---
 
 ## Özelleştirme
 
-İşte bu kadar! Artık argus'u kullanma konusunda profesyonelsiniz.
+İşte bu kadar! Artık opencorvus'u kullanma konusunda profesyonelsiniz.
 
-Kendinize göre uyarlamak için [tema seçebilir](/docs/themes), [tuş atamalarını özelleştirebilir](/docs/keybinds), [kod biçimlendirici ayarlayabilir](/docs/formatters), [özel komutlar oluşturabilir](/docs/commands) veya [argus config](/docs/config) ile oynayabilirsiniz.
+Kendinize göre uyarlamak için [tema seçebilir](/docs/themes), [tuş atamalarını özelleştirebilir](/docs/keybinds), [kod biçimlendirici ayarlayabilir](/docs/formatters), [özel komutlar oluşturabilir](/docs/commands) veya [opencorvus config](/docs/config) ile oynayabilirsiniz.

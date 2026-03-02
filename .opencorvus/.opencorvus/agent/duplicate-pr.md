@@ -1,7 +1,7 @@
 ---
 mode: primary
 hidden: true
-model: argus/claude-haiku-4-5
+model: opencorvus/claude-haiku-4-5
 color: "#E67E22"
 tools:
   "*": false

@@ -1,30 +1,30 @@
 ---
 title: Proveedores
-description: Usando cualquier proveedor LLM en Argus.
+description: Usando cualquier proveedor LLM en OpenCorvus.
 ---
 
 import config from "../../../../config.mjs"
 export const console = config.console
 
-Argus usa el [AI SDK](https://ai-sdk.dev/) y [Models.dev](https://models.dev) para admitir **75+ proveedores LLM** y admite la ejecución de modelos locales.
+OpenCorvus usa el [AI SDK](https://ai-sdk.dev/) y [Models.dev](https://models.dev) para admitir **75+ proveedores LLM** y admite la ejecución de modelos locales.
 
 Para agregar un proveedor necesita:
 
 1. Agregue las claves API para el proveedor usando el comando `/connect`.
-2. Configure el proveedor en su configuración Argus.
+2. Configure el proveedor en su configuración OpenCorvus.
 
 ---
 
 ### Credenciales
 
 Cuando agrega las claves API de un proveedor con el comando `/connect`, se almacenan
-en `~/.local/share/argus/auth.json`.
+en `~/.local/share/opencorvus/auth.json`.
 
 ---
 
 ### Configuración
 
-Puedes personalizar los proveedores a través de la sección `provider` en tu Argus
+Puedes personalizar los proveedores a través de la sección `provider` en tu OpenCorvus
 configuración.
 
 ---
@@ -33,9 +33,9 @@ configuración.
 
 Puede personalizar la URL base para cualquier proveedor configurando la opción `baseURL`. Esto resulta útil cuando se utilizan servicios proxy o puntos finales personalizados.
 
-```json title="argus.json" {6}
+```json title="opencorvus.json" {6}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "anthropic": {
       "options": {
@@ -48,16 +48,16 @@ Puede personalizar la URL base para cualquier proveedor configurando la opción 
 
 ---
 
-## Argus Zen
+## OpenCorvus Zen
 
-Argus Zen es una lista de modelos proporcionados por el equipo Argus que han sido
-probado y verificado para funcionar bien con Argus. [Más información](/docs/zen).
+OpenCorvus Zen es una lista de modelos proporcionados por el equipo OpenCorvus que han sido
+probado y verificado para funcionar bien con OpenCorvus. [Más información](/docs/zen).
 
 :::tip
-Si eres nuevo, te recomendamos comenzar con Argus Zen.
+Si eres nuevo, te recomendamos comenzar con OpenCorvus Zen.
 :::
 
-1. Ejecute el comando `/connect` en TUI, seleccione argus y diríjase a [argus.ai/auth](https://argus.ai/auth).
+1. Ejecute el comando `/connect` en TUI, seleccione opencorvus y diríjase a [opencorvus.ai/auth](https://opencorvus.ai/auth).
 
    ```txt
    /connect
@@ -80,7 +80,7 @@ Si eres nuevo, te recomendamos comenzar con Argus Zen.
    /models
    ```
 
-Funciona como cualquier otro proveedor en Argus y su uso es completamente opcional.
+Funciona como cualquier otro proveedor en OpenCorvus y su uso es completamente opcional.
 
 ---
 
@@ -124,7 +124,7 @@ lista, no dude en abrir un PR.
 
 ### Amazon Bedrock
 
-Para usar Amazon Bedrock con Argus:
+Para usar Amazon Bedrock con OpenCorvus:
 
 1. Dirígete al **Catálogo de modelos** en la consola Amazon Bedrock y solicita
    Accede a los modelos que desees.
@@ -137,17 +137,17 @@ Para usar Amazon Bedrock con Argus:
 
    #### Variables de entorno (Inicio rápido)
 
-   Establezca una de estas variables de entorno mientras ejecuta argus:
+   Establezca una de estas variables de entorno mientras ejecuta opencorvus:
 
    ```bash
    # Option 1: Using AWS access keys
-   AWS_ACCESS_KEY_ID=XXX AWS_SECRET_ACCESS_KEY=YYY argus
+   AWS_ACCESS_KEY_ID=XXX AWS_SECRET_ACCESS_KEY=YYY opencorvus
 
    # Option 2: Using named AWS profile
-   AWS_PROFILE=my-profile argus
+   AWS_PROFILE=my-profile opencorvus
 
    # Option 3: Using Bedrock bearer token
-   AWS_BEARER_TOKEN_BEDROCK=XXX argus
+   AWS_BEARER_TOKEN_BEDROCK=XXX opencorvus
    ```
 
    O agrégalos a tu perfil de bash:
@@ -159,11 +159,11 @@ Para usar Amazon Bedrock con Argus:
 
    #### Archivo de configuración (recomendado)
 
-   Para una configuración persistente o específica del proyecto, utilice `argus.json`:
+   Para una configuración persistente o específica del proyecto, utilice `opencorvus.json`:
 
-   ```json title="argus.json"
+   ```json title="opencorvus.json"
    {
-     "$schema": "https://argus.ai/config.json",
+     "$schema": "https://opencorvus.ai/config.json",
      "provider": {
        "amazon-bedrock": {
          "options": {
@@ -188,9 +188,9 @@ Para usar Amazon Bedrock con Argus:
 
    Si utiliza puntos de enlace de VPC para Bedrock:
 
-   ```json title="argus.json"
+   ```json title="opencorvus.json"
    {
-     "$schema": "https://argus.ai/config.json",
+     "$schema": "https://opencorvus.ai/config.json",
      "provider": {
        "amazon-bedrock": {
          "options": {
@@ -232,9 +232,9 @@ Para usar Amazon Bedrock con Argus:
 :::note
 Para perfiles de inferencia personalizados, utilice el modelo y el nombre del proveedor en la clave y establezca la propiedad `id` en arn. Esto garantiza un almacenamiento en caché correcto:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "amazon-bedrock": {
       // ...
@@ -279,7 +279,7 @@ Para perfiles de inferencia personalizados, utilice el modelo y el nombre del pr
    ```
 
 :::info
-El uso de su suscripción Claude Pro/Max en Argus no está oficialmente respaldado por [Anthropic](https://anthropic.com).
+El uso de su suscripción Claude Pro/Max en OpenCorvus no está oficialmente respaldado por [Anthropic](https://anthropic.com).
 :::
 
 ##### Usando las teclas API
@@ -303,7 +303,7 @@ Si encuentra errores del tipo "Lo siento, pero no puedo ayudar con esa solicitud
 2. Vaya a [Azure AI Foundry](https://ai.azure.com/) e implemente un modelo.
 
    :::nota
-   El nombre de la implementación debe coincidir con el nombre del modelo para que argus funcione correctamente.
+   El nombre de la implementación debe coincidir con el nombre del modelo para que opencorvus funcione correctamente.
    :::
 
 3. Ejecute el comando `/connect` y busque **Azure**.
@@ -324,7 +324,7 @@ Si encuentra errores del tipo "Lo siento, pero no puedo ayudar con esa solicitud
 5. Configure el nombre de su recurso como una variable de entorno:
 
    ```bash
-   AZURE_RESOURCE_NAME=XXX argus
+   AZURE_RESOURCE_NAME=XXX opencorvus
    ```
 
    O agrégalo a tu perfil de bash:
@@ -350,7 +350,7 @@ Si encuentra errores del tipo "Lo siento, pero no puedo ayudar con esa solicitud
 2. Vaya a [Azure AI Foundry](https://ai.azure.com/) e implemente un modelo.
 
    :::nota
-   El nombre de la implementación debe coincidir con el nombre del modelo para que argus funcione correctamente.
+   El nombre de la implementación debe coincidir con el nombre del modelo para que opencorvus funcione correctamente.
    :::
 
 3. Ejecute el comando `/connect` y busque **Azure Cognitive Services**.
@@ -371,7 +371,7 @@ Si encuentra errores del tipo "Lo siento, pero no puedo ayudar con esa solicitud
 5. Configure el nombre de su recurso como una variable de entorno:
 
    ```bash
-   AZURE_COGNITIVE_SERVICES_RESOURCE_NAME=XXX argus
+   AZURE_COGNITIVE_SERVICES_RESOURCE_NAME=XXX opencorvus
    ```
 
    O agrégalo a tu perfil de bash:
@@ -482,11 +482,11 @@ Cloudflare AI Gateway le permite acceder a modelos de OpenAI, Anthropic, Workers
    /models
    ```
 
-   También puede agregar modelos a través de su configuración argus.
+   También puede agregar modelos a través de su configuración opencorvus.
 
-   ```json title="argus.json"
+   ```json title="opencorvus.json"
    {
-     "$schema": "https://argus.ai/config.json",
+     "$schema": "https://opencorvus.ai/config.json",
      "provider": {
        "cloudflare-ai-gateway": {
          "models": {
@@ -663,7 +663,7 @@ GitLab Duo proporciona chat agente basado en IA con capacidades de llamada de he
    #### Uso del token de acceso personal
    1. Vaya a [GitLab Configuración de usuario > Tokens de acceso](https://gitlab.com/-/user_settings/personal_access_tokens)
    2. Haga clic en **Agregar nuevo token**
-   3. Nombre: `Argus`, Alcances: `api`
+   3. Nombre: `OpenCorvus`, Alcances: `api`
    4. Copie el token (comienza con `glpat-`)
    5. Introdúcelo en la terminal.
 
@@ -680,20 +680,20 @@ GitLab Duo proporciona chat agente basado en IA con capacidades de llamada de he
 
 :::note
 También puede especificar la variable de entorno 'GITLAB_TOKEN' si no desea
-para almacenar el token en el almacenamiento de autenticación argus.
+para almacenar el token en el almacenamiento de autenticación opencorvus.
 :::
 
 ##### Autohospedado GitLab
 
 :::note[nota de cumplimiento]
-Argus utiliza un modelo pequeño para algunas tareas de IA, como generar el título de la sesión.
-Está configurado para usar gpt-5-nano de forma predeterminada, alojado por Zen. Para bloquear Argus
+OpenCorvus utiliza un modelo pequeño para algunas tareas de IA, como generar el título de la sesión.
+Está configurado para usar gpt-5-nano de forma predeterminada, alojado por Zen. Para bloquear OpenCorvus
 Para usar solo su propia instancia alojada en GitLab, agregue lo siguiente a su
-Archivo `argus.json`. También se recomienda desactivar el uso compartido de sesiones.
+Archivo `opencorvus.json`. También se recomienda desactivar el uso compartido de sesiones.
 
 ```json
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "small_model": "gitlab/duo-chat-haiku-4-5",
   "share": "disabled"
 }
@@ -747,15 +747,15 @@ Luego exponga el ID de la aplicación como variable de entorno:
 export GITLAB_OAUTH_CLIENT_ID=your_application_id_here
 ```
 
-Más documentación en la página de inicio de [argus-gitlab-auth](https://www.npmjs.com/package/@gitlab/argus-gitlab-auth).
+Más documentación en la página de inicio de [opencorvus-gitlab-auth](https://www.npmjs.com/package/@gitlab/opencorvus-gitlab-auth).
 
 ##### Configuración
 
-Personalizar a través de `argus.json`:
+Personalizar a través de `opencorvus.json`:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "gitlab": {
       "options": {
@@ -774,10 +774,10 @@ Personalizar a través de `argus.json`:
 
 Para acceder a herramientas GitLab (solicitudes de fusión, problemas, canalizaciones, CI/CD, etc.):
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
-  "plugin": ["@gitlab/argus-gitlab-plugin"]
+  "$schema": "https://opencorvus.ai/config.json",
+  "plugin": ["@gitlab/opencorvus-gitlab-plugin"]
 }
 ```
 
@@ -787,7 +787,7 @@ Este complemento proporciona capacidades integrales de administración del repos
 
 ### GitHub Copilot
 
-Para utilizar su suscripción GitHub Copilot con argus:
+Para utilizar su suscripción GitHub Copilot con opencorvus:
 
 :::note
 Algunos modelos pueden necesitar un [Pro+
@@ -825,7 +825,7 @@ Algunos modelos deben habilitarse manualmente en su [GitHub configuración del c
 
 ### Google Vertex AI
 
-Para utilizar Google Vertex AI con Argus:
+Para utilizar Google Vertex AI con OpenCorvus:
 
 1. Dirígete a **Model Garden** en Google Cloud Console y verifica el
    Modelos disponibles en su región.
@@ -841,10 +841,10 @@ Para utilizar Google Vertex AI con Argus:
      - `GOOGLE_APPLICATION_CREDENTIALS`: ruta al archivo clave JSON de su cuenta de servicio
      - Autenticar usando gcloud CLI: `gcloud auth application-default login`
 
-   Configúrelos mientras ejecuta argus.
+   Configúrelos mientras ejecuta opencorvus.
 
    ```bash
-   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json GOOGLE_CLOUD_PROJECT=your-project-id argus
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json GOOGLE_CLOUD_PROJECT=your-project-id opencorvus
    ```
 
    O agréguelos a su perfil de bash.
@@ -954,13 +954,13 @@ Para obtener más proveedores y funciones avanzadas como almacenamiento en cach�
 
 #### Configuraciones opcionales
 
-En caso de que vea una característica o modelo de Helicone que no esté configurado automáticamente a través de argus, siempre podrá configurarlo usted mismo.
+En caso de que vea una característica o modelo de Helicone que no esté configurado automáticamente a través de opencorvus, siempre podrá configurarlo usted mismo.
 
 Aquí está el [Directorio de modelos de Helicone](https://helicone.ai/models), lo necesitará para obtener las ID de los modelos que desea agregar.
 
-```jsonc title="~/.config/argus/argus.jsonc"
+```jsonc title="~/.config/opencorvus/opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "helicone": {
       "npm": "@ai-sdk/openai-compatible",
@@ -986,9 +986,9 @@ Aquí está el [Directorio de modelos de Helicone](https://helicone.ai/models), 
 
 Helicone admite encabezados personalizados para funciones como almacenamiento en caché, seguimiento de usuarios y gestión de sesiones. Agréguelos a la configuración de su proveedor usando `options.headers`:
 
-```jsonc title="~/.config/argus/argus.jsonc"
+```jsonc title="~/.config/opencorvus/opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "helicone": {
       "npm": "@ai-sdk/openai-compatible",
@@ -997,7 +997,7 @@ Helicone admite encabezados personalizados para funciones como almacenamiento en
         "baseURL": "https://ai-gateway.helicone.ai",
         "headers": {
           "Helicone-Cache-Enabled": "true",
-          "Helicone-User-Id": "argus",
+          "Helicone-User-Id": "opencorvus",
         },
       },
     },
@@ -1007,21 +1007,21 @@ Helicone admite encabezados personalizados para funciones como almacenamiento en
 
 ##### Seguimiento de sesión
 
-La función [Sesiones](https://docs.helicone.ai/features/sessions) de Helicone le permite agrupar solicitudes LLM relacionadas. Utilice el complemento [argus-helicone-session](https://github.com/H2Shami/argus-helicone-session) para registrar automáticamente cada conversación Argus como una sesión en Helicone.
+La función [Sesiones](https://docs.helicone.ai/features/sessions) de Helicone le permite agrupar solicitudes LLM relacionadas. Utilice el complemento [opencorvus-helicone-session](https://github.com/H2Shami/opencorvus-helicone-session) para registrar automáticamente cada conversación OpenCorvus como una sesión en Helicone.
 
 ```bash
-npm install -g argus-helicone-session
+npm install -g opencorvus-helicone-session
 ```
 
 Agréguelo a su configuración.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "plugin": ["argus-helicone-session"]
+  "plugin": ["opencorvus-helicone-session"]
 }
 ```
 
-El complemento inyecta encabezados `Helicone-Session-Id` y `Helicone-Session-Name` en sus solicitudes. En la página Sesiones de Helicone, verá cada conversación Argus enumerada como una sesión separada.
+El complemento inyecta encabezados `Helicone-Session-Id` y `Helicone-Session-Name` en sus solicitudes. En la página Sesiones de Helicone, verá cada conversación OpenCorvus enumerada como una sesión separada.
 
 ##### Cabeceras comunes de Helicone
 
@@ -1038,11 +1038,11 @@ Consulte el [Directorio de encabezados de Helicone](https://docs.helicone.ai/hel
 
 ### llama.cpp
 
-Puede configurar argus para usar modelos locales a través de la utilidad llama-server de [llama.cpp](https://github.com/ggml-org/llama.cpp)
+Puede configurar opencorvus para usar modelos locales a través de la utilidad llama-server de [llama.cpp](https://github.com/ggml-org/llama.cpp)
 
-```json title="argus.json" "llama.cpp" {5, 6, 8, 10-15}
+```json title="opencorvus.json" "llama.cpp" {5, 6, 8, 10-15}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "llama.cpp": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1105,11 +1105,11 @@ IO.NET ofrece 17 modelos optimizados para varios casos de uso:
 
 ### LM Studio
 
-Puede configurar argus para usar modelos locales a través de LM Studio.
+Puede configurar opencorvus para usar modelos locales a través de LM Studio.
 
-```json title="argus.json" "lmstudio" {5, 6, 8, 10-14}
+```json title="opencorvus.json" "lmstudio" {5, 6, 8, 10-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "lmstudio": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1222,15 +1222,15 @@ Para usar Kimi K2 de Moonshot AI:
 
 ### Ollama
 
-Puedes configurar argus para usar modelos locales a través de Ollama.
+Puedes configurar opencorvus para usar modelos locales a través de Ollama.
 
 :::tip
-Ollama puede configurarse automáticamente para Argus. Consulte los [documentos de integración de Ollama](https://docs.ollama.com/integrations/argus) para obtener más detalles.
+Ollama puede configurarse automáticamente para OpenCorvus. Consulte los [documentos de integración de Ollama](https://docs.ollama.com/integrations/opencorvus) para obtener más detalles.
 :::
 
-```json title="argus.json" "ollama" {5, 6, 8, 10-14}
+```json title="opencorvus.json" "ollama" {5, 6, 8, 10-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "ollama": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1264,13 +1264,13 @@ Si las llamadas a herramientas no funcionan, intente aumentar `num_ctx` en Ollam
 
 ### Ollama Cloud
 
-Para usar Ollama Cloud con Argus:
+Para usar Ollama Cloud con OpenCorvus:
 
 1. Dirígete a [https://ollama.com/](https://ollama.com/) e inicia sesión o crea una cuenta.
 
 2. Vaya a **Configuración** > **Claves** y haga clic en **Agregar clave API** para generar una nueva clave API.
 
-3. Copie la clave API para usarla en Argus.
+3. Copie la clave API para usarla en OpenCorvus.
 
 4. Ejecute el comando `/connect` y busque **Ollama Cloud**.
 
@@ -1287,7 +1287,7 @@ Para usar Ollama Cloud con Argus:
    └ enter
    ```
 
-6. **Importante**: Antes de usar modelos en la nube en Argus, debe obtener la información del modelo localmente:
+6. **Importante**: Antes de usar modelos en la nube en OpenCorvus, debe obtener la información del modelo localmente:
 
    ```bash
    ollama pull gpt-oss:20b-cloud
@@ -1335,19 +1335,19 @@ Si ya tiene una clave API, puede seleccionar **Ingresar manualmente la clave API
 
 ---
 
-### Argus Zen
+### OpenCorvus Zen
 
-Argus Zen es una lista de modelos probados y verificados proporcionada por el equipo Argus. [Más información](/docs/zen).
+OpenCorvus Zen es una lista de modelos probados y verificados proporcionada por el equipo OpenCorvus. [Más información](/docs/zen).
 
-1. Inicie sesión en **<a href={console}>Argus Zen</a>** y haga clic en **Crear API clave**.
+1. Inicie sesión en **<a href={console}>OpenCorvus Zen</a>** y haga clic en **Crear API clave**.
 
-2. Ejecute el comando `/connect` y busque **Argus Zen**.
+2. Ejecute el comando `/connect` y busque **OpenCorvus Zen**.
 
    ```txt
    /connect
    ```
 
-3. Ingrese su clave Argus API.
+3. Ingrese su clave OpenCorvus API.
 
    ```txt
    ┌ API key
@@ -1389,11 +1389,11 @@ Argus Zen es una lista de modelos probados y verificados proporcionada por el eq
    /models
    ```
 
-   También puede agregar modelos adicionales a través de su configuración argus.
+   También puede agregar modelos adicionales a través de su configuración opencorvus.
 
-   ```json title="argus.json" {6}
+   ```json title="opencorvus.json" {6}
    {
-     "$schema": "https://argus.ai/config.json",
+     "$schema": "https://opencorvus.ai/config.json",
      "provider": {
        "openrouter": {
          "models": {
@@ -1404,11 +1404,11 @@ Argus Zen es una lista de modelos probados y verificados proporcionada por el eq
    }
    ```
 
-5. También puedes personalizarlos a través de tu configuración argus. A continuación se muestra un ejemplo de cómo especificar un proveedor.
+5. También puedes personalizarlos a través de tu configuración opencorvus. A continuación se muestra un ejemplo de cómo especificar un proveedor.
 
-   ```json title="argus.json"
+   ```json title="opencorvus.json"
    {
-     "$schema": "https://argus.ai/config.json",
+     "$schema": "https://opencorvus.ai/config.json",
      "provider": {
        "openrouter": {
          "models": {
@@ -1456,7 +1456,7 @@ SAP AI Core brinda acceso a más de 40 modelos de OpenAI, Anthropic, Google, Ama
    O configure la variable de entorno `AICORE_SERVICE_KEY`:
 
    ```bash
-   AICORE_SERVICE_KEY='{"clientid":"...","clientsecret":"...","url":"...","serviceurls":{"AI_API_URL":"..."}}' argus
+   AICORE_SERVICE_KEY='{"clientid":"...","clientsecret":"...","url":"...","serviceurls":{"AI_API_URL":"..."}}' opencorvus
    ```
 
    O agrégalo a tu perfil de bash:
@@ -1468,7 +1468,7 @@ SAP AI Core brinda acceso a más de 40 modelos de OpenAI, Anthropic, Google, Ama
 4. Opcionalmente, configure el ID de implementación y el grupo de recursos:
 
    ```bash
-   AICORE_DEPLOYMENT_ID=your-deployment-id AICORE_RESOURCE_GROUP=your-resource-group argus
+   AICORE_DEPLOYMENT_ID=your-deployment-id AICORE_RESOURCE_GROUP=your-resource-group opencorvus
    ```
 
    :::note
@@ -1512,7 +1512,7 @@ SAP AI Core brinda acceso a más de 40 modelos de OpenAI, Anthropic, Google, Ama
 
 ### Scaleway
 
-Para utilizar [API generativas de Scaleway](https://www.scaleway.com/en/docs/generative-apis/) con Argus:
+Para utilizar [API generativas de Scaleway](https://www.scaleway.com/en/docs/generative-apis/) con OpenCorvus:
 
 1. Dirígete a la [Configuración de IAM de la consola Scaleway](https://console.scaleway.com/iam/api-keys) para generar una nueva clave API.
 
@@ -1620,11 +1620,11 @@ Vercel AI Gateway le permite acceder a modelos de OpenAI, Anthropic, Google, xAI
    /models
    ```
 
-También puede personalizar modelos a través de su configuración argus. A continuación se muestra un ejemplo de cómo especificar el orden de enrutamiento del proveedor.
+También puede personalizar modelos a través de su configuración opencorvus. A continuación se muestra un ejemplo de cómo especificar el orden de enrutamiento del proveedor.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "vercel": {
       "models": {
@@ -1730,11 +1730,11 @@ Algunas opciones de enrutamiento útiles:
    /models
    ```
 
-   También puede agregar modelos adicionales a través de su configuración argus.
+   También puede agregar modelos adicionales a través de su configuración opencorvus.
 
-   ```json title="argus.json" {6}
+   ```json title="opencorvus.json" {6}
    {
-     "$schema": "https://argus.ai/config.json",
+     "$schema": "https://opencorvus.ai/config.json",
      "provider": {
        "zenmux": {
          "models": {
@@ -1752,7 +1752,7 @@ Algunas opciones de enrutamiento útiles:
 Para agregar cualquier proveedor **compatible con OpenAI** que no aparezca en el comando `/connect`:
 
 :::tip
-Puede utilizar cualquier proveedor compatible con OpenAI con argus. La mayoría de los proveedores de IA modernos ofrecen API compatibles con OpenAI.
+Puede utilizar cualquier proveedor compatible con OpenAI con opencorvus. La mayoría de los proveedores de IA modernos ofrecen API compatibles con OpenAI.
 :::
 
 1. Ejecute el comando `/connect` y desplácese hacia abajo hasta **Otro**.
@@ -1791,18 +1791,18 @@ Puede utilizar cualquier proveedor compatible con OpenAI con argus. La mayoría 
 
    ┌  Add credential
    │
-   ▲  This only stores a credential for myprovider - you will need to configure it in argus.json, check the docs for examples.
+   ▲  This only stores a credential for myprovider - you will need to configure it in opencorvus.json, check the docs for examples.
    │
    ◇  Enter your API key
    │  sk-...
    └
    ```
 
-4. Cree o actualice su archivo `argus.json` en el directorio de su proyecto:
+4. Cree o actualice su archivo `opencorvus.json` en el directorio de su proyecto:
 
-   ```json title="argus.json" ""myprovider"" {5-15}
+   ```json title="opencorvus.json" ""myprovider"" {5-15}
    {
-     "$schema": "https://argus.ai/config.json",
+     "$schema": "https://opencorvus.ai/config.json",
      "provider": {
        "myprovider": {
          "npm": "@ai-sdk/openai-compatible",
@@ -1838,9 +1838,9 @@ Puede utilizar cualquier proveedor compatible con OpenAI con argus. La mayoría 
 
 A continuación se muestra un ejemplo de configuración de las opciones `apiKey`, `headers` y modelo `limit`.
 
-```json title="argus.json" {9,11,17-20}
+```json title="opencorvus.json" {9,11,17-20}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "myprovider": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1873,7 +1873,7 @@ Detalles de configuración:
 - **limit.context**: tokens de entrada máximos que acepta el modelo.
 - **limit.output**: tokens máximos que el modelo puede generar.
 
-Los campos `limit` le permiten a Argus comprender cuánto contexto le queda. Los proveedores estándar los extraen de models.dev automáticamente.
+Los campos `limit` le permiten a OpenCorvus comprender cuánto contexto le queda. Los proveedores estándar los extraen de models.dev automáticamente.
 
 ---
 
@@ -1881,12 +1881,12 @@ Los campos `limit` le permiten a Argus comprender cuánto contexto le queda. Los
 
 Si tiene problemas para configurar un proveedor, verifique lo siguiente:
 
-1. **Verifique la configuración de autenticación**: Ejecute `argus auth list` para ver si las credenciales
+1. **Verifique la configuración de autenticación**: Ejecute `opencorvus auth list` para ver si las credenciales
    para el proveedor se agregan a su configuración.
 
    Esto no se aplica a proveedores como Amazon Bedrock, que dependen de variables de entorno para su autenticación.
 
-2. Para proveedores personalizados, verifique la configuración argus y:
-   - Asegúrese de que el ID del proveedor utilizado en el comando `/connect` coincida con el ID en su configuración argus.
+2. Para proveedores personalizados, verifique la configuración opencorvus y:
+   - Asegúrese de que el ID del proveedor utilizado en el comando `/connect` coincida con el ID en su configuración opencorvus.
    - Se utiliza el paquete npm correcto para el proveedor. Por ejemplo, utilice `@ai-sdk/cerebras` para Cerebras. Y para todos los demás proveedores compatibles con OpenAI, utilice `@ai-sdk/openai-compatible`.
    - Verifique que se utilice el punto final API correcto en el campo `options.baseURL`.

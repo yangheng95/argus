@@ -1,5 +1,5 @@
-name: "argus GitHub Action"
-description: "Run argus in GitHub Actions workflows"
+name: "opencorvus GitHub Action"
+description: "Run opencorvus in GitHub Actions workflows"
 branding:
   icon: "code"
   color: "orange"
@@ -14,7 +14,7 @@ inputs:
     required: false
 
   share:
-    description: "Share the argus session (defaults to true for public repos)"
+    description: "Share the opencorvus session (defaults to true for public repos)"
     required: false
 
   prompt:
@@ -22,12 +22,12 @@ inputs:
     required: false
 
   use_github_token:
-    description: "Use GITHUB_TOKEN directly instead of Argus App token exchange. When true, skips OIDC and uses the GITHUB_TOKEN env var."
+    description: "Use GITHUB_TOKEN directly instead of OpenCorvus App token exchange. When true, skips OIDC and uses the GITHUB_TOKEN env var."
     required: false
     default: "false"
 
   mentions:
-    description: "Comma-separated list of trigger phrases (case-insensitive). Defaults to '/argus,/oc'"
+    description: "Comma-separated list of trigger phrases (case-insensitive). Defaults to '/opencorvus,/oc'"
     required: false
 
   variant:
@@ -41,33 +41,33 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Get argus version
+    - name: Get opencorvus version
       id: version
       shell: bash
       run: |
-        VERSION=$(curl -sf https://api.github.com/repos/yangheng95/argus/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
+        VERSION=$(curl -sf https://api.github.com/repos/yangheng95/opencorvus/releases/latest | grep -o '"tag_name": *"[^"]*"' | cut -d'"' -f4)
         echo "version=${VERSION:-latest}" >> $GITHUB_OUTPUT
 
-    - name: Cache argus
+    - name: Cache opencorvus
       id: cache
       uses: actions/cache@v4
       with:
-        path: ~/.argus/bin
-        key: argus-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
+        path: ~/.opencorvus/bin
+        key: opencorvus-${{ runner.os }}-${{ runner.arch }}-${{ steps.version.outputs.version }}
 
-    - name: Install argus
+    - name: Install opencorvus
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: curl -fsSL https://opencode.ai/install | bash
 
-    - name: Add argus to PATH
+    - name: Add opencorvus to PATH
       shell: bash
-      run: echo "$HOME/.argus/bin" >> $GITHUB_PATH
+      run: echo "$HOME/.opencorvus/bin" >> $GITHUB_PATH
 
-    - name: Run argus
+    - name: Run opencorvus
       shell: bash
-      id: run_argus
-      run: argus github run
+      id: run_opencorvus
+      run: opencorvus github run
       env:
         MODEL: ${{ inputs.model }}
         AGENT: ${{ inputs.agent }}

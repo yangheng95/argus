@@ -1,6 +1,6 @@
 # ACP (Agent Client Protocol) Implementation
 
-This directory contains a clean, protocol-compliant implementation of the [Agent Client Protocol](https://agentclientprotocol.com/) for argus.
+This directory contains a clean, protocol-compliant implementation of the [Agent Client Protocol](https://agentclientprotocol.com/) for opencorvus.
 
 ## Architecture
 
@@ -21,7 +21,7 @@ The implementation follows a clean separation of concerns:
 
 - **`session.ts`** - Session state management
   - Creates and tracks ACP sessions
-  - Maps ACP sessions to internal argus sessions
+  - Maps ACP sessions to internal opencorvus sessions
   - Maintains working directory context
   - Handles MCP server configurations
 
@@ -38,10 +38,10 @@ The implementation follows a clean separation of concerns:
 
 ```bash
 # Start the ACP server in the current directory
-argus acp
+opencorvus acp
 
 # Start in a specific directory
-argus acp --cwd /path/to/project
+opencorvus acp --cwd /path/to/project
 ```
 
 ### Question Tool Opt-In
@@ -49,7 +49,7 @@ argus acp --cwd /path/to/project
 ACP excludes `QuestionTool` by default.
 
 ```bash
-ARGUS_ENABLE_QUESTION_TOOL=1 argus acp
+OPENCORVUS_ENABLE_QUESTION_TOOL=1 opencorvus acp
 ```
 
 Enable this only for ACP clients that support interactive question prompts.
@@ -69,8 +69,8 @@ Add to your Zed configuration (`~/.config/zed/settings.json`):
 ```json
 {
   "agent_servers": {
-    "Argus": {
-      "command": "argus",
+    "OpenCorvus": {
+      "command": "opencorvus",
       "args": ["acp"]
     }
   }
@@ -124,7 +124,7 @@ This implementation follows the ACP specification v1:
 - **Session Persistence**: Save and restore full conversation history
 - **Mode Support**: Implement different operational modes (ask, code, etc.)
 - **Enhanced Permissions**: More sophisticated permission handling
-- **Terminal Integration**: Full terminal support via argus's bash tool
+- **Terminal Integration**: Full terminal support via opencorvus's bash tool
 
 ## Testing
 
@@ -133,7 +133,7 @@ This implementation follows the ACP specification v1:
 bun test test/acp.test.ts
 
 # Test manually with stdio
-echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}' | argus acp
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}' | opencorvus acp
 ```
 
 ## Design Decisions
@@ -158,9 +158,9 @@ Each component has a single responsibility:
 
 This makes the codebase maintainable and testable.
 
-### Mapping to Argus
+### Mapping to OpenCorvus
 
-ACP sessions map cleanly to argus's internal session model:
+ACP sessions map cleanly to opencorvus's internal session model:
 
 - ACP `session/new` → creates internal Session
 - ACP `session/prompt` → uses SessionPrompt.prompt()

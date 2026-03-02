@@ -30,7 +30,7 @@ export class BotCore {
   private running = false
   private stt?: STTPipeline
   private vision?: VisionPipeline
-  /** Base URL of the Argus server */
+  /** Base URL of the OpenCorvus server */
   private serverUrl!: string
   /** Per-session pending message queue (staging area) */
   private sessionQueues = new Map<string, Array<{ msg: IncomingMessage; text: string }>>()
@@ -58,11 +58,11 @@ export class BotCore {
 
   async start(): Promise<void> {
     this.running = true
-    const argus = await createOpencode({ port: this.options?.port ?? 0 })
-    this.client = argus.client
-    this.server = argus.server
-    this.serverUrl = argus.server.url
-    console.log(`[BotCore] Argus server running at ${this.serverUrl}`)
+    const opencorvus = await createOpencode({ port: this.options?.port ?? 0 })
+    this.client = opencorvus.client
+    this.server = opencorvus.server
+    this.serverUrl = opencorvus.server.url
+    console.log(`[BotCore] OpenCorvus server running at ${this.serverUrl}`)
 
     this.subscribeEvents()
 
@@ -209,7 +209,7 @@ export class BotCore {
     if (!adapter) throw new Error(`No adapter for platform: ${platform}`)
 
     // Post the prompt as a visible message and get its ts for threading
-    const ts = await adapter.postAndGetTs(channel, `[Argus Task] ${text}`)
+    const ts = await adapter.postAndGetTs(channel, `[OpenCorvus Task] ${text}`)
 
     // Treat it as an incoming message — this creates session + sends prompt
     await this.handleMessage({
@@ -309,7 +309,7 @@ export class BotCore {
             }
 
             // Skip vision for trivial screen changes (cursor blinks, etc.)
-            const visionDiffThreshold = Number(process.env.ARGUS_MONITOR_DIFF_THRESHOLD) || 2
+            const visionDiffThreshold = Number(process.env.OPENCORVUS_MONITOR_DIFF_THRESHOLD) || 2
             const lowDiff = diffPercent !== undefined && diffPercent < visionDiffThreshold
             if (lowDiff) {
               console.log(`[BotCore] Vision skipped: low screen change (${diffPercent.toFixed(1)}% < ${visionDiffThreshold}% threshold)`)

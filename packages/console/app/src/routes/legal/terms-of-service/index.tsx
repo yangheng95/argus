@@ -11,9 +11,9 @@ export default function TermsOfService() {
   const language = useLanguage()
   return (
     <main data-page="legal">
-      <Title>Argus | Terms of Service</Title>
+      <Title>OpenCorvus | Terms of Service</Title>
       <LocaleLinks path="/legal/terms-of-service" />
-      <Meta name="description" content="Argus terms of service" />
+      <Meta name="description" content="OpenCorvus terms of service" />
       <div data-component="container">
         <Header />
 
@@ -24,7 +24,7 @@ export default function TermsOfService() {
               <p class="effective-date">Effective date: Dec 16, 2025</p>
 
               <p>
-                Welcome to Argus. Please read on to learn the rules and restrictions that govern your use of Argus
+                Welcome to OpenCorvus. Please read on to learn the rules and restrictions that govern your use of OpenCorvus
                 (the "Services"). If you have any questions, comments, or concerns regarding these terms or the
                 Services, please contact us at:
               </p>
@@ -35,7 +35,7 @@ export default function TermsOfService() {
 
               <p>
                 These Terms of Use (the "Terms") are a binding contract between you and{" "}
-                <strong>ANOMALY INNOVATIONS, INC.</strong> ("Argus," "we" and "us"). Your use of the Services in any
+                <strong>ANOMALY INNOVATIONS, INC.</strong> ("OpenCorvus," "we" and "us"). Your use of the Services in any
                 way means that you agree to all of these Terms, and these Terms will remain in effect while you use the
                 Services. These Terms include the provisions in this document as well as those in the Privacy Policy{" "}
                 <a href={language.route("/legal/privacy-policy")}>https://opencode.ai/legal/privacy-policy</a>.{" "}
@@ -68,12 +68,12 @@ export default function TermsOfService() {
                 RIGHT TO PARTICIPATE IN A CLASS ACTION LAWSUIT OR CLASS-WIDE ARBITRATION.
               </p>
 
-              <h2 id="what-is-opencode">What is Argus?</h2>
+              <h2 id="what-is-opencode">What is OpenCorvus?</h2>
               <p>
-                Argus is an AI-powered coding agent that helps you write, understand, and modify code using large
+                OpenCorvus is an AI-powered coding agent that helps you write, understand, and modify code using large
                 language models. Certain of these large language models are provided by third parties ("Third Party
-                Models") and certain of these models are provided directly by us if you use the Argus Zen paid
-                offering ("Zen"). Regardless of whether you use Third Party Models or Zen, Argus enables you to
+                Models") and certain of these models are provided directly by us if you use the OpenCorvus Zen paid
+                offering ("Zen"). Regardless of whether you use Third Party Models or Zen, OpenCorvus enables you to
                 access the functionality of models through a coding agent running within your terminal.
               </p>
 
@@ -97,7 +97,7 @@ export default function TermsOfService() {
 
               <h2 id="what-about-my-privacy">What about my privacy?</h2>
               <p>
-                Argus takes the privacy of its users very seriously. For the current Argus Privacy Policy, please
+                OpenCorvus takes the privacy of its users very seriously. For the current OpenCorvus Privacy Policy, please
                 click here{" "}
                 <a href="https://opencode.ai/legal/privacy-policy">https://opencode.ai/legal/privacy-policy</a>.
               </p>
@@ -114,7 +114,7 @@ export default function TermsOfService() {
                 us personal information, please contact us at <a href="mailto:contact@anoma.ly">contact@anoma.ly</a>.
               </p>
 
-              <h2 id="what-are-the-basics">What are the basics of using Argus?</h2>
+              <h2 id="what-are-the-basics">What are the basics of using OpenCorvus?</h2>
               <p>
                 You represent and warrant that you are an individual of legal age to form a binding contract (or if not,
                 you've received your parent's or guardian's permission to use the Services and have gotten your parent
@@ -141,11 +141,11 @@ export default function TermsOfService() {
               <ol style="list-style-type: lower-alpha;">
                 <li>
                   infringes or violates the intellectual property rights or any other rights of anyone else (including
-                  Argus);
+                  OpenCorvus);
                 </li>
                 <li>
                   violates any law or regulation, including, without limitation, any applicable export control laws,
-                  privacy laws or any other purpose not reasonably intended by Argus;
+                  privacy laws or any other purpose not reasonably intended by OpenCorvus;
                 </li>
                 <li>
                   is dangerous, harmful, fraudulent, deceptive, threatening, harassing, defamatory, obscene, or
@@ -221,7 +221,7 @@ export default function TermsOfService() {
               </p>
 
               <p>
-                If you use Argus with Third Party Models, then your Content will be subject to the data retention
+                If you use OpenCorvus with Third Party Models, then your Content will be subject to the data retention
                 policies of the providers of such Third Party Models. Although we will not retain your Content, we
                 cannot and do not control the retention practices of Third Party Model providers. You should review the
                 terms and conditions applicable to any Third Party Model for more information about the data use and
@@ -231,19 +231,19 @@ export default function TermsOfService() {
               <h2 id="what-about-third-party-models">What about Third Party Models?</h2>
               <p>
                 The Services enable you to access and use Third Party Models, which are not owned or controlled by
-                Argus. Your ability to access Third Party Models is contingent on you having API keys or otherwise
+                OpenCorvus. Your ability to access Third Party Models is contingent on you having API keys or otherwise
                 having the right to access such Third Party Models.
               </p>
 
               <p>
-                Argus has no control over, and assumes no responsibility for, the content, accuracy, privacy
+                OpenCorvus has no control over, and assumes no responsibility for, the content, accuracy, privacy
                 policies, or practices of any providers of Third Party Models. We encourage you to read the terms and
                 conditions and privacy policy of each provider of a Third Party Model that you choose to utilize. By
                 using the Services, you release and hold us harmless from any and all liability arising from your use of
                 any Third Party Model.
               </p>
 
-              <h2 id="will-opencode-ever-change-the-services">Will Argus ever change the Services?</h2>
+              <h2 id="will-opencode-ever-change-the-services">Will OpenCorvus ever change the Services?</h2>
               <p>
                 We're always trying to improve our Services, so they may change over time. We may suspend or discontinue
                 any part of the Services, or we may introduce new features or impose limits on certain features or
@@ -324,8 +324,8 @@ export default function TermsOfService() {
               </p>
 
               <p>
-                Argus is also free to terminate (or suspend access to) your use of the Services for any reason in our
-                discretion, including your breach of these Terms. Argus has the sole right to decide whether you are
+                OpenCorvus is also free to terminate (or suspend access to) your use of the Services for any reason in our
+                discretion, including your breach of these Terms. OpenCorvus has the sole right to decide whether you are
                 in violation of any of the restrictions set forth in these Terms.
               </p>
 
@@ -340,15 +340,15 @@ export default function TermsOfService() {
 
               <h3>Warranty Disclaimer</h3>
               <p>
-                Argus and its licensors, suppliers, partners, parent, subsidiaries or affiliated entities, and each
+                OpenCorvus and its licensors, suppliers, partners, parent, subsidiaries or affiliated entities, and each
                 of their respective officers, directors, members, employees, consultants, contract employees,
-                representatives and agents, and each of their respective successors and assigns (Argus and all such
-                parties together, the "Argus Parties") make no representations or warranties concerning the Services,
+                representatives and agents, and each of their respective successors and assigns (OpenCorvus and all such
+                parties together, the "OpenCorvus Parties") make no representations or warranties concerning the Services,
                 including without limitation regarding any Content contained in or accessed through the Services, and
-                the Argus Parties will not be responsible or liable for the accuracy, copyright compliance, legality,
+                the OpenCorvus Parties will not be responsible or liable for the accuracy, copyright compliance, legality,
                 or decency of material contained in or accessed through the Services or any claims, actions, suits
                 procedures, costs, expenses, damages or liabilities arising out of use of, or in any way related to your
-                participation in, the Services. The Argus Parties make no representations or warranties regarding
+                participation in, the Services. The OpenCorvus Parties make no representations or warranties regarding
                 suggestions or recommendations of services or products offered or purchased through or in connection
                 with the Services. THE SERVICES AND CONTENT ARE PROVIDED BY OPENCODE (AND ITS LICENSORS AND SUPPLIERS)
                 ON AN "AS-IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, WITHOUT
@@ -374,7 +374,7 @@ export default function TermsOfService() {
 
               <h3>Indemnity</h3>
               <p>
-                You agree to indemnify and hold the Argus Parties harmless from and against any and all claims,
+                You agree to indemnify and hold the OpenCorvus Parties harmless from and against any and all claims,
                 liabilities, damages (actual and consequential), losses and expenses (including attorneys' fees) arising
                 from or in any way related to any claims relating to (a) your use of the Services, and (b) your
                 violation of these Terms. In the event of such a claim, suit, or action ("Claim"), we will attempt to
@@ -385,7 +385,7 @@ export default function TermsOfService() {
               <h3>Assignment</h3>
               <p>
                 You may not assign, delegate or transfer these Terms or your rights or obligations hereunder, or your
-                Services account, in any way (by operation of law or otherwise) without Argus's prior written
+                Services account, in any way (by operation of law or otherwise) without OpenCorvus's prior written
                 consent. We may transfer, assign, or delegate these Terms and our rights and obligations without
                 consent.
               </p>
@@ -399,9 +399,9 @@ export default function TermsOfService() {
               <h3 id="arbitration-agreement">Arbitration Agreement</h3>
               <p>
                 Please read the following ARBITRATION AGREEMENT carefully because it requires you to arbitrate certain
-                disputes and claims with Argus and limits the manner in which you can seek relief from Argus. Both
-                you and Argus acknowledge and agree that for the purposes of any dispute arising out of or relating
-                to the subject matter of these Terms, Argus's officers, directors, employees and independent
+                disputes and claims with OpenCorvus and limits the manner in which you can seek relief from OpenCorvus. Both
+                you and OpenCorvus acknowledge and agree that for the purposes of any dispute arising out of or relating
+                to the subject matter of these Terms, OpenCorvus's officers, directors, employees and independent
                 contractors ("Personnel") are third-party beneficiaries of these Terms, and that upon your acceptance of
                 these Terms, Personnel will have the right (and will be deemed to have accepted the right) to enforce
                 these Terms against you as the third-party beneficiary hereof.
@@ -422,14 +422,14 @@ export default function TermsOfService() {
 
               <h4>Costs of Arbitration</h4>
               <p>
-                The Rules will govern payment of all arbitration fees. Argus will pay all arbitration fees for claims
-                less than seventy-five thousand ($75,000) dollars. Argus will not seek its attorneys' fees and costs
+                The Rules will govern payment of all arbitration fees. OpenCorvus will pay all arbitration fees for claims
+                less than seventy-five thousand ($75,000) dollars. OpenCorvus will not seek its attorneys' fees and costs
                 in arbitration unless the arbitrator determines that your claim is frivolous.
               </p>
 
               <h4>Small Claims Court; Infringement</h4>
               <p>
-                Either you or Argus may assert claims, if they qualify, in small claims court in New Castle County,
+                Either you or OpenCorvus may assert claims, if they qualify, in small claims court in New Castle County,
                 Delaware or any United States county where you live or work. Furthermore, notwithstanding the foregoing
                 obligation to arbitrate disputes, each party shall have the right to pursue injunctive or other
                 equitable relief at any time, from any court of competent jurisdiction, to prevent the actual or
@@ -440,10 +440,10 @@ export default function TermsOfService() {
               <h4>Waiver of Jury Trial</h4>
               <p>
                 YOU AND OPENCODE WAIVE ANY CONSTITUTIONAL AND STATUTORY RIGHTS TO GO TO COURT AND HAVE A TRIAL IN FRONT
-                OF A JUDGE OR JURY. You and Argus are instead choosing to have claims and disputes resolved by
+                OF A JUDGE OR JURY. You and OpenCorvus are instead choosing to have claims and disputes resolved by
                 arbitration. Arbitration procedures are typically more limited, more efficient, and less costly than
                 rules applicable in court and are subject to very limited review by a court. In any litigation between
-                you and Argus over whether to vacate or enforce an arbitration award, YOU AND OPENCODE WAIVE ALL
+                you and OpenCorvus over whether to vacate or enforce an arbitration award, YOU AND OPENCODE WAIVE ALL
                 RIGHTS TO A JURY TRIAL, and elect instead to have the dispute be resolved by a judge.
               </p>
 
@@ -453,7 +453,7 @@ export default function TermsOfService() {
                 ON AN INDIVIDUAL BASIS AND NOT ON A CLASS BASIS. CLAIMS OF MORE THAN ONE CUSTOMER OR USER CANNOT BE
                 ARBITRATED OR LITIGATED JOINTLY OR CONSOLIDATED WITH THOSE OF ANY OTHER CUSTOMER OR USER. If however,
                 this waiver of class or consolidated actions is deemed invalid or unenforceable, neither you nor
-                Argus is entitled to arbitration; instead all claims and disputes will be resolved in a court as set
+                OpenCorvus is entitled to arbitration; instead all claims and disputes will be resolved in a court as set
                 forth in (g) below.
               </p>
 
@@ -469,9 +469,9 @@ export default function TermsOfService() {
               <h4>Exclusive Venue</h4>
               <p>
                 If you send the opt-out notice in (f), and/or in any circumstances where the foregoing arbitration
-                agreement permits either you or Argus to litigate any dispute arising out of or relating to the
+                agreement permits either you or OpenCorvus to litigate any dispute arising out of or relating to the
                 subject matter of these Terms in court, then the foregoing arbitration agreement will not apply to
-                either party, and both you and Argus agree that any judicial proceeding (other than small claims
+                either party, and both you and OpenCorvus agree that any judicial proceeding (other than small claims
                 actions) will be brought in the state or federal courts located in, respectively, New Castle County,
                 Delaware, or the federal district in which that county falls.
               </p>
@@ -481,27 +481,27 @@ export default function TermsOfService() {
                 If the prohibition against class actions and other claims brought on behalf of third parties contained
                 above is found to be unenforceable, then all of the preceding language in this Arbitration Agreement
                 section will be null and void. This arbitration agreement will survive the termination of your
-                relationship with Argus.
+                relationship with OpenCorvus.
               </p>
 
               <h3>Miscellaneous</h3>
               <p>
                 You will be responsible for paying, withholding, filing, and reporting all taxes, duties, and other
                 governmental assessments associated with your activity in connection with the Services, provided that
-                the Argus may, in its sole discretion, do any of the foregoing on your behalf or for itself as it
+                the OpenCorvus may, in its sole discretion, do any of the foregoing on your behalf or for itself as it
                 sees fit. The failure of either you or us to exercise, in any way, any right herein shall not be deemed
                 a waiver of any further rights hereunder. If any provision of these Terms are found to be unenforceable
                 or invalid, that provision will be limited or eliminated, to the minimum extent necessary, so that these
-                Terms shall otherwise remain in full force and effect and enforceable. You and Argus agree that these
-                Terms are the complete and exclusive statement of the mutual understanding between you and Argus, and
+                Terms shall otherwise remain in full force and effect and enforceable. You and OpenCorvus agree that these
+                Terms are the complete and exclusive statement of the mutual understanding between you and OpenCorvus, and
                 that these Terms supersede and cancel all previous written and oral agreements, communications and other
                 understandings relating to the subject matter of these Terms. You hereby acknowledge and agree that you
-                are not an employee, agent, partner, or joint venture of Argus, and you do not have any authority of
-                any kind to bind Argus in any respect whatsoever.
+                are not an employee, agent, partner, or joint venture of OpenCorvus, and you do not have any authority of
+                any kind to bind OpenCorvus in any respect whatsoever.
               </p>
 
               <p>
-                Except as expressly set forth in the section above regarding the arbitration agreement, you and Argus
+                Except as expressly set forth in the section above regarding the arbitration agreement, you and OpenCorvus
                 agree there are no third-party beneficiaries intended under these Terms.
               </p>
             </article>

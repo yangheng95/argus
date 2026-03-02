@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "argus",
+      "name": "opencorvus",
       "dependencies": {
         "@aws-sdk/client-s3": "3.933.0",
         "@opencorvus-ai/plugin": "workspace:*",
@@ -24,12 +24,12 @@
         "turbo": "2.5.6",
       },
     },
-    "packages/argus": {
+    "packages/opencorvus": {
       "name": "opencorvus",
       "version": "1.2.15",
       "bin": {
-        "argus": "./bin/argus",
-        "opencorvus": "./bin/argus",
+        "opencorvus": "./bin/opencorvus",
+        "opencorvus": "./bin/opencorvus",
       },
       "dependencies": {
         "@actions/core": "1.11.1",
@@ -3341,7 +3341,7 @@
 
     "opencontrol": ["opencontrol@0.0.6", "", { "dependencies": { "@modelcontextprotocol/sdk": "1.6.1", "@tsconfig/bun": "1.0.7", "hono": "4.7.4", "zod": "3.24.2", "zod-to-json-schema": "3.24.3" }, "bin": { "opencontrol": "bin/index.mjs" } }, "sha512-QeCrpOK5D15QV8kjnGVeD/BHFLwcVr+sn4T6KKmP0WAMs2pww56e4h+eOGHb5iPOufUQXbdbBKi6WV2kk7tefQ=="],
 
-    "opencorvus": ["opencorvus@workspace:packages/argus"],
+    "opencorvus": ["opencorvus@workspace:packages/opencorvus"],
 
     "openid-client": ["openid-client@5.6.4", "", { "dependencies": { "jose": "^4.15.4", "lru-cache": "^6.0.0", "object-hash": "^2.2.0", "oidc-token-hash": "^5.0.3" } }, "sha512-T1h3B10BRPKfcObdBklX639tVz+xh34O7GjofqrqiAQdm7eHsQ00ih18x6wuJ/E6FxdtS2u3FmUGPDeEcMwzNA=="],
 

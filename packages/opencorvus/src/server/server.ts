@@ -80,9 +80,9 @@ export namespace Server {
           // Allow CORS preflight requests to succeed without auth.
           // Browser clients sending Authorization headers will preflight with OPTIONS.
           if (c.req.method === "OPTIONS") return next()
-          const password = Flag.ARGUS_SERVER_PASSWORD
+          const password = Flag.OPENCORVUS_SERVER_PASSWORD
           if (!password) return next()
-          const username = Flag.ARGUS_SERVER_USERNAME ?? "argus"
+          const username = Flag.OPENCORVUS_SERVER_USERNAME ?? "opencorvus"
           return basicAuth({ username, password })(c, next)
         })
         .use(async (c, next) => {
@@ -117,7 +117,7 @@ export namespace Server {
                 return input
 
               // *.opencode.ai (https only, adjust if needed)
-              if (/^https:\/\/([a-z0-9-]+\.)*argus\.ai$/.test(input)) {
+              if (/^https:\/\/([a-z0-9-]+\.)*opencorvus\.ai$/.test(input)) {
                 return input
               }
               if (_corsWhitelist.includes(input)) {
@@ -193,7 +193,7 @@ export namespace Server {
         )
         .use(async (c, next) => {
           if (c.req.path === "/log") return next()
-          const raw = c.req.query("directory") || c.req.header("x-argus-directory") || process.cwd()
+          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory") || process.cwd()
           const directory = (() => {
             try {
               return decodeURIComponent(raw)
@@ -214,9 +214,9 @@ export namespace Server {
           openAPIRouteHandler(app, {
             documentation: {
               info: {
-                title: "argus",
+                title: "opencorvus",
                 version: "1.2.15",
-                description: "argus api",
+                description: "opencorvus api",
               },
               openapi: "3.1.1",
             },
@@ -239,7 +239,7 @@ export namespace Server {
           "/instance/dispose",
           describeRoute({
             summary: "Dispose instance",
-            description: "Clean up and dispose the current Argus instance, releasing all resources.",
+            description: "Clean up and dispose the current OpenCorvus instance, releasing all resources.",
             operationId: "instance.dispose",
             responses: {
               200: {
@@ -262,7 +262,7 @@ export namespace Server {
           describeRoute({
             summary: "Get paths",
             description:
-              "Retrieve the current working directory and related path information for the Argus instance.",
+              "Retrieve the current working directory and related path information for the OpenCorvus instance.",
             operationId: "path.get",
             responses: {
               200: {
@@ -326,7 +326,7 @@ export namespace Server {
           "/command",
           describeRoute({
             summary: "List commands",
-            description: "Get a list of all available commands in the Argus system.",
+            description: "Get a list of all available commands in the OpenCorvus system.",
             operationId: "command.list",
             responses: {
               200: {
@@ -400,7 +400,7 @@ export namespace Server {
           "/agent",
           describeRoute({
             summary: "List agents",
-            description: "Get a list of all available AI agents in the Argus system.",
+            description: "Get a list of all available AI agents in the OpenCorvus system.",
             operationId: "app.agents",
             responses: {
               200: {
@@ -422,7 +422,7 @@ export namespace Server {
           "/skill",
           describeRoute({
             summary: "List skills",
-            description: "Get a list of all available skills in the Argus system.",
+            description: "Get a list of all available skills in the OpenCorvus system.",
             operationId: "app.skills",
             responses: {
               200: {
@@ -547,9 +547,9 @@ export namespace Server {
     const result = await generateSpecs(App() as Hono, {
       documentation: {
         info: {
-          title: "argus",
+          title: "opencorvus",
           version: "1.2.15",
-          description: "argus api",
+          description: "opencorvus api",
         },
         openapi: "3.1.1",
       },

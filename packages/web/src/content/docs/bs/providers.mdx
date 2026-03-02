@@ -1,30 +1,30 @@
 ---
 title: Provajderi
-description: Korištenje bilo kojeg LLM provajdera u Argus.
+description: Korištenje bilo kojeg LLM provajdera u OpenCorvus.
 ---
 
 import config from "../../../../config.mjs"
 export const console = config.console
 
-Argus koristi [AI SDK](https://ai-sdk.dev/) i [Models.dev](https://models.dev) za podršku **75+ LLM provajdera** i podržava pokretanje lokalnih modela.
+OpenCorvus koristi [AI SDK](https://ai-sdk.dev/) i [Models.dev](https://models.dev) za podršku **75+ LLM provajdera** i podržava pokretanje lokalnih modela.
 
 Za dodavanje provajdera potrebno je:
 
 1. Dodajte API ključeve za provajdera koristeći naredbu `/connect`.
-2. Konfigurirajte dobavljača u vašoj Argus konfiguraciji.
+2. Konfigurirajte dobavljača u vašoj OpenCorvus konfiguraciji.
 
 ---
 
 ### Vjerodajnice
 
 Kada dodate API ključeve dobavljača sa naredbom `/connect`, oni se pohranjuju
-u `~/.local/share/argus/auth.json`.
+u `~/.local/share/opencorvus/auth.json`.
 
 ---
 
 ### Konfiguracija
 
-Možete prilagoditi dobavljače putem odjeljka `provider` u vašem Argus
+Možete prilagoditi dobavljače putem odjeljka `provider` u vašem OpenCorvus
 config.
 
 ---
@@ -33,9 +33,9 @@ config.
 
 Možete prilagoditi osnovni URL za bilo kojeg provajdera postavljanjem opcije `baseURL`. Ovo je korisno kada koristite proxy usluge ili prilagođene krajnje tačke.
 
-```json title="argus.json" {6}
+```json title="opencorvus.json" {6}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "anthropic": {
       "options": {
@@ -48,16 +48,16 @@ Možete prilagoditi osnovni URL za bilo kojeg provajdera postavljanjem opcije `b
 
 ---
 
-## Argus Zen
+## OpenCorvus Zen
 
-Argus Zen je lista modela koje je obezbedio Argus tim koji su bili
-testirano i potvrđeno da dobro radi sa Argus. [Saznajte više](/docs/zen).
+OpenCorvus Zen je lista modela koje je obezbedio OpenCorvus tim koji su bili
+testirano i potvrđeno da dobro radi sa OpenCorvus. [Saznajte više](/docs/zen).
 
 :::tip
-Ako ste novi, preporučujemo da počnete sa Argus Zen.
+Ako ste novi, preporučujemo da počnete sa OpenCorvus Zen.
 :::
 
-1. Pokrenite naredbu `/connect` u TUI-u, odaberite argus i idite na [argus.ai/auth](https://argus.ai/auth).
+1. Pokrenite naredbu `/connect` u TUI-u, odaberite opencorvus i idite na [opencorvus.ai/auth](https://opencorvus.ai/auth).
 
 ```txt
    /connect
@@ -80,7 +80,7 @@ Ako ste novi, preporučujemo da počnete sa Argus Zen.
    /models
 ```
 
-Radi kao i svaki drugi provajder u Argus i potpuno je opcionalan za korištenje.
+Radi kao i svaki drugi provajder u OpenCorvus i potpuno je opcionalan za korištenje.
 
 ---
 
@@ -124,7 +124,7 @@ Ne vidite provajdera ovdje? Pošaljite PR.
 
 ### Amazon Bedrock
 
-Da biste koristili Amazon Bedrock s Argus:
+Da biste koristili Amazon Bedrock s OpenCorvus:
 
 1. Idite na **Katalog modela** na Amazon Bedrock konzoli i zatražite
    pristup modelima koje želite.
@@ -137,17 +137,17 @@ Da biste koristili Amazon Bedrock s Argus:
 
    #### Varijable okruženja (Brzi početak)
 
-   Postavite jednu od ovih varijabli okruženja dok pokrećete argus:
+   Postavite jednu od ovih varijabli okruženja dok pokrećete opencorvus:
 
 ```bash
    # Option 1: Using AWS access keys
-   AWS_ACCESS_KEY_ID=XXX AWS_SECRET_ACCESS_KEY=YYY argus
+   AWS_ACCESS_KEY_ID=XXX AWS_SECRET_ACCESS_KEY=YYY opencorvus
 
    # Option 2: Using named AWS profile
-   AWS_PROFILE=my-profile argus
+   AWS_PROFILE=my-profile opencorvus
 
    # Option 3: Using Bedrock bearer token
-   AWS_BEARER_TOKEN_BEDROCK=XXX argus
+   AWS_BEARER_TOKEN_BEDROCK=XXX opencorvus
 ```
 
 Ili ih dodajte na svoj bash profil:
@@ -159,11 +159,11 @@ Ili ih dodajte na svoj bash profil:
 
 #### Konfiguracijski fajl (Preporučeno)
 
-Za konfiguraciju specifičnu za projekat ili trajnu konfiguraciju, koristite `argus.json`:
+Za konfiguraciju specifičnu za projekat ili trajnu konfiguraciju, koristite `opencorvus.json`:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "amazon-bedrock": {
       "options": {
@@ -189,9 +189,9 @@ Opcije konfiguracijske datoteke imaju prednost nad varijablama okruženja.
 
 Ako koristite VPC krajnje tačke za Bedrock:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "amazon-bedrock": {
       "options": {
@@ -235,9 +235,9 @@ Kada se postavi token nosioca (putem `/connect` ili `AWS_BEARER_TOKEN_BEDROCK`),
 :::note
 Za prilagođene profile zaključivanja, koristite ime modela i dobavljača u ključu i postavite svojstvo `id` na arn. Ovo osigurava ispravno keširanje:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "amazon-bedrock": {
       // ...
@@ -282,7 +282,7 @@ Za prilagođene profile zaključivanja, koristite ime modela i dobavljača u klj
 ```
 
 :::info
-[Anthropic] (https://anthropic.com) službeno ne podržava korištenje vaše Claude Pro/Max pretplate u Argus.
+[Anthropic] (https://anthropic.com) službeno ne podržava korištenje vaše Claude Pro/Max pretplate u OpenCorvus.
 :::
 
 ##### Korištenje API ključeva
@@ -306,7 +306,7 @@ Ako naiđete na greške "Žao mi je, ali ne mogu pomoći s tim zahtjevom", poku�
 2. Idite na [Azure AI Foundry](https://ai.azure.com/) i implementirajte model.
 
    :::note
-   Ime implementacije mora odgovarati imenu modela da bi argus ispravno radio.
+   Ime implementacije mora odgovarati imenu modela da bi opencorvus ispravno radio.
    :::
 
 3. Pokrenite naredbu `/connect` i potražite **Azure**.
@@ -327,7 +327,7 @@ Ako naiđete na greške "Žao mi je, ali ne mogu pomoći s tim zahtjevom", poku�
 5. Postavite ime vašeg resursa kao varijablu okruženja:
 
 ```bash
-   AZURE_RESOURCE_NAME=XXX argus
+   AZURE_RESOURCE_NAME=XXX opencorvus
 ```
 
 Ili ga dodajte na svoj bash profil:
@@ -353,7 +353,7 @@ Ili ga dodajte na svoj bash profil:
 2. Idite na [Azure AI Foundry](https://ai.azure.com/) i implementirajte model.
 
    :::note
-   Ime implementacije mora odgovarati imenu modela da bi argus ispravno radio.
+   Ime implementacije mora odgovarati imenu modela da bi opencorvus ispravno radio.
    :::
 
 3. Pokrenite naredbu `/connect` i potražite **Azure kognitivne usluge**.
@@ -374,7 +374,7 @@ Ili ga dodajte na svoj bash profil:
 5. Postavite ime vašeg resursa kao varijablu okruženja:
 
 ```bash
-   AZURE_COGNITIVE_SERVICES_RESOURCE_NAME=XXX argus
+   AZURE_COGNITIVE_SERVICES_RESOURCE_NAME=XXX opencorvus
 ```
 
 Ili ga dodajte na svoj bash profil:
@@ -485,11 +485,11 @@ Ili ga postavite kao varijablu okruženja.
    /models
 ```
 
-Također možete dodati modele kroz svoju argus konfiguraciju.
+Također možete dodati modele kroz svoju opencorvus konfiguraciju.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "cloudflare-ai-gateway": {
       "models": {
@@ -666,7 +666,7 @@ Odaberite **OAuth** i vaš pretraživač će se otvoriti za autorizaciju.
 
 1.  Idite na [GitLab korisničke postavke > Pristupni tokeni](https://gitlab.com/-/user_settings/personal_access_tokens)
 2.  Kliknite **Dodaj novi token**
-3.  Naziv: `Argus`, opseg: `api`
+3.  Naziv: `OpenCorvus`, opseg: `api`
 4.  Kopirajte token (počinje sa `glpat-`)
 5.  Unesite ga u terminal
 
@@ -684,20 +684,20 @@ Dostupna su tri modela bazirana na Claudeu:
 
 :::note
 Također možete odrediti 'GITLAB_TOKEN' varijablu okruženja ako ne želite
-da pohrani token u argus auth memoriju.
+da pohrani token u opencorvus auth memoriju.
 :::
 
 ##### Samostalni GitLab
 
 :::note[Napomena o usklađenosti]
-Argus koristi mali model za neke AI zadatke kao što je generiranje naslova sesije.
-Podrazumevano je konfigurisan da koristi gpt-5-nano, a hostuje ga Zen. Da zaključate Argus
+OpenCorvus koristi mali model za neke AI zadatke kao što je generiranje naslova sesije.
+Podrazumevano je konfigurisan da koristi gpt-5-nano, a hostuje ga Zen. Da zaključate OpenCorvus
 da biste koristili samo svoju vlastitu instancu koju hostuje GitLab, dodajte sljedeće u svoju
-`argus.json` fajl. Također se preporučuje da onemogućite dijeljenje sesije.
+`opencorvus.json` fajl. Također se preporučuje da onemogućite dijeljenje sesije.
 
 ```json
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "small_model": "gitlab/duo-chat-haiku-4-5",
   "share": "disabled"
 }
@@ -751,15 +751,15 @@ Zatim izložite ID aplikacije kao varijablu okruženja:
 export GITLAB_OAUTH_CLIENT_ID=your_application_id_here
 ```
 
-Više dokumentacije na početnoj stranici [argus-gitlab-auth](https://www.npmjs.com/package/@gitlab/argus-gitlab-auth).
+Više dokumentacije na početnoj stranici [opencorvus-gitlab-auth](https://www.npmjs.com/package/@gitlab/opencorvus-gitlab-auth).
 
 ##### Konfiguracija
 
-Prilagodite putem `argus.json`:
+Prilagodite putem `opencorvus.json`:
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "gitlab": {
       "options": {
@@ -778,10 +778,10 @@ Prilagodite putem `argus.json`:
 
 Za pristup GitLab alatima (zahtjevi za spajanje, problemi, cjevovodi, CI/CD, itd.):
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
-  "plugin": ["@gitlab/argus-gitlab-plugin"]
+  "$schema": "https://opencorvus.ai/config.json",
+  "plugin": ["@gitlab/opencorvus-gitlab-plugin"]
 }
 ```
 
@@ -791,7 +791,7 @@ Ovaj dodatak pruža sveobuhvatne mogućnosti upravljanja GitLab repozitorijumom,
 
 ### GitHub Copilot
 
-Da biste koristili svoju GitHub Copilot pretplatu s argus:
+Da biste koristili svoju GitHub Copilot pretplatu s opencorvus:
 
 :::note
 Neki modeli će možda trebati [Pro+
@@ -828,7 +828,7 @@ Neki modeli moraju biti ručno omogućeni u vašim [postavkama GitHub Copilot](h
 
 ### Google Vertex AI
 
-Za korištenje Google Vertex AI s Argus:
+Za korištenje Google Vertex AI s OpenCorvus:
 
 1. Idite do **Model Garden** u Google Cloud Console i provjerite
    modeli dostupni u vašoj regiji.
@@ -844,10 +844,10 @@ Za korištenje Google Vertex AI s Argus:
      - `GOOGLE_APPLICATION_CREDENTIALS`: Put do JSON ključnog fajla vašeg naloga usluge
      - Autentifikacija koristeći gcloud CLI: `gcloud auth application-default login`
 
-   Postavite ih dok se pokreće argus.
+   Postavite ih dok se pokreće opencorvus.
 
 ```bash
-   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json GOOGLE_CLOUD_PROJECT=your-project-id argus
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json GOOGLE_CLOUD_PROJECT=your-project-id opencorvus
 ```
 
 Ili ih dodajte svom bash profilu.
@@ -957,13 +957,13 @@ Za više provajdera i napredne funkcije kao što su keširanje i ograničavanje 
 
 #### Opcione konfiguracije
 
-U slučaju da vidite funkciju ili model iz Helicone-a koji nije automatski konfiguriran putem argusa, uvijek ga možete sami konfigurirati.
+U slučaju da vidite funkciju ili model iz Helicone-a koji nije automatski konfiguriran putem opencorvusa, uvijek ga možete sami konfigurirati.
 
 Evo [Heliconeov katalog modela](https://helicone.ai/models), ovo će vam trebati da preuzmete ID-ove modela koje želite dodati.
 
-```jsonc title="~/.config/argus/argus.jsonc"
+```jsonc title="~/.config/opencorvus/opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "helicone": {
       "npm": "@ai-sdk/openai-compatible",
@@ -989,9 +989,9 @@ Evo [Heliconeov katalog modela](https://helicone.ai/models), ovo će vam trebati
 
 Helicone podržava prilagođena zaglavlja za funkcije kao što su keširanje, praćenje korisnika i upravljanje sesijom. Dodajte ih u konfiguraciju svog provajdera koristeći `options.headers`:
 
-```jsonc title="~/.config/argus/argus.jsonc"
+```jsonc title="~/.config/opencorvus/opencorvus.jsonc"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "helicone": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1000,7 +1000,7 @@ Helicone podržava prilagođena zaglavlja za funkcije kao što su keširanje, pr
         "baseURL": "https://ai-gateway.helicone.ai",
         "headers": {
           "Helicone-Cache-Enabled": "true",
-          "Helicone-User-Id": "argus",
+          "Helicone-User-Id": "opencorvus",
         },
       },
     },
@@ -1010,21 +1010,21 @@ Helicone podržava prilagođena zaglavlja za funkcije kao što su keširanje, pr
 
 ##### Praćenje sesije
 
-Heliconeova funkcija [Sessions](https://docs.helicone.ai/features/sessions) vam omogućava da grupišete povezane LLM zahtjeve zajedno. Koristite dodatak [argus-helicone-session](https://github.com/H2Shami/argus-helicone-session) da automatski prijavite svaki Argus razgovor kao sesiju u Helicone-u.
+Heliconeova funkcija [Sessions](https://docs.helicone.ai/features/sessions) vam omogućava da grupišete povezane LLM zahtjeve zajedno. Koristite dodatak [opencorvus-helicone-session](https://github.com/H2Shami/opencorvus-helicone-session) da automatski prijavite svaki OpenCorvus razgovor kao sesiju u Helicone-u.
 
 ```bash
-npm install -g argus-helicone-session
+npm install -g opencorvus-helicone-session
 ```
 
 Dodajte ga u svoju konfiguraciju.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "plugin": ["argus-helicone-session"]
+  "plugin": ["opencorvus-helicone-session"]
 }
 ```
 
-Dodatak ubacuje zaglavlja `Helicone-Session-Id` i `Helicone-Session-Name` u vaše zahtjeve. Na stranici Helicone Sessions, vidjet ćete svaki Argus razgovor naveden kao zasebna sesija.
+Dodatak ubacuje zaglavlja `Helicone-Session-Id` i `Helicone-Session-Name` u vaše zahtjeve. Na stranici Helicone Sessions, vidjet ćete svaki OpenCorvus razgovor naveden kao zasebna sesija.
 
 ##### Uobičajena Helicone zaglavlja
 
@@ -1041,11 +1041,11 @@ Pogledajte [Helicone Header Directory](https://docs.helicone.ai/helicone-headers
 
 ### llama.cpp
 
-Možete konfigurirati argus za korištenje lokalnih modela putem [llama.cpp's](https://github.com/ggml-org/llama.cpp) uslužnog programa llama-server
+Možete konfigurirati opencorvus za korištenje lokalnih modela putem [llama.cpp's](https://github.com/ggml-org/llama.cpp) uslužnog programa llama-server
 
-```json title="argus.json" "llama.cpp" {5, 6, 8, 10-15}
+```json title="opencorvus.json" "llama.cpp" {5, 6, 8, 10-15}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "llama.cpp": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1108,11 +1108,11 @@ IO.NET nudi 17 modela optimiziranih za različite slučajeve upotrebe:
 
 ### LM Studio
 
-Možete konfigurirati argus za korištenje lokalnih modela preko LM Studio.
+Možete konfigurirati opencorvus za korištenje lokalnih modela preko LM Studio.
 
-```json title="argus.json" "lmstudio" {5, 6, 8, 10-14}
+```json title="opencorvus.json" "lmstudio" {5, 6, 8, 10-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "lmstudio": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1225,15 +1225,15 @@ Da biste koristili Kimi K2 iz Moonshot AI:
 
 ### Ollama
 
-Možete konfigurirati argus za korištenje lokalnih modela putem Ollame.
+Možete konfigurirati opencorvus za korištenje lokalnih modela putem Ollame.
 
 :::tip
-Ollama se može automatski konfigurirati za Argus. Pogledajte [Ollama integracijske dokumente](https://docs.ollama.com/integrations/argus) za detalje.
+Ollama se može automatski konfigurirati za OpenCorvus. Pogledajte [Ollama integracijske dokumente](https://docs.ollama.com/integrations/opencorvus) za detalje.
 :::
 
-```json title="argus.json" "ollama" {5, 6, 8, 10-14}
+```json title="opencorvus.json" "ollama" {5, 6, 8, 10-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "ollama": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1267,13 +1267,13 @@ Ako pozivi alata ne rade, pokušajte povećati `num_ctx` u Ollama. Počnite oko 
 
 ### Ollama Cloud
 
-Da biste koristili Ollama Cloud s Argus:
+Da biste koristili Ollama Cloud s OpenCorvus:
 
 1. Idite na [https://ollama.com/](https://ollama.com/) i prijavite se ili kreirajte račun.
 
 2. Idite na **Postavke** > **Ključevi** i kliknite na **Dodaj API ključ** da generišete novi API ključ.
 
-3. Kopirajte API ključ za korištenje u Argus.
+3. Kopirajte API ključ za korištenje u OpenCorvus.
 
 4. Pokrenite naredbu `/connect` i potražite **Ollama Cloud**.
 
@@ -1290,7 +1290,7 @@ Da biste koristili Ollama Cloud s Argus:
    └ enter
 ```
 
-6. **Važno**: Prije upotrebe modela oblaka u Argus, morate lokalno povući informacije o modelu:
+6. **Važno**: Prije upotrebe modela oblaka u OpenCorvus, morate lokalno povući informacije o modelu:
 
 ```bash
    ollama pull gpt-oss:20b-cloud
@@ -1337,19 +1337,19 @@ Ako već imate API ključ, možete odabrati **Ručno unesite API ključ** i zali
 
 ---
 
-### Argus Zen
+### OpenCorvus Zen
 
-Argus Zen je lista testiranih i verifikovanih modela koju je obezbedio Argus tim. [Saznajte više](/docs/zen).
+OpenCorvus Zen je lista testiranih i verifikovanih modela koju je obezbedio OpenCorvus tim. [Saznajte više](/docs/zen).
 
-1. Prijavite se na **<a href={console}>Argus Zen</a>** i kliknite na **Kreiraj API ključ**.
+1. Prijavite se na **<a href={console}>OpenCorvus Zen</a>** i kliknite na **Kreiraj API ključ**.
 
-2. Pokrenite naredbu `/connect` i potražite **Argus Zen**.
+2. Pokrenite naredbu `/connect` i potražite **OpenCorvus Zen**.
 
 ```txt
    /connect
 ```
 
-3. Unesite svoj Argus API ključ.
+3. Unesite svoj OpenCorvus API ključ.
 
 ```txt
    ┌ API key
@@ -1391,11 +1391,11 @@ Argus Zen je lista testiranih i verifikovanih modela koju je obezbedio Argus tim
    /models
 ```
 
-Također možete dodati dodatne modele putem vaše argus konfiguracije.
+Također možete dodati dodatne modele putem vaše opencorvus konfiguracije.
 
-```json title="argus.json" {6}
+```json title="opencorvus.json" {6}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "openrouter": {
       "models": {
@@ -1406,11 +1406,11 @@ Također možete dodati dodatne modele putem vaše argus konfiguracije.
 }
 ```
 
-5. Također ih možete prilagoditi putem vaše argus konfiguracije. Evo primjera navođenja provajdera
+5. Također ih možete prilagoditi putem vaše opencorvus konfiguracije. Evo primjera navođenja provajdera
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "openrouter": {
       "models": {
@@ -1458,7 +1458,7 @@ SAP AI Core omogućava pristup preko 40+ modela iz OpenAI, Anthropic, Google, Am
 Ili postavite varijablu okruženja `AICORE_SERVICE_KEY`:
 
 ```bash
-   AICORE_SERVICE_KEY='{"clientid":"...","clientsecret":"...","url":"...","serviceurls":{"AI_API_URL":"..."}}' argus
+   AICORE_SERVICE_KEY='{"clientid":"...","clientsecret":"...","url":"...","serviceurls":{"AI_API_URL":"..."}}' opencorvus
 ```
 
 Ili ga dodajte na svoj bash profil:
@@ -1470,7 +1470,7 @@ Ili ga dodajte na svoj bash profil:
 4. Opciono postavite ID implementacije i grupu resursa:
 
 ```bash
-   AICORE_DEPLOYMENT_ID=your-deployment-id AICORE_RESOURCE_GROUP=your-resource-group argus
+   AICORE_DEPLOYMENT_ID=your-deployment-id AICORE_RESOURCE_GROUP=your-resource-group opencorvus
 ```
 
 :::note
@@ -1622,11 +1622,11 @@ Vercel AI Gateway vam omogućava da pristupite modelima iz OpenAI, Anthropic, Go
    /models
 ```
 
-Također možete prilagoditi modele kroz svoju argus konfiguraciju. Evo primjera specificiranja redoslijeda usmjeravanja dobavljača.
+Također možete prilagoditi modele kroz svoju opencorvus konfiguraciju. Evo primjera specificiranja redoslijeda usmjeravanja dobavljača.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "vercel": {
       "models": {
@@ -1732,11 +1732,11 @@ Ako ste pretplaćeni na **GLM plan kodiranja**, odaberite **Z.AI plan kodiranja*
    /models
 ```
 
-Također možete dodati dodatne modele putem vaše argus konfiguracije.
+Također možete dodati dodatne modele putem vaše opencorvus konfiguracije.
 
-```json title="argus.json" {6}
+```json title="opencorvus.json" {6}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "zenmux": {
       "models": {
@@ -1754,7 +1754,7 @@ Također možete dodati dodatne modele putem vaše argus konfiguracije.
 Da biste dodali bilo kojeg **OpenAI-kompatibilnog** provajdera koji nije naveden u naredbi `/connect`:
 
 :::tip
-Možete koristiti bilo kojeg OpenAI kompatibilnog provajdera s argus-om. Većina modernih AI provajdera nudi API-je kompatibilne sa OpenAI.
+Možete koristiti bilo kojeg OpenAI kompatibilnog provajdera s opencorvus-om. Većina modernih AI provajdera nudi API-je kompatibilne sa OpenAI.
 :::
 
 1. Pokrenite naredbu `/connect` i pomaknite se prema dolje do **Ostalo**.
@@ -1793,18 +1793,18 @@ Odaberite ID koji se pamti, to ćete koristiti u svom konfiguracijskom fajlu.
 
    ┌  Add credential
    │
-   ▲  This only stores a credential for myprovider - you will need to configure it in argus.json, check the docs for examples.
+   ▲  This only stores a credential for myprovider - you will need to configure it in opencorvus.json, check the docs for examples.
    │
    ◇  Enter your API key
    │  sk-...
    └
 ```
 
-4. Kreirajte ili ažurirajte svoju `argus.json` datoteku u direktoriju projekta:
+4. Kreirajte ili ažurirajte svoju `opencorvus.json` datoteku u direktoriju projekta:
 
-```json title="argus.json" ""myprovider"" {5-15}
+```json title="opencorvus.json" ""myprovider"" {5-15}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "myprovider": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1841,9 +1841,9 @@ Više o naprednim opcijama u primjeru ispod.
 
 Evo primjera postavljanja opcija `apiKey`, `headers` i modela `limit`.
 
-```json title="argus.json" {9,11,17-20}
+```json title="opencorvus.json" {9,11,17-20}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "provider": {
     "myprovider": {
       "npm": "@ai-sdk/openai-compatible",
@@ -1876,7 +1876,7 @@ Detalji konfiguracije:
 - **limit.context**: Maksimalni ulazni tokeni koje model prihvata.
 - **limit.output**: Maksimalni tokeni koje model može generirati.
 
-Polja `limit` omogućavaju Argus da shvati koliko vam je konteksta ostalo. Standardni dobavljači ih automatski preuzimaju sa models.dev.
+Polja `limit` omogućavaju OpenCorvus da shvati koliko vam je konteksta ostalo. Standardni dobavljači ih automatski preuzimaju sa models.dev.
 
 ---
 
@@ -1884,12 +1884,12 @@ Polja `limit` omogućavaju Argus da shvati koliko vam je konteksta ostalo. Stand
 
 Ako imate problema s konfiguracijom provajdera, provjerite sljedeće:
 
-1. **Provjerite postavke autentifikacije**: Pokrenite `argus auth list` da vidite da li su vjerodajnice
+1. **Provjerite postavke autentifikacije**: Pokrenite `opencorvus auth list` da vidite da li su vjerodajnice
    za provajdera se dodaju u vašu konfiguraciju.
 
    Ovo se ne odnosi na dobavljače kao što je Amazon Bedrock, koji se oslanjaju na varijable okruženja za svoju autentifikaciju.
 
-2. Za prilagođene provajdere, provjerite Argus konfiguraciju i:
-   - Uvjerite se da ID provajdera korišten u naredbi `/connect` odgovara ID-u u vašoj argus konfiguraciji.
+2. Za prilagođene provajdere, provjerite OpenCorvus konfiguraciju i:
+   - Uvjerite se da ID provajdera korišten u naredbi `/connect` odgovara ID-u u vašoj opencorvus konfiguraciji.
    - Za provajdera se koristi pravi npm paket. Na primjer, koristite `@ai-sdk/cerebras` za Cerebras. A za sve ostale OpenAI kompatibilne provajdere, koristite `@ai-sdk/openai-compatible`.
    - Provjerite da li se ispravna krajnja tačka API-ja koristi u polju `options.baseURL`.

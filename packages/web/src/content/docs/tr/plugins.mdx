@@ -1,9 +1,9 @@
 ---
 title: Eklentiler
-description: argus'u genişletmek için kendi eklentilerinizi yazın.
+description: opencorvus'u genişletmek için kendi eklentilerinizi yazın.
 ---
 
-Eklentiler, çeşitli olaylara bağlanarak ve davranışı özelleştirerek argus'u genişletmenize olanak tanır. Yeni özellikler eklemek, harici hizmetlerle entegrasyon sağlamak veya argus'un varsayılan davranışını değiştirmek için eklentiler oluşturabilirsiniz.
+Eklentiler, çeşitli olaylara bağlanarak ve davranışı özelleştirerek opencorvus'u genişletmenize olanak tanır. Yeni özellikler eklemek, harici hizmetlerle entegrasyon sağlamak veya opencorvus'un varsayılan davranışını değiştirmek için eklentiler oluşturabilirsiniz.
 
 Örnekler için topluluk tarafından oluşturulan [eklentilere](/docs/ecosystem#plugins) göz atın.
 
@@ -19,8 +19,8 @@ Eklentileri yüklemenin iki yolu vardır.
 
 JavaScript veya TypeScript dosyalarını eklenti dizinine yerleştirin.
 
-- `.argus/plugins/` - Proje düzeyinde eklentiler
-- `~/.config/argus/plugins/` - Genel eklentiler
+- `.opencorvus/plugins/` - Proje düzeyinde eklentiler
+- `~/.config/opencorvus/plugins/` - Genel eklentiler
 
 Bu dizinlerdeki dosyalar başlangıçta otomatik olarak yüklenir.
 
@@ -30,10 +30,10 @@ Bu dizinlerdeki dosyalar başlangıçta otomatik olarak yüklenir.
 
 Yapılandırma dosyanızda npm paketlerini belirtin.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
-  "plugin": ["argus-helicone-session", "argus-wakatime", "@my-org/custom-plugin"]
+  "$schema": "https://opencorvus.ai/config.json",
+  "plugin": ["opencorvus-helicone-session", "opencorvus-wakatime", "@my-org/custom-plugin"]
 }
 ```
 
@@ -45,7 +45,7 @@ Hem normal hem de kapsamlı npm paketleri desteklenir.
 
 ### Eklentiler nasıl kurulur?
 
-**npm eklentileri** başlangıçta Bun kullanılarak otomatik olarak yüklenir. Paketler ve bağımlılıkları `~/.cache/argus/node_modules/`'da önbelleğe alınır.
+**npm eklentileri** başlangıçta Bun kullanılarak otomatik olarak yüklenir. Paketler ve bağımlılıkları `~/.cache/opencorvus/node_modules/`'da önbelleğe alınır.
 
 **Yerel eklentiler** doğrudan eklenti dizininden yüklenir. Harici paketleri kullanmak için, sisteminizin dizininde bir `package.json` oluşturmanız (bkz. [Bağımlılıklar](#dependencies)) veya eklentiyi npm ve [add it to your config](/docs/config#plugins)'de yayınlamanız gerekir.
 
@@ -55,10 +55,10 @@ Hem normal hem de kapsamlı npm paketleri desteklenir.
 
 Eklentiler tüm kaynaklardan yüklenir ve tüm kancalar sırayla çalışır. Yükleme sırası şöyledir:
 
-1. Global config (`~/.config/argus/argus.json`)
-2. Project config (`argus.json`)
-3. Global eklenti dizini (`~/.config/argus/plugins/`)
-4. Proje eklenti dizini (`.argus/plugins/`)
+1. Global config (`~/.config/opencorvus/opencorvus.json`)
+2. Project config (`opencorvus.json`)
+3. Global eklenti dizini (`~/.config/opencorvus/plugins/`)
+4. Proje eklenti dizini (`.opencorvus/plugins/`)
 
 Aynı ad ve sürüme sahip yinelenen npm paketleri bir kez yüklenir. Ancak benzer adlara sahip bir yerel eklenti ve bir npm eklentisinin her ikisi de ayrı ayrı yüklenir.
 
@@ -75,7 +75,7 @@ işlevler. Her işlev bir bağlam nesnesi alır ve bir kanca nesnesi döndürür
 
 Yerel eklentiler ve özel araçlar harici npm paketlerini kullanabilir. İhtiyacınız olan bağımlılıkları içeren config dizininize bir `package.json` ekleyin.
 
-```json title=".argus/package.json"
+```json title=".opencorvus/package.json"
 {
   "dependencies": {
     "shescape": "^2.1.0"
@@ -83,9 +83,9 @@ Yerel eklentiler ve özel araçlar harici npm paketlerini kullanabilir. İhtiyac
 }
 ```
 
-argus bunları yüklemek için başlangıçta `bun install` komutunu çalıştırır. Eklentileriniz ve araçlarınız daha sonra bunları içe aktarabilir.
+opencorvus bunları yüklemek için başlangıçta `bun install` komutunu çalıştırır. Eklentileriniz ve araçlarınız daha sonra bunları içe aktarabilir.
 
-```ts title=".argus/plugins/my-plugin.ts"
+```ts title=".opencorvus/plugins/my-plugin.ts"
 import { escape } from "shescape"
 
 export const MyPlugin = async (ctx) => {
@@ -103,7 +103,7 @@ export const MyPlugin = async (ctx) => {
 
 ### Temel yapı
 
-```js title=".argus/plugins/example.js"
+```js title=".opencorvus/plugins/example.js"
 export const MyPlugin = async ({ project, client, $, directory, worktree }) => {
   console.log("Plugin initialized!")
 
@@ -118,7 +118,7 @@ Eklenti işlevi şunları alır:
 - `project`: Mevcut proje bilgisi.
 - `directory`: güncel çalışma dizini.
 - `worktree`: Git çalışma ağacı yolu.
-- `client`: Yapay zeka ile etkileşime geçmek için argus'lu bir SDK istemcisi.
+- `client`: Yapay zeka ile etkileşime geçmek için opencorvus'lu bir SDK istemcisi.
 - `$`: Bun'un komutları yürütmek için kullandığı [shell API](https://bun.com/docs/runtime/shell).
 
 ---
@@ -128,7 +128,7 @@ Eklenti işlevi şunları alır:
 TypeScript eklentileri için türleri eklenti paketinden içe aktarabilirsiniz:
 
 ```ts title="my-plugin.ts" {1}
-import type { Plugin } from "@argus-ai/plugin"
+import type { Plugin } from "@opencorvus-ai/plugin"
 
 export const MyPlugin: Plugin = async ({ project, client, $, directory, worktree }) => {
   return {
@@ -211,7 +211,7 @@ Eklentiler aşağıdaki Örnekler bölümünde görüldüğü gibi etkinliklere 
 
 ## Örnekler
 
-argus'u genişletmek için kullanabileceğiniz bazı eklenti örneklerini burada bulabilirsiniz.
+opencorvus'u genişletmek için kullanabileceğiniz bazı eklenti örneklerini burada bulabilirsiniz.
 
 ---
 
@@ -219,13 +219,13 @@ argus'u genişletmek için kullanabileceğiniz bazı eklenti örneklerini burada
 
 Belirli olaylar meydana geldiğinde bildirim gönderin:
 
-```js title=".argus/plugins/notification.js"
+```js title=".opencorvus/plugins/notification.js"
 export const NotificationPlugin = async ({ project, client, $, directory, worktree }) => {
   return {
     event: async ({ event }) => {
       // Send notification on session completion
       if (event.type === "session.idle") {
-        await $`osascript -e 'display notification "Session completed!" with title "argus"'`
+        await $`osascript -e 'display notification "Session completed!" with title "opencorvus"'`
       }
     },
   }
@@ -235,16 +235,16 @@ export const NotificationPlugin = async ({ project, client, $, directory, worktr
 MacOS'ta AppleScript'i çalıştırmak için `osascript` kullanıyoruz. Burada bildirim göndermek için kullanıyoruz.
 
 :::note
-argus masaüstü uygulamasını kullanıyorsanız yanıt hazır olduğunda veya oturum hataları oluştuğunda otomatik olarak sistem bildirimleri gönderebilir.
+opencorvus masaüstü uygulamasını kullanıyorsanız yanıt hazır olduğunda veya oturum hataları oluştuğunda otomatik olarak sistem bildirimleri gönderebilir.
 :::
 
 ---
 
 ### .env Koruması
 
-argus'un `.env` dosyalarını okumasını önleyin:
+opencorvus'un `.env` dosyalarını okumasını önleyin:
 
-```javascript title=".argus/plugins/env-protection.js"
+```javascript title=".opencorvus/plugins/env-protection.js"
 export const EnvProtection = async ({ project, client, $, directory, worktree }) => {
   return {
     "tool.execute.before": async (input, output) => {
@@ -262,7 +262,7 @@ export const EnvProtection = async ({ project, client, $, directory, worktree })
 
 Ortam değişkenlerini tüm kabuk yürütmeye (AI araçları ve kullanıcı terminalleri) enjekte edin:
 
-```javascript title=".argus/plugins/inject-env.js"
+```javascript title=".opencorvus/plugins/inject-env.js"
 export const InjectEnvPlugin = async () => {
   return {
     "shell.env": async (input, output) => {
@@ -277,10 +277,10 @@ export const InjectEnvPlugin = async () => {
 
 ### Özel araçlar
 
-Eklentiler ayrıca argus'a özel araçlar da ekleyebilir:
+Eklentiler ayrıca opencorvus'a özel araçlar da ekleyebilir:
 
-```ts title=".argus/plugins/custom-tools.ts"
-import { type Plugin, tool } from "@argus-ai/plugin"
+```ts title=".opencorvus/plugins/custom-tools.ts"
+import { type Plugin, tool } from "@opencorvus-ai/plugin"
 
 export const CustomToolsPlugin: Plugin = async (ctx) => {
   return {
@@ -300,7 +300,7 @@ export const CustomToolsPlugin: Plugin = async (ctx) => {
 }
 ```
 
-`tool` yardımcısı, argus'un çağırabileceği özel bir araç oluşturur. Bir Zod şeması işlevini alır ve aşağıdakileri içeren bir araç tanımı döndürür:
+`tool` yardımcısı, opencorvus'un çağırabileceği özel bir araç oluşturur. Bir Zod şeması işlevini alır ve aşağıdakileri içeren bir araç tanımı döndürür:
 
 - `description`: Araç ne yapar?
 - `args`: Aracın argümanları için Zod şeması
@@ -314,7 +314,7 @@ export const CustomToolsPlugin: Plugin = async (ctx) => {
 
 Yapılandırılmış günlük kaydı için `client.app.log()` yerine `console.log` kullanın:
 
-```ts title=".argus/plugins/my-plugin.ts"
+```ts title=".opencorvus/plugins/my-plugin.ts"
 export const MyPlugin = async ({ client }) => {
   await client.app.log({
     body: {
@@ -327,7 +327,7 @@ export const MyPlugin = async ({ client }) => {
 }
 ```
 
-Seviyeler: `debug`, `info`, `warn`, `error`. Ayrıntılar için [SDK documentation](https://argus.ai/docs/sdk)'e bakın.
+Seviyeler: `debug`, `info`, `warn`, `error`. Ayrıntılar için [SDK documentation](https://opencorvus.ai/docs/sdk)'e bakın.
 
 ---
 
@@ -335,8 +335,8 @@ Seviyeler: `debug`, `info`, `warn`, `error`. Ayrıntılar için [SDK documentati
 
 Bir oturum sıkıştırıldığında içerilen bağlamı özelleştirin:
 
-```ts title=".argus/plugins/compaction.ts"
-import type { Plugin } from "@argus-ai/plugin"
+```ts title=".opencorvus/plugins/compaction.ts"
+import type { Plugin } from "@opencorvus-ai/plugin"
 
 export const CompactionPlugin: Plugin = async (ctx) => {
   return {
@@ -359,8 +359,8 @@ Include any state that should persist across compaction:
 
 Ayrıca `output.prompt` ayarını yaparak sıkıştırma istemini tamamen değiştirebilirsiniz:
 
-```ts title=".argus/plugins/custom-compaction.ts"
-import type { Plugin } from "@argus-ai/plugin"
+```ts title=".opencorvus/plugins/custom-compaction.ts"
+import type { Plugin } from "@opencorvus-ai/plugin"
 
 export const CustomCompactionPlugin: Plugin = async (ctx) => {
   return {

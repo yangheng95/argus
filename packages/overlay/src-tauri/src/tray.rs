@@ -10,11 +10,11 @@ const MENU_STOP: &str = "stop-bot";
 const MENU_QUIT: &str = "quit-app";
 
 pub fn setup(app: &AppHandle) -> Result<(), String> {
-    let open = MenuItem::with_id(app, MENU_OPEN, "Open Argus Console", true, None::<&str>)
+    let open = MenuItem::with_id(app, MENU_OPEN, "Open OpenCorvus Console", true, None::<&str>)
         .map_err(|error| error.to_string())?;
-    let start = MenuItem::with_id(app, MENU_START, "Start Argus", true, None::<&str>)
+    let start = MenuItem::with_id(app, MENU_START, "Start OpenCorvus", true, None::<&str>)
         .map_err(|error| error.to_string())?;
-    let stop = MenuItem::with_id(app, MENU_STOP, "Stop Argus", true, None::<&str>)
+    let stop = MenuItem::with_id(app, MENU_STOP, "Stop OpenCorvus", true, None::<&str>)
         .map_err(|error| error.to_string())?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>).map_err(|error| error.to_string())?;
 

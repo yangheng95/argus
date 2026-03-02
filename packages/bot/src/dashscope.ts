@@ -14,10 +14,10 @@ function dashscopeBaseURL(key: string | undefined) {
 function authPaths() {
   const home = os.homedir()
   return [
-    process.env.XDG_DATA_HOME ? path.join(process.env.XDG_DATA_HOME, "argus", "auth.json") : undefined,
-    path.join(home, ".local", "share", "argus", "auth.json"),
-    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "argus", "auth.json") : undefined,
-    process.env.APPDATA ? path.join(process.env.APPDATA, "argus", "auth.json") : undefined,
+    process.env.XDG_DATA_HOME ? path.join(process.env.XDG_DATA_HOME, "opencorvus", "auth.json") : undefined,
+    path.join(home, ".local", "share", "opencorvus", "auth.json"),
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, "opencorvus", "auth.json") : undefined,
+    process.env.APPDATA ? path.join(process.env.APPDATA, "opencorvus", "auth.json") : undefined,
   ].filter((x): x is string => !!x)
 }
 

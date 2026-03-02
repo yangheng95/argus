@@ -3,9 +3,9 @@ title: Temaer
 description: Velg et innebygd tema eller definer ditt eget.
 ---
 
-Med argus kan du velge fra ett av flere innebygde temaer, bruke et tema som tilpasser seg terminaltemaet ditt, eller definere ditt eget tilpassede tema.
+Med opencorvus kan du velge fra ett av flere innebygde temaer, bruke et tema som tilpasser seg terminaltemaet ditt, eller definere ditt eget tilpassede tema.
 
-Som standard bruker argus vårt eget `argus`-tema.
+Som standard bruker opencorvus vårt eget `opencorvus`-tema.
 
 ---
 
@@ -23,7 +23,7 @@ Uten truecolor-støtte kan temaer vises med redusert fargenøyaktighet eller fal
 
 ## Innebygde temaer
 
-argus kommer med flere innebygde temaer.
+opencorvus kommer med flere innebygde temaer.
 
 | Navn                   | Beskrivelse                                                               |
 | ---------------------- | ------------------------------------------------------------------------- |
@@ -53,7 +53,7 @@ Og mer, vi legger stadig til nye temaer.
 
 Systemtemaet er for brukere som:
 
-- Vil at argus skal matche terminalens utseende
+- Vil at opencorvus skal matche terminalens utseende
 - Bruker tilpassede terminalfargeskjemaer
 - Foretrekker et konsistent utseende på tvers av alle terminalapplikasjoner
 
@@ -63,9 +63,9 @@ Systemtemaet er for brukere som:
 
 Du kan velge et tema ved å åpne temavelgeren med kommandoen `/theme`. Eller du kan spesifisere det i [config](/docs/config).
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "theme": "tokyonight"
 }
 ```
@@ -74,7 +74,7 @@ Du kan velge et tema ved å åpne temavelgeren med kommandoen `/theme`. Eller du
 
 ## Egendefinerte temaer
 
-argus støtter et fleksibelt JSON-basert temasystem som lar brukere enkelt lage og tilpasse temaer.
+opencorvus støtter et fleksibelt JSON-basert temasystem som lar brukere enkelt lage og tilpasse temaer.
 
 ---
 
@@ -83,9 +83,9 @@ argus støtter et fleksibelt JSON-basert temasystem som lar brukere enkelt lage 
 Temaer lastes inn fra flere kataloger i følgende rekkefølge der senere kataloger overstyrer tidligere:
 
 1. **Innebygde temaer** - Disse er innebygd i binæren
-2. **Brukerkonfigurasjonskatalog** - Definert i `~/.config/argus/themes/*.json` eller `$XDG_CONFIG_HOME/argus/themes/*.json`
-3. **Prosjektrotkatalog** - Definert i `<project-root>/.argus/themes/*.json`
-4. **Gjeldende arbeidskatalog** - Definert i `./.argus/themes/*.json`
+2. **Brukerkonfigurasjonskatalog** - Definert i `~/.config/opencorvus/themes/*.json` eller `$XDG_CONFIG_HOME/opencorvus/themes/*.json`
+3. **Prosjektrotkatalog** - Definert i `<project-root>/.opencorvus/themes/*.json`
+4. **Gjeldende arbeidskatalog** - Definert i `./.opencorvus/themes/*.json`
 
 Hvis flere kataloger inneholder et tema med samme navn, vil temaet fra katalogen med høyere prioritet bli brukt.
 
@@ -98,15 +98,15 @@ For å lage et tilpasset tema, lag en JSON-fil i en av temakatalogene.
 For brukerspesifikke temaer:
 
 ```bash no-frame
-mkdir -p ~/.config/argus/themes
-vim ~/.config/argus/themes/my-theme.json
+mkdir -p ~/.config/opencorvus/themes
+vim ~/.config/opencorvus/themes/my-theme.json
 ```
 
 Og for prosjektspesifikke temaer.
 
 ```bash no-frame
-mkdir -p .argus/themes
-vim .argus/themes/my-theme.json
+mkdir -p .opencorvus/themes
+vim .opencorvus/themes/my-theme.json
 ```
 
 ---
@@ -144,7 +144,7 @@ Her er et eksempel på et tilpasset tema:
 
 ```json title="my-theme.json"
 {
-  "$schema": "https://argus.ai/theme.json",
+  "$schema": "https://opencorvus.ai/theme.json",
   "defs": {
     "nord0": "#2E3440",
     "nord1": "#3B4252",

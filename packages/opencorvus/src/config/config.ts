@@ -59,11 +59,11 @@ export namespace Config {
   function systemManagedConfigDir(): string {
     switch (process.platform) {
       case "darwin":
-        return "/Library/Application Support/argus"
+        return "/Library/Application Support/opencorvus"
       case "win32":
-        return path.join(process.env.ProgramData || "C:\\ProgramData", "argus")
+        return path.join(process.env.ProgramData || "C:\\ProgramData", "opencorvus")
       default:
-        return "/etc/argus"
+        return "/etc/opencorvus"
     }
   }
 
@@ -89,19 +89,19 @@ export namespace Config {
     const auth = await Auth.all()
 
     // Config loading order (low -> high precedence): https://opencode.ai/docs/config#precedence-order
-    // 1) Remote .well-known/argus (org defaults)
-    // 2) Global config (~/.config/argus/argus.json{,c})
-    // 3) Custom config (ARGUS_CONFIG)
-    // 4) Project config (argus.json{,c})
-    // 5) local config directories (.opencorvus/*, legacy .argus/*)
-    // 6) Inline config (ARGUS_CONFIG_CONTENT)
+    // 1) Remote .well-known/opencorvus (org defaults)
+    // 2) Global config (~/.config/opencorvus/opencorvus.json{,c})
+    // 3) Custom config (OPENCORVUS_CONFIG)
+    // 4) Project config (opencorvus.json{,c})
+    // 5) local config directories (.opencorvus/*, legacy .opencorvus/*)
+    // 6) Inline config (OPENCORVUS_CONFIG_CONTENT)
     // Managed config directory is enterprise-only and always overrides everything above.
     let result: Info = {}
     for (const [key, value] of Object.entries(auth)) {
       if (value.type === "wellknown") {
         process.env[value.key] = value.token
-        log.debug("fetching remote config", { url: `${key}/.well-known/argus` })
-        const response = await fetch(`${key}/.well-known/argus`)
+        log.debug("fetching remote config", { url: `${key}/.well-known/opencorvus` })
+        const response = await fetch(`${key}/.well-known/opencorvus`)
         if (!response.ok) {
           throw new Error(`failed to fetch remote config from ${key}: ${response.status}`)
         }
@@ -112,8 +112,8 @@ export namespace Config {
         result = mergeConfigConcatArrays(
           result,
           await load(JSON.stringify(remoteConfig), {
-            dir: path.dirname(`${key}/.well-known/argus`),
-            source: `${key}/.well-known/argus`,
+            dir: path.dirname(`${key}/.well-known/opencorvus`),
+            source: `${key}/.well-known/opencorvus`,
           }),
         )
         log.debug("loaded remote config from well-known", { url: key })
@@ -124,14 +124,14 @@ export namespace Config {
     result = mergeConfigConcatArrays(result, await global())
 
     // Custom config path overrides global config.
-    if (Flag.ARGUS_CONFIG) {
-      result = mergeConfigConcatArrays(result, await loadFile(Flag.ARGUS_CONFIG))
-      log.debug("loaded custom config", { path: Flag.ARGUS_CONFIG })
+    if (Flag.OPENCORVUS_CONFIG) {
+      result = mergeConfigConcatArrays(result, await loadFile(Flag.OPENCORVUS_CONFIG))
+      log.debug("loaded custom config", { path: Flag.OPENCORVUS_CONFIG })
     }
 
     // Project config overrides global and remote config.
-    if (!Flag.ARGUS_DISABLE_PROJECT_CONFIG) {
-      for (const file of await ConfigPaths.projectFiles("argus", Instance.directory, Instance.worktree)) {
+    if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
+      for (const file of await ConfigPaths.projectFiles("opencorvus", Instance.directory, Instance.worktree)) {
         result = mergeConfigConcatArrays(result, await loadFile(file))
       }
     }
@@ -143,15 +143,15 @@ export namespace Config {
     const directories = await ConfigPaths.directories(Instance.directory, Instance.worktree)
 
     // .opencorvus directory config overrides (project and global) config sources.
-    if (Flag.ARGUS_CONFIG_DIR) {
-      log.debug("loading config from ARGUS_CONFIG_DIR", { path: Flag.ARGUS_CONFIG_DIR })
+    if (Flag.OPENCORVUS_CONFIG_DIR) {
+      log.debug("loading config from OPENCORVUS_CONFIG_DIR", { path: Flag.OPENCORVUS_CONFIG_DIR })
     }
 
     const deps = []
 
     for (const dir of unique(directories)) {
-      if (dir.endsWith(".opencorvus") || dir.endsWith(".argus") || dir === Flag.ARGUS_CONFIG_DIR) {
-        for (const file of ["argus.jsonc", "argus.json"]) {
+      if (dir.endsWith(".opencorvus") || dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR) {
+        for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           log.debug(`loading config from ${path.join(dir, file)}`)
           result = mergeConfigConcatArrays(result, await loadFile(path.join(dir, file)))
           // to satisfy the type checker
@@ -175,15 +175,15 @@ export namespace Config {
     }
 
     // Inline config content overrides all non-managed config sources.
-    if (process.env.ARGUS_CONFIG_CONTENT) {
+    if (process.env.OPENCORVUS_CONFIG_CONTENT) {
       result = mergeConfigConcatArrays(
         result,
-        await load(process.env.ARGUS_CONFIG_CONTENT, {
+        await load(process.env.OPENCORVUS_CONFIG_CONTENT, {
           dir: Instance.directory,
-          source: "ARGUS_CONFIG_CONTENT",
+          source: "OPENCORVUS_CONFIG_CONTENT",
         }),
       )
-      log.debug("loaded custom config from ARGUS_CONFIG_CONTENT")
+      log.debug("loaded custom config from OPENCORVUS_CONFIG_CONTENT")
     }
 
     // Load managed config files last (highest priority) - enterprise admin-controlled
@@ -192,7 +192,7 @@ export namespace Config {
     // This way it only loads config file and not skills/plugins/commands
     try {
       if (existsSync(managedDir)) {
-        for (const file of ["argus.jsonc", "argus.json"]) {
+        for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
           const managedFile = path.join(managedDir, file)
           try {
             result = mergeConfigConcatArrays(result, await loadFile(managedFile))
@@ -217,8 +217,8 @@ export namespace Config {
       })
     }
 
-    if (Flag.ARGUS_PERMISSION) {
-      result.permission = mergeDeep((result.permission ?? {}) as object, JSON.parse(Flag.ARGUS_PERMISSION)) as Config.Permission
+    if (Flag.OPENCORVUS_PERMISSION) {
+      result.permission = mergeDeep((result.permission ?? {}) as object, JSON.parse(Flag.OPENCORVUS_PERMISSION)) as Config.Permission
     }
 
     // Backwards compatibility: legacy top-level `tools` config
@@ -243,10 +243,10 @@ export namespace Config {
     }
 
     // Apply flag overrides for compaction settings
-    if (Flag.ARGUS_DISABLE_AUTOCOMPACT) {
+    if (Flag.OPENCORVUS_DISABLE_AUTOCOMPACT) {
       result.compaction = { ...result.compaction, auto: false }
     }
-    if (Flag.ARGUS_DISABLE_PRUNE) {
+    if (Flag.OPENCORVUS_DISABLE_PRUNE) {
       result.compaction = { ...result.compaction, prune: false }
     }
 
@@ -376,8 +376,8 @@ export namespace Config {
       const patterns = [
         "/.opencorvus/command/",
         "/.opencorvus/commands/",
-        "/.argus/command/",
-        "/.argus/commands/",
+        "/.opencorvus/command/",
+        "/.opencorvus/commands/",
         "/command/",
         "/commands/",
       ]
@@ -422,8 +422,8 @@ export namespace Config {
       const patterns = [
         "/.opencorvus/agent/",
         "/.opencorvus/agents/",
-        "/.argus/agent/",
-        "/.argus/agents/",
+        "/.opencorvus/agent/",
+        "/.opencorvus/agents/",
         "/agent/",
         "/agents/",
       ]
@@ -502,7 +502,7 @@ export namespace Config {
    *
    * @example
    * getPluginName("file:///path/to/plugin/foo.js") // "foo"
-   * getPluginName("oh-my-argus@2.4.3") // "oh-my-argus"
+   * getPluginName("oh-my-opencorvus@2.4.3") // "oh-my-opencorvus"
    * getPluginName("@scope/pkg@1.0.0") // "@scope/pkg"
    */
   export function getPluginName(plugin: string): string {
@@ -520,20 +520,20 @@ export namespace Config {
    * Deduplicates plugins by name, with later entries (higher priority) winning.
    * Priority order (highest to lowest):
    * 1. Local plugin/ directory
-   * 2. Local argus.json
+   * 2. Local opencorvus.json
    * 3. Global plugin/ directory
-   * 4. Global argus.json
+   * 4. Global opencorvus.json
    *
    * Since plugins are added in low-to-high priority order,
    * we reverse, deduplicate (keeping first occurrence), then restore order.
    */
   export function deduplicatePlugins(plugins: string[]): string[] {
     // seenNames: canonical plugin names for duplicate detection
-    // e.g., "oh-my-argus", "@scope/pkg"
+    // e.g., "oh-my-opencorvus", "@scope/pkg"
     const seenNames = new Set<string>()
 
     // uniqueSpecifiers: full plugin specifiers to return
-    // e.g., "oh-my-argus@2.4.3", "file:///path/to/plugin.js"
+    // e.g., "oh-my-opencorvus@2.4.3", "file:///path/to/plugin.js"
     const uniqueSpecifiers: string[] = []
 
     for (const specifier of plugins.toReversed()) {
@@ -926,7 +926,7 @@ export namespace Config {
       port: z.number().int().positive().optional().describe("Port to listen on"),
       hostname: z.string().optional().describe("Hostname to listen on"),
       mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
-      mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: argus.local)"),
+      mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: opencorvus.local)"),
       cors: z.array(z.string()).optional().describe("Additional domains to allow for CORS"),
     })
     .strict()
@@ -996,7 +996,7 @@ export namespace Config {
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
       logLevel: Log.Level.optional().describe("Log level"),
-      server: Server.optional().describe("Server configuration for argus serve and web commands"),
+      server: Server.optional().describe("Server configuration for opencorvus serve and web commands"),
       command: z
         .record(z.string(), Command)
         .optional()
@@ -1206,8 +1206,8 @@ export namespace Config {
     let result: Info = pipe(
       {},
       mergeDeep(await loadFile(path.join(Global.Path.config, "config.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "argus.json"))),
-      mergeDeep(await loadFile(path.join(Global.Path.config, "argus.jsonc"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.json"))),
+      mergeDeep(await loadFile(path.join(Global.Path.config, "opencorvus.jsonc"))),
     )
 
     const legacy = path.join(Global.Path.config, "config")
@@ -1257,7 +1257,7 @@ export namespace Config {
       delete copy.theme
       delete copy.keybinds
       delete copy.tui
-      log.warn("tui keys in argus config are deprecated; move them to tui.json", { path: source })
+      log.warn("tui keys in opencorvus config are deprecated; move them to tui.json", { path: source })
       return copy
     })()
 
@@ -1321,7 +1321,7 @@ export namespace Config {
   }
 
   function globalConfigFile() {
-    const candidates = ["argus.jsonc", "argus.json", "config.json"].map((file) =>
+    const candidates = ["opencorvus.jsonc", "opencorvus.json", "config.json"].map((file) =>
       path.join(Global.Path.config, file),
     )
     for (const file of candidates) {

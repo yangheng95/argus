@@ -3,7 +3,7 @@ title: Rješavanje problema
 description: Uobičajeni problemi i kako ih riješiti.
 ---
 
-Da biste otklonili probleme s Argus, počnite provjeravanjem dnevnika i lokalnih podataka koje pohranjuje na disku.
+Da biste otklonili probleme s OpenCorvus, počnite provjeravanjem dnevnika i lokalnih podataka koje pohranjuje na disku.
 
 ---
 
@@ -11,21 +11,21 @@ Da biste otklonili probleme s Argus, počnite provjeravanjem dnevnika i lokalnih
 
 Log fajlovi se pišu na:
 
-- **macOS/Linux**: `~/.local/share/argus/log/`
-- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.local\share\argus\log`
+- **macOS/Linux**: `~/.local/share/opencorvus/log/`
+- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.local\share\opencorvus\log`
 
 Datoteke evidencije se imenuju vremenskim oznakama (npr. `2025-01-09T123456.log`) i čuvaju se najnovijih 10 datoteka dnevnika.
 
-Možete postaviti nivo dnevnika pomoću opcije komandne linije `--log-level` da biste dobili detaljnije informacije o otklanjanju grešaka. Na primjer, `argus --log-level DEBUG`.
+Možete postaviti nivo dnevnika pomoću opcije komandne linije `--log-level` da biste dobili detaljnije informacije o otklanjanju grešaka. Na primjer, `opencorvus --log-level DEBUG`.
 
 ---
 
 ## Pohrana
 
-Argus pohranjuje podatke o sesiji i druge podatke aplikacije na disku na:
+OpenCorvus pohranjuje podatke o sesiji i druge podatke aplikacije na disku na:
 
-- **macOS/Linux**: `~/.local/share/argus/`
-- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.local\share\argus`
+- **macOS/Linux**: `~/.local/share/opencorvus/`
+- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.local\share\opencorvus`
 
 Ovaj direktorij sadrži:
 
@@ -39,13 +39,13 @@ Ovaj direktorij sadrži:
 
 ## Desktop aplikacija
 
-Argus Desktop pokreće lokalni Argus server (`argus-cli` sidecar) u pozadini. Većina problema je uzrokovana nedostatkom dodatka, oštećenom keš memorijom ili lošim postavkama servera.
+OpenCorvus Desktop pokreće lokalni OpenCorvus server (`opencorvus-cli` sidecar) u pozadini. Većina problema je uzrokovana nedostatkom dodatka, oštećenom keš memorijom ili lošim postavkama servera.
 
 ### Brze provjere
 
 - Potpuno zatvorite i ponovo pokrenite aplikaciju.
 - Ako aplikacija prikaže ekran s greškom, kliknite na **Restart** i kopirajte detalje o grešci.
-- samo za macOS: `Argus` meni -> **Ponovo učitaj Webview** (pomaže ako je korisnički interfejs prazan/zamrznut).
+- samo za macOS: `OpenCorvus` meni -> **Ponovo učitaj Webview** (pomaže ako je korisnički interfejs prazan/zamrznut).
 
 ---
 
@@ -57,28 +57,28 @@ Ako se desktop aplikacija ruši pri pokretanju, visi ili se čudno ponaša, poč
 
 Otvorite svoju globalnu konfiguracijsku datoteku i potražite ključ `plugin`.
 
-- **macOS/Linux**: `~/.config/argus/argus.jsonc` (ili `~/.config/argus/argus.json`)
-- **macOS/Linux** (starije instalacije): `~/.local/share/argus/argus.jsonc`
-- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.config\argus\argus.jsonc`
+- **macOS/Linux**: `~/.config/opencorvus/opencorvus.jsonc` (ili `~/.config/opencorvus/opencorvus.json`)
+- **macOS/Linux** (starije instalacije): `~/.local/share/opencorvus/opencorvus.jsonc`
+- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.config\opencorvus\opencorvus.jsonc`
 
 Ako imate konfigurirane dodatke, privremeno ih onemogućite uklanjanjem ključa ili postavljanjem na prazan niz:
 
 ```jsonc
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "plugin": [],
 }
 ```
 
 #### Provjera direktorija dodataka
 
-Argus također može učitati lokalne dodatke s diska. Privremeno ih maknite s puta (ili preimenujte folder) i ponovo pokrenite desktop aplikaciju:
+OpenCorvus također može učitati lokalne dodatke s diska. Privremeno ih maknite s puta (ili preimenujte folder) i ponovo pokrenite desktop aplikaciju:
 
 - **Globalni dodaci**
-  - **macOS/Linux**: `~/.config/argus/plugins/`
-  - **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.config\argus\plugins`
+  - **macOS/Linux**: `~/.config/opencorvus/plugins/`
+  - **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.config\opencorvus\plugins`
 - **Projektni dodaci** (samo ako koristite konfiguraciju po projektu)
-  - `<your-project>/.argus/plugins/`
+  - `<your-project>/.opencorvus/plugins/`
 
 Ako aplikacija ponovo počne raditi, ponovo omogućite dodatke jedan po jedan kako biste otkrili koji od njih uzrokuje problem.
 
@@ -86,22 +86,22 @@ Ako aplikacija ponovo počne raditi, ponovo omogućite dodatke jedan po jedan ka
 
 ### Brisanje keš memorije
 
-Ako onemogućavanje dodataka ne pomogne (ili se instalacija dodatka zaglavila), obrišite keš memoriju kako bi ga Argus mogao ponovo izgraditi.
+Ako onemogućavanje dodataka ne pomogne (ili se instalacija dodatka zaglavila), obrišite keš memoriju kako bi ga OpenCorvus mogao ponovo izgraditi.
 
-1. Potpuno zatvorite Argus Desktop.
+1. Potpuno zatvorite OpenCorvus Desktop.
 2. Izbrišite keš direktorij:
 
-- **macOS**: Finder -> `Cmd+Shift+G` -> zalijepi `~/.cache/argus`
-- **Linux**: obrišite `~/.cache/argus` (ili pokrenite `rm -rf ~/.cache/argus`)
-- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.cache\argus`
+- **macOS**: Finder -> `Cmd+Shift+G` -> zalijepi `~/.cache/opencorvus`
+- **Linux**: obrišite `~/.cache/opencorvus` (ili pokrenite `rm -rf ~/.cache/opencorvus`)
+- **Windows**: Pritisnite `WIN+R` i zalijepite `%USERPROFILE%\.cache\opencorvus`
 
-3. Ponovo pokrenite Argus Desktop.
+3. Ponovo pokrenite OpenCorvus Desktop.
 
 ---
 
 ### Rješavanje problema sa vezom na serveru
 
-Argus Desktop može ili pokrenuti svoj lokalni server (podrazumevano) ili se povezati na URL servera koji ste konfigurisali.
+OpenCorvus Desktop može ili pokrenuti svoj lokalni server (podrazumevano) ili se povezati na URL servera koji ste konfigurisali.
 
 Ako vidite dijaloški okvir **"Povezivanje nije uspjelo"** (ili aplikacija nikada ne prođe kroz početni ekran), provjerite da li postoji prilagođeni URL servera.
 
@@ -111,7 +111,7 @@ Na početnom ekranu kliknite na ime servera (sa tačkom statusa) da otvorite bir
 
 #### Uklonite `server.port` / `server.hostname` iz vaše konfiguracije
 
-Ako vaš `argus.json(c)` sadrži odjeljak `server`, privremeno ga uklonite i ponovo pokrenite desktop aplikaciju.
+Ako vaš `opencorvus.json(c)` sadrži odjeljak `server`, privremeno ga uklonite i ponovo pokrenite desktop aplikaciju.
 
 #### Provjerite varijable okruženja
 
@@ -132,21 +132,21 @@ Na Linuxu, neka podešavanja Waylanda mogu uzrokovati prazne prozore ili greške
 
 ### Windows: WebView2 izvršno okruženje
 
-Na Windows-u, Argus Desktop zahtijeva Microsoft Edge **WebView2 Runtime**. Ako se aplikacija otvori u praznom prozoru ili se ne pokrene, instalirajte/ažurirajte WebView2 i pokušajte ponovo.
+Na Windows-u, OpenCorvus Desktop zahtijeva Microsoft Edge **WebView2 Runtime**. Ako se aplikacija otvori u praznom prozoru ili se ne pokrene, instalirajte/ažurirajte WebView2 i pokušajte ponovo.
 
 ---
 
 ### Windows: Opšti problemi sa performansama
 
-Ako imate spore performanse, probleme s pristupom datotekama ili probleme s terminalom na Windows-u, pokušajte koristiti [WSL (Windows podsistem za Linux)](/docs/windows-wsl). WSL pruža Linux okruženje koje radi neprimetnije sa Argus karakteristikama.
+Ako imate spore performanse, probleme s pristupom datotekama ili probleme s terminalom na Windows-u, pokušajte koristiti [WSL (Windows podsistem za Linux)](/docs/windows-wsl). WSL pruža Linux okruženje koje radi neprimetnije sa OpenCorvus karakteristikama.
 
 ---
 
 ### Obavještenja se ne prikazuju
 
-Argus Desktop prikazuje sistemska obavještenja samo kada:
+OpenCorvus Desktop prikazuje sistemska obavještenja samo kada:
 
-- obavještenja su omogućena za Argus u postavkama vašeg OS-a, i
+- obavještenja su omogućena za OpenCorvus u postavkama vašeg OS-a, i
 - prozor aplikacije nije fokusiran.
 
 ---
@@ -155,11 +155,11 @@ Argus Desktop prikazuje sistemska obavještenja samo kada:
 
 Ako se aplikacija ne pokrene i ne možete izbrisati postavke unutar korisničkog sučelja, resetirajte spremljeno stanje desktop aplikacije.
 
-1. Zatvorite Argus Desktop.
-2. Pronađite i izbrišite ove datoteke (oni žive u direktoriju podataka Argus Desktop aplikacije):
+1. Zatvorite OpenCorvus Desktop.
+2. Pronađite i izbrišite ove datoteke (oni žive u direktoriju podataka OpenCorvus Desktop aplikacije):
 
-- `argus.settings.dat` (URL zadanog servera za desktop)
-- `argus.global.dat` i `argus.workspace.*.dat` (stanje korisničkog interfejsa poput nedavnih servera/projekata)
+- `opencorvus.settings.dat` (URL zadanog servera za desktop)
+- `opencorvus.global.dat` i `opencorvus.workspace.*.dat` (stanje korisničkog interfejsa poput nedavnih servera/projekata)
 
 Da brzo pronađete direktorij:
 
@@ -171,13 +171,13 @@ Da brzo pronađete direktorij:
 
 ## Traženje pomoći
 
-Ako imate problema s Argus:
+Ako imate problema s OpenCorvus:
 
 1. **Prijavite probleme na GitHub**
 
    Najbolji način da prijavite greške ili zatražite funkcije je putem našeg GitHub spremišta:
 
-   [**github.com/yangheng95/argus/issues**](https://github.com/yangheng95/argus/issues)
+   [**github.com/yangheng95/opencorvus/issues**](https://github.com/yangheng95/opencorvus/issues)
 
    Prije kreiranja novog problema, pretražite postojeće probleme da vidite je li vaš problem već prijavljen.
 
@@ -185,7 +185,7 @@ Ako imate problema s Argus:
 
    Za pomoć u stvarnom vremenu i diskusiju u zajednici, pridružite se našem Discord serveru:
 
-   [**argus.ai/discord**](https://argus.ai/discord)
+   [**opencorvus.ai/discord**](https://opencorvus.ai/discord)
 
 ---
 
@@ -195,11 +195,11 @@ Evo nekih uobičajenih problema i kako ih riješiti.
 
 ---
 
-### Argus se ne pokreće
+### OpenCorvus se ne pokreće
 
 1. Provjerite dnevnike za poruke o greškama
 2. Pokušajte pokrenuti sa `--print-logs` da vidite izlaz u terminalu
-3. Uvjerite se da imate najnoviju verziju sa `argus upgrade`
+3. Uvjerite se da imate najnoviju verziju sa `opencorvus upgrade`
 
 ---
 
@@ -225,9 +225,9 @@ primjeri:
 
 - `openai/gpt-4.1`
 - `openrouter/google/gemini-2.5-flash`
-- `argus/kimi-k2`
+- `opencorvus/kimi-k2`
 
-Da saznate kojim modelima imate pristup, pokrenite `argus models`
+Da saznate kojim modelima imate pristup, pokrenite `opencorvus models`
 
 ---
 
@@ -241,10 +241,10 @@ Da biste ovo riješili:
 2. Ako se problem nastavi, pokušajte obrisati pohranjenu konfiguraciju:
 
 ```bash
-   rm -rf ~/.local/share/argus
+   rm -rf ~/.local/share/opencorvus
 ```
 
-Na Windows-u pritisnite `WIN+R` i izbrišite: `%USERPROFILE%\.local\share\argus`
+Na Windows-u pritisnite `WIN+R` i izbrišite: `%USERPROFILE%\.local\share\opencorvus`
 
 3. Ponovo izvršite autentifikaciju kod svog provajdera koristeći naredbu `/connect` u TUI.
 
@@ -252,21 +252,21 @@ Na Windows-u pritisnite `WIN+R` i izbrišite: `%USERPROFILE%\.local\share\argus`
 
 ### AI_APICallError i problemi sa paketom dobavljača
 
-Ako naiđete na greške API poziva, to može biti zbog zastarjelih paketa dobavljača. Argus dinamički instalira pakete dobavljača (OpenAI, Anthropic, Google, itd.) po potrebi i kešira ih lokalno.
+Ako naiđete na greške API poziva, to može biti zbog zastarjelih paketa dobavljača. OpenCorvus dinamički instalira pakete dobavljača (OpenAI, Anthropic, Google, itd.) po potrebi i kešira ih lokalno.
 
 Da biste riješili probleme s paketom dobavljača:
 
 1. Obrišite keš paketa provajdera:
 
 ```bash
-   rm -rf ~/.cache/argus
+   rm -rf ~/.cache/opencorvus
 ```
 
-Na Windows-u pritisnite `WIN+R` i izbrišite: `%USERPROFILE%\.cache\argus`
+Na Windows-u pritisnite `WIN+R` i izbrišite: `%USERPROFILE%\.cache\opencorvus`
 
-2. Ponovo pokrenite Argus da ponovo instalirate najnovije pakete dobavljača
+2. Ponovo pokrenite OpenCorvus da ponovo instalirate najnovije pakete dobavljača
 
-Ovo će prisiliti Argus da preuzme najnovije verzije paketa dobavljača, što često rješava probleme kompatibilnosti s parametrima modela i promjenama API-ja.
+Ovo će prisiliti OpenCorvus da preuzme najnovije verzije paketa dobavljača, što često rješava probleme kompatibilnosti s parametrima modela i promjenama API-ja.
 
 ---
 
@@ -297,4 +297,4 @@ Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
 export DISPLAY=:99.0
 ```
 
-Argus će otkriti da li koristite Wayland i preferirate `wl-clipboard`, u suprotnom će pokušati pronaći alate međuspremnika po redoslijedu: `xclip` i `xsel`.
+OpenCorvus će otkriti da li koristite Wayland i preferirate `wl-clipboard`, u suprotnom će pokušati pronaći alate međuspremnika po redoslijedu: `xclip` i `xsel`.

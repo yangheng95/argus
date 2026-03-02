@@ -13,8 +13,8 @@
     "db": "bun drizzle-kit"
   },
   "bin": {
-    "argus": "./bin/argus",
-    "opencorvus": "./bin/argus"
+    "opencorvus": "./bin/opencorvus",
+    "opencorvus": "./bin/opencorvus"
   },
   "exports": {
     "./*": "./src/*.ts"

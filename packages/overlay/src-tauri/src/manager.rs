@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::events;
 
-const CONFIG_FILE: &str = "argus-manager.json";
+const CONFIG_FILE: &str = "opencorvus-manager.json";
 const MAX_LOGS: usize = 800;
 
 #[derive(Deserialize, Serialize, Clone, Default)]
@@ -54,7 +54,7 @@ pub type Shared = Arc<Mutex<ManagerState>>;
 impl Default for ManagerConfig {
     fn default() -> Self {
         Self {
-            command: "argus".into(),
+            command: "opencorvus".into(),
             serve_args: vec!["serve".into()],
             run_args: vec!["run".into()],
             cwd: String::new(),
@@ -92,7 +92,7 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
         command: {
             let item = config.command.trim();
             if item.is_empty() {
-                "argus".into()
+                "opencorvus".into()
             } else {
                 item.into()
             }
@@ -268,12 +268,12 @@ pub fn probe(shared: &Shared, app: &AppHandle) {
             Ok(Some(status)) => {
                 state.bot = None;
                 let code = status.code().map(|item| item.to_string()).unwrap_or_else(|| "signal".into());
-                Some(format!("Argus exited ({code})"))
+                Some(format!("OpenCorvus exited ({code})"))
             }
             Ok(None) => None,
             Err(error) => {
                 state.bot = None;
-                Some(format!("failed to check Argus status: {error}"))
+                Some(format!("failed to check OpenCorvus status: {error}"))
             }
         }
     };
@@ -288,7 +288,7 @@ pub fn init(shared: &Shared, app: &AppHandle) {
     if let Ok(config) = load_config(app) {
         shared.lock().unwrap().config = config;
     }
-    push_log(shared, app, "Argus manager ready");
+    push_log(shared, app, "OpenCorvus manager ready");
     emit_state(shared, app);
 }
 
@@ -298,7 +298,7 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     let config = {
         let state = shared.lock().unwrap();
         if state.bot.is_some() {
-            push_log(shared, app, "Argus is already running");
+            push_log(shared, app, "OpenCorvus is already running");
             return Ok(());
         }
         state.config.clone()
@@ -311,7 +311,7 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
 
     let mut child = cmd
         .spawn()
-        .map_err(|error| format!("failed to start Argus ({}): {error}", config.command))?;
+        .map_err(|error| format!("failed to start OpenCorvus ({}): {error}", config.command))?;
 
     let pid = child.id();
     if let Some(stdout) = child.stdout.take() {
@@ -329,7 +329,7 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     push_log(
         shared,
         app,
-        format!("Argus started (pid {pid}) with: {} {}", config.command, config.serve_args.join(" ")),
+        format!("OpenCorvus started (pid {pid}) with: {} {}", config.command, config.serve_args.join(" ")),
     );
     emit_state(shared, app);
     Ok(())
@@ -342,11 +342,11 @@ pub fn stop_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     };
 
     if let Some(proc) = child.as_mut() {
-        proc.kill().map_err(|error| format!("failed to stop Argus: {error}"))?;
+        proc.kill().map_err(|error| format!("failed to stop OpenCorvus: {error}"))?;
         let _ = proc.wait();
-        push_log(shared, app, "Argus stopped");
+        push_log(shared, app, "OpenCorvus stopped");
     } else {
-        push_log(shared, app, "Argus is already stopped");
+        push_log(shared, app, "OpenCorvus is already stopped");
     }
 
     emit_state(shared, app);

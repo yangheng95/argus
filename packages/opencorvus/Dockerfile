@@ -7,12 +7,12 @@ ENV BUN_RUNTIME_TRANSPILER_CACHE_PATH=${BUN_RUNTIME_TRANSPILER_CACHE_PATH}
 RUN apk add libgcc libstdc++ ripgrep
 
 FROM base AS build-amd64
-COPY dist/argus-linux-x64-baseline-musl/bin/argus /usr/local/bin/argus
+COPY dist/opencorvus-linux-x64-baseline-musl/bin/opencorvus /usr/local/bin/opencorvus
 
 FROM base AS build-arm64
-COPY dist/argus-linux-arm64-musl/bin/argus /usr/local/bin/argus
+COPY dist/opencorvus-linux-arm64-musl/bin/opencorvus /usr/local/bin/opencorvus
 
 ARG TARGETARCH
 FROM build-${TARGETARCH}
-RUN argus --version
-ENTRYPOINT ["argus"]
+RUN opencorvus --version
+ENTRYPOINT ["opencorvus"]

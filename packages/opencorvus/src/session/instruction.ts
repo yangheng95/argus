@@ -18,27 +18,27 @@ const FILES = [
 
 function globalFiles() {
   const files = []
-  if (Flag.ARGUS_CONFIG_DIR) {
-    files.push(path.join(Flag.ARGUS_CONFIG_DIR, "AGENTS.md"))
+  if (Flag.OPENCORVUS_CONFIG_DIR) {
+    files.push(path.join(Flag.OPENCORVUS_CONFIG_DIR, "AGENTS.md"))
   }
   files.push(path.join(Global.Path.config, "AGENTS.md"))
-  if (!Flag.ARGUS_DISABLE_CLAUDE_CODE_PROMPT) {
+  if (!Flag.OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT) {
     files.push(path.join(os.homedir(), ".claude", "CLAUDE.md"))
   }
   return files
 }
 
 async function resolveRelative(instruction: string): Promise<string[]> {
-  if (!Flag.ARGUS_DISABLE_PROJECT_CONFIG) {
+  if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
     return Filesystem.globUp(instruction, Instance.directory, Instance.worktree).catch(() => [])
   }
-  if (!Flag.ARGUS_CONFIG_DIR) {
+  if (!Flag.OPENCORVUS_CONFIG_DIR) {
     log.warn(
-      `Skipping relative instruction "${instruction}" - no ARGUS_CONFIG_DIR set while project config is disabled`,
+      `Skipping relative instruction "${instruction}" - no OPENCORVUS_CONFIG_DIR set while project config is disabled`,
     )
     return []
   }
-  return Filesystem.globUp(instruction, Flag.ARGUS_CONFIG_DIR, Flag.ARGUS_CONFIG_DIR).catch(() => [])
+  return Filesystem.globUp(instruction, Flag.OPENCORVUS_CONFIG_DIR, Flag.OPENCORVUS_CONFIG_DIR).catch(() => [])
 }
 
 export namespace InstructionPrompt {
@@ -72,7 +72,7 @@ export namespace InstructionPrompt {
     const config = await Config.get()
     const paths = new Set<string>()
 
-    if (!Flag.ARGUS_DISABLE_PROJECT_CONFIG) {
+    if (!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG) {
       for (const file of FILES) {
         const matches = await Filesystem.findUp(file, Instance.directory, Instance.worktree)
         if (matches.length > 0) {

@@ -1,5 +1,5 @@
 import { redirect } from "@solidjs/router"
 
 export async function GET() {
-  return redirect("https://discord.gg/argus")
+  return redirect("https://discord.gg/opencorvus")
 }

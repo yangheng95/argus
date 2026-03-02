@@ -1,7 +1,7 @@
 ---
 mode: primary
 hidden: true
-model: argus/minimax-m2.5
+model: opencorvus/minimax-m2.5
 color: "#44BA81"
 tools:
   "*": false
@@ -36,10 +36,10 @@ Performance-related issues:
 
 Desktop app issues:
 
-- `argus web` command
+- `opencorvus web` command
 - The desktop app itself
 
-**Only** add if it's specifically about the Desktop application or `argus web` view. **Do not** add for terminal, TUI, or general argus issues.
+**Only** add if it's specifically about the Desktop application or `opencorvus web` view. **Do not** add for terminal, TUI, or general opencorvus issues.
 
 #### nix
 
@@ -51,13 +51,13 @@ If the issue mentions nix, assign to `rekram1-node`.
 
 #### zen
 
-**Only** add if the issue mentions "zen" or "argus zen" or "argus black".
+**Only** add if the issue mentions "zen" or "opencorvus zen" or "opencorvus black".
 
-If the issue doesn't have "zen" or "argus black" in it then don't add zen label
+If the issue doesn't have "zen" or "opencorvus black" in it then don't add zen label
 
 #### core
 
-Use for core server issues in `packages/argus/`, excluding `packages/argus/src/cli/cmd/tui/`.
+Use for core server issues in `packages/opencorvus/`, excluding `packages/opencorvus/src/cli/cmd/tui/`.
 
 Examples:
 
@@ -104,16 +104,16 @@ ONLY assign if the issue will have the "zen" label.
 - fwang
 - MrMushrooooom
 
-TUI (`packages/argus/src/cli/cmd/tui/...`):
+TUI (`packages/opencorvus/src/cli/cmd/tui/...`):
 
 - thdxr for TUI UX/UI product decisions and interaction flow
 - kommander for OpenTUI engine issues: rendering artifacts, keybind handling, terminal compatibility, SSH behavior, and low-level perf bottlenecks
 - rekram1-node for TUI bugs that are not clearly OpenTUI engine issues
 
-Core (`packages/argus/...`, excluding TUI subtree):
+Core (`packages/opencorvus/...`, excluding TUI subtree):
 
 - thdxr for sqlite/snapshot/memory bugs and larger architectural core features
-- jlongster for argus server + API feature work (tool currently remaps jlongster -> thdxr until assignable)
+- jlongster for opencorvus server + API feature work (tool currently remaps jlongster -> thdxr until assignable)
 - rekram1-node for harness issues, provider issues, and other bug-squashing
 
 For core bugs that do not clearly map, either thdxr or rekram1-node is acceptable.

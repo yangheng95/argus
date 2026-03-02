@@ -1,15 +1,15 @@
 ---
 title: Introducción
-description: Comience con Argus.
+description: Comience con OpenCorvus.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 import config from "../../../../config.mjs"
 export const console = config.console
 
-[**Argus**](/) es un agente de codificación de IA de código abierto. Está disponible como interfaz basada en terminal, aplicación de escritorio o extensión IDE.
+[**OpenCorvus**](/) es un agente de codificación de IA de código abierto. Está disponible como interfaz basada en terminal, aplicación de escritorio o extensión IDE.
 
-![Argus TUI con el tema argus](../../../assets/lander/screenshot.png)
+![OpenCorvus TUI con el tema opencorvus](../../../assets/lander/screenshot.png)
 
 Empecemos.
 
@@ -17,7 +17,7 @@ Empecemos.
 
 #### Requisitos previos
 
-Para usar Argus en su terminal, necesitará:
+Para usar OpenCorvus en su terminal, necesitará:
 
 1. Un emulador de terminal moderno como:
    - [WezTerm](https://wezterm.org), multiplataforma
@@ -31,10 +31,10 @@ Para usar Argus en su terminal, necesitará:
 
 ## Instalar
 
-La forma más sencilla de instalar Argus es mediante el script de instalación.
+La forma más sencilla de instalar OpenCorvus es mediante el script de instalación.
 
 ```bash
-curl -fsSL https://argus.ai/install | bash
+curl -fsSL https://opencorvus.ai/install | bash
 ```
 
 También puedes instalarlo con los siguientes comandos:
@@ -45,28 +45,28 @@ También puedes instalarlo con los siguientes comandos:
 
       <TabItem label="npm">
       ```bash
-      npm install -g argus-ai
+      npm install -g opencorvus-ai
       ```
 
           </TabItem>
 
         <TabItem label="Bun">
         ```bash
-        bun install -g argus-ai
+        bun install -g opencorvus-ai
         ```
 
           </TabItem>
 
         <TabItem label="pnpm">
         ```bash
-        pnpm install -g argus-ai
+        pnpm install -g opencorvus-ai
         ```
 
           </TabItem>
 
         <TabItem label="Yarn">
         ```bash
-        yarn global add argus-ai
+        yarn global add opencorvus-ai
         ```
 
       </TabItem>
@@ -76,68 +76,68 @@ También puedes instalarlo con los siguientes comandos:
 - **Usando Homebrew en macOS y Linux**
 
   ```bash
-  brew install anomalyco/tap/argus
+  brew install anomalyco/tap/opencorvus
   ```
 
-  > Recomendamos utilizar el tap Argus para las versiones más actualizadas. La fórmula oficial `brew install argus` la mantiene el equipo Homebrew y se actualiza con menos frecuencia.
+  > Recomendamos utilizar el tap OpenCorvus para las versiones más actualizadas. La fórmula oficial `brew install opencorvus` la mantiene el equipo Homebrew y se actualiza con menos frecuencia.
 
 - **Usando Paru en Arch Linux**
 
   ```bash
-  sudo pacman -S argus           # Arch Linux (Stable)
-  paru -S argus-bin              # Arch Linux (Latest from AUR)
+  sudo pacman -S opencorvus           # Arch Linux (Stable)
+  paru -S opencorvus-bin              # Arch Linux (Latest from AUR)
   ```
 
 #### Windows
 
 :::tip[Recomendado: Usar WSL]
-Para obtener la mejor experiencia en Windows, recomendamos utilizar [Windows Subsystem for Linux (WSL)](/docs/windows-wsl). Proporciona un mejor rendimiento y compatibilidad total con las funciones de Argus.
+Para obtener la mejor experiencia en Windows, recomendamos utilizar [Windows Subsystem for Linux (WSL)](/docs/windows-wsl). Proporciona un mejor rendimiento y compatibilidad total con las funciones de OpenCorvus.
 :::
 
 - **Usando Chocolatey**
 
   ```bash
-  choco install argus
+  choco install opencorvus
   ```
 
 - **Usando Scoop**
 
   ```bash
-  scoop install argus
+  scoop install opencorvus
   ```
 
 - **Usando NPM**
 
   ```bash
-  npm install -g argus-ai
+  npm install -g opencorvus-ai
   ```
 
 - **Usando Mise**
 
   ```bash
-  mise use -g github:yangheng95/argus
+  mise use -g github:yangheng95/opencorvus
   ```
 
 - **Usando Docker**
 
   ```bash
-  docker run -it --rm ghcr.io/yangheng95/argus
+  docker run -it --rm ghcr.io/yangheng95/opencorvus
   ```
 
-Actualmente se encuentra en progreso el soporte para instalar Argus en Windows usando Bun.
+Actualmente se encuentra en progreso el soporte para instalar OpenCorvus en Windows usando Bun.
 
-También puede obtener el binario de [Versiones](https://github.com/yangheng95/argus/releases).
+También puede obtener el binario de [Versiones](https://github.com/yangheng95/opencorvus/releases).
 
 ---
 
 ## Configuración
 
-Con Argus puedes usar cualquier proveedor LLM configurando sus claves API.
+Con OpenCorvus puedes usar cualquier proveedor LLM configurando sus claves API.
 
-Si es nuevo en el uso de proveedores LLM, le recomendamos usar [Argus Zen](/docs/zen).
-Es una lista seleccionada de modelos que han sido probados y verificados por el equipo de Argus.
+Si es nuevo en el uso de proveedores LLM, le recomendamos usar [OpenCorvus Zen](/docs/zen).
+Es una lista seleccionada de modelos que han sido probados y verificados por el equipo de OpenCorvus.
 
-1. Ejecute el comando `/connect` en TUI, seleccione argus y diríjase a [argus.ai/auth](https://argus.ai/auth).
+1. Ejecute el comando `/connect` en TUI, seleccione opencorvus y diríjase a [opencorvus.ai/auth](https://opencorvus.ai/auth).
 
    ```txt
    /connect
@@ -167,33 +167,33 @@ quieres trabajar.
 cd /path/to/project
 ```
 
-Y ejecute Argus.
+Y ejecute OpenCorvus.
 
 ```bash
-argus
+opencorvus
 ```
 
-A continuación, inicialice Argus para el proyecto ejecutando el siguiente comando.
+A continuación, inicialice OpenCorvus para el proyecto ejecutando el siguiente comando.
 
 ```bash frame="none"
 /init
 ```
 
-Esto hará que Argus analice su proyecto y cree un archivo `AGENTS.md` en
+Esto hará que OpenCorvus analice su proyecto y cree un archivo `AGENTS.md` en
 la raíz del proyecto.
 
 :::tip
 Debes enviar el archivo `AGENTS.md` de tu proyecto a Git.
 :::
 
-Esto ayuda a Argus a comprender la estructura del proyecto y los patrones de codificación.
+Esto ayuda a OpenCorvus a comprender la estructura del proyecto y los patrones de codificación.
 usado.
 
 ---
 
 ## Usar
 
-Ahora está listo para usar Argus para trabajar en su proyecto. No dudes en preguntarle
+Ahora está listo para usar OpenCorvus para trabajar en su proyecto. No dudes en preguntarle
 ¡cualquier cosa!
 
 Si es nuevo en el uso de un agente de codificación de IA, aquí hay algunos ejemplos que podrían
@@ -203,7 +203,7 @@ ayuda.
 
 ### Hacer preguntas
 
-Puede pedirle a Argus que le explique el código base.
+Puede pedirle a OpenCorvus que le explique el código base.
 
 :::tip
 Utilice la tecla `@` para realizar una búsqueda aproximada de archivos en el proyecto.
@@ -219,11 +219,11 @@ Esto es útil si hay una parte del código base en la que no trabajaste.
 
 ### Agregar funciones
 
-Puede pedirle a Argus que agregue nuevas funciones a su proyecto. Aunque primero recomendamos pedirle que cree un plan.
+Puede pedirle a OpenCorvus que agregue nuevas funciones a su proyecto. Aunque primero recomendamos pedirle que cree un plan.
 
 1. **Crea un plan**
 
-   Argus tiene un _Modo Plan_ que desactiva su capacidad para realizar cambios y
+   OpenCorvus tiene un _Modo Plan_ que desactiva su capacidad para realizar cambios y
    en su lugar, sugiera _cómo_ implementará la función.
 
    Cambie a él usando la tecla **Tab**. Verás un indicador para esto en la esquina inferior derecha.
@@ -240,11 +240,11 @@ Puede pedirle a Argus que agregue nuevas funciones a su proyecto. Aunque primero
    From this screen, the user can undelete a note or permanently delete it.
    ```
 
-   Quiere darle a Argus suficientes detalles para entender lo que quiere. ayuda
+   Quiere darle a OpenCorvus suficientes detalles para entender lo que quiere. ayuda
    hablar con él como si estuviera hablando con un desarrollador junior de su equipo.
 
    :::tip
-   Dale a Argus mucho contexto y ejemplos para ayudarlo a comprender lo que
+   Dale a OpenCorvus mucho contexto y ejemplos para ayudarlo a comprender lo que
    desear.
    :::
 
@@ -261,7 +261,7 @@ Puede pedirle a Argus que agregue nuevas funciones a su proyecto. Aunque primero
    Arrastre y suelte imágenes en la terminal para agregarlas al mensaje.
    :::
 
-   Argus puede escanear cualquier imagen que le proporcione y agregarla al mensaje. Puede
+   OpenCorvus puede escanear cualquier imagen que le proporcione y agregarla al mensaje. Puede
    Haga esto arrastrando y soltando una imagen en la terminal.
 
 3. **Crea la función**
@@ -283,7 +283,7 @@ Puede pedirle a Argus que agregue nuevas funciones a su proyecto. Aunque primero
 
 ### Realizar cambios
 
-Para cambios más sencillos, puede pedirle a Argus que lo construya directamente.
+Para cambios más sencillos, puede pedirle a OpenCorvus que lo construya directamente.
 sin tener que revisar el plan primero.
 
 ```txt frame="none" "@packages/functions/src/settings.ts" "@packages/functions/src/notes.ts"
@@ -292,14 +292,14 @@ handled in the /notes route in @packages/functions/src/notes.ts and implement
 the same logic in @packages/functions/src/settings.ts
 ```
 
-Desea asegurarse de proporcionar una buena cantidad de detalles para que Argus tome la decisión correcta.
+Desea asegurarse de proporcionar una buena cantidad de detalles para que OpenCorvus tome la decisión correcta.
 cambios.
 
 ---
 
 ### Deshacer cambios
 
-Digamos que le pides a Argus que haga algunos cambios.
+Digamos que le pides a OpenCorvus que haga algunos cambios.
 
 ```txt frame="none" "@packages/functions/src/api/index.ts"
 Can you refactor the function in @packages/functions/src/api/index.ts?
@@ -312,14 +312,14 @@ usando el comando `/undo`.
 /undo
 ```
 
-Argus ahora revertirá los cambios que realizó y mostrará su mensaje original
+OpenCorvus ahora revertirá los cambios que realizó y mostrará su mensaje original
 de nuevo.
 
 ```txt frame="none" "@packages/functions/src/api/index.ts"
 Can you refactor the function in @packages/functions/src/api/index.ts?
 ```
 
-Desde aquí puedes modificar el mensaje y pedirle a Argus que vuelva a intentarlo.
+Desde aquí puedes modificar el mensaje y pedirle a OpenCorvus que vuelva a intentarlo.
 
 :::tip
 Puede ejecutar `/undo` varias veces para deshacer varios cambios.
@@ -335,7 +335,7 @@ O **puedes rehacer** los cambios usando el comando `/redo`.
 
 ## Compartir
 
-Las conversaciones que tengas con Argus pueden ser [compartidas con tu
+Las conversaciones que tengas con OpenCorvus pueden ser [compartidas con tu
 equipo](/docs/share).
 
 ```bash frame="none"
@@ -348,12 +348,12 @@ Esto creará un enlace a la conversación actual y lo copiará en su portapapele
 Las conversaciones no se comparten de forma predeterminada.
 :::
 
-Aquí hay una [conversación de ejemplo](https://argus.ai/s/4XP1fce5) con Argus.
+Aquí hay una [conversación de ejemplo](https://opencorvus.ai/s/4XP1fce5) con OpenCorvus.
 
 ---
 
 ## Personalizar
 
-¡Y eso es todo! Ahora eres un profesional en el uso de Argus.
+¡Y eso es todo! Ahora eres un profesional en el uso de OpenCorvus.
 
-Para personalizarlo, recomendamos [elegir un tema](/docs/themes), [personalizar las combinaciones de teclas](/docs/keybinds), [configurar formateadores de código](/docs/formatters), [crear comandos personalizados](/docs/commands) o jugar con la [configuración Argus](/docs/config).
+Para personalizarlo, recomendamos [elegir un tema](/docs/themes), [personalizar las combinaciones de teclas](/docs/keybinds), [configurar formateadores de código](/docs/formatters), [crear comandos personalizados](/docs/commands) o jugar con la [configuración OpenCorvus](/docs/config).

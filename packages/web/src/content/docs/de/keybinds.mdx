@@ -3,11 +3,11 @@ title: Tastenkombinationen
 description: Passen Sie Ihre Tastenkombinationen an.
 ---
 
-Argus verfügt über eine Liste von Tastenkombinationen, die Sie über die Argus-Konfiguration anpassen können.
+OpenCorvus verfügt über eine Liste von Tastenkombinationen, die Sie über die OpenCorvus-Konfiguration anpassen können.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "leader": "ctrl+x",
     "app_exit": "ctrl+c,ctrl+d,<leader>q",
@@ -107,7 +107,7 @@ Argus verfügt über eine Liste von Tastenkombinationen, die Sie über die Argus
 
 ## Leader Key
 
-Argus verwendet für die meisten Keybinds einen `leader`-Schlüssel. Dies vermeidet Konflikte in Ihrem Terminal.
+OpenCorvus verwendet für die meisten Keybinds einen `leader`-Schlüssel. Dies vermeidet Konflikte in Ihrem Terminal.
 
 Standardmäßig ist `ctrl+x` der Leader Key und bei den meisten Aktionen müssen Sie zuerst den Leader Key und dann die Tastenkombination drücken. Um beispielsweise eine neue Sitzung zu starten, drücken Sie zuerst `ctrl+x` und dann `n`.
 
@@ -119,9 +119,9 @@ Sie müssen für Ihre Keybinds keinen Leader Key verwenden, wir empfehlen jedoch
 
 Sie können eine Keybind deaktivieren, indem Sie den Schlüssel mit dem Wert „none“ zu Ihrer Konfiguration hinzufügen.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "keybinds": {
     "session_compact": "none"
   }
@@ -132,7 +132,7 @@ Sie können eine Keybind deaktivieren, indem Sie den Schlüssel mit dem Wert „
 
 ## Desktop-Prompt-Shortcuts
 
-Die Eingabeaufforderungseingabe der Argus-Desktop-App unterstützt gängige Readline/Emacs-style-Verknüpfungen zum Bearbeiten von Text. Diese sind integriert und derzeit nicht über `argus.json` konfigurierbar.
+Die Eingabeaufforderungseingabe der OpenCorvus-Desktop-App unterstützt gängige Readline/Emacs-style-Verknüpfungen zum Bearbeiten von Text. Diese sind integriert und derzeit nicht über `opencorvus.json` konfigurierbar.
 
 | Keybind  | Aktion                                                |
 | -------- | ----------------------------------------------------- |

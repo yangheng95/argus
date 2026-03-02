@@ -1,30 +1,30 @@
 ---
 title: CLI
-description: Argus CLI muligheder og kommandoer.
+description: OpenCorvus CLI muligheder og kommandoer.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-Argus CLI starter som standard [TUI](/docs/tui), når den kører uden nogen argumenter.
+OpenCorvus CLI starter som standard [TUI](/docs/tui), når den kører uden nogen argumenter.
 
 ```bash
-argus
+opencorvus
 ```
 
-Men den accepterer også kommandoer som dokumenteret på denne side. Dette giver dig mulighed for at interagere med Argus programmatisk.
+Men den accepterer også kommandoer som dokumenteret på denne side. Dette giver dig mulighed for at interagere med OpenCorvus programmatisk.
 
 ```bash
-argus run "Explain how closures work in JavaScript"
+opencorvus run "Explain how closures work in JavaScript"
 ```
 
 ---
 
 ### tui
 
-Start Argus terminalbrugergrænsefladen.
+Start OpenCorvus terminalbrugergrænsefladen.
 
 ```bash
-argus [project]
+opencorvus [project]
 ```
 
 #### Flag
@@ -44,36 +44,36 @@ argus [project]
 
 ## Kommandoer
 
-Argus CLI har også følgende kommandoer.
+OpenCorvus CLI har også følgende kommandoer.
 
 ---
 
 ### agent
 
-Administrer agenter i Argus.
+Administrer agenter i OpenCorvus.
 
 ```bash
-argus agent [command]
+opencorvus agent [command]
 ```
 
 ---
 
 ### attach
 
-Tilslut en terminal til en allerede kørende Argus backend-server startet via `serve` eller `web` kommandoer.
+Tilslut en terminal til en allerede kørende OpenCorvus backend-server startet via `serve` eller `web` kommandoer.
 
 ```bash
-argus attach [url]
+opencorvus attach [url]
 ```
 
-Dette gør det muligt at bruge TUI med en ekstern Argus backend. For eksempel:
+Dette gør det muligt at bruge TUI med en ekstern OpenCorvus backend. For eksempel:
 
 ```bash
 # Start the backend server for web/mobile access
-argus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 4096 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-argus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:4096
 ```
 
 #### Flag
@@ -90,7 +90,7 @@ argus attach http://10.20.30.40:4096
 Opret en ny agent med brugerdefineret konfiguration.
 
 ```bash
-argus agent create
+opencorvus agent create
 ```
 
 Denne kommando vil guide dig gennem oprettelse af en ny agent med en brugerdefineret systemprompt og værktøjskonfiguration.
@@ -102,7 +102,7 @@ Denne kommando vil guide dig gennem oprettelse af en ny agent med en brugerdefin
 Liste over alle tilgængelige agenter.
 
 ```bash
-argus agent list
+opencorvus agent list
 ```
 
 ---
@@ -112,20 +112,20 @@ argus agent list
 Kommando til at administrere legitimationsoplysninger og login for udbydere.
 
 ```bash
-argus auth [command]
+opencorvus auth [command]
 ```
 
 ---
 
 #### login
 
-Argus drives af udbyderlisten på [Models.dev](https://models.dev), så du kan bruge `argus auth login` til at konfigurere API-nøgler for enhver udbyder, du vil bruge. Dette er gemt i `~/.local/share/argus/auth.json`.
+OpenCorvus drives af udbyderlisten på [Models.dev](https://models.dev), så du kan bruge `opencorvus auth login` til at konfigurere API-nøgler for enhver udbyder, du vil bruge. Dette er gemt i `~/.local/share/opencorvus/auth.json`.
 
 ```bash
-argus auth login
+opencorvus auth login
 ```
 
-Når Argus starter op, indlæser den udbyderne fra legitimationsfilen. Og hvis der er nogen nøgler defineret i dine miljøer eller en `.env` fil i dit projekt.
+Når OpenCorvus starter op, indlæser den udbyderne fra legitimationsfilen. Og hvis der er nogen nøgler defineret i dine miljøer eller en `.env` fil i dit projekt.
 
 ---
 
@@ -134,13 +134,13 @@ Når Argus starter op, indlæser den udbyderne fra legitimationsfilen. Og hvis d
 Viser alle de godkendte udbydere som gemt i legitimationsfilen.
 
 ```bash
-argus auth list
+opencorvus auth list
 ```
 
 Eller den korte version.
 
 ```bash
-argus auth ls
+opencorvus auth ls
 ```
 
 ---
@@ -150,7 +150,7 @@ argus auth ls
 Logger dig ud af en udbyder ved at rydde den fra legitimationsfilen.
 
 ```bash
-argus auth logout
+opencorvus auth logout
 ```
 
 ---
@@ -160,7 +160,7 @@ argus auth logout
 Administrator GitHub-agenten til lagerautomatisering.
 
 ```bash
-argus github [command]
+opencorvus github [command]
 ```
 
 ---
@@ -170,7 +170,7 @@ argus github [command]
 Installatør GitHub-agenten i dit lager.
 
 ```bash
-argus github install
+opencorvus github install
 ```
 
 Dette opsætter det nødvendige GitHub Actions workflow og guider dig gennem konfigurationsprocessen. [Learn more](/docs/github).
@@ -182,7 +182,7 @@ Dette opsætter det nødvendige GitHub Actions workflow og guider dig gennem kon
 Kør GitHub-agenten. Dette bruges typisk i GitHub Actions.
 
 ```bash
-argus github run
+opencorvus github run
 ```
 
 ##### Flag
@@ -199,7 +199,7 @@ argus github run
 Administrator Model Context Protocol-servere.
 
 ```bash
-argus mcp [command]
+opencorvus mcp [command]
 ```
 
 ---
@@ -209,7 +209,7 @@ argus mcp [command]
 Tilføj en MCP-server til din konfiguration.
 
 ```bash
-argus mcp add
+opencorvus mcp add
 ```
 
 Denne kommando vil guide dig gennem tilføjelse af enten en lokal eller ekstern MCP-server.
@@ -221,13 +221,13 @@ Denne kommando vil guide dig gennem tilføjelse af enten en lokal eller ekstern 
 Liste over alle konfigurerede MCP-servere og deres forbindelsesstatus.
 
 ```bash
-argus mcp list
+opencorvus mcp list
 ```
 
 Eller brug den korte version.
 
 ```bash
-argus mcp ls
+opencorvus mcp ls
 ```
 
 ---
@@ -237,7 +237,7 @@ argus mcp ls
 Godkendt med en OAuth-aktiveret MCP-server.
 
 ```bash
-argus mcp auth [name]
+opencorvus mcp auth [name]
 ```
 
 Hvis du ikke angiver et servernavn, bliver du bedt om at vælge blandt tilgængelige OAuth-kompatible servere.
@@ -245,13 +245,13 @@ Hvis du ikke angiver et servernavn, bliver du bedt om at vælge blandt tilgænge
 Du kan også angive OAuth-kompatible servere og deres godkendelsesstatus.
 
 ```bash
-argus mcp auth list
+opencorvus mcp auth list
 ```
 
 Eller brug den korte version.
 
 ```bash
-argus mcp auth ls
+opencorvus mcp auth ls
 ```
 
 ---
@@ -261,7 +261,7 @@ argus mcp auth ls
 Fjern OAuth-legitimationsoplysninger for en MCP-server.
 
 ```bash
-argus mcp logout [name]
+opencorvus mcp logout [name]
 ```
 
 ---
@@ -271,7 +271,7 @@ argus mcp logout [name]
 Fejlfinding af OAuth-forbindelsesproblemer for en MCP-server.
 
 ```bash
-argus mcp debug <name>
+opencorvus mcp debug <name>
 ```
 
 ---
@@ -281,7 +281,7 @@ argus mcp debug <name>
 Liste over alle tilgængelige modeller fra konfigurerede udbydere.
 
 ```bash
-argus models [provider]
+opencorvus models [provider]
 ```
 
 Denne kommando viser alle tilgængelige modeller på tværs af dine konfigurerede udbydere i formatet `provider/model`.
@@ -291,7 +291,7 @@ Dette er nyttigt til at finde ud af det nøjagtige modelnavn, der skal bruges i 
 Du kan eventuelt videregive et udbyder-id for at filtrere modeller efter den udbyder.
 
 ```bash
-argus models anthropic
+opencorvus models anthropic
 ```
 
 #### Flag
@@ -301,36 +301,36 @@ argus models anthropic
 | `--refresh` | Opdater modelcachen fra models.dev                                      |
 | `--verbose` | Brug mere detaljeret modeloutput (inkluderer metadata som omkostninger) |
 
-Brug flaget `--refresh` til at opdatere den cachelagrede modelliste. Dette er nyttigt, når nye modeller er blevet tilføjet til en udbyder, og du vil se dem i Argus.
+Brug flaget `--refresh` til at opdatere den cachelagrede modelliste. Dette er nyttigt, når nye modeller er blevet tilføjet til en udbyder, og du vil se dem i OpenCorvus.
 
 ```bash
-argus models --refresh
+opencorvus models --refresh
 ```
 
 ---
 
 ### run
 
-Kør argus i ikke-interaktiv tilstand ved at sende en prompt direkte.
+Kør opencorvus i ikke-interaktiv tilstand ved at sende en prompt direkte.
 
 ```bash
-argus run [message..]
+opencorvus run [message..]
 ```
 
 Dette er nyttigt til scripting, automatisering, eller når du vil have et hurtigt svar uden at starte hele TUI. F.eks.
 
-```bash "argus run"
-argus run Explain the use of context in Go
+```bash "opencorvus run"
+opencorvus run Explain the use of context in Go
 ```
 
-Du kan også vedhæfte til en kørende `argus serve`-instans for at undgå MCP serverens kolde opstartstider ved hver kørsel:
+Du kan også vedhæfte til en kørende `opencorvus serve`-instans for at undgå MCP serverens kolde opstartstider ved hver kørsel:
 
 ```bash
 # Start a headless server in one terminal
-argus serve
+opencorvus serve
 
 # In another terminal, run commands that attach to it
-argus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
 ```
 
 #### Flag
@@ -347,20 +347,20 @@ argus run --attach http://localhost:4096 "Explain async/await in JavaScript"
 | `--file`     | `-f` | Fil(er), der skal vedhæftes til meddelelsen                                         |
 | `--format`   |      | Format: standard (formateret) eller json (rå JSON hændelser)                        |
 | `--title`    |      | Titel for sessionen (bruger trunkeret prompt, hvis der ikke er angivet nogen værdi) |
-| `--attach`   |      | Tilslut til en kørende argus-server (f.eks. http://localhost:4096)               |
+| `--attach`   |      | Tilslut til en kørende opencorvus-server (f.eks. http://localhost:4096)               |
 | `--port`     |      | Port til den lokale server (standard til vilkårlig port)                            |
 
 ---
 
 ### serve
 
-Start en hovedløs Argus-server til API-adgang. Tjek [server docs](/docs/server) for den fulde HTTP-grænseflade.
+Start en hovedløs OpenCorvus-server til API-adgang. Tjek [server docs](/docs/server) for den fulde HTTP-grænseflade.
 
 ```bash
-argus serve
+opencorvus serve
 ```
 
-Dette starter en HTTP-server, der giver API-adgang til argus-funktionalitet uden TUI-grænsefladen. Indstil `OPENCODE_SERVER_PASSWORD` for at aktivere HTTP grundlæggende godkendelse (brugernavn er standard til `argus`).
+Dette starter en HTTP-server, der giver API-adgang til opencorvus-funktionalitet uden TUI-grænsefladen. Indstil `OPENCODE_SERVER_PASSWORD` for at aktivere HTTP grundlæggende godkendelse (brugernavn er standard til `opencorvus`).
 
 #### Flag
 
@@ -375,20 +375,20 @@ Dette starter en HTTP-server, der giver API-adgang til argus-funktionalitet uden
 
 ### session
 
-Administrator Argus sessionsholder.
+Administrator OpenCorvus sessionsholder.
 
 ```bash
-argus session [command]
+opencorvus session [command]
 ```
 
 ---
 
 #### list
 
-Liste over alle Argus sessioner.
+Liste over alle OpenCorvus sessioner.
 
 ```bash
-argus session list
+opencorvus session list
 ```
 
 ##### Flag
@@ -402,10 +402,10 @@ argus session list
 
 ### stats
 
-Vis tokenbrug og omkostningsstatistikker for dine Argus-sessioner.
+Vis tokenbrug og omkostningsstatistikker for dine OpenCorvus-sessioner.
 
 ```bash
-argus stats
+opencorvus stats
 ```
 
 #### Flag
@@ -424,7 +424,7 @@ argus stats
 Eksporter sessionsdata som JSON.
 
 ```bash
-argus export [sessionID]
+opencorvus export [sessionID]
 ```
 
 Hvis du ikke angiver et sessions-id, bliver du bedt om at vælge mellem tilgængelige sessioner.
@@ -433,30 +433,30 @@ Hvis du ikke angiver et sessions-id, bliver du bedt om at vælge mellem tilgæng
 
 ### import
 
-Importer sessionsdata fra en JSON fil eller Argus del URL.
+Importer sessionsdata fra en JSON fil eller OpenCorvus del URL.
 
 ```bash
-argus import <file>
+opencorvus import <file>
 ```
 
-Du kan importere fra en lokal fil eller en Argus share URL.
+Du kan importere fra en lokal fil eller en OpenCorvus share URL.
 
 ```bash
-argus import session.json
-argus import https://opncd.ai/s/abc123
+opencorvus import session.json
+opencorvus import https://opncd.ai/s/abc123
 ```
 
 ---
 
 ### web
 
-Start en hovedløs Argus-server med en webgrænseflade.
+Start en hovedløs OpenCorvus-server med en webgrænseflade.
 
 ```bash
-argus web
+opencorvus web
 ```
 
-Dette starter en HTTP-server og åbner en webbrowser for at få adgang til Argus via en webgrænseflade. Indstil `OPENCODE_SERVER_PASSWORD` for at aktivere HTTP grundlæggende godkendelse (brugernavn er standard til `argus`).
+Dette starter en HTTP-server og åbner en webbrowser for at få adgang til OpenCorvus via en webgrænseflade. Indstil `OPENCODE_SERVER_PASSWORD` for at aktivere HTTP grundlæggende godkendelse (brugernavn er standard til `opencorvus`).
 
 #### Flag
 
@@ -474,7 +474,7 @@ Dette starter en HTTP-server og åbner en webbrowser for at få adgang til Argus
 Start en ACP-server (Agent Client Protocol).
 
 ```bash
-argus acp
+opencorvus acp
 ```
 
 Denne kommando starter en ACP-server, der kommunikerer via stdin/stdout ved hjælp af nd-JSON.
@@ -491,10 +491,10 @@ Denne kommando starter en ACP-server, der kommunikerer via stdin/stdout ved hjæ
 
 ### uninstall
 
-Afinstaller Argus og fjern alle relaterede filer.
+Afinstaller OpenCorvus og fjern alle relaterede filer.
 
 ```bash
-argus uninstall
+opencorvus uninstall
 ```
 
 #### Flag
@@ -510,22 +510,22 @@ argus uninstall
 
 ### upgrade
 
-Opdaterer Argus til den nyeste version eller en specifik version.
+Opdaterer OpenCorvus til den nyeste version eller en specifik version.
 
 ```bash
-argus upgrade [target]
+opencorvus upgrade [target]
 ```
 
 For at opgradere til den nyeste version.
 
 ```bash
-argus upgrade
+opencorvus upgrade
 ```
 
 For at opgradere til en bestemt version.
 
 ```bash
-argus upgrade v0.1.48
+opencorvus upgrade v0.1.48
 ```
 
 #### upgrade
@@ -538,7 +538,7 @@ argus upgrade v0.1.48
 
 ## Globale flag
 
-argus CLI tager følgende globale flag.
+opencorvus CLI tager følgende globale flag.
 
 | Flag           | Kort | Beskrivelse                          |
 | -------------- | ---- | ------------------------------------ |
@@ -551,7 +551,7 @@ argus CLI tager følgende globale flag.
 
 ## Miljøvariabler
 
-Argus kan konfigureres ved hjælp af miljøvariabler.
+OpenCorvus kan konfigureres ved hjælp af miljøvariabler.
 
 | Variabel                              | Skriv   | Beskrivelse                                                           |
 | ------------------------------------- | ------- | --------------------------------------------------------------------- |
@@ -577,7 +577,7 @@ Argus kan konfigureres ved hjælp af miljøvariabler.
 | `OPENCODE_CLIENT`                     | string  | Klient-id (standard til `cli`)                                        |
 | `OPENCODE_ENABLE_EXA`                 | boolean | Aktiver Exa-websøgeværktøjer                                          |
 | `OPENCODE_SERVER_PASSWORD`            | string  | Aktiver grundlæggende godkendelse for `serve`/`web`                   |
-| `OPENCODE_SERVER_USERNAME`            | string  | Tilsidesæt grundlæggende godkendelsesbrugernavn (standard `argus`) |
+| `OPENCODE_SERVER_USERNAME`            | string  | Tilsidesæt grundlæggende godkendelsesbrugernavn (standard `opencorvus`) |
 | `OPENCODE_MODELS_URL`                 | string  | Brugerdefineret URL til hentning af modelkonfiguration                |
 
 ---

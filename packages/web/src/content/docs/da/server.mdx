@@ -1,19 +1,19 @@
 ---
 title: Server
-description: Interager med argus-serveren over HTTP.
+description: Interager med opencorvus-serveren over HTTP.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-Kommandoen `argus serve` kører en hovedløs HTTP-server, som afslører et OpenAPI-endpoint, som en argus-klient kan bruge.
+Kommandoen `opencorvus serve` kører en hovedløs HTTP-server, som afslører et OpenAPI-endpoint, som en opencorvus-klient kan bruge.
 
 ---
 
 ### Brug
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### Indstillinger
@@ -23,41 +23,41 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | Port at lytte på                             | `4096`           |
 | `--hostname`    | Værtsnavn at lytte på                        | `127.0.0.1`      |
 | `--mdns`        | Aktiver mDNS-opdagelse                       | `false`          |
-| `--mdns-domain` | Brugerdefineret domænenavn for mDNS-tjeneste | `argus.local` |
+| `--mdns-domain` | Brugerdefineret domænenavn for mDNS-tjeneste | `opencorvus.local` |
 | `--cors`        | Yderligere browseroprindelse for at tillade  | `[]`             |
 
 `--cors` kan angives flere gange:
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### Godkendelse
 
-Indstil `OPENCODE_SERVER_PASSWORD` for at beskytte serveren med HTTP grundlæggende godkendelse. Brugernavnet er som standard `argus`, eller indstil `OPENCODE_SERVER_USERNAME` for at tilsidesætte det. Dette gælder både `argus serve` og `argus web`.
+Indstil `OPENCODE_SERVER_PASSWORD` for at beskytte serveren med HTTP grundlæggende godkendelse. Brugernavnet er som standard `opencorvus`, eller indstil `OPENCODE_SERVER_USERNAME` for at tilsidesætte det. Dette gælder både `opencorvus serve` og `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### Sådan fungerer det
 
-Når du kører `argus` starter den en TUI og en server. Hvor TUI er
+Når du kører `opencorvus` starter den en TUI og en server. Hvor TUI er
 klient som taler med serveren. Serveren viser en OpenAPI 3.1-specifikation
 endpoint. Dette endpoint bruges også til at generere en [SDK](/docs/sdk).
 
 :::tip
-Brug argus-serveren til at interagere med argus programmatisk.
+Brug opencorvus-serveren til at interagere med opencorvus programmatisk.
 :::
 
-Denne arkitektur lader argus understøtte flere klienter og lader dig interagere med argus programmatisk.
+Denne arkitektur lader opencorvus understøtte flere klienter og lader dig interagere med opencorvus programmatisk.
 
-Du kan køre `argus serve` for at starte en selvstændig server. Hvis du har
-argus TUI kørende, vil `argus serve` starte en ny server.
+Du kan køre `opencorvus serve` for at starte en selvstændig server. Hvis du har
+opencorvus TUI kørende, vil `opencorvus serve` starte en ny server.
 
 ---
 
@@ -65,7 +65,7 @@ argus TUI kørende, vil `argus serve` starte en ny server.
 
 Når du starter TUI, tildeler den tilfældigt en port og et værtsnavn. Du kan i stedet sende `--hostname` og `--port` [flagene](/docs/cli). Brug derefter disse til at forbinde til serveren.
 
-[`/tui`](#tui) endpointet kan bruges til at køre TUI gennem serveren. Du kan for eksempel forududfylde eller køre en forespørgsel. Denne opsætning bruges af Argus [IDE](/docs/ide) plugins.
+[`/tui`](#tui) endpointet kan bruges til at køre TUI gennem serveren. Du kan for eksempel forududfylde eller køre en forespørgsel. Denne opsætning bruges af OpenCorvus [IDE](/docs/ide) plugins.
 
 ---
 
@@ -83,7 +83,7 @@ For eksempel `http://localhost:4096/doc`. Brug specifikationen til at generere k
 
 ## API'er
 
-Argus-serveren viser følgende API'er.
+OpenCorvus-serveren viser følgende API'er.
 
 ---
 

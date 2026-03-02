@@ -1,19 +1,19 @@
 ---
 title: Serwer
-description: Interakcja z serwerem argus za pośrednictwem protokołu HTTP.
+description: Interakcja z serwerem opencorvus za pośrednictwem protokołu HTTP.
 ---
 
 import config from "../../../../config.mjs"
 export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
 
-Komenda `argus serve` uruchamia bezgłowy serwer HTTP, który udostępnia punkt końcowy OpenAPI, z którego może korzystać klient argus.
+Komenda `opencorvus serve` uruchamia bezgłowy serwer HTTP, który udostępnia punkt końcowy OpenAPI, z którego może korzystać klient opencorvus.
 
 ---
 
 ### Użycie
 
 ```bash
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 ```
 
 #### Opcje
@@ -23,41 +23,41 @@ argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 | `--port`        | Port nasłuchiwania                           | `4096`           |
 | `--hostname`    | Nazwa hosta do nasłuchiwania                 | `127.0.0.1`      |
 | `--mdns`        | Włącz wykrywanie mDNS                        | `false`          |
-| `--mdns-domain` | Niestandardowa nazwa domeny dla usługi mDNS  | `argus.local` |
+| `--mdns-domain` | Niestandardowa nazwa domeny dla usługi mDNS  | `opencorvus.local` |
 | `--cors`        | Dodatkowe originy przeglądarki do dozwolenia | `[]`             |
 
 `--cors` można przekazać wiele razy:
 
 ```bash
-argus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 ```
 
 ---
 
 ### Uwierzytelnianie
 
-Ustaw `OPENCODE_SERVER_PASSWORD`, aby chronić serwer za pomocą podstawowego uwierzytelniania HTTP. Domyślną nazwą użytkownika jest `argus` lub ustaw `OPENCODE_SERVER_USERNAME`, aby ją zastąpić. Dotyczy to zarówno `argus serve`, jak i `argus web`.
+Ustaw `OPENCODE_SERVER_PASSWORD`, aby chronić serwer za pomocą podstawowego uwierzytelniania HTTP. Domyślną nazwą użytkownika jest `opencorvus` lub ustaw `OPENCODE_SERVER_USERNAME`, aby ją zastąpić. Dotyczy to zarówno `opencorvus serve`, jak i `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password argus serve
+OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---
 
 ### Jak to działa
 
-Kiedy uruchomisz `argus`, uruchomi się TUI i serwer. Gdzie jest TUI
+Kiedy uruchomisz `opencorvus`, uruchomi się TUI i serwer. Gdzie jest TUI
 klient komunikujący się z serwerem. Serwer udostępnia specyfikację OpenAPI 3.1
 punkt końcowy. Ten punkt końcowy jest również używany do generowania [SDK](/docs/sdk).
 
 :::tip
-Użyj serwera argus do programowej interakcji z argus.
+Użyj serwera opencorvus do programowej interakcji z opencorvus.
 :::
 
-Ta architektura umożliwia obsługę wielu klientów przez argus i programową interakcję z kodem otwartym.
+Ta architektura umożliwia obsługę wielu klientów przez opencorvus i programową interakcję z kodem otwartym.
 
-Możesz uruchomić `argus serve`, aby uruchomić samodzielny serwer. Jeśli masz
-argus TUI działa, `argus serve` uruchomi nowy serwer.
+Możesz uruchomić `opencorvus serve`, aby uruchomić samodzielny serwer. Jeśli masz
+opencorvus TUI działa, `opencorvus serve` uruchomi nowy serwer.
 
 ---
 
@@ -65,7 +65,7 @@ argus TUI działa, `argus serve` uruchomi nowy serwer.
 
 Po uruchomieniu TUI losowo przypisuje port i nazwę hosta. Zamiast tego możesz przekazać `--hostname` i `--port` [flagi](/docs/cli). Następnie użyj tego, aby połączyć się z serwerem.
 
-Punktu końcowego [`/tui`](#TUI) można użyć do sterowania TUI przez serwer. Można na przykład wstępnie wypełnić lub uruchomić monit. Ta konfiguracja jest używana przez wtyczki argus [IDE](/docs/ide).
+Punktu końcowego [`/tui`](#TUI) można użyć do sterowania TUI przez serwer. Można na przykład wstępnie wypełnić lub uruchomić monit. Ta konfiguracja jest używana przez wtyczki opencorvus [IDE](/docs/ide).
 
 ---
 
@@ -83,7 +83,7 @@ Na przykład `http://localhost:4096/doc`. Użyj specyfikacji, aby wygenerować k
 
 ## API
 
-Serwer argus udostępnia następujące interfejsy API.
+Serwer opencorvus udostępnia następujące interfejsy API.
 
 ---
 

@@ -1,11 +1,11 @@
 name: "Setup Git Committer"
 description: "Create app token and configure git user"
 inputs:
-  argus-app-id:
-    description: "Argus GitHub App ID"
+  opencorvus-app-id:
+    description: "OpenCorvus GitHub App ID"
     required: true
-  argus-app-secret:
-    description: "Argus GitHub App private key"
+  opencorvus-app-secret:
+    description: "OpenCorvus GitHub App private key"
     required: true
 outputs:
   token:
@@ -21,8 +21,8 @@ runs:
       id: apptoken
       uses: actions/create-github-app-token@v2
       with:
-        app-id: ${{ inputs.argus-app-id }}
-        private-key: ${{ inputs.argus-app-secret }}
+        app-id: ${{ inputs.opencorvus-app-id }}
+        private-key: ${{ inputs.opencorvus-app-secret }}
         owner: ${{ github.repository_owner }}
 
     - name: Configure git user

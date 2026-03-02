@@ -1,22 +1,22 @@
 ---
 title: TUI
-description: การใช้อินเทอร์เฟซผู้ใช้ terminal Argus
+description: การใช้อินเทอร์เฟซผู้ใช้ terminal OpenCorvus
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-Argus มีอินเทอร์เฟซ terminal แบบโต้ตอบหรือ TUI สำหรับการทำงานในโครงการของคุณด้วย LLM
+OpenCorvus มีอินเทอร์เฟซ terminal แบบโต้ตอบหรือ TUI สำหรับการทำงานในโครงการของคุณด้วย LLM
 
-การรัน Argus จะเริ่มต้น TUI สำหรับไดเร็กทอรีปัจจุบัน
+การรัน OpenCorvus จะเริ่มต้น TUI สำหรับไดเร็กทอรีปัจจุบัน
 
 ```bash
-argus
+opencorvus
 ```
 
 หรือคุณสามารถเริ่มต้นสำหรับไดเร็กทอรีการทำงานเฉพาะได้
 
 ```bash
-argus /path/to/project
+opencorvus /path/to/project
 ```
 
 เมื่อคุณอยู่ใน TUI แล้ว คุณสามารถแจ้งด้วยข้อความได้
@@ -57,7 +57,7 @@ How is auth handled in @packages/functions/src/api/index.ts?
 
 ## คำสั่ง
 
-เมื่อใช้ Argus TUI คุณสามารถพิมพ์ `/` ตามด้วยชื่อคำสั่งเพื่อดำเนินการอย่างรวดเร็ว ตัวอย่างเช่น:
+เมื่อใช้ OpenCorvus TUI คุณสามารถพิมพ์ `/` ตามด้วยชื่อคำสั่งเพื่อดำเนินการอย่างรวดเร็ว ตัวอย่างเช่น:
 
 ```bash frame="none"
 /help
@@ -71,7 +71,7 @@ How is auth handled in @packages/functions/src/api/index.ts?
 
 ### connect
 
-เพิ่มผู้ให้บริการให้กับ Argus ให้คุณเลือกจากผู้ให้บริการที่มีอยู่และเพิ่มคีย์ API
+เพิ่มผู้ให้บริการให้กับ OpenCorvus ให้คุณเลือกจากผู้ให้บริการที่มีอยู่และเพิ่มคีย์ API
 
 ```bash frame="none"
 /connect
@@ -117,7 +117,7 @@ How is auth handled in @packages/functions/src/api/index.ts?
 
 ### exit
 
-ออกจาก Argus _นามแฝง_: `/quit`, `/q`
+ออกจาก OpenCorvus _นามแฝง_: `/quit`, `/q`
 
 ```bash frame="none"
 /exit
@@ -355,11 +355,11 @@ How is auth handled in @packages/functions/src/api/index.ts?
 
 ## กำหนดค่า
 
-คุณสามารถปรับแต่งพฤติกรรม TUI ผ่านไฟล์กำหนดค่า Argus ของคุณได้
+คุณสามารถปรับแต่งพฤติกรรม TUI ผ่านไฟล์กำหนดค่า OpenCorvus ของคุณได้
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "tui": {
     "scroll_speed": 3,
     "scroll_acceleration": {

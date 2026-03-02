@@ -1,7 +1,7 @@
 ---
 description: Translate content for a specified locale while preserving technical terms
 mode: subagent
-model: argus/gemini-3-pro
+model: opencorvus/gemini-3-pro
 ---
 
 You are a professional translator and localization specialist.
@@ -13,7 +13,7 @@ Requirements:
 - Preserve meaning, intent, tone, and formatting (including Markdown/MDX structure).
 - Preserve all technical terms and artifacts exactly: product/company names, API names, identifiers, code, commands/flags, file paths, URLs, versions, error messages, config keys/values, and anything inside inline code or code blocks.
 - Also preserve every term listed in the Do-Not-Translate glossary below.
-- Also apply locale-specific guidance from `.argus/glossary/<locale>.md` when available (for example, `zh-cn.md`).
+- Also apply locale-specific guidance from `.opencorvus/glossary/<locale>.md` when available (for example, `zh-cn.md`).
 - Do not modify fenced code blocks.
 - Output ONLY the translation (no commentary).
 
@@ -35,7 +35,7 @@ Locale guidance does not override code/command preservation rules or the global 
 
 ---
 
-# Do-Not-Translate Terms (Argus Docs)
+# Do-Not-Translate Terms (OpenCorvus Docs)
 
 Generated from: `packages/web/src/content/docs/*.mdx` (default English docs)
 Generated on: 2026-02-10
@@ -68,8 +68,8 @@ Neovim
 Node.js
 npm
 Obsidian
-argus
-argus-ai
+opencorvus
+opencorvus-ai
 Paru
 pnpm
 ripgrep
@@ -152,15 +152,15 @@ OAuth
 Ollama integration docs
 OpenAI's Data Policies
 OpenChamber
-Argus
-Argus config
-Argus Config
-Argus TUI with the argus theme
-Argus Web - Active Session
-Argus Web - New Session
-Argus Web - See Servers
-Argus Zen
-Argus-Obsidian
+OpenCorvus
+OpenCorvus config
+OpenCorvus Config
+OpenCorvus TUI with the opencorvus theme
+OpenCorvus Web - Active Session
+OpenCorvus Web - New Session
+OpenCorvus Web - See Servers
+OpenCorvus Zen
+OpenCorvus-Obsidian
 OpenRouter dashboard
 OpenWork
 OVHcloud panel
@@ -301,7 +301,7 @@ NoeFabris
 OpenAI
 OpenAPI
 OpenChamber
-Argus
+OpenCorvus
 OpenRouter
 OpenTUI
 OpenWork
@@ -325,69 +325,69 @@ xAI
 ZenMux
 ```
 
-## Argus CLI commands (as shown in docs)
+## OpenCorvus CLI commands (as shown in docs)
 
 ```text
-argus
-argus [project]
-argus /path/to/project
-argus acp
-argus agent [command]
-argus agent create
-argus agent list
-argus attach [url]
-argus attach http://10.20.30.40:4096
-argus attach http://localhost:4096
-argus auth [command]
-argus auth list
-argus auth login
-argus auth logout
-argus auth ls
-argus export [sessionID]
-argus github [command]
-argus github install
-argus github run
-argus import <file>
-argus import https://opncd.ai/s/abc123
-argus import session.json
-argus mcp [command]
-argus mcp add
-argus mcp auth [name]
-argus mcp auth list
-argus mcp auth ls
-argus mcp auth my-oauth-server
-argus mcp auth sentry
-argus mcp debug <name>
-argus mcp debug my-oauth-server
-argus mcp list
-argus mcp logout [name]
-argus mcp logout my-oauth-server
-argus mcp ls
-argus models --refresh
-argus models [provider]
-argus models anthropic
-argus run [message..]
-argus run Explain the use of context in Go
-argus serve
-argus serve --cors http://localhost:5173 --cors https://app.example.com
-argus serve --hostname 0.0.0.0 --port 4096
-argus serve [--port <number>] [--hostname <string>] [--cors <origin>]
-argus session [command]
-argus session list
-argus session delete <sessionID>
-argus stats
-argus uninstall
-argus upgrade
-argus upgrade [target]
-argus upgrade v0.1.48
-argus web
-argus web --cors https://example.com
-argus web --hostname 0.0.0.0
-argus web --mdns
-argus web --mdns --mdns-domain myproject.local
-argus web --port 4096
-argus web --port 4096 --hostname 0.0.0.0
-argus.server.close()
+opencorvus
+opencorvus [project]
+opencorvus /path/to/project
+opencorvus acp
+opencorvus agent [command]
+opencorvus agent create
+opencorvus agent list
+opencorvus attach [url]
+opencorvus attach http://10.20.30.40:4096
+opencorvus attach http://localhost:4096
+opencorvus auth [command]
+opencorvus auth list
+opencorvus auth login
+opencorvus auth logout
+opencorvus auth ls
+opencorvus export [sessionID]
+opencorvus github [command]
+opencorvus github install
+opencorvus github run
+opencorvus import <file>
+opencorvus import https://opncd.ai/s/abc123
+opencorvus import session.json
+opencorvus mcp [command]
+opencorvus mcp add
+opencorvus mcp auth [name]
+opencorvus mcp auth list
+opencorvus mcp auth ls
+opencorvus mcp auth my-oauth-server
+opencorvus mcp auth sentry
+opencorvus mcp debug <name>
+opencorvus mcp debug my-oauth-server
+opencorvus mcp list
+opencorvus mcp logout [name]
+opencorvus mcp logout my-oauth-server
+opencorvus mcp ls
+opencorvus models --refresh
+opencorvus models [provider]
+opencorvus models anthropic
+opencorvus run [message..]
+opencorvus run Explain the use of context in Go
+opencorvus serve
+opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
+opencorvus serve --hostname 0.0.0.0 --port 4096
+opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
+opencorvus session [command]
+opencorvus session list
+opencorvus session delete <sessionID>
+opencorvus stats
+opencorvus uninstall
+opencorvus upgrade
+opencorvus upgrade [target]
+opencorvus upgrade v0.1.48
+opencorvus web
+opencorvus web --cors https://example.com
+opencorvus web --hostname 0.0.0.0
+opencorvus web --mdns
+opencorvus web --mdns --mdns-domain myproject.local
+opencorvus web --port 4096
+opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus.server.close()
 ```
 
 ## Slash commands and routes
@@ -428,7 +428,7 @@ argus.server.close()
 /mnt/d/
 /models
 /oc
-/argus
+/opencorvus
 /path
 /project
 /project/current
@@ -566,7 +566,7 @@ GITLAB_HOST
 GITLAB_INSTANCE_URL
 GITLAB_OAUTH_CLIENT_ID
 GITLAB_TOKEN
-GITLAB_TOKEN_ARGUS
+GITLAB_TOKEN_OPENCORVUS
 GOOGLE_APPLICATION_CREDENTIALS
 GOOGLE_CLOUD_PROJECT
 HTTP_PROXY
@@ -581,48 +581,48 @@ NODE_ENV
 NODE_EXTRA_CA_CERTS
 NPM_AUTH_TOKEN
 OC_ALLOW_WAYLAND
-ARGUS_API_KEY
-ARGUS_AUTH_JSON
-ARGUS_AUTO_SHARE
-ARGUS_CLIENT
-ARGUS_CONFIG
-ARGUS_CONFIG_CONTENT
-ARGUS_CONFIG_DIR
-ARGUS_DISABLE_AUTOCOMPACT
-ARGUS_DISABLE_AUTOUPDATE
-ARGUS_DISABLE_CLAUDE_CODE
-ARGUS_DISABLE_CLAUDE_CODE_PROMPT
-ARGUS_DISABLE_CLAUDE_CODE_SKILLS
-ARGUS_DISABLE_DEFAULT_PLUGINS
-ARGUS_DISABLE_FILETIME_CHECK
-ARGUS_DISABLE_LSP_DOWNLOAD
-ARGUS_DISABLE_MODELS_FETCH
-ARGUS_DISABLE_PRUNE
-ARGUS_DISABLE_TERMINAL_TITLE
-ARGUS_ENABLE_EXA
-ARGUS_ENABLE_EXPERIMENTAL_MODELS
-ARGUS_EXPERIMENTAL
-ARGUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS
-ARGUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT
-ARGUS_EXPERIMENTAL_DISABLE_FILEWATCHER
-ARGUS_EXPERIMENTAL_EXA
-ARGUS_EXPERIMENTAL_FILEWATCHER
-ARGUS_EXPERIMENTAL_ICON_DISCOVERY
-ARGUS_EXPERIMENTAL_LSP_TOOL
-ARGUS_EXPERIMENTAL_LSP_TY
-ARGUS_EXPERIMENTAL_MARKDOWN
-ARGUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX
-ARGUS_EXPERIMENTAL_OXFMT
-ARGUS_EXPERIMENTAL_PLAN_MODE
-ARGUS_ENABLE_QUESTION_TOOL
-ARGUS_FAKE_VCS
-ARGUS_GIT_BASH_PATH
-ARGUS_MODEL
-ARGUS_MODELS_URL
-ARGUS_PERMISSION
-ARGUS_PORT
-ARGUS_SERVER_PASSWORD
-ARGUS_SERVER_USERNAME
+OPENCORVUS_API_KEY
+OPENCORVUS_AUTH_JSON
+OPENCORVUS_AUTO_SHARE
+OPENCORVUS_CLIENT
+OPENCORVUS_CONFIG
+OPENCORVUS_CONFIG_CONTENT
+OPENCORVUS_CONFIG_DIR
+OPENCORVUS_DISABLE_AUTOCOMPACT
+OPENCORVUS_DISABLE_AUTOUPDATE
+OPENCORVUS_DISABLE_CLAUDE_CODE
+OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT
+OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS
+OPENCORVUS_DISABLE_DEFAULT_PLUGINS
+OPENCORVUS_DISABLE_FILETIME_CHECK
+OPENCORVUS_DISABLE_LSP_DOWNLOAD
+OPENCORVUS_DISABLE_MODELS_FETCH
+OPENCORVUS_DISABLE_PRUNE
+OPENCORVUS_DISABLE_TERMINAL_TITLE
+OPENCORVUS_ENABLE_EXA
+OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS
+OPENCORVUS_EXPERIMENTAL
+OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS
+OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT
+OPENCORVUS_EXPERIMENTAL_DISABLE_FILEWATCHER
+OPENCORVUS_EXPERIMENTAL_EXA
+OPENCORVUS_EXPERIMENTAL_FILEWATCHER
+OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY
+OPENCORVUS_EXPERIMENTAL_LSP_TOOL
+OPENCORVUS_EXPERIMENTAL_LSP_TY
+OPENCORVUS_EXPERIMENTAL_MARKDOWN
+OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX
+OPENCORVUS_EXPERIMENTAL_OXFMT
+OPENCORVUS_EXPERIMENTAL_PLAN_MODE
+OPENCORVUS_ENABLE_QUESTION_TOOL
+OPENCORVUS_FAKE_VCS
+OPENCORVUS_GIT_BASH_PATH
+OPENCORVUS_MODEL
+OPENCORVUS_MODELS_URL
+OPENCORVUS_PERMISSION
+OPENCORVUS_PORT
+OPENCORVUS_SERVER_PASSWORD
+OPENCORVUS_SERVER_USERNAME
 PROJECT_ROOT
 RESOURCE_NAME
 RUST_LOG
@@ -650,77 +650,77 @@ zod
 @ai-sdk/openai-compatible
 @File#L37-42
 @modelcontextprotocol/server-everything
-@argus
+@opencorvus
 ```
 
 ## GitHub owner/repo slugs referenced in docs
 
 ```text
-24601/argus-zellij-namer
-angristan/argus-wakatime
-yangheng95/argus
-apps/argus-agent
-athal7/argus-devcontainers
-awesome-argus/awesome-argus
+24601/opencorvus-zellij-namer
+angristan/opencorvus-wakatime
+yangheng95/opencorvus
+apps/opencorvus-agent
+athal7/opencorvus-devcontainers
+awesome-opencorvus/awesome-opencorvus
 backnotprop/plannotator
-ben-vargas/ai-sdk-provider-argus-sdk
+ben-vargas/ai-sdk-provider-opencorvus-sdk
 btriapitsyn/openchamber
 BurntSushi/ripgrep
 Cluster444/agentic
-code-yeongyu/oh-my-argus
-darrenhinde/argus-agents
-different-ai/argus-scheduler
+code-yeongyu/oh-my-opencorvus
+darrenhinde/opencorvus-agents
+different-ai/opencorvus-scheduler
 different-ai/openwork
 features/copilot
 folke/tokyonight.nvim
-franlol/argus-md-table-formatter
+franlol/opencorvus-md-table-formatter
 ggml-org/llama.cpp
-ghoulr/argus-websearch-cited.git
-H2Shami/argus-helicone-session
+ghoulr/opencorvus-websearch-cited.git
+H2Shami/opencorvus-helicone-session
 hosenur/portal
 jamesmurdza/daytona
-jenslys/argus-gemini-auth
-JRedeker/argus-morph-fast-apply
-JRedeker/argus-shell-strategy
+jenslys/opencorvus-gemini-auth
+JRedeker/opencorvus-morph-fast-apply
+JRedeker/opencorvus-shell-strategy
 kdcokenny/ocx
-kdcokenny/argus-background-agents
-kdcokenny/argus-notify
-kdcokenny/argus-workspace
-kdcokenny/argus-worktree
+kdcokenny/opencorvus-background-agents
+kdcokenny/opencorvus-notify
+kdcokenny/opencorvus-workspace
+kdcokenny/opencorvus-worktree
 login/device
-mohak34/argus-notifier
+mohak34/opencorvus-notifier
 morhetz/gruvbox
-mtymek/argus-obsidian
+mtymek/opencorvus-obsidian
 NeuralNomadsAI/CodeNomad
-nick-vi/argus-type-inject
-NickvanDyke/argus.nvim
-NoeFabris/argus-antigravity-auth
+nick-vi/opencorvus-type-inject
+NickvanDyke/opencorvus.nvim
+NoeFabris/opencorvus-antigravity-auth
 nordtheme/nord
-numman-ali/argus-openai-codex-auth
+numman-ali/opencorvus-openai-codex-auth
 olimorris/codecompanion.nvim
-panta82/argus-notificator
+panta82/opencorvus-notificator
 rebelot/kanagawa.nvim
 remorses/kimaki
 sainnhe/everforest
-shekohex/argus-google-antigravity-auth
-shekohex/argus-pty.git
+shekohex/opencorvus-google-antigravity-auth
+shekohex/opencorvus-pty.git
 spoons-and-mirrors/subtask2
-sudo-tee/argus.nvim
-supermemoryai/argus-supermemory
-Tarquinen/argus-dynamic-context-pruning
+sudo-tee/opencorvus.nvim
+supermemoryai/opencorvus-supermemory
+Tarquinen/opencorvus-dynamic-context-pruning
 Th3Whit3Wolf/one-nvim
 upstash/context7
 vtemian/micode
 vtemian/octto
 yetone/avante.nvim
-zenobi-us/argus-plugin-template
-zenobi-us/argus-skillful
+zenobi-us/opencorvus-plugin-template
+zenobi-us/opencorvus-skillful
 ```
 
 ## Paths, filenames, globs, and URLs
 
 ```text
-./.argus/themes/*.json
+./.opencorvus/themes/*.json
 ./<project-slug>/storage/
 ./config/#custom-directory
 ./global/storage/
@@ -732,68 +732,68 @@ zenobi-us/argus-skillful
 .claude/skills/*/SKILL.md
 .claude/skills/<name>/SKILL.md
 .env
-.github/workflows/argus.yml
+.github/workflows/opencorvus.yml
 .gitignore
 .gitlab-ci.yml
 .ignore
 .NET SDK
 .npmrc
 .ocamlformat
-.argus
-.argus/
-.argus/agents/
-.argus/commands/
-.argus/commands/test.md
-.argus/modes/
-.argus/plans/*.md
-.argus/plugins/
-.argus/skills/<name>/SKILL.md
-.argus/skills/git-release/SKILL.md
-.argus/tools/
-.well-known/argus
+.opencorvus
+.opencorvus/
+.opencorvus/agents/
+.opencorvus/commands/
+.opencorvus/commands/test.md
+.opencorvus/modes/
+.opencorvus/plans/*.md
+.opencorvus/plugins/
+.opencorvus/skills/<name>/SKILL.md
+.opencorvus/skills/git-release/SKILL.md
+.opencorvus/tools/
+.well-known/opencorvus
 { type: "raw" \| "patch", content: string }
 {file:path/to/file}
 **/*.js
 %USERPROFILE%/intelephense/license.txt
-%USERPROFILE%\.cache\argus
-%USERPROFILE%\.config\argus\argus.jsonc
-%USERPROFILE%\.config\argus\plugins
-%USERPROFILE%\.local\share\argus
-%USERPROFILE%\.local\share\argus\log
-<project-root>/.argus/themes/*.json
+%USERPROFILE%\.cache\opencorvus
+%USERPROFILE%\.config\opencorvus\opencorvus.jsonc
+%USERPROFILE%\.config\opencorvus\plugins
+%USERPROFILE%\.local\share\opencorvus
+%USERPROFILE%\.local\share\opencorvus\log
+<project-root>/.opencorvus/themes/*.json
 <providerId>/<modelId>
-<your-project>/.argus/plugins/
+<your-project>/.opencorvus/plugins/
 ~
 ~/...
 ~/.agents/skills/*/SKILL.md
 ~/.agents/skills/<name>/SKILL.md
 ~/.aws/credentials
 ~/.bashrc
-~/.cache/argus
-~/.cache/argus/node_modules/
+~/.cache/opencorvus
+~/.cache/opencorvus/node_modules/
 ~/.claude/CLAUDE.md
 ~/.claude/skills/
 ~/.claude/skills/*/SKILL.md
 ~/.claude/skills/<name>/SKILL.md
-~/.config/argus
-~/.config/argus/AGENTS.md
-~/.config/argus/agents/
-~/.config/argus/commands/
-~/.config/argus/modes/
-~/.config/argus/argus.json
-~/.config/argus/argus.jsonc
-~/.config/argus/plugins/
-~/.config/argus/skills/*/SKILL.md
-~/.config/argus/skills/<name>/SKILL.md
-~/.config/argus/themes/*.json
-~/.config/argus/tools/
+~/.config/opencorvus
+~/.config/opencorvus/AGENTS.md
+~/.config/opencorvus/agents/
+~/.config/opencorvus/commands/
+~/.config/opencorvus/modes/
+~/.config/opencorvus/opencorvus.json
+~/.config/opencorvus/opencorvus.jsonc
+~/.config/opencorvus/plugins/
+~/.config/opencorvus/skills/*/SKILL.md
+~/.config/opencorvus/skills/<name>/SKILL.md
+~/.config/opencorvus/themes/*.json
+~/.config/opencorvus/tools/
 ~/.config/zed/settings.json
 ~/.local/share
-~/.local/share/argus/
-~/.local/share/argus/auth.json
-~/.local/share/argus/log/
-~/.local/share/argus/mcp-auth.json
-~/.local/share/argus/argus.jsonc
+~/.local/share/opencorvus/
+~/.local/share/opencorvus/auth.json
+~/.local/share/opencorvus/log/
+~/.local/share/opencorvus/mcp-auth.json
+~/.local/share/opencorvus/opencorvus.jsonc
 ~/.npmrc
 ~/.zshrc
 ~/code/
@@ -803,7 +803,7 @@ zenobi-us/argus-skillful
 ${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts
 $HOME/intelephense/license.txt
 $HOME/projects/*
-$XDG_CONFIG_HOME/argus/themes/*.json
+$XDG_CONFIG_HOME/opencorvus/themes/*.json
 agent/
 agents/
 build/
@@ -816,11 +816,11 @@ http://localhost:4096
 http://localhost:4096/doc
 https://app.example.com
 https://AZURE_COGNITIVE_SERVICES_RESOURCE_NAME.cognitiveservices.azure.com/
-https://argus.ai/zen/v1/chat/completions
-https://argus.ai/zen/v1/messages
-https://argus.ai/zen/v1/models/gemini-3-flash
-https://argus.ai/zen/v1/models/gemini-3-pro
-https://argus.ai/zen/v1/responses
+https://opencorvus.ai/zen/v1/chat/completions
+https://opencorvus.ai/zen/v1/messages
+https://opencorvus.ai/zen/v1/models/gemini-3-flash
+https://opencorvus.ai/zen/v1/models/gemini-3-pro
+https://opencorvus.ai/zen/v1/responses
 https://RESOURCE_NAME.openai.azure.com/
 laravel/pint
 log/
@@ -828,11 +828,11 @@ model: "anthropic/claude-sonnet-4-5"
 modes/
 node_modules/
 openai/gpt-4.1
-argus.ai/config.json
-argus/<model-id>
-argus/gpt-5.1-codex
-argus/gpt-5.2-codex
-argus/kimi-k2
+opencorvus.ai/config.json
+opencorvus/<model-id>
+opencorvus/gpt-5.1-codex
+opencorvus/gpt-5.2-codex
+opencorvus/kimi-k2
 openrouter/google/gemini-2.5-flash
 opncd.ai/s/<share-id>
 packages/*/AGENTS.md
@@ -841,7 +841,7 @@ project/
 provider_id/model_id
 provider/model
 provider/model-id
-rm -rf ~/.cache/argus
+rm -rf ~/.cache/opencorvus
 skills/
 skills/*/SKILL.md
 src/**/*.ts
@@ -883,7 +883,7 @@ WIN+R
 ## Model ID strings referenced
 
 ```text
-{env:ARGUS_MODEL}
+{env:OPENCORVUS_MODEL}
 anthropic/claude-3-5-sonnet-20241022
 anthropic/claude-haiku-4-20250514
 anthropic/claude-haiku-4-5
@@ -893,8 +893,8 @@ gitlab/duo-chat-haiku-4-5
 lmstudio/google/gemma-3n-e4b
 openai/gpt-4.1
 openai/gpt-5
-argus/gpt-5.1-codex
-argus/gpt-5.2-codex
-argus/kimi-k2
+opencorvus/gpt-5.1-codex
+opencorvus/gpt-5.2-codex
+opencorvus/kimi-k2
 openrouter/google/gemini-2.5-flash
 ```

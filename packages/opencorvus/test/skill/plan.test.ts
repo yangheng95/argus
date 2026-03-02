@@ -86,7 +86,7 @@ test("user-defined plan skill overrides builtin", async () => {
   await using tmp = await tmpdir({
     git: true,
     init: async (dir) => {
-      const skillDir = require("path").join(dir, ".argus", "skill", "plan")
+      const skillDir = require("path").join(dir, ".opencorvus", "skill", "plan")
       await Bun.write(
         require("path").join(skillDir, "SKILL.md"),
         `---

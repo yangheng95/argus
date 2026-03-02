@@ -1,15 +1,15 @@
 ---
 title: Formateri
-description: Argus koristi formatere specifične za jezik.
+description: OpenCorvus koristi formatere specifične za jezik.
 ---
 
-Argus automatski formatira datoteke nakon što su napisane ili uređene pomoću formatera specifičnih za jezik. Ovo osigurava da kod koji se generira prati stilove koda vašeg projekta.
+OpenCorvus automatski formatira datoteke nakon što su napisane ili uređene pomoću formatera specifičnih za jezik. Ovo osigurava da kod koji se generira prati stilove koda vašeg projekta.
 
 ---
 
 ## Ugrađeni
 
-Argus dolazi sa nekoliko ugrađenih formatera za popularne jezike i okvire. Ispod je lista formatera, podržanih ekstenzija datoteka i naredbi ili opcija konfiguracije koje su mu potrebne.
+OpenCorvus dolazi sa nekoliko ugrađenih formatera za popularne jezike i okvire. Ispod je lista formatera, podržanih ekstenzija datoteka i naredbi ili opcija konfiguracije koje su mu potrebne.
 | Formatter | Ekstenzije | Zahtjevi
 |-------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | gofmt | .go | `gofmt` komanda dostupna |
@@ -35,13 +35,13 @@ Argus dolazi sa nekoliko ugrađenih formatera za popularne jezike i okvire. Ispo
 | shfmt | .sh, .bash | `shfmt` komanda dostupna |
 | pint | .php | `laravel/pint` zavisnost u `composer.json` || oxfmt (Eksperimentalno) | .js, .jsx, .ts, .tsx | `oxfmt` zavisnost u `package.json` i [eksperimentalna env varijabla flag](/docs/cli/#experimental) |
 | ormolu | .hs | `ormolu` komanda dostupna |
-Dakle, ako vaš projekat ima `prettier` u vašem `package.json`, Argus će ga automatski koristiti.
+Dakle, ako vaš projekat ima `prettier` u vašem `package.json`, OpenCorvus će ga automatski koristiti.
 
 ---
 
 ## Kako radi
 
-Kada Argus piše ili uređuje datoteku, on:
+Kada OpenCorvus piše ili uređuje datoteku, on:
 
 1. Provjerava ekstenziju datoteke prema svim omogućenim formaterima.
 2. Pokreće odgovarajuću naredbu za formatiranje na datoteci.
@@ -52,11 +52,11 @@ Kada Argus piše ili uređuje datoteku, on:
 
 ## Konfiguracija
 
-Možete prilagoditi formatere kroz `formatter` odjeljak u vašoj Argus konfiguraciji.
+Možete prilagoditi formatere kroz `formatter` odjeljak u vašoj OpenCorvus konfiguraciji.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {}
 }
 ```
@@ -76,18 +76,18 @@ Pogledajmo neke primjere.
 
 Da onemogućite **sve** formatere globalno, postavite `formatter` na `false`:
 
-```json title="argus.json" {3}
+```json title="opencorvus.json" {3}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": false
 }
 ```
 
 Da onemogućite **specifični** formater, postavite `disabled` na `true`:
 
-```json title="argus.json" {5}
+```json title="opencorvus.json" {5}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "disabled": true
@@ -102,9 +102,9 @@ Da onemogućite **specifični** formater, postavite `disabled` na `true`:
 
 Možete nadjačati ugrađene formatere ili dodati nove navođenjem naredbe, varijabli okruženja i ekstenzija datoteke:
 
-```json title="argus.json" {4-14}
+```json title="opencorvus.json" {4-14}
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "formatter": {
     "prettier": {
       "command": ["npx", "prettier", "--write", "$FILE"],

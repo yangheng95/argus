@@ -132,9 +132,9 @@ type IssueQueryResponse = {
   }
 }
 
-const AGENT_USERNAME = "argus-agent[bot]"
+const AGENT_USERNAME = "opencorvus-agent[bot]"
 const AGENT_REACTION = "eyes"
-const WORKFLOW_FILE = ".github/workflows/argus.yml"
+const WORKFLOW_FILE = ".github/workflows/opencorvus.yml"
 
 // Event categories for routing
 // USER_EVENTS: triggered by user actions, have actor/issueId, support reactions/comments
@@ -265,7 +265,7 @@ export const GithubInstallCommand = cmd({
 
           async function promptProvider() {
             const priority: Record<string, number> = {
-              argus: 0,
+              opencorvus: 0,
               anthropic: 1,
               openai: 2,
               google: 3,
@@ -323,7 +323,7 @@ export const GithubInstallCommand = cmd({
             if (installation) return s.stop("GitHub app already installed")
 
             // Open browser
-            const url = "https://github.com/apps/argus-agent"
+            const url = "https://github.com/apps/opencorvus-agent"
             const command =
               process.platform === "darwin"
                 ? `open "${url}"`
@@ -375,7 +375,7 @@ export const GithubInstallCommand = cmd({
 
             await Filesystem.write(
               path.join(app.root, WORKFLOW_FILE),
-              `name: argus
+              `name: opencorvus
 
 on:
   issue_comment:
@@ -384,12 +384,12 @@ on:
     types: [created]
 
 jobs:
-  argus:
+  opencorvus:
     if: |
       contains(github.event.comment.body, ' /oc') ||
       startsWith(github.event.comment.body, '/oc') ||
-      contains(github.event.comment.body, ' /argus') ||
-      startsWith(github.event.comment.body, '/argus')
+      contains(github.event.comment.body, ' /opencorvus') ||
+      startsWith(github.event.comment.body, '/opencorvus')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -402,8 +402,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run argus
-        uses: yangheng95/argus/github@latest${envStr}
+      - name: Run opencorvus
+        uses: yangheng95/opencorvus/github@latest${envStr}
         with:
           model: ${provider}/${model}`,
             )
@@ -521,7 +521,7 @@ export const GithubRunCommand = cmd({
           await addReaction(commentType)
         }
 
-        // Setup argus session
+        // Setup opencorvus session
         const repoData = await fetchRepo()
         session = await Session.create({
           permission: [
@@ -539,7 +539,7 @@ export const GithubRunCommand = cmd({
           await Session.share(session.id)
           return session.id.slice(-8)
         })()
-        console.log("argus session", session.id)
+        console.log("opencorvus session", session.id)
 
         // Handle event types:
         // REPO_EVENTS (schedule, workflow_dispatch): no issue/PR context, output to logs/PR only
@@ -761,7 +761,7 @@ export const GithubRunCommand = cmd({
         }
 
         const reviewContext = getReviewCommentContext()
-        const mentions = (process.env["MENTIONS"] || "/argus,/oc")
+        const mentions = (process.env["MENTIONS"] || "/opencorvus,/oc")
           .split(",")
           .map((m) => m.trim().toLowerCase())
           .filter(Boolean)
@@ -908,7 +908,7 @@ export const GithubRunCommand = cmd({
       }
 
       async function chat(message: string, files: PromptFiles = []) {
-        console.log("Sending message to argus...")
+        console.log("Sending message to opencorvus...")
 
         const result = await SessionPrompt.prompt({
           sessionID: session.id,
@@ -1004,7 +1004,7 @@ export const GithubRunCommand = cmd({
 
       async function getOidcToken() {
         try {
-          return await core.getIDToken("argus-github-action")
+          return await core.getIDToken("opencorvus-github-action")
         } catch (error) {
           console.error("Failed to get OIDC token:", error instanceof Error ? error.message : error)
           throw new Error(
@@ -1106,9 +1106,9 @@ export const GithubRunCommand = cmd({
           .join("")
         if (type === "schedule" || type === "dispatch") {
           const hex = crypto.randomUUID().slice(0, 6)
-          return `argus/${type}-${hex}-${timestamp}`
+          return `opencorvus/${type}-${hex}-${timestamp}`
         }
-        return `argus/${type}${issueId}-${timestamp}`
+        return `opencorvus/${type}${issueId}-${timestamp}`
       }
 
       async function pushToNewBranch(summary: string, branch: string, commit: boolean, isSchedule: boolean) {
@@ -1387,9 +1387,9 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
           const titleAlt = encodeURIComponent(session.title.substring(0, 50))
           const title64 = Buffer.from(session.title.substring(0, 700), "utf8").toString("base64")
 
-          return `<a href="${shareBaseUrl}/s/${shareId}"><img width="200" alt="${titleAlt}" src="https://social-cards.sst.dev/argus-share/${title64}.png?model=${providerID}/${modelID}&version=${session.version}&id=${shareId}" /></a>\n`
+          return `<a href="${shareBaseUrl}/s/${shareId}"><img width="200" alt="${titleAlt}" src="https://social-cards.sst.dev/opencorvus-share/${title64}.png?model=${providerID}/${modelID}&version=${session.version}&id=${shareId}" /></a>\n`
         })()
-        const shareUrl = shareId ? `[argus session](${shareBaseUrl}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
+        const shareUrl = shareId ? `[opencorvus session](${shareBaseUrl}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
         return `\n\n${image}${shareUrl}[github run](${runUrl})`
       }
 
@@ -1450,7 +1450,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         return [
           "<github_action_context>",
           "You are running as a GitHub Action. Important:",
-          "- Git push and PR creation are handled AUTOMATICALLY by the argus infrastructure after your response",
+          "- Git push and PR creation are handled AUTOMATICALLY by the opencorvus infrastructure after your response",
           "- Do NOT include warnings or disclaimers about GitHub tokens, workflow permissions, or PR creation capabilities",
           "- Do NOT suggest manual steps for creating PRs or pushing code - this happens automatically",
           "- Focus only on the code changes and your analysis/response",
@@ -1588,7 +1588,7 @@ query($owner: String!, $repo: String!, $number: Int!) {
         return [
           "<github_action_context>",
           "You are running as a GitHub Action. Important:",
-          "- Git push and PR creation are handled AUTOMATICALLY by the argus infrastructure after your response",
+          "- Git push and PR creation are handled AUTOMATICALLY by the opencorvus infrastructure after your response",
           "- Do NOT include warnings or disclaimers about GitHub tokens, workflow permissions, or PR creation capabilities",
           "- Do NOT suggest manual steps for creating PRs or pushing code - this happens automatically",
           "- Focus only on the code changes and your analysis/response",

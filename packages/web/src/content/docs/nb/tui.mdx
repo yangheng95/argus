@@ -1,22 +1,22 @@
 ---
 title: TUI
-description: Bruke argus-terminalbrukergrensesnittet.
+description: Bruke opencorvus-terminalbrukergrensesnittet.
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components"
 
-argus gir et interaktivt terminalgrensesnitt (TUI) for å jobbe med prosjektene dine med en LLM.
+opencorvus gir et interaktivt terminalgrensesnitt (TUI) for å jobbe med prosjektene dine med en LLM.
 
-Å kjøre argus starter TUI for gjeldende katalog.
+Å kjøre opencorvus starter TUI for gjeldende katalog.
 
 ```bash
-argus
+opencorvus
 ```
 
 Eller du kan starte den for en spesifikk arbeidskatalog.
 
 ```bash
-argus /path/to/project
+opencorvus /path/to/project
 ```
 
 Når du er i TUI, kan du stille den spørsmål med en prompt.
@@ -57,7 +57,7 @@ Utdataene fra kommandoen legges til samtalen som et verktøyresultat.
 
 ## Kommandoer
 
-Når du bruker argus TUI, kan du skrive `/` etterfulgt av et kommandonavn for raskt å utføre handlinger. For eksempel:
+Når du bruker opencorvus TUI, kan du skrive `/` etterfulgt av et kommandonavn for raskt å utføre handlinger. For eksempel:
 
 ```bash frame="none"
 /help
@@ -71,7 +71,7 @@ Her er alle tilgjengelige slash-kommandoer:
 
 ### connect
 
-Legg til en leverandør til argus. Lar deg velge fra tilgjengelige leverandører og legge til deres API-nøkler.
+Legg til en leverandør til opencorvus. Lar deg velge fra tilgjengelige leverandører og legge til deres API-nøkler.
 
 ```bash frame="none"
 /connect
@@ -117,7 +117,7 @@ Veksle visning av verktøydetaljer.
 
 ### exit
 
-Avslutt argus. _Aliaser_: `/quit`, `/q`
+Avslutt opencorvus. _Aliaser_: `/quit`, `/q`
 
 ```bash frame="none"
 /exit
@@ -355,11 +355,11 @@ Noen editorer trenger kommandolinjeargumenter for å kjøre i blokkeringsmodus. 
 
 ## Konfigurasjon
 
-Du kan tilpasse TUI-oppførselen gjennom argus-konfigurasjonsfilen.
+Du kan tilpasse TUI-oppførselen gjennom opencorvus-konfigurasjonsfilen.
 
-```json title="argus.json"
+```json title="opencorvus.json"
 {
-  "$schema": "https://argus.ai/config.json",
+  "$schema": "https://opencorvus.ai/config.json",
   "tui": {
     "scroll_speed": 3,
     "scroll_acceleration": {

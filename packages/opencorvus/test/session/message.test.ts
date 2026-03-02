@@ -859,7 +859,7 @@ describe("session.message.fromError", () => {
       name: "APIError",
       data: {
         message:
-          "Please reauthenticate with the copilot provider to ensure your credentials work properly with Argus.",
+          "Please reauthenticate with the copilot provider to ensure your credentials work properly with OpenCorvus.",
         statusCode: 403,
         isRetryable: false,
         responseHeaders: { "content-type": "application/json" },

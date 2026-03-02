@@ -23,7 +23,7 @@ function resolveCommand() {
     execSync("opencorvus --version", { stdio: "ignore", timeout: 3000 })
     return "opencorvus"
   } catch {}
-  return "argus"
+  return "opencorvus"
 }
 
 export async function createOpenCorvusServer(options?: ServerOptions) {
@@ -38,13 +38,13 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
 
   const args = [`serve`, `--hostname=${options.hostname}`, `--port=${options.port}`]
   if (options.config?.logLevel) args.push(`--log-level=${options.config.logLevel}`)
-  const config = options.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
+  const config = options.config === undefined ? process.env.OPENCORVUS_CONFIG_CONTENT : JSON.stringify(options.config)
 
   const proc = spawn(resolveCommand(), args, {
     signal: options.signal,
     env: {
       ...process.env,
-      ...(config === undefined ? {} : { ARGUS_CONFIG_CONTENT: config }),
+      ...(config === undefined ? {} : { OPENCORVUS_CONFIG_CONTENT: config }),
     },
   })
 
@@ -115,13 +115,13 @@ export function createOpenCorvusTui(options?: TuiOptions) {
     args.push(`--agent=${options.agent}`)
   }
 
-  const config = options?.config === undefined ? process.env.ARGUS_CONFIG_CONTENT : JSON.stringify(options.config)
+  const config = options?.config === undefined ? process.env.OPENCORVUS_CONFIG_CONTENT : JSON.stringify(options.config)
   const proc = spawn(resolveCommand(), args, {
     signal: options?.signal,
     stdio: "inherit",
     env: {
       ...process.env,
-      ...(config === undefined ? {} : { ARGUS_CONFIG_CONTENT: config }),
+      ...(config === undefined ? {} : { OPENCORVUS_CONFIG_CONTENT: config }),
     },
   })
 

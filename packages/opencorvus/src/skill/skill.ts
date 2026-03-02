@@ -56,7 +56,7 @@ export namespace Skill {
   // These follow the directory layout used by Claude Code and other agents.
   const EXTERNAL_DIRS = [".claude", ".agents"]
   const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
-  const ARGUS_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
+  const OPENCORVUS_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
   const SKILL_PATTERN = "**/SKILL.md"
 
   export const state = Instance.state(async () => {
@@ -128,7 +128,7 @@ export namespace Skill {
 
     // Scan external skill directories (.claude/skills/, .agents/skills/, etc.)
     // Load global (home) first, then project-level (so project-level overwrites)
-    if (!Flag.ARGUS_DISABLE_EXTERNAL_SKILLS) {
+    if (!Flag.OPENCORVUS_DISABLE_EXTERNAL_SKILLS) {
       for (const dir of EXTERNAL_DIRS) {
         const root = path.join(Global.Path.home, dir)
         if (!(await Filesystem.isDir(root))) continue
@@ -144,9 +144,9 @@ export namespace Skill {
       }
     }
 
-    // Scan .opencorvus/skill/ directories (with legacy .argus compatibility)
+    // Scan .opencorvus/skill/ directories (with legacy .opencorvus compatibility)
     for (const dir of await Config.directories()) {
-      const matches = await Glob.scan(ARGUS_SKILL_PATTERN, {
+      const matches = await Glob.scan(OPENCORVUS_SKILL_PATTERN, {
         cwd: dir,
         absolute: true,
         include: "file",

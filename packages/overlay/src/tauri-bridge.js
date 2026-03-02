@@ -27,7 +27,7 @@
     return tauri.event.listen(name, (event) => fn(event.payload, event))
   }
 
-  window.argusBridge = Object.freeze({
+  window.opencorvusBridge = Object.freeze({
     events,
     invoke,
     invokeSafe,

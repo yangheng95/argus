@@ -1,6 +1,6 @@
-# Contributing to Argus
+# Contributing to OpenCorvus
 
-We want to make it easy for you to contribute to Argus. Here are the most common type of changes that get merged:
+We want to make it easy for you to contribute to OpenCorvus. Here are the most common type of changes that get merged:
 
 - Bug fixes
 - Additional LSPs / Formatters
@@ -14,10 +14,10 @@ However, any UI or core product feature must go through a design review with the
 
 If you are unsure if a PR would be accepted, feel free to ask a maintainer or look for issues with any of the following labels:
 
-- [`help wanted`](https://github.com/yangheng95/argus/issues?q=is%3Aissue%20state%3Aopen%20label%3Ahelp-wanted)
-- [`good first issue`](https://github.com/yangheng95/argus/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22)
-- [`bug`](https://github.com/yangheng95/argus/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug)
-- [`perf`](https://github.com/yangheng95/argus/issues?q=is%3Aopen%20is%3Aissue%20label%3A%22perf%22)
+- [`help wanted`](https://github.com/yangheng95/opencorvus/issues?q=is%3Aissue%20state%3Aopen%20label%3Ahelp-wanted)
+- [`good first issue`](https://github.com/yangheng95/opencorvus/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22)
+- [`bug`](https://github.com/yangheng95/opencorvus/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug)
+- [`perf`](https://github.com/yangheng95/opencorvus/issues?q=is%3Aopen%20is%3Aissue%20label%3A%22perf%22)
 
 > [!NOTE]
 > PRs that ignore these guardrails will likely be closed.
@@ -29,7 +29,7 @@ Want to take on an issue? Leave a comment and a maintainer may assign it to you 
 New providers shouldn't require many if ANY code changes, but if you want to add support for a new provider first make a PR to:
 https://github.com/yangheng95/models.dev
 
-## Developing Argus
+## Developing OpenCorvus
 
 - Requirements: Bun 1.3+
 - Install dependencies and start the dev server from the repo root:
@@ -41,13 +41,13 @@ https://github.com/yangheng95/models.dev
 
 ### Running against a different directory
 
-By default, `bun dev` runs Argus in the `packages/argus` directory. To run it against a different directory or repository:
+By default, `bun dev` runs OpenCorvus in the `packages/opencorvus` directory. To run it against a different directory or repository:
 
 ```bash
 bun dev <directory>
 ```
 
-To run Argus in the root of the argus repo itself:
+To run OpenCorvus in the root of the opencorvus repo itself:
 
 ```bash
 bun dev .
@@ -58,45 +58,45 @@ bun dev .
 To compile a standalone executable:
 
 ```bash
-./packages/argus/script/build.ts --single
+./packages/opencorvus/script/build.ts --single
 ```
 
 Then run it with:
 
 ```bash
-./packages/argus/dist/argus-<platform>/bin/argus
+./packages/opencorvus/dist/opencorvus-<platform>/bin/opencorvus
 ```
 
 Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
 
 - Core pieces:
-  - `packages/argus`: Core business logic, server, agents, tools, LSP
-  - `packages/argus/src/cli/cmd/tui/`: TUI interface (SolidJS + [opentui](https://github.com/sst/opentui))
+  - `packages/opencorvus`: Core business logic, server, agents, tools, LSP
+  - `packages/opencorvus/src/cli/cmd/tui/`: TUI interface (SolidJS + [opentui](https://github.com/sst/opentui))
   - `packages/sdk`: JavaScript SDK (`@opencorvus-ai/sdk`)
   - `packages/bot`: Chat bot adapters (Slack, Telegram)
   - `packages/plugin`: Plugin system (`@opencorvus-ai/plugin`)
 
-### Understanding bun dev vs argus
+### Understanding bun dev vs opencorvus
 
-During development, `bun dev` is the local equivalent of the built `argus` command:
+During development, `bun dev` is the local equivalent of the built `opencorvus` command:
 
 ```bash
 # Development (from project root)
-bun dev                  # Start TUI in packages/argus directory
+bun dev                  # Start TUI in packages/opencorvus directory
 bun dev <directory>      # Start TUI in a specific directory
 bun dev serve            # Start headless API server only
 bun dev --help           # Show all available commands
 
 # Production
-argus                    # Start TUI in the current directory
-argus <directory>        # Start TUI in a specific directory
-argus serve              # Start headless API server only
-argus --help             # Show all available commands
+opencorvus                    # Start TUI in the current directory
+opencorvus <directory>        # Start TUI in a specific directory
+opencorvus serve              # Start headless API server only
+opencorvus --help             # Show all available commands
 ```
 
 ### Running the API Server
 
-To start the Argus headless API server:
+To start the OpenCorvus headless API server:
 
 ```bash
 bun dev serve
@@ -109,7 +109,7 @@ bun dev serve --port 8080
 ```
 
 > [!NOTE]
-> If you make changes to the API or SDK (e.g. `packages/argus/src/server/server.ts`), run `./script/generate.ts` to regenerate the SDK and related files.
+> If you make changes to the API or SDK (e.g. `packages/opencorvus/src/server/server.ts`), run `./script/generate.ts` to regenerate the SDK and related files.
 
 Please try to follow the [style guide](./AGENTS.md)
 
@@ -117,13 +117,13 @@ Please try to follow the [style guide](./AGENTS.md)
 
 Bun debugging is currently rough around the edges. We hope this guide helps you get set up and avoid some pain points.
 
-The most reliable way to debug Argus is to run it manually in a terminal via `bun run --inspect=<url> dev ...` and attach
+The most reliable way to debug OpenCorvus is to run it manually in a terminal via `bun run --inspect=<url> dev ...` and attach
 your debugger via that URL. Other methods can result in breakpoints being mapped incorrectly, at least in VSCode (YMMV).
 
 To debug the server:
 
 ```bash
-bun run --inspect=ws://localhost:6499/ --cwd packages/argus ./src/index.ts serve --port 4096
+bun run --inspect=ws://localhost:6499/ --cwd packages/opencorvus ./src/index.ts serve --port 4096
 ```
 
 Other tips and tricks:
@@ -138,7 +138,7 @@ If you use VSCode, you can use our example configurations [.vscode/settings.exam
 Some debug methods that can be problematic:
 
 - Debug configurations with `"request": "launch"` can have breakpoints incorrectly mapped and thus unusable
-- The same problem arises when running Argus in the VSCode `JavaScript Debug Terminal`
+- The same problem arises when running OpenCorvus in the VSCode `JavaScript Debug Terminal`
 
 With that said, you may want to try these methods, as they might work for you.
 
@@ -189,7 +189,7 @@ PR titles should follow conventional commit standards:
 
 You can optionally include a scope to indicate which package is affected:
 
-- `feat(argus):` feature in the argus core package
+- `feat(opencorvus):` feature in the opencorvus core package
 - `fix(sdk):` bug fix in the SDK package
 - `chore(bot):` maintenance in the bot package
 
@@ -198,7 +198,7 @@ Examples:
 - `docs: update contributing guidelines`
 - `fix: resolve crash on startup`
 - `feat: add desktop automation support`
-- `feat(argus): add new tool for file search`
+- `feat(opencorvus): add new tool for file search`
 - `fix(bot): resolve Slack adapter timeout`
 - `chore: bump dependency versions`
 
@@ -217,7 +217,7 @@ These are not strictly enforced, they are just general guidelines:
 
 ## Feature Requests
 
-For net-new functionality, start with a design conversation. Open an issue describing the problem, your proposed approach (optional), and why it belongs in Argus. The core team will help decide whether it should move forward; please wait for that approval instead of opening a feature PR directly.
+For net-new functionality, start with a design conversation. Open an issue describing the problem, your proposed approach (optional), and why it belongs in OpenCorvus. The core team will help decide whether it should move forward; please wait for that approval instead of opening a feature PR directly.
 
 ## Trust & Vouch System
 
@@ -226,7 +226,7 @@ This project uses [vouch](https://github.com/mitchellh/vouch) to manage contribu
 ### How it works
 
 - **Vouched users** are explicitly trusted contributors.
-- **Denounced users** are explicitly blocked. Issues and pull requests from denounced users are automatically closed. If you have been denounced, you can request to be unvouched by reaching out to a maintainer via [GitHub Issues](https://github.com/yangheng95/argus/issues)
+- **Denounced users** are explicitly blocked. Issues and pull requests from denounced users are automatically closed. If you have been denounced, you can request to be unvouched by reaching out to a maintainer via [GitHub Issues](https://github.com/yangheng95/opencorvus/issues)
 - **Everyone else** can participate normally — you don't need to be vouched to open issues or PRs.
 
 ### For maintainers

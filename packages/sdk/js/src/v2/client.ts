@@ -24,7 +24,7 @@ export function createOpenCorvusClient(config?: Config & { directory?: string })
     const encodedDirectory = isNonASCII ? encodeURIComponent(config.directory) : config.directory
     config.headers = {
       ...config.headers,
-      "x-argus-directory": encodedDirectory,
+      "x-opencorvus-directory": encodedDirectory,
     }
   }
 
