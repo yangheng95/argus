@@ -408,14 +408,17 @@ if (providerChoice?.visionModel) {
   process.env.ARGUS_VISION_MODEL = providerChoice.visionModel
 }
 if (activeKey) {
-  const visionModel = process.env.ARGUS_VISION_MODEL ?? "qwen3.5-plus"
-  bot.setVision(new VisionPipeline({
-    apiKey: activeKey,
-    baseURL: dashscopeBaseURL,
-    model: visionModel,
-  }))
-  const keySource = useCodingPlan ? "CODING_DASHSCOPE_API_KEY (coding plan)" : "DASHSCOPE_API_KEY (standard)"
-  console.log(`[Bot] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${dashscopeBaseURL})`)
+  const visionModel = process.env.ARGUS_VISION_MODEL
+  if (visionModel) {
+    bot.setVision(new VisionPipeline({
+      apiKey: activeKey,
+      baseURL: dashscopeBaseURL,
+      model: visionModel,
+    }))
+    const keySource = useCodingPlan ? "CODING_DASHSCOPE_API_KEY (coding plan)" : "DASHSCOPE_API_KEY (standard)"
+    console.log(`[Bot] Vision pipeline enabled (model: ${visionModel}, key: ${keySource}, baseURL: ${dashscopeBaseURL})`)
+  } else {
+    console.log("[Bot] Vision pipeline disabled (ARGUS_VISION_MODEL not set)")
 }
 
 if (process.env.SLACK_BOT_TOKEN) {
