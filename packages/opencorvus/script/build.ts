@@ -57,6 +57,7 @@ const migrations = await Promise.all(
 console.log(`Loaded ${migrations.length} migrations`)
 
 const singleFlag = process.argv.includes("--single")
+const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 
@@ -119,7 +120,9 @@ const allTargets: {
   },
 ]
 
-const targets = singleFlag
+// Dev and CI builds only need a native binary; full matrix is for release packaging.
+const single = singleFlag || (!allFlag && !Script.release)
+const targets = single
   ? allTargets.filter((item) => {
       if (item.os !== process.platform || item.arch !== process.arch) {
         return false

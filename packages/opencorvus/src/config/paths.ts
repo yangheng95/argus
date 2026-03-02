@@ -25,7 +25,7 @@ export namespace ConfigPaths {
       ...(!Flag.OPENCORVUS_DISABLE_PROJECT_CONFIG
         ? await Array.fromAsync(
             Filesystem.up({
-              targets: [".opencorvus", ".opencorvus"],
+              targets: [".opencorvus"],
               start: directory,
               stop: worktree,
             }),
