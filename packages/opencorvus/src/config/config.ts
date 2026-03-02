@@ -420,8 +420,6 @@ export namespace Config {
       const patterns = [
         "/.opencorvus/agent/",
         "/.opencorvus/agents/",
-        "/.opencorvus/agent/",
-        "/.opencorvus/agents/",
         "/agent/",
         "/agents/",
       ]
