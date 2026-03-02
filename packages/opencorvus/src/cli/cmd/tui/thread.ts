@@ -175,10 +175,14 @@ export const TuiThreadCommand = cmd({
     }
 
     // Show provider selection before Worker spawn so env vars are inherited.
-    try {
-      await promptProviderSelection()
-    } catch {
-      // Prompt library failure (e.g. non-interactive env) — skip silently
+    // Skip if --model is specified (model already chosen) or stdin is not a TTY
+    // (non-interactive env, e.g. spawned by bot or CI).
+    if (!args.model && process.stdin.isTTY) {
+      try {
+        await promptProviderSelection()
+      } catch {
+        // Prompt library failure — skip silently
+      }
     }
 
     // Keep ENABLE_PROCESSED_INPUT cleared even if other code flips it.
