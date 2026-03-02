@@ -11,7 +11,7 @@ import { Log } from "../util/log"
 import { showWindowHighlight } from "./overlay-client"
 
 const log = Log.create({ service: "screen" })
-const MAX_ATTACHMENT_BYTES = 12 * 1024 * 1024
+const MAX_ATTACHMENT_BYTES = Number(process.env.OPENCORVUS_SCREEN_MAX_ATTACHMENT_MB ?? "32") * 1024 * 1024
 
 async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; compressed: boolean }> {
   if (buffer.length <= MAX_ATTACHMENT_BYTES) {
@@ -19,20 +19,22 @@ async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; co
   }
   const sharp = await import("sharp").then((x) => x.default)
   const attempts = [
-    () => sharp(buffer).jpeg({ quality: 85, mozjpeg: true }).toBuffer(),
-    () => sharp(buffer).jpeg({ quality: 75, mozjpeg: true }).toBuffer(),
-    () => sharp(buffer).jpeg({ quality: 65, mozjpeg: true }).toBuffer(),
-    () => sharp(buffer).jpeg({ quality: 55, mozjpeg: true }).toBuffer(),
+    // Keep original fidelity first: try lossless PNG re-encode before switching format.
+    () => sharp(buffer).png({ compressionLevel: 9, adaptiveFiltering: true, effort: 10 }).toBuffer(),
+    () => sharp(buffer).jpeg({ quality: 95, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer(),
+    () => sharp(buffer).jpeg({ quality: 90, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer(),
+    () => sharp(buffer).jpeg({ quality: 85, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer(),
   ]
   for (const attempt of attempts) {
     try {
       const next = await attempt()
       if (next.length <= MAX_ATTACHMENT_BYTES) {
-        return { mime: "image/jpeg", buffer: next, compressed: true }
+        const mime = next[0] === 0x89 && next[1] === 0x50 ? "image/png" : "image/jpeg"
+        return { mime, buffer: next, compressed: true }
       }
     } catch {}
   }
-  const fallback = await sharp(buffer).jpeg({ quality: 45, mozjpeg: true }).toBuffer()
+  const fallback = await sharp(buffer).jpeg({ quality: 80, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer()
   return { mime: "image/jpeg", buffer: fallback, compressed: true }
 }
 
