@@ -269,7 +269,7 @@ async function getShellConfigFile(): Promise<string | null> {
     if (!exists) continue
 
     const content = await Filesystem.readText(file).catch(() => "")
-    if (content.includes("# opencorvus") || content.includes(".opencorvus/bin") || content.includes(".opencorvus/bin")) {
+    if (content.includes("# opencorvus") || content.includes(".opencorvus/bin")) {
       return file
     }
   }
