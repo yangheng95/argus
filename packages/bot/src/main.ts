@@ -345,7 +345,7 @@ const dashscopeBaseURL = dashscopeBaseURLForKey(activeKey)
 if (activeKey) process.env.DASHSCOPE_API_KEY = activeKey
 
 // Build Argus config — use provider selection if user chose one, else default
-const argusModel = providerChoice?.model ?? "alibaba-cn/qwen3.5-plus"
+const argusModel = providerChoice?.model ?? process.env.ARGUS_DEFAULT_MODEL ?? ""
 const argusProvider: Record<string, any> = {
   "alibaba-cn": {
     options: {
