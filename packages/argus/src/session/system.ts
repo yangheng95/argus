@@ -1,6 +1,4 @@
 import os from "os"
-import { Ripgrep } from "../file/ripgrep"
-
 import { Instance } from "../project/instance"
 import { Shell } from "@/shell/shell"
 
