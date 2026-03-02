@@ -86,13 +86,13 @@ export namespace Database {
 
     // Apply schema migrations
     const entries =
-      typeof ARGUS_MIGRATIONS !== "undefined"
-        ? ARGUS_MIGRATIONS
+      typeof OPENCORVUS_MIGRATIONS !== "undefined"
+        ? OPENCORVUS_MIGRATIONS
         : migrations(path.join(import.meta.dirname, "../../migration"))
     if (entries.length > 0) {
       log.info("applying migrations", {
         count: entries.length,
-        mode: typeof ARGUS_MIGRATIONS !== "undefined" ? "bundled" : "dev",
+        mode: typeof OPENCORVUS_MIGRATIONS !== "undefined" ? "bundled" : "dev",
       })
       migrate(db, entries)
     }
