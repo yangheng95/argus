@@ -152,24 +152,16 @@ export class BotCore {
    * and window binding strategy for on-demand TUI.
    */
   private buildSystemPrompt(): string {
-    const projectDir = process.env.TUI_PROJECT_DIR || process.cwd()
-    const botDir = path.resolve(__dirname, "..")
-    const launchScript = path.join(botDir, "launch-tui.cmd")
-
     return [
       "## Bot Context",
       "You are responding to a user via Slack. Keep responses concise and actionable.",
       "Tool calls are invisible to the user — always write text before/after actions.",
       "",
-      "## Coding Tasks (via TUI)",
-      "When asked to write or modify code, use the Argus TUI instead of editing files directly:",
-      "1. screen.list_windows — check if a window titled \"ARGUS_TUI_BOT\" exists",
-      "2. If found: screen.bind_window(\"ARGUS_TUI_BOT\") → screen.screenshot → interact",
-      "3. If NOT found: launch TUI via bash, then bind:",
-      `   bash: start "ARGUS_TUI_BOT" "${launchScript}" "${projectDir}"`,
-      "   Wait 5s, then screen.list_windows again, bind to ARGUS_TUI_BOT",
-      "4. Type the coding instruction into the TUI, press Enter, monitor with screenshots",
-      "5. Report results in your text response",
+      "## Coding Tasks (Session API First)",
+      "When asked to write or modify code, execute via Session API workflow (not TUI window automation):",
+      "1. Keep using the current session context and submit the coding instruction as a normal prompt",
+      "2. Wait for assistant completion and report concise progress/result to Slack",
+      "3. Use TUI runtime only as optional visual monitor, never as execution source of truth",
       "",
       "## Non-Coding Tasks",
       "For questions that need real-time data (weather, news, stock prices, etc.), use available tools (web search, bash, etc.).",
