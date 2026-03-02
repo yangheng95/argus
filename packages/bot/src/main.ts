@@ -212,7 +212,7 @@ async function promptProviderSelection(): Promise<PromptResult | null> {
         )
         model = modelInput.trim() || selected.defaultModel
 
-        const currentVision = process.env.ARGUS_VISION_MODEL ?? "qwen3.5-plus"
+        const currentVision = process.env.ARGUS_VISION_MODEL ?? ""
         const visionInput = await rlQuestion(
           rl,
           `\x1b[36m◆\x1b[0m  Vision model [\x1b[2m${currentVision}\x1b[0m]: `,
