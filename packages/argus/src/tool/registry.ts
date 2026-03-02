@@ -33,6 +33,7 @@ import { MemoryTool } from "./memory"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { GoalTool } from "./goal"
+import { VisionAnalyzeTool } from "./vision-analyze"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
