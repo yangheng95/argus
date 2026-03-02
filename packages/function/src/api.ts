@@ -49,9 +49,9 @@ export class SyncServer extends DurableObject<Env> {
     })
   }
 
-  async webSocketMessage(ws, message) {}
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {}
 
-  async webSocketClose(ws, code, reason, wasClean) {
+  async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean) {
     ws.close(code, "Durable Object is closing WebSocket")
   }
 
@@ -192,7 +192,7 @@ export default new Hono<{ Bindings: Env }>()
     const stub = c.env.SYNC_SERVER.get(c.env.SYNC_SERVER.idFromName(id))
     const data = await stub.getData()
 
-    let info
+    let info: unknown
     const messages: Record<string, any> = {}
     data.forEach((d) => {
       const [root, type, ...splits] = d.key.split("/")
@@ -289,6 +289,7 @@ export default new Hono<{ Bindings: Env }>()
         audience: EXPECTED_AUDIENCE,
       })
       const sub = payload.sub // e.g. 'repo:my-org/my-repo:ref:refs/heads/main'
+      if (typeof sub !== "string") throw new Error("Invalid token subject")
       const parts = sub.split(":")[1].split("/")
       owner = parts[0]
       repo = parts[1]
@@ -336,7 +337,7 @@ export default new Hono<{ Bindings: Env }>()
       // Verify permissions
       const userClient = new Octokit({ auth: token })
       const { data: repoData } = await userClient.repos.get({ owner, repo })
-      if (!repoData.permissions.admin && !repoData.permissions.push && !repoData.permissions.maintain)
+      if (!repoData.permissions?.admin && !repoData.permissions?.push && !repoData.permissions?.maintain)
         throw new Error("User does not have write permissions")
 
       // Get installation token
@@ -375,6 +376,7 @@ export default new Hono<{ Bindings: Env }>()
   .get("/get_github_app_installation", async (c) => {
     const owner = c.req.query("owner")
     const repo = c.req.query("repo")
+    if (!owner || !repo) return c.json({ error: "owner and repo are required" }, { status: 400 })
 
     const auth = createAppAuth({
       appId: Resource.GITHUB_APP_ID.value,

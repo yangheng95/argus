@@ -314,7 +314,15 @@ function configSchema() {
     hooks: {
       "astro:build:done": async () => {
         console.log("generating config schema")
-        spawnSync("../opencode/script/schema.ts", ["./dist/config.json", "./dist/tui.json"])
+        const result = spawnSync("bun", [
+          "run",
+          "../opencorvus/script/schema.ts",
+          "./dist/config.json",
+          "./dist/tui.json",
+        ])
+        if (result.status === 0) return
+        if (result.error) throw result.error
+        throw new Error(`config schema generation failed: ${result.status ?? "unknown"}`)
       },
     },
   }

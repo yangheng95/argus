@@ -7,9 +7,9 @@
   "private": true,
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test": "bun test --timeout 30000",
+    "test": "bun --config ./bunfig.toml test --timeout 30000",
     "build": "bun run script/build.ts",
-    "dev": "bun run --conditions=browser ./src/index.ts",
+    "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts",
     "db": "bun drizzle-kit"
   },
   "bin": {

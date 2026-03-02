@@ -38,6 +38,19 @@ jobs:
       - name: Run unit tests
         run: bunx turbo run test --filter=opencorvus
 
+  build-critical:
+    name: build-critical (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run critical builds
+        run: bunx turbo run build --filter=@opencorvus-ai/console-app --filter=@opencorvus-ai/web
+
   gui-coordinate-smoke:
     name: gui-coordinate-smoke (${{ matrix.settings.name }})
     strategy:
@@ -98,6 +111,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - unit
+      - build-critical
       - gui-coordinate-smoke
       - bot-unit
       - overlay-check
@@ -106,10 +120,12 @@ jobs:
       - name: Verify upstream test jobs passed
         run: |
           echo "unit=${{ needs.unit.result }}"
+          echo "build-critical=${{ needs['build-critical'].result }}"
           echo "gui-coordinate-smoke=${{ needs['gui-coordinate-smoke'].result }}"
           echo "bot-unit=${{ needs['bot-unit'].result }}"
           echo "overlay-check=${{ needs['overlay-check'].result }}"
           test "${{ needs.unit.result }}" = "success"
+          test "${{ needs['build-critical'].result }}" = "success"
           test "${{ needs['gui-coordinate-smoke'].result }}" = "success"
           test "${{ needs['bot-unit'].result }}" = "success"
           test "${{ needs['overlay-check'].result }}" = "success"
