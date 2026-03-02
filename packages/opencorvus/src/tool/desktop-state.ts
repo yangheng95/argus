@@ -1,4 +1,4 @@
-import { Coordinates } from "../argus/gui/coordinates"
+import { Coordinates } from "../opencorvus/gui/coordinates"
 import { Instance } from "../project/instance"
 
 const desktopState = Instance.state((): { bounds: Coordinates.WindowBounds | null } => ({
