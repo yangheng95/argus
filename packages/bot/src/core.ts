@@ -130,6 +130,19 @@ export class BotCore {
       console.log(`[BotCore] Created session ${createResult.data.id} for ${threadKey}`)
     }
 
+    // If session is currently processing a task, queue this message and notify user
+    if (this.sessionProcessing.has(session.sessionId)) {
+      const queue = this.sessionQueues.get(session.sessionId) ?? []
+      queue.push({ msg, text })
+      this.sessionQueues.set(session.sessionId, queue)
+      await adapter.sendMessage(msg.channel, msg.thread, `⏳ 当前任务正在进行，您的消息已加入队列（第 ${queue.length} 条）。`)
+      console.log(`[BotCore] Queued message for ${session.sessionId}, queue size: ${queue.length}`)
+      return
+    }
+
+    // Mark session as processing before sending prompt
+    this.sessionProcessing.add(session.sessionId)
+
     // Use promptAsync to bypass monitor command queue and execute directly.
     // System prompt is injected via the `system` field (appended to LLM system prompt in llm.ts:76).
     const result = await this.client.session.promptAsync({
@@ -141,6 +154,7 @@ export class BotCore {
     })
 
     if (result.error) {
+      this.sessionProcessing.delete(session.sessionId)
       console.error("[BotCore] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
       await adapter.sendMessage(msg.channel, msg.thread, "Failed to send prompt.")
       return
