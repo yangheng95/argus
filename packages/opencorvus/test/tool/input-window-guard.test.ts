@@ -7,14 +7,14 @@ let foreground = true
 const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
 
-mock.module("../../src/argus/perception/window", () => ({
+mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
     getBinding: async () => binding,
     ensureBoundForeground: async () => foreground,
   },
 }))
 
-mock.module("../../src/argus/gui/index", () => ({
+mock.module("../../src/opencorvus/gui/index", () => ({
   GUI: {
     click: async (x: number, y: number) => {
       clicks.push({ x, y })
