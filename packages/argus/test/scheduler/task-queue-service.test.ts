@@ -22,12 +22,12 @@ describe("scheduler.task-queue-service", () => {
 
   test("executes queued prompt task", async () => {
     await using tmp = await tmpdir({ git: true })
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(async () => result())
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create()
+        const session = await Session.create({})
         const id = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {
@@ -51,14 +51,12 @@ describe("scheduler.task-queue-service", () => {
 
   test("retries on failure and marks failed after max retries", async () => {
     await using tmp = await tmpdir({ git: true })
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(async () => {
-      throw new Error("boom")
-    })
+    const prompt = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("boom"))
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const session = await Session.create()
+        const session = await Session.create({})
         const id = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {
@@ -91,13 +89,13 @@ describe("scheduler.task-queue-service", () => {
   test("poll only processes tasks for current project", async () => {
     await using one = await tmpdir({ git: true })
     await using two = await tmpdir({ git: true })
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(async () => result())
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
     let id = ""
 
     await Instance.provide({
       directory: two.path,
       fn: async () => {
-        const session = await Session.create()
+        const session = await Session.create({})
         id = TaskQueueService.enqueuePrompt({
           sessionID: session.id,
           prompt: {

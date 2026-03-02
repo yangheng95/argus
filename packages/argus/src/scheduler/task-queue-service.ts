@@ -126,7 +126,7 @@ export namespace TaskQueueService {
 
   function claim(id: string) {
     const now = Date.now()
-    const update = Database.use((db) =>
+    return Database.use((db) =>
       db
         .update(TaskQueueTable)
         .set({
@@ -145,14 +145,7 @@ export namespace TaskQueueService {
               WHERE ${SessionTable.project_id} = ${Instance.project.id}
             )`,
         )
-        .run(),
-    )
-    if (update.changes === 0) return
-    return Database.use((db) =>
-      db
-        .select()
-        .from(TaskQueueTable)
-        .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.status, "running")))
+        .returning()
         .get(),
     )
   }
@@ -266,8 +259,16 @@ function promptSchema() {
   })
 }
 
+type PromptPart = z.infer<ReturnType<typeof promptSchema>>["parts"][number]
+type TextPart = Extract<PromptPart, { type: "text" }>
+
+function textPart(part: PromptPart): part is TextPart {
+  return part.type === "text"
+}
+
 function firstText(input: z.infer<ReturnType<typeof promptSchema>>) {
-  const text = input.parts.find((part) => part.type === "text" && part.text.trim().length > 0)?.text
-  if (!text) return "[task]"
-  return text
+  const part = input.parts.find(textPart)
+  if (!part) return "[task]"
+  if (part.text.trim().length === 0) return "[task]"
+  return part.text
 }
