@@ -127,6 +127,79 @@ export async function addCoordinateOverlay(
   return pipeline.png().toBuffer()
 }
 
+/**
+ * Draw a crosshair + circle marker on an image at the given position.
+ * Used to show the LLM where its last click actually landed.
+ */
+export async function addClickMarker(
+  imageBuffer: Buffer,
+  x: number,
+  y: number,
+  label?: string,
+): Promise<Buffer> {
+  const sharp = await import("sharp").then((m) => m.default)
+  const meta = await sharp(imageBuffer).metadata()
+  const width = meta.width!
+  const height = meta.height!
+
+  // Clamp to image bounds
+  const cx = Math.max(0, Math.min(x, width - 1))
+  const cy = Math.max(0, Math.min(y, height - 1))
+
+  const isHighDpi = Math.max(width, height) > 2500
+  const r = isHighDpi ? 20 : 14       // circle radius
+  const armLen = isHighDpi ? 36 : 24  // crosshair arm length
+  const sw = isHighDpi ? 3 : 2        // stroke width
+  const fontSize = isHighDpi ? 14 : 10
+  const charW = isHighDpi ? 9 : 6
+
+  const markerColor = "rgba(0,255,0,0.9)"    // bright green — distinct from red grid
+  const shadowColor = "rgba(0,0,0,0.6)"       // shadow for contrast
+  const labelBg = "rgba(0,0,0,0.7)"
+  const labelText = "rgba(0,255,0,1)"
+
+  const svgParts: string[] = []
+
+  // Shadow (offset by 1px for contrast)
+  svgParts.push(`<circle cx="${cx + 1}" cy="${cy + 1}" r="${r}" fill="none" stroke="${shadowColor}" stroke-width="${sw + 1}"/>`)
+  // Circle
+  svgParts.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  // Small dot at center
+  svgParts.push(`<circle cx="${cx}" cy="${cy}" r="${isHighDpi ? 3 : 2}" fill="${markerColor}"/>`)
+
+  // Crosshair arms (extending beyond circle)
+  const armStart = r + 4
+  const armEnd = r + armLen
+  // Up
+  if (cy - armEnd > 0) svgParts.push(`<line x1="${cx}" y1="${cy - armStart}" x2="${cx}" y2="${cy - armEnd}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  // Down
+  if (cy + armEnd < height) svgParts.push(`<line x1="${cx}" y1="${cy + armStart}" x2="${cx}" y2="${cy + armEnd}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  // Left
+  if (cx - armEnd > 0) svgParts.push(`<line x1="${cx - armStart}" y1="${cy}" x2="${cx - armEnd}" y2="${cy}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  // Right
+  if (cx + armEnd < width) svgParts.push(`<line x1="${cx + armStart}" y1="${cy}" x2="${cx + armEnd}" y2="${cy}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+
+  // Label
+  const text = label || `CLICK(${cx},${cy})`
+  const labelW = text.length * charW + 8
+  const labelH = fontSize + 8
+  const labelX = Math.min(cx + r + 6, width - labelW - 2)
+  const labelY = Math.max(cy - labelH - 4, 2)
+  svgParts.push(`<rect x="${labelX}" y="${labelY}" width="${labelW}" height="${labelH}" fill="${labelBg}" rx="3"/>`)
+  svgParts.push(`<text x="${labelX + 4}" y="${labelY + fontSize + 1}" font-size="${fontSize}" fill="${labelText}" font-family="monospace">${text}</text>`)
+
+  const svg = Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svgParts.join("")}</svg>`,
+  )
+
+  const pipeline = sharp(imageBuffer).composite([{ input: svg, top: 0, left: 0 }])
+  if (meta.format === "jpeg" || meta.format === "jpg") {
+    return pipeline.jpeg({ quality: 95, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer()
+  }
+  return pipeline.png().toBuffer()
+}
+
 export const Overlay = {
   add: addCoordinateOverlay,
+  addClickMarker,
 }
