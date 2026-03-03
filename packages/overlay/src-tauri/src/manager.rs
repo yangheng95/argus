@@ -7,6 +7,8 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 use crate::events;
 
