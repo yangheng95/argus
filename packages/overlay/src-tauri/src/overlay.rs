@@ -9,6 +9,9 @@ const OVERLAY_WIDTH: f64 = 420.0;
 const OVERLAY_HEIGHT: f64 = 180.0;
 // Focus ring center ratio in index.html (#focus top: var(--focus-y))
 const FOCUS_Y_RATIO: f64 = 0.74;
+// Confirm dialog logical dimensions (must match confirm.html card + padding)
+const CONFIRM_WIDTH: f64 = 460.0;
+const CONFIRM_HEIGHT: f64 = 220.0;
 
 #[derive(Deserialize, Serialize, Clone)]
 struct ShowPayload {
