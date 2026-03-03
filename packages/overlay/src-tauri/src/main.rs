@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod commands;
 mod events;
@@ -38,7 +38,9 @@ fn main() {
             let _ = tray::setup(&app.handle());
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
-            manager::show_console(&app.handle());
+            if std::env::var("OPENCORVUS_OVERLAY_SHOW_CONSOLE").ok().as_deref() == Some("1") {
+                manager::show_console(&app.handle());
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

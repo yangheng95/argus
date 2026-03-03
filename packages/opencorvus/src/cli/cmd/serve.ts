@@ -7,7 +7,7 @@ import { Project } from "../../project/project"
 import { Installation } from "../../installation"
 
 export const ServeCommand = cmd({
-  command: "serve",
+  command: ["serve", "$0"],
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "starts a headless opencorvus server",
   handler: async (args) => {
