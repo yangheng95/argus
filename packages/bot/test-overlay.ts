@@ -44,47 +44,53 @@ function send(event: Record<string, unknown>) {
 await new Promise(r => setTimeout(r, 3000))
 console.log("--- Overlay ready, sending test events ---")
 
-// Test 1: Click hint at center screen
-send({ type: "hint", x: 960, y: 540, action: "click", label: "Test click (960, 540)" })
-await new Promise(r => setTimeout(r, 2000))
+// Test 1: Click at center screen — popup should appear centered above this point
+send({ type: "hint", x: 960, y: 540, action: "click", label: "click (960, 540)" })
+await new Promise(r => setTimeout(r, 2500))
 
-// Test 2: Type hint
-send({ type: "hint", x: 960, y: 540, action: "type", label: "type: Hello World" })
-await new Promise(r => setTimeout(r, 2000))
+// Test 2: Click at top-left area
+send({ type: "hint", x: 300, y: 300, action: "click", label: "click (300, 300)" })
+await new Promise(r => setTimeout(r, 2500))
 
-// Test 3: Key hint
-send({ type: "hint", x: 960, y: 540, action: "key", label: "key: Enter" })
-await new Promise(r => setTimeout(r, 2000))
+// Test 3: Type hint — should appear at same location (no coordinate change)
+send({ type: "hint", x: 300, y: 300, action: "type", label: "type: Hello World" })
+await new Promise(r => setTimeout(r, 2500))
 
-// Test 4: Click done
-send({ type: "hint", x: 800, y: 400, action: "click", label: "done click", status: "done" })
-await new Promise(r => setTimeout(r, 2000))
+// Test 4: Key hint at bottom-right
+send({ type: "hint", x: 1500, y: 800, action: "key", label: "key: Enter" })
+await new Promise(r => setTimeout(r, 2500))
 
-// Test 5: Confirm dialog
-send({
-  type: "confirm",
-  id: "test-1",
-  x: 960,
-  y: 540,
-  title: "Test Confirmation",
-  message: "This is a test confirm dialog. Click OK or Cancel.",
-  confirm: "OK",
-  cancel: "Cancel",
-  timeout_ms: 5000,
-})
-await new Promise(r => setTimeout(r, 6000))
+// Test 5: Scroll hint
+send({ type: "hint", x: 960, y: 540, action: "scroll", label: "scroll down 3" })
+await new Promise(r => setTimeout(r, 2500))
 
-// Test 6: Window highlight
+// Test 6: Done status — green accent
+send({ type: "hint", x: 800, y: 400, action: "click", label: "done click (800, 400)", status: "done" })
+await new Promise(r => setTimeout(r, 2500))
+
+// Test 7: Window highlight — should frame the specified rectangle
 send({
   type: "window-highlight",
   x: 200,
-  y: 200,
-  width: 800,
-  height: 600,
+  y: 150,
+  width: 900,
+  height: 650,
   label: "Target Window",
   duration_ms: 3000,
 })
 await new Promise(r => setTimeout(r, 4000))
+
+// Test 8: Smaller window highlight
+send({
+  type: "window-highlight",
+  x: 500,
+  y: 300,
+  width: 400,
+  height: 300,
+  label: "Small Dialog",
+  duration_ms: 2000,
+})
+await new Promise(r => setTimeout(r, 3000))
 
 console.log("--- All tests done, closing overlay ---")
 proc.stdin!.end()
