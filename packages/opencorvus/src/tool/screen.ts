@@ -137,6 +137,17 @@ export const ScreenTool = Tool.define("screen", {
       metadata: { action: params.action },
     })
 
+    // Coerce LLM string values to expected types (models often pass numbers/booleans as strings)
+    if ("wait_for_change" in params) {
+      const v = params.wait_for_change as any
+      if (v === "true") (params as any).wait_for_change = true
+      else if (v === "false") (params as any).wait_for_change = false
+    }
+    if ("window_id" in params) {
+      const v = params.window_id as any
+      if (typeof v === "string" && /^\d+$/.test(v.trim())) (params as any).window_id = Number(v)
+    }
+
     switch (params.action) {
       case "screenshot": {
         GuiState.activate()
