@@ -149,15 +149,6 @@ export namespace LLM {
 
     const tools = await resolveTools(input)
 
-    // DEBUG: Log tool names being sent to model
-    l.info("tools after resolveTools", {
-      toolNames: Object.keys(tools),
-      toolCount: Object.keys(tools).length,
-      toolChoice: input.toolChoice,
-      modelId: input.model.api.id,
-      providerId: input.model.providerID,
-    })
-
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
     // Add a dummy tool that is never called to satisfy this validation.

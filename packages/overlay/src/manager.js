@@ -35,6 +35,64 @@ function readLines(input) {
     .filter((item) => item.length > 0)
 }
 
+function readArgs(input) {
+  const text = (input || "").trim()
+  if (!text) return []
+
+  const out = []
+  let item = ""
+  let quote = ""
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]
+    if (quote) {
+      if (char === quote) {
+        quote = ""
+        continue
+      }
+      if (char === "\\" && i + 1 < text.length) {
+        const next = text[i + 1]
+        if (next === quote || next === "\\") {
+          item += next
+          i += 1
+          continue
+        }
+      }
+      item += char
+      continue
+    }
+
+    if (char === "\"" || char === "'") {
+      quote = char
+      continue
+    }
+
+    if (/\s/.test(char)) {
+      if (item) {
+        out.push(item)
+        item = ""
+      }
+      continue
+    }
+
+    item += char
+  }
+
+  if (item) out.push(item)
+  return out
+}
+
+function quoteArg(input) {
+  if (!input) return "\"\""
+  if (!/[\s"'\\]/.test(input)) return input
+  return `"${input.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`
+}
+
+function argsToText(list) {
+  if (!Array.isArray(list)) return ""
+  return list.map((item) => quoteArg(String(item))).join(" ")
+}
+
 function envToText(env) {
   if (!Array.isArray(env)) return ""
   return env.map((item) => `${item.key ?? ""}=${item.value ?? ""}`).join("\n")
@@ -57,8 +115,8 @@ function fillConfig(config) {
   if (!config) return
   els.commandInput.value = config.command ?? "opencorvus"
   els.cwdInput.value = config.cwd ?? ""
-  els.serveArgsInput.value = Array.isArray(config.serve_args) ? config.serve_args.join("\n") : ""
-  els.runArgsInput.value = Array.isArray(config.run_args) ? config.run_args.join("\n") : ""
+  els.serveArgsInput.value = argsToText(config.serve_args)
+  els.runArgsInput.value = argsToText(config.run_args)
   els.envInput.value = envToText(config.env)
   state.configLoaded = true
 }
@@ -67,8 +125,8 @@ function readConfig() {
   return {
     command: (els.commandInput.value || "opencorvus").trim(),
     cwd: els.cwdInput.value.trim(),
-    serve_args: readLines(els.serveArgsInput.value),
-    run_args: readLines(els.runArgsInput.value),
+    serve_args: readArgs(els.serveArgsInput.value),
+    run_args: readArgs(els.runArgsInput.value),
     env: textToEnv(els.envInput.value),
   }
 }
