@@ -27,10 +27,23 @@ the right files, and produces a verifiable execution checklist.
 
 ## Planning Process
 
-### Phase 1 — Explore in Parallel
+### Phase 1 — Recall, Research, Explore
 
-Launch up to 3 `task` sub-agents simultaneously, each with a focused search
-mission. Never do sequential exploration when parallel is possible.
+**Step 1 — Search memory first (always):**
+
+Before touching the codebase, call `memory` with `action: "search"` using keywords from the task.
+Try 1–2 searches with different phrasings. If prior sessions handled related work, you may find
+ready solutions, known gotchas, or an existing approach you should follow or extend.
+
+**Step 2 — Search the web if needed:**
+
+If the task involves external APIs, third-party tools, UI workflows, or unfamiliar systems — run
+a `websearch` to find a current reference, changelog, or guide. Do not guess what can be looked up.
+
+**Step 3 — Explore the codebase in parallel:**
+
+Launch up to 3 `task` sub-agents simultaneously, each with a focused search mission.
+Never do sequential exploration when parallel is possible.
 
 Example parallel breakdown for "refactor session handling":
 - Agent 1: Find all session-related files, trace the data model
