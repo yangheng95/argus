@@ -13,14 +13,11 @@ import { Snapshot } from "@/snapshot"
 import { Log } from "../../util/log"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { SessionProxyMiddleware } from "../../control-plane/session-proxy-middleware"
-import { SessionInteractionRoutes } from "./session-interaction"
 
 const log = Log.create({ service: "server" })
 
-export const SessionRoutes = lazy(() =>
+export const SessionManagementRoutes = lazy(() =>
   new Hono()
-    .use(SessionProxyMiddleware)
     .get(
       "/",
       describeRoute({
@@ -540,5 +537,4 @@ export const SessionRoutes = lazy(() =>
         return c.json(true)
       },
     )
-    .route("/", SessionInteractionRoutes())
 )
