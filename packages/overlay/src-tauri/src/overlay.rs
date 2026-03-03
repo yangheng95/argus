@@ -4,6 +4,12 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 use crate::events;
 
+// Overlay window logical dimensions (must match tauri.conf.json)
+const OVERLAY_WIDTH: f64 = 380.0;
+const OVERLAY_HEIGHT: f64 = 160.0;
+// Focus ring center is at 75% of window height
+const FOCUS_Y_RATIO: f64 = 0.75;
+
 #[derive(Deserialize, Serialize, Clone)]
 struct ShowPayload {
     x: i32,
@@ -62,7 +68,7 @@ enum InboundEvent {
 }
 
 pub fn position_window(window: WebviewWindow, x: i32, y: i32) {
-    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+    let _ = window.set_position(tauri::LogicalPosition::new(x as f64, y as f64));
     let _ = window.show();
 }
 
@@ -119,21 +125,20 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                 Ok(l) if !l.trim().is_empty() => {
                     if let Ok(event) = serde_json::from_str::<InboundEvent>(&l) {
                         match event {
-                    InboundEvent::Hint {
-                        x,
-                        y,
+                            InboundEvent::Hint {
+                                x,
+                                y,
                                 action,
                                 label,
                                 status,
                             } => {
-                                // Position overlay so focus ring center (at 75% height) aligns with target
+                                // All coordinates are logical (DPI-aware) from OpenCorvus.
+                                // Position overlay so focus ring center aligns with target.
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_OVERLAY) {
-                                    if let Ok(size) = window.outer_size() {
-                                        let win_x = x - (size.width as i32) / 2;
-                                        let win_y = y - (size.height as i32) * 3 / 4;
-                                        let _ = window.set_position(tauri::PhysicalPosition::new(win_x, win_y));
-                                        let _ = window.show();
-                                    }
+                                    let win_x = x as f64 - OVERLAY_WIDTH / 2.0;
+                                    let win_y = y as f64 - OVERLAY_HEIGHT * FOCUS_Y_RATIO;
+                                    let _ = window.set_position(tauri::LogicalPosition::new(win_x, win_y));
+                                    let _ = window.show();
                                 }
                                 let _ = handle.emit(
                                     events::EVT_SHOW_OVERLAY,
@@ -156,6 +161,14 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 cancel,
                                 timeout_ms,
                             } => {
+                                if let Some(window) = handle.get_webview_window("confirm") {
+                                    let _ = window.set_position(tauri::LogicalPosition::new(
+                                        x as f64 - 230.0, // center 460px confirm window
+                                        y as f64 - 110.0,
+                                    ));
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
                                 let _ = handle.emit(
                                     events::EVT_SHOW_CONFIRM,
                                     ConfirmPayload {
@@ -178,11 +191,12 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 label,
                                 duration_ms,
                             } => {
+                                // Coordinates are logical (DPI-aware) — use LogicalSize/LogicalPosition
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_HIGHLIGHT) {
-                                    let w = width.max(40).min(10000);
-                                    let h = height.max(40).min(10000);
-                                    let _ = window.set_size(tauri::PhysicalSize::new(w, h));
-                                    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+                                    let w = (width.max(40).min(10000)) as f64;
+                                    let h = (height.max(40).min(10000)) as f64;
+                                    let _ = window.set_size(tauri::LogicalSize::new(w, h));
+                                    let _ = window.set_position(tauri::LogicalPosition::new(x as f64, y as f64));
                                     let _ = window.show();
                                     let _ = handle.emit_to(
                                         events::WINDOW_HIGHLIGHT,
