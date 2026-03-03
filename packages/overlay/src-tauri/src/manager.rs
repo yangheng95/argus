@@ -160,6 +160,11 @@ fn build_command(config: &ManagerConfig, args: &[String]) -> Command {
     for item in &config.env {
         cmd.env(&item.key, &item.value);
     }
+    #[cfg(target_os = "windows")]
+    {
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd
 }
 
