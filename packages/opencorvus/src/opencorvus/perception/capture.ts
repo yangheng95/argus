@@ -262,10 +262,12 @@ export namespace Capture {
     const rawBuffer = Buffer.from(await image.toRaw())
     await Filesystem.write(filePath, buffer, undefined)
 
+    // Monitor.width()/height() return PHYSICAL pixels; derive logical via scaleFactor.
+    const scale = target.scaleFactor()
     const logicalX = target.x()
     const logicalY = target.y()
-    const logicalWidth = target.width()
-    const logicalHeight = target.height()
+    const logicalWidth = scale > 0 ? Math.round(target.width() / scale) : target.width()
+    const logicalHeight = scale > 0 ? Math.round(target.height() / scale) : target.height()
     const bounds = scaleWindowBounds({
       logicalX,
       logicalY,
@@ -279,6 +281,9 @@ export namespace Capture {
       path: filePath,
       width: image.width,
       height: image.height,
+      physicalWidth: target.width(),
+      physicalHeight: target.height(),
+      scale,
       monitor: {
         id: target.id(),
         name: target.name(),
@@ -287,7 +292,7 @@ export namespace Capture {
         width: logicalWidth,
         height: logicalHeight,
         isPrimary: target.isPrimary(),
-        scaleFactor: target.scaleFactor(),
+        scaleFactor: scale,
       },
       source,
       focusedWindow: focused
