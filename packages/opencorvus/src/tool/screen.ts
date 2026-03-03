@@ -174,20 +174,23 @@ export const ScreenTool = Tool.define("screen", {
         }
 
         if (!currentBinding && !monitorBinding) {
-          try {
-            // After a focus change, wait briefly for the new window to appear
-            if (hadFocusChange) {
-              await new Promise((r) => setTimeout(r, 500))
-            }
-            const windows = await WindowManager.listWindows()
-            const target = pickWindow(windows)
-            if (target) {
-              // Quiet bind: don't steal focus, just capture
-              await WindowManager.bindByIdQuiet(target.id, target.title)
-              autoBound = true
-              currentBinding = await WindowManager.getBinding()
-            }
-          } catch {}
+          if (hadFocusChange) {
+            // After a focus change, skip auto-bind entirely.
+            // Capture the full primary monitor so the LLM sees everything
+            // and can list_windows + bind_window to the correct target.
+            log.info("focus change: skipping auto-bind, will capture fullscreen")
+          } else {
+            try {
+              const windows = await WindowManager.listWindows()
+              const target = pickWindow(windows)
+              if (target) {
+                // Quiet bind: don't steal focus, just capture
+                await WindowManager.bindByIdQuiet(target.id, target.title)
+                autoBound = true
+                currentBinding = await WindowManager.getBinding()
+              }
+            } catch {}
+          }
         }
 
         let result = await Capture.take({ mode: "auto" })
