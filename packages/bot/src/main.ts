@@ -3,6 +3,15 @@ import { SlackAdapter } from "./adapters/slack"
 import { TelegramAdapter } from "./adapters/telegram"
 import { DiscordAdapter } from "./adapters/discord"
 import { FeishuAdapter } from "./adapters/feishu"
+import { WhatsappAdapter } from "./adapters/whatsapp"
+import { GoogleChatAdapter } from "./adapters/googlechat"
+import { MSTeamsAdapter } from "./adapters/msteams"
+import { LineAdapter } from "./adapters/line"
+import { MatrixAdapter } from "./adapters/matrix"
+import { MattermostAdapter } from "./adapters/mattermost"
+import { SignalAdapter } from "./adapters/signal"
+import { WeComAdapter } from "./adapters/wecom"
+import { DingTalkAdapter } from "./adapters/dingtalk"
 import { STTPipeline } from "./stt/pipeline"
 import { GroqProvider } from "./stt/providers/groq"
 import { OpenAIWhisperProvider } from "./stt/providers/openai-whisper"
@@ -145,6 +154,66 @@ const adapters = registerAdapters(bot, process.env, {
     port: process.env.FEISHU_WEBHOOK_PORT ? Number(process.env.FEISHU_WEBHOOK_PORT) : undefined,
     path: process.env.FEISHU_WEBHOOK_PATH,
     verificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
+  }),
+  whatsapp: (opts) => new WhatsappAdapter({
+    token: opts.token,
+    numberId: opts.numberId,
+    host: process.env.WHATSAPP_WEBHOOK_HOST,
+    port: process.env.WHATSAPP_WEBHOOK_PORT ? Number(process.env.WHATSAPP_WEBHOOK_PORT) : undefined,
+    path: process.env.WHATSAPP_WEBHOOK_PATH,
+    verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
+  }),
+  googlechat: (opts) => new GoogleChatAdapter({
+    serviceAccount: opts.serviceAccount,
+    host: process.env.GOOGLECHAT_WEBHOOK_HOST,
+    port: process.env.GOOGLECHAT_WEBHOOK_PORT ? Number(process.env.GOOGLECHAT_WEBHOOK_PORT) : undefined,
+    path: process.env.GOOGLECHAT_WEBHOOK_PATH,
+  }),
+  msteams: (opts) => new MSTeamsAdapter({
+    appId: opts.appId,
+    appSecret: opts.appSecret,
+    host: process.env.MSTEAMS_WEBHOOK_HOST,
+    port: process.env.MSTEAMS_WEBHOOK_PORT ? Number(process.env.MSTEAMS_WEBHOOK_PORT) : undefined,
+    path: process.env.MSTEAMS_WEBHOOK_PATH,
+  }),
+  line: (opts) => new LineAdapter({
+    token: opts.token,
+    host: process.env.LINE_WEBHOOK_HOST,
+    port: process.env.LINE_WEBHOOK_PORT ? Number(process.env.LINE_WEBHOOK_PORT) : undefined,
+    path: process.env.LINE_WEBHOOK_PATH,
+    secret: process.env.LINE_CHANNEL_SECRET,
+  }),
+  matrix: (opts) => new MatrixAdapter({
+    homeserver: opts.homeserver,
+    token: opts.token,
+    since: process.env.MATRIX_SINCE_TOKEN,
+  }),
+  mattermost: (opts) => new MattermostAdapter({
+    url: opts.url,
+    token: opts.token,
+    host: process.env.MATTERMOST_WEBHOOK_HOST,
+    port: process.env.MATTERMOST_WEBHOOK_PORT ? Number(process.env.MATTERMOST_WEBHOOK_PORT) : undefined,
+    path: process.env.MATTERMOST_WEBHOOK_PATH,
+  }),
+  signal: (opts) => new SignalAdapter({
+    service: opts.service,
+    account: opts.account,
+  }),
+  wecom: (opts) => new WeComAdapter({
+    corpId: opts.corpId,
+    secret: opts.secret,
+    agentId: opts.agentId,
+    host: process.env.WECOM_WEBHOOK_HOST,
+    port: process.env.WECOM_WEBHOOK_PORT ? Number(process.env.WECOM_WEBHOOK_PORT) : undefined,
+    path: process.env.WECOM_WEBHOOK_PATH,
+  }),
+  dingtalk: (opts) => new DingTalkAdapter({
+    appKey: opts.appKey,
+    appSecret: opts.appSecret,
+    host: process.env.DINGTALK_WEBHOOK_HOST,
+    port: process.env.DINGTALK_WEBHOOK_PORT ? Number(process.env.DINGTALK_WEBHOOK_PORT) : undefined,
+    path: process.env.DINGTALK_WEBHOOK_PATH,
+    defaultWebhook: process.env.DINGTALK_DEFAULT_WEBHOOK,
   }),
 })
 for (const warn of adapters.warns) {
