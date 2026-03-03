@@ -107,6 +107,8 @@ describe("tool.screen monitor flow", () => {
         const tool = await ScreenTool.init()
         const result = await tool.execute({ action: "list_windows" }, ctx)
         expect(result.output).toContain("monitor: 2")
+        expect(result.output).toContain("Selectable targets")
+        expect(result.metadata.candidates[0].window_id).toBe(7)
       },
     })
   })

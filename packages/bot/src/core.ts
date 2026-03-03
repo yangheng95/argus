@@ -19,6 +19,7 @@ type ToolInput = {
   name?: string
   action?: string
   title?: string
+  window_id?: number
   key?: string
   x?: number
   y?: number
@@ -216,15 +217,16 @@ export class BotCore {
       "## Window discovery and binding (CRITICAL)",
       "Single-monitor flow: start with `screen.screenshot`; you often do NOT need `screen.list_windows`.",
       "Use `screen.bind_window` when app-level precision is needed (window-relative coordinates).",
-      "- Window search uses **case-insensitive substring matching** on title and app name.",
-      "- Use `screen.list_windows` only when multiple windows are possible, title is unknown, or bind_window fails.",
+      "- Prefer `screen.list_windows` + `window_id` for deterministic window selection.",
+      "- `screen.bind_window` also supports title/app substring fallback (case-insensitive).",
+      "- Use `screen.list_windows` when multiple windows are possible, or bind_window fails.",
       "- After binding, take a `screenshot` to confirm you see the correct window.",
       "",
       "### Claude Code window binding workflow:",
       "1. `bash('start \"Claude Code\" cmd /c \"claude\"')` to launch",
       "2. `input.wait` with ms=3000 to let it start",
-      "3. Try `screen.bind_window` with title containing 'claude' or 'Claude Code'",
-      "4. If bind fails or wrong window is selected, run `screen.list_windows` and re-bind using exact title",
+      "3. Run `screen.list_windows`, pick the Claude window `window_id`, then call `screen.bind_window` with that id",
+      "4. If needed, fallback to title matching with 'claude' or 'Claude Code'",
       "5. `screenshot` to verify",
       "6. `input.type` to enter commands, then `input.key` with key='Return' to submit",
       "",
@@ -376,7 +378,10 @@ export class BotCore {
         case "screen": {
           const action = data.action
           if (action === "bind_window" && !debug) return "`screen.bind_window`"
-          if (action === "bind_window") return `\`screen.bind_window: ${data.title ?? "?"}\``
+          if (action === "bind_window") {
+            const target = data.title ?? (typeof data.window_id === "number" ? `#${data.window_id}` : "?")
+            return `\`screen.bind_window: ${target}\``
+          }
           if (action === "list_windows") return "`screen.list_windows`"
           if (action === "screenshot") return "`screen.screenshot`"
           if (action) return `\`screen.${action}\``

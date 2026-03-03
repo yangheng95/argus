@@ -29,6 +29,7 @@ describe("bot core tool status", () => {
 
     expect(status("input", { action: "click", x: 120, y: 80, button: "left" })).toBe("`input.click: (120, 80) left`")
     expect(status("screen", { action: "bind_window", title: "OpenCorvus" })).toBe("`screen.bind_window: OpenCorvus`")
+    expect(status("screen", { action: "bind_window", window_id: 23 })).toBe("`screen.bind_window: #23`")
     expect(status("bash", { command: "echo secret" })).toBe("`$ echo secret`")
   })
 })

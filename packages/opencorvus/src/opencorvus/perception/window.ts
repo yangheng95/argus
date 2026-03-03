@@ -109,21 +109,24 @@ export namespace WindowManager {
 
   // Lazy-loaded Bun FFI bindings for Win32 window management.
   // Direct FFI is ~100x faster than the PowerShell+C# compilation approach.
-  let _user32: ReturnType<typeof import("bun:ffi")["dlopen"]> | null = null
-  function getUser32() {
-    if (_user32) return _user32
+  let _win32ffi: { user32: any; kernel32: any } | null = null
+  function getWin32() {
+    if (_win32ffi) return _win32ffi
     const { dlopen, FFIType } = require("bun:ffi")
-    _user32 = dlopen("user32.dll", {
+    const user32 = dlopen("user32.dll", {
       SetForegroundWindow: { args: [FFIType.ptr], returns: FFIType.bool },
       BringWindowToTop: { args: [FFIType.ptr], returns: FFIType.bool },
       ShowWindow: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.bool },
       IsIconic: { args: [FFIType.ptr], returns: FFIType.bool },
       GetForegroundWindow: { args: [], returns: FFIType.ptr },
       GetWindowThreadProcessId: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
-      GetCurrentThreadId: { args: [], returns: FFIType.i32 },
       AttachThreadInput: { args: [FFIType.i32, FFIType.i32, FFIType.bool], returns: FFIType.bool },
     })
-    return _user32
+    const kernel32 = dlopen("kernel32.dll", {
+      GetCurrentThreadId: { args: [], returns: FFIType.i32 },
+    })
+    _win32ffi = { user32, kernel32 }
+    return _win32ffi
   }
 
   /**
@@ -134,23 +137,24 @@ export namespace WindowManager {
   export async function focusWindow(windowId: number, appName?: string): Promise<boolean> {
     try {
       if (process.platform === "win32") {
-        const u32 = getUser32()
+        const { user32, kernel32 } = getWin32()
         const { ptr: ptrFn } = require("bun:ffi")
         const hwnd = ptrFn(windowId)
         // AttachThreadInput to bypass Windows foreground-lock restriction
-        const fg = u32.symbols.GetForegroundWindow()
+        const fg = user32.symbols.GetForegroundWindow()
         const pidBuf = new Int32Array(1)
-        const fgTid = u32.symbols.GetWindowThreadProcessId(fg, pidBuf)
-        const myTid = u32.symbols.GetCurrentThreadId()
-        u32.symbols.AttachThreadInput(myTid, fgTid, true)
+        const fgTid = user32.symbols.GetWindowThreadProcessId(fg, pidBuf)
+        const myTid = kernel32.symbols.GetCurrentThreadId()
+        user32.symbols.AttachThreadInput(myTid, fgTid, true)
         // Restore if minimized (SW_RESTORE = 9)
-        if (u32.symbols.IsIconic(hwnd)) {
-          u32.symbols.ShowWindow(hwnd, 9)
+        if (user32.symbols.IsIconic(hwnd)) {
+          user32.symbols.ShowWindow(hwnd, 9)
         }
-        u32.symbols.BringWindowToTop(hwnd)
-        u32.symbols.SetForegroundWindow(hwnd)
-        u32.symbols.AttachThreadInput(myTid, fgTid, false)
-        return true
+        user32.symbols.BringWindowToTop(hwnd)
+        const result = user32.symbols.SetForegroundWindow(hwnd)
+        user32.symbols.AttachThreadInput(myTid, fgTid, false)
+        log.info("focusWindow win32 ffi", { windowId, result, fgTid, myTid })
+        return result
       }
 
       if (process.platform === "darwin") {
