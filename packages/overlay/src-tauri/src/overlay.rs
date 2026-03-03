@@ -196,8 +196,10 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                             } => {
                                 // Coordinates are logical (DPI-aware) — use LogicalSize/LogicalPosition
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_HIGHLIGHT) {
-                                    let w = (width.max(40).min(10000)) as f64;
-                                    let h = (height.max(40).min(10000)) as f64;
+                                    const HIGHLIGHT_MIN_SIZE: u32 = 40;
+                                    const HIGHLIGHT_MAX_SIZE: u32 = 10000;
+                                    let w = (width.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
+                                    let h = (height.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
                                     let _ = window.set_size(tauri::LogicalSize::new(w, h));
                                     let _ = window.set_position(tauri::LogicalPosition::new(x as f64, y as f64));
                                     let _ = window.show();
