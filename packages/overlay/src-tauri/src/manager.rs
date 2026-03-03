@@ -72,6 +72,8 @@ impl Default for ManagerConfig {
             command: "opencorvus".into(),
             cwd: String::new(),
             env: vec![],
+            serve_args: DEFAULT_SERVE_ARGS.iter().map(|s| (*s).to_string()).collect(),
+            run_args: DEFAULT_RUN_ARGS.iter().map(|s| (*s).to_string()).collect(),
         }
     }
 }
