@@ -10,6 +10,7 @@
   --surface-0: #090d13;
   --surface-1: #111820;
   --surface-2: #1a2430;
+  --surface-dark-rgb: 10, 14, 26;
   --glass: rgba(12, 18, 27, 0.76);
   --glass-border: rgba(255, 255, 255, 0.11);
   --glass-border-hover: rgba(255, 255, 255, 0.18);
