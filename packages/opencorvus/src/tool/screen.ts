@@ -289,21 +289,12 @@ export const ScreenTool = Tool.define("screen", {
           consecutiveNoChange: GuiState.get().repetition.consecutiveNoChange,
         })
 
-        const hasScaleCompensation = !!result.windowBounds && (
-          Math.abs((result.windowBounds.scaleX ?? 1) - 1) > 0.01 ||
-          Math.abs((result.windowBounds.scaleY ?? 1) - 1) > 0.01
-        )
-        const scaleInfo = hasScaleCompensation
-          ? ` DPI scale compensation active (${(result.windowBounds?.scaleX ?? 1).toFixed(2)}x, ${(result.windowBounds?.scaleY ?? 1).toFixed(2)}x).`
-          : ""
+        // Compact coordinate info — keep essential data only
         const coordInfo = result.scope === "window" && result.windowBounds
-          ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
+          ? `Window ${result.windowBounds.width}x${result.windowBounds.height}.`
           : result.windowBounds
-            ? `Coordinates are relative to monitor "${result.monitor?.name ?? result.monitor?.id ?? "unknown"}" (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
-            : "Coordinates are screen-absolute."
-
-        const platformName = process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : "Windows"
-        const shortcutHint = process.platform === "darwin" ? "Use Cmd for shortcuts (Cmd+C, Cmd+V, etc.)." : "Use Ctrl for shortcuts (Ctrl+C, Ctrl+V, etc.)."
+            ? `Monitor ${result.windowBounds.width}x${result.windowBounds.height}.`
+            : ""
 
         if (isDuplicate) {
           GuiState.recordAction({
