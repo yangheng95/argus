@@ -33,8 +33,8 @@ Do NOT guess or improvise complex workflows from memory. Real-world UIs change f
 # Desktop Interaction (screen + input tools)
 
 - **single-monitor default**: start with screenshot; on one screen you usually do NOT need list_windows.
-- **list_windows only when needed**: use it when multiple windows are possible, title is unknown, or bind_window fails.
-- **bind_window** to focus on a specific app — coordinates become window-relative, screenshots capture only that window.
+- **list_windows for target selection**: when windows are ambiguous, run it first and choose a `window_id` candidate.
+- **bind_window** by `window_id` for deterministic selection; use title matching only as fallback.
 - **Screenshot before acting** to observe current state. Never interact blindly.
 - **Anchor pointer actions**: Before any click/drag/move, ensure you have a fresh screenshot anchor from `screen.screenshot`. If pointer action is blocked, take a screenshot and retry.
 - **Screenshot after acting** to verify results.

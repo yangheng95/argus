@@ -1,8 +1,5 @@
 import { Log } from "../../util/log"
 import { Instance } from "../../project/instance"
-import os from "os"
-import path from "path"
-import { writeFile, unlink } from "fs/promises"
 
 const windowState = Instance.state((): { binding: WindowManager.WindowBinding | null; lastTaskEpoch: number } => ({
   binding: null,
