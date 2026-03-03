@@ -116,7 +116,7 @@ If a desktop task matches an available skill (e.g., `desktop`), load it for deta
 
 ### Cleanup commands
 
-- Remove Argus build outputs:
+- Remove GUI agent build outputs:
   - `cmd /c "if exist packages\\argus\\dist rmdir /s /q packages\\argus\\dist"`
 - Remove Overlay build outputs:
   - `cmd /c "if exist packages\\overlay\\src-tauri\\target rmdir /s /q packages\\overlay\\src-tauri\\target"`
