@@ -99,6 +99,19 @@ fn stamp() -> u64 {
 }
 
 fn norm_config(config: ManagerConfig) -> ManagerConfig {
+    let serve_args: Vec<String> = config
+        .serve_args
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let run_args: Vec<String> = config
+        .run_args
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
     ManagerConfig {
         command: {
             let item = config.command.trim();
@@ -118,8 +131,16 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
             })
             .filter(|item| !item.key.is_empty())
             .collect(),
-        serve_args: config.serve_args.into_iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
-        run_args: config.run_args.into_iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+        serve_args: if serve_args.is_empty() {
+            vec!["serve".into()]
+        } else {
+            serve_args
+        },
+        run_args: if run_args.is_empty() {
+            vec!["run".into(), "--continue".into()]
+        } else {
+            run_args
+        },
     }
 }
 

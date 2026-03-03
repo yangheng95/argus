@@ -19,6 +19,8 @@ const els = {
   clearLogsBtn: document.getElementById("clearLogsBtn"),
   saveBtn: document.getElementById("saveBtn"),
   commandInput: document.getElementById("commandInput"),
+  serveArgsInput: document.getElementById("serveArgsInput"),
+  runArgsInput: document.getElementById("runArgsInput"),
   serveFixedInput: document.getElementById("serveFixedInput"),
   runFixedInput: document.getElementById("runFixedInput"),
   servePreviewInput: document.getElementById("servePreviewInput"),
@@ -31,6 +33,8 @@ const state = {
   logs: [],
   logPath: "",
   command: "opencorvus",
+  serveArgs: [...FIXED_SERVE_ARGS],
+  runArgs: [...FIXED_RUN_ARGS],
   configLoaded: false,
   sending: false,
 }
@@ -47,6 +51,22 @@ function envToText(env) {
   return env.map((item) => `${item.key ?? ""}=${item.value ?? ""}`).join("\n")
 }
 
+function argsToText(args) {
+  if (!Array.isArray(args)) return ""
+  return args
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item.length > 0)
+    .join("\n")
+}
+
+function normArgs(args, fallback) {
+  const list = Array.isArray(args)
+    ? args.map((item) => String(item ?? "").trim()).filter((item) => item.length > 0)
+    : readLines(String(args ?? ""))
+  if (list.length > 0) return list
+  return [...fallback]
+}
+
 function quote(input) {
   if (!input) return "\"\""
   if (!/[\s"'\\]/.test(input)) return input
@@ -59,11 +79,15 @@ function cmd(command, args) {
 
 function renderCommandPreview() {
   const command = (els.commandInput?.value ?? state.command ?? "opencorvus").trim() || "opencorvus"
+  const serveArgs = normArgs(readLines(els.serveArgsInput?.value ?? ""), FIXED_SERVE_ARGS)
+  const runArgs = normArgs(readLines(els.runArgsInput?.value ?? ""), FIXED_RUN_ARGS)
   state.command = command
-  if (els.serveFixedInput) els.serveFixedInput.value = FIXED_SERVE_ARGS.join(" ")
-  if (els.runFixedInput) els.runFixedInput.value = `${FIXED_RUN_ARGS.join(" ")} "<prompt>"`
-  if (els.servePreviewInput) els.servePreviewInput.value = cmd(command, FIXED_SERVE_ARGS)
-  if (els.runPreviewInput) els.runPreviewInput.value = `${cmd(command, FIXED_RUN_ARGS)} "<prompt>"`
+  state.serveArgs = serveArgs
+  state.runArgs = runArgs
+  if (els.serveFixedInput) els.serveFixedInput.value = serveArgs.join(" ")
+  if (els.runFixedInput) els.runFixedInput.value = `${runArgs.join(" ")} "<prompt>"`
+  if (els.servePreviewInput) els.servePreviewInput.value = cmd(command, serveArgs)
+  if (els.runPreviewInput) els.runPreviewInput.value = `${cmd(command, runArgs)} "<prompt>"`
 }
 
 function textToEnv(input) {
@@ -82,7 +106,11 @@ function textToEnv(input) {
 function fillConfig(config) {
   if (!config) return
   state.command = (config.command ?? "opencorvus").trim() || "opencorvus"
+  state.serveArgs = normArgs(config.serve_args, FIXED_SERVE_ARGS)
+  state.runArgs = normArgs(config.run_args, FIXED_RUN_ARGS)
   if (els.commandInput) els.commandInput.value = state.command
+  if (els.serveArgsInput) els.serveArgsInput.value = argsToText(state.serveArgs)
+  if (els.runArgsInput) els.runArgsInput.value = argsToText(state.runArgs)
   els.cwdInput.value = config.cwd ?? ""
   els.envInput.value = envToText(config.env)
   renderCommandPreview()
@@ -91,9 +119,15 @@ function fillConfig(config) {
 
 function readConfig() {
   const command = (els.commandInput?.value ?? state.command ?? "opencorvus").trim() || "opencorvus"
+  const serveArgs = normArgs(readLines(els.serveArgsInput?.value ?? ""), FIXED_SERVE_ARGS)
+  const runArgs = normArgs(readLines(els.runArgsInput?.value ?? ""), FIXED_RUN_ARGS)
   state.command = command
+  state.serveArgs = serveArgs
+  state.runArgs = runArgs
   return {
     command,
+    serve_args: serveArgs,
+    run_args: runArgs,
     cwd: els.cwdInput.value.trim(),
     env: textToEnv(els.envInput.value),
   }
@@ -205,6 +239,12 @@ async function sendPrompt(prompt) {
 
 function bindEvents() {
   els.commandInput?.addEventListener("input", () => {
+    renderCommandPreview()
+  })
+  els.serveArgsInput?.addEventListener("input", () => {
+    renderCommandPreview()
+  })
+  els.runArgsInput?.addEventListener("input", () => {
     renderCommandPreview()
   })
 

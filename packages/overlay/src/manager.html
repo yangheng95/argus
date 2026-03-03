@@ -443,17 +443,26 @@
         <section class="card">
           <div class="card-head">Bot Config</div>
           <div class="cfg">
-            <p class="cfg-hint">Start and prompt args are fixed by startup binding. Command path, working directory, and env remain configurable.</p>
+            <p class="cfg-hint">Start and prompt share one command binary. Configure args below (one argument per line) so both flows stay aligned.</p>
             <label>Command
               <input id="commandInput" placeholder='opencorvus or C:\path\to\opencorvus.exe' />
             </label>
             <details>
-              <summary>Command Preview (fixed args)</summary>
-              <label>Fixed Start Args
-                <input id="serveFixedInput" value="serve" readonly />
+              <summary>Binding Args</summary>
+              <label>Start Args (one per line)
+                <textarea id="serveArgsInput" rows="3" placeholder="serve"></textarea>
               </label>
-              <label>Fixed Prompt Args
-                <input id="runFixedInput" value='run --continue "<prompt>"' readonly />
+              <label>Prompt Args (one per line)
+                <textarea id="runArgsInput" rows="4" placeholder="run&#10;--continue"></textarea>
+              </label>
+            </details>
+            <details>
+              <summary>Command Preview</summary>
+              <label>Start Args (joined)
+                <input id="serveFixedInput" readonly />
+              </label>
+              <label>Prompt Args (joined)
+                <input id="runFixedInput" readonly />
               </label>
               <label>Effective Start Command
                 <input id="servePreviewInput" readonly />
