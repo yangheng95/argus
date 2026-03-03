@@ -27,7 +27,10 @@
   --color-drag: #f97316;
   --color-move: #a78bfa;
   --color-done: #10b981;
+  --color-done-tint-rgb: 52, 211, 153;
   --color-error: #ef4444;
+  --color-error-tint-rgb: 248, 113, 113;
+  --color-system-rgb: 251, 191, 36;
 
   /* Shared */
   --radius-sm: 8px;
