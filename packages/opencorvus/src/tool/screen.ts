@@ -376,14 +376,8 @@ export const ScreenTool = Tool.define("screen", {
         if (rep.consecutiveNoChange >= 6) {
           return {
             title: `Screenshot captured (${result.width}x${result.height}) - STUCK`,
-            output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}\n\n` +
-              `${overlayInfo}\n\n` +
-              `*** STUCK: ${rep.consecutiveNoChange} previous actions had no effect. ***\n` +
-              `You MUST try a fundamentally different approach.\n` +
-              `1. Press Esc to dismiss hidden overlays\n` +
-              `2. Use keyboard (Tab, Enter) instead of clicking\n` +
-              `3. If multiple windows are competing, use list_windows to find dialogs\n` +
-              `4. Try a completely different UI path`,
+            output: `${result.width}x${result.height}. ${coordInfo}${overlayInfo}\n` +
+              `STUCK(${rep.consecutiveNoChange}x). Try: Esc, Tab/Enter, list_windows, or different approach.`,
             metadata: {
               width: result.width,
               height: result.height,
