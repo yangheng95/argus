@@ -2,6 +2,7 @@ import z from "zod"
 import { createHash } from "crypto"
 import { Tool } from "./tool"
 import { Capture } from "../opencorvus/perception/capture"
+import { MonitorManager } from "../opencorvus/perception/monitor"
 import { WindowManager } from "../opencorvus/perception/window"
 import { ScreenDiff } from "../opencorvus/perception/diff"
 import { DesktopState } from "./desktop-state"
@@ -20,7 +21,6 @@ async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; co
   }
   const sharp = await import("sharp").then((x) => x.default)
   const attempts = [
-    // Keep original fidelity first: try lossless PNG re-encode before switching format.
     () => sharp(buffer).png({ compressionLevel: 9, adaptiveFiltering: true, effort: 10 }).toBuffer(),
     () => sharp(buffer).jpeg({ quality: 95, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer(),
     () => sharp(buffer).jpeg({ quality: 90, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer(),
@@ -39,22 +39,33 @@ async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; co
   return { mime: "image/jpeg", buffer: fallback, compressed: true }
 }
 
-const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, and bind to a specific window.
+function monitorForWindow(
+  w: { x: number; y: number; width: number; height: number },
+  monitors: { id: number; name: string; x: number; y: number; width: number; height: number }[],
+) {
+  const cx = w.x + Math.floor(w.width / 2)
+  const cy = w.y + Math.floor(w.height / 2)
+  return monitors.find((m) => cx >= m.x && cy >= m.y && cx < m.x + m.width && cy < m.y + m.height) ?? null
+}
+
+const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, list monitors, and bind a target window or monitor.
 
 Actions:
-- screenshot: Capture the current screen (or bound window). Returns the image for visual analysis. If the screen has not changed since the last screenshot, it will tell you instead of returning the image again (saves analysis time). Set wait_for_change=true to block until the screen actually changes — use this when waiting for page loads, dialogs, or animations instead of polling with repeated screenshots.
+- screenshot: Capture the current screen (or bound window/monitor). Returns the image for visual analysis. If the screen has not changed since the last screenshot, it will tell you instead of returning the image again (saves analysis time). Set wait_for_change=true to block until the screen actually changes - use this when waiting for page loads, dialogs, or animations instead of polling with repeated screenshots.
+- list_monitors: List all monitors with position, size, and scale.
+- bind_monitor: Bind to a monitor by id or name (e.g. 1, "DELL", "primary"). Screenshots then focus this monitor.
 - list_windows: List all visible windows with their positions and sizes. Use this to find windows before interacting.
 - bind_window: Bind to a specific window by title substring. After binding, screenshots capture only that window and coordinates become window-relative to it.
 
 IMPORTANT workflow:
-1. Use list_windows FIRST to see what apps are open and find the one you need.
-2. Use bind_window to focus on the target app — this makes coordinates easier and screenshots cleaner.
-3. Take a screenshot of the bound window to see its content.
-4. Interact with the app via the input tool, using coordinates from the screenshot.
-5. Take another screenshot to verify the result.
+1. In multi-monitor setups, use list_monitors first and bind_monitor to choose the target screen.
+2. Use list_windows to find the app window you need.
+3. Use bind_window to focus on the target app when precision is needed.
+4. Take a screenshot of the bound target to see current content.
+5. Interact with the app via the input tool, using coordinates from the screenshot.
+6. Take another screenshot to verify the result.
 
-IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn — only your text description persists.`
-
+IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn - only your text description persists.`
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
@@ -70,10 +81,21 @@ const ListWindowsAction = z.object({
   action: z.literal("list_windows"),
 })
 
+const ListMonitorsAction = z.object({
+  action: z.literal("list_monitors"),
+})
+
+const BindMonitorAction = z.object({
+  action: z.literal("bind_monitor"),
+  monitor: z.union([z.number().int(), z.string()]).describe("Monitor id or name (e.g. 1, \"DELL\", \"primary\")"),
+})
+
 const ScreenParams = z.discriminatedUnion("action", [
   ScreenshotAction,
   BindWindowAction,
   ListWindowsAction,
+  ListMonitorsAction,
+  BindMonitorAction,
 ])
 
 export const ScreenTool = Tool.define("screen", {
@@ -90,43 +112,36 @@ export const ScreenTool = Tool.define("screen", {
     switch (params.action) {
       case "screenshot": {
         GuiState.activate()
-
-        // If no window is bound, try to auto-bind to the focused window.
-        // This captures only the active window instead of the full desktop,
-        // producing smaller, more relevant screenshots for the vision LLM.
         let autoBound = false
         let foregroundFailed = false
         let currentBinding = await WindowManager.getBinding()
+        const monitorBinding = await MonitorManager.getBinding()
         if (currentBinding) {
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
-            // Don't block — fall back to fullscreen capture so the agent can still see the desktop.
-            // The agent can then decide how to recover (alt+tab, re-bind, etc.).
-            log.warn("bound window not foreground, falling back to fullscreen capture", {
+            log.warn("bound window not foreground, falling back to monitor capture", {
               title: currentBinding.info.title,
               appName: currentBinding.info.appName,
             })
             foregroundFailed = true
-            await WindowManager.unbind()
+            WindowManager.unbind()
             currentBinding = null
           }
         }
-        if (!currentBinding) {
+        if (!currentBinding && !monitorBinding) {
           try {
             const windows = await WindowManager.listWindows()
             const focused = windows.find((w) => w.isFocused)
             if (focused && focused.title && focused.width > 100 && focused.height > 100) {
               await WindowManager.bind(focused.title)
               autoBound = true
+              currentBinding = await WindowManager.getBinding()
             }
-          } catch {
-            // Silently fall back to fullscreen
-          }
+          } catch {}
         }
 
         let result = await Capture.take({ mode: "auto" })
 
-        // wait_for_change: if the screen hasn't changed, poll cheaply until it does
         if (params.wait_for_change && result.rawBuffer) {
           const firstHash = createHash("md5").update(result.buffer).digest("hex")
           if (firstHash === GuiState.get().lastScreenshotHash) {
@@ -136,21 +151,20 @@ export const ScreenTool = Tool.define("screen", {
               height: result.height,
               timestamp: result.timestamp,
             }
-            const POLL_INTERVAL = 500
-            const MAX_WAIT = 30_000
+            const pollInterval = 500
+            const maxWait = 30_000
             const startTime = Date.now()
+            let changed = false
 
             log.info("wait_for_change: screen unchanged, polling for changes", {
-              maxWait: MAX_WAIT,
-              pollInterval: POLL_INTERVAL,
+              maxWait,
+              pollInterval,
             })
 
-            let changed = false
-            while (Date.now() - startTime < MAX_WAIT) {
+            while (Date.now() - startTime < maxWait) {
               if (ctx.abort.aborted) break
-              await new Promise((r) => setTimeout(r, POLL_INTERVAL))
+              await new Promise((r) => setTimeout(r, pollInterval))
               if (ctx.abort.aborted) break
-
               try {
                 const probe = await Capture.take({ mode: "auto" })
                 if (!probe.rawBuffer) continue
@@ -160,18 +174,15 @@ export const ScreenTool = Tool.define("screen", {
                   height: probe.height,
                   timestamp: probe.timestamp,
                 })
-                if (diff.changed) {
-                  result = probe
-                  changed = true
-                  log.info("wait_for_change: change detected", {
-                    diffPercent: diff.diffPercent.toFixed(1),
-                    elapsed: Date.now() - startTime,
-                  })
-                  break
-                }
-              } catch {
-                // Capture or compare failed — skip this round
-              }
+                if (!diff.changed) continue
+                result = probe
+                changed = true
+                log.info("wait_for_change: change detected", {
+                  diffPercent: diff.diffPercent.toFixed(1),
+                  elapsed: Date.now() - startTime,
+                })
+                break
+              } catch {}
             }
 
             if (!changed) {
@@ -183,22 +194,30 @@ export const ScreenTool = Tool.define("screen", {
         }
 
         DesktopState.setBounds(result.windowBounds)
+        if (result.scope === "window") {
+          const binding = await WindowManager.getBinding()
+          DesktopState.setTarget(binding ? { scope: "window", windowId: binding.windowId, title: binding.info.title } : null)
+        } else if (result.monitor) {
+          DesktopState.setTarget({
+            scope: "monitor",
+            monitorId: result.monitor.id,
+            name: result.monitor.name,
+          })
+        } else {
+          DesktopState.setTarget(null)
+        }
         Capture.cleanup().catch(() => {})
 
-        // Unbind if we auto-bound (so the LLM can still bind to other windows)
         if (autoBound) {
           WindowManager.unbind()
         }
 
-        // Hash the raw screenshot to detect duplicates
         const hash = createHash("md5").update(result.buffer).digest("hex")
         const isDuplicate = hash === GuiState.get().lastScreenshotHash
 
-        // Record to GuiState (also updates lastScreenshotHash)
         GuiState.recordScreenshot(hash, result.width, result.height, isDuplicate)
         GuiState.updateRepetition(!isDuplicate)
 
-        // Diagnostic logging for screenshot capture
         log.info("screenshot-capture", {
           imageWidth: result.width,
           imageHeight: result.height,
@@ -206,9 +225,11 @@ export const ScreenTool = Tool.define("screen", {
           hash: hash.substring(0, 8),
           isDuplicate,
           autoBound,
+          scope: result.scope,
+          monitorId: result.monitor?.id ?? null,
           windowBounds: result.windowBounds
             ? `${result.windowBounds.width}x${result.windowBounds.height}@${result.windowBounds.x},${result.windowBounds.y}`
-            : "fullscreen",
+            : "none",
           pixelScale: result.windowBounds?.scaleX && result.windowBounds?.scaleY
             ? `${result.windowBounds.scaleX.toFixed(3)}x${result.windowBounds.scaleY.toFixed(3)}`
             : "1.000x1.000",
@@ -222,14 +243,15 @@ export const ScreenTool = Tool.define("screen", {
         const scaleInfo = hasScaleCompensation
           ? ` DPI scale compensation active (${(result.windowBounds?.scaleX ?? 1).toFixed(2)}x, ${(result.windowBounds?.scaleY ?? 1).toFixed(2)}x).`
           : ""
-        const coordInfo = result.windowBounds
-          ? `Coordinates are relative to the bound target (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
-          : "Coordinates are screen-absolute."
+        const coordInfo = result.scope === "window" && result.windowBounds
+          ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
+          : result.windowBounds
+            ? `Coordinates are relative to monitor "${result.monitor?.name ?? result.monitor?.id ?? "unknown"}" (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
+            : "Coordinates are screen-absolute."
 
         const platformName = process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : "Windows"
         const shortcutHint = process.platform === "darwin" ? "Use Cmd for shortcuts (Cmd+C, Cmd+V, etc.)." : "Use Ctrl for shortcuts (Ctrl+C, Ctrl+V, etc.)."
 
-        // If screen hasn't changed, skip sending the image to save vision tokens
         if (isDuplicate) {
           GuiState.recordAction({
             time: Date.now(),
@@ -241,8 +263,18 @@ export const ScreenTool = Tool.define("screen", {
           })
           return {
             title: `Screenshot unchanged (${result.width}x${result.height})`,
-            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze — use the previous screenshot as reference. If you are waiting for something to load, try using input.wait first, then screenshot again.`,
-            metadata: { width: result.width, height: result.height, windowBounds: result.windowBounds, unchanged: true, screenshotHash: hash, scaleX: result.windowBounds?.scaleX ?? 1, scaleY: result.windowBounds?.scaleY ?? 1 },
+            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze - use the previous screenshot as reference. If you are waiting for something to load, try using input.wait first, then screenshot again.`,
+            metadata: {
+              width: result.width,
+              height: result.height,
+              windowBounds: result.windowBounds,
+              unchanged: true,
+              screenshotHash: hash,
+              scope: result.scope,
+              monitor: result.monitor,
+              scaleX: result.windowBounds?.scaleX ?? 1,
+              scaleY: result.windowBounds?.scaleY ?? 1,
+            },
           }
         }
 
@@ -255,7 +287,6 @@ export const ScreenTool = Tool.define("screen", {
           screenChanged: true,
         })
 
-        // Compression is intentionally disabled. Keep `image()` for fast rollback.
         const encoded = SCREEN_COMPRESSION_ENABLED
           ? await image(result.buffer)
           : { mime: "image/png", buffer: result.buffer, compressed: false }
@@ -263,11 +294,10 @@ export const ScreenTool = Tool.define("screen", {
         const outputMime = output[0] === 0x89 && output[1] === 0x50 ? "image/png" : "image/jpeg"
         const base64 = output.toString("base64")
 
-        // Check if agent is stuck — append corrective guidance
         const rep = GuiState.get().repetition
         if (rep.consecutiveNoChange >= 6) {
           return {
-            title: `Screenshot captured (${result.width}x${result.height}) — STUCK`,
+            title: `Screenshot captured (${result.width}x${result.height}) - STUCK`,
             output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}\n\n` +
               `*** STUCK: ${rep.consecutiveNoChange} previous actions had no effect. ***\n` +
               `You MUST try a fundamentally different approach.\n` +
@@ -281,6 +311,8 @@ export const ScreenTool = Tool.define("screen", {
               windowBounds: result.windowBounds,
               unchanged: false,
               screenshotHash: hash,
+              scope: result.scope,
+              monitor: result.monitor,
               stuck: true,
               compressed: encoded.compressed,
               attachmentBytes: output.length,
@@ -298,10 +330,10 @@ export const ScreenTool = Tool.define("screen", {
         }
 
         const foregroundNote = foregroundFailed
-          ? ` WARNING: Could not bring the previously bound window to foreground. The binding was released and this is a fullscreen capture. Use list_windows to find your target window, then use input.key with "alt+tab" to switch windows, or re-bind with screen.bind_window.`
+          ? ` WARNING: Could not bring the previously bound window to foreground. The window binding was released and capture fell back to monitor mode. Use list_windows to find your target window, then use input.key with "alt+tab" to switch windows, or re-bind with screen.bind_window.`
           : ""
         return {
-          title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [fullscreen fallback]" : ""}`,
+          title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [monitor fallback]" : ""}`,
           output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint} The image has coordinate tick marks along the edges for precise positioning.${foregroundNote}`,
           metadata: {
             width: result.width,
@@ -309,6 +341,8 @@ export const ScreenTool = Tool.define("screen", {
             windowBounds: result.windowBounds,
             unchanged: false,
             screenshotHash: hash,
+            scope: result.scope,
+            monitor: result.monitor,
             compressed: encoded.compressed,
             attachmentBytes: output.length,
             scaleX: result.windowBounds?.scaleX ?? 1,
@@ -335,7 +369,12 @@ export const ScreenTool = Tool.define("screen", {
           label: binding.info.title,
           durationMs: 1600,
         })
-        DesktopState.setBounds(null) // Reset — next screenshot will set it
+        DesktopState.setBounds(null)
+        DesktopState.setTarget({
+          scope: "window",
+          windowId: binding.windowId,
+          title: binding.info.title,
+        })
         GuiState.recordAction({
           time: Date.now(),
           tool: "screen",
@@ -346,7 +385,7 @@ export const ScreenTool = Tool.define("screen", {
         })
         return {
           title: `Bound to "${binding.info.title}"`,
-          output: `Bound to window: "${binding.info.title}" (${binding.info.appName}), position: (${binding.info.x}, ${binding.info.y}), size: ${binding.info.width}x${binding.info.height}. Take a screenshot to see the window content — coordinates will be relative to this window.`,
+          output: `Bound to window: "${binding.info.title}" (${binding.info.appName}), position: (${binding.info.x}, ${binding.info.y}), size: ${binding.info.width}x${binding.info.height}. Take a screenshot to see the window content - coordinates will be relative to this window.`,
           metadata: {
             windowId: binding.windowId,
             title: binding.info.title,
@@ -359,16 +398,62 @@ export const ScreenTool = Tool.define("screen", {
         }
       }
 
+      case "bind_monitor": {
+        GuiState.activate()
+        const binding = await MonitorManager.bind(params.monitor)
+        WindowManager.unbind()
+        DesktopState.setBounds(null)
+        DesktopState.setTarget({
+          scope: "monitor",
+          monitorId: binding.monitorId,
+          name: binding.info.name,
+        })
+        GuiState.recordAction({
+          time: Date.now(),
+          tool: "screen",
+          action: "bind_monitor",
+          detail: `"${binding.info.name}"`,
+          screenshotHashAfter: null,
+          screenChanged: null,
+        })
+        return {
+          title: `Bound to monitor ${binding.info.id}`,
+          output: `Bound to monitor: "${binding.info.name}" (id ${binding.info.id}), position: (${binding.info.x}, ${binding.info.y}), size: ${binding.info.width}x${binding.info.height}, scale: ${binding.info.scaleFactor}. Take a screenshot to inspect this monitor.`,
+          metadata: binding.info,
+        }
+      }
+
       case "list_windows": {
         GuiState.activate()
-        const windows = await WindowManager.listWindows()
-        const lines = windows.map(
-          (w) => `[${w.id}] "${w.title}" (${w.appName}) — pos: (${w.x},${w.y}), size: ${w.width}x${w.height}${w.isFocused ? " [focused]" : ""}`,
+        const [windows, monitors] = await Promise.all([WindowManager.listWindows(), MonitorManager.listMonitors()])
+        const enriched = windows.map((w) => {
+          const monitor = monitorForWindow(w, monitors)
+          return {
+            ...w,
+            monitorId: monitor?.id ?? null,
+            monitorName: monitor?.name ?? null,
+          }
+        })
+        const lines = enriched.map(
+          (w) => `[${w.id}] "${w.title}" (${w.appName}) - pos: (${w.x},${w.y}), size: ${w.width}x${w.height}, monitor: ${w.monitorId ?? "?"}${w.isFocused ? " [focused]" : ""}`,
         )
         return {
-          title: `Found ${windows.length} windows`,
+          title: `Found ${enriched.length} windows`,
           output: lines.length > 0 ? lines.join("\n") : "No visible windows found.",
-          metadata: { count: windows.length, windows },
+          metadata: { count: enriched.length, windows: enriched },
+        }
+      }
+
+      case "list_monitors": {
+        GuiState.activate()
+        const monitors = await MonitorManager.listMonitors()
+        const lines = monitors.map(
+          (m) => `[${m.id}] "${m.name}" - pos: (${m.x},${m.y}), size: ${m.width}x${m.height}, scale: ${m.scaleFactor}${m.isPrimary ? " [primary]" : ""}`,
+        )
+        return {
+          title: `Found ${monitors.length} monitors`,
+          output: lines.length > 0 ? lines.join("\n") : "No monitors found.",
+          metadata: { count: monitors.length, monitors },
         }
       }
     }

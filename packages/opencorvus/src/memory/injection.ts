@@ -15,15 +15,34 @@ export namespace MemoryInjection {
 
   const MEMORY_RECALL_INSTRUCTION = `## Memory Recall
 
-You have access to a persistent memory store via the \`memory\` tool. Before answering questions about prior work, decisions, architectural choices, user preferences, project history, or any past context:
+You have access to a persistent memory store via the \`memory\` tool.
 
-1. Call \`memory\` with \`action: "search"\` and a relevant query
-2. Use the search results to inform your response
-3. If you need more detail from a specific memory, call \`memory\` with \`action: "list"\` to browse available files
+### At the start of every task — search BEFORE planning:
 
-When you learn something important that should persist across sessions (architectural decisions, user preferences, project patterns, debugging insights), save it with \`action: "write"\`.
+1. Call \`memory\` with \`action: "search"\` using keywords from the task (e.g. the app name, technology, pattern, or problem type)
+2. If results are sparse, try a second search with broader or alternate keywords
+3. Use any recalled prior work, known patterns, gotchas, or preferences to inform your plan — do not re-discover what is already known
 
-You can also delete outdated or incorrect memories with \`action: "delete"\`.`
+This is not optional. Prior sessions may have already solved parts of this problem or identified traps you should avoid. Skipping memory recall risks duplicating work or repeating past mistakes.
+
+### During execution — write as you go:
+
+After each significant discovery or completed subtask, call \`memory\` with \`action: "write"\` to record:
+- Solutions and exact steps that worked
+- Gotchas, traps, or unexpected behaviors encountered
+- Environment-specific details (paths, config values, platform quirks)
+- Patterns confirmed to work well in this project
+
+Do not batch writes to the end. If a step reveals something worth keeping, write it immediately before moving on.
+
+### After task completion — write a summary:
+
+Write a final memory entry summarising: what was accomplished, key decisions made, anything that was tricky, and what the next steps would be if this task were revisited.
+
+### Other memory actions:
+
+- \`action: "list"\` — browse available memory files when search results are sparse
+- \`action: "delete"\` — remove outdated or incorrect memories`
 
   /**
    * Returns the memory recall instruction for the system prompt,

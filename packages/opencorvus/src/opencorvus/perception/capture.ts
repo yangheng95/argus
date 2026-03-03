@@ -2,6 +2,7 @@ import { Log } from "../../util/log"
 import { Global } from "../../global"
 import { Filesystem } from "../../util/filesystem"
 import { WindowManager } from "./window"
+import { MonitorManager } from "./monitor"
 import path from "path"
 
 export namespace Capture {
@@ -28,11 +29,14 @@ export namespace Capture {
     rawBuffer?: Buffer
     timestamp: number
     windowBounds: WindowBounds | null
+    scope: "window" | "monitor"
+    monitor: MonitorManager.MonitorInfo | null
   }
 
   export interface CaptureOptions {
-    mode: "window" | "fullscreen" | "auto"
+    mode: "window" | "monitor" | "fullscreen" | "auto"
     windowTitle?: string
+    monitor?: string | number
     outputDir?: string
   }
 
@@ -83,9 +87,13 @@ export namespace Capture {
 
     try {
       if (options.mode === "auto") {
-        const binding = await WindowManager.getBinding()
-        if (binding && !binding.info.isMinimized) {
-          return await captureWindowById(binding.windowId, binding.info, filePath, timestamp)
+        const windowBinding = await WindowManager.getBinding()
+        if (windowBinding && !windowBinding.info.isMinimized) {
+          return await captureWindowById(windowBinding.windowId, windowBinding.info, filePath, timestamp)
+        }
+        const monitorBinding = await MonitorManager.getBinding()
+        if (monitorBinding) {
+          return await captureMonitorById(monitorBinding.monitorId, filePath, timestamp)
         }
         return await captureFullscreen(filePath, timestamp)
       }
@@ -96,6 +104,15 @@ export namespace Capture {
           return await captureWindowById(info.id, info, filePath, timestamp)
         }
         log.warn("window not found, falling back to fullscreen", { windowTitle: options.windowTitle })
+        return await captureFullscreen(filePath, timestamp)
+      }
+
+      if (options.mode === "monitor" && options.monitor !== undefined) {
+        const info = await MonitorManager.findMonitor(options.monitor)
+        if (info) {
+          return await captureMonitorById(info.id, filePath, timestamp)
+        }
+        log.warn("monitor not found, falling back to fullscreen", { monitor: options.monitor })
         return await captureFullscreen(filePath, timestamp)
       }
 
@@ -156,6 +173,66 @@ export namespace Capture {
       rawBuffer,
       timestamp,
       windowBounds: bounds,
+      scope: "window",
+      monitor: null,
+    }
+  }
+
+  async function captureMonitorById(
+    monitorId: number,
+    filePath: string,
+    timestamp: number,
+  ): Promise<CaptureResult> {
+    const native = await MonitorManager.getNativeMonitor(monitorId)
+    if (!native) {
+      throw new Error(`Monitor with id ${monitorId} no longer exists`)
+    }
+
+    const image = await native.captureImage()
+    const buffer = Buffer.from(await image.toPng())
+    const rawBuffer = Buffer.from(await image.toRaw())
+    await Filesystem.write(filePath, buffer, undefined)
+
+    const logicalX = native.x()
+    const logicalY = native.y()
+    const logicalWidth = native.width()
+    const logicalHeight = native.height()
+    const bounds = scaleWindowBounds({
+      logicalX,
+      logicalY,
+      logicalWidth,
+      logicalHeight,
+      imageWidth: image.width,
+      imageHeight: image.height,
+    })
+    const monitor = {
+      id: native.id(),
+      name: native.name(),
+      x: logicalX,
+      y: logicalY,
+      width: logicalWidth,
+      height: logicalHeight,
+      isPrimary: native.isPrimary(),
+      scaleFactor: native.scaleFactor(),
+    }
+
+    log.info("captured monitor", {
+      path: filePath,
+      monitor,
+      width: image.width,
+      height: image.height,
+    })
+
+    return {
+      path: filePath,
+      width: image.width,
+      height: image.height,
+      buffer,
+      rawBuffer,
+      timestamp,
+      windowBounds: bounds,
+      scope: "monitor",
+      monitor,
     }
   }
 
@@ -223,6 +300,17 @@ export namespace Capture {
       rawBuffer,
       timestamp,
       windowBounds: bounds,
+      scope: "monitor",
+      monitor: {
+        id: target.id(),
+        name: target.name(),
+        x: logicalX,
+        y: logicalY,
+        width: logicalWidth,
+        height: logicalHeight,
+        isPrimary: target.isPrimary(),
+        scaleFactor: target.scaleFactor(),
+      },
     }
   }
 

@@ -2,6 +2,7 @@ import z from "zod"
 import { generateObject } from "ai"
 import { Tool } from "./tool"
 import { Capture } from "../opencorvus/perception/capture"
+import { MonitorManager } from "../opencorvus/perception/monitor"
 import { WindowManager } from "../opencorvus/perception/window"
 import { Overlay } from "../opencorvus/perception/overlay"
 import { Provider } from "../provider/provider"
@@ -119,9 +120,14 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
         parts.push(`## Previous State\n${params.previous_summary}`)
       }
       const binding = await WindowManager.getBinding()
+      const monitorBinding = await MonitorManager.getBinding()
       if (binding) {
         parts.push(
           `## Window Info\nTitle: ${binding.info.title}\nSize: ${binding.info.width}x${binding.info.height}`,
+        )
+      } else if (monitorBinding) {
+        parts.push(
+          `## Monitor Info\nName: ${monitorBinding.info.name}\nSize: ${monitorBinding.info.width}x${monitorBinding.info.height}`,
         )
       }
       parts.push("Analyze the screenshot above and provide the structured analysis.")
@@ -191,7 +197,9 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
 
       const coordInfo = binding
         ? `Coordinates are relative to bound window "${binding.info.title}" (${binding.info.width}x${binding.info.height}).`
-        : "Coordinates are screen-absolute."
+        : capture.scope === "monitor" && capture.monitor
+          ? `Coordinates are relative to monitor "${capture.monitor.name}" (${capture.monitor.width}x${capture.monitor.height}).`
+          : "Coordinates are screen-absolute."
 
       return {
         title: `Screen analyzed (${capture.width}x${capture.height})`,
