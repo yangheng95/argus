@@ -2,6 +2,7 @@ import { BotCore } from "./core"
 import { SlackAdapter } from "./adapters/slack"
 import { TelegramAdapter } from "./adapters/telegram"
 import { DiscordAdapter } from "./adapters/discord"
+import { FeishuAdapter } from "./adapters/feishu"
 import { STTPipeline } from "./stt/pipeline"
 import { GroqProvider } from "./stt/providers/groq"
 import { OpenAIWhisperProvider } from "./stt/providers/openai-whisper"
@@ -137,6 +138,14 @@ const adapters = registerAdapters(bot, process.env, {
   slack: (opts) => new SlackAdapter(opts),
   telegram: (opts) => new TelegramAdapter(opts),
   discord: (opts) => new DiscordAdapter(opts),
+  feishu: (opts) => new FeishuAdapter({
+    appId: opts.appId,
+    appSecret: opts.appSecret,
+    host: process.env.FEISHU_WEBHOOK_HOST,
+    port: process.env.FEISHU_WEBHOOK_PORT ? Number(process.env.FEISHU_WEBHOOK_PORT) : undefined,
+    path: process.env.FEISHU_WEBHOOK_PATH,
+    verificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
+  }),
 })
 for (const warn of adapters.warns) {
   console.warn(`[Bot] ${warn}`)

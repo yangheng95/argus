@@ -3,12 +3,13 @@ import type { BotAdapter } from "./adapter"
 type Env = Record<string, string | undefined>
 
 export const ADAPTER_HINT =
-  "Set one adapter token set: SLACK_BOT_TOKEN + SLACK_APP_TOKEN, TELEGRAM_BOT_TOKEN, or DISCORD_BOT_TOKEN (OPENCLAW_* fallbacks are also supported)."
+  "Set one adapter token set: SLACK_BOT_TOKEN + SLACK_APP_TOKEN, TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, or FEISHU_APP_ID + FEISHU_APP_SECRET (OPENCLAW_* fallbacks are also supported)."
 
 export interface AdapterFactory {
   slack(opts: { token: string; appToken: string; signingSecret?: string }): BotAdapter
   telegram(opts: { token: string }): BotAdapter
   discord(opts: { token: string }): BotAdapter
+  feishu(opts: { appId: string; appSecret: string }): BotAdapter
 }
 
 function pick(env: Env, keys: readonly string[]) {
@@ -72,16 +73,23 @@ const ready: Rule[] = [
       token: vals.token!,
     }),
   },
-] 
-
-const planned: Plan[] = [
   {
     name: "feishu",
     req: {
       appId: ["FEISHU_APP_ID", "OPENCLAW_FEISHU_APP_ID"],
       appSecret: ["FEISHU_APP_SECRET", "OPENCLAW_FEISHU_APP_SECRET"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.feishu({
+      appId: vals.appId!,
+      appSecret: vals.appSecret!,
+    }),
   },
+] 
+
+const planned: Plan[] = [
   {
     name: "whatsapp",
     req: {

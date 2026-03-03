@@ -9,6 +9,8 @@
     "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun run packages/bot/src/main.ts",
     "dev:tui": "bun --preload @opentui/solid/preload --cwd packages/opencorvus --conditions=browser src/index.ts",
     "dev:server": "bun --preload @opentui/solid/preload --cwd packages/opencorvus --conditions=browser src/index.ts serve",
+    "patch:follow-redirects": "bun run scripts/patch-follow-redirects.ts",
+    "postinstall": "bun run patch:follow-redirects",
     "typecheck": "bunx turbo run typecheck",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"

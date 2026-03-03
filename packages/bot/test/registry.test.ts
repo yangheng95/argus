@@ -23,22 +23,25 @@ function bot() {
 }
 
 describe("adapter registry", () => {
-  test("registers slack, telegram and discord from standard env keys", () => {
+  test("registers slack, telegram, discord and feishu from standard env keys", () => {
     const app = bot()
     const result = registerAdapters(app, {
       SLACK_BOT_TOKEN: "xoxb-a",
       SLACK_APP_TOKEN: "xapp-a",
       TELEGRAM_BOT_TOKEN: "tg-a",
       DISCORD_BOT_TOKEN: "dc-a",
+      FEISHU_APP_ID: "cli_a",
+      FEISHU_APP_SECRET: "sec_a",
     }, {
       slack: () => new Fake("slack"),
       telegram: () => new Fake("telegram"),
       discord: () => new Fake("discord"),
+      feishu: () => new Fake("feishu"),
     })
 
     expect(result.warns).toHaveLength(0)
-    expect(result.names).toEqual(["slack", "telegram", "discord"])
-    expect(app.list.map((item) => item.platform)).toEqual(["slack", "telegram", "discord"])
+    expect(result.names).toEqual(["slack", "telegram", "discord", "feishu"])
+    expect(app.list.map((item) => item.platform)).toEqual(["slack", "telegram", "discord", "feishu"])
   })
 
   test("supports openclaw fallback env keys", () => {
@@ -51,6 +54,7 @@ describe("adapter registry", () => {
       slack: () => new Fake("slack"),
       telegram: () => new Fake("telegram"),
       discord: () => new Fake("discord"),
+      feishu: () => new Fake("feishu"),
     })
 
     expect(result.warns).toHaveLength(0)
@@ -66,6 +70,7 @@ describe("adapter registry", () => {
       slack: () => new Fake("slack"),
       telegram: () => new Fake("telegram"),
       discord: () => new Fake("discord"),
+      feishu: () => new Fake("feishu"),
     })
 
     expect(result.names).toEqual([])
@@ -78,15 +83,16 @@ describe("adapter registry", () => {
   test("warns when planned channel is configured", () => {
     const app = bot()
     const result = registerAdapters(app, {
-      FEISHU_APP_ID: "cli_a",
-      FEISHU_APP_SECRET: "sec_a",
+      DINGTALK_APP_KEY: "ding_key",
+      DINGTALK_APP_SECRET: "ding_secret",
     }, {
       slack: () => new Fake("slack"),
       telegram: () => new Fake("telegram"),
       discord: () => new Fake("discord"),
+      feishu: () => new Fake("feishu"),
     })
 
     expect(result.names).toEqual([])
-    expect(result.warns).toContain("Channel 'feishu' is configured but not implemented yet in OpenCorvus bot.")
+    expect(result.warns).toContain("Channel 'dingtalk' is configured but not implemented yet in OpenCorvus bot.")
   })
 })

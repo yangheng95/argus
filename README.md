@@ -105,6 +105,11 @@ opencorvus serve
 opencorvus serve --port 8080
 ```
 
+> [!TIP]
+> For local source development, run `bun install` once at repo root.  
+> The install now auto-applies the Bun + nut-js `follow-redirects` compatibility patch via `postinstall`.  
+> If you reinstall dependencies and desktop input fails, rerun `bun run patch:follow-redirects`.
+
 ## Agents
 
 OpenCorvus includes two built-in agents, switchable with the `Tab` key in the TUI:
