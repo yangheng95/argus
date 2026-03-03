@@ -28,6 +28,8 @@ pub struct ManagerConfig {
     pub command: String,
     pub cwd: String,
     pub env: Vec<EnvItem>,
+    pub serve_args: Vec<String>,
+    pub run_args: Vec<String>,
 }
 
 #[derive(Serialize, Clone)]
