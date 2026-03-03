@@ -545,3 +545,11 @@ export function overlayDiagnostic() {
 export function parseOverlayReply(line: string) {
   return parse(line)
 }
+
+/**
+ * Eagerly start the overlay process.
+ * Returns true if the process is running after this call.
+ */
+export function startOverlay(): boolean {
+  return ensureProcess() !== null
+}
