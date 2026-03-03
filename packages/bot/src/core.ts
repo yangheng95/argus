@@ -541,8 +541,25 @@ export class BotCore {
           if (toolName === "input") {
             this.sendInputHint(toolInput, "done")
           }
-          // Upload screenshot images from screen tool
+          // Screen tool completions
           if (toolName === "screen") {
+            // Highlight the bound window with overlay frame
+            if (toolInput?.action === "bind_window") {
+              const meta = part.state.metadata
+              if (meta?.x !== undefined && meta?.width !== undefined) {
+                this.sendOverlayEvent({
+                  type: "window-highlight",
+                  x: Number(meta.x),
+                  y: Number(meta.y),
+                  width: Number(meta.width),
+                  height: Number(meta.height),
+                  label: meta.title || meta.appName || "Target window",
+                  duration_ms: 2500,
+                })
+              }
+            }
+
+            // Upload screenshot images
             const hasImage = (part.state.attachments ?? []).some(
               (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
             )

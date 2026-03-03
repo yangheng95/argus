@@ -60,6 +60,7 @@ const singleFlag = process.argv.includes("--single")
 const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
+const binaryOnly = process.argv.includes("--binary-only")
 
 const allTargets: {
   os: string
@@ -192,7 +193,7 @@ for (const item of targets) {
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
     plugins: [solidPlugin],
-    sourcemap: "external",
+    sourcemap: binaryOnly ? "none" : "external",
     compile: {
       autoloadBunfig: false,
       autoloadDotenv: false,
@@ -216,6 +217,14 @@ for (const item of targets) {
   })
 
   await $`rm -rf ./dist/${name}/bin/tui`
+  if (binaryOnly) {
+    const files = await fs.promises.readdir(path.join(dir, "dist", name, "bin"))
+    await Promise.all(
+      files
+        .filter((x) => x.endsWith(".map"))
+        .map((x) => fs.promises.rm(path.join(dir, "dist", name, "bin", x), { force: true })),
+    )
+  }
   await Bun.file(`dist/${name}/package.json`).write(
     JSON.stringify(
       {

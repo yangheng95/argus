@@ -1,85 +1,55 @@
 ---
 name: opencorvus-slack-bot-config
-description: [TODO: Complete and informative explanation of what the skill does and when to use it. Include WHEN to use this skill - specific scenarios, file types, or tasks that trigger it.]
+description: Configure and troubleshoot Slack bot integration for OpenCorvus. Use when tasks involve Slack Socket Mode setup, Slack tokens, event subscriptions, updates to packages/bot/.env, adapter wiring in packages/bot/src/main.ts, or Slack message delivery debugging.
 ---
 
-# Opencorvus Slack Bot Config
+# OpenCorvus Slack Bot Config
 
 ## Overview
 
-[TODO: 1-2 sentences explaining what this skill enables]
+Configure Slack for OpenCorvus using a verified checklist from OpenClaw channel docs and Slack official Socket Mode docs.
+Map platform setup steps to the OpenCorvus bot runtime in `packages/bot`.
 
-## Structuring This Skill
+## Workflow
 
-[TODO: Choose the structure that best fits this skill's purpose. Common patterns:
+1. Confirm scope.
+- Confirm this task targets OpenCorvus (`packages/bot`) and not OpenClaw CLI runtime.
+- If user is on OpenClaw runtime, use the OpenClaw commands in the reference as-is.
 
-**1. Workflow-Based** (best for sequential processes)
-- Works well when there are clear step-by-step procedures
-- Example: DOCX skill with "Workflow Decision Tree" -> "Reading" -> "Creating" -> "Editing"
-- Structure: ## Overview -> ## Workflow Decision Tree -> ## Step 1 -> ## Step 2...
+2. Load checklist.
+- Read `references/openclaw.md`.
 
-**2. Task-Based** (best for tool collections)
-- Works well when the skill offers different operations/capabilities
-- Example: PDF skill with "Quick Start" -> "Merge PDFs" -> "Split PDFs" -> "Extract Text"
-- Structure: ## Overview -> ## Quick Start -> ## Task Category 1 -> ## Task Category 2...
+3. Configure Slack app and environment.
+- Ensure Socket Mode is enabled.
+- Ensure `xapp` and `xoxb` tokens are created and copied.
+- Set `SLACK_APP_TOKEN` and `SLACK_BOT_TOKEN` in `packages/bot/.env`.
+- Set `SLACK_SIGNING_SECRET` if HTTP mode is requested.
 
-**3. Reference/Guidelines** (best for standards or specifications)
-- Works well for brand guidelines, coding standards, or requirements
-- Example: Brand styling with "Brand Guidelines" -> "Colors" -> "Typography" -> "Features"
-- Structure: ## Overview -> ## Guidelines -> ## Specifications -> ## Usage...
+4. Verify OpenCorvus wiring.
+- Confirm `packages/bot/src/main.ts` registers `SlackAdapter` when `SLACK_BOT_TOKEN` is present.
+- Confirm `packages/bot/src/adapters/slack.ts` still uses Socket Mode and thread replies.
 
-**4. Capabilities-Based** (best for integrated systems)
-- Works well when the skill provides multiple interrelated features
-- Example: Product Management with "Core Capabilities" -> numbered capability list
-- Structure: ## Overview -> ## Core Capabilities -> ### 1. Feature -> ### 2. Feature...
+5. Validate runtime.
+- Run `bun run --cwd packages/bot src/main.ts` or `bun dev`.
+- Send one inbound Slack message.
+- Confirm one threaded reply.
+- If image output is expected, confirm upload works.
 
-Patterns can be mixed and matched as needed. Most skills combine patterns (e.g., start with task-based, add workflow for complex operations).
+6. Troubleshoot.
+- If startup fails, re-check token values and app installation.
+- If events do not arrive, re-check subscribed bot events and app scopes.
+- If duplicate replies appear, inspect dedupe behavior by message timestamp.
 
-Delete this entire "Structuring This Skill" section when done - it's just guidance.]
+## Guardrails
 
-## [TODO: Replace with the first main section based on chosen structure]
+- Do not output real secrets.
+- Do not instruct webhook URL setup for Socket Mode-only requests unless user asks for HTTP mode.
+- Keep edits minimal and localized to env files and Slack adapter wiring.
 
-[TODO: Add content here. See examples in existing skills:
-- Code samples for technical skills
-- Decision trees for complex workflows
-- Concrete examples with realistic user requests
-- References to scripts/templates/references as needed]
+## Output Format
 
-## Resources (optional)
-
-Create only the resource directories this skill actually needs. Delete this section if no resources are required.
-
-### scripts/
-Executable code (Python/Bash/etc.) that can be run directly to perform specific operations.
-
-**Examples from other skills:**
-- PDF skill: `fill_fillable_fields.py`, `extract_form_field_info.py` - utilities for PDF manipulation
-- DOCX skill: `document.py`, `utilities.py` - Python modules for document processing
-
-**Appropriate for:** Python scripts, shell scripts, or any executable code that performs automation, data processing, or specific operations.
-
-**Note:** Scripts may be executed without loading into context, but can still be read by Codex for patching or environment adjustments.
-
-### references/
-Documentation and reference material intended to be loaded into context to inform Codex's process and thinking.
-
-**Examples from other skills:**
-- Product management: `communication.md`, `context_building.md` - detailed workflow guides
-- BigQuery: API reference documentation and query examples
-- Finance: Schema documentation, company policies
-
-**Appropriate for:** In-depth documentation, API references, database schemas, comprehensive guides, or any detailed information that Codex should reference while working.
-
-### assets/
-Files not intended to be loaded into context, but rather used within the output Codex produces.
-
-**Examples from other skills:**
-- Brand styling: PowerPoint template files (.pptx), logo files
-- Frontend builder: HTML/React boilerplate project directories
-- Typography: Font files (.ttf, .woff2)
-
-**Appropriate for:** Templates, boilerplate code, document templates, images, icons, fonts, or any files meant to be copied or used in the final output.
-
----
-
-**Not every skill requires all three types of resources.**
+1. Setup summary.
+2. Required Slack settings and env vars.
+3. Exact file edits.
+4. Run commands.
+5. Verification and troubleshooting checklist.
