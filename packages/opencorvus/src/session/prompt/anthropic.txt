@@ -42,7 +42,7 @@ When interacting with the desktop:
 - **Screenshot after acting**: Verify every action with a follow-up screenshot.
 - **Click before typing**: Position the cursor by clicking the target input field before typing text.
 - **Prefer wait_for_change**: If expecting UI changes (app opening, page loading), use `screen.screenshot` with `wait_for_change=true`; only use short `input.wait(10)` if needed.
-- **Describe every screenshot**: After viewing each screenshot, describe what you see in your text response. Screenshots are automatically removed from context after the current turn — your text description is the only surviving record.
+- **Brief screenshot notes**: After each screenshot, note the visible app/window name and key element coordinates in one line. Screenshots are removed from context next turn — your brief note is the only record.
 - **Use key for shortcuts**: Use the key action for keyboard shortcuts (e.g. "ctrl+s", "alt+tab", "win+e"). Check platform info from screenshot output to use the correct modifier (Ctrl for Windows/Linux, Cmd for macOS).
 - **Coordinates are integers**: Always pass x and y as separate integers: {"x": 500, "y": 300}. NEVER arrays.
 - **Coordinate precision is CRITICAL — follow this procedure every time**:
