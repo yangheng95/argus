@@ -61,6 +61,7 @@ const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const binaryOnly = process.argv.includes("--binary-only")
+const onefileFlag = process.argv.includes("--onefile") || process.env.OPENCORVUS_ONEFILE === "1"
 
 const embeddedEnv = (() => {
   const keys = (process.env.OPENCORVUS_EMBED_ENV_KEYS ?? "")
@@ -102,6 +103,9 @@ if (Object.keys(embeddedEnv).length > 0) {
   console.log(`embedding env keys: ${Object.keys(embeddedEnv).join(", ")}`)
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
+if (onefileFlag) {
+  console.log("onefile mode enabled: embedding overlay sidecar into main binary")
+}
 
 const allTargets: {
   os: string
@@ -354,6 +358,18 @@ for (const item of targets) {
   }
   if (executablePath) compile.executablePath = executablePath
 
+  const overlaySource = onefileFlag ? await resolveOverlay(item) : null
+  if (onefileFlag && !overlaySource) {
+    throw new Error(`onefile mode requires overlay sidecar for target ${overlayLabel(item)}`)
+  }
+  const overlayBytes = overlaySource ? await Bun.file(overlaySource).bytes() : undefined
+  const embeddedOverlayDefine = overlayBytes
+    ? JSON.stringify(Buffer.from(overlayBytes).toString("base64"))
+    : "undefined"
+  const embeddedOverlayHashDefine = overlayBytes
+    ? JSON.stringify(Bun.hash.xxHash32(overlayBytes).toString(16).padStart(8, "0"))
+    : "undefined"
+
   await Bun.build({
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
@@ -369,11 +385,13 @@ for (const item of targets) {
       OPENCORVUS_CHANNEL: `'${Script.channel}'`,
       OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
+      OPENCORVUS_EMBEDDED_OVERLAY_B64: embeddedOverlayDefine,
+      OPENCORVUS_EMBEDDED_OVERLAY_HASH: embeddedOverlayHashDefine,
     },
   })
 
   await $`rm -rf ./dist/${name}/bin/tui`
-  await installOverlay(item, name)
+  if (!onefileFlag) await installOverlay(item, name)
   if (binaryOnly) {
     const files = await fs.promises.readdir(path.join(dir, "dist", name, "bin"))
     await Promise.all(

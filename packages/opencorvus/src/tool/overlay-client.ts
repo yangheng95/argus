@@ -1,7 +1,12 @@
-import { existsSync, statSync } from "fs"
+import { chmodSync, existsSync, mkdirSync, statSync, writeFileSync } from "fs"
+import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { Log } from "../util/log"
+import { Global } from "../global"
+
+declare const OPENCORVUS_EMBEDDED_OVERLAY_B64: string | undefined
+declare const OPENCORVUS_EMBEDDED_OVERLAY_HASH: string | undefined
 
 function binaryNames() {
   const ext = process.platform === "win32" ? ".exe" : ""
@@ -25,6 +30,9 @@ function resolveBinaryPath() {
     if (existsSync(candidate)) return candidate
   }
 
+  const embedded = embeddedBinaryPath()
+  if (embedded) return embedded
+
   const dir = fileURLToPath(new URL(".", import.meta.url))
   for (const mode of ["release", "debug"] as const) {
     for (const name of names) {
@@ -34,6 +42,36 @@ function resolveBinaryPath() {
   }
 
   return join(executableDir, names[0])
+}
+
+function embeddedBinaryPath() {
+  if (typeof OPENCORVUS_EMBEDDED_OVERLAY_B64 !== "string" || !OPENCORVUS_EMBEDDED_OVERLAY_B64) return
+  const ext = process.platform === "win32" ? ".exe" : ""
+  const hash =
+    typeof OPENCORVUS_EMBEDDED_OVERLAY_HASH === "string" && OPENCORVUS_EMBEDDED_OVERLAY_HASH
+      ? OPENCORVUS_EMBEDDED_OVERLAY_HASH
+      : "embedded"
+  const dir = join(Global.Path.bin, "overlay")
+  const file = join(dir, `opencorvus-overlay-${hash}${ext}`)
+  if (existsSync(file)) return file
+  if (materializeEmbedded(file)) return file
+
+  const tempDir = join(tmpdir(), "opencorvus-overlay")
+  const tempFile = join(tempDir, `opencorvus-overlay-${hash}${ext}`)
+  if (existsSync(tempFile)) return tempFile
+  if (materializeEmbedded(tempFile)) return tempFile
+}
+
+function materializeEmbedded(file: string) {
+  try {
+    mkdirSync(dirname(file), { recursive: true })
+    const bytes = Buffer.from(OPENCORVUS_EMBEDDED_OVERLAY_B64, "base64")
+    writeFileSync(file, bytes, { mode: 0o755 })
+    if (process.platform !== "win32") chmodSync(file, 0o755)
+    return true
+  } catch {
+    return false
+  }
 }
 
 const BINARY_PATH = resolveBinaryPath()
