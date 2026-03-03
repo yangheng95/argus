@@ -72,8 +72,7 @@ export class BotCore {
       await adapter.start()
     }
 
-    // Start overlay process for visual feedback
-    await this.startOverlay()
+    // Overlay is managed by OpenCorvus's overlay-client.ts (spawned on first tool use)
   }
 
   async stop(): Promise<void> {
