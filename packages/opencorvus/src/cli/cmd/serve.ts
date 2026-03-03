@@ -86,12 +86,14 @@ export const ServeCommand = cmd({
     }
     const opts = await resolveNetworkOptions(args)
 
-    // Kill old process if port is occupied
+    // Kill old process if port is occupied, then wait for release with retries
     if (opts.port > 0 && (await isPortInUse(opts.port, opts.hostname))) {
       console.log(`Port ${opts.port} is in use, killing old process...`)
       await killOldProcess(opts.port)
-      // Brief wait for port release
-      await new Promise((r) => setTimeout(r, 500))
+      for (let i = 0; i < 10; i++) {
+        await new Promise((r) => setTimeout(r, 500))
+        if (!(await isPortInUse(opts.port, opts.hostname))) break
+      }
     }
 
     const server = Server.listen(opts)
