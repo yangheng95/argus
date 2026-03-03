@@ -62,6 +62,47 @@ const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const binaryOnly = process.argv.includes("--binary-only")
 
+const embeddedEnv = (() => {
+  const keys = (process.env.OPENCORVUS_EMBED_ENV_KEYS ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+  const env = Object.fromEntries(
+    keys.flatMap((key) => {
+      const value = process.env[key]?.trim()
+      if (!value) return []
+      return [[key, value] as const]
+    }),
+  ) as Record<string, string>
+
+  const dashscope = process.env.OPENCORVUS_EMBED_DASHSCOPE_KEY?.trim()
+  if (dashscope) {
+    env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY = dashscope
+    env.OPENCORVUS_EMBEDDED_DASHSCOPE_TTL_HOURS = process.env.OPENCORVUS_EMBED_DASHSCOPE_TTL_HOURS?.trim() || "24"
+    if (!env.OPENCORVUS_CONFIG_CONTENT && !process.env.OPENCORVUS_CONFIG_CONTENT) {
+      env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
+        $schema: "https://opencode.ai/config.json",
+        model: "alibaba-cn/qwen3.5-plus",
+      })
+    }
+  }
+
+  const model = process.env.OPENCORVUS_EMBED_MODEL?.trim()
+  if (model) {
+    env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
+      $schema: "https://opencode.ai/config.json",
+      model,
+    })
+  }
+
+  return env
+})()
+
+if (Object.keys(embeddedEnv).length > 0) {
+  console.log(`embedding env keys: ${Object.keys(embeddedEnv).join(", ")}`)
+}
+const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
+
 const allTargets: {
   os: string
   arch: "arm64" | "x64"
@@ -327,6 +368,7 @@ for (const item of targets) {
       OPENCORVUS_WORKER_PATH: workerPath,
       OPENCORVUS_CHANNEL: `'${Script.channel}'`,
       OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
+      OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
     },
   })
 

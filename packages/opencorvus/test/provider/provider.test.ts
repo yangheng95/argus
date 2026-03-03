@@ -1,10 +1,13 @@
 import { test, expect } from "bun:test"
 import path from "path"
+import fs from "fs/promises"
 
 import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Env } from "../../src/env"
+import { Global } from "../../src/global"
+import { Auth } from "../../src/auth"
 
 test("provider loaded from env variable", async () => {
   await using tmp = await tmpdir({
@@ -31,6 +34,80 @@ test("provider loaded from env variable", async () => {
       expect(providers["anthropic"].options.headers["anthropic-beta"]).toBeDefined()
     },
   })
+})
+
+test("alibaba-cn provider loaded from DASHSCOPE_API_KEY", async () => {
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(
+        path.join(dir, "opencorvus.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+        }),
+      )
+    },
+  })
+  await Instance.provide({
+    directory: tmp.path,
+    init: async () => {
+      Env.set("DASHSCOPE_API_KEY", "sk-test-api-key")
+      await Auth.remove("alibaba-cn")
+    },
+    fn: async () => {
+      const providers = await Provider.list()
+      expect(providers["alibaba-cn"]).toBeDefined()
+      expect(providers["alibaba-cn"].source).toBe("env")
+    },
+  })
+})
+
+test("embedded dashscope key expires after ttl", async () => {
+  const key = "sk-test-embedded"
+  const prevKey = process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY
+  const prevTtl = process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_TTL_HOURS
+  const marker = path.join(Global.Path.state, "dashscope-embedded.json")
+  process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY = key
+  process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_TTL_HOURS = "24"
+
+  try {
+    await fs.mkdir(path.dirname(marker), { recursive: true })
+    await fs.writeFile(
+      marker,
+      JSON.stringify({
+        hash: Bun.hash.xxHash32(key),
+        first: Date.now() - 25 * 60 * 60 * 1000,
+      }),
+    )
+
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "opencorvus.json"),
+          JSON.stringify({
+            $schema: "https://opencode.ai/config.json",
+          }),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.remove("DASHSCOPE_API_KEY")
+        await Auth.remove("alibaba-cn")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["alibaba-cn"]).toBeUndefined()
+      },
+    })
+  } finally {
+    if (prevKey === undefined) delete process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY
+    else process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY = prevKey
+    if (prevTtl === undefined) delete process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_TTL_HOURS
+    else process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_TTL_HOURS = prevTtl
+    await fs.rm(marker, { force: true }).catch(() => {})
+  }
 })
 
 test("provider loaded from config with apiKey option", async () => {

@@ -85,6 +85,46 @@ export namespace Provider {
     })
   }
 
+  const dashscopeState = path.join(Global.Path.state, "dashscope-embedded.json")
+
+  function dashscopeTtlMs() {
+    const raw = Number(process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_TTL_HOURS ?? "24")
+    if (!Number.isFinite(raw) || raw <= 0) return 24 * 60 * 60 * 1000
+    return raw * 60 * 60 * 1000
+  }
+
+  async function dashscopeKey(env: Record<string, string | undefined>) {
+    const direct = env["DASHSCOPE_API_KEY"]?.trim()
+    if (direct) return direct
+
+    const key = process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY?.trim()
+    if (!key) return
+
+    const now = Date.now()
+    const hash = Bun.hash.xxHash32(key)
+    const saved = await Filesystem.readJson<{ hash?: number; first?: number }>(dashscopeState).catch(() => ({
+      hash: undefined,
+      first: undefined,
+    }))
+    const firstSaved = typeof saved.first === "number" && Number.isFinite(saved.first) ? saved.first : undefined
+    const same = saved.hash === hash && firstSaved !== undefined
+    const first = firstSaved ?? now
+
+    if (!same) {
+      await Filesystem.writeJson(
+        dashscopeState,
+        {
+          hash,
+          first,
+        },
+        0o600,
+      )
+    }
+
+    if (now - first >= dashscopeTtlMs()) return
+    return key
+  }
+
   const BUNDLED_PROVIDERS: Record<string, (options: any) => SDK> = {
     "@ai-sdk/amazon-bedrock": createAmazonBedrock,
     "@ai-sdk/anthropic": createAnthropic,
@@ -902,6 +942,16 @@ export namespace Provider {
         source: "env",
         key: provider.env.length === 1 ? apiKey : undefined,
       })
+    }
+
+    if (!disabled.has("alibaba-cn")) {
+      const key = await dashscopeKey(env)
+      if (key) {
+        mergeProvider("alibaba-cn", {
+          source: "env",
+          key,
+        })
+      }
     }
 
     // load apikeys
