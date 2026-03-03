@@ -166,8 +166,8 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                             } => {
                                 if let Some(window) = handle.get_webview_window("confirm") {
                                     let _ = window.set_position(tauri::LogicalPosition::new(
-                                        x as f64 - 230.0, // center 460px confirm window
-                                        y as f64 - 110.0,
+                                        x as f64 - CONFIRM_WIDTH / 2.0,
+                                        y as f64 - CONFIRM_HEIGHT / 2.0,
                                     ));
                                     let _ = window.show();
                                     let _ = window.set_focus();
