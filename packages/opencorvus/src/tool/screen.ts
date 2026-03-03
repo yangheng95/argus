@@ -152,24 +152,38 @@ export const ScreenTool = Tool.define("screen", {
         let foregroundFailed = false
         let currentBinding = await WindowManager.getBinding()
         const monitorBinding = await MonitorManager.getBinding()
-        if (currentBinding) {
+        const hadFocusChange = WindowManager.consumeFocusChange()
+
+        if (currentBinding && !hadFocusChange) {
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
             log.warn("bound window not foreground, will try window capture anyway", {
               title: currentBinding.info.title,
               appName: currentBinding.info.appName,
             })
-            // Don't unbind — node-screenshots can capture any window regardless of focus.
-            // Only set foregroundFailed for informational warning.
             foregroundFailed = true
           }
+        } else if (currentBinding && hadFocusChange) {
+          // Focus-changing key was pressed — suspend explicit binding
+          // so auto-bind picks the newly focused window.
+          log.info("focus change detected, suspending binding for this screenshot", {
+            previousTitle: currentBinding.info.title,
+          })
+          WindowManager.unbind()
+          currentBinding = null
         }
+
         if (!currentBinding && !monitorBinding) {
           try {
+            // After a focus change, wait briefly for the new window to appear
+            if (hadFocusChange) {
+              await new Promise((r) => setTimeout(r, 500))
+            }
             const windows = await WindowManager.listWindows()
-            const focused = pickWindow(windows)
-            if (focused) {
-              await WindowManager.bindById(focused.id, focused.title)
+            const target = pickWindow(windows)
+            if (target) {
+              // Quiet bind: don't steal focus, just capture
+              await WindowManager.bindByIdQuiet(target.id, target.title)
               autoBound = true
               currentBinding = await WindowManager.getBinding()
             }
