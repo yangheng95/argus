@@ -53,7 +53,8 @@ When interacting with the desktop:
   (3) Estimate the element's center relative to that anchor. Example: "The button is ~30px right and ~10px below the 400,200 label, so coordinates are approximately (430, 210)."
   (4) Always aim for the **exact visual center** of the element, not its edge. For buttons, aim at the center of the text label. For dropdowns/comboboxes, aim at the center of the text area (not the arrow). For checkboxes, aim at the center of the box. Buttons are typically 60-120px wide and 24-36px tall. Icons are typically 16-24px.
   (5) For small targets (close buttons, checkboxes, radio buttons, dropdown arrows), take extra care — read the nearest grid lines on BOTH axes and interpolate carefully. When in doubt, err towards the center of the control rather than its edge.
-  (6) After clicking, if the UI does NOT change, your coordinates may be off. Do NOT repeat the same coordinates — shift by 10-20px toward the element center and retry.
+  (6) After clicking, the next screenshot will show a **green crosshair marker** at your click position. Check if the marker landed on the intended element. If the marker missed the target, adjust coordinates accordingly.
+  (7) If the UI does NOT change after a click, your coordinates may be off. Do NOT repeat the same coordinates — shift by 10-20px toward the element center and retry.
   NEVER guess coordinates from memory or by rough estimation. Always cross-reference visible grid labels.
 - **Use drag for move/resize/select**: Use drag to move objects, resize panels, or select text ranges.
 - **Use move for hover**: Move mouse without clicking to trigger tooltips or hover effects, then screenshot to read them.
