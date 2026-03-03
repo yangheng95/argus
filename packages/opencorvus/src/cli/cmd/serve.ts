@@ -7,9 +7,6 @@ import { Project } from "../../project/project"
 import { Installation } from "../../installation"
 import { startOverlay } from "../../tool/overlay-client"
 import { createConnection } from "net"
-import { Global } from "../../global"
-import path from "path"
-import fs from "fs"
 
 /** Hide the console window on Windows using Win32 API. */
 function hideConsoleWindow() {
