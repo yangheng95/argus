@@ -42,7 +42,7 @@ function isPortInUse(port: number, hostname: string): Promise<boolean> {
   })
 }
 
-/** Kill old opencorvus process occupying the port (Windows only). */
+/** Kill old opencorvus process occupying the port. */
 async function killOldProcess(port: number) {
   if (process.platform !== "win32") {
     // Unix: use fuser

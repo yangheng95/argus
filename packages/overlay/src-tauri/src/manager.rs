@@ -2,9 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 #[cfg(target_os = "windows")]
@@ -17,6 +19,7 @@ const LOG_FILE: &str = "opencorvus-manager-log.jsonl";
 const MAX_LOGS: usize = 800;
 const DEFAULT_SERVE_ARGS: &[&str] = &["serve"];
 const DEFAULT_RUN_ARGS: &[&str] = &["run", "--continue"];
+const AUTO_PORT_ENV: &str = "OPENCORVUS_OVERLAY_AUTO_PORT";
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {
@@ -221,6 +224,16 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
     };
     args.push(prompt);
 
+    if let Err(error) = check_attach_health(&config.run_args) {
+        let message = format!("attach endpoint unavailable: {error}");
+        push_log(shared, app, message.clone());
+        return SendResult {
+            success: false,
+            code: -1,
+            output: message,
+        };
+    }
+
     let mut cmd = build_command(&config, &args);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -265,6 +278,149 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         code,
         output: text,
     }
+}
+
+fn attach_arg(args: &[String]) -> Option<String> {
+    args.iter().enumerate().find_map(|(index, arg)| {
+        if arg == "--attach" {
+            return args.get(index + 1).cloned();
+        }
+        arg.strip_prefix("--attach=").map(|item| item.to_string())
+    })
+}
+
+fn attach_target(input: &str) -> Option<(String, u16)> {
+    let text = input.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let rest = text.strip_prefix("http://")?;
+    let host = rest.split('/').next()?;
+    let (name, port) = host.rsplit_once(':')?;
+    if name.trim().is_empty() {
+        return None;
+    }
+    let value = port.parse::<u16>().ok()?;
+    Some((name.to_string(), value))
+}
+
+fn check_attach_health(args: &[String]) -> Result<(), String> {
+    let Some(raw) = attach_arg(args) else {
+        return Ok(());
+    };
+    let Some((host, port)) = attach_target(&raw) else {
+        return Ok(());
+    };
+
+    let addr = format!("{host}:{port}");
+    let socket = addr
+        .to_socket_addrs()
+        .map_err(|error| format!("cannot resolve {addr}: {error}"))?
+        .next()
+        .ok_or_else(|| format!("cannot resolve {addr}"))?;
+    let mut stream = TcpStream::connect_timeout(&socket, Duration::from_millis(1200))
+        .map_err(|error| format!("{addr} connect failed: {error}"))?;
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(1200)));
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(1200)));
+    let req = format!("GET /path HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|error| format!("{addr} write failed: {error}"))?;
+
+    let mut buf = [0u8; 12];
+    let count = stream
+        .read(&mut buf)
+        .map_err(|error| format!("{addr} read failed: {error}"))?;
+    if count == 0 {
+        return Err(format!("{addr} sent empty response"));
+    }
+    let prefix = String::from_utf8_lossy(&buf[..count]);
+    if prefix.starts_with("HTTP/") {
+        return Ok(());
+    }
+    Err(format!(
+        "{addr} responded with invalid protocol, likely occupied by another process"
+    ))
+}
+
+fn flag_value(args: &[String], key: &str) -> Option<String> {
+    let prefix = format!("{key}=");
+    args.iter().enumerate().find_map(|(index, item)| {
+        if item == key {
+            return args.get(index + 1).cloned();
+        }
+        item.strip_prefix(&prefix).map(|value| value.to_string())
+    })
+}
+
+fn set_flag(args: &mut Vec<String>, key: &str, value: String) {
+    let prefix = format!("{key}=");
+    for index in 0..args.len() {
+        if args[index] == key {
+            if let Some(next) = args.get_mut(index + 1) {
+                *next = value;
+            } else {
+                args.push(value);
+            }
+            return;
+        }
+        if args[index].starts_with(&prefix) {
+            args[index] = format!("{key}={value}");
+            return;
+        }
+    }
+    args.push(key.to_string());
+    args.push(value);
+}
+
+fn serve_host(args: &[String]) -> String {
+    flag_value(args, "--hostname")
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
+        .unwrap_or_else(|| "127.0.0.1".to_string())
+}
+
+fn serve_port(args: &[String]) -> Option<u16> {
+    flag_value(args, "--port")
+        .and_then(|item| item.trim().parse::<u16>().ok())
+        .filter(|item| *item > 0)
+}
+
+fn bind_addr(host: &str, port: u16) -> String {
+    format!("{host}:{port}")
+}
+
+fn port_available(host: &str, port: u16) -> bool {
+    TcpListener::bind(bind_addr(host, port)).is_ok()
+}
+
+fn next_port(host: &str) -> Option<u16> {
+    TcpListener::bind(bind_addr(host, 0))
+        .ok()
+        .and_then(|listener| listener.local_addr().ok())
+        .map(|addr| addr.port())
+        .filter(|port| *port > 0)
+}
+
+fn align_attach(args: &mut Vec<String>, host: &str, port: u16) {
+    let attach_host = attach_arg(args)
+        .and_then(|item| attach_target(&item))
+        .map(|(name, _)| name)
+        .unwrap_or_else(|| {
+            if host == "0.0.0.0" || host == "::" {
+                "127.0.0.1".to_string()
+            } else {
+                host.to_string()
+            }
+        });
+    set_flag(args, "--attach", format!("http://{attach_host}:{port}"));
+}
+
+fn auto_port_enabled() -> bool {
+    std::env::var(AUTO_PORT_ENV)
+        .ok()
+        .map(|item| item.trim() != "0")
+        .unwrap_or(true)
 }
 
 pub fn new_shared() -> Shared {
@@ -399,7 +555,7 @@ pub fn init(shared: &Shared, app: &AppHandle) {
 pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     probe(shared, app);
 
-    let config = {
+    let mut config = {
         let state = shared.lock().unwrap();
         if state.bot.is_some() {
             push_log(shared, app, "OpenCorvus is already running");
@@ -407,6 +563,29 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         }
         state.config.clone()
     };
+
+    if auto_port_enabled() {
+        let host = serve_host(&config.serve_args);
+        if let Some(current) = serve_port(&config.serve_args) {
+            if !port_available(&host, current) {
+                if let Some(next) = next_port(&host) {
+                    set_flag(&mut config.serve_args, "--port", next.to_string());
+                    align_attach(&mut config.run_args, &host, next);
+                    push_log(
+                        shared,
+                        app,
+                        format!("Port {current} is occupied, auto-switched to {next} for this session"),
+                    );
+                } else {
+                    push_log(
+                        shared,
+                        app,
+                        format!("Port {current} is occupied and no free replacement port was found"),
+                    );
+                }
+            }
+        }
+    }
 
     let args = if config.serve_args.is_empty() {
         DEFAULT_SERVE_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>()
@@ -432,6 +611,7 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
 
     {
         let mut state = shared.lock().unwrap();
+        state.config = config.clone();
         state.bot = Some(child);
     }
 

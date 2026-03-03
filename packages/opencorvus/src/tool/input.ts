@@ -17,17 +17,21 @@ function coordinateSpace(): Coordinates.CoordinateSpace {
   return "auto"
 }
 
-const FOCUS_CHANGING_PATTERNS = [
-  /^(win|super|meta|cmd)$/i,
-  /^(win|super|meta|cmd)\+/i,
-  /^alt\+tab$/i,
-  /^alt\+f4$/i,
-  /^ctrl\+n$/i,
-  /^ctrl\+shift\+n$/i,
-]
+const FOCUS_CHANGING_KEYS = new Set([
+  "win",
+  "super",
+  "meta",
+  "cmd",
+  "alt+tab",
+  "alt+shift+tab",
+  "cmd+tab",
+  "cmd+shift+tab",
+  "alt+f4",
+  "cmd+q",
+])
 
 function isFocusChangingKey(key: string): boolean {
-  return FOCUS_CHANGING_PATTERNS.some((p) => p.test(key.trim()))
+  return FOCUS_CHANGING_KEYS.has(key.trim().toLowerCase())
 }
 
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, wait, and request desktop confirmation.

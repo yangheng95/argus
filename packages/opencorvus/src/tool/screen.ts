@@ -92,7 +92,7 @@ IMPORTANT workflow:
 
 IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn - only your text description persists.
 
-Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1 to render coordinate ticks on returned images. By default, returned screenshots do not include visual coordinate overlays.`
+Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=0 to disable coordinate ticks on returned images. By default, screenshots include visible coordinate overlays.`
 
 const WaitForChange = z.preprocess((input) => {
   if (typeof input !== "string") return input

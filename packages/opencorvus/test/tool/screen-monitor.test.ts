@@ -4,6 +4,7 @@ import { tmpdir } from "../fixture/fixture"
 
 let unbound = 0
 let overlayCalls = 0
+let clickMarkerCalls = 0
 const bindByIdCalls: number[] = []
 let monitorBinding: any = null
 
@@ -57,6 +58,25 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         },
       }
     },
+    bindByIdQuiet: async (windowId: number, matchTitle?: string) => {
+      bindByIdCalls.push(windowId)
+      return {
+        windowId: 7,
+        matchTitle: matchTitle ?? "editor",
+        info: {
+          id: 7,
+          title: "Editor",
+          appName: "Code",
+          x: 2100,
+          y: 120,
+          width: 1200,
+          height: 800,
+          isMinimized: false,
+          isFocused: true,
+        },
+      }
+    },
+    consumeFocusChange: () => false,
     unbind: () => {
       unbound += 1
     },
@@ -123,6 +143,10 @@ mock.module("../../src/opencorvus/perception/overlay", () => ({
     overlayCalls += 1
     return Buffer.concat([buf, Buffer.from("-overlay")])
   },
+  addClickMarker: async (buf: Buffer) => {
+    clickMarkerCalls += 1
+    return Buffer.concat([buf, Buffer.from("-click")])
+  },
 }))
 
 mock.module("../../src/tool/overlay-client", () => ({
@@ -146,6 +170,7 @@ const ctx = {
 beforeEach(() => {
   unbound = 0
   overlayCalls = 0
+  clickMarkerCalls = 0
   bindByIdCalls.length = 0
   monitorBinding = {
     monitorId: 2,
@@ -202,15 +227,15 @@ describe("tool.screen monitor flow", () => {
     })
   })
 
-  test("screenshot does not render visible coordinate overlay by default", async () => {
+  test("screenshot renders coordinate overlay by default", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await ScreenTool.init()
-        const result = await tool.execute({ action: "screenshot" }, ctx)
-        expect(overlayCalls).toBe(0)
-        expect(result.output).toContain("no visible coordinate overlay")
+        await tool.execute({ action: "screenshot" }, ctx)
+        expect(overlayCalls).toBe(1)
+        expect(clickMarkerCalls).toBe(0)
       },
     })
   })
@@ -235,9 +260,21 @@ describe("tool.screen monitor flow", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await ScreenTool.init()
-        const result = await tool.execute({ action: "screenshot" }, ctx)
+        await tool.execute({ action: "screenshot" }, ctx)
         expect(overlayCalls).toBe(1)
-        expect(result.output).toContain("Debug mode: coordinate ticks are visible on the image")
+      },
+    })
+  })
+
+  test("screenshot can disable coordinate overlay via env", async () => {
+    await using tmp = await tmpdir()
+    process.env.OPENCORVUS_SCREEN_DEBUG_COORDINATE_OVERLAY = "0"
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        await tool.execute({ action: "screenshot" }, ctx)
+        expect(overlayCalls).toBe(0)
       },
     })
   })

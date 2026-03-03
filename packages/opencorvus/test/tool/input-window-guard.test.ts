@@ -6,11 +6,16 @@ let binding: any = null
 let foreground = true
 const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
+const hotkeys: string[][] = []
+let focusMarks = 0
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
     getBinding: async () => binding,
     ensureBoundForeground: async () => foreground,
+    markFocusChange: () => {
+      focusMarks += 1
+    },
   },
 }))
 
@@ -29,7 +34,9 @@ mock.module("../../src/opencorvus/gui/index", () => ({
     drag: async (_startX: number, _startY: number, _endX: number, _endY: number) => {},
     paste: async (_text: string) => {},
     pressKey: async (_key: string) => {},
-    hotkey: async (..._keys: string[]) => {},
+    hotkey: async (...keys: string[]) => {
+      hotkeys.push(keys)
+    },
   },
 }))
 
@@ -81,6 +88,8 @@ beforeEach(() => {
   foreground = true
   clicks.length = 0
   middleClicks.length = 0
+  hotkeys.length = 0
+  focusMarks = 0
   delete process.env.OPENCORVUS_COORDINATE_SPACE
 })
 
@@ -214,6 +223,33 @@ describe("tool.input bound window guard", () => {
         )
         expect(result.metadata.unavailable).toBe(true)
         expect(result.metadata.unavailableReason).toBe("binary_missing")
+      },
+    })
+  })
+
+  test("does not mark focus change for in-window shortcut", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "cmd+c" }, ctx)
+        expect(result.metadata.focusChanging).toBe(false)
+        expect(focusMarks).toBe(0)
+      },
+    })
+  })
+
+  test("marks focus change for app-switch shortcut", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "cmd+tab" }, ctx)
+        expect(result.metadata.focusChanging).toBe(true)
+        expect(focusMarks).toBe(1)
+        expect(hotkeys).toEqual([["cmd", "tab"]])
       },
     })
   })

@@ -49,7 +49,15 @@ fn main() {
             }
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
-            if std::env::var("OPENCORVUS_OVERLAY_SHOW_CONSOLE").ok().as_deref() == Some("1") {
+            let forced = std::env::var("OPENCORVUS_OVERLAY_SHOW_CONSOLE")
+                .ok()
+                .as_deref()
+                == Some("1");
+            let bridge_mode = std::env::var("OPENCORVUS_OVERLAY_STDIN_EXIT")
+                .ok()
+                .as_deref()
+                == Some("1");
+            if forced || !bridge_mode {
                 manager::show_console(&app.handle());
             }
             Ok(())
