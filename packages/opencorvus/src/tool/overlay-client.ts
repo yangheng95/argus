@@ -1,17 +1,39 @@
 import { existsSync, statSync } from "fs"
-import { join } from "path"
+import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { Log } from "../util/log"
 
-function resolveBinaryPath() {
-  const dir = fileURLToPath(new URL(".", import.meta.url))
+function binaryNames() {
   const ext = process.platform === "win32" ? ".exe" : ""
-  const names = [`opencorvus-overlay${ext}`, `opencorvus-overlay${ext}`, `openlens-overlay${ext}`]
+  return [`opencorvus-overlay${ext}`, `openlens-overlay${ext}`]
+}
+
+function resolveBinaryPath() {
+  const names = binaryNames()
+  const fromEnv = process.env.OPENCORVUS_OVERLAY_BIN?.trim()
+  if (fromEnv) return fromEnv
+
+  const executableDir = dirname(process.execPath)
   for (const name of names) {
-    const candidate = join(dir, "..", "..", "..", "overlay", "src-tauri", "target", "release", name)
+    const candidate = join(executableDir, name)
     if (existsSync(candidate)) return candidate
   }
-  return join(dir, "..", "..", "..", "overlay", "src-tauri", "target", "release", names[0])
+
+  const cwd = process.cwd()
+  for (const name of names) {
+    const candidate = join(cwd, name)
+    if (existsSync(candidate)) return candidate
+  }
+
+  const dir = fileURLToPath(new URL(".", import.meta.url))
+  for (const mode of ["release", "debug"] as const) {
+    for (const name of names) {
+      const candidate = join(dir, "..", "..", "..", "overlay", "src-tauri", "target", mode, name)
+      if (existsSync(candidate)) return candidate
+    }
+  }
+
+  return join(executableDir, names[0])
 }
 
 const BINARY_PATH = resolveBinaryPath()
