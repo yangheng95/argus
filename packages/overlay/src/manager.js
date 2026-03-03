@@ -15,10 +15,9 @@ const els = {
   refreshBtn: document.getElementById("refreshBtn"),
   clearLogsBtn: document.getElementById("clearLogsBtn"),
   saveBtn: document.getElementById("saveBtn"),
-  commandInput: document.getElementById("commandInput"),
+  serveCmdInput: document.getElementById("serveCmdInput"),
+  runCmdInput: document.getElementById("runCmdInput"),
   cwdInput: document.getElementById("cwdInput"),
-  serveArgsInput: document.getElementById("serveArgsInput"),
-  runArgsInput: document.getElementById("runArgsInput"),
   envInput: document.getElementById("envInput"),
 }
 
@@ -93,6 +92,10 @@ function argsToText(list) {
   return list.map((item) => quoteArg(String(item))).join(" ")
 }
 
+function commandToText(command, list) {
+  return argsToText([command || "opencorvus", ...(Array.isArray(list) ? list : [])])
+}
+
 function envToText(env) {
   if (!Array.isArray(env)) return ""
   return env.map((item) => `${item.key ?? ""}=${item.value ?? ""}`).join("\n")
@@ -113,20 +116,24 @@ function textToEnv(input) {
 
 function fillConfig(config) {
   if (!config) return
-  els.commandInput.value = config.command ?? "opencorvus"
+  const command = config.command ?? "opencorvus"
+  els.serveCmdInput.value = commandToText(command, config.serve_args)
+  els.runCmdInput.value = commandToText(command, config.run_args)
   els.cwdInput.value = config.cwd ?? ""
-  els.serveArgsInput.value = argsToText(config.serve_args)
-  els.runArgsInput.value = argsToText(config.run_args)
   els.envInput.value = envToText(config.env)
   state.configLoaded = true
 }
 
 function readConfig() {
+  const serve = readArgs(els.serveCmdInput.value)
+  const run = readArgs(els.runCmdInput.value)
+  const command = (serve[0] || run[0] || "opencorvus").trim() || "opencorvus"
+
   return {
-    command: (els.commandInput.value || "opencorvus").trim(),
+    command,
     cwd: els.cwdInput.value.trim(),
-    serve_args: readArgs(els.serveArgsInput.value),
-    run_args: readArgs(els.runArgsInput.value),
+    serve_args: serve.length > 0 ? serve.slice(1) : [],
+    run_args: run.length === 0 ? [] : run[0] === command ? run.slice(1) : run,
     env: textToEnv(els.envInput.value),
   }
 }
@@ -224,6 +231,15 @@ function bindEvents() {
       state.sending = false
       els.sendBtn.disabled = false
     }
+  })
+
+  els.promptInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return
+    if (event.shiftKey) return
+    if (event.isComposing) return
+    event.preventDefault()
+    if (state.sending) return
+    els.sendForm.requestSubmit()
   })
 
   els.startBtn.addEventListener("click", async () => {

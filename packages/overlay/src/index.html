@@ -32,10 +32,11 @@
       height: 40px;
       transform: translate(-50%, -50%) scale(0.8);
       border-radius: var(--radius-pill);
-      border: 2px solid transparent;
-      background:
-        linear-gradient(transparent, transparent) padding-box,
-        linear-gradient(135deg, var(--accent), rgba(20, 50, 94, 0.12)) border-box;
+      border: 2px solid var(--accent);
+      background: transparent !important;
+      box-shadow:
+        0 0 0 1px rgba(20, 50, 94, 0.14),
+        0 0 16px rgba(20, 50, 94, 0.18);
       opacity: 0;
       transition: opacity 120ms var(--ease), transform 180ms var(--ease);
     }
@@ -72,9 +73,10 @@
     }
 
     #focus.done {
-      background:
-        linear-gradient(transparent, transparent) padding-box,
-        linear-gradient(135deg, var(--color-done), rgba(20, 50, 94, 0.1)) border-box;
+      border-color: var(--color-done);
+      box-shadow:
+        0 0 0 1px rgba(var(--color-done-rgb), 0.28),
+        0 0 18px rgba(var(--color-done-rgb), 0.25);
     }
 
     #focus.done::before {
@@ -83,9 +85,10 @@
     }
 
     #focus.error {
-      background:
-        linear-gradient(transparent, transparent) padding-box,
-        linear-gradient(135deg, var(--color-error), rgba(20, 50, 94, 0.1)) border-box;
+      border-color: var(--color-error);
+      box-shadow:
+        0 0 0 1px rgba(var(--color-error-rgb), 0.3),
+        0 0 18px rgba(var(--color-error-rgb), 0.25);
     }
 
     #focus.error::before {

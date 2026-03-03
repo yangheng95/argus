@@ -425,15 +425,12 @@
         <section class="card">
           <div class="card-head">Bot Config</div>
           <div class="cfg">
-            <p class="cfg-hint">Keep it simple: command + args, advanced options only when needed.</p>
-            <label>Command
-              <input id="commandInput" placeholder="opencorvus" />
+            <p class="cfg-hint">Keep it simple: use full command lines, advanced options only when needed.</p>
+            <label>Start Command
+              <input id="serveCmdInput" placeholder='opencorvus serve --host "127.0.0.1"' />
             </label>
-            <label>Start Args
-              <input id="serveArgsInput" placeholder='serve --host "127.0.0.1"' />
-            </label>
-            <label>Prompt Args
-              <input id="runArgsInput" placeholder='run --continue --model "openai/gpt-5"' />
+            <label>Prompt Command
+              <input id="runCmdInput" placeholder='opencorvus run --continue --model "openai/gpt-5"' />
             </label>
             <details>
               <summary>Advanced (optional)</summary>
