@@ -1,3 +1,4 @@
+import path from "node:path"
 import { createOpencode, type OpencodeClient } from "@opencorvus-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { SlackAdapter } from "./adapters/slack"
