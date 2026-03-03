@@ -10,12 +10,32 @@ mock.module("../../src/opencorvus/perception/window", () => ({
     getBinding: async () => null,
     ensureBoundForeground: async () => true,
     listWindows: async () => [
-      { id: 7, title: "Editor", appName: "Code", x: 2100, y: 120, width: 1200, height: 800, isMinimized: false, isFocused: true },
+      {
+        id: 7,
+        title: "Editor",
+        appName: "Code",
+        x: 2100,
+        y: 120,
+        width: 1200,
+        height: 800,
+        isMinimized: false,
+        isFocused: true,
+      },
     ],
     bind: async (_title: string) => ({
       windowId: 7,
       matchTitle: "editor",
-      info: { id: 7, title: "Editor", appName: "Code", x: 2100, y: 120, width: 1200, height: 800, isMinimized: false, isFocused: true },
+      info: {
+        id: 7,
+        title: "Editor",
+        appName: "Code",
+        x: 2100,
+        y: 120,
+        width: 1200,
+        height: 800,
+        isMinimized: false,
+        isFocused: true,
+      },
     }),
     unbind: () => {
       unbound += 1
@@ -25,8 +45,16 @@ mock.module("../../src/opencorvus/perception/window", () => ({
 
 mock.module("../../src/opencorvus/perception/monitor", () => ({
   MonitorManager: {
-    getBinding: async () => ({ monitorId: 2, match: "2", info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 } }),
-    bind: async (_query: string | number) => ({ monitorId: 2, match: "2", info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 } }),
+    getBinding: async () => ({
+      monitorId: 2,
+      match: "2",
+      info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
+    }),
+    bind: async (_query: string | number) => ({
+      monitorId: 2,
+      match: "2",
+      info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
+    }),
     listMonitors: async () => [
       { id: 1, name: "Main", x: 0, y: 0, width: 1920, height: 1080, isPrimary: true, scaleFactor: 1 },
       { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
@@ -36,6 +64,29 @@ mock.module("../../src/opencorvus/perception/monitor", () => ({
 
 mock.module("../../src/opencorvus/perception/capture", () => ({
   Capture: {
+    scaleWindowBounds: (input: {
+      logicalX: number
+      logicalY: number
+      logicalWidth: number
+      logicalHeight: number
+      imageWidth: number
+      imageHeight: number
+    }) => {
+      const sx = input.logicalWidth > 0 ? input.imageWidth / input.logicalWidth : 1
+      const sy = input.logicalHeight > 0 ? input.imageHeight / input.logicalHeight : 1
+      return {
+        x: Math.round(input.logicalX * sx),
+        y: Math.round(input.logicalY * sy),
+        width: input.imageWidth,
+        height: input.imageHeight,
+        scaleX: sx,
+        scaleY: sy,
+        logicalX: input.logicalX,
+        logicalY: input.logicalY,
+        logicalWidth: input.logicalWidth,
+        logicalHeight: input.logicalHeight,
+      }
+    },
     take: async (_opts: unknown) => ({
       path: "x",
       width: 1920,

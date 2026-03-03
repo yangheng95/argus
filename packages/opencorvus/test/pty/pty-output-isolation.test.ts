@@ -128,7 +128,12 @@ describe("pty", () => {
           ctx.connId = 2
 
           Pty.write(a.id, "AAA\n")
-          await Bun.sleep(100)
+          await Bun.sleep(50)
+          await Array.from({ length: 9 }).reduce(async (pending) => {
+            await pending
+            if (out.join("").includes("AAA")) return
+            await Bun.sleep(50)
+          }, Promise.resolve())
 
           expect(out.join("")).toContain("AAA")
         } finally {
