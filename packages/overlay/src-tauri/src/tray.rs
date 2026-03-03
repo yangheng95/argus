@@ -22,6 +22,7 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     let menu = Menu::with_items(app, &[&open, &start, &stop, &quit]).map_err(|error| error.to_string())?;
 
     let icon = Image::from_bytes(include_bytes!("../icons/icon.ico"))
+        .or_else(|_| Image::from_bytes(include_bytes!("../icons/icon.png")))
         .map_err(|error| error.to_string())?;
 
     let _tray = TrayIconBuilder::new()
