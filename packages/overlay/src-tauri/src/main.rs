@@ -31,6 +31,8 @@ fn main() {
             let _ = tray::setup(&app.handle());
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
+            // Auto-show console window on startup
+            manager::show_console(&app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())
