@@ -210,7 +210,7 @@ export class BotCore {
       "## The visibility principle",
       "Everything you do must be visible to the user. Using background tools (write, bash) to produce code silently is unacceptable - the user has no idea what you changed or whether it is correct.",
       "For coding tasks, open a visible coding tool first:",
-      "- **Claude Code**: `bash('start \"Claude Code\" cmd /k \"claude\"')` — opens in a new terminal (use /k to keep window open)",
+      "- **Claude Code**: `bash('start \"Claude Code\" cmd /k \"set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude\"')` — opens in a new terminal",
       `- **OpenCorvus TUI**: \`bash('start "OpenCorvus" cmd /k "bun --preload @opentui/solid/preload --conditions=browser ${opencorvusSrc} <project_dir>"')\``,
       "Exception: if the user explicitly asks for a specific tool ('use codex', 'use VS Code', 'run bash'), follow that instruction.",
       "",
