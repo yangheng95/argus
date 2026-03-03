@@ -343,8 +343,12 @@ export const ScreenTool = Tool.define("screen", {
         const encoded = SCREEN_COMPRESSION_ENABLED
           ? await image(result.buffer)
           : { mime: "image/png", buffer: result.buffer, compressed: false }
-        const debugOverlay = debugCoordinateOverlay()
-        let attachment = debugOverlay ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer) : encoded.buffer
+        // Always apply coordinate grid overlay — the LLM prompt instructs models to
+        // reference grid labels for precise coordinate picking. The debug env var can
+        // be set to "0" to explicitly disable it.
+        const overlayDisabled = process.env[SCREEN_DEBUG_COORDINATE_OVERLAY_ENV]?.trim().toLowerCase() === "0"
+        let attachment = overlayDisabled ? encoded.buffer : await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
+        const debugOverlay = !overlayDisabled
 
         // Draw click marker if there was a recent click action
         const lastClick = DesktopState.consumeLastClick()
