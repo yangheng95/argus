@@ -28,12 +28,13 @@ Example of BAD behavior (DO NOT do this):
 Every desktop task follows this pattern:
 
 1. `screen.list_windows` — See what apps are open
-2. `screen.bind_window("App")` — Bind to the target app
-3. `screen.screenshot` — Observe the app
-4. `input.*` — Interact (click, type, key, etc.)
-5. `input.wait(ms)` — Wait for UI if needed
-6. `screen.screenshot` — Verify result
-7. Repeat 4-6 as needed
+2. Pick target `window_id` from candidates
+3. `screen.bind_window({window_id})` — Bind to the target app (title matching is fallback only)
+4. `screen.screenshot` — Observe the app
+5. `input.*` — Interact (click, type, key, etc.)
+6. `input.wait(ms)` — Wait for UI if needed
+7. `screen.screenshot` — Verify result
+8. Repeat 5-7 as needed
 
 ## RULES
 
@@ -62,9 +63,9 @@ If the `bash` tool is available, you can launch the OpenCorvus TUI for high-effi
 
 2. **Wait for TUI to start** — `input.wait(5000)` then `screen.list_windows`
 
-3. **Bind to TUI window** — The window title contains "OPENCORVUS" or the project name:
+3. **Bind to TUI window** — Use `screen.list_windows` and pick the OPENCORVUS window id:
    ```
-   screen.bind_window("OPENCORVUS")
+   screen.bind_window({ window_id: 123 })
    ```
 
 4. **Screenshot the TUI** to see its interface — it has a prompt input at the bottom.
@@ -100,7 +101,7 @@ Before touching any UI, plan:
 **For creating new files (preferred: terminal window approach):**
 1. Open a terminal window via GUI:
    - If VS Code is open: bind to VS Code → press `ctrl+`` (backtick) to toggle the integrated terminal panel
-   - If no IDE: open standalone PowerShell via `Win` key → type "powershell" → `Enter` → `wait(2000)` → `list_windows` → `bind_window("PowerShell")`
+   - If no IDE: open standalone PowerShell via `Win` key → type "powershell" → `Enter` → `wait(2000)` → `list_windows` → `bind_window({window_id})`
 2. Type shell commands into the terminal via `input.type`:
    - Small files (<500 chars): `echo 'content' > filename.html`
    - Large files: Break into chunks, use multiple `echo '...' >> filename.html` appends

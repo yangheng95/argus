@@ -104,102 +104,30 @@ export namespace WindowManager {
     return windows.find((w) => w.id() === windowId) ?? null
   }
 
-  // Lazy-loaded Bun FFI bindings for Win32 window management.
-  // Direct FFI is ~100x faster than the PowerShell+C# compilation approach.
-  let _win32ffi: { user32: any; kernel32: any } | null = null
-  function getWin32() {
-    if (_win32ffi) return _win32ffi
-    const { dlopen, FFIType } = require("bun:ffi")
-    const user32 = dlopen("user32.dll", {
-      SetForegroundWindow: { args: [FFIType.ptr], returns: FFIType.bool },
-      BringWindowToTop: { args: [FFIType.ptr], returns: FFIType.bool },
-      ShowWindow: { args: [FFIType.ptr, FFIType.i32], returns: FFIType.bool },
-      IsIconic: { args: [FFIType.ptr], returns: FFIType.bool },
-      GetForegroundWindow: { args: [], returns: FFIType.ptr },
-      GetWindowThreadProcessId: { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
-      AttachThreadInput: { args: [FFIType.i32, FFIType.i32, FFIType.bool], returns: FFIType.bool },
-    })
-    const kernel32 = dlopen("kernel32.dll", {
-      GetCurrentThreadId: { args: [], returns: FFIType.i32 },
-    })
-    _win32ffi = { user32, kernel32 }
-    return _win32ffi
+  // Lazy-loaded cross-platform window action from @nut-tree-fork/libnut.
+  // Works on Windows, macOS, and Linux using native APIs under the hood.
+  let _windowAction: any = null
+  function getWindowAction() {
+    if (_windowAction) return _windowAction
+    const nutPath = require.resolve("@nut-tree-fork/nut-js")
+    const libnutPath = require.resolve("@nut-tree-fork/libnut", { paths: [require("path").dirname(nutPath)] })
+    const { DefaultWindowAction } = require(libnutPath)
+    _windowAction = new DefaultWindowAction()
+    return _windowAction
   }
 
   /**
-   * Focus/activate a window by its native ID.
-   * Uses platform-specific best-effort activation.
-   * On Windows, uses Bun FFI to call user32.dll directly for instant (~1ms) focus.
+   * Focus/activate a window by its native ID (HWND on Windows, XID on Linux, etc.).
+   * Uses @nut-tree-fork/libnut for cross-platform focus — works on Windows/macOS/Linux.
    */
-  export async function focusWindow(windowId: number, appName?: string): Promise<boolean> {
+  export async function focusWindow(windowId: number, _appName?: string): Promise<boolean> {
     try {
-      if (process.platform === "win32") {
-        const { user32, kernel32 } = getWin32()
-        // Pass windowId as a raw number — Bun FFI accepts numbers for FFIType.ptr params.
-        // (Do NOT use ptr() which returns an opaque Cell object that can't be re-passed.)
-        const fg = user32.symbols.GetForegroundWindow()
-        const pidBuf = new Int32Array(1)
-        const fgTid = user32.symbols.GetWindowThreadProcessId(fg, pidBuf)
-        const myTid = kernel32.symbols.GetCurrentThreadId()
-        user32.symbols.AttachThreadInput(myTid, fgTid, true)
-        // Restore if minimized (SW_RESTORE = 9)
-        if (user32.symbols.IsIconic(windowId)) {
-          user32.symbols.ShowWindow(windowId, 9)
-        }
-        user32.symbols.BringWindowToTop(windowId)
-        const result = user32.symbols.SetForegroundWindow(windowId)
-        user32.symbols.AttachThreadInput(myTid, fgTid, false)
-        log.info("focusWindow win32 ffi", { windowId, result, fgTid, myTid })
-        return result
-      }
-
-      if (process.platform === "darwin") {
-        if (!appName) return false
-        const { execFileSync } = await import("child_process")
-        const escaped = appName.replace(/"/g, "\\\"")
-        execFileSync("osascript", ["-e", `tell application \"${escaped}\" to activate`], {
-          timeout: 5000,
-          stdio: "ignore",
-        })
-        return true
-      }
-
-      if (process.platform === "linux") {
-        const { execFileSync } = await import("child_process")
-        const isWayland = !!process.env.WAYLAND_DISPLAY
-        const hasX11 = !!process.env.DISPLAY
-
-        if (isWayland && !hasX11) {
-          log.warn("window focus not supported on pure Wayland; install XWayland or use a Wayland-native compositor tool", { windowId })
-          return false
-        }
-
-        // X11 or XWayland: try xdotool then wmctrl
-        try {
-          execFileSync("xdotool", ["windowactivate", "--sync", String(windowId)], {
-            timeout: 5000,
-            stdio: "ignore",
-          })
-          return true
-        } catch {
-          // Fall through to wmctrl
-        }
-
-        const hex = `0x${windowId.toString(16)}`
-        try {
-          execFileSync("wmctrl", ["-ia", hex], {
-            timeout: 5000,
-            stdio: "ignore",
-          })
-          return true
-        } catch {
-          return false
-        }
-      }
-
-      return false
+      const wa = getWindowAction()
+      await wa.focusWindow(windowId)
+      log.info("focusWindow", { windowId })
+      return true
     } catch (err) {
-      log.warn("failed to focus window", { windowId, appName, err })
+      log.warn("failed to focus window", { windowId, err })
       return false
     }
   }
