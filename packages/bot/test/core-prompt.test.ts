@@ -1,13 +1,20 @@
-import { describe, expect, test } from "bun:test"
-import { BotCore } from "../src/core"
+import { describe, expect, mock, test } from "bun:test"
+
+mock.module("@opencorvus-ai/sdk", () => ({
+  createOpencode: async () => {
+    throw new Error("not used in this test")
+  },
+}))
+
+const { BotCore } = await import("../src/core")
 
 describe("bot core system prompt", () => {
-  test("enforces memory recall and external setup research", () => {
+  test("enforces visible execution principles", () => {
     const core = new BotCore()
     const prompt = (core as any).buildSystemPrompt("slack") as string
 
-    expect(prompt).toContain('memory(action: "search")')
-    expect(prompt).toContain("websearch/webfetch")
-    expect(prompt).toContain("Slack bot registration")
+    expect(prompt).toContain("The visibility principle")
+    expect(prompt).toContain("OpenCorvus TUI")
+    expect(prompt).toContain("Search memory at the start of each task")
   })
 })

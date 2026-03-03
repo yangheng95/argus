@@ -1,7 +1,6 @@
 import path from "node:path"
 import { createOpencode, type OpencodeClient } from "@opencorvus-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
-import type { SlackAdapter } from "./adapters/slack"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
 
@@ -195,16 +194,16 @@ export class BotCore {
   }
 
   /**
-   * Inject a prompt directly into a Slack channel, bypassing the Slack message listener.
-   * This creates a session bound to the channel so SSE events flow back to Slack.
-   * Useful for automated testing with bot tokens.
+   * Inject a prompt directly into a channel, bypassing inbound listener events.
+   * Requires adapter.startThread(channel, text).
    */
   async injectPrompt(platform: string, channel: string, text: string): Promise<void> {
-    const adapter = this.adapters.find((a) => a.platform === platform) as SlackAdapter | undefined
+    const adapter = this.adapters.find((a) => a.platform === platform)
     if (!adapter) throw new Error(`No adapter for platform: ${platform}`)
+    if (!adapter.startThread) throw new Error(`Adapter ${platform} does not support injectPrompt`)
 
     // Post the prompt as a visible message and get its ts for threading
-    const ts = await adapter.postAndGetTs(channel, `[OpenCorvus Task] ${text}`)
+    const ts = await adapter.startThread(channel, `[OpenCorvus Task] ${text}`)
 
     // Treat it as an incoming message — this creates session + sends prompt
     await this.handleMessage({

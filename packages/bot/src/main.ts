@@ -10,6 +10,7 @@ import { GoogleGeminiProvider } from "./stt/providers/google-gemini"
 import { LocalCLIProvider } from "./stt/providers/local-cli"
 import { VisionPipeline } from "./vision"
 import { applyDashscopeRuntime } from "./dashscope"
+import { ADAPTER_HINT, registerAdapters } from "./registry"
 
 // Bot tool permissions: override defaults that would "ask" user for confirmation.
 // Defaults already have "*": "allow", so we don't need to deny-all + re-allow.
@@ -132,36 +133,20 @@ if (activeKey) {
   }
 }
 
-if (process.env.SLACK_BOT_TOKEN) {
-  bot.register(
-    new SlackAdapter({
-      token: process.env.SLACK_BOT_TOKEN,
-      signingSecret: process.env.SLACK_SIGNING_SECRET,
-      appToken: process.env.SLACK_APP_TOKEN!,
-    }),
-  )
+const adapters = registerAdapters(bot, process.env, {
+  slack: (opts) => new SlackAdapter(opts),
+  telegram: (opts) => new TelegramAdapter(opts),
+  discord: (opts) => new DiscordAdapter(opts),
+})
+for (const warn of adapters.warns) {
+  console.warn(`[Bot] ${warn}`)
 }
 
-if (process.env.TELEGRAM_BOT_TOKEN) {
-  bot.register(
-    new TelegramAdapter({
-      token: process.env.TELEGRAM_BOT_TOKEN,
-    }),
-  )
-}
-
-if (process.env.DISCORD_BOT_TOKEN) {
-  bot.register(
-    new DiscordAdapter({
-      token: process.env.DISCORD_BOT_TOKEN,
-    }),
-  )
-}
-
-if (bot.adapterCount === 0) {
-  console.error("No adapter configured. Set SLACK_BOT_TOKEN, TELEGRAM_BOT_TOKEN, or DISCORD_BOT_TOKEN.")
+if (adapters.names.length === 0) {
+  console.error(`No adapter configured. ${ADAPTER_HINT}`)
   process.exit(1)
 }
+console.log(`[Bot] Registered adapters: ${adapters.names.join(", ")}`)
 
 await bot.start()
 console.log("Bot is running")

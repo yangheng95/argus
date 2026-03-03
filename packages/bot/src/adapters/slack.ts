@@ -116,10 +116,14 @@ export class SlackAdapter implements BotAdapter {
     })
   }
 
-  /** Post a top-level message and return its ts (for threading replies) */
-  async postAndGetTs(channel: string, text: string): Promise<string> {
+  async startThread(channel: string, text: string): Promise<string> {
     const result = await this.app.client.chat.postMessage({ channel, text })
     return result.ts!
+  }
+
+  /** Backward-compatible alias used by older call sites. */
+  async postAndGetTs(channel: string, text: string): Promise<string> {
+    return this.startThread(channel, text)
   }
 
   async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
