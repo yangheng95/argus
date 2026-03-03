@@ -191,6 +191,9 @@ export class BotCore {
       adapter.onMessage((msg) => this.handleMessage(msg))
       await adapter.start()
     }
+
+    // Start overlay process for visual feedback
+    await this.startOverlay()
   }
 
   async stop(): Promise<void> {
@@ -199,6 +202,7 @@ export class BotCore {
       await adapter.stop()
     }
     this.server.close()
+    this.stopOverlay()
   }
 
   async handleMessage(msg: IncomingMessage): Promise<void> {
