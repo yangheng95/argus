@@ -18,6 +18,7 @@
   --text-primary: rgba(244, 247, 252, 0.96);
   --text-secondary: rgba(177, 190, 207, 0.92);
   --text-muted: rgba(115, 130, 149, 0.86);
+  --text-muted-rgb: 115, 130, 149;
 
   /* Semantic */
   --color-click: #38bdf8;
