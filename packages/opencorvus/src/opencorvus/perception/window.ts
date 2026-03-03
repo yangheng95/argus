@@ -91,6 +91,16 @@ export namespace WindowManager {
     return matches[0]
   }
 
+  export async function findWindowById(windowId: number): Promise<WindowInfo | null> {
+    const windows = await listWindows(true)
+    const match = windows.find((w) => w.id === windowId) ?? null
+    if (!match) {
+      log.info("no window found", { windowId })
+      return null
+    }
+    return match
+  }
+
   export async function getNativeWindow(windowId: number): Promise<InstanceType<typeof import("node-screenshots").Window> | null> {
     const { Window } = await import("node-screenshots")
     const windows = Window.all()
@@ -237,6 +247,27 @@ if ([OpenCorvusF${windowId}]::IsIconic($hwnd)) {
     }
 
     // Bring window to foreground after binding.
+    const focused = await ensureForeground(info.id, info.appName)
+    if (!focused) {
+      log.warn("bound window not confirmed focused", { windowId: info.id, title: info.title, appName: info.appName })
+    }
+
+    log.info("bound window", { windowId: info.id, title: info.title, appName: info.appName, focused })
+    return windowState().binding!
+  }
+
+  export async function bindById(windowId: number, matchTitle?: string): Promise<WindowBinding> {
+    const info = await findWindowById(windowId)
+    if (!info) {
+      throw new Error(`No window found with id ${windowId}`)
+    }
+
+    windowState().binding = {
+      windowId: info.id,
+      matchTitle: matchTitle?.trim() || info.title || info.appName || String(info.id),
+      info,
+    }
+
     const focused = await ensureForeground(info.id, info.appName)
     if (!focused) {
       log.warn("bound window not confirmed focused", { windowId: info.id, title: info.title, appName: info.appName })

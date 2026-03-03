@@ -59,11 +59,18 @@ function monitorForWindow(
   return monitors.find((m) => cx >= m.x && cy >= m.y && cx < m.x + m.width && cy < m.y + m.height) ?? null
 }
 
-function pickWindow(windows: WindowManager.WindowInfo[]): WindowManager.WindowInfo | null {
+function candidateWindows<
+  T extends { title: string; isMinimized: boolean; isFocused: boolean; width: number; height: number },
+>(windows: T[]): T[] {
   const list = windows.filter((w) => !!w.title && !w.isMinimized && w.width > 100 && w.height > 100)
-  const focused = list.find((w) => w.isFocused)
-  if (focused) return focused
-  return [...list].sort((a, b) => b.width * b.height - a.width * a.height)[0] ?? null
+  return [...list].sort((a, b) => {
+    if (a.isFocused !== b.isFocused) return a.isFocused ? -1 : 1
+    return b.width * b.height - a.width * a.height
+  })
+}
+
+function pickWindow(windows: WindowManager.WindowInfo[]): WindowManager.WindowInfo | null {
+  return candidateWindows(windows)[0] ?? null
 }
 
 const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, list monitors, and bind a target window or monitor.
@@ -72,14 +79,14 @@ Actions:
 - screenshot: Capture the current screen (or bound window/monitor). Returns the image for visual analysis. If the screen has not changed since the last screenshot, it will tell you instead of returning the image again (saves analysis time). Set wait_for_change=true to block until the screen actually changes - use this when waiting for page loads, dialogs, or animations instead of polling with repeated screenshots.
 - list_monitors: List all monitors with position, size, and scale.
 - bind_monitor: Bind to a monitor by id or name (e.g. 1, "DELL", "primary"). Screenshots then focus this monitor.
-- list_windows: List all visible windows with their positions and sizes. Use when you need to disambiguate windows.
-- bind_window: Bind to a specific window by title substring. After binding, screenshots capture only that window and coordinates become window-relative to it.
+- list_windows: List all visible windows with their positions and sizes. It also returns ranked window_id candidates for model-driven target selection.
+- bind_window: Bind to a specific window by window_id (preferred from list_windows) or by title substring fallback. After binding, screenshots capture only that window and coordinates become window-relative.
 
 IMPORTANT workflow:
 1. In multi-monitor setups, use list_monitors first and bind_monitor to choose the target screen.
 2. In single-monitor setups, start with screenshot and interact directly.
 3. Use bind_window when app-level coordinate precision is needed.
-4. Use list_windows only when multiple windows are possible or bind_window fails.
+4. Use list_windows when multiple windows are possible, then choose a window_id and call bind_window.
 5. Take a screenshot of the bound target to see current content.
 6. Interact with the app via the input tool, using coordinates from the screenshot.
 7. Take another screenshot to verify the result.
@@ -98,7 +105,10 @@ const ScreenshotAction = z.object({
 
 const BindWindowAction = z.object({
   action: z.literal("bind_window"),
-  title: z.string().describe("Window title substring to search for (e.g. \"Chrome\", \"Notepad\")"),
+  window_id: z.number().int().optional().describe("Exact window id from list_windows. Preferred for deterministic binding."),
+  title: z.string().optional().describe("Fallback window title/app substring when window_id is unavailable."),
+}).refine((v) => typeof v.window_id === "number" || !!v.title?.trim(), {
+  message: "Provide window_id or title",
 })
 
 const ListWindowsAction = z.object({
@@ -360,7 +370,7 @@ export const ScreenTool = Tool.define("screen", {
         }
 
         const foregroundNote = foregroundFailed
-          ? ` WARNING: Could not bring the previously bound window to foreground. The window binding was released and capture fell back to monitor mode. Use input.key with "alt+tab" to switch windows, or re-bind with screen.bind_window. If the target title is unknown or ambiguous, run list_windows and bind again.`
+          ? ` WARNING: Could not bring the previously bound window to foreground. The window binding was released and capture fell back to monitor mode. Use input.key with "alt+tab" to switch windows, or re-bind with screen.bind_window. If the target is unknown or ambiguous, run list_windows, pick a window_id, and bind again.`
           : ""
         return {
           title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [monitor fallback]" : ""}`,
@@ -391,18 +401,34 @@ export const ScreenTool = Tool.define("screen", {
 
       case "bind_window": {
         GuiState.activate()
-        const query = params.title.trim()
-        const match = query ? await WindowManager.findWindow(query) : null
-        const monitors = await MonitorManager.listMonitors()
-        const fallback = !match && monitors.length === 1
-          ? pickWindow(await WindowManager.listWindows())
+        const query = params.title?.trim() ?? ""
+        const requestedWindowId = params.window_id
+        const [windows, monitors] = await Promise.all([WindowManager.listWindows(true), MonitorManager.listMonitors()])
+        const pickedById = typeof requestedWindowId === "number"
+          ? windows.find((w) => w.id === requestedWindowId) ?? null
+          : null
+        const match = pickedById ?? (query ? await WindowManager.findWindow(query) : null)
+        const fallback = !match && query && monitors.length === 1
+          ? pickWindow(windows)
           : null
         const picked = match ?? fallback
         if (!picked) {
-          if (query) throw new Error(`No window found matching "${query}"`)
+          if (typeof requestedWindowId === "number" && query) {
+            throw new Error(`No window found with id ${requestedWindowId} or matching "${query}"`)
+          }
+          if (typeof requestedWindowId === "number") {
+            throw new Error(`No window found with id ${requestedWindowId}`)
+          }
+          if (query) {
+            throw new Error(`No window found matching "${query}"`)
+          }
           throw new Error("No window found to bind")
         }
-        const binding = await WindowManager.bind(picked.title)
+        const mode = pickedById ? "window_id" : fallback ? "single_monitor_fallback" : "title"
+        const binding = await WindowManager.bindById(picked.id, query || undefined)
+        const idFallbackNote = typeof requestedWindowId === "number" && !pickedById && query
+          ? ` Requested window_id ${requestedWindowId} did not match any window, so title matching selected "${binding.info.title}".`
+          : ""
         const fallbackNote = fallback
           ? ` Requested "${query || "focused"}" did not match any window, so single-monitor fallback bound "${binding.info.title}".`
           : ""
@@ -430,7 +456,7 @@ export const ScreenTool = Tool.define("screen", {
         })
         return {
           title: `Bound to "${binding.info.title}"`,
-          output: `Bound to window: "${binding.info.title}" (${binding.info.appName}), position: (${binding.info.x}, ${binding.info.y}), size: ${binding.info.width}x${binding.info.height}.${fallbackNote} Take a screenshot to see the window content - coordinates will be relative to this window.`,
+          output: `Bound to window: "${binding.info.title}" (${binding.info.appName}), position: (${binding.info.x}, ${binding.info.y}), size: ${binding.info.width}x${binding.info.height}.${idFallbackNote}${fallbackNote} Take a screenshot to see the window content - coordinates will be relative to this window.`,
           metadata: {
             windowId: binding.windowId,
             title: binding.info.title,
@@ -439,7 +465,10 @@ export const ScreenTool = Tool.define("screen", {
             y: binding.info.y,
             width: binding.info.width,
             height: binding.info.height,
-            requestedTitle: query,
+            requestedTitle: query || null,
+            requestedWindowId: requestedWindowId ?? null,
+            selectionMode: mode,
+            idFallback: typeof requestedWindowId === "number" && !pickedById,
             singleMonitorFallback: !!fallback,
             monitorCount: monitors.length,
           },
@@ -485,10 +514,25 @@ export const ScreenTool = Tool.define("screen", {
         const lines = enriched.map(
           (w) => `[${w.id}] "${w.title}" (${w.appName}) - pos: (${w.x},${w.y}), size: ${w.width}x${w.height}, monitor: ${w.monitorId ?? "?"}${w.isFocused ? " [focused]" : ""}`,
         )
+        const candidates = candidateWindows(enriched).map((w) => ({
+          window_id: w.id,
+          title: w.title,
+          appName: w.appName,
+          monitorId: w.monitorId,
+          isFocused: w.isFocused,
+          width: w.width,
+          height: w.height,
+        }))
+        const candidateLines = candidates.slice(0, 8).map(
+          (w, i) => `${i === 0 ? "*" : "-"} window_id=${w.window_id} "${w.title}" (${w.appName}) on monitor ${w.monitorId ?? "?"}${w.isFocused ? " [focused]" : ""}`,
+        )
+        const candidateHint = candidateLines.length > 0
+          ? `\n\nSelectable targets (best first):\n${candidateLines.join("\n")}\nBind one with: screen.bind_window({ window_id: <id> })`
+          : ""
         return {
           title: `Found ${enriched.length} windows`,
-          output: lines.length > 0 ? lines.join("\n") : "No visible windows found.",
-          metadata: { count: enriched.length, windows: enriched },
+          output: lines.length > 0 ? lines.join("\n") + candidateHint : "No visible windows found.",
+          metadata: { count: enriched.length, windows: enriched, candidates },
         }
       }
 

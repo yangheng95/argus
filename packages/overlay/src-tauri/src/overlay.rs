@@ -104,10 +104,13 @@ pub fn apply_overlay_window_style(app: &tauri::App) {
             let raw = hwnd.0 as *mut std::ffi::c_void;
             unsafe {
                 let style = GetWindowLongPtrW(raw, GWL_EXSTYLE);
+                // WS_EX_TRANSPARENT = click-through, WS_EX_NOACTIVATE = don't steal focus.
+                // Do NOT add WS_EX_LAYERED — it conflicts with Tauri 2's WebView2 transparency
+                // and causes the window to render with a solid black background.
                 SetWindowLongPtrW(
                     raw,
                     GWL_EXSTYLE,
-                    style | WS_EX_LAYERED as isize | WS_EX_TRANSPARENT as isize | WS_EX_NOACTIVATE as isize,
+                    style | WS_EX_TRANSPARENT as isize | WS_EX_NOACTIVATE as isize,
                 );
             }
         }

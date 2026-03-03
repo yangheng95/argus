@@ -34,14 +34,15 @@ If the platform-specific skill is available, treat it as the primary source for 
 
 ## Golden Rules
 
-1. **list_windows FIRST** — Before interacting with any app, check what's open. Don't guess.
-2. **bind_window for precision** — Binding makes coordinates window-relative and screenshots cleaner.
-3. **Screenshot BEFORE acting** — Never click/type blindly. Know what's on screen.
-4. **Screenshot AFTER acting** — Verify every action had the expected effect.
-5. **Click BEFORE typing** — Always click the target field to give it focus.
-6. **Wait BEFORE screenshot** — If expecting UI changes, `wait` first, then screenshot.
-7. **Coordinates are integers** — `{"x": 500, "y": 300}`. NEVER use arrays.
-8. **Describe every screenshot** — Screenshots are removed from context after the current turn. Your text description is the only surviving record.
+1. **single-monitor default** — Start with screenshot. On one screen, you usually do NOT need `list_windows`.
+2. **bind_window for precision** — Use binding when app-level coordinates are needed.
+3. **list_windows only when needed** — Use it when windows are ambiguous, title is unknown, or bind fails.
+4. **Screenshot BEFORE acting** — Never click/type blindly. Know what's on screen.
+5. **Screenshot AFTER acting** — Verify every action had the expected effect.
+6. **Click BEFORE typing** — Always click the target field to give it focus.
+7. **Wait BEFORE screenshot** — If expecting UI changes, `wait` first, then screenshot.
+8. **Coordinates are integers** — `{"x": 500, "y": 300}`. NEVER use arrays.
+9. **Describe every screenshot** — Screenshots are removed from context after the current turn. Your text description is the only surviving record.
 
 ## Platform Detection
 
@@ -61,20 +62,20 @@ The screenshot output includes platform info (e.g. "Platform: Windows"). Use it 
 
 ### Windows
 ```
-input.key("win") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.list_windows → screen.bind_window("AppName")
+input.key("win") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.bind_window("AppName")
 ```
 
 ### macOS
 ```
-input.key("cmd+space") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.list_windows → screen.bind_window("AppName")
+input.key("cmd+space") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.bind_window("AppName")
 ```
 
 ### Linux
 ```
-input.key("super") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.list_windows → screen.bind_window("AppName")
+input.key("super") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.bind_window("AppName")
 ```
 
-**Verification:** Always `list_windows` after launching — if the app doesn't appear, wait longer or try again.
+**Verification:** After launching, take `screen.screenshot`; if bind fails or the target app is ambiguous, run `screen.list_windows` and re-bind.
 
 ## 2. Opening a URL in Browser
 

@@ -11,20 +11,20 @@ Use this skill for Linux desktop tasks. Interact only through `screen` and `inpu
 
 ## Standard Flow
 
-1. `screen.list_windows`
-2. `screen.bind_window("target")`
-3. `screen.screenshot`
-4. `input.*` action
-5. `input.wait(300-3000)`
-6. `screen.screenshot` verify
+1. `screen.screenshot`
+2. `screen.bind_window("target")` only when app-level precision is needed
+3. `input.*` action
+4. `input.wait(300-3000)`
+5. `screen.screenshot` verify
+6. `screen.list_windows` only if window title is ambiguous or bind failed
 
 ## App Launch (Linux)
 
 - Open launcher: `input.key("super")`
 - Search app: `input.type("AppName")`
 - Launch: `input.key("enter")`
-- Wait and verify: `input.wait(2000)` + `screen.list_windows`
-- Bind target window: `screen.bind_window("AppName")`
+- Wait and verify: `input.wait(2000)` + `screen.screenshot`
+- Bind target window if needed: `screen.bind_window("AppName")`
 
 ## Window Positioning
 
