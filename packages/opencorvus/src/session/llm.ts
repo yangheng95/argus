@@ -249,6 +249,14 @@ export namespace LLM {
                 // @ts-expect-error
                 args.params.prompt = ProviderTransform.message(args.params.prompt, input.model, options)
               }
+              // DEBUG: Log actual params being sent to provider
+              l.info("middleware transformParams", {
+                type: args.type,
+                toolCount: args.params.tools?.length ?? 0,
+                toolNames: args.params.tools?.map((t: any) => t.name ?? t.id ?? "unknown"),
+                toolChoice: (args.params as any).toolChoice,
+                providerOptions: Object.keys((args.params as any).providerOptions ?? {}),
+              })
               return args.params
             },
           },

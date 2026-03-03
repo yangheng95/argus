@@ -322,6 +322,36 @@
       letter-spacing: 0.06em;
     }
 
+    .cfg-hint {
+      margin: 0;
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .cfg details {
+      border: 1px solid rgba(20, 50, 94, 0.12);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      background: rgba(20, 50, 94, 0.03);
+      display: grid;
+      gap: 10px;
+    }
+
+    .cfg summary {
+      cursor: pointer;
+      user-select: none;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .cfg details[open] summary {
+      color: var(--text-secondary);
+    }
+
     .save-wrap {
       display: flex;
       justify-content: flex-end;
@@ -395,21 +425,25 @@
         <section class="card">
           <div class="card-head">Bot Config</div>
           <div class="cfg">
+            <p class="cfg-hint">Keep it simple: command + args, advanced options only when needed.</p>
             <label>Command
               <input id="commandInput" placeholder="opencorvus" />
             </label>
-            <label>Working Directory
-              <input id="cwdInput" placeholder="(optional)" />
+            <label>Start Args
+              <input id="serveArgsInput" placeholder='serve --host "127.0.0.1"' />
             </label>
-            <label>Start Args (one per line)
-              <textarea id="serveArgsInput" rows="4"></textarea>
+            <label>Prompt Args
+              <input id="runArgsInput" placeholder='run --continue --model "openai/gpt-5"' />
             </label>
-            <label>Prompt Args (one per line)
-              <textarea id="runArgsInput" rows="4"></textarea>
-            </label>
-            <label>Env (KEY=VALUE, one per line)
-              <textarea id="envInput" rows="4"></textarea>
-            </label>
+            <details>
+              <summary>Advanced (optional)</summary>
+              <label>Working Directory
+                <input id="cwdInput" placeholder="(optional)" />
+              </label>
+              <label>Env (KEY=VALUE, one per line)
+                <textarea id="envInput" rows="4"></textarea>
+              </label>
+            </details>
             <div class="save-wrap">
               <button id="saveBtn" type="button">Save Config</button>
             </div>
