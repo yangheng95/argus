@@ -28,16 +28,22 @@ export namespace MonitorManager {
   export async function listMonitors(): Promise<MonitorInfo[]> {
     const { Monitor } = await import("node-screenshots")
     const monitors = Monitor.all()
-    const result = monitors.map((m) => ({
-      id: m.id(),
-      name: m.name(),
-      x: m.x(),
-      y: m.y(),
-      width: m.width(),
-      height: m.height(),
-      isPrimary: m.isPrimary(),
-      scaleFactor: m.scaleFactor(),
-    }))
+    const result = monitors.map((m) => {
+      const scale = m.scaleFactor()
+      // Monitor.width()/height() return PHYSICAL pixels; derive logical via scaleFactor.
+      const logicalWidth = scale > 0 ? Math.round(m.width() / scale) : m.width()
+      const logicalHeight = scale > 0 ? Math.round(m.height() / scale) : m.height()
+      return {
+        id: m.id(),
+        name: m.name(),
+        x: m.x(),
+        y: m.y(),
+        width: logicalWidth,
+        height: logicalHeight,
+        isPrimary: m.isPrimary(),
+        scaleFactor: scale,
+      }
+    })
     log.info("listed monitors", { count: result.length })
     return result
   }
