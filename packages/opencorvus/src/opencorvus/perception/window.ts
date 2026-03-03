@@ -135,7 +135,7 @@ export namespace WindowManager {
   export async function ensureForeground(windowId: number, appName?: string): Promise<boolean> {
     for (let attempt = 1; attempt <= 3; attempt++) {
       await focusWindow(windowId, appName)
-      await sleep(120)
+      await sleep(200 + attempt * 100)
       const native = await getNativeWindow(windowId)
       if (native?.isFocused()) {
         log.info("focused window", { windowId, attempt })
