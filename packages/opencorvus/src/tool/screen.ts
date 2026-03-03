@@ -77,19 +77,18 @@ const DESCRIPTION = `Observe the desktop environment. Use this tool to take scre
 
 Actions:
 - screenshot: Capture the current screen (or bound window/monitor). Returns the image for visual analysis. If the screen has not changed since the last screenshot, it will tell you instead of returning the image again (saves analysis time). Set wait_for_change=true to block until the screen actually changes - use this when waiting for page loads, dialogs, or animations instead of polling with repeated screenshots.
-- list_monitors: List all monitors with position, size, and scale.
+- list_monitors: List all monitors with position, size, and scale. Use this as fallback when target windows cannot be found.
 - bind_monitor: Bind to a monitor by id or name (e.g. 1, "DELL", "primary"). Screenshots then focus this monitor.
 - list_windows: List all visible windows with their positions and sizes. It also returns ranked window_id candidates for model-driven target selection.
 - bind_window: Bind to a specific window by window_id (preferred from list_windows) or by title substring fallback. After binding, screenshots capture only that window and coordinates become window-relative.
 
 IMPORTANT workflow:
-1. In multi-monitor setups, use list_monitors first and bind_monitor to choose the target screen.
-2. In single-monitor setups, start with screenshot and interact directly.
-3. Use bind_window when app-level coordinate precision is needed.
-4. Use list_windows when multiple windows are possible, then choose a window_id and call bind_window.
-5. Take a screenshot of the bound target to see current content.
-6. Interact with the app via the input tool, using coordinates from the screenshot.
-7. Take another screenshot to verify the result.
+1. Window-first: use screenshot/list_windows, choose a window_id, then bind_window.
+2. Only if target window cannot be found, use list_monitors + bind_monitor to switch target desktop/monitor.
+3. In single-monitor setups, start with screenshot and interact directly.
+4. Take a screenshot of the bound target to see current content.
+5. Interact with the app via the input tool, using coordinates from the screenshot.
+6. Take another screenshot to verify the result.
 
 IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn - only your text description persists.
 
@@ -97,10 +96,7 @@ Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1 to render coordinate 
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
-  wait_for_change: z.preprocess(
-    (v) => (v === "true" ? true : v === "false" ? false : v),
-    z.boolean().optional(),
-  ).describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
+  wait_for_change: z.boolean().optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
 })
 
 const BindWindowAction = z.object({
@@ -533,9 +529,10 @@ export const ScreenTool = Tool.define("screen", {
         const candidateHint = candidateLines.length > 0
           ? `\n\nSelectable targets (best first):\n${candidateLines.join("\n")}\nBind one with: screen.bind_window({ window_id: <id> })`
           : ""
+        const monitorFallbackHint = "\nIf target app/window is not listed, then use screen.list_monitors and screen.bind_monitor to switch desktop/monitor."
         return {
           title: `Found ${enriched.length} windows`,
-          output: lines.length > 0 ? lines.join("\n") + candidateHint : "No visible windows found.",
+          output: lines.length > 0 ? lines.join("\n") + candidateHint + monitorFallbackHint : "No visible windows found. Use screen.list_monitors and screen.bind_monitor if the app may be on another desktop/monitor.",
           metadata: { count: enriched.length, windows: enriched, candidates },
         }
       }

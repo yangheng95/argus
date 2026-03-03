@@ -25,7 +25,7 @@ Actions:
 - scroll: Scroll up or down at the current mouse position.
 - drag: Drag from (startX, startY) to (endX, endY).
 - move: Move mouse to (x, y) without clicking. Useful for hover effects.
-- wait: Wait for a specified number of milliseconds. Prefer skipping it; when needed, start with 100ms.
+- wait: Wait for a specified number of milliseconds. Prefer skipping it; when needed, start with 10ms.
 - confirm: Open a desktop confirmation dialog and wait for user choice before continuing.
 
 If a window is bound via the screen tool, all coordinates are relative to that window.
@@ -44,7 +44,7 @@ Best practices:
 - Always take a screenshot BEFORE interacting to see current state.
 - After performing an action, take another screenshot to VERIFY the result.
 - Click on a text field BEFORE typing to ensure it has focus.
-- Avoid long waits; prefer 100ms wait + screenshot verification loop.`
+- Avoid long waits; prefer 10ms wait + screenshot verification loop.`
 
 // Robust number parser: handles any format LLMs might produce.
 // Examples: 500, "500", "[500]", "[500, 300]", "([714, 584],)", "(500)", etc. → first integer
@@ -103,7 +103,7 @@ const MoveAction = z.object({
 
 const WaitAction = z.object({
   action: z.literal("wait"),
-  ms: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(100).max(10000).default(100)).describe("Milliseconds to wait (100-10000, default 100)"),
+  ms: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(10).max(10000).default(10)).describe("Milliseconds to wait (10-10000, default 10)"),
 })
 
 const ConfirmAction = z.object({

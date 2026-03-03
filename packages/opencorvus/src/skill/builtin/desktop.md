@@ -40,7 +40,7 @@ If the platform-specific skill is available, treat it as the primary source for 
 4. **Screenshot BEFORE acting** — Never click/type blindly. Know what's on screen.
 5. **Screenshot AFTER acting** — Verify every action had the expected effect.
 6. **Click BEFORE typing** — Always click the target field to give it focus.
-7. **Wait BEFORE screenshot** — If expecting UI changes, `wait` first, then screenshot.
+7. **Wait BEFORE screenshot** — If expecting UI changes, use short waits (`input.wait(10)`), then screenshot.
 8. **Coordinates are integers** — `{"x": 500, "y": 300}`. NEVER use arrays.
 9. **Describe every screenshot** — Screenshots are removed from context after the current turn. Your text description is the only surviving record.
 
@@ -62,17 +62,17 @@ The screenshot output includes platform info (e.g. "Platform: Windows"). Use it 
 
 ### Windows
 ```
-input.key("win") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
+input.key("win") → wait(10) → input.type("AppName") → wait(10) → input.key("enter") → wait(10) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
 ### macOS
 ```
-input.key("cmd+space") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
+input.key("cmd+space") → wait(10) → input.type("AppName") → wait(10) → input.key("enter") → wait(10) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
 ### Linux
 ```
-input.key("super") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
+input.key("super") → wait(10) → input.type("AppName") → wait(10) → input.key("enter") → wait(10) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
 **Verification:** After launching, take `screen.screenshot`; if target is ambiguous, run `screen.list_windows`, pick `window_id`, then bind.
@@ -86,7 +86,7 @@ input.key("super") → wait(500) → input.type("AppName") → wait(500) → inp
 4. input.key("ctrl+a")               ← select all existing URL text
 5. input.type("https://example.com")
 6. input.key("enter")
-7. input.wait(3000)                   ← let page load
+7. input.wait(10)                     ← quick first check
 8. screen.screenshot                  ← verify page loaded
 ```
 
@@ -168,7 +168,7 @@ input.key("space")        ← toggle checkbox
 ```
 # Method A: Click to open, click to select
 input.click(x, y)         ← click dropdown to open it
-input.wait(300)            ← let menu appear
+input.wait(10)             ← let menu appear
 screen.screenshot          ← see options
 input.click(optX, optY)   ← click desired option
 
@@ -202,7 +202,7 @@ File dialogs are extremely common and vary significantly across platforms.
 1. In the file dialog, click the path bar (usually at top)
 2. input.type("C:\\Users\\user\\Documents")  ← type full path
 3. input.key("enter")                        ← navigate to folder
-4. input.wait(500)
+4. input.wait(10)
 5. screen.screenshot                         ← see files in folder
 
 # Select a file:
@@ -241,7 +241,7 @@ File dialogs are extremely common and vary significantly across platforms.
 
 ```
 1. input.click(x, y) with button="right"    ← right-click
-2. input.wait(300)                           ← let menu appear
+2. input.wait(10)                            ← let menu appear
 3. screen.screenshot                         ← see menu items
 4. input.click(menuX, menuY)                 ← click desired item
 
@@ -269,7 +269,7 @@ input.scroll(direction="up", amount=5)       ← scroll up 5 steps
 1. screen.screenshot                         ← check current view
 2. (content not found)
 3. input.scroll("down", 5)                   ← scroll more
-4. input.wait(300)
+4. input.wait(10)
 5. screen.screenshot                         ← check again
 6. Repeat until content found or page end reached
 ```
@@ -367,7 +367,7 @@ screen.list_windows → screen.bind_window({window_id})
 ### Windows (Explorer)
 ```
 input.key("win+e")                           ← open File Explorer
-input.wait(1500)
+input.wait(10)
 screen.bind_window("Explorer")
 
 # Navigate to path:
@@ -418,7 +418,7 @@ input.click(firstX, firstY) → input.key("shift") — NOT directly available
 
 ```
 1. input.move(x, y)                          ← move mouse to element (don't click!)
-2. input.wait(800)                           ← wait for tooltip to appear
+2. input.wait(10)                            ← wait for tooltip to appear
 3. screen.screenshot                         ← capture the tooltip
 4. Describe the tooltip content in your response
 ```
@@ -431,7 +431,7 @@ input.click(firstX, firstY) → input.key("shift") — NOT directly available
 ```
 1. screen.screenshot                         ← locate source file
 2. input.drag(fileX, fileY, targetX, targetY) ← drag file to destination
-3. input.wait(500)
+3. input.wait(10)
 4. screen.screenshot                         ← verify
 ```
 
@@ -473,7 +473,7 @@ input.key("alt+n")                           ← No (some Windows dialogs)
 1. screen.screenshot                         ← see the banner
 2. Look for "Accept", "Reject", "Close", "X" button
 3. input.click(x, y)                         ← click it
-4. input.wait(500)
+4. input.wait(10)
 5. screen.screenshot                         ← verify it's gone
 ```
 
@@ -504,7 +504,7 @@ input.key("alt+y")                           ← click "Yes" on UAC prompt
 6. input.type("password")
 7. input.key("enter")                        ← submit
    # OR: input.click(loginBtnX, loginBtnY)   ← click login button
-8. input.wait(3000)                          ← wait for redirect
+8. input.wait(10)                            ← quick first check
 9. screen.screenshot                         ← verify logged in
 ```
 
@@ -585,7 +585,7 @@ input.key("ctrl+c")                          ← Windows Terminal / macOS
 2. Look for "Next", "Continue", "Install", "Agree" button
 3. If checkbox needed (e.g. "I agree"): input.click(checkboxX, checkboxY)
 4. input.click(nextBtnX, nextBtnY)           ← click Next/Install
-5. input.wait(1000)                          ← wait for next step
+5. input.wait(10)                            ← wait for next step
 6. screen.screenshot                         ← verify and repeat
 
 # If a license agreement page:
@@ -594,7 +594,7 @@ input.click(agreeCheckboxX, agreeCheckboxY)  ← check "I agree"
 input.click(nextBtnX, nextBtnY)
 
 # Progress bar: wait until finished
-input.wait(5000)
+input.wait(10)
 screen.screenshot                            ← check if still installing
 # Repeat wait+screenshot until "Finish" button appears
 ```
@@ -620,7 +620,7 @@ When you encounter an unfamiliar application:
 **Menu exploration pattern:**
 ```
 input.click(menuX, menuY)                    ← click "File" or first menu
-input.wait(300)
+input.wait(10)
 screen.screenshot                            ← read all menu items and their shortcuts
 input.key("esc")                             ← close menu
 # Repeat for each menu: Edit, View, Tools, Help, etc.
@@ -632,16 +632,16 @@ Don't use fixed wait times blindly. Adjust based on the action:
 
 | Action | Suggested wait |
 |--------|---------------|
-| Key press / click | 200-500ms |
-| Menu open | 300-500ms |
-| Tab switch | 300-500ms |
-| App launch | 2000-5000ms |
-| Page load (web) | 2000-5000ms |
-| File dialog open | 500-1000ms |
-| Heavy operation (install, build) | 5000-10000ms |
-| Tooltip appear | 500-1000ms |
+| Key press / click | 10-50ms |
+| Menu open | 10-50ms |
+| Tab switch | 10-50ms |
+| App launch | 10-100ms |
+| Page load (web) | 10-100ms |
+| File dialog open | 10-100ms |
+| Heavy operation (install, build) | 10ms loop + screenshot checks |
+| Tooltip appear | 10-100ms |
 
-**If screenshot shows "unchanged":** Wait longer and retry. Double the wait time on each retry (500 → 1000 → 2000).
+**If screenshot shows "unchanged":** Retry with short waits. Increase gradually only if needed (10 → 50 → 100).
 
 ## Retry & Recovery Strategy
 
@@ -763,17 +763,17 @@ You CANNOT do OCR, but you can read text visible in screenshots:
 - **Keyboard shortcuts > mouse clicks** — Shortcuts are faster and more reliable than navigating menus.
 - **Don't guess coordinates** — Always screenshot first and read positions from the image.
 - **Use bind_window** — It reduces coordinate errors and makes screenshots cleaner.
-- **Check list_windows after opening an app** — Verify the app actually appeared.
+- **After opening an app, screenshot first** — Use `list_windows` only when target selection is ambiguous.
 - **If stuck, reset** — `esc` to close dialogs, `alt+f4` to close windows, `list_windows` to reassess.
 - **Platform matters** — Always check platform info in screenshot output and use the correct modifier.
 - **Describe everything you see** — Your text description is the ONLY thing that persists between turns.
 - **One action at a time** — Verify each step before proceeding to the next.
-- **If "Screen has NOT changed"** — Wait longer, then retry. The UI hasn't updated yet.
-- **Use wait() generously** — It's better to wait too long than to screenshot too early and waste a turn.
+- **If "Screen has NOT changed"** — Retry with short waits (`input.wait(10)`), then screenshot again.
+- **Use wait() sparingly** — Keep waits short so events are sent quickly.
 
 ## Screenshot Dedup
 
 The screen tool detects identical screenshots. When you see "Screen has NOT changed":
-- The UI hasn't updated yet → use `input.wait(2000)` then screenshot again
+- The UI hasn't updated yet → use `input.wait(10)` then screenshot again
 - Your previous action may have failed → try a different approach
-- Double the wait time on each retry: 500 → 1000 → 2000 → 5000
+- Increase slightly only if needed: 10 → 50 → 100
