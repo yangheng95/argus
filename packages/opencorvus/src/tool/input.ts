@@ -237,6 +237,14 @@ export const InputTool = Tool.define("input", {
           await GUI.click(screen.x, screen.y)
         }
         showOverlay(screen.x, screen.y, action, "done", "done")
+        // Record click position in image coordinates so the next screenshot
+        // can draw a marker showing the LLM where it actually clicked.
+        DesktopState.setLastClick({
+          imageX: params.x,
+          imageY: params.y,
+          action: params.button === "double" ? "double_click" : params.button === "right" ? "right_click" : "click",
+          time: Date.now(),
+        })
         const coordDetail = lastWindowBounds
           ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y}${screen.clamped ? " [CLAMPED]" : ""})`
           : ""
