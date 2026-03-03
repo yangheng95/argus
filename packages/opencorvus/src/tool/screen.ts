@@ -344,12 +344,26 @@ export const ScreenTool = Tool.define("screen", {
           ? await image(result.buffer)
           : { mime: "image/png", buffer: result.buffer, compressed: false }
         const debugOverlay = debugCoordinateOverlay()
-        const attachment = debugOverlay ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer) : encoded.buffer
+        let attachment = debugOverlay ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer) : encoded.buffer
+
+        // Draw click marker if there was a recent click action
+        const lastClick = DesktopState.consumeLastClick()
+        let clickMarkerInfo = ""
+        if (lastClick && (Date.now() - lastClick.time) < 10_000) {
+          try {
+            attachment = await addClickMarker(attachment, lastClick.imageX, lastClick.imageY, `${lastClick.action}(${lastClick.imageX},${lastClick.imageY})`)
+            clickMarkerInfo = ` A green crosshair marker shows your previous ${lastClick.action} at (${lastClick.imageX},${lastClick.imageY}).`
+            log.info("click-marker-applied", { x: lastClick.imageX, y: lastClick.imageY, action: lastClick.action })
+          } catch (e) {
+            log.warn("click-marker-failed", { error: e instanceof Error ? e.message : String(e) })
+          }
+        }
+
         const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
         const base64 = attachment.toString("base64")
-        const overlayInfo = debugOverlay
+        const overlayInfo = (debugOverlay
           ? ` Debug mode: coordinate ticks are visible on the image (${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1).`
-          : " Shared image has no visible coordinate overlay."
+          : " Shared image has no visible coordinate overlay.") + clickMarkerInfo
 
         const rep = GuiState.get().repetition
         if (rep.consecutiveNoChange >= 6) {
