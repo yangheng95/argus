@@ -388,9 +388,12 @@ export const ScreenTool = Tool.define("screen", {
         const foregroundNote = foregroundFailed
           ? ` Note: The bound window was not in the foreground, but the screenshot was captured from it anyway. If input actions miss the target, use input.key("alt+tab") to bring the window to front first.`
           : ""
+        const focusChangeNote = hadFocusChange && autoBound
+          ? ` A focus-changing key was detected. This screenshot shows the currently focused window. If this is not the expected window, use screen.list_windows + screen.bind_window to target the correct one.`
+          : ""
         return {
           title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [window not focused]" : ""}`,
-          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${foregroundNote}`,
+          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${foregroundNote}${focusChangeNote}`,
           metadata: {
             width: result.width,
             height: result.height,
