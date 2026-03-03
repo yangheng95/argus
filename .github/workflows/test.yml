@@ -100,8 +100,10 @@ jobs:
         settings:
           - name: linux
             host: ubuntu-latest
-          - name: macos
+          - name: macos-arm64
             host: macos-latest
+          - name: macos-x64
+            host: macos-15-intel
           - name: windows
             host: windows-latest
     runs-on: ${{ matrix.settings.host }}
