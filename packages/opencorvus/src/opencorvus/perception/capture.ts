@@ -193,10 +193,14 @@ export namespace Capture {
     const rawBuffer = Buffer.from(await image.toRaw())
     await Filesystem.write(filePath, buffer, undefined)
 
+    // Monitor.x()/y() return logical positions, but Monitor.width()/height()
+    // return PHYSICAL pixel dimensions (unlike Window which returns logical).
+    // Use scaleFactor() to derive true logical dimensions for DPI compensation.
+    const scale = native.scaleFactor()
     const logicalX = native.x()
     const logicalY = native.y()
-    const logicalWidth = native.width()
-    const logicalHeight = native.height()
+    const logicalWidth = scale > 0 ? Math.round(native.width() / scale) : native.width()
+    const logicalHeight = scale > 0 ? Math.round(native.height() / scale) : native.height()
     const bounds = scaleWindowBounds({
       logicalX,
       logicalY,
@@ -213,7 +217,7 @@ export namespace Capture {
       width: logicalWidth,
       height: logicalHeight,
       isPrimary: native.isPrimary(),
-      scaleFactor: native.scaleFactor(),
+      scaleFactor: scale,
     }
 
     log.info("captured monitor", {
@@ -221,6 +225,9 @@ export namespace Capture {
       monitor,
       width: image.width,
       height: image.height,
+      physicalWidth: native.width(),
+      physicalHeight: native.height(),
+      scale,
     })
 
     return {
