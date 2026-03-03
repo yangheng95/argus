@@ -1,4 +1,4 @@
-import { existsSync } from "fs"
+import { existsSync, statSync } from "fs"
 import { join } from "path"
 import { fileURLToPath } from "url"
 import { Log } from "../util/log"
@@ -59,6 +59,7 @@ let reading = false
 let seq = 0
 let last = { x: 240, y: 160 }
 let lastWarn = { key: "", time: 0 }
+let binaryMtime = 0
 const pending = new Map<string, Pending>()
 const diagnostic: OverlayDiagnostic = {
   available: true,
@@ -77,6 +78,30 @@ function binaryName() {
 
 function binaryStem() {
   return binaryName().replace(/\.exe$/i, "")
+}
+
+function binaryMtimeMs() {
+  try {
+    return statSync(BINARY_PATH).mtimeMs
+  } catch {
+    return 0
+  }
+}
+
+function stopOverlay(reason: string, detail?: Record<string, unknown>) {
+  const current = proc
+  if (!current || dead) return
+  dead = true
+  proc = null
+  binaryMtime = 0
+  settleAll("unavailable")
+  log.info("overlay-restart", {
+    reason,
+    pid: current.pid,
+    path: BINARY_PATH,
+    ...detail,
+  })
+  Promise.resolve(current.kill()).catch(() => {})
 }
 
 function clearOldOverlayProcesses() {
@@ -197,11 +222,21 @@ function ensureProcess() {
     markUnavailable("binary_missing")
     return null
   }
-  if (proc && !dead) return proc
+  if (proc && !dead) {
+    const nextMtime = binaryMtimeMs()
+    if (nextMtime > 0 && nextMtime !== binaryMtime) {
+      stopOverlay("binary_changed", {
+        previousMtime: binaryMtime,
+        nextMtime,
+      })
+    } else {
+      return proc
+    }
+  }
 
   try {
     clearOldOverlayProcesses()
-    proc = Bun.spawn([BINARY_PATH], {
+    const spawned = Bun.spawn([BINARY_PATH], {
       stdin: "pipe",
       stdout: "pipe",
       stderr: "ignore",
@@ -210,23 +245,29 @@ function ensureProcess() {
         OPENCORVUS_OVERLAY_STDIN_EXIT: "1",
       },
     })
+    proc = spawned
     dead = false
-    markAvailable({ pid: proc.pid })
-    void watchOutput(proc)
-    proc.exited
+    binaryMtime = binaryMtimeMs()
+    markAvailable({ pid: spawned.pid })
+    void watchOutput(spawned)
+    spawned.exited
       .then((code) => {
+        if (proc !== spawned) return
         dead = true
         proc = null
+        binaryMtime = 0
         markUnavailable("process_exited", { code })
         settleAll("unavailable")
       })
       .catch((error) => {
+        if (proc !== spawned) return
         dead = true
         proc = null
+        binaryMtime = 0
         markUnavailable("process_exited", { error: errorMessage(error) })
         settleAll("unavailable")
       })
-    return proc
+    return spawned
   } catch (error) {
     markUnavailable("spawn_failed", { error: errorMessage(error) })
     return null
@@ -247,6 +288,7 @@ async function send(payload: Record<string, unknown>) {
     (error: unknown) => {
       dead = true
       proc = null
+      binaryMtime = 0
       markUnavailable("write_failed", { type: payload.type, error: errorMessage(error) })
       settleAll("unavailable")
       return false

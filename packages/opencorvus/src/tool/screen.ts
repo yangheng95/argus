@@ -158,13 +158,13 @@ export const ScreenTool = Tool.define("screen", {
         if (currentBinding) {
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
-            log.warn("bound window not foreground, falling back to monitor capture", {
+            log.warn("bound window not foreground, will try window capture anyway", {
               title: currentBinding.info.title,
               appName: currentBinding.info.appName,
             })
+            // Don't unbind — node-screenshots can capture any window regardless of focus.
+            // Only set foregroundFailed for informational warning.
             foregroundFailed = true
-            WindowManager.unbind()
-            currentBinding = null
           }
         }
         if (!currentBinding && !monitorBinding) {
