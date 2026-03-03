@@ -102,9 +102,17 @@ For each task:
   2. Execute the task (read → edit/write → verify)
   3. planner.update_task(id, status="completed")
   4. Run verification for this unit before moving to next
+  5. memory.write any discoveries, gotchas, or patterns confirmed by this step
 ```
 
 **Never batch verify at the end.** Catch errors per task so failures are isolated.
+
+**Never batch memory writes to the end.** Write findings as you go — if the session is cut short,
+only already-written memories survive. Each completed subtask that reveals something non-obvious
+should produce a memory entry.
+
+After all tasks complete, write a final memory summary: what was built, key decisions made,
+what was tricky, and what the logical next steps would be.
 
 ## Tool Usage During Planning
 
