@@ -116,6 +116,8 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
             })
             .filter(|item| !item.key.is_empty())
             .collect(),
+        serve_args: config.serve_args.into_iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+        run_args: config.run_args.into_iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
     }
 }
 
