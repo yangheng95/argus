@@ -43,6 +43,10 @@ export class BotCore {
   private overlayProcess: ChildProcess | null = null
   /** Last known cursor position for overlay hints on non-spatial actions */
   private lastOverlayPos = { x: 960, y: 540 }
+  /** Path to overlay binary (cached after first resolve) */
+  private overlayBin: string | null = null
+  /** Number of overlay restart attempts */
+  private overlayRestarts = 0
 
   constructor(private options?: BotCoreOptions) {}
 
