@@ -119,6 +119,17 @@ const allTargets: {
     avx2: false,
   },
 ]
+const runtimeDir = process.env.OPENCORVUS_BUN_RUNTIME_DIR
+const runtimeName = (item: (typeof allTargets)[number]) =>
+  [
+    "bun",
+    item.os === "win32" ? "windows" : item.os,
+    item.arch === "arm64" ? "aarch64" : item.arch,
+    item.abi,
+    item.avx2 === false ? "baseline" : undefined,
+  ]
+    .filter(Boolean)
+    .join("-")
 
 // Dev and CI builds only need a native binary; full matrix is for release packaging.
 const single = singleFlag || (!allFlag && !Script.release)
@@ -170,6 +181,12 @@ for (const item of targets) {
   // Use platform-specific bunfs root path based on target OS
   const bunfsRoot = item.os === "win32" ? "B:/~BUN/root/" : "/$bunfs/root/"
   const workerRelativePath = path.relative(dir, parserWorker).replaceAll("\\", "/")
+  const executablePath = runtimeDir
+    ? path.resolve(runtimeDir, runtimeName(item), item.os === "win32" ? "bun.exe" : "bun")
+    : undefined
+  if (runtimeDir && executablePath && !fs.existsSync(executablePath)) {
+    throw new Error(`Missing Bun runtime for target '${runtimeName(item)}' at '${executablePath}'`)
+  }
 
   await Bun.build({
     conditions: ["browser"],
@@ -185,6 +202,7 @@ for (const item of targets) {
       outfile: `dist/${name}/bin/opencorvus`,
       execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
+      executablePath,
     },
     entrypoints: ["./src/index.ts", parserWorker, workerPath],
     define: {

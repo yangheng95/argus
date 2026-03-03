@@ -1,4 +1,4 @@
-import { Database, eq, sql } from "@/storage/db"
+import { Database, eq } from "@/storage/db"
 import { TaskPlanTable } from "./task-plan.sql"
 import { Identifier } from "@/id/id"
 import { Log } from "@/util/log"

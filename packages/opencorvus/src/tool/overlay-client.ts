@@ -17,6 +17,8 @@ function resolveBinaryPath() {
 const BINARY_PATH = resolveBinaryPath()
 const log = Log.create({ service: "overlay-client" })
 const WARN_THROTTLE_MS = 15_000
+// Global singleton strategy for overlay subprocess management.
+const SINGLETON_MODE = (process.env.OPENCORVUS_OVERLAY_SINGLETON_MODE ?? "kill-old-start-new").toLowerCase()
 
 type ConfirmAnswer = "confirm" | "cancel" | "timeout"
 type ConfirmResult = ConfirmAnswer | "unavailable"
@@ -67,6 +69,36 @@ const diagnostic: OverlayDiagnostic = {
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message
   return String(error)
+}
+
+function binaryName() {
+  return BINARY_PATH.split(/[\\/]/).at(-1) ?? "opencorvus-overlay"
+}
+
+function binaryStem() {
+  return binaryName().replace(/\.exe$/i, "")
+}
+
+function clearOldOverlayProcesses() {
+  if (SINGLETON_MODE === "reuse") return
+  if (process.platform === "win32") {
+    const taskkill = Bun.which("taskkill")
+    if (!taskkill) return
+    Bun.spawnSync([taskkill, "/im", binaryName(), "/f"], {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+    })
+    return
+  }
+
+  const pkill = Bun.which("pkill")
+  if (!pkill) return
+  Bun.spawnSync([pkill, "-x", binaryStem()], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+  })
 }
 
 function warnOnce(key: string, detail?: Record<string, unknown>) {
@@ -168,6 +200,7 @@ function ensureProcess() {
   if (proc && !dead) return proc
 
   try {
+    clearOldOverlayProcesses()
     proc = Bun.spawn([BINARY_PATH], {
       stdin: "pipe",
       stdout: "pipe",

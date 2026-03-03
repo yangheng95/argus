@@ -1,5 +1,3 @@
-import sharp from "sharp"
-
 /**
  * Draw a coordinate grid overlay on a screenshot PNG buffer.
  *
@@ -15,6 +13,7 @@ export async function addCoordinateOverlay(
   imageBuffer: Buffer,
   opts?: { step?: number; labelStep?: number },
 ): Promise<Buffer> {
+  const sharp = await import("sharp").then((x) => x.default)
   const meta = await sharp(imageBuffer).metadata()
   const width = meta.width!
   const height = meta.height!

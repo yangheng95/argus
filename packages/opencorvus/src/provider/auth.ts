@@ -3,7 +3,7 @@ import { Plugin } from "../plugin"
 import { map, filter, pipe, fromEntries, mapValues } from "remeda"
 import z from "zod"
 import { fn } from "@/util/fn"
-import type { AuthOuathResult, Hooks } from "@opencorvus-ai/plugin"
+import type { AuthOuathResult } from "@opencorvus-ai/plugin"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { Auth } from "@/auth"
 

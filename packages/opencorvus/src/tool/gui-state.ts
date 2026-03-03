@@ -84,7 +84,7 @@ export namespace GuiState {
     }
   }
 
-  export function recordScreenshot(hash: string, width: number, height: number, unchanged: boolean): void {
+  export function recordScreenshot(hash: string, width: number, height: number, _unchanged: boolean): void {
     const s = guiState()
     if (!s.isGuiSession) return
 
