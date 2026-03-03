@@ -184,15 +184,9 @@ Common failures:
 - **Wrong window focused** — Re-bind to target window
 - **App not responding** — Wait 5000ms, or alt+tab away and back
 
-## Screenshot Description Requirements
+## Screenshot Notes
 
-After EVERY screenshot, your text description MUST include:
-1. **What app/window is visible** — "VS Code 编辑器，打开了 tank-battle.html"
-2. **Key UI elements and their approximate coordinates** — "终端面板在底部 y≈800-1050, 编辑器占据 y≈50-750"
-3. **Current focus/cursor position** — "光标在编辑器第15行"
-4. **Any dialogs/popups** — "保存对话框出现在 (600,400) 附近"
-
-This precision is critical because screenshots are removed from context next turn. Your text is the ONLY record.
+After screenshots, write ONE line: app name + key element coordinates. Example: "Settings > Display, resolution dropdown ~(740,900)". Screenshots are removed next turn.
 
 ## If Screen Hasn't Changed
 
