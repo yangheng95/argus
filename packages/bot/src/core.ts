@@ -70,20 +70,21 @@ export class BotCore {
   // --- Overlay Process Management ---
 
   async startOverlay(): Promise<void> {
-    const projectRoot = path.resolve(import.meta.dirname, "../../..")
-    const releaseBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "release", "opencorvus-overlay.exe")
-    const debugBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "debug", "opencorvus-overlay.exe")
-
-    const overlayBin = existsSync(releaseBin) ? releaseBin : existsSync(debugBin) ? debugBin : null
-    if (!overlayBin) {
+    if (!this.overlayBin) {
+      const projectRoot = path.resolve(import.meta.dirname, "../../..")
+      const releaseBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "release", "opencorvus-overlay.exe")
+      const debugBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "debug", "opencorvus-overlay.exe")
+      this.overlayBin = existsSync(releaseBin) ? releaseBin : existsSync(debugBin) ? debugBin : null
+    }
+    if (!this.overlayBin) {
       console.log("[BotCore] Overlay binary not found, skipping overlay launch")
       return
     }
 
     try {
-      const proc = spawn(overlayBin, [], {
+      const proc = spawn(this.overlayBin, [], {
         stdio: ["pipe", "pipe", "pipe"],
-        env: { ...process.env, OPENCORVUS_OVERLAY_STDIN_EXIT: "1" },
+        env: { ...process.env, OPENCORVUS_OVERLAY_STDIN_EXIT: "1", RUST_BACKTRACE: "1" },
       })
 
       this.overlayProcess = proc
@@ -106,9 +107,15 @@ export class BotCore {
       proc.on("exit", (code) => {
         console.log(`[BotCore] Overlay exited (code ${code})`)
         this.overlayProcess = null
+        // Auto-restart up to 5 times if still running
+        if (this.running && code !== 0 && this.overlayRestarts < 5) {
+          this.overlayRestarts++
+          console.log(`[BotCore] Auto-restarting overlay (attempt ${this.overlayRestarts}/5)...`)
+          setTimeout(() => this.startOverlay(), 2000)
+        }
       })
 
-      console.log(`[BotCore] Overlay started (pid ${proc.pid}, bin: ${path.basename(path.dirname(overlayBin))})`)
+      console.log(`[BotCore] Overlay started (pid ${proc.pid}, bin: ${path.basename(path.dirname(this.overlayBin))})`)
     } catch (err) {
       console.error("[BotCore] Failed to start overlay:", err)
     }
