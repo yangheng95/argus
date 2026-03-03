@@ -81,7 +81,6 @@ export class BotCore {
       await adapter.stop()
     }
     this.server.close()
-    this.stopOverlay()
   }
 
   async handleMessage(msg: IncomingMessage): Promise<void> {
