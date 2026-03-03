@@ -110,10 +110,13 @@ For each task:
 
 | Phase | Tools |
 |-------|-------|
+| Recall | `memory` (search prior work, known patterns, gotchas) |
+| Research | `websearch`, `webfetch` (external APIs, unfamiliar systems) |
 | Explore | `task` (parallel sub-agents), `glob`, `grep`, `read` |
 | Decompose | `planner.add_task`, `planner.scratchpad_write` |
 | Execute | `edit`, `write`, `bash` (tests, typecheck, lint) |
 | Track | `planner.update_task`, `planner.list_tasks` |
+| Persist | `memory` (write discoveries, working solutions, gotchas per subtask) |
 
 **Sub-agent prompt template for exploration:**
 
