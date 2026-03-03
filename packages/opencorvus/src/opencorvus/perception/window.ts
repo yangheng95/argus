@@ -297,6 +297,19 @@ export namespace WindowManager {
     windowState().binding = null
   }
 
+  export function markFocusChange(): void {
+    windowState().pendingFocusChange = true
+    log.info("marked pending focus change")
+  }
+
+  export function consumeFocusChange(): boolean {
+    const ws = windowState()
+    if (!ws.pendingFocusChange) return false
+    ws.pendingFocusChange = false
+    log.info("consumed pending focus change")
+    return true
+  }
+
   export async function getBinding(): Promise<WindowBinding | null> {
     const ws = windowState()
     if (!ws.binding) return null
