@@ -184,7 +184,11 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
 
     push_log(shared, app, format!("prompt> {prompt}"));
 
-    let mut args = RUN_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>();
+    let mut args = if config.run_args.is_empty() {
+        DEFAULT_RUN_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>()
+    } else {
+        config.run_args.clone()
+    };
     args.push(prompt);
 
     let mut cmd = build_command(&config, &args);
