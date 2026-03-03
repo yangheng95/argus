@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tank Battle</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background: #1a1a2e;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+      #gameContainer {
+        position: relative;
+      }
+      canvas {
+        border: 3px solid #4a4a6a;
+        border-radius: 8px;
+        background: #0f0f1a;
+      }
+      #ui {
+        position: absolute;
+        top: -50px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        padding: 0 10px;
+      }
+      .score {
+        color: #fff;
+        font-size: 24px;
+        padding: 10px 20px;
+        border-radius: 5px;
+      }
+      #p1Score {
+        background: #4a9eff;
+      }
+      #p2Score {
+        background: #ff4a4a;
+      }
+      #gameOver {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.85);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: #fff;
+        border-radius: 8px;
+      }
+      #gameOver h1 {
+        font-size: 48px;
+        margin-bottom: 20px;
+        text-shadow: 0 0 20px #fff;
+      }
+      #gameOver p {
+        font-size: 24px;
+        margin-bottom: 30px;
+      }
+      #restart {
+        padding: 15px 40px;
+        font-size: 20px;
+        background: #4a9eff;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.3s;
+      }
+      #restart:hover {
+        background: #3a8eef;
+      }
+      #controls {
+        position: absolute;
+        bottom: -80px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        padding: 0 10px;
+      }
+      .control {
+        color: #888;
+        font-size: 14px;
+        padding: 10px;
+      }
+      .control h3 {
+        color: #fff;
+        margin-bottom: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gameContainer">
+      <div id="ui">
+        <div id="p1Score" class="score">P1: 0</div>
+        <div id="p2Score" class="score">P2: 0</div>
+      </div>
+      <canvas id="game" width="800" height="600"></canvas>
+      <div id="controls">
+        <div class="control">
+          <h3 style="color: #4a9eff">Player 1</h3>
+          WASD - Move | Space - Shoot
+        </div>
+        <div class="control">
+          <h3 style="color: #ff4a4a">Player 2</h3>
+          Arrow Keys - Move | Enter - Shoot
+        </div>
+      </div>
+      <div id="gameOver">
+        <h1 id="winner">Player 1 Wins!</h1>
+        <p id="finalScore">Score: 0 - 0</p>
+        <button id="restart">Play Again</button>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("game")
+      const ctx = canvas.getContext("2d")
+      const p1ScoreEl = document.getElementById("p1Score")
+      const p2ScoreEl = document.getElementById("p2Score")
+      const gameOverEl = document.getElementById("gameOver")
+      const winnerEl = document.getElementById("winner")
+      const finalScoreEl = document.getElementById("finalScore")
+      const restartBtn = document.getElementById("restart")
+
+      const TANK_SIZE = 40
+      const BULLET_SIZE = 8
+      const TANK_SPEED = 4
+      const BULLET_SPEED = 8
+      const COOLDOWN = 500
+
+      let p1Score = 0
+      let p2Score = 0
+      let gameRunning = true
+
+      const keys = {}
+
+      const tank1 = {
+        x: 100,
+        y: 300,
+        width: TANK_SIZE,
+        height: TANK_SIZE,
+        color: "#4a9eff",
+        direction: "right",
+        lastShot: 0,
+        score: 0,
+      }
+
+      const tank2 = {
+        x: 660,
+        y: 300,
+        width: TANK_SIZE,
+        height: TANK_SIZE,
+        color: "#ff4a4a",
+        direction: "left",
+        lastShot: 0,
+        score: 0,
+      }
+
+      let bullets = []
+
+      document.addEventListener("keydown", (e) => {
+        keys[e.code] = true
+        if (
+          [
+            "Space",
+            "Enter",
+            "ArrowUp",
+            "ArrowDown",
+            "ArrowLeft",
+            "ArrowRight",
+            "KeyW",
+            "KeyA",
+            "KeyS",
+            "KeyD",
+          ].includes(e.code)
+        ) {
+          e.preventDefault()
+        }
+      })
+
+      document.addEventListener("keyup", (e) => {
+        keys[e.code] = false
+      })
+
+      restartBtn.addEventListener("click", restartGame)
+
+      function restartGame() {
+        tank1.x = 100
+        tank1.y = 300
+        tank1.direction = "right"
+        tank1.score = 0
+        tank2.x = 660
+        tank2.y = 300
+        tank2.direction = "left"
+        tank2.score = 0
+        bullets = []
+        p1Score = 0
+        p2Score = 0
+        gameRunning = true
+        gameOverEl.style.display = "none"
+        updateScore()
+      }
+
+      function updateScore() {
+        p1ScoreEl.textContent = `P1: ${tank1.score}`
+        p2ScoreEl.textContent = `P2: ${tank2.score}`
+      }
+
+      function moveTank(tank, up, down, left, right) {
+        if (keys[up]) {
+          tank.y = Math.max(0, tank.y - TANK_SPEED)
+          tank.direction = "up"
+        }
+        if (keys[down]) {
+          tank.y = Math.min(canvas.height - tank.height, tank.y + TANK_SPEED)
+          tank.direction = "down"
+        }
+        if (keys[left]) {
+          tank.x = Math.max(0, tank.x - TANK_SPEED)
+          tank.direction = "left"
+        }
+        if (keys[right]) {
+          tank.x = Math.min(canvas.width - tank.width, tank.x + TANK_SPEED)
+          tank.direction = "right"
+        }
+      }
+
+      function shoot(tank, shooter) {
+        const now = Date.now()
+        if (now - tank.lastShot < COOLDOWN) return
+        tank.lastShot = now
+
+        let bx = tank.x + tank.width / 2 - BULLET_SIZE / 2
+        let by = tank.y + tank.height / 2 - BULLET_SIZE / 2
+        let vx = 0,
+          vy = 0
+
+        switch (tank.direction) {
+          case "up":
+            vy = -BULLET_SPEED
+            break
+          case "down":
+            vy = BULLET_SPEED
+            break
+          case "left":
+            vx = -BULLET_SPEED
+            break
+          case "right":
+            vx = BULLET_SPEED
+            break
+        }
+
+        bullets.push({
+          x: bx,
+          y: by,
+          vx,
+          vy,
+          width: BULLET_SIZE,
+          height: BULLET_SIZE,
+          owner: shooter,
+        })
+      }
+
+      function checkCollision(a, b) {
+        return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+      }
+
+      function update() {
+        if (!gameRunning) return
+
+        moveTank(tank1, "KeyW", "KeyS", "KeyA", "KeyD")
+        moveTank(tank2, "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight")
+
+        if (keys["Space"]) shoot(tank1, 1)
+        if (keys["Enter"]) shoot(tank2, 2)
+
+        for (let i = bullets.length - 1; i >= 0; i--) {
+          const b = bullets[i]
+          b.x += b.vx
+          b.y += b.vy
+
+          if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+            bullets.splice(i, 1)
+            continue
+          }
+
+          if (b.owner === 1 && checkCollision(b, tank2)) {
+            tank1.score++
+            bullets.splice(i, 1)
+            updateScore()
+            checkWin()
+            continue
+          }
+
+          if (b.owner === 2 && checkCollision(b, tank1)) {
+            tank2.score++
+            bullets.splice(i, 1)
+            updateScore()
+            checkWin()
+            continue
+          }
+
+          for (let j = bullets.length - 1; j >= 0; j--) {
+            if (i !== j && bullets[j] && checkCollision(b, bullets[j])) {
+              bullets.splice(Math.max(i, j), 1)
+              bullets.splice(Math.min(i, j), 1)
+              i--
+              break
+            }
+          }
+        }
+      }
+
+      function checkWin() {
+        const winScore = 5
+        if (tank1.score >= winScore || tank2.score >= winScore) {
+          gameRunning = false
+          const winner = tank1.score >= winScore ? "Player 1" : "Player 2"
+          winnerEl.textContent = `${winner} Wins!`
+          winnerEl.style.color = tank1.score >= winScore ? "#4a9eff" : "#ff4a4a"
+          finalScoreEl.textContent = `Final Score: ${tank1.score} - ${tank2.score}`
+          gameOverEl.style.display = "flex"
+        }
+      }
+
+      function drawTank(tank) {
+        ctx.fillStyle = tank.color
+        ctx.fillRect(tank.x, tank.y, tank.width, tank.height)
+
+        ctx.fillStyle = "#2a2a4a"
+        const turretSize = 20
+        let tx = tank.x + tank.width / 2 - turretSize / 2
+        let ty = tank.y + tank.height / 2 - turretSize / 2
+
+        switch (tank.direction) {
+          case "up":
+            ty -= 15
+            break
+          case "down":
+            ty += 15
+            break
+          case "left":
+            tx -= 15
+            break
+          case "right":
+            tx += 15
+            break
+        }
+        ctx.fillRect(tx, ty, turretSize, turretSize)
+
+        ctx.fillStyle = "#3a3a5a"
+        const barrelLen = 25,
+          barrelWidth = 6
+        const cx = tank.x + tank.width / 2,
+          cy = tank.y + tank.height / 2
+        let bx1, by1, bx2, by2
+
+        switch (tank.direction) {
+          case "up":
+            bx1 = cx - barrelWidth / 2
+            by1 = cy - turretSize / 2 - barrelLen
+            bx2 = cx + barrelWidth / 2
+            by2 = cy - turretSize / 2
+            break
+          case "down":
+            bx1 = cx - barrelWidth / 2
+            by1 = cy + turretSize / 2
+            bx2 = cx + barrelWidth / 2
+            by2 = cy + turretSize / 2 + barrelLen
+            break
+          case "left":
+            bx1 = cx - turretSize / 2 - barrelLen
+            by1 = cy - barrelWidth / 2
+            bx2 = cx - turretSize / 2
+            by2 = cy + barrelWidth / 2
+            break
+          case "right":
+            bx1 = cx + turretSize / 2
+            by1 = cy - barrelWidth / 2
+            bx2 = cx + turretSize / 2 + barrelLen
+            by2 = cy + barrelWidth / 2
+            break
+        }
+        ctx.fillRect(bx1, by1, bx2 - bx1, by2 - by1)
+      }
+
+      function draw() {
+        ctx.fillStyle = "#0f0f1a"
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+        ctx.strokeStyle = "#1a1a2e"
+        ctx.lineWidth = 2
+        for (let i = 0; i < canvas.width; i += 50) {
+          ctx.beginPath()
+          ctx.moveTo(i, 0)
+          ctx.lineTo(i, canvas.height)
+          ctx.stroke()
+        }
+        for (let i = 0; i < canvas.height; i += 50) {
+          ctx.beginPath()
+          ctx.moveTo(0, i)
+          ctx.lineTo(canvas.width, i)
+          ctx.stroke()
+        }
+
+        bullets.forEach((b) => {
+          ctx.fillStyle = b.owner === 1 ? "#4a9eff" : "#ff4a4a"
+          ctx.beginPath()
+          ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, 0, Math.PI * 2)
+          ctx.fill()
+        })
+
+        drawTank(tank1)
+        drawTank(tank2)
+      }
+
+      function gameLoop() {
+        update()
+        draw()
+        requestAnimationFrame(gameLoop)
+      }
+
+      gameLoop()
+    </script>
+  </body>
+</html>

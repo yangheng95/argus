@@ -1,3 +1,4 @@
+use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
@@ -20,7 +21,12 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
 
     let menu = Menu::with_items(app, &[&open, &start, &stop, &quit]).map_err(|error| error.to_string())?;
 
+    let icon = Image::from_bytes(include_bytes!("../icons/icon.ico"))
+        .map_err(|error| error.to_string())?;
+
     let _tray = TrayIconBuilder::new()
+        .icon(icon)
+        .tooltip("OpenCorvus")
         .menu(&menu)
         .on_menu_event(|app, event| {
             let state = app.state::<Shared>();
