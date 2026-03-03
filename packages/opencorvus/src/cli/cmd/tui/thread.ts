@@ -3,6 +3,7 @@ import { tui } from "./app"
 import { Rpc } from "@/util/rpc"
 import { type rpc } from "./worker"
 import path from "path"
+import { existsSync } from "fs"
 import { fileURLToPath } from "url"
 import { UI } from "@/cli/ui"
 import { iife } from "@/util/iife"
@@ -131,6 +132,43 @@ function createEventSource(client: RpcClient): EventSource {
   }
 }
 
+function overlayPath() {
+  const env = process.env.OPENCORVUS_OVERLAY_BIN?.trim()
+  if (env && existsSync(env)) return env
+
+  const ext = process.platform === "win32" ? ".exe" : ""
+  const names = [`opencorvus-overlay${ext}`, `openlens-overlay${ext}`]
+  const dir = path.dirname(process.execPath)
+
+  for (const name of names) {
+    const file = path.join(dir, name)
+    if (existsSync(file)) return file
+  }
+
+  for (const name of names) {
+    const file = Bun.which(name)
+    if (file) return file
+  }
+}
+
+function launchOverlay() {
+  if (!process.stdin.isTTY) return false
+  if (process.argv.length !== 2) return false
+
+  const file = overlayPath()
+  if (!file) return false
+
+  const proc = Bun.spawn([file], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
+    detached: true,
+    env: Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
+  })
+  proc.unref()
+  return true
+}
+
 export const TuiThreadCommand = cmd({
   command: "$0 [project]",
   describe: "start opencorvus tui",
@@ -171,6 +209,10 @@ export const TuiThreadCommand = cmd({
     if (args.fork && !args.continue && !args.session) {
       UI.error("--fork requires --continue or --session")
       process.exitCode = 1
+      return
+    }
+
+    if (launchOverlay()) {
       return
     }
 

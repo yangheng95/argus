@@ -91,28 +91,9 @@ pub fn confirm_reply(window: WebviewWindow, id: String, answer: String) {
 }
 
 pub fn apply_overlay_window_style(app: &tauri::App) {
-    #[cfg(target_os = "windows")]
-    {
-        use windows_sys::Win32::UI::WindowsAndMessaging::*;
-        for name in [events::WINDOW_OVERLAY, events::WINDOW_HIGHLIGHT] {
-            let Some(win) = app.get_webview_window(name) else {
-                continue;
-            };
-            let Ok(hwnd) = win.hwnd() else {
-                continue;
-            };
-            let raw = hwnd.0 as *mut std::ffi::c_void;
-            unsafe {
-                let style = GetWindowLongPtrW(raw, GWL_EXSTYLE);
-                // WS_EX_TRANSPARENT = click-through, WS_EX_NOACTIVATE = don't steal focus.
-                // Do NOT add WS_EX_LAYERED — it conflicts with Tauri 2's WebView2 transparency
-                // and causes the window to render with a solid black background.
-                SetWindowLongPtrW(
-                    raw,
-                    GWL_EXSTYLE,
-                    style | WS_EX_TRANSPARENT as isize | WS_EX_NOACTIVATE as isize,
-                );
-            }
+    for name in [events::WINDOW_OVERLAY, events::WINDOW_HIGHLIGHT] {
+        if let Some(win) = app.get_webview_window(name) {
+            let _ = win.set_ignore_cursor_events(true);
         }
     }
 }

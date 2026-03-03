@@ -11,16 +11,27 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      APP_ID: ${{ vars.OPENCORVUS_APP_ID || vars.ARGUS_APP_ID || vars.OPENCODE_APP_ID }}
+      APP_SECRET: ${{ secrets.OPENCORVUS_APP_SECRET || secrets.ARGUS_APP_SECRET || secrets.OPENCODE_APP_SECRET }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
 
+      - name: Setup git committer
+        if: ${{ env.APP_ID != '' && env.APP_SECRET != '' }}
+        uses: ./.github/actions/setup-git-committer
+        with:
+          opencorvus-app-id: ${{ env.APP_ID }}
+          opencorvus-app-secret: ${{ env.APP_SECRET }}
+
       - name: Configure git identity
+        if: ${{ !(env.APP_ID != '' && env.APP_SECRET != '') }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
