@@ -46,6 +46,7 @@ const guiState = Instance.state(
     taskEpoch: 0,
     lastScreenshotHash: null,
     isGuiSession: false,
+    lastFocusChangeStep: -1,
     repetition: {
       consecutiveNoChange: 0,
       recentClickCoords: [],
