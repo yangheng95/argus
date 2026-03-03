@@ -2,16 +2,11 @@
 <html>
 <head>
   <meta charset="utf-8" />
+  <link rel="stylesheet" href="tokens.css" />
   <style>
     :root {
-      --accent: rgba(110, 168, 254, 0.9);
-      --accent-glow: rgba(110, 168, 254, 0.3);
-    }
-
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+      --accent: var(--color-click);
+      --accent-glow: rgba(99, 102, 241, 0.25);
     }
 
     html, body {
@@ -29,19 +24,21 @@
       pointer-events: none;
     }
 
-    /* ── Focus ring: crosshair at target point ── */
+    /* ── Focus ring ── */
     #focus {
       position: absolute;
       left: 50%;
       top: 75%;
-      width: 48px;
-      height: 48px;
-      transform: translate(-50%, -50%) scale(0.6);
-      border-radius: 999px;
-      border: 2.5px solid var(--accent);
-      box-shadow: 0 0 16px var(--accent-glow);
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%) scale(0.5);
+      border-radius: var(--radius-pill);
+      border: 2px solid transparent;
+      background:
+        linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+        linear-gradient(135deg, var(--accent), rgba(255, 255, 255, 0.2)) border-box;
       opacity: 0;
-      transition: opacity 100ms ease, transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+      transition: opacity 120ms var(--ease), transform 200ms var(--ease-bounce);
     }
 
     #focus::before {
@@ -49,19 +46,20 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       transform: translate(-50%, -50%);
       border-radius: 50%;
       background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
     }
 
     #focus::after {
       content: "";
       position: absolute;
-      inset: -8px;
+      inset: -6px;
       border-radius: inherit;
-      border: 1.5px solid rgba(255, 255, 255, 0.15);
+      border: 1.5px solid rgba(255, 255, 255, 0.06);
       opacity: 0;
     }
 
@@ -71,88 +69,99 @@
     }
 
     #focus.pointer.visible::after {
-      animation: ring-pulse 500ms ease-out;
+      animation: ring-pulse 600ms var(--ease) forwards;
     }
 
     #focus.done {
-      border-color: rgba(52, 211, 153, 0.95);
-      box-shadow: 0 0 14px rgba(16, 185, 129, 0.3);
+      background:
+        linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+        linear-gradient(135deg, var(--color-done), rgba(255, 255, 255, 0.15)) border-box;
     }
 
     #focus.done::before {
-      background: rgba(52, 211, 153, 0.95);
+      background: var(--color-done);
+      box-shadow: 0 0 8px var(--color-done);
     }
 
-    /* ── Popup label: compact pill above focus ── */
+    /* ── Popup pill ── */
     #popup {
       position: absolute;
       left: 50%;
       top: 14px;
-      transform: translateX(-50%) translateY(3px);
+      transform: translateX(-50%) translateY(4px);
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 8px;
-      background: rgba(15, 17, 28, 0.88);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(12px);
-      color: rgba(240, 244, 255, 0.92);
-      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-      font-size: 11.5px;
+      gap: 7px;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--glass);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 12px;
       font-weight: 500;
       line-height: 1;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
       white-space: nowrap;
       opacity: 0;
-      transition: opacity 120ms ease, transform 120ms ease;
+      box-shadow: var(--shadow-md), 0 0 0 0 transparent;
+      transition:
+        opacity 140ms var(--ease),
+        transform 140ms var(--ease),
+        box-shadow 200ms var(--ease);
     }
 
     #popup.visible {
       opacity: 1;
       transform: translateX(-50%) translateY(0);
+      box-shadow: var(--shadow-md), 0 0 24px rgba(99, 102, 241, 0.08);
     }
 
     #popup.hiding {
       opacity: 0;
-      transform: translateX(-50%) translateY(-3px);
-      transition: opacity 200ms ease, transform 200ms ease;
+      transform: translateX(-50%) translateY(-4px);
+      transition: opacity 220ms var(--ease), transform 220ms var(--ease);
     }
 
     #popup.done {
-      --accent: rgba(52, 211, 153, 0.95);
-      border-color: rgba(52, 211, 153, 0.2);
+      --accent: var(--color-done);
+      border-color: rgba(52, 211, 153, 0.18);
+      box-shadow: var(--shadow-md), 0 0 20px rgba(52, 211, 153, 0.1);
     }
 
-    /* Action-specific accent colors */
+    /* ── Action accent colors ── */
     #popup[data-action="click"],
     #popup[data-action="double"],
     #popup[data-action="right"],
-    #popup[data-action="middle"] { --accent: rgba(96, 165, 250, 0.94); }
-    #popup[data-action="type"]   { --accent: rgba(52, 211, 153, 0.94); }
-    #popup[data-action="key"]    { --accent: rgba(251, 191, 36, 0.94); }
-    #popup[data-action="scroll"] { --accent: rgba(167, 139, 250, 0.94); }
-    #popup[data-action="drag"]   { --accent: rgba(248, 113, 113, 0.94); }
-    #popup[data-action="move"]   { --accent: rgba(129, 140, 248, 0.9); }
+    #popup[data-action="middle"] { --accent: var(--color-click); }
+    #popup[data-action="type"]   { --accent: var(--color-type); }
+    #popup[data-action="key"]    { --accent: var(--color-key); }
+    #popup[data-action="scroll"] { --accent: var(--color-scroll); }
+    #popup[data-action="drag"]   { --accent: var(--color-drag); }
+    #popup[data-action="move"]   { --accent: var(--color-move); }
 
-    /* Accent dot before icon */
+    /* ── Accent indicator bar (left edge) ── */
     #popup::before {
       content: "";
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
+      width: 3px;
+      height: 14px;
+      border-radius: 2px;
       background: var(--accent);
       box-shadow: 0 0 8px var(--accent);
       flex-shrink: 0;
+      transition: background 120ms var(--ease), box-shadow 120ms var(--ease);
     }
 
     #icon {
       width: 14px;
       height: 14px;
-      color: rgba(240, 244, 255, 0.8);
+      color: var(--text-primary);
       flex-shrink: 0;
       display: flex;
       align-items: center;
+      opacity: 0.85;
     }
 
     #icon svg {
@@ -161,20 +170,20 @@
     }
 
     #label {
-      color: rgba(240, 244, 255, 0.7);
+      color: var(--text-secondary);
       overflow: hidden;
       text-overflow: ellipsis;
       max-width: 260px;
     }
 
     @keyframes ring-pulse {
-      from {
-        opacity: 0.7;
-        transform: scale(0.85);
+      0% {
+        opacity: 0.6;
+        transform: scale(0.9);
       }
-      to {
+      100% {
         opacity: 0;
-        transform: scale(1.4);
+        transform: scale(1.6);
       }
     }
   </style>
