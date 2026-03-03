@@ -3,6 +3,7 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
 let unbound = 0
+let overlayCalls = 0
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
@@ -51,7 +52,10 @@ mock.module("../../src/opencorvus/perception/capture", () => ({
 }))
 
 mock.module("../../src/opencorvus/perception/overlay", () => ({
-  addCoordinateOverlay: async (buf: Buffer) => buf,
+  addCoordinateOverlay: async (buf: Buffer) => {
+    overlayCalls += 1
+    return Buffer.concat([buf, Buffer.from("-overlay")])
+  },
 }))
 
 mock.module("../../src/tool/overlay-client", () => ({
@@ -74,6 +78,8 @@ const ctx = {
 
 beforeEach(() => {
   unbound = 0
+  overlayCalls = 0
+  delete process.env.OPENCORVUS_SCREEN_DEBUG_COORDINATE_OVERLAY
 })
 
 describe("tool.screen monitor flow", () => {
@@ -101,6 +107,33 @@ describe("tool.screen monitor flow", () => {
         const tool = await ScreenTool.init()
         const result = await tool.execute({ action: "list_windows" }, ctx)
         expect(result.output).toContain("monitor: 2")
+      },
+    })
+  })
+
+  test("screenshot does not render visible coordinate overlay by default", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const result = await tool.execute({ action: "screenshot" }, ctx)
+        expect(overlayCalls).toBe(0)
+        expect(result.output).toContain("no visible coordinate overlay")
+      },
+    })
+  })
+
+  test("screenshot renders coordinate overlay when debug flag is enabled", async () => {
+    await using tmp = await tmpdir()
+    process.env.OPENCORVUS_SCREEN_DEBUG_COORDINATE_OVERLAY = "1"
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const result = await tool.execute({ action: "screenshot" }, ctx)
+        expect(overlayCalls).toBe(1)
+        expect(result.output).toContain("Debug mode: coordinate ticks are visible on the image")
       },
     })
   })

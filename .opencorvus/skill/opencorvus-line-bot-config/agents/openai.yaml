@@ -1,0 +1,5 @@
+﻿interface:
+  display_name: "OpenCorvus LINE Bot Config"
+  short_description: "Configure LINE bot integration for OpenCorvus"
+  default_prompt: "Use $opencorvus-line-bot-config to set up or debug LINE bot integration for OpenCorvus."
+

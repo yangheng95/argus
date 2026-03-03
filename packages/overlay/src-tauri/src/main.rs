@@ -28,6 +28,13 @@ fn main() {
         .setup(|app| {
             let state = app.state::<manager::Shared>();
             manager::init(state.inner(), &app.handle());
+            if let Err(error) = manager::start_bot(state.inner(), &app.handle()) {
+                manager::push_log(
+                    state.inner(),
+                    &app.handle(),
+                    format!("auto-start failed: {error}"),
+                );
+            }
             let _ = tray::setup(&app.handle());
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);

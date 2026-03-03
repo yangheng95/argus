@@ -1,54 +1,49 @@
-# OpenClaw and Slack Reference
+﻿# OpenClaw and Slack Reference
 
 ## Snapshot
 
 Research date: 2026-03-03.
 
-OpenClaw Slack docs add a complete checklist for Socket Mode setup, event subscriptions, scopes, and troubleshooting.
-Use those platform steps, then map runtime commands to OpenCorvus.
+## Verified OpenClaw facts
 
-## OpenClaw Slack Checklist (Portable)
+- OpenClaw marks Slack as a stable channel on the chat channels page.
+- The Slack guide uses Socket Mode as the default path.
+- Socket Mode requires app-level token (`xapp-...`) and bot token (`xoxb-...`).
+- HTTP Events API is optional and needs signing secret plus public webhook URL.
+- OpenClaw docs provide both `openclaw channels add` and `openclaw channels update` flows.
 
-1. Enable Slack Socket Mode.
-2. Create App-Level Token with `connections:write` (`xapp-...`).
-3. Install app and copy Bot Token (`xoxb-...`).
-4. Subscribe bot events:
-- `app_mention`
-- `message.channels`
-- `message.groups`
-- `message.im`
-- `message.mpim`
-5. Add required bot scopes for read and write behavior.
-
-OpenClaw docs also note env fallback:
-- `OPENCLAW_SLACK_APP_TOKEN` or `SLACK_APP_TOKEN`
-- `OPENCLAW_SLACK_BOT_TOKEN` or `SLACK_BOT_TOKEN`
-- `OPENCLAW_SLACK_SIGNING_SECRET` or `SLACK_SIGNING_SECRET`
-
-## OpenCorvus Mapping
+## OpenCorvus mapping
 
 OpenCorvus source of truth:
-- `packages/bot/src/main.ts`
+- `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/slack.ts`
 - `packages/bot/.env.example`
 
-Set in `packages/bot/.env`:
-- `SLACK_BOT_TOKEN`
-- `SLACK_APP_TOKEN`
-- `SLACK_SIGNING_SECRET` (optional in Socket Mode path)
+OpenCorvus env keys:
+- Required: `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`
+- Optional: `SLACK_SIGNING_SECRET`
+- Compatibility fallback: `OPENCLAW_SLACK_BOT_TOKEN`, `OPENCLAW_SLACK_APP_TOKEN`, `OPENCLAW_SLACK_SIGNING_SECRET`
 
-Runtime checks:
-- `main.ts` registers `SlackAdapter` when `SLACK_BOT_TOKEN` exists.
-- `slack.ts` uses `socketMode: true`, threaded replies, and message dedupe by `message.ts`.
+Runtime notes:
+- `SlackAdapter` runs Socket Mode (`socketMode: true`).
+- Replies are sent as thread replies (`thread_ts`).
+- Adapter deduplicates repeated message events by `message.ts`.
 
-## Recommended Minimum Scopes
+## Differences to keep explicit
 
-- `chat:write`
-- `files:write`
-- message read scopes needed for subscribed events in the target conversation types
+- OpenClaw documents both Socket Mode and HTTP Events mode.
+- OpenCorvus implementation is Socket Mode centric; HTTP webhook mode is not the primary path in current adapter code.
+
+## Verification checklist
+
+1. Start bot and confirm Slack adapter is registered.
+2. Send one DM and one channel message; confirm one reply each.
+3. Confirm no duplicated replies for a single message event.
+4. If startup fails, re-check `xapp` and `xoxb` token placement.
 
 ## Sources
 
-- OpenClaw Slack channels docs: https://docs.openclaw.ai/getting-started/channels/slack
+- OpenClaw channels overview: https://docs.openclaw.ai/channels
+- OpenClaw Slack channel docs: https://docs.openclaw.ai/channels/slack
 - Slack Socket Mode docs: https://api.slack.com/apis/connections/socket
 - Slack Events API docs: https://api.slack.com/apis/events-api

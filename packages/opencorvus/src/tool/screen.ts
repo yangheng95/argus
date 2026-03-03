@@ -14,6 +14,17 @@ import { showWindowHighlight } from "./overlay-client"
 const log = Log.create({ service: "screen" })
 const MAX_ATTACHMENT_BYTES = Number(process.env.OPENCORVUS_SCREEN_MAX_ATTACHMENT_MB ?? "32") * 1024 * 1024
 const SCREEN_COMPRESSION_ENABLED = false
+const SCREEN_DEBUG_COORDINATE_OVERLAY_ENV = "OPENCORVUS_SCREEN_DEBUG_COORDINATE_OVERLAY"
+
+function bool(input: string | undefined) {
+  if (!input) return false
+  const value = input.trim().toLowerCase()
+  return value === "1" || value === "true" || value === "yes" || value === "on"
+}
+
+function debugCoordinateOverlay() {
+  return bool(process.env[SCREEN_DEBUG_COORDINATE_OVERLAY_ENV])
+}
 
 async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; compressed: boolean }> {
   if (buffer.length <= MAX_ATTACHMENT_BYTES) {
@@ -65,7 +76,9 @@ IMPORTANT workflow:
 5. Interact with the app via the input tool, using coordinates from the screenshot.
 6. Take another screenshot to verify the result.
 
-IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn - only your text description persists.`
+IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn - only your text description persists.
+
+Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1 to render coordinate ticks on returned images. By default, returned screenshots do not include visual coordinate overlays.`
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
@@ -290,15 +303,20 @@ export const ScreenTool = Tool.define("screen", {
         const encoded = SCREEN_COMPRESSION_ENABLED
           ? await image(result.buffer)
           : { mime: "image/png", buffer: result.buffer, compressed: false }
-        const output = await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
-        const outputMime = output[0] === 0x89 && output[1] === 0x50 ? "image/png" : "image/jpeg"
-        const base64 = output.toString("base64")
+        const debugOverlay = debugCoordinateOverlay()
+        const attachment = debugOverlay ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer) : encoded.buffer
+        const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
+        const base64 = attachment.toString("base64")
+        const overlayInfo = debugOverlay
+          ? ` Debug mode: coordinate ticks are visible on the image (${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1).`
+          : " Shared image has no visible coordinate overlay."
 
         const rep = GuiState.get().repetition
         if (rep.consecutiveNoChange >= 6) {
           return {
             title: `Screenshot captured (${result.width}x${result.height}) - STUCK`,
             output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}\n\n` +
+              `${overlayInfo}\n\n` +
               `*** STUCK: ${rep.consecutiveNoChange} previous actions had no effect. ***\n` +
               `You MUST try a fundamentally different approach.\n` +
               `1. Press Esc to dismiss hidden overlays\n` +
@@ -315,7 +333,8 @@ export const ScreenTool = Tool.define("screen", {
               monitor: result.monitor,
               stuck: true,
               compressed: encoded.compressed,
-              attachmentBytes: output.length,
+              attachmentBytes: attachment.length,
+              debugCoordinateOverlay: debugOverlay,
               scaleX: result.windowBounds?.scaleX ?? 1,
               scaleY: result.windowBounds?.scaleY ?? 1,
             },
@@ -334,7 +353,7 @@ export const ScreenTool = Tool.define("screen", {
           : ""
         return {
           title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [monitor fallback]" : ""}`,
-          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint} The image has coordinate tick marks along the edges for precise positioning.${foregroundNote}`,
+          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${foregroundNote}`,
           metadata: {
             width: result.width,
             height: result.height,
@@ -344,7 +363,8 @@ export const ScreenTool = Tool.define("screen", {
             scope: result.scope,
             monitor: result.monitor,
             compressed: encoded.compressed,
-            attachmentBytes: output.length,
+            attachmentBytes: attachment.length,
+            debugCoordinateOverlay: debugOverlay,
             scaleX: result.windowBounds?.scaleX ?? 1,
             scaleY: result.windowBounds?.scaleY ?? 1,
           },

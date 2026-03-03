@@ -1,6 +1,6 @@
----
+﻿---
 name: opencorvus-feishu-bot-config
-description: Plan and implement Feishu or Lark bot integration for OpenCorvus. Use when tasks involve Feishu app credentials, event subscription settings, FEISHU_* environment variables, designing a new Feishu adapter in packages/bot, or troubleshooting Feishu message delivery.
+description: Configure and troubleshoot Feishu or Lark bot integration for OpenCorvus. Use when tasks involve Feishu app credentials, event subscription settings, FEISHU_* environment variables, adapter wiring checks in packages/bot/src/main.ts, or troubleshooting Feishu message delivery.
 ---
 
 # OpenCorvus Feishu Bot Config
@@ -8,7 +8,7 @@ description: Plan and implement Feishu or Lark bot integration for OpenCorvus. U
 ## Overview
 
 Guide Feishu or Lark integration for OpenCorvus using OpenClaw Feishu plugin documentation as a complete reference baseline.
-Treat this as implementation and configuration guidance because OpenCorvus does not include a built-in Feishu adapter by default.
+Use this as implementation and configuration guidance for the built-in Feishu adapter in `packages/bot`.
 
 ## Workflow
 
@@ -19,30 +19,27 @@ Treat this as implementation and configuration guidance because OpenCorvus does 
 2. Load reference baseline.
 - Read `references/openclaw.md`.
 
-3. Pick integration path.
-- Use native adapter path for long-term integration.
-- Use bridge path only for temporary rollout when code change is blocked.
+3. Verify native adapter wiring.
+- Confirm `packages/bot/src/adapters/feishu.ts` implements `BotAdapter`.
+- Confirm adapter is exported in `packages/bot/src/index.ts`.
+- Confirm adapter is registered in `packages/bot/src/main.ts` behind `FEISHU_APP_ID` and `FEISHU_APP_SECRET`.
+- Confirm required env keys exist in `packages/bot/.env.example`.
 
-4. Apply native adapter changes.
-- Add `packages/bot/src/adapters/feishu.ts` implementing `BotAdapter`.
-- Export adapter in `packages/bot/src/index.ts`.
-- Register adapter in `packages/bot/src/main.ts` behind `FEISHU_APP_ID` and `FEISHU_APP_SECRET`.
-- Add required env keys in `packages/bot/.env.example`.
-
-5. Validate runtime.
+4. Validate runtime.
 - Run `bun run --cwd packages/bot src/main.ts` or `bun dev`.
 - Confirm startup log indicates Feishu adapter readiness.
 - Test inbound text and outbound reply.
 - If images are supported, test image upload.
 
-6. Troubleshoot.
+5. Troubleshoot.
 - If no events arrive, re-check event subscription mode and permissions.
 - If signature checks fail, re-check verification and encrypt configuration.
 - If replies fail, re-check app credentials and tenant permissions.
 
 ## Guardrails
 
-- Do not claim Feishu is built-in unless adapter files exist in OpenCorvus.
+- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
+- Do not claim unsupported features that the current Feishu adapter does not implement.
 - Do not expose app secrets in plain text outputs.
 - Keep implementation scope focused on adapter, env, and message flow.
 
@@ -53,3 +50,4 @@ Treat this as implementation and configuration guidance because OpenCorvus does 
 3. Exact file edits.
 4. Run commands.
 5. Verification and troubleshooting checklist.
+

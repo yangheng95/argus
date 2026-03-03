@@ -73,7 +73,7 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
   - `packages/opencorvus`: Core business logic, server, agents, tools, LSP
   - `packages/opencorvus/src/cli/cmd/tui/`: TUI interface (SolidJS + [opentui](https://github.com/sst/opentui))
   - `packages/sdk`: JavaScript SDK (`@opencorvus-ai/sdk`)
-  - `packages/bot`: Chat bot adapters (Slack, Telegram)
+  - `packages/bot`: Chat bot adapters (Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, LINE, Matrix, Mattermost, Signal, WeCom, DingTalk)
   - `packages/plugin`: Plugin system (`@opencorvus-ai/plugin`)
 
 ### Understanding bun dev vs opencorvus

@@ -46,6 +46,21 @@ export namespace TaskQueueService {
     await poll()
   }
 
+  export async function executePrompt(raw: { sessionID: string; prompt: unknown; source?: string }) {
+    const input = z
+      .object({
+        sessionID: Identifier.schema("session"),
+        prompt: z.unknown(),
+        source: z.string().optional(),
+      })
+      .parse(raw)
+    const prompt = promptSchema().parse(input.prompt)
+    return SessionPrompt.prompt({
+      sessionID: input.sessionID,
+      ...prompt,
+    })
+  }
+
   export function enqueuePrompt(raw: z.input<typeof EnqueuePromptInput>) {
     const input = EnqueuePromptInput.parse(raw)
     const prompt = promptSchema().parse(input.prompt)
@@ -155,10 +170,10 @@ export namespace TaskQueueService {
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
     }
-    const prompt = promptSchema().parse(metadata.data.input)
-    await SessionPrompt.prompt({
+    await executePrompt({
       sessionID: task.session_id,
-      ...prompt,
+      prompt: metadata.data.input,
+      source: "task-queue-service",
     })
     const now = Date.now()
     Database.use((db) =>

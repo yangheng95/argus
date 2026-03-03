@@ -1,4 +1,4 @@
----
+﻿---
 name: opencorvus-telegram-bot-config
 description: Configure and troubleshoot Telegram bot integration for OpenCorvus. Use when tasks involve BotFather token setup, privacy mode decisions, updates to TELEGRAM_BOT_TOKEN in packages/bot/.env, Telegram adapter checks in packages/bot/src/main.ts, or Telegram message delivery debugging.
 ---
@@ -40,6 +40,7 @@ Map platform setup to the OpenCorvus long-polling adapter in `packages/bot`.
 
 ## Guardrails
 
+- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Do not output real tokens.
 - Do not suggest webhook-only setup for OpenCorvus unless user explicitly asks for webhook mode.
 - Keep edits minimal and focused on env and adapter wiring.
@@ -51,3 +52,4 @@ Map platform setup to the OpenCorvus long-polling adapter in `packages/bot`.
 3. Exact file edits.
 4. Run commands.
 5. Verification and troubleshooting checklist.
+

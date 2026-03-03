@@ -1,0 +1,55 @@
+﻿---
+name: opencorvus-line-bot-config
+description: Configure and troubleshoot LINE bot integration for OpenCorvus. Use when tasks involve LINE_CHANNEL_ACCESS_TOKEN setup, adapter wiring checks in packages/bot/src/main.ts, updates to packages/bot/.env, or LINE message delivery debugging.
+---
+
+# OpenCorvus LINE Bot Config
+
+## Overview
+
+Configure LINE for OpenCorvus using a repeatable checklist and map platform setup to the adapter implementation in packages/bot.
+
+## Workflow
+
+1. Confirm scope.
+- Confirm the task targets OpenCorvus bot runtime (packages/bot) rather than OpenClaw runtime.
+- If the task is strictly OpenClaw runtime work, use the OpenClaw commands from the reference as-is.
+
+2. Load checklist.
+- Read references/openclaw.md.
+
+3. Configure platform and environment.
+- Set required env keys: LINE_CHANNEL_ACCESS_TOKEN.
+- Set optional env keys when needed: LINE_CHANNEL_SECRET, LINE_WEBHOOK_HOST, LINE_WEBHOOK_PORT, LINE_WEBHOOK_PATH.
+- Ensure the platform-side app or webhook configuration matches the adapter mode.
+
+4. Verify OpenCorvus wiring.
+- Confirm packages/bot/src/main.ts registers this adapter when required env keys exist.
+- Confirm adapter implementation exists at packages/bot/src/adapters/line.ts.
+- Confirm packages/bot/.env.example contains the same env keys.
+
+5. Validate runtime.
+- Run bun run --cwd packages/bot src/main.ts or bun dev.
+- Send one inbound message and confirm one outbound reply.
+- If image output is expected, test one image output.
+
+6. Troubleshoot.
+- Re-check credentials and webhook endpoints.
+- Re-check app or bot permissions.
+- Re-check adapter logs for transport-specific errors.
+
+## Guardrails
+
+- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
+- Do not output real secrets.
+- Keep edits focused on adapter wiring, env keys, and transport configuration.
+- Do not claim parity features that the adapter does not implement.
+
+## Output Format
+
+1. Setup summary.
+2. Required platform settings and env vars.
+3. Exact file edits.
+4. Run commands.
+5. Verification and troubleshooting checklist.
+

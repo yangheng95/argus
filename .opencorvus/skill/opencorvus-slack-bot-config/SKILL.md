@@ -1,4 +1,4 @@
----
+﻿---
 name: opencorvus-slack-bot-config
 description: Configure and troubleshoot Slack bot integration for OpenCorvus. Use when tasks involve Slack Socket Mode setup, Slack tokens, event subscriptions, updates to packages/bot/.env, adapter wiring in packages/bot/src/main.ts, or Slack message delivery debugging.
 ---
@@ -42,6 +42,7 @@ Map platform setup steps to the OpenCorvus bot runtime in `packages/bot`.
 
 ## Guardrails
 
+- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Do not output real secrets.
 - Do not instruct webhook URL setup for Socket Mode-only requests unless user asks for HTTP mode.
 - Keep edits minimal and localized to env files and Slack adapter wiring.
@@ -53,3 +54,4 @@ Map platform setup steps to the OpenCorvus bot runtime in `packages/bot`.
 3. Exact file edits.
 4. Run commands.
 5. Verification and troubleshooting checklist.
+

@@ -9,10 +9,9 @@ Enable OpenCorvus bot to support mainstream channels with stable architecture, c
 
 ## Current Baseline
 
-- Existing adapters: Slack, Telegram, Discord.
+- Existing adapters: Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, LINE, Matrix, Mattermost, Signal, WeCom, DingTalk.
 - Registry-driven adapter wiring is in place.
-- OpenClaw-style env fallbacks are supported for Slack and Telegram.
-- Planned channels are recognized and warned when configured but not implemented.
+- OpenClaw-style env fallbacks are supported across all registered adapters.
 
 ## Guiding Rules
 
@@ -137,8 +136,5 @@ Mitigation: preserve compatibility path and keep baseline tests green on each st
 
 ## Suggested Milestones
 
-1. M1: Phase 1 + Feishu text MVP
-2. M2: WhatsApp + Google Chat text MVP
-3. M3: Teams + LINE + Matrix text MVP
-4. M4: Mattermost + Signal + WeCom + DingTalk text MVP
-5. M5: media support parity and reliability hardening
+1. M1-M4 delivered as text MVP adapters.
+2. M5 next: media support parity, webhook security hardening, and reliability hardening.

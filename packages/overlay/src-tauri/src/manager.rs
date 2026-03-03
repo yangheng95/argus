@@ -56,7 +56,7 @@ impl Default for ManagerConfig {
         Self {
             command: "opencorvus".into(),
             serve_args: vec!["serve".into()],
-            run_args: vec!["run".into()],
+            run_args: vec!["run".into(), "--continue".into()],
             cwd: String::new(),
             env: vec![],
         }

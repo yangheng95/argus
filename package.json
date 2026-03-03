@@ -6,9 +6,8 @@
   "type": "module",
   "packageManager": "bun@1.3.10",
   "scripts": {
-    "dev": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun run packages/bot/src/main.ts",
-    "dev:tui": "bun --preload @opentui/solid/preload --cwd packages/opencorvus --conditions=browser src/index.ts",
-    "dev:server": "bun --preload @opentui/solid/preload --cwd packages/opencorvus --conditions=browser src/index.ts serve",
+    "dev": "bun run scripts/run-overlay.ts",
+    "dev:bot": "NODE_TLS_REJECT_UNAUTHORIZED=0 bun run packages/bot/src/main.ts",
     "patch:follow-redirects": "bun run scripts/patch-follow-redirects.ts",
     "postinstall": "bun run patch:follow-redirects",
     "typecheck": "bunx turbo run typecheck",

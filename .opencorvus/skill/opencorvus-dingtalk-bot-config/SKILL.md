@@ -1,0 +1,56 @@
+﻿---
+name: opencorvus-dingtalk-bot-config
+description: Configure and troubleshoot DingTalk bot integration for OpenCorvus. Use when tasks involve DINGTALK_APP_KEY, DINGTALK_APP_SECRET setup, adapter wiring checks in packages/bot/src/main.ts, updates to packages/bot/.env, or DingTalk message delivery debugging.
+---
+
+# OpenCorvus DingTalk Bot Config
+
+## Overview
+
+Configure DingTalk for OpenCorvus using a repeatable checklist and map platform setup to the adapter implementation in packages/bot.
+
+## Workflow
+
+1. Confirm scope.
+- Confirm the task targets OpenCorvus bot runtime (packages/bot) rather than OpenClaw runtime.
+- OpenClaw does not currently publish an official DingTalk channel page; treat this workflow as OpenCorvus-native and use vendor docs for platform-side steps.
+
+2. Load checklist.
+- Read references/openclaw.md.
+- Follow the "Verified OpenClaw facts" section to keep claims explicit about what is and is not officially documented.
+
+3. Configure platform and environment.
+- Set required env keys: DINGTALK_APP_KEY, DINGTALK_APP_SECRET.
+- Set optional env keys when needed: DINGTALK_DEFAULT_WEBHOOK, DINGTALK_WEBHOOK_HOST, DINGTALK_WEBHOOK_PORT, DINGTALK_WEBHOOK_PATH.
+- Ensure the platform-side app or webhook configuration matches the adapter mode.
+
+4. Verify OpenCorvus wiring.
+- Confirm packages/bot/src/main.ts registers this adapter when required env keys exist.
+- Confirm adapter implementation exists at packages/bot/src/adapters/dingtalk.ts.
+- Confirm packages/bot/.env.example contains the same env keys.
+
+5. Validate runtime.
+- Run bun run --cwd packages/bot src/main.ts or bun dev.
+- Send one inbound message and confirm one outbound reply.
+- If image output is expected, test one image output.
+
+6. Troubleshoot.
+- Re-check credentials and webhook endpoints.
+- Re-check app or bot permissions.
+- Re-check adapter logs for transport-specific errors.
+
+## Guardrails
+
+- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
+- Do not output real secrets.
+- Keep edits focused on adapter wiring, env keys, and transport configuration.
+- Do not claim parity features that the adapter does not implement.
+
+## Output Format
+
+1. Setup summary.
+2. Required platform settings and env vars.
+3. Exact file edits.
+4. Run commands.
+5. Verification and troubleshooting checklist.
+

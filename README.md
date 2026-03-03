@@ -59,7 +59,7 @@ Unlike pure coding agents, OpenCorvus can see and interact with your entire desk
 - **Skill system** — loadable skills for coding, desktop automation, and more
 - **Multi-provider** — works with Claude, OpenAI, Google, Qwen, and other LLM providers via AI SDK
 - **TUI** — built-in terminal user interface (SolidJS + opentui, 30 themes, session management, undo/redo)
-- **Client/server architecture** — headless server with SDK, TUI, and bot adapters
+- **Client/server architecture** — headless server with SDK, TUI, and remote chat channels
 - **LSP support** — built-in Language Server Protocol integration for code intelligence
 - **MCP support** — Model Context Protocol for extending tool capabilities
 - **Sub-agent system** — spawn focused sub-agents for parallel exploration and complex tasks
@@ -133,9 +133,10 @@ OpenCorvus uses a skill system to load specialized instructions on demand:
 
 Skills are loaded automatically based on the task. Only one skill is active at a time.
 
-## Bot — Slack / Telegram 接入
+## Remote Chat Channels (Slack / Telegram / More)
 
-Bot 是 OpenCorvus 的首选启动方式。它在内部自动启动 OpenCorvus 服务器，并通过 Slack 或 Telegram 接受指令、汇报进度。
+OpenCorvus core is always-on. Overlay is its visual chat UI and starts with the core (`bun dev`). Slack / Telegram and other chat bots are optional remote channels selected in overlay, and reusable after configuration.
+You can also build OpenCorvus-native chat bots from skills.
 
 ### 快速启动
 
@@ -144,17 +145,17 @@ Bot 是 OpenCorvus 的首选启动方式。它在内部自动启动 OpenCorvus �
 cp packages/bot/.env.example packages/bot/.env
 
 # 2. 启动 Bot（同时自动启动 OpenCorvus 服务器）
-bun dev
+bun dev:bot
 ```
 
-> `bun dev` 等价于 `bun run --cwd packages/bot src/main.ts`。
-> 如果只需要 TUI 或无头服务器，使用 `bun dev:tui` 或 `bun dev:server`。
+> `bun dev` starts the overlay console (required local chat entry).
+> `bun dev:bot` equals `bun run --cwd packages/bot src/main.ts` (optional remote chat channels entry).
 
 ### 环境变量配置
 
 在 `packages/bot/.env`（或系统环境变量）中配置以下参数：
 
-#### Slack 适配器
+#### Slack 通道
 
 | 变量 | 说明 |
 |------|------|
@@ -164,13 +165,13 @@ bun dev
 
 > Slack App 需开启 **Socket Mode**，并在 **Event Subscriptions** 订阅 `message.channels`、`message.im` 等事件。
 
-#### Telegram 适配器
+#### Telegram 通道
 
 | 变量 | 说明 |
 |------|------|
 | `TELEGRAM_BOT_TOKEN` | 通过 [@BotFather](https://t.me/BotFather) 创建 Bot 后获取 |
 
-> Slack 和 Telegram 可同时配置，Bot 会注册两个适配器。
+> Slack 和 Telegram 可同时配置，Bot 会启用两个通道。
 
 #### LLM 模型配置
 
@@ -272,9 +273,8 @@ TUI_PROJECT_DIR=D:/my-project
 
 | 命令 | 用途 |
 |------|------|
-| `bun dev` | **启动 Bot**（内嵌 OpenCorvus 服务器，推荐开发入口） |
-| `bun dev:tui` | 启动 TUI（终端交互界面） |
-| `bun dev:server` | 启动无头 API 服务器（供 SDK 或外部程序接入） |
+| `bun dev` | **Start overlay console** (required local chat entry) |
+| `bun dev:bot` | Start optional remote chat channels configured from overlay |
 
 ---
 
@@ -302,7 +302,7 @@ TUI_PROJECT_DIR=D:/my-project
 
 - **packages/opencorvus** — Core: agents, sessions, tools, providers, skills, LSP, TUI
 - **packages/sdk** — JavaScript SDK for programmatic access
-- **packages/bot** — Chat bot adapters (Slack, Telegram)
+- **packages/bot** — Remote chat channels (Slack, Telegram)
 - **packages/plugin** — Plugin system (`@opencorvus-ai/plugin`)
 
 ## Contributing

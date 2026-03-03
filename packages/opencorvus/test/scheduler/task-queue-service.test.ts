@@ -49,6 +49,32 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(1)
   })
 
+  test("executes prompt immediately via shared executor", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        await TaskQueueService.executePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "hello sync",
+              },
+            ],
+          },
+          source: "test",
+        })
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
   test("retries on failure and marks failed after max retries", async () => {
     await using tmp = await tmpdir({ git: true })
     const prompt = spyOn(SessionPrompt, "prompt").mockRejectedValue(new Error("boom"))

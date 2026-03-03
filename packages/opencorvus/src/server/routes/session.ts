@@ -766,7 +766,11 @@ export const SessionRoutes = lazy(() =>
         c.status(200)
         c.header("Content-Type", "application/json")
         return stream(c, async (stream) => {
-          const msg = await SessionPrompt.prompt({ ...body, sessionID })
+          const msg = await TaskQueueService.executePrompt({
+            sessionID,
+            prompt: body,
+            source: "session.prompt",
+          })
           stream.write(JSON.stringify(msg))
         })
       },

@@ -1,55 +1,50 @@
-# OpenClaw and Feishu or Lark Reference
+﻿# OpenClaw and Feishu or Lark Reference
 
 ## Snapshot
 
 Research date: 2026-03-03.
 
-OpenClaw Feishu docs provide app creation, credentials, permission scopes, and event subscription guidance.
-Use this as the reference baseline for implementing Feishu in OpenCorvus.
+## Verified OpenClaw facts
 
-## OpenClaw Feishu Checklist (Portable)
+- OpenClaw marks Feishu as beta.
+- Feishu support is plugin-based in OpenClaw (`@openclaw/plugin-feishu`).
+- Docs describe long connection (websocket) and webhook modes.
+- Core app credentials are `FEISHU_APP_ID` and `FEISHU_APP_SECRET`.
+- Webhook mode includes verification token and encrypt key handling.
+- Event subscription guidance includes `im.message.receive_v1`.
 
-1. Install Feishu plugin in OpenClaw runtime.
-2. Create Feishu or Lark self-built app.
-3. Collect:
-- `FEISHU_APP_ID` (`cli_...`)
-- `FEISHU_APP_SECRET`
-4. Add app permissions:
-- messaging and user profile scopes needed by bot flow
-5. Configure event subscription:
-- choose event mode
-- subscribe to message receive event
-6. Enable bot capability in app settings.
+## OpenCorvus mapping
 
-OpenClaw docs also mention:
-- domain mode (`feishu` vs `lark`) for deployment region
-- webhook mode requiring verification token and encrypt key
-- long-connection mode as preferred for simple setup
+OpenCorvus source of truth:
+- `packages/bot/src/registry.ts`
+- `packages/bot/src/adapters/feishu.ts`
+- `packages/bot/.env.example`
 
-## OpenCorvus Gap and Mapping
+OpenCorvus env keys:
+- Required: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
+- Optional: `FEISHU_WEBHOOK_HOST`, `FEISHU_WEBHOOK_PORT`, `FEISHU_WEBHOOK_PATH`, `FEISHU_VERIFICATION_TOKEN`
+- Compatibility fallback: `OPENCLAW_FEISHU_APP_ID`, `OPENCLAW_FEISHU_APP_SECRET`
 
-OpenCorvus currently does not include a built-in Feishu adapter in `packages/bot/src/main.ts`.
-Implement native support in OpenCorvus by:
+Runtime notes:
+- OpenCorvus adapter is webhook-first (HTTP server), not websocket long connection.
+- Adapter validates verification token only when configured.
+- Outbound API uses tenant access token and Feishu message APIs.
 
-1. Adding `packages/bot/src/adapters/feishu.ts` implementing `BotAdapter`.
-2. Registering adapter in `packages/bot/src/main.ts` behind Feishu env keys.
-3. Extending `packages/bot/.env.example` with required Feishu keys.
+## Differences to keep explicit
 
-Suggested env keys:
-- `FEISHU_APP_ID`
-- `FEISHU_APP_SECRET`
-- `FEISHU_VERIFICATION_TOKEN`
-- `FEISHU_ENCRYPT_KEY`
+- OpenClaw includes websocket long-connection mode.
+- Current OpenCorvus implementation supports webhook mode only.
 
-## Verification Checklist
+## Verification checklist
 
-1. Adapter starts without credential errors.
-2. Inbound text event reaches handler.
-3. Outbound reply posts successfully.
-4. Signature validation fails closed for invalid webhook requests.
+1. Start bot and confirm Feishu webhook listening path.
+2. Verify challenge callback succeeds.
+3. Send one text message and confirm one reply.
+4. If enabled, verify invalid token is rejected.
 
 ## Sources
 
-- OpenClaw Feishu channels docs: https://docs.openclaw.ai/getting-started/channels/feishu
+- OpenClaw channels overview: https://docs.openclaw.ai/channels
+- OpenClaw Feishu docs: https://docs.openclaw.ai/channels/feishu
 - Feishu Open Platform docs: https://open.feishu.cn/document
 - Lark Open Platform docs: https://open.larksuite.com/document

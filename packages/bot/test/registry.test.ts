@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { BotAdapter, MessageHandler } from "../src/adapter"
-import { registerAdapters } from "../src/registry"
+import { registerAdapters, READY_CHANNELS } from "../src/registry"
 
 class Fake implements BotAdapter {
   constructor(readonly platform: string) {}
@@ -22,6 +22,24 @@ function bot() {
   }
 }
 
+function factory() {
+  return {
+    slack: () => new Fake("slack"),
+    telegram: () => new Fake("telegram"),
+    discord: () => new Fake("discord"),
+    feishu: () => new Fake("feishu"),
+    whatsapp: () => new Fake("whatsapp"),
+    googlechat: () => new Fake("googlechat"),
+    msteams: () => new Fake("msteams"),
+    line: () => new Fake("line"),
+    matrix: () => new Fake("matrix"),
+    mattermost: () => new Fake("mattermost"),
+    signal: () => new Fake("signal"),
+    wecom: () => new Fake("wecom"),
+    dingtalk: () => new Fake("dingtalk"),
+  }
+}
+
 describe("adapter registry", () => {
   test("registers slack, telegram, discord and feishu from standard env keys", () => {
     const app = bot()
@@ -32,12 +50,7 @@ describe("adapter registry", () => {
       DISCORD_BOT_TOKEN: "dc-a",
       FEISHU_APP_ID: "cli_a",
       FEISHU_APP_SECRET: "sec_a",
-    }, {
-      slack: () => new Fake("slack"),
-      telegram: () => new Fake("telegram"),
-      discord: () => new Fake("discord"),
-      feishu: () => new Fake("feishu"),
-    })
+    }, factory())
 
     expect(result.warns).toHaveLength(0)
     expect(result.names).toEqual(["slack", "telegram", "discord", "feishu"])
@@ -50,12 +63,7 @@ describe("adapter registry", () => {
       OPENCLAW_SLACK_BOT_TOKEN: "xoxb-a",
       OPENCLAW_SLACK_APP_TOKEN: "xapp-a",
       OPENCLAW_TELEGRAM_BOT_TOKEN: "tg-a",
-    }, {
-      slack: () => new Fake("slack"),
-      telegram: () => new Fake("telegram"),
-      discord: () => new Fake("discord"),
-      feishu: () => new Fake("feishu"),
-    })
+    }, factory())
 
     expect(result.warns).toHaveLength(0)
     expect(result.names).toEqual(["slack", "telegram"])
@@ -66,12 +74,7 @@ describe("adapter registry", () => {
     const app = bot()
     const result = registerAdapters(app, {
       SLACK_BOT_TOKEN: "xoxb-a",
-    }, {
-      slack: () => new Fake("slack"),
-      telegram: () => new Fake("telegram"),
-      discord: () => new Fake("discord"),
-      feishu: () => new Fake("feishu"),
-    })
+    }, factory())
 
     expect(result.names).toEqual([])
     expect(result.warns).toEqual([
@@ -80,19 +83,19 @@ describe("adapter registry", () => {
     expect(app.list).toHaveLength(0)
   })
 
-  test("warns when planned channel is configured", () => {
+  test("registers dingtalk from env keys", () => {
     const app = bot()
     const result = registerAdapters(app, {
       DINGTALK_APP_KEY: "ding_key",
       DINGTALK_APP_SECRET: "ding_secret",
-    }, {
-      slack: () => new Fake("slack"),
-      telegram: () => new Fake("telegram"),
-      discord: () => new Fake("discord"),
-      feishu: () => new Fake("feishu"),
-    })
+    }, factory())
 
-    expect(result.names).toEqual([])
-    expect(result.warns).toContain("Channel 'dingtalk' is configured but not implemented yet in OpenCorvus bot.")
+    expect(result.warns).toEqual([])
+    expect(result.names).toEqual(["dingtalk"])
+    expect(app.list.map((item) => item.platform)).toEqual(["dingtalk"])
+  })
+
+  test("no planned channels remain", () => {
+    expect(READY_CHANNELS).toContain("dingtalk")
   })
 })

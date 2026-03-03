@@ -11,13 +11,44 @@ interface SessionEntry {
   thread: string
 }
 
+type ScreenAttachment = { type?: string; mime?: string; url?: string; filename?: string }
+type SessionMessagePart = { id?: string; state?: { attachments?: ScreenAttachment[] } }
+type ToolInput = {
+  command?: string
+  filePath?: string
+  name?: string
+  action?: string
+  title?: string
+  key?: string
+  x?: number
+  y?: number
+  button?: string
+  text?: string
+  ms?: number
+  direction?: string
+  amount?: number
+  startX?: number
+  startY?: number
+  endX?: number
+  endY?: number
+}
+
+const BOT_DEBUG_TOOL_INPUT_ENV = "OPENCORVUS_BOT_DEBUG_TOOL_INPUT"
+const BOT_MESSAGE_LIMIT = 3900
+
+function bool(input: string | undefined) {
+  if (!input) return false
+  const value = input.trim().toLowerCase()
+  return value === "1" || value === "true" || value === "yes" || value === "on"
+}
+
 export interface BotCoreOptions {
   port?: number
 }
 
 export class BotCore {
   private sessions = new Map<string, SessionEntry>()
-  /** Reverse lookup: sessionId → threadKey */
+  /** Reverse lookup: sessionId -> threadKey */
   private sessionIndex = new Map<string, string>()
   private adapters: BotAdapter[] = []
   private client!: OpencodeClient
@@ -34,7 +65,7 @@ export class BotCore {
   private serverUrl!: string
   /** Per-session pending message queue (staging area) */
   private sessionQueues = new Map<string, Array<{ msg: IncomingMessage; text: string }>>()
-  /** Sessions currently being processed — new messages are queued until session.idle fires */
+  /** Sessions currently being processed - new messages are queued until session.idle fires */
   private sessionProcessing = new Set<string>()
 
   constructor(private options?: BotCoreOptions) {}
@@ -137,7 +168,7 @@ export class BotCore {
       const queue = this.sessionQueues.get(session.sessionId) ?? []
       queue.push({ msg, text })
       this.sessionQueues.set(session.sessionId, queue)
-      await adapter.sendMessage(msg.channel, msg.thread, `⏳ 当前任务正在进行，您的消息已加入队列（第 ${queue.length} 条）。`)
+      await adapter.sendMessage(msg.channel, msg.thread, `Current task is still running. Your message is queued (#${queue.length}).`)
       console.log(`[BotCore] Queued message for ${session.sessionId}, queue size: ${queue.length}`)
       return
     }
@@ -215,37 +246,51 @@ export class BotCore {
     })
   }
 
-  /** Format a brief Slack status message for important tool completions */
-  private formatToolStatus(tool: string, input: any): string | null {
+  private toolInputDebug() {
+    return bool(process.env[BOT_DEBUG_TOOL_INPUT_ENV])
+  }
+
+  /** Format a brief status message for important tool completions */
+  private formatToolStatus(tool: string, input: unknown): string | null {
     try {
+      const data = (input ?? {}) as ToolInput
+      const debug = this.toolInputDebug()
       switch (tool) {
         case "bash": {
-          const cmd = input?.command ?? ""
+          if (!debug) return "`$ bash`"
+          const cmd = data.command ?? ""
           const short = cmd.length > 80 ? cmd.slice(0, 80) + "..." : cmd
           return `\`$ ${short}\``
         }
         case "edit":
-          return `\`edit ${input?.filePath ?? "file"}\``
+          if (!debug) return "`edit`"
+          return `\`edit ${data.filePath ?? "file"}\``
         case "write":
-          return `\`write ${input?.filePath ?? "file"}\``
+          if (!debug) return "`write`"
+          return `\`write ${data.filePath ?? "file"}\``
         case "skill":
-          return `\`skill: ${input?.name ?? "?"}\``
+          if (!debug) return "`skill`"
+          return `\`skill: ${data.name ?? "?"}\``
         case "screen": {
-          const action = input?.action
-          if (action === "bind_window") return `\`screen.bind_window: ${input?.title ?? "?"}\``
+          const action = data.action
+          if (action === "bind_window" && !debug) return "`screen.bind_window`"
+          if (action === "bind_window") return `\`screen.bind_window: ${data.title ?? "?"}\``
           if (action === "list_windows") return "`screen.list_windows`"
           if (action === "screenshot") return "`screen.screenshot`"
+          if (action) return `\`screen.${action}\``
           return "`screen`"
         }
         case "input": {
-          const action = input?.action
-          if (action === "key") return `\`input.key: ${input?.key ?? "?"}\``
-          if (action === "click") return `\`input.click: (${input?.x ?? "?"}, ${input?.y ?? "?"}) ${input?.button ?? "left"}\``
-          if (action === "type") return `\`input.type: ${Math.min(String(input?.text ?? "").length, 999)} chars\``
-          if (action === "wait") return `\`input.wait: ${input?.ms ?? "?"}ms\``
-          if (action === "scroll") return `\`input.scroll: ${input?.direction ?? "?"} ${input?.amount ?? ""}\``
-          if (action === "drag") return `\`input.drag: (${input?.startX ?? "?"}, ${input?.startY ?? "?"}) -> (${input?.endX ?? "?"}, ${input?.endY ?? "?"})\``
-          if (action === "move") return `\`input.move: (${input?.x ?? "?"}, ${input?.y ?? "?"})\``
+          const action = data.action
+          if (!action) return "`input`"
+          if (!debug) return `\`input.${action}\``
+          if (action === "key") return `\`input.key: ${data.key ?? "?"}\``
+          if (action === "click") return `\`input.click: (${data.x ?? "?"}, ${data.y ?? "?"}) ${data.button ?? "left"}\``
+          if (action === "type") return `\`input.type: ${Math.min(String(data.text ?? "").length, 999)} chars\``
+          if (action === "wait") return `\`input.wait: ${data.ms ?? "?"}ms\``
+          if (action === "scroll") return `\`input.scroll: ${data.direction ?? "?"} ${data.amount ?? ""}\``
+          if (action === "drag") return `\`input.drag: (${data.startX ?? "?"}, ${data.startY ?? "?"}) -> (${data.endX ?? "?"}, ${data.endY ?? "?"})\``
+          if (action === "move") return `\`input.move: (${data.x ?? "?"}, ${data.y ?? "?"})\``
           return "`input`"
         }
         // read, glob, grep — too noisy, skip
@@ -265,9 +310,8 @@ export class BotCore {
 
 
   /**
-   * Fetch screenshot attachment from API, upload to Slack, and optionally
-   * run vision analysis in parallel. Vision analysis text is posted as a
-   * follow-up message in the Slack thread.
+   * Upload screenshot attachment and optionally run vision analysis in parallel.
+   * Prefer event payload attachments and fall back to fetching message parts if needed.
    */
   private async processScreenshot(
     session: SessionEntry,
@@ -276,64 +320,64 @@ export class BotCore {
     partId: string,
     title: string,
     diffPercent?: number,
+    initialAttachments?: ScreenAttachment[],
   ): Promise<void> {
     try {
-      const msgResult = await this.client.session.message({
-        sessionID: sessionId,
-        messageID: messageId,
-      })
-      if (msgResult.error) return
+      let attachments = (initialAttachments ?? []).filter((att) => att.type === "file" && att.mime?.startsWith("image/"))
+      if (attachments.length === 0) {
+        const msgResult = await this.client.session.message({
+          sessionID: sessionId,
+          messageID: messageId,
+        })
+        if (msgResult.error) return
+        const data = msgResult.data as { parts?: SessionMessagePart[] }
+        const part = (data.parts ?? []).find((p) => p.id === partId)
+        attachments = (part?.state?.attachments ?? []).filter((att) => att.type === "file" && att.mime?.startsWith("image/"))
+      }
+      for (const att of attachments) {
+        const match = att.url?.match(/^data:[^;]+;base64,(.+)$/)
+        if (!match) continue
 
-      const parts = (msgResult.data as any).parts ?? []
-      for (const p of parts) {
-        if (p.id !== partId) continue
-        for (const att of p.state?.attachments ?? []) {
-          if (att.type === "file" && att.mime?.startsWith("image/")) {
-            const match = att.url?.match(/^data:[^;]+;base64,(.+)$/)
-            if (!match) continue
+        const base64Data = match[1]
+        const buffer = Buffer.from(base64Data, "base64")
+        const ext = att.mime === "image/png" ? "png" : "jpg"
 
-            const base64Data = match[1]
-            const buffer = Buffer.from(base64Data, "base64")
-            const ext = att.mime === "image/png" ? "png" : "jpg"
+        // Skip vision for oversized screenshots (would timeout or OOM the API)
+        const tooLarge = buffer.length >= 7 * 1024 * 1024
+        if (tooLarge) {
+          console.log(`[BotCore] Vision skipped: screenshot too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB > 7MB)`)
+        }
 
-            // Skip vision for oversized screenshots (would timeout or OOM the API)
-            const tooLarge = buffer.length >= 7 * 1024 * 1024
-            if (tooLarge) {
-              console.log(`[BotCore] Vision skipped: screenshot too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB > 7MB)`)
-            }
+        // Skip vision for trivial screen changes (cursor blinks, etc.)
+        const visionDiffThreshold = Number(process.env.OPENCORVUS_MONITOR_DIFF_THRESHOLD) || 2
+        const lowDiff = diffPercent !== undefined && diffPercent < visionDiffThreshold
+        if (lowDiff) {
+          console.log(`[BotCore] Vision skipped: low screen change (${diffPercent.toFixed(1)}% < ${visionDiffThreshold}% threshold)`)
+        }
 
-            // Skip vision for trivial screen changes (cursor blinks, etc.)
-            const visionDiffThreshold = Number(process.env.OPENCORVUS_MONITOR_DIFF_THRESHOLD) || 2
-            const lowDiff = diffPercent !== undefined && diffPercent < visionDiffThreshold
-            if (lowDiff) {
-              console.log(`[BotCore] Vision skipped: low screen change (${diffPercent.toFixed(1)}% < ${visionDiffThreshold}% threshold)`)
-            }
+        // Run upload and vision analysis in parallel
+        const uploadPromise = session.adapter.uploadImage(
+          session.channel,
+          session.thread,
+          buffer,
+          att.filename ?? `screenshot.${ext}`,
+          title,
+        )
 
-            // Run upload and vision analysis in parallel
-            const uploadPromise = session.adapter.uploadImage(
-              session.channel,
-              session.thread,
-              buffer,
-              att.filename ?? `screenshot.${ext}`,
-              title,
-            )
+        const shouldVision = this.vision && !tooLarge && !lowDiff
+        const visionPromise = shouldVision
+          ? this.vision!.analyze(base64Data).catch((err) => {
+              console.warn("[BotCore] Vision analysis failed:", err)
+              return null
+            })
+          : Promise.resolve(null)
 
-            const shouldVision = this.vision && !tooLarge && !lowDiff
-            const visionPromise = shouldVision
-              ? this.vision!.analyze(base64Data).catch((err) => {
-                  console.warn("[BotCore] Vision analysis failed:", err)
-                  return null
-                })
-              : Promise.resolve(null)
+        const [, visionResult] = await Promise.all([uploadPromise, visionPromise])
 
-            const [, visionResult] = await Promise.all([uploadPromise, visionPromise])
+        console.log(`[BotCore] Uploaded screenshot (${(buffer.length / 1024).toFixed(0)}KB)`)
 
-            console.log(`[BotCore] Uploaded screenshot (${(buffer.length / 1024).toFixed(0)}KB)`)
-
-            if (visionResult) {
-              console.log(`[BotCore] Vision analysis (${visionResult.tokens.prompt + visionResult.tokens.completion} tokens): ${visionResult.description.slice(0, 120)}...`)
-            }
-          }
+        if (visionResult) {
+          console.log(`[BotCore] Vision analysis (${visionResult.tokens.prompt + visionResult.tokens.completion} tokens): ${visionResult.description.slice(0, 120)}...`)
         }
       }
     } catch (err) {
@@ -414,7 +458,7 @@ export class BotCore {
           // Upload screenshot images from screen tool
           if (toolName === "screen") {
             const hasImage = (part.state.attachments ?? []).some(
-              (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
+              (a: ScreenAttachment) => a.type === "file" && a.mime?.startsWith("image/"),
             )
             if (hasImage) {
               const metadata = part.state.metadata ?? {}
@@ -425,6 +469,7 @@ export class BotCore {
                 part.id,
                 part.state.title,
                 metadata.diffPercent,
+                part.state.attachments ?? [],
               )
             }
           }
