@@ -36,7 +36,7 @@ mock.module("../../src/opencorvus/gui/index", () => ({
 mock.module("../../src/tool/overlay-client", () => ({
   showOverlay: () => {},
   showWindowHighlight: () => {},
-  resolveOverlayCoord: (value: number | undefined, fallback: number) => Number.isFinite(value) ? Math.round(value) : fallback,
+  resolveOverlayCoord: (value: number | undefined, fallback: number) => typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback,
   requestOverlayConfirm: async () => "unavailable",
   overlayDiagnostic: () => ({
     available: false,

@@ -257,7 +257,7 @@ async function send(payload: Record<string, unknown>) {
 }
 
 export function resolveOverlayCoord(value: number | undefined, fallback: number) {
-  if (!Number.isFinite(value)) return fallback
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback
   return Math.round(value)
 }
 
