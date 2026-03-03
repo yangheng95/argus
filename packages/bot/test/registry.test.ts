@@ -40,7 +40,7 @@ function factory() {
   }
 }
 
-describe("adapter registry", () => {
+describe("channel registry", () => {
   test("registers slack, telegram, discord and feishu from standard env keys", () => {
     const app = bot()
     const result = registerAdapters(app, {
@@ -78,7 +78,7 @@ describe("adapter registry", () => {
 
     expect(result.names).toEqual([])
     expect(result.warns).toEqual([
-      "Skip slack adapter: missing required env. Need: SLACK_BOT_TOKEN, SLACK_APP_TOKEN.",
+      "Skip slack channel: missing required env. Need: SLACK_BOT_TOKEN, SLACK_APP_TOKEN.",
     ])
     expect(app.list).toHaveLength(0)
   })

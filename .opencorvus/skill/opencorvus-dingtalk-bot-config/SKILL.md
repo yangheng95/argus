@@ -1,4 +1,4 @@
-﻿---
+---
 name: opencorvus-dingtalk-bot-config
 description: Configure and troubleshoot DingTalk bot integration for OpenCorvus. Use when tasks involve DINGTALK_APP_KEY, DINGTALK_APP_SECRET setup, adapter wiring checks in packages/bot/src/main.ts, updates to packages/bot/.env, or DingTalk message delivery debugging.
 ---
@@ -11,6 +11,13 @@ Configure DingTalk for OpenCorvus using a repeatable checklist and map platform 
 
 ## Workflow
 
+## Interaction Mode
+
+- Default to screen-guided flow.
+- Ask the user to open the platform admin page, then advance one step at a time.
+- After each manual portal action, pause and wait for explicit user confirmation before continuing.
+- Offer a text-guided fallback at any time (copy-paste checklist with URLs and exact fields).
+- If desktop confirmation is unavailable, switch to text-guided fallback and continue.
 1. Confirm scope.
 - Confirm the task targets OpenCorvus bot runtime (packages/bot) rather than OpenClaw runtime.
 - OpenClaw does not currently publish an official DingTalk channel page; treat this workflow as OpenCorvus-native and use vendor docs for platform-side steps.

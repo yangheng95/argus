@@ -21,6 +21,7 @@ import { LocalCLIProvider } from "./stt/providers/local-cli"
 import { VisionPipeline } from "./vision"
 import { applyDashscopeRuntime } from "./dashscope"
 import { ADAPTER_HINT, registerAdapters } from "./registry"
+import { applyBundledEnv } from "./bundled-env"
 
 // Bot tool permissions: override defaults that would "ask" user for confirmation.
 // Defaults already have "*": "allow", so we don't need to deny-all + re-allow.
@@ -45,6 +46,19 @@ const botPermission = {
   goal: "allow",
   vision_analyze: "allow",
   external_directory: "allow",
+}
+
+const bundled = await applyBundledEnv()
+if (bundled.expired) {
+  console.warn(
+    `[Bot] Bundled env expired at ${bundled.expireAt}. Configure your own packages/bot/.env to continue.`,
+  )
+} else if (bundled.enabled) {
+  console.log(
+    `[Bot] Bundled env active until ${bundled.expireAt} (applied ${bundled.applied}, user overrides ${bundled.skipped}).`,
+  )
+} else if (bundled.reason === "invalid_bundle") {
+  console.warn(`[Bot] Ignore invalid bundled env file: ${bundled.file}`)
 }
 
 function inlineConfig() {
@@ -221,10 +235,10 @@ for (const warn of adapters.warns) {
 }
 
 if (adapters.names.length === 0) {
-  console.error(`No adapter configured. ${ADAPTER_HINT}`)
+  console.error(`No chat channel configured. ${ADAPTER_HINT}`)
   process.exit(1)
 }
-console.log(`[Bot] Registered adapters: ${adapters.names.join(", ")}`)
+console.log(`[Bot] Registered chat channels: ${adapters.names.join(", ")}`)
 
 await bot.start()
 console.log("Bot is running")

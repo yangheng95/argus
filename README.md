@@ -149,7 +149,8 @@ bun dev:bot
 ```
 
 > `bun dev` starts the overlay console (required local chat entry).
-> `bun dev:bot` equals `bun run --cwd packages/bot src/main.ts` (optional remote chat channels entry).
+> `bun dev:bot` equals `bun run --cwd packages/bot --no-env-file --env-file .env src/main.ts` (optional remote chat channels entry).
+> `bun dev:bot` only loads `packages/bot/.env` (plus system env), and does not auto-load repo root `.env`.
 
 ### 环境变量配置
 

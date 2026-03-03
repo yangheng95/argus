@@ -1,4 +1,4 @@
-﻿---
+---
 name: opencorvus-feishu-bot-config
 description: Configure and troubleshoot Feishu or Lark bot integration for OpenCorvus. Use when tasks involve Feishu app credentials, event subscription settings, FEISHU_* environment variables, adapter wiring checks in packages/bot/src/main.ts, or troubleshooting Feishu message delivery.
 ---
@@ -12,6 +12,13 @@ Use this as implementation and configuration guidance for the built-in Feishu ad
 
 ## Workflow
 
+## Interaction Mode
+
+- Default to screen-guided flow.
+- Ask the user to open the platform admin page, then advance one step at a time.
+- After each manual portal action, pause and wait for explicit user confirmation before continuing.
+- Offer a text-guided fallback at any time (copy-paste checklist with URLs and exact fields).
+- If desktop confirmation is unavailable, switch to text-guided fallback and continue.
 1. Confirm runtime and current state.
 - Confirm this task targets OpenCorvus (`packages/bot`).
 - Check whether `packages/bot/src/adapters/feishu.ts` already exists.

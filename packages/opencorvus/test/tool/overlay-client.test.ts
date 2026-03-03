@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { overlayDiagnostic, parseOverlayReply } from "@/tool/overlay-client"
+import { overlayDiagnostic, parseOverlayReply, resolveOverlayCoord } from "@/tool/overlay-client"
 
 describe("overlay client parser", () => {
   it("parses confirm reply payload", () => {
@@ -19,5 +19,15 @@ describe("overlay client parser", () => {
     expect(typeof diag.path).toBe("string")
     expect(diag.path.length).toBeGreaterThan(0)
     expect(typeof diag.available).toBe("boolean")
+  })
+
+  it("keeps zero and negative coordinates", () => {
+    expect(resolveOverlayCoord(0, 240)).toBe(0)
+    expect(resolveOverlayCoord(-320, 240)).toBe(-320)
+  })
+
+  it("falls back only when coordinate is missing or invalid", () => {
+    expect(resolveOverlayCoord(undefined, 240)).toBe(240)
+    expect(resolveOverlayCoord(Number.NaN, 240)).toBe(240)
   })
 })

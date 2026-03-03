@@ -204,14 +204,23 @@ export class BotCore {
     const projectRoot = path.resolve(import.meta.dirname, "../../..")
     const opencorvusSrc = path.join(projectRoot, "packages", "opencorvus", "src", "index.ts")
     return [
-      `You are OpenCorvus — a coding and desktop automation assistant. The user talks to you via ${channel}, but they also watch your screen. They need to SEE what you're doing.`,
+      `You are OpenCorvus - a coding and desktop automation assistant. The user talks to you via ${channel}, and they also watch your screen. They need to SEE what you are doing.`,
       "",
       "## The visibility principle",
-      "Everything you do must be visible to the user. Using background tools (write, bash) to produce code silently is unacceptable — the user has no idea what you changed or whether it's correct.",
+      "Everything you do must be visible to the user. Using background tools (write, bash) to produce code silently is unacceptable - the user has no idea what you changed or whether it is correct.",
       "For coding tasks, open the OpenCorvus TUI first. The TUI runs in a real terminal window the user can watch, and it has full coding capabilities.",
       `TUI launch command (Windows): bash("start \\"OpenCorvus\\" cmd /c \\"bun --preload @opentui/solid/preload --conditions=browser ${opencorvusSrc} <project_dir>\\"")`,
       "After launching: use screen tools to bind to the TUI window, take a screenshot to confirm it's open, then type the coding task into its prompt.",
       "Exception: if the user explicitly asks for a specific tool ('use codex', 'use VS Code', 'run bash'), follow that instruction.",
+      "",
+      "## Response style",
+      "Write in short, scannable blocks suitable for chat apps.",
+      "- Start with a one-line direct answer.",
+      "- Use short labeled sections when useful: Plan, Actions, Result, Next.",
+      "- Prefer numbered steps for procedures and '-' bullets for facts.",
+      "- Keep each paragraph to one or two short sentences.",
+      "- Use fenced code blocks for commands or code snippets.",
+      "- Avoid long walls of text, repeated filler, or unnecessary prefaces.",
       "",
       "## Desktop tasks",
       "Use screen/input tools to interact visually. Always describe what you see after each screenshot.",
@@ -222,6 +231,75 @@ export class BotCore {
       "## Memory",
       "Search memory at the start of each task to recall relevant past context.",
     ].join("\n")
+  }
+
+  private polish(text: string): string {
+    const normalized = text.replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").trim()
+    if (!normalized) return ""
+    return normalized
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+  }
+
+  private split(text: string, limit = BOT_MESSAGE_LIMIT): string[] {
+    if (text.length <= limit) return [text]
+
+    const out: string[] = []
+    const blocks = text.split(/\n{2,}/)
+    let chunk = ""
+
+    for (const block of blocks) {
+      const joined = chunk ? `${chunk}\n\n${block}` : block
+      if (joined.length <= limit) {
+        chunk = joined
+        continue
+      }
+
+      if (chunk) {
+        out.push(chunk)
+        chunk = ""
+      }
+
+      if (block.length <= limit) {
+        chunk = block
+        continue
+      }
+
+      for (const line of block.split("\n")) {
+        const next = chunk ? `${chunk}\n${line}` : line
+        if (next.length <= limit) {
+          chunk = next
+          continue
+        }
+
+        if (chunk) {
+          out.push(chunk)
+          chunk = ""
+        }
+
+        if (line.length <= limit) {
+          chunk = line
+          continue
+        }
+
+        let index = 0
+        while (index < line.length) {
+          const part = line.slice(index, index + limit)
+          if (part.length === limit) {
+            out.push(part)
+            index += limit
+            continue
+          }
+          chunk = part
+          index = line.length
+        }
+      }
+    }
+
+    if (chunk) out.push(chunk)
+    return out
   }
 
   /**
@@ -386,7 +464,7 @@ export class BotCore {
   }
 
   private async handleEvent(event: any): Promise<void> {
-    // Session entered standby — clear processing flag and dequeue next pending message
+    // Session entered standby - clear processing flag and dequeue next pending message
     if (event.type === "session.idle") {
       const sessionId = event.properties?.sessionID
       if (sessionId) {
@@ -420,9 +498,13 @@ export class BotCore {
         this.textBuffers.delete(info.id)
 
         if (text) {
-          const truncated = text.length > 3900 ? text.slice(0, 3900) + "\n...(truncated)" : text
-          await session.adapter.sendMessage(session.channel, session.thread, truncated).catch(() => {})
-          console.log(`[BotCore] Sent text for ${info.sessionID} (${text.length} chars)`)
+          const polished = this.polish(text)
+          if (polished) {
+            for (const part of this.split(polished, BOT_MESSAGE_LIMIT)) {
+              await session.adapter.sendMessage(session.channel, session.thread, part).catch(() => {})
+            }
+          }
+          console.log(`[BotCore] Sent text for ${info.sessionID} (${polished.length} chars)`)
         }
 
         if (info.error) {

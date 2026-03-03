@@ -244,9 +244,9 @@ export const InputTool = Tool.define("input", {
       case "type": {
         const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
-        showOverlay(0, 0, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
+        showOverlay(undefined, undefined, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
         await GUI.paste(params.text)
-        showOverlay(0, 0, "type", `done ${params.text.length} chars`, "done")
+        showOverlay(undefined, undefined, "type", `done ${params.text.length} chars`, "done")
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -265,14 +265,14 @@ export const InputTool = Tool.define("input", {
       case "key": {
         const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
-        showOverlay(0, 0, "key", params.key)
+        showOverlay(undefined, undefined, "key", params.key)
         const parts = params.key.split("+").map((k) => k.trim())
         if (parts.length > 1) {
           await GUI.hotkey(...parts)
         } else {
           await GUI.pressKey(parts[0])
         }
-        showOverlay(0, 0, "key", `done ${params.key}`, "done")
+        showOverlay(undefined, undefined, "key", `done ${params.key}`, "done")
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -291,9 +291,9 @@ export const InputTool = Tool.define("input", {
       case "scroll": {
         const windowBlocked = await ensureBoundWindowForeground()
         if (windowBlocked) return windowBlocked
-        showOverlay(0, 0, "scroll", `${params.direction} ${params.amount}`)
+        showOverlay(undefined, undefined, "scroll", `${params.direction} ${params.amount}`)
         await GUI.scroll(params.direction, params.amount)
-        showOverlay(0, 0, "scroll", `done ${params.direction}`, "done")
+        showOverlay(undefined, undefined, "scroll", `done ${params.direction}`, "done")
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",

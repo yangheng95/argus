@@ -5,10 +5,10 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 use crate::events;
 
 // Overlay window logical dimensions (must match tauri.conf.json)
-const OVERLAY_WIDTH: f64 = 380.0;
-const OVERLAY_HEIGHT: f64 = 160.0;
-// Focus ring center is at 75% of window height
-const FOCUS_Y_RATIO: f64 = 0.75;
+const OVERLAY_WIDTH: f64 = 420.0;
+const OVERLAY_HEIGHT: f64 = 180.0;
+// Focus ring center ratio in index.html (#focus top: var(--focus-y))
+const FOCUS_Y_RATIO: f64 = 0.74;
 
 #[derive(Deserialize, Serialize, Clone)]
 struct ShowPayload {

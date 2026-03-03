@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenCorvus Bot Config Wizard"
+  short_description: "Unified screen-guided bot channel setup with text fallback"
+  default_prompt: "Use $opencorvus-bot-config-wizard to configure chat bot channels step-by-step with screen guidance first and text fallback."

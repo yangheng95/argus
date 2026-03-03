@@ -256,10 +256,15 @@ async function send(payload: Record<string, unknown>) {
   return ok
 }
 
-export function showOverlay(screenX: number, screenY: number, action: string, label: string, status: "start" | "done" = "start") {
+export function resolveOverlayCoord(value: number | undefined, fallback: number) {
+  if (!Number.isFinite(value)) return fallback
+  return Math.round(value)
+}
+
+export function showOverlay(screenX: number | undefined, screenY: number | undefined, action: string, label: string, status: "start" | "done" = "start") {
   void (async () => {
-    const x = Number.isFinite(screenX) && screenX > 0 ? Math.round(screenX) : last.x
-    const y = Number.isFinite(screenY) && screenY > 0 ? Math.round(screenY) : last.y
+    const x = resolveOverlayCoord(screenX, last.x)
+    const y = resolveOverlayCoord(screenY, last.y)
     last = { x, y }
     await send({ type: "hint", x, y, action, label, status })
   })()
@@ -293,8 +298,8 @@ export async function requestOverlayConfirm(input: {
   timeoutMs?: number
 }) {
   const timeout = Math.max(1000, Math.min(input.timeoutMs ?? 30000, 120000))
-  const x = Number.isFinite(input.x) && (input.x ?? 0) > 0 ? Math.round(input.x!) : last.x
-  const y = Number.isFinite(input.y) && (input.y ?? 0) > 0 ? Math.round(input.y!) : last.y
+  const x = resolveOverlayCoord(input.x, last.x)
+  const y = resolveOverlayCoord(input.y, last.y)
   const id = `confirm_${Date.now()}_${++seq}`
 
   return new Promise<ConfirmResult>((done) => {

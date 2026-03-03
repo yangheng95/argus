@@ -17,7 +17,7 @@ export function formatResponse(parts: Part[]): { text: string; images: ImageAtta
     if (part.type === "text") {
       textLines.push(part.text)
     } else if (part.type === "tool" && part.state.status === "completed") {
-      toolLines.push(`*${part.tool}* — ${part.state.title}`)
+      toolLines.push(`*${part.tool}* - ${part.state.title}`)
       // Extract image attachments from tool results
       for (const att of part.state.attachments ?? []) {
         if (att.type === "file" && att.mime?.startsWith("image/")) {
@@ -64,7 +64,7 @@ export function formatToolUpdate(part: ToolPart): { text?: string; images: Image
       }
     }
   }
-  return { text: `*${part.tool}* — ${part.state.title}`, images }
+  return { text: `*${part.tool}* - ${part.state.title}`, images }
 }
 
 function dataUrlToBuffer(url: string): Buffer | null {

@@ -1,4 +1,4 @@
-﻿---
+---
 name: opencorvus-telegram-bot-config
 description: Configure and troubleshoot Telegram bot integration for OpenCorvus. Use when tasks involve BotFather token setup, privacy mode decisions, updates to TELEGRAM_BOT_TOKEN in packages/bot/.env, Telegram adapter checks in packages/bot/src/main.ts, or Telegram message delivery debugging.
 ---
@@ -12,6 +12,13 @@ Map platform setup to the OpenCorvus long-polling adapter in `packages/bot`.
 
 ## Workflow
 
+## Interaction Mode
+
+- Default to screen-guided flow.
+- Ask the user to open the platform admin page, then advance one step at a time.
+- After each manual portal action, pause and wait for explicit user confirmation before continuing.
+- Offer a text-guided fallback at any time (copy-paste checklist with URLs and exact fields).
+- If desktop confirmation is unavailable, switch to text-guided fallback and continue.
 1. Confirm scope.
 - Confirm this task targets OpenCorvus (`packages/bot`) and not OpenClaw CLI runtime.
 - If user is on OpenClaw runtime, use the OpenClaw commands from the reference directly.

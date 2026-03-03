@@ -3,7 +3,7 @@ import type { BotAdapter } from "./adapter"
 type Env = Record<string, string | undefined>
 
 export const ADAPTER_HINT =
-  "Set one adapter token set: SLACK_BOT_TOKEN + SLACK_APP_TOKEN, TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, FEISHU_APP_ID + FEISHU_APP_SECRET, or other mainstream adapter env pairs (OPENCLAW_* fallbacks are also supported)."
+  "Set one chat channel token set: SLACK_BOT_TOKEN + SLACK_APP_TOKEN, TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, FEISHU_APP_ID + FEISHU_APP_SECRET, or other mainstream channel env pairs (OPENCLAW_* fallbacks are also supported)."
 
 export interface AdapterFactory {
   slack(opts: { token: string; appToken: string; signingSecret?: string }): BotAdapter
@@ -254,7 +254,7 @@ export function registerAdapters(
     const miss = Object.keys(item.req).filter((key) => !vals[key])
     if (miss.length > 0) {
       if (have(env, item.req)) {
-        warns.push(`Skip ${item.name} adapter: missing required env. Need: ${need(item.req)}.`)
+        warns.push(`Skip ${item.name} channel: missing required env. Need: ${need(item.req)}.`)
       }
       continue
     }

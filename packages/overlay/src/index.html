@@ -6,7 +6,7 @@
   <style>
     :root {
       --accent: var(--color-click);
-      --accent-glow: rgba(99, 102, 241, 0.25);
+      --focus-y: 74%;
     }
 
     html, body {
@@ -24,21 +24,20 @@
       pointer-events: none;
     }
 
-    /* ── Focus ring ── */
     #focus {
       position: absolute;
       left: 50%;
-      top: 75%;
-      width: 44px;
-      height: 44px;
-      transform: translate(-50%, -50%) scale(0.5);
+      top: var(--focus-y);
+      width: 40px;
+      height: 40px;
+      transform: translate(-50%, -50%) scale(0.8);
       border-radius: var(--radius-pill);
       border: 2px solid transparent;
       background:
         linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
-        linear-gradient(135deg, var(--accent), rgba(255, 255, 255, 0.2)) border-box;
+        linear-gradient(135deg, var(--accent), rgba(255, 255, 255, 0.16)) border-box;
       opacity: 0;
-      transition: opacity 120ms var(--ease), transform 200ms var(--ease-bounce);
+      transition: opacity 120ms var(--ease), transform 180ms var(--ease);
     }
 
     #focus::before {
@@ -46,20 +45,20 @@
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 5px;
-      height: 5px;
+      width: 4px;
+      height: 4px;
       transform: translate(-50%, -50%);
       border-radius: 50%;
       background: var(--accent);
-      box-shadow: 0 0 6px var(--accent);
+      box-shadow: 0 0 5px var(--accent);
     }
 
     #focus::after {
       content: "";
       position: absolute;
-      inset: -6px;
+      inset: -4px;
       border-radius: inherit;
-      border: 1.5px solid rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.07);
       opacity: 0;
     }
 
@@ -69,99 +68,120 @@
     }
 
     #focus.pointer.visible::after {
-      animation: ring-pulse 600ms var(--ease) forwards;
+      animation: ring-pulse 420ms var(--ease) forwards;
     }
 
     #focus.done {
       background:
         linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
-        linear-gradient(135deg, var(--color-done), rgba(255, 255, 255, 0.15)) border-box;
+        linear-gradient(135deg, var(--color-done), rgba(255, 255, 255, 0.12)) border-box;
     }
 
     #focus.done::before {
       background: var(--color-done);
-      box-shadow: 0 0 8px var(--color-done);
+      box-shadow: 0 0 7px var(--color-done);
     }
 
-    /* ── Popup pill ── */
+    #focus.error {
+      background:
+        linear-gradient(var(--surface-0), var(--surface-0)) padding-box,
+        linear-gradient(135deg, var(--color-error), rgba(255, 255, 255, 0.12)) border-box;
+    }
+
+    #focus.error::before {
+      background: var(--color-error);
+      box-shadow: 0 0 7px var(--color-error);
+    }
+
     #popup {
       position: absolute;
       left: 50%;
-      top: 14px;
-      transform: translateX(-50%) translateY(4px);
-      display: inline-flex;
+      top: calc(var(--focus-y) - 74px);
+      transform: translate(-50%, 6px);
+      min-width: 260px;
+      max-width: 420px;
+      display: grid;
+      grid-template-columns: auto auto minmax(0, 1fr);
       align-items: center;
-      gap: 7px;
-      padding: 7px 14px;
-      border-radius: var(--radius-sm);
+      column-gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
       background: var(--glass);
       border: 1px solid var(--glass-border);
       backdrop-filter: var(--blur);
       -webkit-backdrop-filter: var(--blur);
       color: var(--text-primary);
       font-family: var(--font-ui);
-      font-size: 12px;
-      font-weight: 500;
-      line-height: 1;
-      letter-spacing: 0.01em;
-      white-space: nowrap;
       opacity: 0;
-      box-shadow: var(--shadow-md), 0 0 0 0 transparent;
+      box-shadow: var(--shadow-sm);
       transition:
-        opacity 140ms var(--ease),
-        transform 140ms var(--ease),
-        box-shadow 200ms var(--ease);
+        opacity 120ms var(--ease),
+        transform 120ms var(--ease),
+        border-color 120ms var(--ease),
+        box-shadow 120ms var(--ease);
     }
 
     #popup.visible {
       opacity: 1;
-      transform: translateX(-50%) translateY(0);
-      box-shadow: var(--shadow-md), 0 0 24px rgba(99, 102, 241, 0.08);
+      transform: translate(-50%, 0);
+      box-shadow: var(--shadow-md);
     }
 
     #popup.hiding {
       opacity: 0;
-      transform: translateX(-50%) translateY(-4px);
-      transition: opacity 220ms var(--ease), transform 220ms var(--ease);
+      transform: translate(-50%, -4px);
+      transition: opacity 180ms var(--ease), transform 180ms var(--ease);
     }
 
-    #popup.done {
-      --accent: var(--color-done);
-      border-color: rgba(52, 211, 153, 0.18);
-      box-shadow: var(--shadow-md), 0 0 20px rgba(52, 211, 153, 0.1);
-    }
-
-    /* ── Action accent colors ── */
     #popup[data-action="click"],
     #popup[data-action="double"],
     #popup[data-action="right"],
     #popup[data-action="middle"] { --accent: var(--color-click); }
-    #popup[data-action="type"]   { --accent: var(--color-type); }
-    #popup[data-action="key"]    { --accent: var(--color-key); }
-    #popup[data-action="scroll"] { --accent: var(--color-scroll); }
-    #popup[data-action="drag"]   { --accent: var(--color-drag); }
-    #popup[data-action="move"]   { --accent: var(--color-move); }
 
-    /* ── Accent indicator bar (left edge) ── */
-    #popup::before {
-      content: "";
-      width: 3px;
-      height: 14px;
-      border-radius: 2px;
+    #popup[data-action="type"] { --accent: var(--color-type); }
+    #popup[data-action="key"] { --accent: var(--color-key); }
+    #popup[data-action="scroll"] { --accent: var(--color-scroll); }
+    #popup[data-action="drag"] { --accent: var(--color-drag); }
+    #popup[data-action="move"] { --accent: var(--color-move); }
+
+    #popup[data-status="done"] {
+      --accent: var(--color-done);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    #popup[data-status="error"] {
+      --accent: var(--color-error);
+      border-color: rgba(239, 68, 68, 0.35);
+    }
+
+    #status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: var(--radius-pill);
       background: var(--accent);
-      box-shadow: 0 0 8px var(--accent);
-      flex-shrink: 0;
-      transition: background 120ms var(--ease), box-shadow 120ms var(--ease);
+      box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
+      align-self: start;
+      margin-top: 4px;
+    }
+
+    #popup[data-status="done"] #status-dot {
+      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+    }
+
+    #popup[data-status="error"] #status-dot {
+      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
     }
 
     #icon {
-      width: 14px;
-      height: 14px;
+      width: 15px;
+      height: 15px;
       color: var(--text-primary);
-      flex-shrink: 0;
       display: flex;
       align-items: center;
-      opacity: 0.85;
+      justify-content: center;
+      opacity: 0.92;
+      align-self: start;
+      margin-top: 1px;
     }
 
     #icon svg {
@@ -169,21 +189,50 @@
       height: 100%;
     }
 
-    #label {
+    #copy {
+      min-width: 0;
+      display: grid;
+      row-gap: 2px;
+    }
+
+    #title {
+      color: var(--text-primary);
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    #detail {
       color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.35;
       overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 260px;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      word-break: break-word;
     }
 
     @keyframes ring-pulse {
       0% {
-        opacity: 0.6;
-        transform: scale(0.9);
+        opacity: 0.38;
+        transform: scale(1);
       }
       100% {
         opacity: 0;
-        transform: scale(1.6);
+        transform: scale(1.32);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #popup,
+      #focus {
+        transition: none;
+      }
+
+      #focus.pointer.visible::after {
+        animation: none;
       }
     }
   </style>
@@ -191,9 +240,13 @@
 <body>
   <div id="root">
     <div id="focus"></div>
-    <div id="popup">
+    <div id="popup" data-status="start">
+      <span id="status-dot"></span>
       <span id="icon"></span>
-      <span id="label"></span>
+      <span id="copy">
+        <span id="title">Action</span>
+        <span id="detail">Running...</span>
+      </span>
     </div>
   </div>
   <script src="tauri-bridge.js"></script>
