@@ -223,7 +223,7 @@ export class BotCore {
       "- After binding, take a `screenshot` to confirm you see the correct window.",
       "",
       "### Claude Code window binding workflow:",
-      "1. `bash('start \"Claude Code\" cmd /k \"claude\"')` to launch",
+      "1. `bash('start \"Claude Code\" cmd /k \"set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude\"')` to launch",
       "2. `input.wait` with ms=3000 to let it start",
       "3. Run `screen.list_windows`, pick the Claude window `window_id`, then call `screen.bind_window` with that id",
       "4. If needed, fallback to title matching with 'claude' or 'Claude Code'",
