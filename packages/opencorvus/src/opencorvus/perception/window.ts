@@ -1,9 +1,10 @@
 import { Log } from "../../util/log"
 import { Instance } from "../../project/instance"
 
-const windowState = Instance.state((): { binding: WindowManager.WindowBinding | null; lastTaskEpoch: number } => ({
+const windowState = Instance.state((): { binding: WindowManager.WindowBinding | null; lastTaskEpoch: number; pendingFocusChange: boolean } => ({
   binding: null,
   lastTaskEpoch: -1,
+  pendingFocusChange: false,
 }))
 
 export namespace WindowManager {
