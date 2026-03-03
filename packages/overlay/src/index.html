@@ -147,12 +147,12 @@
 
     #popup[data-status="done"] {
       --accent: var(--color-done);
-      border-color: rgba(16, 185, 129, 0.3);
+      border-color: rgba(var(--color-done-rgb), 0.3);
     }
 
     #popup[data-status="error"] {
       --accent: var(--color-error);
-      border-color: rgba(239, 68, 68, 0.35);
+      border-color: rgba(var(--color-error-rgb), 0.35);
     }
 
     #status-dot {
@@ -166,11 +166,11 @@
     }
 
     #popup[data-status="done"] #status-dot {
-      box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+      box-shadow: 0 0 0 4px rgba(var(--color-done-rgb), 0.2);
     }
 
     #popup[data-status="error"] #status-dot {
-      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
+      box-shadow: 0 0 0 4px rgba(var(--color-error-rgb), 0.2);
     }
 
     #icon {
