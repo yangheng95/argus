@@ -239,6 +239,26 @@ export namespace WindowManager {
   }
 
   /**
+   * Bind to a window by ID without bringing it to foreground.
+   * Used by auto-bind in screenshot to avoid focus-stealing.
+   */
+  export async function bindByIdQuiet(windowId: number, matchTitle?: string): Promise<WindowBinding> {
+    const info = await findWindowById(windowId)
+    if (!info) {
+      throw new Error(`No window found with id ${windowId}`)
+    }
+
+    windowState().binding = {
+      windowId: info.id,
+      matchTitle: matchTitle?.trim() || info.title || info.appName || String(info.id),
+      info,
+    }
+
+    log.info("bound window (quiet)", { windowId: info.id, title: info.title, appName: info.appName })
+    return windowState().binding!
+  }
+
+  /**
    * At new task boundaries, re-search previous binding by matchTitle.
    * This avoids stale window IDs and supports task-to-task rebinding.
    */
