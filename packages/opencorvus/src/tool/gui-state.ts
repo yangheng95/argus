@@ -27,6 +27,7 @@ interface GuiSessionState {
   taskEpoch: number
   lastScreenshotHash: string | null
   isGuiSession: boolean
+  lastFocusChangeStep: number
   repetition: {
     consecutiveNoChange: number
     recentClickCoords: Array<{ x: number; y: number; step: number }>
