@@ -413,6 +413,7 @@ export class BotCore {
 
         if (part.state?.status === "completed") {
           // Upload screenshot images from screen tool
+          if (toolName === "screen") {
             const hasImage = (part.state.attachments ?? []).some(
               (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
             )
