@@ -6,6 +6,7 @@ import { Workspace } from "../../control-plane/workspace"
 import { Project } from "../../project/project"
 import { Installation } from "../../installation"
 import { startOverlay } from "../../tool/overlay-client"
+import { createConnection } from "net"
 
 /** Hide the console window on Windows using Win32 API. */
 function hideConsoleWindow() {
@@ -25,6 +26,50 @@ function hideConsoleWindow() {
   } catch {}
 }
 
+/** Check if a port is in use. */
+function isPortInUse(port: number, hostname: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = createConnection({ port, host: hostname })
+    sock.once("connect", () => {
+      sock.destroy()
+      resolve(true)
+    })
+    sock.once("error", () => resolve(false))
+    sock.setTimeout(500, () => {
+      sock.destroy()
+      resolve(false)
+    })
+  })
+}
+
+/** Kill old opencorvus process occupying the port (Windows only). */
+async function killOldProcess(port: number) {
+  if (process.platform !== "win32") {
+    // Unix: use fuser
+    try {
+      Bun.spawnSync(["fuser", "-k", `${port}/tcp`], { stdio: "ignore" })
+    } catch {}
+    return
+  }
+  // Windows: netstat → find PID → taskkill
+  try {
+    const result = Bun.spawnSync(["cmd", "/c", `netstat -ano | findstr :${port} | findstr LISTENING`], {
+      stdout: "pipe",
+      stderr: "ignore",
+    })
+    const output = result.stdout.toString()
+    const pids = new Set<number>()
+    for (const line of output.split(/\r?\n/)) {
+      const match = line.trim().match(/\s(\d+)\s*$/)
+      if (match) pids.add(Number(match[1]))
+    }
+    for (const pid of pids) {
+      if (pid === process.pid || pid <= 0) continue
+      Bun.spawnSync(["taskkill", "/F", "/PID", String(pid)], { stdio: "ignore" })
+    }
+  } catch {}
+}
+
 export const ServeCommand = cmd({
   command: ["serve", "$0"],
   builder: (yargs) => withNetworkOptions(yargs),
@@ -40,6 +85,15 @@ export const ServeCommand = cmd({
       console.log("Warning: OPENCORVUS_SERVER_PASSWORD is not set; server is unsecured.")
     }
     const opts = await resolveNetworkOptions(args)
+
+    // Kill old process if port is occupied
+    if (opts.port > 0 && (await isPortInUse(opts.port, opts.hostname))) {
+      console.log(`Port ${opts.port} is in use, killing old process...`)
+      await killOldProcess(opts.port)
+      // Brief wait for port release
+      await new Promise((r) => setTimeout(r, 500))
+    }
+
     const server = Server.listen(opts)
     console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
 
