@@ -23,15 +23,14 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
 
     let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))
         .or_else(|_| Image::from_bytes(include_bytes!("../icons/icon.ico")))
-        .or_else(|_| {
+        .unwrap_or_else(|_| {
             // Fallback: 16x16 solid teal RGBA pixel data
             let mut rgba = vec![0u8; 16 * 16 * 4];
             for pixel in rgba.chunks_exact_mut(4) {
                 pixel.copy_from_slice(&[0x00, 0xA0, 0xA0, 0xFF]);
             }
-            Image::from_rgba(rgba, 16, 16)
-        })
-        .map_err(|error| error.to_string())?;
+            Image::new_owned(rgba, 16, 16)
+        });
 
     let _tray = TrayIconBuilder::new()
         .icon(icon)
