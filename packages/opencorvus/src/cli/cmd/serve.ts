@@ -26,43 +26,6 @@ function hideConsoleWindow() {
   } catch {}
 }
 
-const LOCKFILE = path.join(Global.Path.data, "serve.lock")
-
-/** Acquire singleton lock. Returns true if we got it, false if another instance is alive. */
-function acquireLock(): boolean {
-  try {
-    fs.mkdirSync(path.dirname(LOCKFILE), { recursive: true })
-    // Check existing lock
-    if (fs.existsSync(LOCKFILE)) {
-      const content = fs.readFileSync(LOCKFILE, "utf-8").trim()
-      const pid = Number(content)
-      if (pid > 0 && pid !== process.pid) {
-        try {
-          process.kill(pid, 0) // signal 0 = check if alive
-          return false // another instance is alive
-        } catch {
-          // PID not alive — stale lock, take over
-        }
-      }
-    }
-    fs.writeFileSync(LOCKFILE, String(process.pid))
-    return true
-  } catch {
-    return true // can't check lock, proceed anyway
-  }
-}
-
-function releaseLock() {
-  try {
-    if (fs.existsSync(LOCKFILE)) {
-      const content = fs.readFileSync(LOCKFILE, "utf-8").trim()
-      if (Number(content) === process.pid) {
-        fs.unlinkSync(LOCKFILE)
-      }
-    }
-  } catch {}
-}
-
 /** Check if a port is in use. */
 function isPortInUse(port: number, hostname: string): Promise<boolean> {
   return new Promise((resolve) => {
