@@ -279,8 +279,13 @@ export const InputTool = Tool.define("input", {
       }
 
       case "key": {
-        const windowBlocked = await ensureBoundWindowForeground("key")
-        if (windowBlocked) return windowBlocked
+        const focusChanging = isFocusChangingKey(params.key)
+        // Skip ensureBoundWindowForeground for focus-changing keys
+        // to avoid pulling the old window back to front
+        if (!focusChanging) {
+          const windowBlocked = await ensureBoundWindowForeground("key")
+          if (windowBlocked) return windowBlocked
+        }
         showOverlay(undefined, undefined, "key", params.key)
         const parts = params.key.split("+").map((k) => k.trim())
         if (parts.length > 1) {
@@ -289,6 +294,10 @@ export const InputTool = Tool.define("input", {
           await GUI.pressKey(parts[0])
         }
         showOverlay(undefined, undefined, "key", `done ${params.key}`, "done")
+        if (focusChanging) {
+          WindowManager.markFocusChange()
+          GuiState.recordFocusChange()
+        }
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -300,7 +309,7 @@ export const InputTool = Tool.define("input", {
         return {
           title: `Pressed ${params.key}`,
           output: `Pressed key: ${params.key}`,
-          metadata: { key: params.key },
+          metadata: { key: params.key, focusChanging },
         }
       }
 
