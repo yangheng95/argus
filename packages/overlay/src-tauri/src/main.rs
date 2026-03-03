@@ -35,7 +35,14 @@ fn main() {
                     format!("auto-start failed: {error}"),
                 );
             }
-            let _ = tray::setup(&app.handle());
+            if let Err(error) = tray::setup(&app.handle()) {
+                manager::push_log(
+                    state.inner(),
+                    &app.handle(),
+                    format!("tray setup failed: {error}"),
+                );
+                manager::show_console(&app.handle());
+            }
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
             if std::env::var("OPENCORVUS_OVERLAY_SHOW_CONSOLE").ok().as_deref() == Some("1") {

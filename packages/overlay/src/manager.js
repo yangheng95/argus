@@ -1,5 +1,7 @@
 const bridge = window.opencorvusBridge
 const invoke = bridge.invoke
+const FIXED_SERVE_ARGS = ["serve"]
+const FIXED_RUN_ARGS = ["run", "--continue"]
 
 const els = {
   statusBadge: document.getElementById("statusBadge"),
@@ -16,8 +18,11 @@ const els = {
   refreshBtn: document.getElementById("refreshBtn"),
   clearLogsBtn: document.getElementById("clearLogsBtn"),
   saveBtn: document.getElementById("saveBtn"),
-  serveCmdInput: document.getElementById("serveCmdInput"),
-  runCmdInput: document.getElementById("runCmdInput"),
+  commandInput: document.getElementById("commandInput"),
+  serveFixedInput: document.getElementById("serveFixedInput"),
+  runFixedInput: document.getElementById("runFixedInput"),
+  servePreviewInput: document.getElementById("servePreviewInput"),
+  runPreviewInput: document.getElementById("runPreviewInput"),
   cwdInput: document.getElementById("cwdInput"),
   envInput: document.getElementById("envInput"),
 }
@@ -25,6 +30,7 @@ const els = {
 const state = {
   logs: [],
   logPath: "",
+  command: "opencorvus",
   configLoaded: false,
   sending: false,
 }
@@ -36,71 +42,28 @@ function readLines(input) {
     .filter((item) => item.length > 0)
 }
 
-function readArgs(input) {
-  const text = (input || "").trim()
-  if (!text) return []
-
-  const out = []
-  let item = ""
-  let quote = ""
-
-  for (let i = 0; i < text.length; i += 1) {
-    const char = text[i]
-    if (quote) {
-      if (char === quote) {
-        quote = ""
-        continue
-      }
-      if (char === "\\" && i + 1 < text.length) {
-        const next = text[i + 1]
-        if (next === quote || next === "\\") {
-          item += next
-          i += 1
-          continue
-        }
-      }
-      item += char
-      continue
-    }
-
-    if (char === "\"" || char === "'") {
-      quote = char
-      continue
-    }
-
-    if (/\s/.test(char)) {
-      if (item) {
-        out.push(item)
-        item = ""
-      }
-      continue
-    }
-
-    item += char
-  }
-
-  if (item) out.push(item)
-  return out
+function envToText(env) {
+  if (!Array.isArray(env)) return ""
+  return env.map((item) => `${item.key ?? ""}=${item.value ?? ""}`).join("\n")
 }
 
-function quoteArg(input) {
+function quote(input) {
   if (!input) return "\"\""
   if (!/[\s"'\\]/.test(input)) return input
   return `"${input.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`
 }
 
-function argsToText(list) {
-  if (!Array.isArray(list)) return ""
-  return list.map((item) => quoteArg(String(item))).join(" ")
+function cmd(command, args) {
+  return [command, ...args].map((item) => quote(String(item))).join(" ")
 }
 
-function commandToText(command, list) {
-  return argsToText([command || "opencorvus", ...(Array.isArray(list) ? list : [])])
-}
-
-function envToText(env) {
-  if (!Array.isArray(env)) return ""
-  return env.map((item) => `${item.key ?? ""}=${item.value ?? ""}`).join("\n")
+function renderCommandPreview() {
+  const command = (els.commandInput?.value ?? state.command ?? "opencorvus").trim() || "opencorvus"
+  state.command = command
+  if (els.serveFixedInput) els.serveFixedInput.value = FIXED_SERVE_ARGS.join(" ")
+  if (els.runFixedInput) els.runFixedInput.value = `${FIXED_RUN_ARGS.join(" ")} "<prompt>"`
+  if (els.servePreviewInput) els.servePreviewInput.value = cmd(command, FIXED_SERVE_ARGS)
+  if (els.runPreviewInput) els.runPreviewInput.value = `${cmd(command, FIXED_RUN_ARGS)} "<prompt>"`
 }
 
 function textToEnv(input) {
@@ -118,24 +81,20 @@ function textToEnv(input) {
 
 function fillConfig(config) {
   if (!config) return
-  const command = config.command ?? "opencorvus"
-  els.serveCmdInput.value = commandToText(command, config.serve_args)
-  els.runCmdInput.value = commandToText(command, config.run_args)
+  state.command = (config.command ?? "opencorvus").trim() || "opencorvus"
+  if (els.commandInput) els.commandInput.value = state.command
   els.cwdInput.value = config.cwd ?? ""
   els.envInput.value = envToText(config.env)
+  renderCommandPreview()
   state.configLoaded = true
 }
 
 function readConfig() {
-  const serve = readArgs(els.serveCmdInput.value)
-  const run = readArgs(els.runCmdInput.value)
-  const command = (serve[0] || run[0] || "opencorvus").trim() || "opencorvus"
-
+  const command = (els.commandInput?.value ?? state.command ?? "opencorvus").trim() || "opencorvus"
+  state.command = command
   return {
     command,
     cwd: els.cwdInput.value.trim(),
-    serve_args: serve.length > 0 ? serve.slice(1) : [],
-    run_args: run.length === 0 ? [] : run[0] === command ? run.slice(1) : run,
     env: textToEnv(els.envInput.value),
   }
 }
@@ -245,6 +204,10 @@ async function sendPrompt(prompt) {
 }
 
 function bindEvents() {
+  els.commandInput?.addEventListener("input", () => {
+    renderCommandPreview()
+  })
+
   els.sendForm.addEventListener("submit", async (event) => {
     event.preventDefault()
     if (state.sending) return
@@ -330,6 +293,7 @@ function bindTauriEvents() {
 async function boot() {
   bindEvents()
   bindTauriEvents()
+  renderCommandPreview()
   addMessage("system", "OpenCorvus manager is ready.")
   await refreshState()
 }

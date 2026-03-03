@@ -206,6 +206,13 @@
       box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.1);
     }
 
+    input[readonly] {
+      background: rgba(20, 50, 94, 0.12);
+      color: var(--text-muted);
+      border-style: dashed;
+      cursor: default;
+    }
+
     .send {
       min-width: 100px;
       border: none;
@@ -436,13 +443,25 @@
         <section class="card">
           <div class="card-head">Bot Config</div>
           <div class="cfg">
-            <p class="cfg-hint">Keep it simple: use full command lines, advanced options only when needed.</p>
-            <label>Start Command
-              <input id="serveCmdInput" placeholder='opencorvus serve --host "127.0.0.1"' />
+            <p class="cfg-hint">Start and prompt args are fixed by startup binding. Command path, working directory, and env remain configurable.</p>
+            <label>Command
+              <input id="commandInput" placeholder='opencorvus or C:\path\to\opencorvus.exe' />
             </label>
-            <label>Prompt Command
-              <input id="runCmdInput" placeholder='opencorvus run --continue --model "openai/gpt-5"' />
-            </label>
+            <details>
+              <summary>Command Preview (fixed args)</summary>
+              <label>Fixed Start Args
+                <input id="serveFixedInput" value="serve" readonly />
+              </label>
+              <label>Fixed Prompt Args
+                <input id="runFixedInput" value='run --continue "<prompt>"' readonly />
+              </label>
+              <label>Effective Start Command
+                <input id="servePreviewInput" readonly />
+              </label>
+              <label>Effective Prompt Command
+                <input id="runPreviewInput" readonly />
+              </label>
+            </details>
             <details>
               <summary>Advanced (optional)</summary>
               <label>Working Directory

@@ -13,6 +13,8 @@ use crate::events;
 const CONFIG_FILE: &str = "opencorvus-manager.json";
 const LOG_FILE: &str = "opencorvus-manager-log.jsonl";
 const MAX_LOGS: usize = 800;
+const DEFAULT_SERVE_ARGS: &[&str] = &["serve"];
+const DEFAULT_RUN_ARGS: &[&str] = &["run", "--continue"];
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {
@@ -21,10 +23,9 @@ pub struct EnvItem {
 }
 
 #[derive(Deserialize, Serialize, Clone)]
+#[serde(default)]
 pub struct ManagerConfig {
     pub command: String,
-    pub serve_args: Vec<String>,
-    pub run_args: Vec<String>,
     pub cwd: String,
     pub env: Vec<EnvItem>,
 }
@@ -67,8 +68,6 @@ impl Default for ManagerConfig {
     fn default() -> Self {
         Self {
             command: "opencorvus".into(),
-            serve_args: vec!["serve".into()],
-            run_args: vec!["run".into(), "--continue".into()],
             cwd: String::new(),
             env: vec![],
         }
@@ -93,13 +92,6 @@ fn stamp() -> u64 {
         .unwrap_or(0)
 }
 
-fn norm_list(list: Vec<String>) -> Vec<String> {
-    list.into_iter()
-        .map(|item| item.trim().to_string())
-        .filter(|item| !item.is_empty())
-        .collect()
-}
-
 fn norm_config(config: ManagerConfig) -> ManagerConfig {
     ManagerConfig {
         command: {
@@ -110,8 +102,6 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
                 item.into()
             }
         },
-        serve_args: norm_list(config.serve_args),
-        run_args: norm_list(config.run_args),
         cwd: config.cwd.trim().into(),
         env: config
             .env
@@ -190,7 +180,7 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
 
     push_log(shared, app, format!("prompt> {prompt}"));
 
-    let mut args = config.run_args.clone();
+    let mut args = RUN_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>();
     args.push(prompt);
 
     let mut cmd = build_command(&config, &args);
@@ -380,7 +370,8 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         state.config.clone()
     };
 
-    let mut cmd = build_command(&config, &config.serve_args);
+    let args = SERVE_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>();
+    let mut cmd = build_command(&config, &args);
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -405,7 +396,7 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     push_log(
         shared,
         app,
-        format!("OpenCorvus started (pid {pid}) with: {} {}", config.command, config.serve_args.join(" ")),
+        format!("OpenCorvus started (pid {pid}) with: {} {}", config.command, args.join(" ")),
     );
     emit_state(shared, app);
     Ok(())
