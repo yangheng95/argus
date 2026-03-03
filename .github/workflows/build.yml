@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.2.3). Leave empty for dev snapshot (no release).'
+        required: false
+        default: ''
 
 jobs:
   build-overlay:
@@ -53,7 +58,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/overlay/src-tauri -> target
-          # cache-on-failure: false  # uncomment to skip caching broken builds
 
       - name: Build overlay
         run: cargo build --release --manifest-path packages/overlay/src-tauri/Cargo.toml
@@ -70,6 +74,8 @@ jobs:
     name: package (all platforms)
     needs: build-overlay
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
@@ -117,14 +123,48 @@ jobs:
           done
           rm -f /tmp/_warmup.ts /tmp/_warmup_out*
 
+      - name: Resolve version and release flag
+        id: meta
+        run: |
+          # tag push: use tag name
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            RELEASE=1
+          # workflow_dispatch with version input
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+            RELEASE=1
+          else
+            VERSION=""
+            RELEASE=0
+          fi
+          echo "version=$VERSION"    >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE"    >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.meta.outputs.release == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --repo "$GITHUB_REPOSITORY" || true
+
       - name: Build all platforms
         working-directory: packages/opencorvus
         env:
           MODELS_DEV_API_JSON: /tmp/models-api-clean.json
           OPENCORVUS_OVERLAY_BIN_DIR: /tmp/overlay-dir
+          OPENCODE_RELEASE:  ${{ steps.meta.outputs.release == '1' && '1' || '' }}
+          OPENCODE_VERSION:  ${{ steps.meta.outputs.version }}
+          OPENCODE_CHANNEL:  ${{ steps.meta.outputs.release == '1' && 'latest' || '' }}
+          GH_REPO:           ${{ github.repository }}
+          GH_TOKEN:          ${{ secrets.GITHUB_TOKEN }}
         run: bun run script/build.ts --all
 
-      - name: Upload dist
+      - name: Upload dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: opencorvus-dist
