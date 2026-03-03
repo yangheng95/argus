@@ -65,18 +65,7 @@ function showPopup(action, label, status) {
 }
 
 bridge.listen(bridge.events.showOverlay, (payload) => {
-  const { x, y, action, label, status } = payload
-  const px = Number(x)
-  const py = Number(y)
-  if (!Number.isFinite(px) || !Number.isFinite(py)) return
-
-  const dpr = window.devicePixelRatio || 1
-  const winWidth = Math.round(window.innerWidth * dpr)
-  const winX = Math.round(px - winWidth / 2)
-  const winY = Math.round(py - 88 * dpr)
-
-  bridge
-    .invoke("position_window", { window: "overlay", x: winX, y: winY })
-    .then(() => showPopup(action, label, status ?? "start"))
-    .catch(() => showPopup(action, label, status ?? "start"))
+  const { action, label, status } = payload
+  // Window is already positioned by Rust stdin handler (physical pixel coords)
+  showPopup(action, label, status ?? "start")
 })

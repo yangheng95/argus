@@ -1,15 +1,12 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test"
-import path from "path"
+import { describe, expect, test } from "bun:test"
 import { Session } from "../../src/session"
 import { SessionRevert } from "../../src/session/revert"
-import { SessionCompaction } from "../../src/session/compaction"
 import { MessageV2 } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { Identifier } from "../../src/id/id"
 import { tmpdir } from "../fixture/fixture"
 
-const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
 
 describe("revert + compact workflow", () => {

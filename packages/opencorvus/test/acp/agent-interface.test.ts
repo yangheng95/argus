@@ -14,6 +14,7 @@ import type { Agent as ACPAgent } from "@agentclientprotocol/sdk"
  */
 type _AssertAgentImplementsACPAgent = ACP.Agent extends ACPAgent ? true : never
 const _typeCheck: _AssertAgentImplementsACPAgent = true
+void _typeCheck
 
 /**
  * Runtime verification that optional methods the SDK expects are actually implemented.

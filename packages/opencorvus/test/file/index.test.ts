@@ -261,7 +261,6 @@ describe("file/index Filesystem patterns", () => {
 
     test("returns empty array buffer on error for images", async () => {
       await using tmp = await tmpdir()
-      const filepath = path.join(tmp.path, "broken.png")
       // Don't create the file
 
       await Instance.provide({

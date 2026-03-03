@@ -126,11 +126,11 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 label,
                                 status,
                             } => {
-                                // Position overlay at physical pixel coords directly in Rust
+                                // Position overlay so focus ring center (at 75% height) aligns with target
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_OVERLAY) {
                                     if let Ok(size) = window.outer_size() {
                                         let win_x = x - (size.width as i32) / 2;
-                                        let win_y = y - (size.height as i32) - 10;
+                                        let win_y = y - (size.height as i32) * 3 / 4;
                                         let _ = window.set_position(tauri::PhysicalPosition::new(win_x, win_y));
                                         let _ = window.show();
                                     }

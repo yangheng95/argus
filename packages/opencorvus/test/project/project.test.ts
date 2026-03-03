@@ -297,8 +297,6 @@ describe("Project.update", () => {
   })
 
   test("should throw error when project not found", async () => {
-    await using tmp = await tmpdir({ git: true })
-
     await expect(
       Project.update({
         projectID: "nonexistent-project-id",

@@ -107,7 +107,6 @@ describe("memory: abort controller leak", () => {
     const controllers2: AbortController[] = []
 
     for (let i = 0; i < ITERATIONS; i++) {
-      const _content = `${i}:${"x".repeat(50 * 1024)}` // 50KB - won't be captured
       const controller = new AbortController()
       controllers2.push(controller)
 

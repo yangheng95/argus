@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenCorvus Bot Config"
+  short_description: "Configure Slack, Telegram, and Feishu bots for OpenCorvus"
+  default_prompt: "Use $opencorvus-bot-config to set up or troubleshoot OpenCorvus bot integrations."
