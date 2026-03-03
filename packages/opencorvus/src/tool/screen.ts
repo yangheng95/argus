@@ -7,7 +7,7 @@ import { WindowManager } from "../opencorvus/perception/window"
 import { ScreenDiff } from "../opencorvus/perception/diff"
 import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
-import { addCoordinateOverlay } from "../opencorvus/perception/overlay"
+import { addCoordinateOverlay, addClickMarker } from "../opencorvus/perception/overlay"
 import { Log } from "../util/log"
 import { showWindowHighlight } from "./overlay-client"
 
