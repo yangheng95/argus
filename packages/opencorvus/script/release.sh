@@ -34,12 +34,12 @@ POLL_INTERVAL=30
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --version)      VERSION="$2";       shift 2 ;;
-    --release-repo) RELEASE_REPO="$2";  shift 2 ;;
-    --ref)          REF="$2";           shift 2 ;;
-    --run-id)       RUN_ID="$2";        shift 2 ;;
-    --overlay-dir)  OVERLAY_DIR="$2";   shift 2 ;;
-    --work-dir)     WORK_DIR="$2";      shift 2 ;;
+    --version)      VERSION="${2:?'--version requires a value'}";       shift 2 ;;
+    --release-repo) RELEASE_REPO="${2:?'--release-repo requires a value'}"; shift 2 ;;
+    --ref)          REF="${2:?'--ref requires a value'}";               shift 2 ;;
+    --run-id)       RUN_ID="${2:?'--run-id requires a value'}";         shift 2 ;;
+    --overlay-dir)  OVERLAY_DIR="${2:?'--overlay-dir requires a value'}"; shift 2 ;;
+    --work-dir)     WORK_DIR="${2:?'--work-dir requires a value'}";     shift 2 ;;
     --skip-install) SKIP_INSTALL=1;     shift   ;;
     --no-upload)    NO_UPLOAD=1;        shift   ;;
     *) echo "Unknown option: $1"; exit 1 ;;
