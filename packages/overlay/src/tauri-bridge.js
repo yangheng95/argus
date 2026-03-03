@@ -7,6 +7,7 @@
     showWindowHighlight: "show-window-highlight",
     managerLog: "manager-log",
     managerState: "manager-state",
+    overlayDiagnostic: "overlay-diagnostic",
   })
 
   async function invoke(cmd, payload = {}) {

@@ -399,6 +399,17 @@ test("webfetch is allowed by default", async () => {
   })
 })
 
+test("unknown permission defaults to ask", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      expect(evalPerm(build, "future_tool")).toBe("ask")
+    },
+  })
+})
+
 test("legacy tools config converts to permissions", async () => {
   await using tmp = await tmpdir({
     config: {

@@ -78,9 +78,23 @@ function materializeEmbedded(file: string) {
 const BINARY_PATH = resolveBinaryPath()
 const log = Log.create({ service: "overlay-client" })
 const WARN_THROTTLE_MS = 15_000
+const encoder = new TextEncoder()
 // Global singleton strategy for overlay subprocess management.
 const SINGLETON_MODE = (process.env.OPENCORVUS_OVERLAY_SINGLETON_MODE ?? "kill-old-start-new").toLowerCase()
 
+function envInt(name: string, fallback: number, min = 1) {
+  const value = Number(process.env[name])
+  if (!Number.isFinite(value)) return fallback
+  return Math.max(min, Math.round(value))
+}
+
+const RETRY_BASE_MS = envInt("OPENCORVUS_OVERLAY_RETRY_BASE_MS", 250)
+const RETRY_MAX_MS = Math.max(RETRY_BASE_MS, envInt("OPENCORVUS_OVERLAY_RETRY_MAX_MS", 5000))
+const CIRCUIT_WINDOW_MS = envInt("OPENCORVUS_OVERLAY_CIRCUIT_WINDOW_MS", 30_000)
+const CIRCUIT_THRESHOLD = envInt("OPENCORVUS_OVERLAY_CIRCUIT_THRESHOLD", 6)
+const CIRCUIT_COOLDOWN_MS = envInt("OPENCORVUS_OVERLAY_CIRCUIT_COOLDOWN_MS", 30_000)
+
+type OverlayStatus = "start" | "running" | "done" | "error"
 type ConfirmAnswer = "confirm" | "cancel" | "timeout"
 type ConfirmResult = ConfirmAnswer | "unavailable"
 type Pending = {
@@ -93,6 +107,8 @@ type OverlayUnavailableReason =
   | "binary_missing"
   | "spawn_failed"
   | "process_exited"
+  | "retry_backoff"
+  | "circuit_open"
   | "stdout_unavailable"
   | "stdout_read_failed"
   | "stdin_unavailable"
@@ -103,6 +119,10 @@ type OverlayDiagnostic = {
   reason?: OverlayUnavailableReason
   updatedAt: number
   path: string
+  failures: number
+  consecutiveFailures: number
+  nextRetryAt?: number
+  circuitOpenUntil?: number
 }
 
 type WindowHighlightInput = {
@@ -115,17 +135,22 @@ type WindowHighlightInput = {
 }
 
 let proc: ReturnType<typeof Bun.spawn> | null = null
-let dead = false
-let reading = false
 let seq = 0
 let last = { x: 240, y: 160 }
 let lastWarn = { key: "", time: 0 }
 let binaryMtime = 0
+let failures = 0
+let consecutiveFailures = 0
+let nextRetryAt = 0
+let circuitOpenUntil = 0
+let recentFailures: number[] = []
 const pending = new Map<string, Pending>()
 const diagnostic: OverlayDiagnostic = {
   available: true,
   updatedAt: Date.now(),
   path: BINARY_PATH,
+  failures: 0,
+  consecutiveFailures: 0,
 }
 
 function errorMessage(error: unknown) {
@@ -151,8 +176,7 @@ function binaryMtimeMs() {
 
 function stopOverlay(reason: string, detail?: Record<string, unknown>) {
   const current = proc
-  if (!current || dead) return
-  dead = true
+  if (!current) return
   proc = null
   binaryMtime = 0
   settleAll("unavailable")
@@ -194,10 +218,42 @@ function warnOnce(key: string, detail?: Record<string, unknown>) {
   log.warn(key, detail)
 }
 
+function pushDiagnostic(event: string, detail?: Record<string, unknown>) {
+  const current = proc
+  if (!current) return
+  const input = current.stdin
+  if (!input || typeof input === "number") return
+  const line =
+    JSON.stringify({
+      type: "diagnostic",
+      event,
+      ts: Date.now(),
+      available: diagnostic.available,
+      reason: diagnostic.reason,
+      path: diagnostic.path,
+      failures: diagnostic.failures,
+      consecutive_failures: diagnostic.consecutiveFailures,
+      next_retry_at: diagnostic.nextRetryAt,
+      circuit_open_until: diagnostic.circuitOpenUntil,
+      detail,
+    }) + "\n"
+  void Promise.resolve(input.write(encoder.encode(line))).catch(() => {})
+}
+
+function syncDiagnostic(now = Date.now()) {
+  diagnostic.failures = failures
+  diagnostic.consecutiveFailures = consecutiveFailures
+  diagnostic.nextRetryAt = nextRetryAt > now ? nextRetryAt : undefined
+  diagnostic.circuitOpenUntil = circuitOpenUntil > now ? circuitOpenUntil : undefined
+}
+
 function markUnavailable(reason: OverlayUnavailableReason, detail?: Record<string, unknown>) {
+  const now = Date.now()
   diagnostic.available = false
   diagnostic.reason = reason
-  diagnostic.updatedAt = Date.now()
+  diagnostic.updatedAt = now
+  syncDiagnostic(now)
+  pushDiagnostic("overlay-unavailable", { reason, ...detail })
   warnOnce(`overlay-unavailable:${reason}`, {
     ...detail,
     path: BINARY_PATH,
@@ -205,14 +261,54 @@ function markUnavailable(reason: OverlayUnavailableReason, detail?: Record<strin
 }
 
 function markAvailable(detail?: Record<string, unknown>) {
-  if (diagnostic.available) return
+  const now = Date.now()
+  const changed = !diagnostic.available || Boolean(diagnostic.reason)
   diagnostic.available = true
   diagnostic.reason = undefined
-  diagnostic.updatedAt = Date.now()
+  diagnostic.updatedAt = now
+  syncDiagnostic(now)
+  if (!changed) return
+  pushDiagnostic("overlay-available", detail)
   log.info("overlay-available", {
     ...detail,
     path: BINARY_PATH,
   })
+}
+
+function registerFailure(reason: OverlayUnavailableReason, detail?: Record<string, unknown>) {
+  const now = Date.now()
+  failures += 1
+  consecutiveFailures += 1
+  recentFailures = recentFailures.filter((item) => now - item <= CIRCUIT_WINDOW_MS)
+  recentFailures.push(now)
+  nextRetryAt = now + Math.min(RETRY_BASE_MS * 2 ** Math.max(0, consecutiveFailures - 1), RETRY_MAX_MS)
+  if (recentFailures.length >= CIRCUIT_THRESHOLD) {
+    circuitOpenUntil = now + CIRCUIT_COOLDOWN_MS
+    recentFailures = []
+  }
+  markUnavailable(reason, {
+    ...detail,
+    failures,
+    consecutiveFailures,
+    nextRetryAt,
+    circuitOpenUntil: circuitOpenUntil > now ? circuitOpenUntil : undefined,
+  })
+}
+
+function registerSuccess(detail?: Record<string, unknown>) {
+  consecutiveFailures = 0
+  nextRetryAt = 0
+  circuitOpenUntil = 0
+  recentFailures = []
+  markAvailable(detail)
+}
+
+function clearCurrent(target: ReturnType<typeof Bun.spawn>) {
+  if (proc !== target) return false
+  proc = null
+  binaryMtime = 0
+  settleAll("unavailable")
+  return true
 }
 
 function settle(id: string, answer: ConfirmResult) {
@@ -244,19 +340,23 @@ function parse(line: string): { id: string; answer: ConfirmAnswer } | undefined 
 }
 
 async function watchOutput(target: ReturnType<typeof Bun.spawn>) {
-  if (reading) return
   const out = target.stdout
   if (!out || typeof out === "number") {
-    markUnavailable("stdout_unavailable")
+    if (clearCurrent(target)) {
+      registerFailure("stdout_unavailable")
+      Promise.resolve(target.kill()).catch(() => {})
+    }
     return
   }
-  reading = true
   const reader = out.getReader()
   const decoder = new TextDecoder()
   let buf = ""
-  while (!dead) {
+  while (proc === target) {
     const chunk = await reader.read().catch((error) => {
-      markUnavailable("stdout_read_failed", { error: errorMessage(error) })
+      if (clearCurrent(target)) {
+        registerFailure("stdout_read_failed", { error: errorMessage(error) })
+        Promise.resolve(target.kill()).catch(() => {})
+      }
       return { done: true, value: undefined as Uint8Array | undefined }
     })
     if (chunk.done) break
@@ -271,7 +371,6 @@ async function watchOutput(target: ReturnType<typeof Bun.spawn>) {
     }
   }
   reader.releaseLock()
-  reading = false
 }
 
 function ensureProcess() {
@@ -283,7 +382,7 @@ function ensureProcess() {
     markUnavailable("binary_missing")
     return null
   }
-  if (proc && !dead) {
+  if (proc) {
     const nextMtime = binaryMtimeMs()
     if (nextMtime > 0 && nextMtime !== binaryMtime) {
       stopOverlay("binary_changed", {
@@ -294,6 +393,20 @@ function ensureProcess() {
       return proc
     }
   }
+
+  const now = Date.now()
+  if (nextRetryAt > 0 && nextRetryAt <= now) nextRetryAt = 0
+  if (circuitOpenUntil > 0 && circuitOpenUntil <= now) circuitOpenUntil = 0
+  if (recentFailures.length) recentFailures = recentFailures.filter((item) => now - item <= CIRCUIT_WINDOW_MS)
+  if (circuitOpenUntil > now) {
+    markUnavailable("circuit_open", { retryInMs: circuitOpenUntil - now, circuitOpenUntil })
+    return null
+  }
+  if (nextRetryAt > now) {
+    markUnavailable("retry_backoff", { retryInMs: nextRetryAt - now, nextRetryAt })
+    return null
+  }
+  syncDiagnostic(now)
 
   try {
     clearOldOverlayProcesses()
@@ -307,30 +420,21 @@ function ensureProcess() {
       },
     })
     proc = spawned
-    dead = false
     binaryMtime = binaryMtimeMs()
     markAvailable({ pid: spawned.pid })
     void watchOutput(spawned)
     spawned.exited
       .then((code) => {
-        if (proc !== spawned) return
-        dead = true
-        proc = null
-        binaryMtime = 0
-        markUnavailable("process_exited", { code })
-        settleAll("unavailable")
+        if (!clearCurrent(spawned)) return
+        registerFailure("process_exited", { code })
       })
       .catch((error) => {
-        if (proc !== spawned) return
-        dead = true
-        proc = null
-        binaryMtime = 0
-        markUnavailable("process_exited", { error: errorMessage(error) })
-        settleAll("unavailable")
+        if (!clearCurrent(spawned)) return
+        registerFailure("process_exited", { error: errorMessage(error) })
       })
     return spawned
   } catch (error) {
-    markUnavailable("spawn_failed", { error: errorMessage(error) })
+    registerFailure("spawn_failed", { error: errorMessage(error) })
     return null
   }
 }
@@ -340,22 +444,20 @@ async function send(payload: Record<string, unknown>) {
   if (!current) return false
   const input = current.stdin
   if (!input || typeof input === "number") {
-    markUnavailable("stdin_unavailable", { type: payload.type })
+    if (clearCurrent(current)) Promise.resolve(current.kill()).catch(() => {})
+    registerFailure("stdin_unavailable", { type: payload.type })
     return false
   }
   const line = JSON.stringify(payload) + "\n"
-  const ok = await Promise.resolve(input.write(new TextEncoder().encode(line))).then(
+  const ok = await Promise.resolve(input.write(encoder.encode(line))).then(
     () => true,
     (error: unknown) => {
-      dead = true
-      proc = null
-      binaryMtime = 0
-      markUnavailable("write_failed", { type: payload.type, error: errorMessage(error) })
-      settleAll("unavailable")
+      if (clearCurrent(current)) Promise.resolve(current.kill()).catch(() => {})
+      registerFailure("write_failed", { type: payload.type, error: errorMessage(error) })
       return false
     },
   )
-  if (ok) markAvailable()
+  if (ok) registerSuccess()
   return ok
 }
 
@@ -364,7 +466,13 @@ export function resolveOverlayCoord(value: number | undefined, fallback: number)
   return Math.round(value)
 }
 
-export function showOverlay(screenX: number | undefined, screenY: number | undefined, action: string, label: string, status: "start" | "done" = "start") {
+export function showOverlay(
+  screenX: number | undefined,
+  screenY: number | undefined,
+  action: string,
+  label: string,
+  status: OverlayStatus = "start",
+) {
   void (async () => {
     const x = resolveOverlayCoord(screenX, last.x)
     const y = resolveOverlayCoord(screenY, last.y)

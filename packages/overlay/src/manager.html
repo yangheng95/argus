@@ -245,6 +245,16 @@
       border-bottom: 1px solid rgba(20, 50, 94, 0.1);
     }
 
+    .log-path {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(20, 50, 94, 0.08);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
     button {
       border: 1px solid var(--glass-border);
       background: rgba(20, 50, 94, 0.04);
@@ -419,6 +429,7 @@
             <button id="refreshBtn" type="button">Refresh</button>
             <button id="clearLogsBtn" type="button">Clear</button>
           </div>
+          <div class="log-path" id="logPathText">Log file: -</div>
           <pre class="log-body" id="logs"></pre>
         </section>
 

@@ -3,6 +3,7 @@ use std::io::{BufRead, BufReader, Write};
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 
 use crate::events;
+use crate::manager;
 
 // Overlay window logical dimensions (must match tauri.conf.json)
 const OVERLAY_WIDTH: f64 = 420.0;
@@ -40,6 +41,20 @@ struct WindowHighlightPayload {
     duration_ms: Option<u64>,
 }
 
+#[derive(Deserialize, Serialize, Clone)]
+struct DiagnosticPayload {
+    event: String,
+    ts: Option<u64>,
+    available: Option<bool>,
+    reason: Option<String>,
+    path: Option<String>,
+    failures: Option<u32>,
+    consecutive_failures: Option<u32>,
+    next_retry_at: Option<u64>,
+    circuit_open_until: Option<u64>,
+    detail: Option<serde_json::Value>,
+}
+
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum InboundEvent {
@@ -67,6 +82,18 @@ enum InboundEvent {
         height: u32,
         label: Option<String>,
         duration_ms: Option<u64>,
+    },
+    Diagnostic {
+        event: String,
+        ts: Option<u64>,
+        available: Option<bool>,
+        reason: Option<String>,
+        path: Option<String>,
+        failures: Option<u32>,
+        consecutive_failures: Option<u32>,
+        next_retry_at: Option<u64>,
+        circuit_open_until: Option<u64>,
+        detail: Option<serde_json::Value>,
     },
 }
 
@@ -193,6 +220,50 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                         WindowHighlightPayload { label, duration_ms },
                                     );
                                 }
+                            }
+                            InboundEvent::Diagnostic {
+                                event,
+                                ts,
+                                available,
+                                reason,
+                                path,
+                                failures,
+                                consecutive_failures,
+                                next_retry_at,
+                                circuit_open_until,
+                                detail,
+                            } => {
+                                let payload = DiagnosticPayload {
+                                    event: event.clone(),
+                                    ts,
+                                    available,
+                                    reason,
+                                    path,
+                                    failures,
+                                    consecutive_failures,
+                                    next_retry_at,
+                                    circuit_open_until,
+                                    detail,
+                                };
+                                let _ = handle.emit_to(
+                                    events::WINDOW_CONSOLE,
+                                    events::EVT_OVERLAY_DIAGNOSTIC,
+                                    payload.clone(),
+                                );
+                                let shared = handle.state::<manager::Shared>();
+                                let level = if payload.available.unwrap_or(false) {
+                                    "info"
+                                } else {
+                                    "warn"
+                                };
+                                manager::push_log_json(
+                                    shared.inner(),
+                                    &handle,
+                                    level,
+                                    "overlay",
+                                    format!("overlay diagnostic: {}", payload.event),
+                                    serde_json::to_value(payload).ok(),
+                                );
                             }
                         }
                     }

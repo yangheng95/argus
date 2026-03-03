@@ -19,6 +19,10 @@ describe("overlay client parser", () => {
     expect(typeof diag.path).toBe("string")
     expect(diag.path.length).toBeGreaterThan(0)
     expect(typeof diag.available).toBe("boolean")
+    expect(typeof diag.failures).toBe("number")
+    expect(typeof diag.consecutiveFailures).toBe("number")
+    if (diag.nextRetryAt !== undefined) expect(typeof diag.nextRetryAt).toBe("number")
+    if (diag.circuitOpenUntil !== undefined) expect(typeof diag.circuitOpenUntil).toBe("number")
   })
 
   it("keeps zero and negative coordinates", () => {

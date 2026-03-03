@@ -21,11 +21,11 @@
   openssl,
   webkitgtk_4_1,
   gst_all_1,
-  opencode,
+  opencorvus,
 }:
 rustPlatform.buildRustPackage (finalAttrs: {
   pname = "opencorvus-desktop";
-  inherit (opencode)
+  inherit (opencorvus)
     version
     src
     node_modules
@@ -72,7 +72,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
     patchShebangs packages/desktop/node_modules
 
     mkdir -p packages/desktop/src-tauri/sidecars
-    cp ${opencode}/bin/opencorvus packages/desktop/src-tauri/sidecars/opencorvus-cli-${stdenv.hostPlatform.rust.rustcTarget}
+    cp ${opencorvus}/bin/opencorvus packages/desktop/src-tauri/sidecars/opencorvus-cli-${stdenv.hostPlatform.rust.rustcTarget}
   '';
 
   # see publish-tauri job in .github/workflows/publish.yml
@@ -95,6 +95,6 @@ rustPlatform.buildRustPackage (finalAttrs: {
     homepage = "https://opencode.ai";
     license = lib.licenses.mit;
     mainProgram = "opencorvus-desktop";
-    inherit (opencode.meta) platforms;
+    inherit (opencorvus.meta) platforms;
   };
 })

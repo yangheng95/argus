@@ -7,3 +7,4 @@ pub const EVT_SHOW_CONFIRM: &str = "show-confirm";
 pub const EVT_SHOW_WINDOW_HIGHLIGHT: &str = "show-window-highlight";
 pub const EVT_MANAGER_LOG: &str = "manager-log";
 pub const EVT_MANAGER_STATE: &str = "manager-state";
+pub const EVT_OVERLAY_DIAGNOSTIC: &str = "overlay-diagnostic";

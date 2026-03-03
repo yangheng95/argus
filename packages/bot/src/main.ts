@@ -22,31 +22,7 @@ import { VisionPipeline } from "./vision"
 import { applyDashscopeRuntime } from "./dashscope"
 import { ADAPTER_HINT, registerAdapters } from "./registry"
 import { applyBundledEnv } from "./bundled-env"
-
-// Bot tool permissions: override defaults that would "ask" user for confirmation.
-// Defaults already have "*": "allow", so we don't need to deny-all + re-allow.
-// We only need to override "ask" → "allow" for tools the bot should use freely.
-const botPermission = {
-  doom_loop: "allow",
-  invalid: "allow", // required for experimental_repairToolCall error handling
-  screen: "allow",
-  input: "allow",   // defaults has "ask" — override to "allow" for bot
-  bash: "allow",
-  edit: "allow",
-  write: "allow",
-  read: "allow",
-  glob: "allow",
-  grep: "allow",
-  skill: "allow",
-  websearch: "allow",
-  webfetch: "allow",
-  memory: "allow",
-  schedule: "allow",
-  planner: "allow",
-  goal: "allow",
-  vision_analyze: "allow",
-  external_directory: "allow",
-}
+import { permissionForProfile, pickPermissionProfile } from "./permission-profile"
 
 const bundled = await applyBundledEnv()
 if (bundled.expired) {
@@ -81,6 +57,8 @@ const config = inlineConfig()
 const permission = config.permission
 const permissionMap =
   permission && typeof permission === "object" && !Array.isArray(permission) ? (permission as Record<string, unknown>) : {}
+const profileState = pickPermissionProfile(process.env.OPENCORVUS_BOT_PERMISSION_PROFILE)
+const botPermission = permissionForProfile(profileState.profile)
 process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
   ...config,
   permission: {
@@ -88,6 +66,12 @@ process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
     ...botPermission,
   },
 })
+if (profileState.invalid) {
+  console.warn(
+    `[Bot] Unknown OPENCORVUS_BOT_PERMISSION_PROFILE=${process.env.OPENCORVUS_BOT_PERMISSION_PROFILE}. Fallback to profile: ${profileState.profile}.`,
+  )
+}
+console.log(`[Bot] Permission profile: ${profileState.profile}`)
 
 console.log("[Bot] Model/provider config source: opencorvus auth + opencorvus.json + OPENCORVUS_CONFIG_CONTENT")
 if (!activeKey) {

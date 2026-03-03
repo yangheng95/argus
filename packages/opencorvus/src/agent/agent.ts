@@ -53,8 +53,22 @@ export namespace Agent {
     const skillDirs = await Skill.dirs()
     const whitelistedDirs = [Truncate.GLOB, ...skillDirs.map((dir) => path.join(dir, "*"))]
     const defaults = PermissionNext.fromConfig({
-      "*": "allow",
+      "*": "ask",
+      invalid: "allow",
       doom_loop: "ask",
+      list: "allow",
+      glob: "allow",
+      grep: "allow",
+      bash: "allow",
+      edit: "allow",
+      task: "allow",
+      webfetch: "allow",
+      websearch: "allow",
+      codesearch: "allow",
+      lsp: "allow",
+      memory: "allow",
+      schedule: "allow",
+      skill: "allow",
       screen: "allow",
       input: "ask",
       external_directory: {

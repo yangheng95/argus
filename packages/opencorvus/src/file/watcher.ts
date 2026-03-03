@@ -10,10 +10,10 @@ import path from "path"
 import { createWrapper } from "@parcel/watcher/wrapper"
 import { lazy } from "@/util/lazy"
 import { withTimeout } from "@/util/timeout"
-import type ParcelWatcher from "@parcel/watcher"
 import { $ } from "bun"
 import { Flag } from "@/flag/flag"
 import { readdir } from "fs/promises"
+import type { FSWatcher } from "chokidar"
 
 const SUBSCRIBE_TIMEOUT_MS = 10_000
 
@@ -32,7 +32,11 @@ export namespace FileWatcher {
     ),
   }
 
-  const watcher = lazy((): typeof import("@parcel/watcher") | undefined => {
+  type Subscription = {
+    unsubscribe: () => Promise<void>
+  }
+
+  const parcel = lazy((): typeof import("@parcel/watcher") | undefined => {
     try {
       const binding = require(
         `@parcel/watcher-${process.platform}-${process.arch}${process.platform === "linux" ? `-${OPENCORVUS_LIBC || "glibc"}` : ""}`,
@@ -43,6 +47,85 @@ export namespace FileWatcher {
       return
     }
   })
+
+  const chokidar = lazy((): typeof import("chokidar") | undefined => {
+    try {
+      return require("chokidar") as typeof import("chokidar")
+    } catch (error) {
+      log.error("failed to load chokidar fallback", { error })
+      return
+    }
+  })
+
+  function publish(evt: { type: string; path: string }) {
+    if (evt.type === "create" || evt.type === "add") Bus.publish(Event.Updated, { file: evt.path, event: "add" })
+    if (evt.type === "update" || evt.type === "change") Bus.publish(Event.Updated, { file: evt.path, event: "change" })
+    if (evt.type === "delete" || evt.type === "unlink") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
+  }
+
+  function ignored(dir: string, patterns: string[]) {
+    return (input: string) => {
+      const rel = path.relative(dir, input).replaceAll("\\", "/")
+      if (!rel || rel === ".") return false
+      if (rel.startsWith("../")) return false
+      const name = rel.split("/").at(0)
+      if (name && patterns.includes(name)) return true
+      for (const item of patterns) {
+        if (path.isAbsolute(item) && input.startsWith(item)) return true
+      }
+      return FileIgnore.match(rel, { extra: patterns })
+    }
+  }
+
+  async function subscribeWithParcel(
+    watcher: typeof import("@parcel/watcher"),
+    dir: string,
+    ignore: string[],
+    backend: "windows" | "fs-events" | "inotify",
+  ) {
+    const pending = watcher.subscribe(
+      dir,
+      (err, evts) => {
+        if (err) return
+        evts.forEach(publish)
+      },
+      {
+        ignore,
+        backend,
+      },
+    )
+    const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS).catch((err) => {
+      log.error("failed to subscribe via parcel", { error: err, dir, backend })
+      pending.then((s) => s.unsubscribe()).catch(() => {})
+      return undefined
+    })
+    if (!sub) return
+    return {
+      unsubscribe: () => sub.unsubscribe(),
+    } satisfies Subscription
+  }
+
+  function subscribeWithChokidar(
+    watcher: typeof import("chokidar"),
+    dir: string,
+    ignore: string[],
+  ) {
+    const instance: FSWatcher = watcher.watch(dir, {
+      ignoreInitial: true,
+      ignored: ignored(dir, ignore),
+    })
+    instance.on("add", (item) => publish({ type: "add", path: item }))
+    instance.on("change", (item) => publish({ type: "change", path: item }))
+    instance.on("unlink", (item) => publish({ type: "unlink", path: item }))
+    instance.on("error", (error) => {
+      log.error("chokidar watch error", { error, dir })
+    })
+    return {
+      unsubscribe: async () => {
+        await instance.close()
+      },
+    } satisfies Subscription
+  }
 
   const state = Instance.state(
     async () => {
@@ -57,33 +140,25 @@ export namespace FileWatcher {
         log.error("watcher backend not supported", { platform: process.platform })
         return {}
       }
-      log.info("watcher backend", { platform: process.platform, backend })
 
-      const w = watcher()
-      if (!w) return {}
+      const parcelWatcher = parcel()
+      const chokidarWatcher = parcelWatcher ? undefined : chokidar()
+      if (!parcelWatcher && !chokidarWatcher) return {}
+      log.info("watcher backend", {
+        platform: process.platform,
+        backend,
+        runtime: parcelWatcher ? "parcel" : "chokidar",
+      })
 
-      const subscribe: ParcelWatcher.SubscribeCallback = (err, evts) => {
-        if (err) return
-        for (const evt of evts) {
-          if (evt.type === "create") Bus.publish(Event.Updated, { file: evt.path, event: "add" })
-          if (evt.type === "update") Bus.publish(Event.Updated, { file: evt.path, event: "change" })
-          if (evt.type === "delete") Bus.publish(Event.Updated, { file: evt.path, event: "unlink" })
-        }
+      const subs: Subscription[] = []
+      const cfgIgnores = cfg.watcher?.ignore ?? []
+      const subscribe = async (dir: string, ignore: string[]) => {
+        if (parcelWatcher) return subscribeWithParcel(parcelWatcher, dir, ignore, backend)
+        if (chokidarWatcher) return subscribeWithChokidar(chokidarWatcher, dir, ignore)
       }
 
-      const subs: ParcelWatcher.AsyncSubscription[] = []
-      const cfgIgnores = cfg.watcher?.ignore ?? []
-
       if (Flag.OPENCORVUS_EXPERIMENTAL_FILEWATCHER) {
-        const pending = w.subscribe(Instance.directory, subscribe, {
-          ignore: [...FileIgnore.PATTERNS, ...cfgIgnores],
-          backend,
-        })
-        const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS).catch((err) => {
-          log.error("failed to subscribe to Instance.directory", { error: err })
-          pending.then((s) => s.unsubscribe()).catch(() => {})
-          return undefined
-        })
+        const sub = await subscribe(Instance.directory, [...FileIgnore.PATTERNS, ...cfgIgnores])
         if (sub) subs.push(sub)
       }
 
@@ -98,15 +173,7 @@ export namespace FileWatcher {
         if (vcsDir && !cfgIgnores.includes(".git") && !cfgIgnores.includes(vcsDir)) {
           const gitDirContents = await readdir(vcsDir).catch(() => [])
           const ignoreList = gitDirContents.filter((entry) => entry !== "HEAD")
-          const pending = w.subscribe(vcsDir, subscribe, {
-            ignore: ignoreList,
-            backend,
-          })
-          const sub = await withTimeout(pending, SUBSCRIBE_TIMEOUT_MS).catch((err) => {
-            log.error("failed to subscribe to vcsDir", { error: err })
-            pending.then((s) => s.unsubscribe()).catch(() => {})
-            return undefined
-          })
+          const sub = await subscribe(vcsDir, ignoreList)
           if (sub) subs.push(sub)
         }
       }

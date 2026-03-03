@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs;
-use std::io::{BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -11,6 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::events;
 
 const CONFIG_FILE: &str = "opencorvus-manager.json";
+const LOG_FILE: &str = "opencorvus-manager-log.jsonl";
 const MAX_LOGS: usize = 800;
 
 #[derive(Deserialize, Serialize, Clone, Default)]
@@ -33,7 +34,8 @@ pub struct ManagerSnapshot {
     pub running: bool,
     pub pid: Option<u32>,
     pub config: ManagerConfig,
-    pub logs: Vec<String>,
+    pub logs: Vec<LogEntry>,
+    pub log_path: String,
 }
 
 #[derive(Serialize)]
@@ -43,9 +45,19 @@ pub struct SendResult {
     pub output: String,
 }
 
+#[derive(Deserialize, Serialize, Clone)]
+pub struct LogEntry {
+    pub ts: u64,
+    pub level: String,
+    pub tag: String,
+    pub message: String,
+    pub detail: Option<serde_json::Value>,
+}
+
 pub struct ManagerState {
     config: ManagerConfig,
-    logs: VecDeque<String>,
+    logs: VecDeque<LogEntry>,
+    log_path: String,
     bot: Option<Child>,
 }
 
@@ -68,16 +80,17 @@ impl ManagerState {
         Self {
             config: ManagerConfig::default(),
             logs: VecDeque::new(),
+            log_path: String::new(),
             bot: None,
         }
     }
 }
 
-fn stamp() -> String {
+fn stamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|item| item.as_secs().to_string())
-        .unwrap_or_else(|_| "0".into())
+        .map(|item| item.as_secs())
+        .unwrap_or(0)
 }
 
 fn norm_list(list: Vec<String>) -> Vec<String> {
@@ -116,6 +129,12 @@ fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_config_dir().map_err(|error| error.to_string())?;
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     Ok(dir.join(CONFIG_FILE))
+}
+
+fn log_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|error| error.to_string())?;
+    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    Ok(dir.join(LOG_FILE))
 }
 
 fn load_config(app: &AppHandle) -> Result<ManagerConfig, String> {
@@ -238,6 +257,7 @@ pub fn snapshot(shared: &Shared) -> ManagerSnapshot {
         pid: state.bot.as_ref().map(|child| child.id()),
         config: state.config.clone(),
         logs: state.logs.iter().cloned().collect(),
+        log_path: state.log_path.clone(),
     }
 }
 
@@ -245,16 +265,69 @@ pub fn emit_state(shared: &Shared, app: &AppHandle) {
     let _ = app.emit_to(events::WINDOW_CONSOLE, events::EVT_MANAGER_STATE, snapshot(shared));
 }
 
-pub fn push_log(shared: &Shared, app: &AppHandle, line: impl Into<String>) {
-    let item = format!("[{}] {}", stamp(), line.into());
+fn persist_log(app: &AppHandle, item: &LogEntry) {
+    let Ok(path) = log_path(app) else {
+        return;
+    };
+    let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+    let Ok(line) = serde_json::to_string(item) else {
+        return;
+    };
+    let _ = writeln!(file, "{line}");
+}
+
+fn push_log_entry(shared: &Shared, app: &AppHandle, item: LogEntry) {
+    persist_log(app, &item);
     {
         let mut state = shared.lock().unwrap();
+        if state.log_path.is_empty() {
+            state.log_path = log_path(app)
+                .map(|item| item.to_string_lossy().to_string())
+                .unwrap_or_default();
+        }
         state.logs.push_back(item.clone());
         while state.logs.len() > MAX_LOGS {
             state.logs.pop_front();
         }
     }
     let _ = app.emit_to(events::WINDOW_CONSOLE, events::EVT_MANAGER_LOG, item);
+}
+
+pub fn push_log(shared: &Shared, app: &AppHandle, line: impl Into<String>) {
+    push_log_entry(
+        shared,
+        app,
+        LogEntry {
+            ts: stamp(),
+            level: "info".into(),
+            tag: "manager".into(),
+            message: line.into(),
+            detail: None,
+        },
+    );
+}
+
+pub fn push_log_json(
+    shared: &Shared,
+    app: &AppHandle,
+    level: impl Into<String>,
+    tag: impl Into<String>,
+    message: impl Into<String>,
+    detail: Option<serde_json::Value>,
+) {
+    push_log_entry(
+        shared,
+        app,
+        LogEntry {
+            ts: stamp(),
+            level: level.into(),
+            tag: tag.into(),
+            message: message.into(),
+            detail,
+        },
+    );
 }
 
 pub fn probe(shared: &Shared, app: &AppHandle) {
@@ -285,6 +358,9 @@ pub fn probe(shared: &Shared, app: &AppHandle) {
 }
 
 pub fn init(shared: &Shared, app: &AppHandle) {
+    if let Ok(path) = log_path(app) {
+        shared.lock().unwrap().log_path = path.to_string_lossy().to_string();
+    }
     if let Ok(config) = load_config(app) {
         shared.lock().unwrap().config = config;
     }

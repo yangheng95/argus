@@ -37,11 +37,11 @@
             node_modules = final.callPackage ./nix/node_modules.nix {
               inherit rev;
             };
-            opencorvus = final.callPackage ./nix/opencode.nix {
+            opencorvus = final.callPackage ./nix/opencorvus.nix {
               inherit node_modules;
             };
             desktop = final.callPackage ./nix/desktop.nix {
-              opencode = opencorvus;
+              inherit opencorvus;
             };
           in
           {
@@ -56,11 +56,11 @@
           node_modules = pkgs.callPackage ./nix/node_modules.nix {
             inherit rev;
           };
-          opencorvus = pkgs.callPackage ./nix/opencode.nix {
+          opencorvus = pkgs.callPackage ./nix/opencorvus.nix {
             inherit node_modules;
           };
           desktop = pkgs.callPackage ./nix/desktop.nix {
-            opencode = opencorvus;
+            inherit opencorvus;
           };
         in
         {

@@ -16,6 +16,7 @@ function result() {
 
 describe("scheduler.task-queue-service", () => {
   afterEach(async () => {
+    delete process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY
     mock.restore()
     await Instance.disposeAll()
   })
@@ -147,5 +148,103 @@ describe("scheduler.task-queue-service", () => {
     const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
     expect(row?.status).toBe("queued")
     expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("runs queued tasks concurrently across sessions", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "2"
+    let running = 0
+    let peak = 0
+    const stub = async () => {
+      running += 1
+      peak = Math.max(peak, running)
+      await Bun.sleep(40)
+      running -= 1
+      return result()
+    }
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(stub as never)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const a = await Session.create({})
+        const b = await Session.create({})
+        TaskQueueService.enqueuePrompt({
+          sessionID: a.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "A",
+              },
+            ],
+          },
+        })
+        TaskQueueService.enqueuePrompt({
+          sessionID: b.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "B",
+              },
+            ],
+          },
+        })
+        await TaskQueueService.runNow()
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(2)
+    expect(peak).toBe(2)
+  })
+
+  test("only claims one task per session in a single run", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "4"
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+    let first = ""
+    let second = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        first = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "first",
+              },
+            ],
+          },
+        })
+        second = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "second",
+              },
+            ],
+          },
+        })
+
+        await TaskQueueService.runNow()
+        const firstRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, first)).get())
+        const secondRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get())
+        expect(firstRow?.status).toBe("completed")
+        expect(secondRow?.status).toBe("queued")
+
+        await TaskQueueService.runNow()
+        const finalRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get())
+        expect(finalRow?.status).toBe("completed")
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(2)
   })
 })

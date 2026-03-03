@@ -27,6 +27,8 @@ export namespace TaskQueueService {
   const POLL_INTERVAL_MS = 2000
   const RUN_TIMEOUT_MS = 6 * 60 * 60 * 1000
   const BATCH_SIZE = 10
+  const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
+  const CONCURRENCY_DEFAULT = 4
 
   const state = Instance.state(() => ({
     running: false,
@@ -105,17 +107,37 @@ export namespace TaskQueueService {
     const queued = pending()
     if (queued.length === 0) return
     log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
+    const limit = concurrency()
+    const seen = new Set<string>()
+    const list: Array<typeof TaskQueueTable.$inferSelect> = []
     for (const item of queued) {
+      if (list.length >= limit) break
+      if (seen.has(item.session_id)) continue
       const task = claim(item.id)
       if (!task) continue
-      await execute(task).catch((error) => fail(task, error))
+      seen.add(item.session_id)
+      list.push(task)
     }
+    if (list.length === 0) return
+    await Promise.all(list.map((task) => execute(task).catch((error) => fail(task, error))))
+  }
+
+  function concurrency() {
+    const raw = process.env[CONCURRENCY_ENV]
+    if (!raw) return Math.min(CONCURRENCY_DEFAULT, BATCH_SIZE)
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return Math.min(CONCURRENCY_DEFAULT, BATCH_SIZE)
+    if (value < 1) return 1
+    return Math.min(Math.floor(value), BATCH_SIZE)
   }
 
   function pending() {
     return Database.use((db) =>
       db
-        .select({ id: TaskQueueTable.id })
+        .select({
+          id: TaskQueueTable.id,
+          session_id: TaskQueueTable.session_id,
+        })
         .from(TaskQueueTable)
         .where(
           sql`${TaskQueueTable.status} IN ('queued', 'retrying')

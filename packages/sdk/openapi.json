@@ -3868,8 +3868,23 @@
         "summary": "Send async message",
         "description": "Create and send a new message to a session asynchronously, starting the session if needed and returning immediately.",
         "responses": {
-          "204": {
-            "description": "Prompt accepted"
+          "202": {
+            "description": "Prompt accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "taskID": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "taskID"
+                  ]
+                }
+              }
+            }
           },
           "400": {
             "description": "Bad request",

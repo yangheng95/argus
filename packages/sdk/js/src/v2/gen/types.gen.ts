@@ -3941,7 +3941,9 @@ export type SessionPromptAsyncResponses = {
   /**
    * Prompt accepted
    */
-  204: void
+  202: {
+    taskID: string
+  }
 }
 
 export type SessionPromptAsyncResponse = SessionPromptAsyncResponses[keyof SessionPromptAsyncResponses]

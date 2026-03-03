@@ -33,8 +33,18 @@ type ToolInput = {
   endX?: number
   endY?: number
 }
+type PermissionReply = "once" | "always" | "reject"
+type PermissionAsked = {
+  id: string
+  sessionID: string
+  permission: string
+  patterns: string[]
+}
 
 const BOT_DEBUG_TOOL_INPUT_ENV = "OPENCORVUS_BOT_DEBUG_TOOL_INPUT"
+const BOT_PERMISSION_REPLY_ENV = "OPENCORVUS_BOT_PERMISSION_ASK_REPLY"
+const BOT_QUEUE_LIMIT_ENV = "OPENCORVUS_BOT_SESSION_QUEUE_LIMIT"
+const BOT_QUEUE_LIMIT_DEFAULT = 20
 const BOT_MESSAGE_LIMIT = 3900
 
 function bool(input: string | undefined) {
@@ -167,6 +177,16 @@ export class BotCore {
     // If session is currently processing a task, queue this message and notify user
     if (this.sessionProcessing.has(session.sessionId)) {
       const queue = this.sessionQueues.get(session.sessionId) ?? []
+      const limit = this.queueLimit()
+      if (queue.length >= limit) {
+        await adapter.sendMessage(
+          msg.channel,
+          msg.thread,
+          `Current task is still running. Queue is full (${limit}). Please retry later.`,
+        )
+        console.warn(`[BotCore] Dropped message for ${session.sessionId}, queue limit reached: ${limit}`)
+        return
+      }
       queue.push({ msg, text })
       this.sessionQueues.set(session.sessionId, queue)
       await adapter.sendMessage(msg.channel, msg.thread, `Current task is still running. Your message is queued (#${queue.length}).`)
@@ -177,7 +197,7 @@ export class BotCore {
     // Mark session as processing before sending prompt
     this.sessionProcessing.add(session.sessionId)
 
-    // Use promptAsync to bypass monitor command queue and execute directly.
+    // promptAsync enqueues work and returns immediately.
     // System prompt is injected via the `system` field (appended to LLM system prompt in llm.ts:76).
     const result = await this.client.session.promptAsync({
       sessionID: session.sessionId,
@@ -355,6 +375,23 @@ export class BotCore {
     return bool(process.env[BOT_DEBUG_TOOL_INPUT_ENV])
   }
 
+  private queueLimit() {
+    const raw = process.env[BOT_QUEUE_LIMIT_ENV]
+    if (!raw) return BOT_QUEUE_LIMIT_DEFAULT
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return BOT_QUEUE_LIMIT_DEFAULT
+    if (value < 1) return BOT_QUEUE_LIMIT_DEFAULT
+    return Math.floor(value)
+  }
+
+  private permissionReply(): PermissionReply {
+    const raw = process.env[BOT_PERMISSION_REPLY_ENV]?.trim().toLowerCase()
+    if (raw === "once") return "once"
+    if (raw === "always") return "always"
+    if (raw === "reject") return "reject"
+    return "reject"
+  }
+
   /** Format a brief status message for important tool completions */
   private formatToolStatus(tool: string, input: unknown): string | null {
     try {
@@ -494,6 +531,37 @@ export class BotCore {
   }
 
   private async handleEvent(event: any): Promise<void> {
+    if (event.type === "permission.asked") {
+      const asked = event.properties as PermissionAsked
+      const reply = this.permissionReply()
+      const result = await this.client.permission.reply({
+        requestID: asked.id,
+        reply,
+      })
+      const session = this.findSession(asked.sessionID)
+      if (result.error) {
+        console.error("[BotCore] permission.reply error:", JSON.stringify(result.error).slice(0, 500))
+        if (session) {
+          await session.adapter.sendMessage(
+            session.channel,
+            session.thread,
+            `Failed to reply permission request: ${asked.permission}`,
+          ).catch(() => {})
+        }
+        return
+      }
+      if (session) {
+        const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
+        await session.adapter.sendMessage(
+          session.channel,
+          session.thread,
+          `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
+        ).catch(() => {})
+      }
+      console.log(`[BotCore] Auto-replied permission ${asked.id} with ${reply}`)
+      return
+    }
+
     // Session entered standby - clear processing flag and dequeue next pending message
     if (event.type === "session.idle") {
       const sessionId = event.properties?.sessionID

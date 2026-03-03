@@ -7,6 +7,7 @@ import { GuiState } from "./gui-state"
 import { WindowManager } from "../opencorvus/perception/window"
 import { Log } from "../util/log"
 import { overlayDiagnostic, requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
+import { Capability } from "../platform/capability"
 
 const log = Log.create({ service: "input" })
 
@@ -141,8 +142,9 @@ export const InputTool = Tool.define("input", {
     const lastWindowBounds = DesktopState.getBounds()
     const space = coordinateSpace()
 
-    const requireBounds = () => {
+    const requireBounds = (action: "click" | "drag" | "move") => {
       if (lastWindowBounds) return null
+      showOverlay(undefined, undefined, action, "blocked: screenshot anchor required", "error")
       return {
         title: "Pointer action blocked: no coordinate anchor",
         output: "Cannot run pointer action without a recent screenshot anchor. Take screen.screenshot first so coordinates are bound to one target (window or single monitor), then retry.",
@@ -150,7 +152,7 @@ export const InputTool = Tool.define("input", {
       }
     }
 
-    const ensureBoundWindowForeground = async () => {
+    const ensureBoundWindowForeground = async (action: "click" | "type" | "key" | "scroll" | "drag" | "move") => {
       const binding = await WindowManager.getBinding()
       if (!binding) return null
       const ok = await WindowManager.ensureBoundForeground()
@@ -165,6 +167,7 @@ export const InputTool = Tool.define("input", {
         })
         return null
       }
+      showOverlay(undefined, undefined, action, "blocked: bound window not foreground", "error")
       return {
         title: "Action blocked: bound window not foreground",
         output:
@@ -180,9 +183,9 @@ export const InputTool = Tool.define("input", {
 
     switch (params.action) {
       case "click": {
-        const blocked = requireBounds()
+        const blocked = requireBounds("click")
         if (blocked) return blocked
-        const windowBlocked = await ensureBoundWindowForeground()
+        const windowBlocked = await ensureBoundWindowForeground("click")
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, lastWindowBounds!, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds, space)
@@ -242,7 +245,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "type": {
-        const windowBlocked = await ensureBoundWindowForeground()
+        const windowBlocked = await ensureBoundWindowForeground("type")
         if (windowBlocked) return windowBlocked
         showOverlay(undefined, undefined, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
         await GUI.paste(params.text)
@@ -263,7 +266,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "key": {
-        const windowBlocked = await ensureBoundWindowForeground()
+        const windowBlocked = await ensureBoundWindowForeground("key")
         if (windowBlocked) return windowBlocked
         showOverlay(undefined, undefined, "key", params.key)
         const parts = params.key.split("+").map((k) => k.trim())
@@ -289,7 +292,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "scroll": {
-        const windowBlocked = await ensureBoundWindowForeground()
+        const windowBlocked = await ensureBoundWindowForeground("scroll")
         if (windowBlocked) return windowBlocked
         showOverlay(undefined, undefined, "scroll", `${params.direction} ${params.amount}`)
         await GUI.scroll(params.direction, params.amount)
@@ -310,9 +313,9 @@ export const InputTool = Tool.define("input", {
       }
 
       case "drag": {
-        const blocked = requireBounds()
+        const blocked = requireBounds("drag")
         if (blocked) return blocked
-        const windowBlocked = await ensureBoundWindowForeground()
+        const windowBlocked = await ensureBoundWindowForeground("drag")
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.startX, params.startY, lastWindowBounds!, space)
         const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds, space)
@@ -353,9 +356,9 @@ export const InputTool = Tool.define("input", {
       }
 
       case "move": {
-        const blocked = requireBounds()
+        const blocked = requireBounds("move")
         if (blocked) return blocked
-        const windowBlocked = await ensureBoundWindowForeground()
+        const windowBlocked = await ensureBoundWindowForeground("move")
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, lastWindowBounds!, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds, space)
@@ -396,6 +399,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "confirm": {
+        showOverlay(undefined, undefined, "confirm", params.title, "running")
         const answer = await requestOverlayConfirm({
           title: params.title,
           message: params.message,
@@ -407,6 +411,9 @@ export const InputTool = Tool.define("input", {
         const unavailable = answer === "unavailable"
         const overlay = overlayDiagnostic()
         const unavailableReason = unavailable ? overlay.reason ?? "unknown" : undefined
+        const capabilityHint = unavailable
+          ? Capability.cachedItem("overlay_confirm")?.hint || Capability.overlayItem().hint
+          : undefined
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -416,21 +423,28 @@ export const InputTool = Tool.define("input", {
           screenChanged: null,
         })
         if (unavailable) {
+          showOverlay(undefined, undefined, "confirm", `unavailable ${unavailableReason}`, "error")
           log.warn("overlay-confirm-unavailable", {
             reason: unavailableReason,
             path: overlay.path,
           })
+        } else if (accepted) {
+          showOverlay(undefined, undefined, "confirm", "confirmed", "done")
+        } else if (answer === "timeout") {
+          showOverlay(undefined, undefined, "confirm", "timeout", "error")
+        } else {
+          showOverlay(undefined, undefined, "confirm", "cancelled", "error")
         }
         return {
           title: accepted ? "User confirmed" : unavailable ? "Desktop confirm unavailable" : "User did not confirm",
           output: unavailable
-            ? `Desktop confirmation window is unavailable (${unavailableReason}). Continue with a fallback flow (question tool or safe default).`
+            ? `Desktop confirmation window is unavailable (${unavailableReason}). Continue with a fallback flow (question tool or safe default).${capabilityHint ? ` Hint: ${capabilityHint}` : ""}`
             : accepted
               ? "User confirmed to continue with the next step."
               : answer === "timeout"
                 ? "Confirmation timed out. Treat as not confirmed and ask a follow-up if needed."
                 : "User cancelled the next step.",
-          metadata: { answer, confirmed: accepted, timeout: answer === "timeout", unavailable, unavailableReason },
+          metadata: { answer, confirmed: accepted, timeout: answer === "timeout", unavailable, unavailableReason, capabilityHint },
         }
       }
     }

@@ -7,6 +7,7 @@ const els = {
   pidText: document.getElementById("pidText"),
   chat: document.getElementById("chat"),
   logs: document.getElementById("logs"),
+  logPathText: document.getElementById("logPathText"),
   sendForm: document.getElementById("sendForm"),
   sendBtn: document.getElementById("sendBtn"),
   promptInput: document.getElementById("promptInput"),
@@ -23,6 +24,7 @@ const els = {
 
 const state = {
   logs: [],
+  logPath: "",
   configLoaded: false,
   sending: false,
 }
@@ -144,6 +146,12 @@ function setStatus(running, pid) {
   els.pidText.textContent = `PID: ${pid ?? "-"}`
 }
 
+function setLogPath(value) {
+  const text = typeof value === "string" && value.trim() ? value.trim() : "-"
+  state.logPath = text
+  els.logPathText.textContent = `Log file: ${text}`
+}
+
 function addMessage(role, text) {
   const box = document.createElement("div")
   box.className = `msg ${role}`
@@ -153,13 +161,38 @@ function addMessage(role, text) {
 }
 
 function renderLogs() {
-  els.logs.textContent = state.logs.join("\n")
+  els.logs.textContent = state.logs.map((item) => JSON.stringify(item)).join("\n")
   els.logs.scrollTop = els.logs.scrollHeight
 }
 
-function appendLog(line) {
+function normalizeLog(item) {
+  if (!item) return null
+  if (typeof item === "object") {
+    const x = item
+    return {
+      ts: Number.isFinite(Number(x.ts)) ? Number(x.ts) : Math.floor(Date.now() / 1000),
+      level: typeof x.level === "string" ? x.level : "info",
+      tag: typeof x.tag === "string" ? x.tag : "manager",
+      message: typeof x.message === "string" ? x.message : JSON.stringify(x),
+      detail: x.detail ?? null,
+    }
+  }
+  if (typeof item === "string") {
+    return {
+      ts: Math.floor(Date.now() / 1000),
+      level: "info",
+      tag: "legacy",
+      message: item,
+      detail: null,
+    }
+  }
+  return null
+}
+
+function appendLog(item) {
+  const line = normalizeLog(item)
   if (!line) return
-  state.logs.push(String(line))
+  state.logs.push(line)
   if (state.logs.length > 800) state.logs = state.logs.slice(-800)
   renderLogs()
 }
@@ -167,8 +200,9 @@ function appendLog(line) {
 function applySnapshot(snapshot) {
   if (!snapshot) return
   setStatus(snapshot.running, snapshot.pid)
+  setLogPath(snapshot.log_path)
   if (Array.isArray(snapshot.logs)) {
-    state.logs = snapshot.logs.slice(-800)
+    state.logs = snapshot.logs.map((item) => normalizeLog(item)).filter((item) => Boolean(item)).slice(-800)
     renderLogs()
   }
   if (!state.configLoaded) fillConfig(snapshot.config)

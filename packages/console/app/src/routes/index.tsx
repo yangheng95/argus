@@ -1,8 +1,7 @@
 import "./index.css"
 import { Title, Meta } from "@solidjs/meta"
 //import { HttpHeader } from "@solidjs/start"
-import video from "../asset/lander/opencode-min.mp4"
-import videoPoster from "../asset/lander/opencode-poster.png"
+import videoPoster from "../asset/lander/opencorvus-poster.png"
 import mascotIdle from "../asset/lander/mascot-ar-idle.png"
 import { IconCopy, IconCheck } from "../component/icon"
 import { A, createAsync } from "@solidjs/router"
@@ -171,9 +170,7 @@ export default function Home() {
           </section>
 
           <section data-component="video">
-            <video src={video} autoplay playsinline loop muted preload="auto" poster={videoPoster}>
-              {i18n.t("common.videoUnsupported")}
-            </video>
+            <img src={videoPoster} alt={i18n.t("common.videoUnsupported")} />
           </section>
 
           <section data-component="what">

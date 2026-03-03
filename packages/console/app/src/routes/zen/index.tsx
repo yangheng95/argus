@@ -4,8 +4,7 @@ import { Title, Meta } from "@solidjs/meta"
 //import { HttpHeader } from "@solidjs/start"
 import zenLogoLight from "../../asset/zen-ornate-light.svg"
 import zenLogoDark from "../../asset/zen-ornate-dark.svg"
-import compareVideo from "../../asset/lander/opencode-comparison-min.mp4"
-import compareVideoPoster from "../../asset/lander/opencode-comparison-poster.png"
+import compareVideoPoster from "../../asset/lander/opencorvus-comparison-poster.png"
 import avatarDax from "../../asset/lander/avatar-dax.png"
 import avatarJay from "../../asset/lander/avatar-jay.png"
 import avatarFrank from "../../asset/lander/avatar-frank.png"
@@ -143,9 +142,7 @@ export default function Home() {
           </section>
 
           <section data-component="comparison">
-            <video src={compareVideo} autoplay playsinline loop muted preload="auto" poster={compareVideoPoster}>
-              {i18n.t("common.videoUnsupported")}
-            </video>
+            <img src={compareVideoPoster} alt={i18n.t("common.videoUnsupported")} />
           </section>
 
           <section data-component="problem">

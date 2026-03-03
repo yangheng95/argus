@@ -43,6 +43,8 @@ mock.module("../../src/tool/overlay-client", () => ({
     reason: "binary_missing",
     updatedAt: Date.now(),
     path: "overlay-binary",
+    failures: 0,
+    consecutiveFailures: 0,
   }),
   parseOverlayReply: (line: string) => {
     let raw: unknown

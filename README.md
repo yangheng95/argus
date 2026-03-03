@@ -219,6 +219,15 @@ OPENAI_API_KEY=sk-...
 
 > 生产环境建议将 `bash` 设为 `"ask"` 而非 `"allow"`，防止未经审查的命令执行。
 
+Bot runtime can also apply a permission profile via `OPENCORVUS_BOT_PERMISSION_PROFILE`:
+
+- `restricted`: read-only style bot, denies `bash/edit/write/input/task/skill/external_directory`
+- `standard` (default): allows normal coding tools, but denies `external_directory`, `doom_loop`, `question`
+- `permissive`: legacy-compatible broad permissions
+- `passthrough`: do not inject bot-specific permission overrides
+- `OPENCORVUS_BOT_SESSION_QUEUE_LIMIT` (default `20`): max pending inbound messages per session before new messages are rejected
+- `OPENCORVUS_BOT_PERMISSION_ASK_REPLY` (default `reject`): auto-reply mode for `permission.asked` events (`once | always | reject`)
+
 #### 可选：语音识别（STT）
 
 | 变量 | 说明 |
@@ -245,6 +254,8 @@ OPENAI_API_KEY=sk-...
 | 变量 | 说明 |
 |------|------|
 | `TUI_PROJECT_DIR` | Bot 指挥 TUI 工作的默认项目目录，默认 `process.cwd()` |
+| `OPENCORVUS_BOT_SESSION_QUEUE_LIMIT` | 单会话排队上限，超过后拒绝新消息（默认 `20`） |
+| `OPENCORVUS_BOT_PERMISSION_ASK_REPLY` | 收到 `permission.asked` 时自动回复策略（默认 `reject`） |
 
 ### 完整 `.env` 示例
 

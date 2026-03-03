@@ -381,7 +381,8 @@ body {
 
   [data-component="comparison"] {
     border-top: 1px solid var(--color-border-weak);
-    video {
+    video,
+    img {
       width: 100%;
       height: auto;
       max-width: none;

@@ -38,6 +38,7 @@ import { WorkspaceServeCommand } from "./cli/cmd/workspace-serve"
 import { Filesystem } from "./util/filesystem"
 import { DebugCommand } from "./cli/cmd/debug"
 import { StatsCommand } from "./cli/cmd/stats"
+import { DoctorCommand } from "./cli/cmd/doctor"
 import { McpCommand } from "./cli/cmd/mcp"
 import { GithubCommand } from "./cli/cmd/github"
 import { ExportCommand } from "./cli/cmd/export"
@@ -53,6 +54,7 @@ import path from "path"
 import { Global } from "./global"
 import { JsonMigration } from "./storage/json-migration"
 import { Database } from "./storage/db"
+import { Capability } from "./platform/capability"
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
@@ -101,6 +103,26 @@ let cli = yargs(hideBin(process.argv))
       version: Installation.VERSION,
       args: process.argv.slice(2),
     })
+    const report = await Capability.preflight().catch((error) => {
+      Log.Default.warn("capability.preflight.failed", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return undefined
+    })
+    if (report) {
+      const issues = report.items.filter((item) => item.state !== "ok")
+      if (issues.length > 0) {
+        Log.Default.warn("capability.preflight.issues", {
+          total: report.total,
+          issues: issues.map((item) => ({ id: item.id, state: item.state, detail: item.detail })),
+        })
+        if (process.stderr.isTTY && process.argv[2] !== "doctor") {
+          process.stderr.write(
+            `Capability warnings detected (${report.total.fail} fail, ${report.total.warn} warn). Run "opencorvus doctor" for details.${EOL}`,
+          )
+        }
+      }
+    }
 
     const marker = path.join(Global.Path.data, "opencorvus.db")
     if (!(await Filesystem.exists(marker))) {
@@ -154,6 +176,7 @@ let cli = yargs(hideBin(process.argv))
   .command(UninstallCommand)
   .command(ServeCommand)
   .command(ModelsCommand)
+  .command(DoctorCommand)
   .command(StatsCommand)
   .command(ExportCommand)
   .command(ImportCommand)
