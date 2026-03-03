@@ -2,6 +2,8 @@
   /* Brand gradient */
   --brand-from: #0ea5a4;
   --brand-to: #22d3ee;
+  --brand-from-rgb: 14, 165, 164;
+  --brand-to-rgb: 34, 211, 238;
   --brand-gradient: linear-gradient(135deg, var(--brand-from), var(--brand-to));
 
   /* Surfaces */
