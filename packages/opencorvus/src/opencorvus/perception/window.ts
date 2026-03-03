@@ -135,20 +135,19 @@ export namespace WindowManager {
     try {
       if (process.platform === "win32") {
         const { user32, kernel32 } = getWin32()
-        const { ptr: ptrFn } = require("bun:ffi")
-        const hwnd = ptrFn(windowId)
-        // AttachThreadInput to bypass Windows foreground-lock restriction
+        // Pass windowId as a raw number — Bun FFI accepts numbers for FFIType.ptr params.
+        // (Do NOT use ptr() which returns an opaque Cell object that can't be re-passed.)
         const fg = user32.symbols.GetForegroundWindow()
         const pidBuf = new Int32Array(1)
         const fgTid = user32.symbols.GetWindowThreadProcessId(fg, pidBuf)
         const myTid = kernel32.symbols.GetCurrentThreadId()
         user32.symbols.AttachThreadInput(myTid, fgTid, true)
         // Restore if minimized (SW_RESTORE = 9)
-        if (user32.symbols.IsIconic(hwnd)) {
-          user32.symbols.ShowWindow(hwnd, 9)
+        if (user32.symbols.IsIconic(windowId)) {
+          user32.symbols.ShowWindow(windowId, 9)
         }
-        user32.symbols.BringWindowToTop(hwnd)
-        const result = user32.symbols.SetForegroundWindow(hwnd)
+        user32.symbols.BringWindowToTop(windowId)
+        const result = user32.symbols.SetForegroundWindow(windowId)
         user32.symbols.AttachThreadInput(myTid, fgTid, false)
         log.info("focusWindow win32 ffi", { windowId, result, fgTid, myTid })
         return result

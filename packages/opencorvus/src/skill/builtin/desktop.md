@@ -22,7 +22,7 @@ If the platform-specific skill is available, treat it as the primary source for 
 | Tool | Action | Parameters | What it does |
 |------|--------|-----------|-------------|
 | `screen` | `list_windows` | — | List all open windows (title, app, position, size) |
-| `screen` | `bind_window` | `title` | Bind to a window by title — makes coordinates relative to it |
+| `screen` | `bind_window` | `window_id` or `title` | Bind to a window (prefer `window_id` from `list_windows`) — makes coordinates relative |
 | `screen` | `screenshot` | — | Capture screen/bound window (skips if unchanged) |
 | `input` | `click` | `x, y, button?` | Click at (x,y). button: left/right/double/middle |
 | `input` | `type` | `text` | Type text via clipboard paste |
@@ -36,7 +36,7 @@ If the platform-specific skill is available, treat it as the primary source for 
 
 1. **single-monitor default** — Start with screenshot. On one screen, you usually do NOT need `list_windows`.
 2. **bind_window for precision** — Use binding when app-level coordinates are needed.
-3. **list_windows only when needed** — Use it when windows are ambiguous, title is unknown, or bind fails.
+3. **list_windows for selection** — When windows are ambiguous, list candidates and bind with `window_id`.
 4. **Screenshot BEFORE acting** — Never click/type blindly. Know what's on screen.
 5. **Screenshot AFTER acting** — Verify every action had the expected effect.
 6. **Click BEFORE typing** — Always click the target field to give it focus.
@@ -62,26 +62,26 @@ The screenshot output includes platform info (e.g. "Platform: Windows"). Use it 
 
 ### Windows
 ```
-input.key("win") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.bind_window("AppName")
+input.key("win") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
 ### macOS
 ```
-input.key("cmd+space") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.bind_window("AppName")
+input.key("cmd+space") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
 ### Linux
 ```
-input.key("super") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.bind_window("AppName")
+input.key("super") → wait(500) → input.type("AppName") → wait(500) → input.key("enter") → wait(2000) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
-**Verification:** After launching, take `screen.screenshot`; if bind fails or the target app is ambiguous, run `screen.list_windows` and re-bind.
+**Verification:** After launching, take `screen.screenshot`; if target is ambiguous, run `screen.list_windows`, pick `window_id`, then bind.
 
 ## 2. Opening a URL in Browser
 
 ```
 1. Open browser (if not already open, launch it via platform launcher)
-2. screen.bind_window("Chrome")      ← or "Firefox", "Edge", "Safari"
+2. screen.list_windows → screen.bind_window({window_id})   ← preferred; title fallback: "Chrome"/"Firefox"/"Edge"/"Safari"
 3. input.key("ctrl+l")               ← macOS: "cmd+l" — focus address bar
 4. input.key("ctrl+a")               ← select all existing URL text
 5. input.type("https://example.com")
@@ -322,7 +322,7 @@ input.key("win+right")                       ← snap to right half
 ```
 input.key("alt+tab")                         ← macOS: "cmd+tab"
 # To go to a specific window:
-screen.list_windows → screen.bind_window("target")
+screen.list_windows → screen.bind_window({window_id})
 ```
 
 ## 10. Window Management (Keyboard)

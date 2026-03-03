@@ -12,7 +12,7 @@ Use this skill for macOS desktop tasks. Interact only through `screen` and `inpu
 ## Standard Flow
 
 1. `screen.screenshot`
-2. `screen.bind_window("target")` only when app-level precision is needed
+2. `screen.list_windows` then `screen.bind_window({window_id})` when app-level precision is needed
 3. `input.*` action
 4. `input.wait(300-3000)`
 5. `screen.screenshot` verify
@@ -24,17 +24,17 @@ Use this skill for macOS desktop tasks. Interact only through `screen` and `inpu
 - Search app: `input.type("AppName")`
 - Launch: `input.key("enter")`
 - Wait and verify: `input.wait(2000)` + `screen.screenshot`
-- Bind target window if needed: `screen.bind_window("AppName")`
+- Bind target window if needed: `screen.list_windows` -> `screen.bind_window({window_id})` (title fallback: `screen.bind_window("AppName")`)
 
 ## Window Positioning
 
 - Always bind before pointer actions.
-- Re-bind with exact app/window substring if multiple similar windows exist.
+- Re-bind by `window_id` from `screen.list_windows` if multiple similar windows exist.
 - If window not responsive, try `cmd+tab` to switch back, then screenshot.
 
 ## Browser Workflow (Safari/Chrome)
 
-1. `screen.bind_window("Safari")` or `screen.bind_window("Chrome")`
+1. `screen.list_windows` -> `screen.bind_window({window_id})` (or title fallback: `"Safari"` / `"Chrome"`)
 2. `input.key("cmd+l")` (address bar)
 3. `input.key("cmd+a")`
 4. `input.type("https://...")`

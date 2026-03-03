@@ -12,7 +12,7 @@ Use this skill for Windows desktop tasks. Interact only through `screen` and `in
 ## Standard Flow
 
 1. `screen.screenshot`
-2. `screen.bind_window("target")` only when app-level precision is needed
+2. `screen.list_windows` then `screen.bind_window({window_id})` when app-level precision is needed
 3. `input.*` action
 4. `input.wait(300-3000)`
 5. `screen.screenshot` verify
@@ -24,17 +24,17 @@ Use this skill for Windows desktop tasks. Interact only through `screen` and `in
 - Search app: `input.type("AppName")`
 - Launch: `input.key("enter")`
 - Wait and verify: `input.wait(2000)` + `screen.screenshot`
-- Bind target window if needed: `screen.bind_window("AppName")`
+- Bind target window if needed: `screen.list_windows` -> `screen.bind_window({window_id})` (title fallback: `screen.bind_window("AppName")`)
 
 ## Window Positioning
 
 - Always bind before pointer actions.
-- If wrong window is focused, run `screen.list_windows` and re-bind by specific title substring.
+- If wrong window is focused, run `screen.list_windows` and re-bind by `window_id`.
 - If minimized, bind + take fresh screenshot before click/type.
 
 ## Browser Workflow (Chrome/Edge)
 
-1. `screen.bind_window("Chrome")` or `screen.bind_window("Edge")`
+1. `screen.list_windows` -> `screen.bind_window({window_id})` (or title fallback: `"Chrome"` / `"Edge"`)
 2. `input.key("ctrl+l")` (address bar)
 3. `input.key("ctrl+a")`
 4. `input.type("https://...")`
