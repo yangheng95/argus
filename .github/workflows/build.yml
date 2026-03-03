@@ -173,3 +173,70 @@ jobs:
           name: opencorvus-dist
           path: packages/opencorvus/dist/
           retention-days: 7
+
+  publish:
+    name: publish release branch
+    needs: package
+    if: needs.package.outputs.release == '1'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: opencorvus-dist
+          path: /tmp/dist
+
+      - name: Assemble and push release branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION:  ${{ needs.package.outputs.version }}
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name  "GitHub Actions"
+
+          # Prepare a clean worktree for the release branch
+          WORK=$(mktemp -d)
+          cd "$WORK"
+          git init
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          # Reuse existing history if branch exists; otherwise start orphan
+          if git fetch origin release --depth=1 2>/dev/null; then
+            git checkout release
+          else
+            git checkout --orphan release
+          fi
+
+          # Wipe everything, start fresh
+          git rm -rf . 2>/dev/null || true
+
+          # README from source repo
+          cp "$GITHUB_WORKSPACE/README.md" . 2>/dev/null || echo "# OpenCorvus v${VERSION}" > README.md
+
+          # Primary platform binaries (skip baseline / musl variants)
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64; do
+            src="/tmp/dist/opencorvus-${platform}/bin"
+            [[ -d "$src" ]] || continue
+            mkdir -p "$platform"
+            # copy binaries, skip sourcemaps
+            find "$src" -maxdepth 1 -type f ! -name '*.map' -exec cp {} "$platform/" \;
+            chmod +x "$platform"/opencorvus* 2>/dev/null || true
+          done
+
+          echo "── Release branch contents ──────────────────────"
+          find . -not -path './.git/*' | sort
+          echo "─────────────────────────────────────────────────"
+
+          git add -A
+          git commit -m "release: v${VERSION}"
+          git push origin release --force
