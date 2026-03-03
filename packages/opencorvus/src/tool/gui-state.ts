@@ -76,6 +76,14 @@ export namespace GuiState {
     guiState().isGuiSession = true
   }
 
+  export function recordFocusChange(): void {
+    const s = guiState()
+    if (!s.isGuiSession) return
+    s.lastFocusChangeStep = s.currentStep
+    // Reset no-change counter — new window screenshot will differ
+    s.repetition.consecutiveNoChange = 0
+  }
+
   export function recordAction(record: Omit<ActionRecord, "step">): void {
     const s = guiState()
     if (!s.isGuiSession) return
