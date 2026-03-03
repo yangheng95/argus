@@ -308,7 +308,7 @@ export const ExperimentalRoutes = lazy(() =>
       "/bind_window",
       describeRoute({
         summary: "Bind window",
-        description: "Bind to a desktop window by title substring. Activates GUI state and sets the window as the target for screenshots and input.",
+        description: "Bind to a desktop window by window_id (preferred) or title substring. Activates GUI state and sets the window as the target for screenshots and input.",
         operationId: "experimental.bind_window",
         responses: {
           200: {
@@ -321,6 +321,7 @@ export const ExperimentalRoutes = lazy(() =>
                   title: z.string(),
                   appName: z.string(),
                   focused: z.boolean(),
+                  selectionMode: z.enum(["window_id", "title"]),
                 })),
               },
             },
@@ -328,11 +329,24 @@ export const ExperimentalRoutes = lazy(() =>
           ...errors(404),
         },
       }),
-      validator("json", z.object({ title: z.string() })),
+      validator(
+        "json",
+        z
+          .object({
+            window_id: z.number().int().optional(),
+            title: z.string().optional(),
+          })
+          .refine((v) => typeof v.window_id === "number" || !!v.title?.trim(), {
+            message: "Provide window_id or title",
+          }),
+      ),
       async (c) => {
-        const { title } = c.req.valid("json")
+        const body = c.req.valid("json")
         GuiState.activate()
-        const binding = await WindowManager.bind(title)
+        const selectionMode = typeof body.window_id === "number" ? "window_id" : "title"
+        const binding = typeof body.window_id === "number"
+          ? await WindowManager.bindById(body.window_id, body.title)
+          : await WindowManager.bind(body.title!.trim())
         DesktopState.setBounds(null)
         const refreshed = await WindowManager.getBinding()
         return c.json({
@@ -341,6 +355,7 @@ export const ExperimentalRoutes = lazy(() =>
           title: binding.info.title,
           appName: binding.info.appName,
           focused: refreshed?.info.isFocused ?? binding.info.isFocused,
+          selectionMode,
         })
       },
     )

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
-const binds: string[] = []
+const bindsById: number[] = []
+const bindsByTitle: string[] = []
 let windows = [
   { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
 ]
@@ -20,8 +21,18 @@ mock.module("../../src/opencorvus/perception/window", () => ({
       if (!query) return null
       return windows.find((w) => w.title.toLowerCase().includes(query) || w.appName.toLowerCase().includes(query)) ?? null
     },
+    bindById: async (windowId: number, matchTitle?: string) => {
+      bindsById.push(windowId)
+      const info = windows.find((w) => w.id === windowId)
+      if (!info) throw new Error(`No window found with id ${windowId}`)
+      return {
+        windowId: info.id,
+        matchTitle: matchTitle?.trim() || info.title,
+        info,
+      }
+    },
     bind: async (title: string) => {
-      binds.push(title)
+      bindsByTitle.push(title)
       const query = title.trim().toLowerCase()
       const info = windows.find((w) => w.title.toLowerCase().includes(query) || w.appName.toLowerCase().includes(query))
       if (!info) throw new Error(`No window found matching "${title}"`)
@@ -65,7 +76,8 @@ const ctx = {
 }
 
 beforeEach(() => {
-  binds.length = 0
+  bindsById.length = 0
+  bindsByTitle.length = 0
   windows = [
     { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
   ]
@@ -85,7 +97,9 @@ describe("tool.screen bind_window", () => {
         expect(result.metadata.title).toBe("Editor")
         expect(result.metadata.singleMonitorFallback).toBe(true)
         expect(result.metadata.requestedTitle).toBe("Missing Window")
-        expect(binds).toEqual(["Editor"])
+        expect(result.metadata.selectionMode).toBe("single_monitor_fallback")
+        expect(bindsById).toEqual([7])
+        expect(bindsByTitle).toEqual([])
       },
     })
   })
@@ -104,7 +118,29 @@ describe("tool.screen bind_window", () => {
         await expect(tool.execute({ action: "bind_window", title: "Missing Window" }, ctx)).rejects.toThrow(
           'No window found matching "Missing Window"',
         )
-        expect(binds).toHaveLength(0)
+        expect(bindsById).toHaveLength(0)
+        expect(bindsByTitle).toHaveLength(0)
+      },
+    })
+  })
+
+  test("binds exact window by window_id", async () => {
+    windows = [
+      { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
+      { id: 11, title: "Editor", appName: "Code", x: 100, y: 100, width: 1280, height: 800, isMinimized: false, isFocused: false },
+    ]
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const result = await tool.execute({ action: "bind_window", window_id: 11 }, ctx)
+        expect(result.metadata.windowId).toBe(11)
+        expect(result.metadata.selectionMode).toBe("window_id")
+        expect(result.metadata.idFallback).toBe(false)
+        expect(bindsById).toEqual([11])
+        expect(bindsByTitle).toEqual([])
       },
     })
   })
