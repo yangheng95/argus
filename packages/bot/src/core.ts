@@ -1,8 +1,16 @@
 import path from "node:path"
-import { createOpencode, type OpencodeClient } from "@opencorvus-ai/sdk"
+import { createOpencode, type Event, type OpencodeClient } from "@opencorvus-ai/sdk"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
+import {
+  BOT_MESSAGE_LIMIT,
+  formatToolStatus as formatToolStatusMessage,
+  polishText,
+  splitText,
+} from "./message-formatter"
+import { permissionReply as permissionReplyRule, queueLimit as queueLimitRule, type PermissionReply } from "./bot-policy"
+import { SessionCoordinator } from "./session-coordinator"
 
 interface SessionEntry {
   sessionId: string
@@ -13,54 +21,23 @@ interface SessionEntry {
 
 type ScreenAttachment = { type?: string; mime?: string; url?: string; filename?: string }
 type SessionMessagePart = { id?: string; state?: { attachments?: ScreenAttachment[] } }
-type ToolInput = {
-  command?: string
-  filePath?: string
-  name?: string
-  action?: string
-  title?: string
-  window_id?: number
-  key?: string
-  x?: number
-  y?: number
-  button?: string
-  text?: string
-  ms?: number
-  direction?: string
-  amount?: number
-  startX?: number
-  startY?: number
-  endX?: number
-  endY?: number
-}
-type PermissionReply = "once" | "always" | "reject"
 type PermissionAsked = {
   id: string
   sessionID: string
   permission: string
   patterns: string[]
 }
-
-const BOT_DEBUG_TOOL_INPUT_ENV = "OPENCORVUS_BOT_DEBUG_TOOL_INPUT"
-const BOT_PERMISSION_REPLY_ENV = "OPENCORVUS_BOT_PERMISSION_ASK_REPLY"
-const BOT_QUEUE_LIMIT_ENV = "OPENCORVUS_BOT_SESSION_QUEUE_LIMIT"
-const BOT_QUEUE_LIMIT_DEFAULT = 20
-const BOT_MESSAGE_LIMIT = 3900
-
-function bool(input: string | undefined) {
-  if (!input) return false
-  const value = input.trim().toLowerCase()
-  return value === "1" || value === "true" || value === "yes" || value === "on"
-}
+type EventPermissionAsked = Extract<Event, { type: "permission.asked" }>
+type EventSessionIdle = Extract<Event, { type: "session.idle" }>
+type EventMessageUpdated = Extract<Event, { type: "message.updated" }>
+type EventMessagePartUpdated = Extract<Event, { type: "message.part.updated" }>
 
 export interface BotCoreOptions {
   port?: number
 }
 
 export class BotCore {
-  private sessions = new Map<string, SessionEntry>()
-  /** Reverse lookup: sessionId -> threadKey */
-  private sessionIndex = new Map<string, string>()
+  private session = new SessionCoordinator<SessionEntry, IncomingMessage>()
   private adapters: BotAdapter[] = []
   private client!: OpencodeClient
   private server!: { url: string; close(): void }
@@ -74,10 +51,6 @@ export class BotCore {
   private vision?: VisionPipeline
   /** Base URL of the OpenCorvus server */
   private serverUrl!: string
-  /** Per-session pending message queue (staging area) */
-  private sessionQueues = new Map<string, Array<{ msg: IncomingMessage; text: string }>>()
-  /** Sessions currently being processed - new messages are queued until session.idle fires */
-  private sessionProcessing = new Set<string>()
 
   constructor(private options?: BotCoreOptions) {}
 
@@ -150,7 +123,7 @@ export class BotCore {
 
     if (!text) return
 
-    let session = this.sessions.get(threadKey)
+    let session = this.session.get(threadKey)
 
     if (!session) {
       const createResult = await this.client.session.create({
@@ -169,33 +142,29 @@ export class BotCore {
         channel: msg.channel,
         thread: msg.thread,
       }
-      this.sessions.set(threadKey, session)
-      this.sessionIndex.set(createResult.data.id, threadKey)
+      this.session.bind(threadKey, session)
       console.log(`[BotCore] Created session ${createResult.data.id} for ${threadKey}`)
     }
 
     // If session is currently processing a task, queue this message and notify user
-    if (this.sessionProcessing.has(session.sessionId)) {
-      const queue = this.sessionQueues.get(session.sessionId) ?? []
-      const limit = this.queueLimit()
-      if (queue.length >= limit) {
+    if (this.session.processing(session.sessionId)) {
+      const queue = this.session.enqueue(session.sessionId, { msg, text }, this.queueLimit())
+      if (!queue.ok) {
         await adapter.sendMessage(
           msg.channel,
           msg.thread,
-          `Current task is still running. Queue is full (${limit}). Please retry later.`,
+          `Current task is still running. Queue is full (${queue.limit}). Please retry later.`,
         )
-        console.warn(`[BotCore] Dropped message for ${session.sessionId}, queue limit reached: ${limit}`)
+        console.warn(`[BotCore] Dropped message for ${session.sessionId}, queue limit reached: ${queue.limit}`)
         return
       }
-      queue.push({ msg, text })
-      this.sessionQueues.set(session.sessionId, queue)
-      await adapter.sendMessage(msg.channel, msg.thread, `Current task is still running. Your message is queued (#${queue.length}).`)
-      console.log(`[BotCore] Queued message for ${session.sessionId}, queue size: ${queue.length}`)
+      await adapter.sendMessage(msg.channel, msg.thread, `Current task is still running. Your message is queued (#${queue.size}).`)
+      console.log(`[BotCore] Queued message for ${session.sessionId}, queue size: ${queue.size}`)
       return
     }
 
     // Mark session as processing before sending prompt
-    this.sessionProcessing.add(session.sessionId)
+    this.session.start(session.sessionId)
 
     // promptAsync enqueues work and returns immediately.
     // System prompt is injected via the `system` field (appended to LLM system prompt in llm.ts:76).
@@ -206,7 +175,7 @@ export class BotCore {
     })
 
     if (result.error) {
-      this.sessionProcessing.delete(session.sessionId)
+      this.session.stop(session.sessionId)
       console.error("[BotCore] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
       await adapter.sendMessage(msg.channel, msg.thread, "Failed to send prompt.")
       return
@@ -281,72 +250,11 @@ export class BotCore {
   }
 
   private polish(text: string): string {
-    const normalized = text.replace(/\r\n/g, "\n").replace(/\u00a0/g, " ").trim()
-    if (!normalized) return ""
-    return normalized
-      .split("\n")
-      .map((line) => line.trimEnd())
-      .join("\n")
-      .replace(/\n{3,}/g, "\n\n")
+    return polishText(text)
   }
 
   private split(text: string, limit = BOT_MESSAGE_LIMIT): string[] {
-    if (text.length <= limit) return [text]
-
-    const out: string[] = []
-    const blocks = text.split(/\n{2,}/)
-    let chunk = ""
-
-    for (const block of blocks) {
-      const joined = chunk ? `${chunk}\n\n${block}` : block
-      if (joined.length <= limit) {
-        chunk = joined
-        continue
-      }
-
-      if (chunk) {
-        out.push(chunk)
-        chunk = ""
-      }
-
-      if (block.length <= limit) {
-        chunk = block
-        continue
-      }
-
-      for (const line of block.split("\n")) {
-        const next = chunk ? `${chunk}\n${line}` : line
-        if (next.length <= limit) {
-          chunk = next
-          continue
-        }
-
-        if (chunk) {
-          out.push(chunk)
-          chunk = ""
-        }
-
-        if (line.length <= limit) {
-          chunk = line
-          continue
-        }
-
-        let index = 0
-        while (index < line.length) {
-          const part = line.slice(index, index + limit)
-          if (part.length === limit) {
-            out.push(part)
-            index += limit
-            continue
-          }
-          chunk = part
-          index = line.length
-        }
-      }
-    }
-
-    if (chunk) out.push(chunk)
-    return out
+    return splitText(text, limit)
   }
 
   /**
@@ -371,86 +279,21 @@ export class BotCore {
     })
   }
 
-  private toolInputDebug() {
-    return bool(process.env[BOT_DEBUG_TOOL_INPUT_ENV])
-  }
-
   private queueLimit() {
-    const raw = process.env[BOT_QUEUE_LIMIT_ENV]
-    if (!raw) return BOT_QUEUE_LIMIT_DEFAULT
-    const value = Number(raw)
-    if (!Number.isFinite(value)) return BOT_QUEUE_LIMIT_DEFAULT
-    if (value < 1) return BOT_QUEUE_LIMIT_DEFAULT
-    return Math.floor(value)
+    return queueLimitRule(process.env)
   }
 
   private permissionReply(): PermissionReply {
-    const raw = process.env[BOT_PERMISSION_REPLY_ENV]?.trim().toLowerCase()
-    if (raw === "once") return "once"
-    if (raw === "always") return "always"
-    if (raw === "reject") return "reject"
-    return "reject"
+    return permissionReplyRule(process.env)
   }
 
   /** Format a brief status message for important tool completions */
   private formatToolStatus(tool: string, input: unknown): string | null {
-    try {
-      const data = (input ?? {}) as ToolInput
-      const debug = this.toolInputDebug()
-      switch (tool) {
-        case "bash": {
-          if (!debug) return "`$ bash`"
-          const cmd = data.command ?? ""
-          const short = cmd.length > 80 ? cmd.slice(0, 80) + "..." : cmd
-          return `\`$ ${short}\``
-        }
-        case "edit":
-          if (!debug) return "`edit`"
-          return `\`edit ${data.filePath ?? "file"}\``
-        case "write":
-          if (!debug) return "`write`"
-          return `\`write ${data.filePath ?? "file"}\``
-        case "skill":
-          if (!debug) return "`skill`"
-          return `\`skill: ${data.name ?? "?"}\``
-        case "screen": {
-          const action = data.action
-          if (action === "bind_window" && !debug) return "`screen.bind_window`"
-          if (action === "bind_window") {
-            const target = data.title ?? (typeof data.window_id === "number" ? `#${data.window_id}` : "?")
-            return `\`screen.bind_window: ${target}\``
-          }
-          if (action === "list_windows") return "`screen.list_windows`"
-          if (action === "screenshot") return "`screen.screenshot`"
-          if (action) return `\`screen.${action}\``
-          return "`screen`"
-        }
-        case "input": {
-          const action = data.action
-          if (!action) return "`input`"
-          if (!debug) return `\`input.${action}\``
-          if (action === "key") return `\`input.key: ${data.key ?? "?"}\``
-          if (action === "click") return `\`input.click: (${data.x ?? "?"}, ${data.y ?? "?"}) ${data.button ?? "left"}\``
-          if (action === "type") return `\`input.type: ${Math.min(String(data.text ?? "").length, 999)} chars\``
-          if (action === "wait") return `\`input.wait: ${data.ms ?? "?"}ms\``
-          if (action === "scroll") return `\`input.scroll: ${data.direction ?? "?"} ${data.amount ?? ""}\``
-          if (action === "drag") return `\`input.drag: (${data.startX ?? "?"}, ${data.startY ?? "?"}) -> (${data.endX ?? "?"}, ${data.endY ?? "?"})\``
-          if (action === "move") return `\`input.move: (${data.x ?? "?"}, ${data.y ?? "?"})\``
-          return "`input`"
-        }
-        // read, glob, grep — too noisy, skip
-        default:
-          return null
-      }
-    } catch {
-      return null
-    }
+    return formatToolStatusMessage(tool, input, process.env)
   }
 
   private findSession(sessionId: string): SessionEntry | undefined {
-    const threadKey = this.sessionIndex.get(sessionId)
-    if (!threadKey) return undefined
-    return this.sessions.get(threadKey)
+    return this.session.findSession(sessionId)
   }
 
 
@@ -530,9 +373,9 @@ export class BotCore {
     }
   }
 
-  private async handleEvent(event: any): Promise<void> {
+  private async handleEvent(event: Event): Promise<void> {
     if (event.type === "permission.asked") {
-      const asked = event.properties as PermissionAsked
+      const asked = (event as EventPermissionAsked).properties as PermissionAsked
       const reply = this.permissionReply()
       const result = await this.client.permission.reply({
         requestID: asked.id,
@@ -564,15 +407,13 @@ export class BotCore {
 
     // Session entered standby - clear processing flag and dequeue next pending message
     if (event.type === "session.idle") {
-      const sessionId = event.properties?.sessionID
+      const sessionId = (event as EventSessionIdle).properties.sessionID
       if (sessionId) {
-        this.sessionProcessing.delete(sessionId)
-        const queue = this.sessionQueues.get(sessionId)
-        if (queue && queue.length > 0) {
-          const next = queue.shift()!
-          if (queue.length === 0) this.sessionQueues.delete(sessionId)
-          console.log(`[BotCore] Dequeuing next message for ${sessionId}, remaining: ${queue.length}`)
-          this.handleMessage(next.msg).catch((err) => console.error("[BotCore] dequeue handleMessage error:", err))
+        this.session.stop(sessionId)
+        const next = this.session.dequeue(sessionId)
+        if (next.item) {
+          console.log(`[BotCore] Dequeuing next message for ${sessionId}, remaining: ${next.remaining}`)
+          this.handleMessage(next.item.msg).catch((err) => console.error("[BotCore] dequeue handleMessage error:", err))
         }
       }
       return
@@ -580,7 +421,7 @@ export class BotCore {
 
     // Track user message IDs so we can skip their parts
     if (event.type === "message.updated") {
-      const info = event.properties.info
+      const info = (event as EventMessageUpdated).properties.info
 
       if (info.role === "user") {
         this.userMessageIds.add(info.id)
@@ -614,7 +455,7 @@ export class BotCore {
     }
 
     if (event.type === "message.part.updated") {
-      const part = event.properties.part
+      const part = (event as EventMessagePartUpdated).properties.part
 
       // Skip parts belonging to user messages
       if (this.userMessageIds.has(part.messageID)) return
@@ -642,13 +483,15 @@ export class BotCore {
             )
             if (hasImage) {
               const metadata = part.state.metadata ?? {}
+              const rawDiff = (metadata as Record<string, unknown>).diffPercent
+              const diffPercent = typeof rawDiff === "number" ? rawDiff : undefined
               await this.processScreenshot(
                 session,
                 part.sessionID,
                 part.messageID,
                 part.id,
                 part.state.title,
-                metadata.diffPercent,
+                diffPercent,
                 part.state.attachments ?? [],
               )
             }
@@ -679,7 +522,7 @@ export class BotCore {
           delay = 1000 // reset backoff on successful connection
           for await (const event of events.stream) {
             try {
-              await this.handleEvent(event)
+              await this.handleEvent(event as Event)
             } catch (err) {
               console.error("[BotCore] event handler error:", err)
             }

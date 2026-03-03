@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import type { BotAdapter, IncomingMessage } from "../src/adapter"
+import { SessionCoordinator } from "../src/session-coordinator"
 
 mock.module("@opencorvus-ai/sdk", () => ({
   createOpencode: async () => {
@@ -44,28 +45,26 @@ describe("bot core queue guard", () => {
     const a = adapter(sent)
     const core = new BotCore() as unknown as {
       adapters: BotAdapter[]
-      sessions: Map<string, { sessionId: string; adapter: BotAdapter; channel: string; thread: string }>
-      sessionProcessing: Set<string>
-      sessionQueues: Map<string, Array<{ msg: IncomingMessage; text: string }>>
+      session: SessionCoordinator<{ sessionId: string; adapter: BotAdapter; channel: string; thread: string }, IncomingMessage>
       handleMessage(msg: IncomingMessage): Promise<void>
     }
 
     core.adapters = [a]
-    core.sessions.set("slack:C1:T1", {
+    core.session.bind("slack:C1:T1", {
       sessionId: "session_1",
       adapter: a,
       channel: "C1",
       thread: "T1",
     })
-    core.sessionProcessing.add("session_1")
-    core.sessionQueues.set("session_1", [
-      { msg: incoming("one"), text: "one" },
-      { msg: incoming("two"), text: "two" },
-    ])
+    core.session.start("session_1")
+    core.session.enqueue("session_1", { msg: incoming("one"), text: "one" }, 2)
+    core.session.enqueue("session_1", { msg: incoming("two"), text: "two" }, 2)
 
     await core.handleMessage(incoming("overflow"))
 
-    expect(core.sessionQueues.get("session_1")?.length).toBe(2)
+    expect(core.session.dequeue("session_1").item?.text).toBe("one")
+    expect(core.session.dequeue("session_1").item?.text).toBe("two")
+    expect(core.session.dequeue("session_1").item).toBeUndefined()
     expect(sent.at(-1)).toBe("Current task is still running. Queue is full (2). Please retry later.")
   })
 })
@@ -76,8 +75,7 @@ describe("bot core permission asked", () => {
     const calls: Array<{ requestID: string; reply: "once" | "always" | "reject" }> = []
     const a = adapter(sent)
     const core = new BotCore() as unknown as {
-      sessions: Map<string, { sessionId: string; adapter: BotAdapter; channel: string; thread: string }>
-      sessionIndex: Map<string, string>
+      session: SessionCoordinator<{ sessionId: string; adapter: BotAdapter; channel: string; thread: string }, IncomingMessage>
       client: {
         permission: {
           reply(input: { requestID: string; reply: "once" | "always" | "reject" }): Promise<{ error?: unknown }>
@@ -86,13 +84,12 @@ describe("bot core permission asked", () => {
       handleEvent(event: unknown): Promise<void>
     }
 
-    core.sessions.set("slack:C1:T1", {
+    core.session.bind("slack:C1:T1", {
       sessionId: "session_1",
       adapter: a,
       channel: "C1",
       thread: "T1",
     })
-    core.sessionIndex.set("session_1", "slack:C1:T1")
     core.client = {
       permission: {
         reply: async (input) => {
@@ -122,8 +119,7 @@ describe("bot core permission asked", () => {
     const calls: Array<{ requestID: string; reply: "once" | "always" | "reject" }> = []
     const a = adapter(sent)
     const core = new BotCore() as unknown as {
-      sessions: Map<string, { sessionId: string; adapter: BotAdapter; channel: string; thread: string }>
-      sessionIndex: Map<string, string>
+      session: SessionCoordinator<{ sessionId: string; adapter: BotAdapter; channel: string; thread: string }, IncomingMessage>
       client: {
         permission: {
           reply(input: { requestID: string; reply: "once" | "always" | "reject" }): Promise<{ error?: unknown }>
@@ -132,13 +128,12 @@ describe("bot core permission asked", () => {
       handleEvent(event: unknown): Promise<void>
     }
 
-    core.sessions.set("slack:C1:T1", {
+    core.session.bind("slack:C1:T1", {
       sessionId: "session_1",
       adapter: a,
       channel: "C1",
       thread: "T1",
     })
-    core.sessionIndex.set("session_1", "slack:C1:T1")
     core.client = {
       permission: {
         reply: async (input) => {

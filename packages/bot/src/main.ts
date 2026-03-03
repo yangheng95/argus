@@ -22,7 +22,7 @@ import { VisionPipeline } from "./vision"
 import { applyDashscopeRuntime } from "./dashscope"
 import { ADAPTER_HINT, registerAdapters } from "./registry"
 import { applyBundledEnv } from "./bundled-env"
-import { permissionForProfile, pickPermissionProfile } from "./permission-profile"
+import { resolveRuntimeConfig } from "./runtime-config"
 
 const bundled = await applyBundledEnv()
 if (bundled.expired) {
@@ -37,35 +37,17 @@ if (bundled.expired) {
   console.warn(`[Bot] Ignore invalid bundled env file: ${bundled.file}`)
 }
 
-function inlineConfig() {
-  if (!process.env.OPENCORVUS_CONFIG_CONTENT) return {}
-  try {
-    const parsed = JSON.parse(process.env.OPENCORVUS_CONFIG_CONTENT)
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
-    return parsed as Record<string, unknown>
-  } catch {
-    return {}
-  }
-}
-
 const runtime = await applyDashscopeRuntime()
 const activeKey = runtime.key
 const useCodingPlan = runtime.useCodingPlan
 const baseURL = runtime.baseURL
 
-const config = inlineConfig()
-const permission = config.permission
-const permissionMap =
-  permission && typeof permission === "object" && !Array.isArray(permission) ? (permission as Record<string, unknown>) : {}
-const profileState = pickPermissionProfile(process.env.OPENCORVUS_BOT_PERMISSION_PROFILE)
-const botPermission = permissionForProfile(profileState.profile)
-process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
-  ...config,
-  permission: {
-    ...permissionMap,
-    ...botPermission,
-  },
-})
+const runtimeConfig = resolveRuntimeConfig(
+  process.env.OPENCORVUS_CONFIG_CONTENT,
+  process.env.OPENCORVUS_BOT_PERMISSION_PROFILE,
+)
+const profileState = runtimeConfig.profileState
+process.env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(runtimeConfig.config)
 if (profileState.invalid) {
   console.warn(
     `[Bot] Unknown OPENCORVUS_BOT_PERMISSION_PROFILE=${process.env.OPENCORVUS_BOT_PERMISSION_PROFILE}. Fallback to profile: ${profileState.profile}.`,
