@@ -41,7 +41,7 @@ Every desktop task follows this pattern:
 - **ALWAYS click before typing** — text goes to the focused element.
 - **Prefer `wait_for_change` over long wait()** — use short `input.wait(10)` only when needed.
 - **Coordinates are separate integers** — `{"x": 500, "y": 300}`, NEVER arrays.
-- **ALWAYS describe screenshots** — after each screenshot, describe what you see in text. Screenshots are auto-removed from context next turn; your description is the only surviving record.
+- **Brief screenshot notes** — after each screenshot, note visible app + key coordinates in one line. Screenshots are removed next turn.
 - **ALWAYS write text between tool calls** — explain what you're doing and what you see. Never chain 3+ tool calls without any text output.
 
 ## Coding Tasks — Choose Your Approach
