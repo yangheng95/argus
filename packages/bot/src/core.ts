@@ -63,6 +63,120 @@ export class BotCore {
     return this
   }
 
+  // --- Overlay Process Management ---
+
+  async startOverlay(): Promise<void> {
+    const projectRoot = path.resolve(import.meta.dirname, "../../..")
+    const releaseBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "release", "opencorvus-overlay.exe")
+    const debugBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "debug", "opencorvus-overlay.exe")
+
+    const overlayBin = existsSync(releaseBin) ? releaseBin : existsSync(debugBin) ? debugBin : null
+    if (!overlayBin) {
+      console.log("[BotCore] Overlay binary not found, skipping overlay launch")
+      return
+    }
+
+    try {
+      const proc = spawn(overlayBin, [], {
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env, OPENCORVUS_OVERLAY_STDIN_EXIT: "1" },
+      })
+
+      this.overlayProcess = proc
+
+      proc.stdout?.on("data", (data: Buffer) => {
+        for (const line of data.toString().split("\n")) {
+          if (!line.trim()) continue
+          try {
+            const msg = JSON.parse(line)
+            console.log(`[BotCore] Overlay reply: ${JSON.stringify(msg)}`)
+          } catch {}
+        }
+      })
+
+      proc.stderr?.on("data", (data: Buffer) => {
+        const text = data.toString().trim()
+        if (text) console.error(`[BotCore] Overlay stderr: ${text}`)
+      })
+
+      proc.on("exit", (code) => {
+        console.log(`[BotCore] Overlay exited (code ${code})`)
+        this.overlayProcess = null
+      })
+
+      console.log(`[BotCore] Overlay started (pid ${proc.pid}, bin: ${path.basename(path.dirname(overlayBin))})`)
+    } catch (err) {
+      console.error("[BotCore] Failed to start overlay:", err)
+    }
+  }
+
+  private stopOverlay(): void {
+    if (this.overlayProcess) {
+      this.overlayProcess.kill()
+      this.overlayProcess = null
+      console.log("[BotCore] Overlay stopped")
+    }
+  }
+
+  private sendOverlayEvent(event: Record<string, unknown>): void {
+    if (!this.overlayProcess?.stdin?.writable) return
+    try {
+      this.overlayProcess.stdin.write(JSON.stringify(event) + "\n")
+    } catch {}
+  }
+
+  private sendInputHint(input: any, status?: string): void {
+    const action = input?.action
+    if (!action || action === "wait") return
+
+    let x: number, y: number, label: string
+
+    switch (action) {
+      case "click":
+      case "double":
+      case "right":
+      case "middle":
+        x = Number(input.x) || 0
+        y = Number(input.y) || 0
+        label = `${action} (${x}, ${y})`
+        this.lastOverlayPos = { x, y }
+        break
+      case "scroll":
+        x = Number(input.x) || this.lastOverlayPos.x
+        y = Number(input.y) || this.lastOverlayPos.y
+        label = `scroll ${input.direction ?? "?"}`
+        break
+      case "drag":
+        x = Number(input.startX) || 0
+        y = Number(input.startY) || 0
+        label = `drag → (${input.endX ?? "?"}, ${input.endY ?? "?"})`
+        this.lastOverlayPos = { x, y }
+        break
+      case "move":
+        x = Number(input.x) || 0
+        y = Number(input.y) || 0
+        label = `move (${x}, ${y})`
+        this.lastOverlayPos = { x, y }
+        break
+      case "type": {
+        x = this.lastOverlayPos.x
+        y = this.lastOverlayPos.y
+        const text = String(input.text ?? "")
+        label = text.length > 20 ? `type ${text.length} chars` : `type: ${text}`
+        break
+      }
+      case "key":
+        x = this.lastOverlayPos.x
+        y = this.lastOverlayPos.y
+        label = `key: ${input.key ?? "?"}`
+        break
+      default:
+        return
+    }
+
+    this.sendOverlayEvent({ type: "hint", x, y, action, label, status })
+  }
+
   async start(): Promise<void> {
     this.running = true
     const opencorvus = await createOpencode({ port: this.options?.port ?? 0 })
