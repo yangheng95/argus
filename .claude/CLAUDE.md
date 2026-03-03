@@ -149,3 +149,30 @@ curl -s -X POST https://slack.com/api/chat.postMessage \
 - **SSE 没有 session 事件**: promptAsync 的 task queue 在 scheduler 中运行缺少 Instance 上下文，Bus.publish 无法到达 GlobalBus
 - **Bot 不回复 Slack**: 检查 SSE 事件流是否包含 `message.part.updated` 和 `message.updated`
 - **GUI 工具坐标问题**: 高分辨率屏幕 (3840x2088) 下坐标需要参考截图中的坐标网格标签
+
+关于修改 node_modules 这个问题：不是必须的，这是 @opentui/solid 包本身的 bug。
+
+  问题根源
+
+  @opentui/solid 的 package.json 中：
+  "./jsx-runtime": "./jsx-runtime.d.ts"  // 指向了 .d.ts 类型文件
+
+  应该指向实际的 JS 文件，但该包根本没有提供 jsx-runtime.js。这是包作者的发布错误。
+
+  对其他人的影响
+
+  其他人 bun install 后会遇到同样的问题，因为 npm 上发布的包就是坏的。
+
+  正确的解决方案（不改 node_modules）
+
+  有两种方案可以让修复随代码一起分发：
+
+  方案 A：patch 文件（推荐）
+  用 patch-package 或 bun 的 --patch 功能生成 patch 文件，提交到代码库，其他人 install 后自动打补丁。
+
+  方案 B：在 opencorvus 的 package.json 中加 overrides
+  "overrides": {
+    "@opentui/solid": {
+      ...
+    }
+  }
