@@ -1,0 +1,4 @@
+interface:
+  display_name: "OpenCorvus Telegram Bot Config"
+  short_description: "Configure Telegram bot integration for OpenCorvus"
+  default_prompt: "Use $opencorvus-telegram-bot-config to set up or debug Telegram bot integration for OpenCorvus."
