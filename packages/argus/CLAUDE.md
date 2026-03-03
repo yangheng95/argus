@@ -104,7 +104,7 @@ If a desktop task matches an available skill (e.g., `desktop`), load it for deta
 
 ### Build commands
 
-- Argus package build: `bun run --cwd packages/argus script/build.ts`
+- GUI agent package build: `bun run --cwd packages/argus script/build.ts`
 - Overlay (Tauri) build from `packages/overlay/src-tauri`:
   - Debug: `cargo build`
   - Release: `cargo build --release`
