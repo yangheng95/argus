@@ -405,39 +405,14 @@ export class BotCore {
       }
 
       // Post tool progress for key tools so bot users can see what happened.
+      // Overlay hints (popup + window highlight) are handled natively by
+      // OpenCorvus's overlay-client.ts — no need to duplicate here.
       if (part.type === "tool") {
         const toolName = part.tool
         const toolInput = part.state?.input
 
-        // Send overlay hint when input tool starts executing
-        if (toolName === "input" && part.state?.status === "running") {
-          this.sendInputHint(toolInput)
-        }
-
         if (part.state?.status === "completed") {
-          // Send "done" overlay hint for input tool completion
-          if (toolName === "input") {
-            this.sendInputHint(toolInput, "done")
-          }
-          // Screen tool completions
-          if (toolName === "screen") {
-            // Highlight the bound window with overlay frame
-            if (toolInput?.action === "bind_window") {
-              const meta = part.state.metadata
-              if (meta?.x !== undefined && meta?.width !== undefined) {
-                this.sendOverlayEvent({
-                  type: "window-highlight",
-                  x: Number(meta.x),
-                  y: Number(meta.y),
-                  width: Number(meta.width),
-                  height: Number(meta.height),
-                  label: meta.title || meta.appName || "Target window",
-                  duration_ms: 2500,
-                })
-              }
-            }
-
-            // Upload screenshot images
+          // Upload screenshot images from screen tool
             const hasImage = (part.state.attachments ?? []).some(
               (a: any) => a.type === "file" && a.mime?.startsWith("image/"),
             )
