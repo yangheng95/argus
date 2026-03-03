@@ -27,6 +27,44 @@ export namespace WindowManager {
     info: WindowInfo
   }
 
+  function norm(text: string): string {
+    return text.trim().toLowerCase()
+  }
+
+  function gap(a: WindowInfo, b: WindowInfo): number {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + Math.abs(a.width - b.width) + Math.abs(a.height - b.height)
+  }
+
+  function pick(windows: WindowInfo[], previous: WindowBinding): WindowInfo | null {
+    const title = norm(previous.info.title)
+    const app = norm(previous.info.appName)
+    const query = norm(previous.matchTitle)
+    if (windows.length === 0) return null
+
+    const scored = windows.map((win) => {
+      const winTitle = norm(win.title)
+      const winApp = norm(win.appName)
+      const exactTitle = title.length > 0 && winTitle === title
+      const exactApp = app.length > 0 && winApp === app
+      const queryExact = query.length > 0 && (winTitle === query || winApp === query)
+      const queryHit = query.length > 0 && (winTitle.includes(query) || winApp.includes(query))
+      const s =
+        (queryExact ? 500 : 0) +
+        (exactTitle ? 220 : 0) +
+        (exactApp ? 180 : 0) +
+        (queryHit ? 120 : 0) +
+        (win.isFocused ? 80 : 0) +
+        (!win.isMinimized ? 40 : 0) -
+        Math.min(200, Math.floor(gap(win, previous.info) / 20))
+      return { win, s }
+    })
+
+    scored.sort((a, b) => b.s - a.s)
+    const best = scored[0]
+    if (!best) return null
+    return best.s >= 60 ? best.win : null
+  }
+
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
   }
@@ -265,9 +303,26 @@ export namespace WindowManager {
     // Refresh window position — the window may have moved or been closed.
     const native = await getNativeWindow(ws.binding.windowId)
     if (!native) {
-      log.warn("bound window disappeared", { windowId: ws.binding.windowId, title: ws.binding.matchTitle })
-      ws.binding = null
-      return null
+      const previous = ws.binding
+      const windows = await listWindows(true)
+      const next = pick(windows, previous)
+      if (!next) {
+        log.warn("bound window disappeared", { windowId: previous.windowId, title: previous.matchTitle })
+        ws.binding = null
+        return null
+      }
+      ws.binding = {
+        ...previous,
+        windowId: next.id,
+        info: next,
+      }
+      log.info("rebound window after id loss", {
+        previousWindowId: previous.windowId,
+        reboundWindowId: next.id,
+        title: next.title,
+        appName: next.appName,
+      })
+      return ws.binding
     }
 
     ws.binding.info = {

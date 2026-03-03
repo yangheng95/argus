@@ -94,9 +94,17 @@ IMPORTANT: After viewing each screenshot, you MUST describe what you see in your
 
 Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1 to render coordinate ticks on returned images. By default, returned screenshots do not include visual coordinate overlays.`
 
+const WaitForChange = z.preprocess((input) => {
+  if (typeof input !== "string") return input
+  const value = input.trim().toLowerCase()
+  if (value === "true" || value === "1") return true
+  if (value === "false" || value === "0") return false
+  return input
+}, z.boolean())
+
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
-  wait_for_change: z.boolean().optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
+  wait_for_change: WaitForChange.optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
 })
 
 const BindWindowAction = z.object({
@@ -137,17 +145,6 @@ export const ScreenTool = Tool.define("screen", {
       metadata: { action: params.action },
     })
 
-    // Coerce LLM string values to expected types (models often pass numbers/booleans as strings)
-    if ("wait_for_change" in params) {
-      const v = params.wait_for_change as any
-      if (v === "true") (params as any).wait_for_change = true
-      else if (v === "false") (params as any).wait_for_change = false
-    }
-    if ("window_id" in params) {
-      const v = params.window_id as any
-      if (typeof v === "string" && /^\d+$/.test(v.trim())) (params as any).window_id = Number(v)
-    }
-
     switch (params.action) {
       case "screenshot": {
         GuiState.activate()
@@ -172,7 +169,7 @@ export const ScreenTool = Tool.define("screen", {
             const windows = await WindowManager.listWindows()
             const focused = pickWindow(windows)
             if (focused) {
-              await WindowManager.bind(focused.title)
+              await WindowManager.bindById(focused.id, focused.title)
               autoBound = true
               currentBinding = await WindowManager.getBinding()
             }

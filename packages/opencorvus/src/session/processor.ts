@@ -152,7 +152,11 @@ export namespace SessionProcessor {
                     const parts = await MessageV2.parts(input.assistantMessage.id)
                     const lastThree = parts.slice(-DOOM_LOOP_THRESHOLD)
 
+                    const guiSession = GuiState.get().isGuiSession
+                    const guiTool =
+                      value.toolName === "screen" || value.toolName === "input" || value.toolName === "vision_analyze"
                     const exactMatch =
+                      (!guiSession || !guiTool) &&
                       lastThree.length === DOOM_LOOP_THRESHOLD &&
                       lastThree.every(
                         (p) =>
@@ -162,7 +166,7 @@ export namespace SessionProcessor {
                           JSON.stringify(p.state.input) === JSON.stringify(value.input),
                       )
 
-                    const guiRepetition = GuiState.get().isGuiSession && GuiState.checkRepetition()
+                    const guiRepetition = guiSession && GuiState.checkRepetition()
 
                     if (exactMatch || guiRepetition) {
                       const agent = await Agent.get(input.assistantMessage.agent)

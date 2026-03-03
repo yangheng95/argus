@@ -4,6 +4,8 @@ import { tmpdir } from "../fixture/fixture"
 
 let unbound = 0
 let overlayCalls = 0
+const bindByIdCalls: number[] = []
+let monitorBinding: any = null
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
@@ -37,6 +39,24 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         isFocused: true,
       },
     }),
+    bindById: async (windowId: number, matchTitle?: string) => {
+      bindByIdCalls.push(windowId)
+      return {
+        windowId: 7,
+        matchTitle: matchTitle ?? "editor",
+        info: {
+          id: 7,
+          title: "Editor",
+          appName: "Code",
+          x: 2100,
+          y: 120,
+          width: 1200,
+          height: 800,
+          isMinimized: false,
+          isFocused: true,
+        },
+      }
+    },
     unbind: () => {
       unbound += 1
     },
@@ -45,11 +65,7 @@ mock.module("../../src/opencorvus/perception/window", () => ({
 
 mock.module("../../src/opencorvus/perception/monitor", () => ({
   MonitorManager: {
-    getBinding: async () => ({
-      monitorId: 2,
-      match: "2",
-      info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
-    }),
+    getBinding: async () => monitorBinding,
     bind: async (_query: string | number) => ({
       monitorId: 2,
       match: "2",
@@ -130,10 +146,32 @@ const ctx = {
 beforeEach(() => {
   unbound = 0
   overlayCalls = 0
+  bindByIdCalls.length = 0
+  monitorBinding = {
+    monitorId: 2,
+    match: "2",
+    info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
+  }
   delete process.env.OPENCORVUS_SCREEN_DEBUG_COORDINATE_OVERLAY
 })
 
 describe("tool.screen monitor flow", () => {
+  test("parameters parse string wait_for_change values", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const wait = tool.parameters.parse({ action: "screenshot", wait_for_change: "true" })
+        const noWait = tool.parameters.parse({ action: "screenshot", wait_for_change: "false" })
+        if (wait.action !== "screenshot") throw new Error("expected screenshot action")
+        if (noWait.action !== "screenshot") throw new Error("expected screenshot action")
+        expect(wait.wait_for_change).toBe(true)
+        expect(noWait.wait_for_change).toBe(false)
+      },
+    })
+  })
+
   test("bind_monitor unbinds window and stores monitor target", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -173,6 +211,19 @@ describe("tool.screen monitor flow", () => {
         const result = await tool.execute({ action: "screenshot" }, ctx)
         expect(overlayCalls).toBe(0)
         expect(result.output).toContain("no visible coordinate overlay")
+      },
+    })
+  })
+
+  test("screenshot auto-binds focused window by id when no binding exists", async () => {
+    await using tmp = await tmpdir()
+    monitorBinding = null
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        await tool.execute({ action: "screenshot" }, ctx)
+        expect(bindByIdCalls).toEqual([7])
       },
     })
   })
