@@ -161,39 +161,28 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
         hasSuggestion: !!analysis.suggestedAction,
       })
 
-      // Format as text — this is what the LLM sees, no image
+      // Compact output — essential coordinates and actions only
       const lines: string[] = []
-      lines.push(`## Screen Analysis [${hash.slice(0, 8)}]`)
-      lines.push("")
-      lines.push(`**Description:** ${analysis.description}`)
-      lines.push("")
 
       if (analysis.errors && analysis.errors.length > 0) {
-        lines.push("**Errors/Warnings:**")
-        for (const err of analysis.errors) {
-          lines.push(`- ${err}`)
-        }
-        lines.push("")
+        lines.push(`Errors: ${analysis.errors.join("; ")}`)
       }
 
       if (analysis.elements.length > 0) {
-        lines.push("**Interactive Elements:**")
         for (const el of analysis.elements) {
-          const state = el.state ? ` [${el.state}]` : ""
-          lines.push(`- ${el.type}: "${el.description}" at (${el.coordinates.x}, ${el.coordinates.y})${state}`)
+          const state = el.state ? `[${el.state}]` : ""
+          lines.push(`${el.type}(${el.coordinates.x},${el.coordinates.y})${state} ${el.description}`)
         }
-        lines.push("")
       }
 
       if (analysis.suggestedAction) {
-        const action = analysis.suggestedAction
-        const coords = action.coordinates ? ` at (${action.coordinates.x}, ${action.coordinates.y})` : ""
-        const extra = action.text ? ` text="${action.text}"` : action.key ? ` key="${action.key}"` : ""
-        lines.push(`**Suggested Action:** ${action.type}${coords}${extra} — ${action.reason}`)
-        lines.push("")
+        const a = analysis.suggestedAction
+        const coords = a.coordinates ? `(${a.coordinates.x},${a.coordinates.y})` : ""
+        const extra = a.text ? ` "${a.text}"` : a.key ? ` key=${a.key}` : ""
+        lines.push(`Next: ${a.type}${coords}${extra}`)
       }
 
-      lines.push(`**Running Summary:** ${analysis.runningSummary}`)
+      lines.push(analysis.runningSummary)
 
       const coordInfo = binding
         ? `Coordinates are relative to bound window "${binding.info.title}" (${binding.info.width}x${binding.info.height}).`
