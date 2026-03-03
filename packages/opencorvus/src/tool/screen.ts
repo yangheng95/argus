@@ -307,7 +307,7 @@ export const ScreenTool = Tool.define("screen", {
           })
           return {
             title: `Screenshot unchanged (${result.width}x${result.height})`,
-            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze - use the previous screenshot as reference. If you are waiting for something to load, prefer screen.screenshot with wait_for_change=true, then retry.`,
+            output: `Unchanged ${result.width}x${result.height}. ${coordInfo} Use wait_for_change=true or try a different action.`,
             metadata: {
               width: result.width,
               height: result.height,
