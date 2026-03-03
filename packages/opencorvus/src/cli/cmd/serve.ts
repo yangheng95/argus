@@ -81,15 +81,6 @@ export const ServeCommand = cmd({
       hideConsoleWindow()
     }
 
-    // Singleton: only one serve instance allowed
-    if (!acquireLock()) {
-      console.error("Another OpenCorvus instance is already running. Exiting.")
-      process.exit(1)
-    }
-    process.on("exit", releaseLock)
-    process.on("SIGINT", () => { releaseLock(); process.exit(0) })
-    process.on("SIGTERM", () => { releaseLock(); process.exit(0) })
-
     if (!Flag.OPENCORVUS_SERVER_PASSWORD) {
       console.log("Warning: OPENCORVUS_SERVER_PASSWORD is not set; server is unsecured.")
     }
