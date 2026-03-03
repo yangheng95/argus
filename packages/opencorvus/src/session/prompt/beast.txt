@@ -47,7 +47,7 @@ Do NOT guess or improvise complex workflows from memory. Real-world UIs change f
 - **Screenshot after acting** to verify results.
 - **Click before typing** to give the target field focus.
 - **Wait before screenshot** when expecting UI changes.
-- **Describe every screenshot** in text — screenshots are removed from context next turn.
+- **Brief screenshot notes**: note visible app + key coordinates in one line. Screenshots are removed next turn.
 - Use **key** for keyboard shortcuts. Check platform info for correct modifier (Ctrl vs Cmd).
 - **Coordinates are integers**: `{"x": 500, "y": 300}`. NEVER arrays.
 - **Coordinate precision is CRITICAL — follow this procedure every time**:
