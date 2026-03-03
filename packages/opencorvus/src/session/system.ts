@@ -11,6 +11,19 @@ import PROMPT_CODEX from "./prompt/codex_header.txt"
 import PROMPT_TRINITY from "./prompt/trinity.txt"
 import type { Provider } from "@/provider/provider"
 
+const TUI_WORKFLOW = [
+  "<tui-workflow>",
+  "If the `tui` tool is available, prefer this control flow for deterministic TUI automation:",
+  "1) Call `tui` with action `status` first.",
+  "2) If runtime is not running and you need managed control, call `tui` with action `start`.",
+  "3) Submit work via `tui` action `submit_task` (preferred) or `append_prompt` + `submit_prompt`.",
+  "4) Use `tui` action `status` to monitor runtime and session progress.",
+  "5) Use `tui` action `execute_command` only for explicit UI commands (open dialogs, cycling, paging).",
+  "6) Avoid blind command chains; always check `status` before and after major actions.",
+  "Command aliases are exposed by `tui.status.commands.aliases`.",
+  "</tui-workflow>",
+].join("\n")
+
 function platformName(): string {
   switch (process.platform) {
     case "win32":
@@ -68,6 +81,7 @@ export namespace SystemPrompt {
         `  Today's date: ${new Date().toDateString()}`,
         `</env>`,
       ].join("\n"),
+      TUI_WORKFLOW,
     ]
   }
 }

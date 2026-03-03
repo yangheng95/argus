@@ -34,6 +34,7 @@ import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { GoalTool } from "./goal"
 import { VisionAnalyzeTool } from "./vision-analyze"
+import { TuiTool } from "./tui"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -134,6 +135,7 @@ export namespace ToolRegistry {
       PlannerTool,
       GoalTool,
       VisionAnalyzeTool,
+      TuiTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,

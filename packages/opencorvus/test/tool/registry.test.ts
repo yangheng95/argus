@@ -6,6 +6,20 @@ import { Instance } from "../../src/project/instance"
 import { ToolRegistry } from "../../src/tool/registry"
 
 describe("tool.registry", () => {
+  test("includes core coding tools", async () => {
+    await using tmp = await tmpdir()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const ids = await ToolRegistry.ids()
+        ;["bash", "read", "glob", "grep", "edit", "write", "skill", "task", "tui"].forEach((id) => {
+          expect(ids).toContain(id)
+        })
+      },
+    })
+  })
+
   test("loads tools from .opencorvus/tool (singular)", async () => {
     await using tmp = await tmpdir({
       init: async (dir) => {

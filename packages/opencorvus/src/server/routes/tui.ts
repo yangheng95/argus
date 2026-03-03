@@ -7,10 +7,9 @@ import { TuiEvent } from "@/cli/cmd/tui/event"
 import { AsyncQueue } from "../../util/queue"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
-import { Tui } from "@/tui"
 import { SessionStatus } from "@/session/status"
-import { SessionPrompt } from "@/session/prompt"
-import { TaskQueueService } from "@/scheduler/task-queue-service"
+import { TuiRuntime } from "@/tui/runtime"
+import { TuiCommand } from "@/tui/command"
 
 const TuiRequest = z.object({
   path: z.string(),
@@ -21,11 +20,6 @@ type TuiRequest = z.infer<typeof TuiRequest>
 
 const request = new AsyncQueue<TuiRequest>()
 const response = new AsyncQueue<any>()
-const runtime = {
-  handle: null as Tui.Handle | null,
-  mode: "none" as "none" | "spawned" | "connected",
-  sessionID: null as string | null,
-}
 
 export async function callTui(ctx: Context) {
   const body = await ctx.req.json()
@@ -129,35 +123,7 @@ export const TuiRoutes = lazy(() =>
       ),
       async (c) => {
         const body = c.req.valid("json")
-        if (runtime.handle && !runtime.handle.closed) {
-          await runtime.handle.close().catch(() => {})
-        }
-
-        if (body.mode === "connect") {
-          if (!body.url) {
-            throw new Error("url is required when mode=connect")
-          }
-          runtime.handle = Tui.connect(body.url)
-          runtime.mode = "connected"
-          runtime.sessionID = body.sessionID ?? null
-          return c.json({ mode: runtime.mode, url: runtime.handle.url })
-        }
-
-        runtime.handle = await Tui.spawn({
-          directory: body.directory,
-          sessionID: body.sessionID,
-          model: body.model,
-          agent: body.agent,
-          prompt: body.prompt,
-          continue: body.continue,
-          fork: body.fork,
-          port: body.port,
-          hostname: body.hostname,
-          bin: body.bin,
-        })
-        runtime.mode = "spawned"
-        runtime.sessionID = body.sessionID ?? null
-        return c.json({ mode: runtime.mode, url: runtime.handle.url })
+        return c.json(await TuiRuntime.start(body))
       },
     )
     .get(
@@ -185,11 +151,46 @@ export const TuiRoutes = lazy(() =>
         },
       }),
       async (c) => {
+        return c.json(TuiRuntime.status())
+      },
+    )
+    .get(
+      "/status",
+      describeRoute({
+        summary: "Get TUI status",
+        description: "Get TUI runtime state, session execution status, and command aliases.",
+        operationId: "tui.status",
+        responses: {
+          200: {
+            description: "TUI status",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    runtime: z.object({
+                      running: z.boolean(),
+                      mode: z.enum(["none", "spawned", "connected"]),
+                      url: z.string().nullable(),
+                      sessionID: z.string().nullable(),
+                    }),
+                    sessions: z.record(z.string(), SessionStatus.Info),
+                    commands: z.object({
+                      aliases: z.array(z.string()),
+                    }),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
         return c.json({
-          running: !!runtime.handle && !runtime.handle.closed,
-          mode: runtime.mode,
-          url: runtime.handle?.url ?? null,
-          sessionID: runtime.sessionID,
+          runtime: TuiRuntime.status(),
+          sessions: SessionStatus.list(),
+          commands: {
+            aliases: TuiCommand.aliases,
+          },
         })
       },
     )
@@ -211,13 +212,7 @@ export const TuiRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        if (runtime.handle && !runtime.handle.closed) {
-          await runtime.handle.close().catch(() => {})
-        }
-        runtime.handle = null
-        runtime.mode = "none"
-        runtime.sessionID = null
-        return c.json(true)
+        return c.json(await TuiRuntime.stop())
       },
     )
     .post(
@@ -259,76 +254,7 @@ export const TuiRoutes = lazy(() =>
       ),
       async (c) => {
         const body = c.req.valid("json")
-
-        const sessionID = body.sessionID ?? runtime.sessionID
-        if (!sessionID) {
-          throw new Error("sessionID is required. Pass it in /tui/runtime/start or /tui/runtime/submit-task.")
-        }
-        runtime.sessionID = sessionID
-
-        const prompt = {
-          agent: body.agent,
-          parts: [
-            {
-              type: "text" as const,
-              text: body.text,
-            },
-          ],
-        }
-        const run = () =>
-          SessionPrompt.prompt({
-            sessionID,
-            ...prompt,
-          })
-
-        const wait = body.wait ?? true
-        if (!wait) {
-          TaskQueueService.enqueuePrompt({
-            sessionID,
-            prompt,
-            source: "tui.runtime.submit-task",
-          })
-          return c.json({
-            accepted: true,
-            sessionID,
-            waited: false,
-            completed: false,
-            message: null,
-          })
-        }
-
-        const start = Date.now()
-        const timeoutMs = body.timeoutMs ?? 5 * 60 * 1000
-
-        const result = await Promise.race([
-          run().then((message) => ({ kind: "done" as const, message })),
-          new Promise<{ kind: "timeout" }>((resolve) =>
-            setTimeout(() => resolve({ kind: "timeout" }), timeoutMs),
-          ),
-        ])
-
-        if (result.kind === "done") {
-          return c.json({
-            accepted: true,
-            sessionID,
-            waited: true,
-            completed: true,
-            message: result.message,
-          })
-        }
-
-        const status = SessionStatus.get(sessionID)
-        const msgs = await Session.messages({ sessionID, limit: 50 })
-        const latest = msgs
-          .filter((m) => m.info.role === "assistant" && m.info.time.created >= start)
-          .at(-1) ?? null
-        return c.json({
-          accepted: true,
-          sessionID,
-          waited: true,
-          completed: status.type === "idle" && !!latest,
-          message: latest,
-        })
+        return c.json(await TuiRuntime.submitTask(body))
       },
     )
     .post(
@@ -358,26 +284,7 @@ export const TuiRoutes = lazy(() =>
       ),
       async (c) => {
         const body = c.req.valid("json")
-        if (!runtime.handle || runtime.handle.closed) {
-          throw new Error("TUI runtime is not running. Call /tui/runtime/start first.")
-        }
-        if (!body.path.startsWith("/tui/")) {
-          throw new Error("proxy path must start with /tui/")
-        }
-
-        const res = await fetch(`${runtime.handle.url}${body.path}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body.body ?? {}),
-        })
-        const text = await res.text()
-        if (!res.ok) {
-          throw new Error(`TUI proxy failed: ${res.status} ${body.path} ${text}`)
-        }
-
-        return c.body(text, 200, {
-          "Content-Type": res.headers.get("Content-Type") ?? "application/json",
-        })
+        return c.json(await TuiRuntime.proxy(body))
       },
     )
     .post(
@@ -423,7 +330,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "help.show",
+          command: TuiCommand.action.help,
         })
         return c.json(true)
       },
@@ -447,7 +354,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "session.list",
+          command: TuiCommand.action.sessions,
         })
         return c.json(true)
       },
@@ -471,7 +378,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "session.list",
+          command: TuiCommand.action.themes,
         })
         return c.json(true)
       },
@@ -495,7 +402,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "model.list",
+          command: TuiCommand.action.models,
         })
         return c.json(true)
       },
@@ -519,7 +426,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "prompt.submit",
+          command: TuiCommand.action.submit,
         })
         return c.json(true)
       },
@@ -543,7 +450,7 @@ export const TuiRoutes = lazy(() =>
       }),
       async (c) => {
         await Bus.publish(TuiEvent.CommandExecute, {
-          command: "prompt.clear",
+          command: TuiCommand.action.clear,
         })
         return c.json(true)
       },
@@ -570,22 +477,7 @@ export const TuiRoutes = lazy(() =>
       async (c) => {
         const command = c.req.valid("json").command
         await Bus.publish(TuiEvent.CommandExecute, {
-          // @ts-expect-error
-          command: {
-            session_new: "session.new",
-            session_share: "session.share",
-            session_interrupt: "session.interrupt",
-            session_compact: "session.compact",
-            messages_page_up: "session.page.up",
-            messages_page_down: "session.page.down",
-            messages_line_up: "session.line.up",
-            messages_line_down: "session.line.down",
-            messages_half_page_up: "session.half.page.up",
-            messages_half_page_down: "session.half.page.down",
-            messages_first: "session.first",
-            messages_last: "session.last",
-            agent_cycle: "agent.cycle",
-          }[command],
+          command: TuiCommand.normalize(command),
         })
         return c.json(true)
       },
