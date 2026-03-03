@@ -243,7 +243,7 @@ export class BotCore {
       "- Avoid long walls of text, repeated filler, or unnecessary prefaces.",
       "",
       "## Desktop tasks",
-      "Use screen/input tools to interact visually. Always describe what you see after each screenshot.",
+      "Use screen/input tools to interact visually. After screenshots: note key state + coordinates briefly (1 line). No verbose descriptions.",
       "",
       "## When something fails",
       "Read the error message carefully. Fix the exact issue before retrying. Don't loop on the same broken action.",
