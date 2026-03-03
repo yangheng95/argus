@@ -90,7 +90,10 @@ Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1 to render coordinate 
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
-  wait_for_change: z.boolean().optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
+  wait_for_change: z.preprocess(
+    (v) => (v === "true" ? true : v === "false" ? false : v),
+    z.boolean().optional(),
+  ).describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
 })
 
 const BindWindowAction = z.object({
