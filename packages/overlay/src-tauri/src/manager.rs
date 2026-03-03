@@ -374,7 +374,11 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         state.config.clone()
     };
 
-    let args = SERVE_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>();
+    let args = if config.serve_args.is_empty() {
+        DEFAULT_SERVE_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>()
+    } else {
+        config.serve_args.clone()
+    };
     let mut cmd = build_command(&config, &args);
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
