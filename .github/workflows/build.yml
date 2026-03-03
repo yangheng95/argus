@@ -1,0 +1,132 @@
+name: build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-overlay:
+    name: overlay (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+            ext: ""
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+            ext: ""
+          - runner: macos-latest
+            platform: darwin-arm64
+            ext: ""
+          - runner: macos-13
+            platform: darwin-x64
+            ext: ""
+          - runner: windows-latest
+            platform: windows-x64
+            ext: ".exe"
+
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/overlay/src-tauri -> target
+          # cache-on-failure: false  # uncomment to skip caching broken builds
+
+      - name: Build overlay
+        run: cargo build --release --manifest-path packages/overlay/src-tauri/Cargo.toml
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: overlay-${{ matrix.platform }}
+          path: packages/overlay/src-tauri/target/release/opencorvus-overlay${{ matrix.ext }}
+          if-no-files-found: error
+          retention-days: 1
+
+  package:
+    name: package (all platforms)
+    needs: build-overlay
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Download overlay artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/overlays
+
+      - name: Stage overlay binaries
+        run: |
+          mkdir -p /tmp/overlay-dir
+          install -m755 /tmp/overlays/overlay-linux-x64/opencorvus-overlay   /tmp/overlay-dir/opencorvus-overlay-linux-x64
+          install -m755 /tmp/overlays/overlay-linux-arm64/opencorvus-overlay  /tmp/overlay-dir/opencorvus-overlay-linux-arm64
+          install -m755 /tmp/overlays/overlay-darwin-arm64/opencorvus-overlay /tmp/overlay-dir/opencorvus-overlay-darwin-arm64
+          install -m755 /tmp/overlays/overlay-darwin-x64/opencorvus-overlay   /tmp/overlay-dir/opencorvus-overlay-darwin-x64
+          cp /tmp/overlays/overlay-windows-x64/opencorvus-overlay.exe         /tmp/overlay-dir/opencorvus-overlay-windows-x64.exe
+          ls -lh /tmp/overlay-dir/
+
+      - name: Fetch models.dev snapshot
+        run: curl -fsSL https://models.dev/api.json | tr -d '\n\r' > /tmp/models-api-clean.json
+
+      - name: Cache Bun cross-compilation runtimes
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-runtimes-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            bun-runtimes-${{ runner.os }}-
+
+      - name: Pre-cache Bun cross-compilation runtimes
+        run: |
+          echo 'console.log(1)' > /tmp/_warmup.ts
+          for target in \
+            bun-linux-aarch64 bun-linux-x64 bun-linux-x64-baseline \
+            bun-linux-aarch64-musl bun-linux-x64-musl \
+            bun-darwin-aarch64 bun-darwin-x64 bun-darwin-x64-baseline \
+            bun-windows-x64 bun-windows-x64-baseline; do
+            bun build --compile --target=$target /tmp/_warmup.ts --outfile /tmp/_warmup_out 2>/dev/null || true
+          done
+          rm -f /tmp/_warmup.ts /tmp/_warmup_out*
+
+      - name: Build all platforms
+        working-directory: packages/opencorvus
+        env:
+          MODELS_DEV_API_JSON: /tmp/models-api-clean.json
+          OPENCORVUS_OVERLAY_BIN_DIR: /tmp/overlay-dir
+        run: bun run script/build.ts --all
+
+      - name: Upload dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencorvus-dist
+          path: packages/opencorvus/dist/
+          retention-days: 7
