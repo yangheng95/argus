@@ -12,6 +12,10 @@ fn main() {
     let shared = manager::new_shared();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // Another instance tried to launch — bring existing console to front
+            manager::show_console(app);
+        }))
         .manage(shared)
         .invoke_handler(tauri::generate_handler![
             commands::position_window,
