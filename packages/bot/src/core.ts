@@ -531,7 +531,16 @@ export class BotCore {
         const toolName = part.tool
         const toolInput = part.state?.input
 
+        // Send overlay hint when input tool starts executing
+        if (toolName === "input" && part.state?.status === "running") {
+          this.sendInputHint(toolInput)
+        }
+
         if (part.state?.status === "completed") {
+          // Send "done" overlay hint for input tool completion
+          if (toolName === "input") {
+            this.sendInputHint(toolInput, "done")
+          }
           // Upload screenshot images from screen tool
           if (toolName === "screen") {
             const hasImage = (part.state.attachments ?? []).some(
