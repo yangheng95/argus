@@ -27,21 +27,19 @@ Example of BAD behavior (DO NOT do this):
 
 Every desktop task follows this pattern:
 
-1. `screen.list_windows` — See what apps are open
-2. Pick target `window_id` from candidates
-3. `screen.bind_window({window_id})` — Bind to the target app (title matching is fallback only)
-4. `screen.screenshot` — Observe the app
-5. `input.*` — Interact (click, type, key, etc.)
-6. `input.wait(ms)` — Wait for UI if needed
-7. `screen.screenshot` — Verify result
-8. Repeat 5-7 as needed
+1. `screen.screenshot` — Observe current state first (single-monitor default)
+2. If windows are ambiguous: `screen.list_windows` → pick target `window_id` → `screen.bind_window({window_id})`
+3. `input.*` — Interact (click, type, key, etc.)
+4. Prefer `screen.screenshot` with `wait_for_change=true` when waiting for UI updates
+5. `screen.screenshot` — Verify result
+6. Repeat 3-5 as needed
 
 ## RULES
 
 - **ALWAYS check window state before interacting** — use list_windows or screenshot to verify.
-- **ALWAYS bind_window** — it makes coordinates relative and screenshots focused.
+- **Bind window when needed** — on single monitor, screenshot-first is usually enough; bind_window is for precision or ambiguity.
 - **ALWAYS click before typing** — text goes to the focused element.
-- **ALWAYS use wait() before screenshot** when expecting UI changes (app opening, page loading).
+- **Prefer `wait_for_change` over long wait()** — use short `input.wait(10)` only when needed.
 - **Coordinates are separate integers** — `{"x": 500, "y": 300}`, NEVER arrays.
 - **ALWAYS describe screenshots** — after each screenshot, describe what you see in text. Screenshots are auto-removed from context next turn; your description is the only surviving record.
 - **ALWAYS write text between tool calls** — explain what you're doing and what you see. Never chain 3+ tool calls without any text output.
@@ -61,7 +59,7 @@ If the `bash` tool is available, you can launch the OpenCorvus TUI for high-effi
    ```
    Replace `PROJECT_DIR` with the actual project directory path. The `--preload` flag is **required** for rendering.
 
-2. **Wait for TUI to start** — `input.wait(5000)` then `screen.list_windows`
+2. **Wait for TUI to start** — `input.wait(10)` then `screen.screenshot` (or `wait_for_change=true`)
 
 3. **Bind to TUI window** — Use `screen.list_windows` and pick the OPENCORVUS window id:
    ```
@@ -101,7 +99,7 @@ Before touching any UI, plan:
 **For creating new files (preferred: terminal window approach):**
 1. Open a terminal window via GUI:
    - If VS Code is open: bind to VS Code → press `ctrl+`` (backtick) to toggle the integrated terminal panel
-   - If no IDE: open standalone PowerShell via `Win` key → type "powershell" → `Enter` → `wait(2000)` → `list_windows` → `bind_window({window_id})`
+   - If no IDE: open standalone PowerShell via `Win` key → type "powershell" → `Enter` → `wait(10)` → `screen.screenshot` (only list/bind when ambiguous)
 2. Type shell commands into the terminal via `input.type`:
    - Small files (<500 chars): `echo 'content' > filename.html`
    - Large files: Break into chunks, use multiple `echo '...' >> filename.html` appends
@@ -151,15 +149,15 @@ After creating/editing:
 
 ### Windows
 
-Press `win` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
+Press `win` → type app name → `enter` → `wait(10)` → `screen.screenshot` (optional `list_windows` + `bind_window` only when ambiguous)
 
 ### macOS
 
-Press `cmd+space` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
+Press `cmd+space` → type app name → `enter` → `wait(10)` → `screen.screenshot` (optional `list_windows` + `bind_window` only when ambiguous)
 
 ### Linux
 
-Press `super` → type app name → `enter` → `wait(2000)` → `list_windows` → `bind_window`
+Press `super` → type app name → `enter` → `wait(10)` → `screen.screenshot` (optional `list_windows` + `bind_window` only when ambiguous)
 
 TIP: Check the platform info in the first screenshot output to know which OS you're on.
 
@@ -200,7 +198,7 @@ This precision is critical because screenshots are removed from context next tur
 
 When you see "Screen has NOT changed", the UI hasn't updated yet:
 
-- Use `input.wait(2000)` then screenshot again
+- Prefer `screen.screenshot` with `wait_for_change=true`, or use short `input.wait(10)` then screenshot again
 - Or try a different action
 - Double the wait time on each retry: 500 → 1000 → 2000 → 5000
 
