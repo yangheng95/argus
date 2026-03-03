@@ -105,10 +105,11 @@ const ScreenshotAction = z.object({
 
 const BindWindowAction = z.object({
   action: z.literal("bind_window"),
-  window_id: z.preprocess(
-    (v) => (typeof v === "string" ? Number(v) : v),
-    z.number().int().optional(),
-  ).describe("Exact window id from list_windows. Preferred for deterministic binding."),
+  window_id: z
+    .union([z.number().int(), z.string().trim().regex(/^\d+$/)])
+    .transform((v) => (typeof v === "string" ? Number(v) : v))
+    .optional()
+    .describe("Exact window id from list_windows. Preferred for deterministic binding."),
   title: z.string().optional().describe("Fallback window title/app substring when window_id is unavailable."),
 }).refine((v) => typeof v.window_id === "number" || !!v.title?.trim(), {
   message: "Provide window_id or title",

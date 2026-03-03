@@ -144,4 +144,23 @@ describe("tool.screen bind_window", () => {
       },
     })
   })
+
+  test("accepts numeric string window_id", async () => {
+    windows = [
+      { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
+      { id: 11, title: "Editor", appName: "Code", x: 100, y: 100, width: 1280, height: 800, isMinimized: false, isFocused: false },
+    ]
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const result = await tool.execute({ action: "bind_window", window_id: "11" } as any, ctx)
+        expect(result.metadata.windowId).toBe(11)
+        expect(result.metadata.selectionMode).toBe("window_id")
+        expect(bindsById).toEqual([11])
+      },
+    })
+  })
 })

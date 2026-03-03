@@ -333,7 +333,10 @@ export const ExperimentalRoutes = lazy(() =>
         "json",
         z
           .object({
-            window_id: z.number().int().optional(),
+            window_id: z
+              .union([z.number().int(), z.string().trim().regex(/^\d+$/)])
+              .transform((v) => (typeof v === "string" ? Number(v) : v))
+              .optional(),
             title: z.string().optional(),
           })
           .refine((v) => typeof v.window_id === "number" || !!v.title?.trim(), {

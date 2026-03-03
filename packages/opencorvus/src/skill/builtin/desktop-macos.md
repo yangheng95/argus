@@ -14,7 +14,7 @@ Use this skill for macOS desktop tasks. Interact only through `screen` and `inpu
 1. `screen.screenshot`
 2. `screen.list_windows` then `screen.bind_window({window_id})` when app-level precision is needed
 3. `input.*` action
-4. `input.wait(300-3000)`
+4. `input.wait(100)` only when UI is not ready yet
 5. `screen.screenshot` verify
 6. `screen.list_windows` only if window title is ambiguous or bind failed
 
@@ -23,7 +23,7 @@ Use this skill for macOS desktop tasks. Interact only through `screen` and `inpu
 - Open Spotlight: `input.key("cmd+space")`
 - Search app: `input.type("AppName")`
 - Launch: `input.key("enter")`
-- Wait and verify: `input.wait(2000)` + `screen.screenshot`
+- Verify quickly: `input.wait(100)` + `screen.screenshot`
 - Bind target window if needed: `screen.list_windows` -> `screen.bind_window({window_id})` (title fallback: `screen.bind_window("AppName")`)
 
 ## Window Positioning
@@ -39,7 +39,7 @@ Use this skill for macOS desktop tasks. Interact only through `screen` and `inpu
 3. `input.key("cmd+a")`
 4. `input.type("https://...")`
 5. `input.key("enter")`
-6. `input.wait(3000)`
+6. `input.wait(100)`
 7. `screen.screenshot`
 
 ## Common macOS Shortcuts

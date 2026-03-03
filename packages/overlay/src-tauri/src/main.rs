@@ -38,7 +38,7 @@ fn main() {
             let _ = tray::setup(&app.handle());
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
-            // Console window starts hidden; user opens it via tray menu.
+            manager::show_console(&app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())
