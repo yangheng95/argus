@@ -359,6 +359,18 @@ export const ScreenTool = Tool.define("screen", {
           }
         }
 
+        // Compress if overlays inflated the image beyond attachment limit
+        if (attachment.length > MAX_ATTACHMENT_BYTES) {
+          try {
+            const sharp = await import("sharp").then((x) => x.default)
+            const compressed = await sharp(attachment).jpeg({ quality: 92, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer()
+            log.info("post-overlay-compress", { before: attachment.length, after: compressed.length })
+            attachment = compressed
+          } catch (e) {
+            log.warn("post-overlay-compress-failed", { error: e instanceof Error ? e.message : String(e) })
+          }
+        }
+
         const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
         const base64 = attachment.toString("base64")
         const overlayInfo = (debugOverlay
