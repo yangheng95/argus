@@ -65,6 +65,7 @@ function embeddedBinaryPath() {
 function materializeEmbedded(file: string) {
   try {
     mkdirSync(dirname(file), { recursive: true })
+    if (typeof OPENCORVUS_EMBEDDED_OVERLAY_B64 !== "string" || !OPENCORVUS_EMBEDDED_OVERLAY_B64) return false
     const bytes = Buffer.from(OPENCORVUS_EMBEDDED_OVERLAY_B64, "base64")
     writeFileSync(file, bytes, { mode: 0o755 })
     if (process.platform !== "win32") chmodSync(file, 0o755)
