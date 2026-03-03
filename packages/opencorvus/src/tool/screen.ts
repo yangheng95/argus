@@ -83,9 +83,9 @@ Actions:
 - bind_window: Bind to a specific window by window_id (preferred from list_windows) or by title substring fallback. After binding, screenshots capture only that window and coordinates become window-relative.
 
 IMPORTANT workflow:
-1. Window-first: use screenshot/list_windows, choose a window_id, then bind_window.
-2. Only if target window cannot be found, use list_monitors + bind_monitor to switch target desktop/monitor.
-3. In single-monitor setups, start with screenshot and interact directly.
+1. Single-monitor default: start with screenshot and interact directly.
+2. If target app/window is ambiguous, use list_windows, choose a window_id, then bind_window.
+3. Only if target window cannot be found, use list_monitors + bind_monitor to switch desktop/monitor.
 4. Take a screenshot of the bound target to see current content.
 5. Interact with the app via the input tool, using coordinates from the screenshot.
 6. Take another screenshot to verify the result.
@@ -302,7 +302,7 @@ export const ScreenTool = Tool.define("screen", {
           })
           return {
             title: `Screenshot unchanged (${result.width}x${result.height})`,
-            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze - use the previous screenshot as reference. If you are waiting for something to load, try using input.wait first, then screenshot again.`,
+            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze - use the previous screenshot as reference. If you are waiting for something to load, prefer screen.screenshot with wait_for_change=true, then retry.`,
             metadata: {
               width: result.width,
               height: result.height,
@@ -347,7 +347,7 @@ export const ScreenTool = Tool.define("screen", {
               `You MUST try a fundamentally different approach.\n` +
               `1. Press Esc to dismiss hidden overlays\n` +
               `2. Use keyboard (Tab, Enter) instead of clicking\n` +
-              `3. Use list_windows to find new dialogs\n` +
+              `3. If multiple windows are competing, use list_windows to find dialogs\n` +
               `4. Try a completely different UI path`,
             metadata: {
               width: result.width,
@@ -375,10 +375,10 @@ export const ScreenTool = Tool.define("screen", {
         }
 
         const foregroundNote = foregroundFailed
-          ? ` WARNING: Could not bring the previously bound window to foreground. The window binding was released and capture fell back to monitor mode. Use input.key with "alt+tab" to switch windows, or re-bind with screen.bind_window. If the target is unknown or ambiguous, run list_windows, pick a window_id, and bind again.`
+          ? ` Note: The bound window was not in the foreground, but the screenshot was captured from it anyway. If input actions miss the target, use input.key("alt+tab") to bring the window to front first.`
           : ""
         return {
-          title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [monitor fallback]" : ""}`,
+          title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [window not focused]" : ""}`,
           output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${foregroundNote}`,
           metadata: {
             width: result.width,
@@ -535,9 +535,12 @@ export const ScreenTool = Tool.define("screen", {
           ? `\n\nSelectable targets (best first):\n${candidateLines.join("\n")}\nBind one with: screen.bind_window({ window_id: <id> })`
           : ""
         const monitorFallbackHint = "\nIf target app/window is not listed, then use screen.list_monitors and screen.bind_monitor to switch desktop/monitor."
+        const singleMonitorHint = "\nOn single-monitor setups you often can continue with screen.screenshot + input directly without list_windows."
         return {
           title: `Found ${enriched.length} windows`,
-          output: lines.length > 0 ? lines.join("\n") + candidateHint + monitorFallbackHint : "No visible windows found. Use screen.list_monitors and screen.bind_monitor if the app may be on another desktop/monitor.",
+          output: lines.length > 0
+            ? lines.join("\n") + candidateHint + singleMonitorHint + monitorFallbackHint
+            : "No visible windows found. Use screen.list_monitors and screen.bind_monitor if the app may be on another desktop/monitor.",
           metadata: { count: enriched.length, windows: enriched, candidates },
         }
       }

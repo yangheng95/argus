@@ -11,9 +11,9 @@
   --surface-1: #f4f9ff;
   --surface-2: #eaf3ff;
   --surface-dark-rgb: 255, 255, 255;
-  --glass: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(27, 56, 104, 0.18);
-  --glass-border-hover: rgba(27, 56, 104, 0.28);
+  --glass: rgba(255, 255, 255, 0.97);
+  --glass-border: rgba(27, 56, 104, 0.16);
+  --glass-border-hover: rgba(27, 56, 104, 0.24);
 
   /* Text */
   --text-primary: rgba(18, 37, 64, 0.96);

@@ -41,7 +41,7 @@ When interacting with the desktop:
 - **Anchor pointer actions**: Before any click/drag/move, ensure you have a fresh screenshot anchor from `screen.screenshot`. If pointer action is blocked, take a screenshot and retry.
 - **Screenshot after acting**: Verify every action with a follow-up screenshot.
 - **Click before typing**: Position the cursor by clicking the target input field before typing text.
-- **Wait before screenshot**: If expecting UI changes (app opening, page loading), use wait() first, then screenshot.
+- **Prefer wait_for_change**: If expecting UI changes (app opening, page loading), use `screen.screenshot` with `wait_for_change=true`; only use short `input.wait(10)` if needed.
 - **Describe every screenshot**: After viewing each screenshot, describe what you see in your text response. Screenshots are automatically removed from context after the current turn — your text description is the only surviving record.
 - **Use key for shortcuts**: Use the key action for keyboard shortcuts (e.g. "ctrl+s", "alt+tab", "win+e"). Check platform info from screenshot output to use the correct modifier (Ctrl for Windows/Linux, Cmd for macOS).
 - **Coordinates are integers**: Always pass x and y as separate integers: {"x": 500, "y": 300}. NEVER arrays.
@@ -57,7 +57,7 @@ When interacting with the desktop:
 - **Use drag for move/resize/select**: Use drag to move objects, resize panels, or select text ranges.
 - **Use move for hover**: Move mouse without clicking to trigger tooltips or hover effects, then screenshot to read them.
 
-If screen shows "unchanged": the UI hasn't updated — wait longer and retry. If an action failed, try a different approach.
+If screen shows "unchanged": the UI hasn't updated — prefer `wait_for_change=true` or short `input.wait(10)`, then retry. If an action failed, try a different approach.
 
 # Skills
 
