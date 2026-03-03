@@ -3,13 +3,22 @@ import type { BotAdapter } from "./adapter"
 type Env = Record<string, string | undefined>
 
 export const ADAPTER_HINT =
-  "Set one adapter token set: SLACK_BOT_TOKEN + SLACK_APP_TOKEN, TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, or FEISHU_APP_ID + FEISHU_APP_SECRET (OPENCLAW_* fallbacks are also supported)."
+  "Set one adapter token set: SLACK_BOT_TOKEN + SLACK_APP_TOKEN, TELEGRAM_BOT_TOKEN, DISCORD_BOT_TOKEN, FEISHU_APP_ID + FEISHU_APP_SECRET, or other mainstream adapter env pairs (OPENCLAW_* fallbacks are also supported)."
 
 export interface AdapterFactory {
   slack(opts: { token: string; appToken: string; signingSecret?: string }): BotAdapter
   telegram(opts: { token: string }): BotAdapter
   discord(opts: { token: string }): BotAdapter
   feishu(opts: { appId: string; appSecret: string }): BotAdapter
+  whatsapp(opts: { token: string; numberId: string }): BotAdapter
+  googlechat(opts: { serviceAccount: string }): BotAdapter
+  msteams(opts: { appId: string; appSecret: string }): BotAdapter
+  line(opts: { token: string }): BotAdapter
+  matrix(opts: { homeserver: string; token: string }): BotAdapter
+  mattermost(opts: { url: string; token: string }): BotAdapter
+  signal(opts: { service: string; account: string }): BotAdapter
+  wecom(opts: { corpId: string; secret: string; agentId: string }): BotAdapter
+  dingtalk(opts: { appKey: string; appSecret: string }): BotAdapter
 }
 
 function pick(env: Env, keys: readonly string[]) {
@@ -87,21 +96,31 @@ const ready: Rule[] = [
       appSecret: vals.appSecret!,
     }),
   },
-] 
-
-const planned: Plan[] = [
   {
     name: "whatsapp",
     req: {
       token: ["WHATSAPP_ACCESS_TOKEN", "OPENCLAW_WHATSAPP_ACCESS_TOKEN"],
       numberId: ["WHATSAPP_PHONE_NUMBER_ID", "OPENCLAW_WHATSAPP_PHONE_NUMBER_ID"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.whatsapp({
+      token: vals.token!,
+      numberId: vals.numberId!,
+    }),
   },
   {
     name: "googlechat",
     req: {
       serviceAccount: ["GOOGLECHAT_SERVICE_ACCOUNT_JSON", "OPENCLAW_GOOGLECHAT_SERVICE_ACCOUNT_JSON"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.googlechat({
+      serviceAccount: vals.serviceAccount!,
+    }),
   },
   {
     name: "msteams",
@@ -109,12 +128,25 @@ const planned: Plan[] = [
       appId: ["MSTEAMS_APP_ID", "OPENCLAW_MSTEAMS_APP_ID"],
       appSecret: ["MSTEAMS_APP_SECRET", "OPENCLAW_MSTEAMS_APP_SECRET"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.msteams({
+      appId: vals.appId!,
+      appSecret: vals.appSecret!,
+    }),
   },
   {
     name: "line",
     req: {
       token: ["LINE_CHANNEL_ACCESS_TOKEN", "OPENCLAW_LINE_CHANNEL_ACCESS_TOKEN"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.line({
+      token: vals.token!,
+    }),
   },
   {
     name: "matrix",
@@ -122,6 +154,13 @@ const planned: Plan[] = [
       homeserver: ["MATRIX_HOMESERVER_URL", "OPENCLAW_MATRIX_HOMESERVER_URL"],
       token: ["MATRIX_ACCESS_TOKEN", "OPENCLAW_MATRIX_ACCESS_TOKEN"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.matrix({
+      homeserver: vals.homeserver!,
+      token: vals.token!,
+    }),
   },
   {
     name: "mattermost",
@@ -129,6 +168,13 @@ const planned: Plan[] = [
       url: ["MATTERMOST_SERVER_URL", "OPENCLAW_MATTERMOST_SERVER_URL"],
       token: ["MATTERMOST_BOT_TOKEN", "OPENCLAW_MATTERMOST_BOT_TOKEN"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.mattermost({
+      url: vals.url!,
+      token: vals.token!,
+    }),
   },
   {
     name: "signal",
@@ -136,6 +182,13 @@ const planned: Plan[] = [
       service: ["SIGNAL_SERVICE_URL", "OPENCLAW_SIGNAL_SERVICE_URL"],
       account: ["SIGNAL_ACCOUNT", "OPENCLAW_SIGNAL_ACCOUNT"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.signal({
+      service: vals.service!,
+      account: vals.account!,
+    }),
   },
   {
     name: "wecom",
@@ -144,6 +197,14 @@ const planned: Plan[] = [
       secret: ["WECOM_SECRET", "OPENCLAW_WECOM_SECRET"],
       agentId: ["WECOM_AGENT_ID", "OPENCLAW_WECOM_AGENT_ID"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.wecom({
+      corpId: vals.corpId!,
+      secret: vals.secret!,
+      agentId: vals.agentId!,
+    }),
   },
   {
     name: "dingtalk",
@@ -151,8 +212,17 @@ const planned: Plan[] = [
       appKey: ["DINGTALK_APP_KEY", "OPENCLAW_DINGTALK_APP_KEY"],
       appSecret: ["DINGTALK_APP_SECRET", "OPENCLAW_DINGTALK_APP_SECRET"],
     },
+    make: (
+      f: AdapterFactory,
+      vals: Record<string, string | undefined>,
+    ) => f.dingtalk({
+      appKey: vals.appKey!,
+      appSecret: vals.appSecret!,
+    }),
   },
 ] 
+
+const planned: Plan[] = []
 
 export const READY_CHANNELS = ready.map((item) => item.name)
 export const PLANNED_CHANNELS = planned.map((item) => item.name)
