@@ -39,6 +39,10 @@ export class BotCore {
   private sessionQueues = new Map<string, Array<{ msg: IncomingMessage; text: string }>>()
   /** Sessions currently being processed — new messages are queued until session.idle fires */
   private sessionProcessing = new Set<string>()
+  /** Overlay Tauri process for visual feedback */
+  private overlayProcess: ChildProcess | null = null
+  /** Last known cursor position for overlay hints on non-spatial actions */
+  private lastOverlayPos = { x: 960, y: 540 }
 
   constructor(private options?: BotCoreOptions) {}
 
