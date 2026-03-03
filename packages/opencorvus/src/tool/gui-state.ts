@@ -213,6 +213,11 @@ export namespace GuiState {
     const s = guiState()
     if (!s.isGuiSession) return null
 
+    // Grace period: don't trigger repetition alert within 3 steps of a focus change
+    const inFocusGracePeriod = s.lastFocusChangeStep >= 0 &&
+      (s.currentStep - s.lastFocusChangeStep) <= 3
+    if (inFocusGracePeriod) return null
+
     const alerts: string[] = []
 
     // Signal 1: consecutive no-change
