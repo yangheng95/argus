@@ -16,6 +16,8 @@ const els = {
   refreshBtn: document.getElementById("refreshBtn"),
   clearLogsBtn: document.getElementById("clearLogsBtn"),
   saveBtn: document.getElementById("saveBtn"),
+  openMcpBtn: document.getElementById("openMcpBtn"),
+  openSkillBtn: document.getElementById("openSkillBtn"),
   serveCmdInput: document.getElementById("serveCmdInput"),
   runCmdInput: document.getElementById("runCmdInput"),
   cwdInput: document.getElementById("cwdInput"),
@@ -472,6 +474,16 @@ async function saveConfig() {
   addMessage("system", "Configuration saved.")
 }
 
+async function openMcpConfig() {
+  const file = await invoke("manager_open_mcp_config")
+  addMessage("system", `MCP config opened: ${file}`)
+}
+
+async function openSkillFolder() {
+  const dir = await invoke("manager_open_skill_dir")
+  addMessage("system", `Skills folder opened: ${dir}`)
+}
+
 async function sendPrompt(prompt) {
   state.stream = null
   const result = await invoke("manager_send", { prompt })
@@ -555,6 +567,22 @@ function bindEvents() {
       await saveConfig()
     } catch (error) {
       addMessage("system", `Save config failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.openMcpBtn.addEventListener("click", async () => {
+    try {
+      await openMcpConfig()
+    } catch (error) {
+      addMessage("system", `Open MCP config failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.openSkillBtn.addEventListener("click", async () => {
+    try {
+      await openSkillFolder()
+    } catch (error) {
+      addMessage("system", `Open skills folder failed: ${error?.message || String(error)}`)
     }
   })
 }

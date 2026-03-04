@@ -23,7 +23,9 @@ fn main() {
             commands::manager_stop,
             commands::manager_clear_logs,
             commands::manager_save,
-            commands::manager_send
+            commands::manager_send,
+            commands::manager_open_mcp_config,
+            commands::manager_open_skill_dir
         ])
         .setup(|app| {
             let state = app.state::<manager::Shared>();

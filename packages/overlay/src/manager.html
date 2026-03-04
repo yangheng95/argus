@@ -445,6 +445,18 @@
       line-height: 1.45;
     }
 
+    .cfg-entry {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .cfg-entry button {
+      flex: 1;
+      min-width: 120px;
+    }
+
     .cfg details {
       border: 1px solid rgba(20, 50, 94, 0.12);
       border-radius: var(--radius-sm);
@@ -543,6 +555,10 @@
           <div class="card-head">Bot Config</div>
           <div class="cfg">
             <p class="cfg-hint">Keep it simple: use full command lines, advanced options only when needed.</p>
+            <div class="cfg-entry">
+              <button id="openMcpBtn" type="button">MCP Config</button>
+              <button id="openSkillBtn" type="button">Skills Folder</button>
+            </div>
             <label>Start Command
               <input id="serveCmdInput" placeholder='opencorvus serve --host "127.0.0.1"' />
             </label>

@@ -59,3 +59,13 @@ pub fn manager_save(
 pub fn manager_send(state: State<'_, Shared>, app: AppHandle, prompt: String) -> Result<SendResult, String> {
     manager::send(state.inner(), &app, prompt)
 }
+
+#[tauri::command]
+pub fn manager_open_mcp_config(state: State<'_, Shared>, app: AppHandle) -> Result<String, String> {
+    manager::open_mcp_config(state.inner(), &app)
+}
+
+#[tauri::command]
+pub fn manager_open_skill_dir(state: State<'_, Shared>, app: AppHandle) -> Result<String, String> {
+    manager::open_skill_dir(state.inner(), &app)
+}

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -13,6 +13,7 @@ use crate::events;
 const CONFIG_FILE: &str = "opencorvus-manager.json";
 const LOG_FILE: &str = "opencorvus-manager-log.jsonl";
 const MAX_LOGS: usize = 800;
+const CONFIG_SCHEMA: &str = "https://opencode.ai/config.json";
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {
@@ -75,8 +76,17 @@ pub type Shared = Arc<Mutex<ManagerState>>;
 
 impl Default for ManagerConfig {
     fn default() -> Self {
+        // Prefer sibling binary in the same directory as this overlay executable.
+        // Falls back to bare "opencorvus" (relies on PATH) if unavailable.
+        let command = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|dir| dir.join("opencorvus")))
+            .filter(|p| p.exists())
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "opencorvus".into());
+
         Self {
-            command: "opencorvus".into(),
+            command,
             serve_args: vec!["serve".into()],
             run_args: vec!["run".into(), "--continue".into()],
             cwd: String::new(),
@@ -161,6 +171,78 @@ fn save_config(app: &AppHandle, config: &ManagerConfig) -> Result<(), String> {
     let path = config_path(app)?;
     let data = serde_json::to_string_pretty(config).map_err(|error| error.to_string())?;
     fs::write(path, data).map_err(|error| error.to_string())
+}
+
+fn work_dir(shared: &Shared) -> PathBuf {
+    let cwd = {
+        let state = shared.lock().unwrap();
+        state.config.cwd.trim().to_string()
+    };
+    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    if cwd.is_empty() {
+        return root;
+    }
+    let path = PathBuf::from(cwd);
+    if path.is_absolute() {
+        return path;
+    }
+    root.join(path)
+}
+
+fn mcp_config_path(base: &Path) -> PathBuf {
+    let candidates = [
+        base.join("opencorvus.jsonc"),
+        base.join("opencorvus.json"),
+        base.join(".opencorvus").join("opencorvus.jsonc"),
+        base.join(".opencorvus").join("opencorvus.json"),
+    ];
+    for item in candidates {
+        if item.exists() {
+            return item;
+        }
+    }
+    base.join("opencorvus.jsonc")
+}
+
+fn ensure_mcp_config(path: &Path) -> Result<(), String> {
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let content = format!(
+        "{{\n  \"$schema\": \"{CONFIG_SCHEMA}\",\n  \"mcp\": {{}}\n}}\n"
+    );
+    fs::write(path, content).map_err(|error| error.to_string())
+}
+
+fn open_target(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .arg("/C")
+            .arg("start")
+            .arg("")
+            .arg(path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 fn build_command(config: &ManagerConfig, args: &[String]) -> Command {
@@ -675,6 +757,24 @@ pub fn save(shared: &Shared, app: &AppHandle, config: ManagerConfig) -> Result<M
     push_log(shared, app, "configuration saved");
     emit_state(shared, app);
     Ok(snapshot(shared))
+}
+
+pub fn open_mcp_config(shared: &Shared, app: &AppHandle) -> Result<String, String> {
+    let path = mcp_config_path(&work_dir(shared));
+    ensure_mcp_config(&path)?;
+    open_target(&path)?;
+    let value = path.to_string_lossy().to_string();
+    push_log(shared, app, format!("opened MCP config: {value}"));
+    Ok(value)
+}
+
+pub fn open_skill_dir(shared: &Shared, app: &AppHandle) -> Result<String, String> {
+    let path = work_dir(shared).join(".opencorvus").join("skills");
+    fs::create_dir_all(&path).map_err(|error| error.to_string())?;
+    open_target(&path)?;
+    let value = path.to_string_lossy().to_string();
+    push_log(shared, app, format!("opened skills folder: {value}"));
+    Ok(value)
 }
 
 pub fn send(shared: &Shared, app: &AppHandle, prompt: String) -> Result<SendResult, String> {
