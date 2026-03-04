@@ -181,13 +181,10 @@ beforeEach(() => {
   clicks.length = 0
   middleClicks.length = 0
   hotkeys.length = 0
-<<<<<<< HEAD
   focusMarks = 0
-=======
   keys.length = 0
   pastes.length = 0
   AutomationRuntime.clear()
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   delete process.env.OPENCORVUS_COORDINATE_SPACE
 })
 
