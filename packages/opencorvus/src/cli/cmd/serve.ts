@@ -47,7 +47,7 @@ async function killOldProcess(port: number) {
   if (process.platform !== "win32") {
     // Unix: use fuser
     try {
-      Bun.spawnSync(["fuser", "-k", `${port}/tcp`], { stdio: "ignore" })
+      Bun.spawnSync(["fuser", "-k", `${port}/tcp`], { stdio: ["ignore", "ignore", "ignore"] })
     } catch {}
     return
   }
