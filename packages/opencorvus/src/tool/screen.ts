@@ -401,7 +401,9 @@ export const ScreenTool = Tool.define("screen", {
         const debugOverlay = debugCoordinateOverlay()
         const attachment = debugOverlay ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer) : encoded.buffer
         const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
+        process.stderr.write(`[SCREEN] calling ScreenshotStore.save sessionID=${ctx.sessionID}\n`)
         const screenshotUrl = await ScreenshotStore.save(ctx.sessionID, outputMime, attachment)
+        process.stderr.write(`[SCREEN] screenshotUrl=${screenshotUrl.substring(0, 60)}\n`)
         const overlayInfo = debugOverlay
           ? ` Debug mode: coordinate ticks are visible on the image (${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1).`
           : " Shared image has no visible coordinate overlay."
