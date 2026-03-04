@@ -167,9 +167,7 @@ export namespace TuiRuntime {
     const timeoutMs = input.timeoutMs ?? 5 * 60 * 1000
     const result = await Promise.race([
       run().then((message) => ({ kind: "done" as const, message })),
-      new Promise<{ kind: "timeout" }>((resolve) =>
-        setTimeout(() => resolve({ kind: "timeout" }), timeoutMs),
-      ),
+      new Promise<{ kind: "timeout" }>((resolve) => setTimeout(() => resolve({ kind: "timeout" }), timeoutMs)),
     ])
 
     if (result.kind === "done") {
@@ -184,9 +182,7 @@ export namespace TuiRuntime {
 
     const status = SessionStatus.get(sessionID)
     const msgs = await Session.messages({ sessionID, limit: 50 })
-    const latest = msgs
-      .filter((m) => m.info.role === "assistant" && m.info.time.created >= start)
-      .at(-1) ?? null
+    const latest = msgs.filter((m) => m.info.role === "assistant" && m.info.time.created >= start).at(-1) ?? null
     return {
       accepted: true as const,
       sessionID,

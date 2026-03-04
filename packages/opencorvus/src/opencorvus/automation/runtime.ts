@@ -96,11 +96,13 @@ export namespace AutomationRuntime {
     }
   }
 
-  export function attach(input: {
-    playwrightGlobal?: string
-    appiumGlobal?: string
-    appiumAppId?: string
-  } = {}) {
+  export function attach(
+    input: {
+      playwrightGlobal?: string
+      appiumGlobal?: string
+      appiumAppId?: string
+    } = {},
+  ) {
     const pkey = input.playwrightGlobal ?? DEFAULT_PLAYWRIGHT_GLOBAL
     const akey = input.appiumGlobal ?? DEFAULT_APPIUM_GLOBAL
     const p = asPlaywrightPage(pick(pkey))

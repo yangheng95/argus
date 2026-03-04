@@ -23,8 +23,8 @@ export namespace InputGuard {
     return {
       title: `Pointer action blocked: driver ${driver} unsupported`,
       output:
-        `Action "${action}" requires desktop coordinate input and does not run on ${driver} driver. `
-        + `Use input with driver=desktop (or auto), or use selector-based automation flow for ${driver}.`,
+        `Action "${action}" requires desktop coordinate input and does not run on ${driver} driver. ` +
+        `Use input with driver=desktop (or auto), or use selector-based automation flow for ${driver}.`,
       metadata: {
         blocked: true,
         reason: "pointer_driver_unsupported",
@@ -57,8 +57,8 @@ export namespace InputGuard {
     return {
       title: "Pointer action blocked: no coordinate anchor",
       output:
-        "Cannot run pointer action without a recent screenshot anchor. "
-        + "Take screen.screenshot first so coordinates are bound to one target (window or single monitor), then retry.",
+        "Cannot run pointer action without a recent screenshot anchor. " +
+        "Take screen.screenshot first so coordinates are bound to one target (window or single monitor), then retry.",
       metadata: { blocked: true, reason: "no_bounds" },
     }
   }
@@ -75,8 +75,8 @@ export namespace InputGuard {
       return {
         title: "Pointer action blocked: stale window anchor",
         output:
-          "The previous screenshot anchor belongs to a window binding that is no longer active. "
-          + "Re-bind with screen.bind_window and take a fresh screen.screenshot before retrying pointer actions.",
+          "The previous screenshot anchor belongs to a window binding that is no longer active. " +
+          "Re-bind with screen.bind_window and take a fresh screen.screenshot before retrying pointer actions.",
         metadata: {
           blocked: true,
           reason: "stale_window_anchor",
@@ -100,22 +100,24 @@ export namespace InputGuard {
       width: binding.info.width,
       height: binding.info.height,
     }
-    const complete = Number.isFinite(actual.x)
-      && Number.isFinite(actual.y)
-      && Number.isFinite(actual.width)
-      && Number.isFinite(actual.height)
+    const complete =
+      Number.isFinite(actual.x) &&
+      Number.isFinite(actual.y) &&
+      Number.isFinite(actual.width) &&
+      Number.isFinite(actual.height)
     if (!complete) return null
-    const drifted = Math.abs(expected.x - actual.x) > 2
-      || Math.abs(expected.y - actual.y) > 2
-      || Math.abs(expected.width - actual.width) > 2
-      || Math.abs(expected.height - actual.height) > 2
+    const drifted =
+      Math.abs(expected.x - actual.x) > 2 ||
+      Math.abs(expected.y - actual.y) > 2 ||
+      Math.abs(expected.width - actual.width) > 2 ||
+      Math.abs(expected.height - actual.height) > 2
     if (!drifted) return null
     showOverlay(undefined, undefined, action, "blocked: window geometry drifted", "error")
     return {
       title: "Pointer action blocked: window geometry drifted",
       output:
-        "The bound window moved or resized since the last screenshot anchor. "
-        + "Take a fresh screen.screenshot before retrying pointer actions so coordinates map to the current window geometry.",
+        "The bound window moved or resized since the last screenshot anchor. " +
+        "Take a fresh screen.screenshot before retrying pointer actions so coordinates map to the current window geometry.",
       metadata: {
         blocked: true,
         reason: "window_geometry_drifted",
@@ -133,7 +135,7 @@ export namespace InputGuard {
     allowFocusRecovery = false,
     bindingHint?: Awaited<ReturnType<typeof WindowManager.getBinding>>,
   ): Promise<Block | null> {
-    const binding = bindingHint ?? await WindowManager.getBinding()
+    const binding = bindingHint ?? (await WindowManager.getBinding())
     const target = DesktopState.getTarget()
     if (target?.scope === "monitor") return null
     if (!binding) {
@@ -155,8 +157,8 @@ export namespace InputGuard {
       return {
         title: "Action blocked: window binding drifted",
         output:
-          "Current window binding drifted from the screenshot anchor. "
-          + "Re-bind with screen.bind_window and take a fresh screen.screenshot.",
+          "Current window binding drifted from the screenshot anchor. " +
+          "Re-bind with screen.bind_window and take a fresh screen.screenshot.",
         metadata: {
           blocked: true,
           reason: "window_binding_drifted",
@@ -185,9 +187,9 @@ export namespace InputGuard {
     return {
       title: "Action blocked: bound window not foreground",
       output:
-        "The bound window is not in foreground (possibly occluded or minimized). "
-        + "Re-bind with screen.bind_window before retrying. "
-        + "If your action uses coordinates, take a fresh screen.screenshot after re-bind.",
+        "The bound window is not in foreground (possibly occluded or minimized). " +
+        "Re-bind with screen.bind_window before retrying. " +
+        "If your action uses coordinates, take a fresh screen.screenshot after re-bind.",
       metadata: {
         blocked: true,
         reason: "bound_window_not_foreground",

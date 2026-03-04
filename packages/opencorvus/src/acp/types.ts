@@ -21,4 +21,3 @@ export interface ACPConfig {
     modelID: string
   }
 }
-

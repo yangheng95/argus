@@ -30,14 +30,7 @@ export class MattermostAdapter implements BotAdapter {
   private serve: Serve
   private server?: Server
 
-  constructor(opts: {
-    url: string
-    token: string
-    host?: string
-    port?: number
-    path?: string
-    serve?: Serve
-  }) {
+  constructor(opts: { url: string; token: string; host?: string; port?: number; path?: string; serve?: Serve }) {
     this.url = base(opts.url)
     this.token = opts.token
     this.host = opts.host ?? "0.0.0.0"
@@ -82,7 +75,13 @@ export class MattermostAdapter implements BotAdapter {
     return data.id ?? `${Date.now()}`
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
     const form = new FormData()
     form.set("channel_id", channel)
     form.set("files", new Blob([Uint8Array.from(imageBuffer)]), filename)
@@ -97,10 +96,7 @@ export class MattermostAdapter implements BotAdapter {
     if (!uploaded.ok) throw new Error(`Mattermost upload failed: ${uploaded.status} ${await uploaded.text()}`)
 
     const data = (await uploaded.json()) as FileResponse
-    const ids = data.file_infos
-      ?.map((item) => item.id)
-      .filter((id): id is string => Boolean(id))
-      ?? []
+    const ids = data.file_infos?.map((item) => item.id).filter((id): id is string => Boolean(id)) ?? []
     if (ids.length === 0) throw new Error("Mattermost upload failed: missing file id")
 
     await this.post({

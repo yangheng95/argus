@@ -32,20 +32,28 @@ const scaled = Capture.scaleWindowBounds({
   imageHeight: 900,
 })
 assert(scaled.x === 150 && scaled.y === 75, `scaled origin failed: ${scaled.x},${scaled.y}`)
-assert((scaled.scaleX ?? 0) === 1.5 && (scaled.scaleY ?? 0) === 1.5, `scaled ratio failed: ${scaled.scaleX},${scaled.scaleY}`)
+assert(
+  (scaled.scaleX ?? 0) === 1.5 && (scaled.scaleY ?? 0) === 1.5,
+  `scaled ratio failed: ${scaled.scaleX},${scaled.scaleY}`,
+)
 
-const logical = Coordinates.resolveDetailed(450, 300, {
-  x: 150,
-  y: 75,
-  width: 1200,
-  height: 900,
-  scaleX: 1.5,
-  scaleY: 1.5,
-  logicalX: 100,
-  logicalY: 50,
-  logicalWidth: 800,
-  logicalHeight: 600,
-}, "logical")
+const logical = Coordinates.resolveDetailed(
+  450,
+  300,
+  {
+    x: 150,
+    y: 75,
+    width: 1200,
+    height: 900,
+    scaleX: 1.5,
+    scaleY: 1.5,
+    logicalX: 100,
+    logicalY: 50,
+    logicalWidth: 800,
+    logicalHeight: 600,
+  },
+  "logical",
+)
 assert(logical.x === 400 && logical.y === 250, `logical mapping failed: ${logical.x},${logical.y}`)
 assert(!logical.clamped, "logical mapping should not clamp")
 
@@ -58,6 +66,9 @@ const fallback = Capture.scaleWindowBounds({
   imageHeight: 700,
 })
 assert(fallback.x === 40 && fallback.y === 30, `zero-size origin fallback failed: ${fallback.x},${fallback.y}`)
-assert((fallback.scaleX ?? 0) === 1 && (fallback.scaleY ?? 0) === 1, `zero-size scaling fallback failed: ${fallback.scaleX},${fallback.scaleY}`)
+assert(
+  (fallback.scaleX ?? 0) === 1 && (fallback.scaleY ?? 0) === 1,
+  `zero-size scaling fallback failed: ${fallback.scaleX},${fallback.scaleY}`,
+)
 
 console.log("gui-coordinate-smoke: ok")

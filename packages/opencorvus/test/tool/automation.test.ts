@@ -99,13 +99,16 @@ describe("tool.automation", () => {
 
   test("returns runtime unavailable when run action has no attached driver", async () => {
     const tool = await AutomationTool.init()
-    const result = await tool.execute({
-      action: "run",
-      step: {
-        id: "noop",
-        act: { kind: "wait", ms: 1 },
+    const result = await tool.execute(
+      {
+        action: "run",
+        step: {
+          id: "noop",
+          act: { kind: "wait", ms: 1 },
+        },
       },
-    }, ctx)
+      ctx,
+    )
     expect(result.metadata.ok).toBe(false)
     expect(result.metadata.reason).toBe("runtime_unavailable")
   })
@@ -123,17 +126,20 @@ describe("tool.automation", () => {
     AutomationRuntime.setPlaywright({ page })
 
     const tool = await AutomationTool.init()
-    const result = await tool.execute({
-      action: "run",
-      driver: "playwright",
-      step: {
-        id: "save",
-        target: [{ kind: "role", value: "button", name: "Save" }],
-        pre: [{ kind: "visible" }],
-        act: { kind: "click" },
-        post: [{ kind: "exists" }],
+    const result = await tool.execute(
+      {
+        action: "run",
+        driver: "playwright",
+        step: {
+          id: "save",
+          target: [{ kind: "role", value: "button", name: "Save" }],
+          pre: [{ kind: "visible" }],
+          act: { kind: "click" },
+          post: [{ kind: "exists" }],
+        },
       },
-    }, ctx)
+      ctx,
+    )
     const payload = JSON.parse(result.output) as { ok: boolean; driver: string; failed: number }
     expect(payload.ok).toBe(true)
     expect(payload.driver).toBe("playwright")
@@ -153,14 +159,17 @@ describe("tool.automation", () => {
     AutomationRuntime.setAppium({ client })
 
     const tool = await AutomationTool.init()
-    const result = await tool.execute({
-      action: "run",
-      step: {
-        id: "field",
-        target: [{ kind: "aid", value: "username" }],
-        act: { kind: "type", text: "alice" },
+    const result = await tool.execute(
+      {
+        action: "run",
+        step: {
+          id: "field",
+          target: [{ kind: "aid", value: "username" }],
+          act: { kind: "type", text: "alice" },
+        },
       },
-    }, ctx)
+      ctx,
+    )
     const payload = JSON.parse(result.output) as { ok: boolean; driver: string }
     expect(payload.ok).toBe(true)
     expect(payload.driver).toBe("appium")
@@ -205,19 +214,22 @@ describe("tool.automation", () => {
     AutomationRuntime.setPlaywright({ page })
 
     const tool = await AutomationTool.init()
-    const result = await tool.execute({
-      action: "run",
-      driver: "playwright",
-      post_template: "visible",
-      timeoutMs: 20,
-      intervalMs: 0,
-      retryMax: 1,
-      step: {
-        id: "save",
-        target: [{ kind: "role", value: "button", name: "Save" }],
-        act: { kind: "click" },
+    const result = await tool.execute(
+      {
+        action: "run",
+        driver: "playwright",
+        post_template: "visible",
+        timeoutMs: 20,
+        intervalMs: 0,
+        retryMax: 1,
+        step: {
+          id: "save",
+          target: [{ kind: "role", value: "button", name: "Save" }],
+          act: { kind: "click" },
+        },
       },
-    }, ctx)
+      ctx,
+    )
     const payload = JSON.parse(result.output) as { ok: boolean; failed: number }
     expect(payload.ok).toBe(false)
     expect(payload.failed).toBe(1)

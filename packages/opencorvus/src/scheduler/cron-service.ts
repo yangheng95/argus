@@ -84,17 +84,19 @@ export namespace CronService {
       return row
     }
 
-    await Promise.all(Array.from({ length: slots }, async () => {
-      while (true) {
-        const row = pick()
-        if (!row) return
-        const job = claim(row.id, projectID, owner, now)
-        if (!job) continue
-        await execute(job, owner, now).catch(async (err) => {
-          await fail(job, owner, err)
-        })
-      }
-    }))
+    await Promise.all(
+      Array.from({ length: slots }, async () => {
+        while (true) {
+          const row = pick()
+          if (!row) return
+          const job = claim(row.id, projectID, owner, now)
+          if (!job) continue
+          await execute(job, owner, now).catch(async (err) => {
+            await fail(job, owner, err)
+          })
+        }
+      }),
+    )
   }
 
   function concurrency() {
@@ -129,11 +131,7 @@ export namespace CronService {
         .select()
         .from(CronJobTable)
         .where(
-          and(
-            eq(CronJobTable.id, id),
-            eq(CronJobTable.project_id, projectID),
-            eq(CronJobTable.lease_owner, owner),
-          ),
+          and(eq(CronJobTable.id, id), eq(CronJobTable.project_id, projectID), eq(CronJobTable.lease_owner, owner)),
         )
         .get(),
     )
@@ -224,11 +222,7 @@ export namespace CronService {
     )
   }
 
-  async function fail(
-    job: typeof CronJobTable.$inferSelect,
-    owner: string,
-    err: unknown,
-  ): Promise<void> {
+  async function fail(job: typeof CronJobTable.$inferSelect, owner: string, err: unknown): Promise<void> {
     const now = Date.now()
     const step = job.failure_count + 1
     const wait = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** Math.min(step, 30))

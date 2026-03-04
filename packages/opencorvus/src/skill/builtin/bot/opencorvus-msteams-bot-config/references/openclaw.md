@@ -15,16 +15,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/msteams.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `MSTEAMS_APP_ID`, `MSTEAMS_APP_SECRET`
 - Optional: `MSTEAMS_WEBHOOK_HOST`, `MSTEAMS_WEBHOOK_PORT`, `MSTEAMS_WEBHOOK_PATH`
 - Compatibility fallback: `OPENCLAW_MSTEAMS_APP_ID`, `OPENCLAW_MSTEAMS_APP_SECRET`
 
 Runtime notes:
+
 - Adapter hosts webhook endpoint and keeps per-conversation session cache.
 - Outbound token acquisition uses Bot Framework OAuth endpoint (`botframework.com` tenant).
 - Outbound media is text fallback in current MVP (no native image upload flow).

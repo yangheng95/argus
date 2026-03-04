@@ -22,7 +22,9 @@ export namespace LSPServer {
       .catch(() => false)
 
   function pathWithBin() {
-    return [process.env["PATH"], Global.Path.bin].filter((value): value is string => Boolean(value)).join(path.delimiter)
+    return [process.env["PATH"], Global.Path.bin]
+      .filter((value): value is string => Boolean(value))
+      .join(path.delimiter)
   }
 
   function resolveNpmCommand() {

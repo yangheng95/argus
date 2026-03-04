@@ -32,11 +32,11 @@ export async function addCoordinateOverlay(
   const labelH = isHighDpi ? 20 : 14
   const minorStrokeW = isHighDpi ? 0.8 : 0.5
   const majorStrokeW = isHighDpi ? 1.5 : 1
-  const minorColor = "rgba(255,0,0,0.08)"    // very faint minor grid
-  const majorColor = "rgba(255,0,0,0.18)"    // visible major grid
-  const tickColor = "rgba(255,0,0,0.40)"     // edge ticks clearly visible
-  const bgColor = "rgba(0,0,0,0.35)"         // label background — more contrast
-  const textColor = "rgba(255,255,255,0.85)"  // brighter text for readability
+  const minorColor = "rgba(255,0,0,0.08)" // very faint minor grid
+  const majorColor = "rgba(255,0,0,0.18)" // visible major grid
+  const tickColor = "rgba(255,0,0,0.40)" // edge ticks clearly visible
+  const bgColor = "rgba(0,0,0,0.35)" // label background — more contrast
+  const textColor = "rgba(255,255,255,0.85)" // brighter text for readability
   const tickLen = isHighDpi ? 18 : 12
   const tickStrokeW = isHighDpi ? 2 : 1.5
   // Interior label style
@@ -44,7 +44,7 @@ export async function addCoordinateOverlay(
   const interiorCharW = isHighDpi ? 8 : 6
   const interiorLabelH = isHighDpi ? 16 : 12
   const interiorBg = "rgba(0,0,0,0.45)"
-  const interiorText = "rgba(255,255,0,0.85)"  // yellow for interior labels (distinct from edge)
+  const interiorText = "rgba(255,255,0,0.85)" // yellow for interior labels (distinct from edge)
 
   const svgParts: string[] = []
 
@@ -58,18 +58,30 @@ export async function addCoordinateOverlay(
     svgParts.push(`<line x1="${x}" y1="0" x2="${x}" y2="${height}" stroke="${color}" stroke-width="${sw}"/>`)
 
     // Top and bottom tick marks
-    svgParts.push(`<line x1="${x}" y1="0" x2="${x}" y2="${tickLen}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`)
-    svgParts.push(`<line x1="${x}" y1="${height}" x2="${x}" y2="${height - tickLen}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`)
+    svgParts.push(
+      `<line x1="${x}" y1="0" x2="${x}" y2="${tickLen}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`,
+    )
+    svgParts.push(
+      `<line x1="${x}" y1="${height}" x2="${x}" y2="${height - tickLen}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`,
+    )
 
     // Top edge label (every minor step)
     const labelW = String(x).length * charW + 4
-    svgParts.push(`<rect x="${x - labelW / 2}" y="${tickLen}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`)
-    svgParts.push(`<text x="${x}" y="${tickLen + labelH - 3}" font-size="${fontSize}" fill="${textColor}" text-anchor="middle" font-family="monospace">${x}</text>`)
+    svgParts.push(
+      `<rect x="${x - labelW / 2}" y="${tickLen}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`,
+    )
+    svgParts.push(
+      `<text x="${x}" y="${tickLen + labelH - 3}" font-size="${fontSize}" fill="${textColor}" text-anchor="middle" font-family="monospace">${x}</text>`,
+    )
 
     // Bottom edge label (every major step to reduce clutter)
     if (isMajor) {
-      svgParts.push(`<rect x="${x - labelW / 2}" y="${height - tickLen - labelH}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`)
-      svgParts.push(`<text x="${x}" y="${height - tickLen - 3}" font-size="${fontSize}" fill="${textColor}" text-anchor="middle" font-family="monospace">${x}</text>`)
+      svgParts.push(
+        `<rect x="${x - labelW / 2}" y="${height - tickLen - labelH}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`,
+      )
+      svgParts.push(
+        `<text x="${x}" y="${height - tickLen - 3}" font-size="${fontSize}" fill="${textColor}" text-anchor="middle" font-family="monospace">${x}</text>`,
+      )
     }
   }
 
@@ -83,18 +95,30 @@ export async function addCoordinateOverlay(
     svgParts.push(`<line x1="0" y1="${y}" x2="${width}" y2="${y}" stroke="${color}" stroke-width="${sw}"/>`)
 
     // Left and right tick marks
-    svgParts.push(`<line x1="0" y1="${y}" x2="${tickLen}" y2="${y}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`)
-    svgParts.push(`<line x1="${width}" y1="${y}" x2="${width - tickLen}" y2="${y}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`)
+    svgParts.push(
+      `<line x1="0" y1="${y}" x2="${tickLen}" y2="${y}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`,
+    )
+    svgParts.push(
+      `<line x1="${width}" y1="${y}" x2="${width - tickLen}" y2="${y}" stroke="${tickColor}" stroke-width="${tickStrokeW}"/>`,
+    )
 
     // Left edge label (every minor step)
     const labelW = String(y).length * charW + 4
-    svgParts.push(`<rect x="${tickLen}" y="${y - labelH / 2}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`)
-    svgParts.push(`<text x="${tickLen + 2}" y="${y + fontSize / 3}" font-size="${fontSize}" fill="${textColor}" font-family="monospace">${y}</text>`)
+    svgParts.push(
+      `<rect x="${tickLen}" y="${y - labelH / 2}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`,
+    )
+    svgParts.push(
+      `<text x="${tickLen + 2}" y="${y + fontSize / 3}" font-size="${fontSize}" fill="${textColor}" font-family="monospace">${y}</text>`,
+    )
 
     // Right edge label (every major step)
     if (isMajor) {
-      svgParts.push(`<rect x="${width - tickLen - labelW}" y="${y - labelH / 2}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`)
-      svgParts.push(`<text x="${width - tickLen - labelW + 2}" y="${y + fontSize / 3}" font-size="${fontSize}" fill="${textColor}" font-family="monospace">${y}</text>`)
+      svgParts.push(
+        `<rect x="${width - tickLen - labelW}" y="${y - labelH / 2}" width="${labelW}" height="${labelH}" fill="${bgColor}" rx="2"/>`,
+      )
+      svgParts.push(
+        `<text x="${width - tickLen - labelW + 2}" y="${y + fontSize / 3}" font-size="${fontSize}" fill="${textColor}" font-family="monospace">${y}</text>`,
+      )
     }
   }
 
@@ -106,15 +130,21 @@ export async function addCoordinateOverlay(
       const label = `${x},${y}`
       const lw = label.length * interiorCharW + 4
       // Position label slightly offset from intersection to avoid overlap with grid
-      svgParts.push(`<rect x="${x + 3}" y="${y - interiorLabelH - 1}" width="${lw}" height="${interiorLabelH}" fill="${interiorBg}" rx="2"/>`)
-      svgParts.push(`<text x="${x + 5}" y="${y - 3}" font-size="${interiorFontSize}" fill="${interiorText}" font-family="monospace">${label}</text>`)
+      svgParts.push(
+        `<rect x="${x + 3}" y="${y - interiorLabelH - 1}" width="${lw}" height="${interiorLabelH}" fill="${interiorBg}" rx="2"/>`,
+      )
+      svgParts.push(
+        `<text x="${x + 5}" y="${y - 3}" font-size="${interiorFontSize}" fill="${interiorText}" font-family="monospace">${label}</text>`,
+      )
     }
   }
 
   // ── Origin label ──
   const originW = isHighDpi ? 28 : 20
   svgParts.push(`<rect x="0" y="0" width="${originW}" height="${labelH}" fill="${bgColor}" rx="2"/>`)
-  svgParts.push(`<text x="2" y="${labelH - 3}" font-size="${fontSize}" fill="${textColor}" font-family="monospace">0,0</text>`)
+  svgParts.push(
+    `<text x="2" y="${labelH - 3}" font-size="${fontSize}" fill="${textColor}" font-family="monospace">0,0</text>`,
+  )
 
   const svg = Buffer.from(
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svgParts.join("")}</svg>`,
@@ -131,12 +161,7 @@ export async function addCoordinateOverlay(
  * Draw a crosshair + circle marker on an image at the given position.
  * Used to show the LLM where its last click actually landed.
  */
-export async function addClickMarker(
-  imageBuffer: Buffer,
-  x: number,
-  y: number,
-  label?: string,
-): Promise<Buffer> {
+export async function addClickMarker(imageBuffer: Buffer, x: number, y: number, label?: string): Promise<Buffer> {
   const sharp = await import("sharp").then((m) => m.default)
   const meta = await sharp(imageBuffer).metadata()
   const width = meta.width!
@@ -147,21 +172,23 @@ export async function addClickMarker(
   const cy = Math.max(0, Math.min(y, height - 1))
 
   const isHighDpi = Math.max(width, height) > 2500
-  const r = isHighDpi ? 20 : 14       // circle radius
-  const armLen = isHighDpi ? 36 : 24  // crosshair arm length
-  const sw = isHighDpi ? 3 : 2        // stroke width
+  const r = isHighDpi ? 20 : 14 // circle radius
+  const armLen = isHighDpi ? 36 : 24 // crosshair arm length
+  const sw = isHighDpi ? 3 : 2 // stroke width
   const fontSize = isHighDpi ? 14 : 10
   const charW = isHighDpi ? 9 : 6
 
-  const markerColor = "rgba(0,255,0,0.9)"    // bright green — distinct from red grid
-  const shadowColor = "rgba(0,0,0,0.6)"       // shadow for contrast
+  const markerColor = "rgba(0,255,0,0.9)" // bright green — distinct from red grid
+  const shadowColor = "rgba(0,0,0,0.6)" // shadow for contrast
   const labelBg = "rgba(0,0,0,0.7)"
   const labelText = "rgba(0,255,0,1)"
 
   const svgParts: string[] = []
 
   // Shadow (offset by 1px for contrast)
-  svgParts.push(`<circle cx="${cx + 1}" cy="${cy + 1}" r="${r}" fill="none" stroke="${shadowColor}" stroke-width="${sw + 1}"/>`)
+  svgParts.push(
+    `<circle cx="${cx + 1}" cy="${cy + 1}" r="${r}" fill="none" stroke="${shadowColor}" stroke-width="${sw + 1}"/>`,
+  )
   // Circle
   svgParts.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${markerColor}" stroke-width="${sw}"/>`)
   // Small dot at center
@@ -171,13 +198,25 @@ export async function addClickMarker(
   const armStart = r + 4
   const armEnd = r + armLen
   // Up
-  if (cy - armEnd > 0) svgParts.push(`<line x1="${cx}" y1="${cy - armStart}" x2="${cx}" y2="${cy - armEnd}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  if (cy - armEnd > 0)
+    svgParts.push(
+      `<line x1="${cx}" y1="${cy - armStart}" x2="${cx}" y2="${cy - armEnd}" stroke="${markerColor}" stroke-width="${sw}"/>`,
+    )
   // Down
-  if (cy + armEnd < height) svgParts.push(`<line x1="${cx}" y1="${cy + armStart}" x2="${cx}" y2="${cy + armEnd}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  if (cy + armEnd < height)
+    svgParts.push(
+      `<line x1="${cx}" y1="${cy + armStart}" x2="${cx}" y2="${cy + armEnd}" stroke="${markerColor}" stroke-width="${sw}"/>`,
+    )
   // Left
-  if (cx - armEnd > 0) svgParts.push(`<line x1="${cx - armStart}" y1="${cy}" x2="${cx - armEnd}" y2="${cy}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  if (cx - armEnd > 0)
+    svgParts.push(
+      `<line x1="${cx - armStart}" y1="${cy}" x2="${cx - armEnd}" y2="${cy}" stroke="${markerColor}" stroke-width="${sw}"/>`,
+    )
   // Right
-  if (cx + armEnd < width) svgParts.push(`<line x1="${cx + armStart}" y1="${cy}" x2="${cx + armEnd}" y2="${cy}" stroke="${markerColor}" stroke-width="${sw}"/>`)
+  if (cx + armEnd < width)
+    svgParts.push(
+      `<line x1="${cx + armStart}" y1="${cy}" x2="${cx + armEnd}" y2="${cy}" stroke="${markerColor}" stroke-width="${sw}"/>`,
+    )
 
   // Label
   const text = label || `CLICK(${cx},${cy})`
@@ -186,7 +225,9 @@ export async function addClickMarker(
   const labelX = Math.min(cx + r + 6, width - labelW - 2)
   const labelY = Math.max(cy - labelH - 4, 2)
   svgParts.push(`<rect x="${labelX}" y="${labelY}" width="${labelW}" height="${labelH}" fill="${labelBg}" rx="3"/>`)
-  svgParts.push(`<text x="${labelX + 4}" y="${labelY + fontSize + 1}" font-size="${fontSize}" fill="${labelText}" font-family="monospace">${text}</text>`)
+  svgParts.push(
+    `<text x="${labelX + 4}" y="${labelY + fontSize + 1}" font-size="${fontSize}" fill="${labelText}" font-family="monospace">${text}</text>`,
+  )
 
   const svg = Buffer.from(
     `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svgParts.join("")}</svg>`,

@@ -9,21 +9,25 @@ Research date: 2026-03-03.
 - OpenClaw chat channels index does not list WeCom as an official channel page.
 
 Inference from the official channel index snapshot:
+
 - Treat WeCom as OpenCorvus-native integration for now, not a documented OpenClaw channel workflow.
 
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/wecom.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `WECOM_CORP_ID`, `WECOM_SECRET`, `WECOM_AGENT_ID`
 - Optional: `WECOM_WEBHOOK_HOST`, `WECOM_WEBHOOK_PORT`, `WECOM_WEBHOOK_PATH`
 - Compatibility fallback: `OPENCLAW_WECOM_CORP_ID`, `OPENCLAW_WECOM_SECRET`, `OPENCLAW_WECOM_AGENT_ID`
 
 Runtime notes:
+
 - Adapter hosts XML callback endpoint for inbound events.
 - Outbound uses WeCom access token + message send API.
 - Media output uses WeCom media upload API before image send.

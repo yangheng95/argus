@@ -553,7 +553,8 @@ export const dict = {
   "download.faq.a3.afterZen": "，但 OpenCorvus 同樣支援 OpenAI、Anthropic、xAI 等所有主流供應商。",
 
   "download.faq.a5.p1": "OpenCorvus 100% 免費使用。",
-  "download.faq.a5.p2.beforeZen": "額外費用來自你對模型供應商的訂閱。雖然 OpenCorvus 支援任何模型供應商，但我們建議使用",
+  "download.faq.a5.p2.beforeZen":
+    "額外費用來自你對模型供應商的訂閱。雖然 OpenCorvus 支援任何模型供應商，但我們建議使用",
   "download.faq.a5.p2.afterZen": "。",
 
   "download.faq.a6.p1": "你的資料與資訊只會在你於 OpenCorvus 中建立可分享連結時被儲存。",

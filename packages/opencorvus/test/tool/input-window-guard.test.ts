@@ -58,7 +58,8 @@ mock.module("../../src/opencorvus/gui/index", () => ({
 mock.module("../../src/tool/overlay-client", () => ({
   showOverlay: () => {},
   showWindowHighlight: () => {},
-  resolveOverlayCoord: (value: number | undefined, fallback: number) => typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback,
+  resolveOverlayCoord: (value: number | undefined, fallback: number) =>
+    typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback,
   requestOverlayConfirm: async () => "unavailable",
   overlayDiagnostic: () => ({
     available: false,
@@ -148,18 +149,22 @@ function anchorMonitor(bounds: {
   })
 }
 
-function anchorWindow(windowId: number, title: string, bounds: {
-  x: number
-  y: number
-  width: number
-  height: number
-  scaleX?: number
-  scaleY?: number
-  logicalX?: number
-  logicalY?: number
-  logicalWidth?: number
-  logicalHeight?: number
-}) {
+function anchorWindow(
+  windowId: number,
+  title: string,
+  bounds: {
+    x: number
+    y: number
+    width: number
+    height: number
+    scaleX?: number
+    scaleY?: number
+    logicalX?: number
+    logicalY?: number
+    logicalWidth?: number
+    logicalHeight?: number
+  },
+) {
   DesktopState.recordCapture({
     scope: "window",
     bounds,
@@ -357,10 +362,7 @@ describe("tool.input bound window guard", () => {
       fn: async () => {
         anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
         const tool = await InputTool.init()
-        const result = await tool.execute(
-          { action: "click", x: 280, y: 300, button: "left", post: "none" },
-          ctx,
-        )
+        const result = await tool.execute({ action: "click", x: 280, y: 300, button: "left", post: "none" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(clicks).toEqual([{ x: 280, y: 300 }])
         expect(foregroundCalls).toBe(1)
@@ -486,10 +488,7 @@ describe("tool.input bound window guard", () => {
       fn: async () => {
         DesktopState.bindWindow(7, "Editor")
         const tool = await InputTool.init()
-        const result = await tool.execute(
-          { action: "type", text: "hello", driver: "playwright" },
-          ctx,
-        )
+        const result = await tool.execute({ action: "type", text: "hello", driver: "playwright" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(pastes).toHaveLength(0)
       },

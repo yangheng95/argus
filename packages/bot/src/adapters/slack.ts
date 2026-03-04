@@ -29,7 +29,9 @@ export class SlackAdapter implements BotAdapter {
 
     // Debug: log ALL raw message events before any filtering
     this.app.event("message", async ({ event }) => {
-      console.log(`[Slack][DEBUG] raw event: subtype=${(event as any).subtype ?? "none"} bot_id=${(event as any).bot_id ?? "none"} user=${(event as any).user ?? "none"} text="${((event as any).text ?? "").slice(0, 60)}"`)
+      console.log(
+        `[Slack][DEBUG] raw event: subtype=${(event as any).subtype ?? "none"} bot_id=${(event as any).bot_id ?? "none"} user=${(event as any).user ?? "none"} text="${((event as any).text ?? "").slice(0, 60)}"`,
+      )
     })
 
     this.app.message(async ({ message }) => {
@@ -43,13 +45,15 @@ export class SlackAdapter implements BotAdapter {
 
       // Detect audio attachments from message files
       let audio: AudioAttachment | undefined
-      const files = (message as any).files as Array<{
-        mimetype: string
-        url_private: string
-        name?: string
-        size: number
-        duration_ms?: number
-      }> | undefined
+      const files = (message as any).files as
+        | Array<{
+            mimetype: string
+            url_private: string
+            name?: string
+            size: number
+            duration_ms?: number
+          }>
+        | undefined
 
       if (files) {
         const audioFile = files.find((f) => f.mimetype?.startsWith("audio/"))
@@ -131,7 +135,13 @@ export class SlackAdapter implements BotAdapter {
     return this.startThread(channel, text)
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
     await this.app.client.filesUploadV2({
       channel_id: channel,
       thread_ts: thread,

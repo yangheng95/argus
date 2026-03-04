@@ -23,4 +23,3 @@ export namespace LiteData {
   export const priceID = fn(z.void(), () => Resource.ZEN_LITE_PRICE.price)
   export const planName = fn(z.void(), () => "lite")
 }
-

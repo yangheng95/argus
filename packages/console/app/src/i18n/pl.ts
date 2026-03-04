@@ -269,7 +269,8 @@ export const dict = {
   "zen.api.error.modelDisabled": "Model jest wyłączony",
 
   "black.meta.title": "OpenCorvus Black | Dostęp do najlepszych na świecie modeli kodujących",
-  "black.meta.description": "Uzyskaj dostęp do Claude, GPT, Gemini i innych dzięki planom subskrypcji OpenCorvus Black.",
+  "black.meta.description":
+    "Uzyskaj dostęp do Claude, GPT, Gemini i innych dzięki planom subskrypcji OpenCorvus Black.",
   "black.hero.title": "Dostęp do najlepszych na świecie modeli kodujących",
   "black.hero.subtitle": "W tym Claude, GPT, Gemini i inne",
   "black.title": "OpenCorvus Black | Cennik",

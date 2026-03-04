@@ -32,7 +32,8 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(#ffffff09 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+  background-image:
+    linear-gradient(#ffffff09 1px, transparent 1px), linear-gradient(90deg, #ffffff08 1px, transparent 1px);
   background-size: 40px 40px;
   opacity: 0.16;
   pointer-events: none;
@@ -223,4 +224,3 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-

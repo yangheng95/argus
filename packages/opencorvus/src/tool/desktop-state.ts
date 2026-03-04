@@ -42,11 +42,21 @@ const desktopState = Instance.state(
 )
 
 export namespace DesktopState {
-  export function getBounds() { return desktopState().bounds }
-  export function getTarget() { return desktopState().target }
-  export function getPhase() { return desktopState().phase }
-  export function getTaskEpoch() { return desktopState().taskEpoch }
-  export function getAnchorHash() { return desktopState().anchorHash }
+  export function getBounds() {
+    return desktopState().bounds
+  }
+  export function getTarget() {
+    return desktopState().target
+  }
+  export function getPhase() {
+    return desktopState().phase
+  }
+  export function getTaskEpoch() {
+    return desktopState().taskEpoch
+  }
+  export function getAnchorHash() {
+    return desktopState().anchorHash
+  }
   export function snapshot() {
     const s = desktopState()
     return {

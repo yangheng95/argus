@@ -140,5 +140,3 @@ export namespace Plugin {
     })
   }
 }
-
-

@@ -14,6 +14,7 @@ the right files, and produces a verifiable execution checklist.
 ## When to Load This Skill
 
 **Load plan skill when:**
+
 - Task touches 5+ files across multiple directories
 - Scope is uncertain (e.g. "refactor the auth system")
 - Multiple valid approaches exist and the choice matters
@@ -21,6 +22,7 @@ the right files, and produces a verifiable execution checklist.
 - The user's request is ambiguous about what exactly should change
 
 **Skip planning and execute directly when:**
+
 - Single file change with clear instructions
 - Typo fix, small rename, simple config update
 - You've already explored and understand the full scope
@@ -46,11 +48,13 @@ Launch up to 3 `task` sub-agents simultaneously, each with a focused search miss
 Never do sequential exploration when parallel is possible.
 
 Example parallel breakdown for "refactor session handling":
+
 - Agent 1: Find all session-related files, trace the data model
 - Agent 2: Find all callers/consumers of the session API
 - Agent 3: Find test coverage, check patterns used in similar refactors
 
 **Exploration goals:**
+
 - Identify every file that needs to change
 - Understand existing patterns before proposing a replacement
 - Find test files that document expected behavior
@@ -68,12 +72,14 @@ planner.add_task("Step 2: <second logical unit>", parentId=root)
 ```
 
 **Task decomposition rules:**
+
 - Each task = one independently verifiable unit of work
 - Order by dependency: tasks that others depend on come first
 - Include a verification task at the end ("run tests, typecheck, grep for residuals")
 - Aim for 3–8 tasks; if more, group into phases
 
 Use `planner.scratchpad_write` to record key findings from exploration:
+
 - Critical files and their roles
 - Gotchas and constraints
 - Chosen approach and why (vs alternatives considered)
@@ -116,15 +122,15 @@ what was tricky, and what the logical next steps would be.
 
 ## Tool Usage During Planning
 
-| Phase | Tools |
-|-------|-------|
-| Recall | `memory` (search prior work, known patterns, gotchas) |
-| Research | `websearch`, `webfetch` (external APIs, unfamiliar systems) |
-| Explore | `task` (parallel sub-agents), `glob`, `grep`, `read` |
-| Decompose | `planner.add_task`, `planner.scratchpad_write` |
-| Execute | `edit`, `write`, `bash` (tests, typecheck, lint) |
-| Track | `planner.update_task`, `planner.list_tasks` |
-| Persist | `memory` (write discoveries, working solutions, gotchas per subtask) |
+| Phase     | Tools                                                                |
+| --------- | -------------------------------------------------------------------- |
+| Recall    | `memory` (search prior work, known patterns, gotchas)                |
+| Research  | `websearch`, `webfetch` (external APIs, unfamiliar systems)          |
+| Explore   | `task` (parallel sub-agents), `glob`, `grep`, `read`                 |
+| Decompose | `planner.add_task`, `planner.scratchpad_write`                       |
+| Execute   | `edit`, `write`, `bash` (tests, typecheck, lint)                     |
+| Track     | `planner.update_task`, `planner.list_tasks`                          |
+| Persist   | `memory` (write discoveries, working solutions, gotchas per subtask) |
 
 **Sub-agent prompt template for exploration:**
 
@@ -148,6 +154,7 @@ Before switching from planning to execution, confirm:
 ## Anti-Patterns
 
 **DO NOT:**
+
 - Start editing before exploration is complete
 - Use planning as a reason to delay — if scope is clear, just execute
 - Create tasks so granular they track individual lines of code
@@ -155,6 +162,7 @@ Before switching from planning to execution, confirm:
 - Spend more time planning than the task would take to just do
 
 **DO:**
+
 - Parallelize exploration — multiple `task` agents at once
 - Record findings in scratchpad before they fall out of context
 - Adjust the plan mid-execution if you discover something unexpected

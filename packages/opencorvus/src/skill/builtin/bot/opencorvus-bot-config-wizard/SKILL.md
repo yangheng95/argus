@@ -9,6 +9,7 @@ description: Unified overlay-first setup workflow for OpenCorvus remote chat cha
 
 Drive one consistent channel setup workflow and avoid ad-hoc per-platform instructions.
 Default to overlay-guided setup in the new manager UI:
+
 - `Bot Config` card
 - `Environment Variables` button
 - `Channel Integrations` group and `+ Add Custom Env`
@@ -19,11 +20,13 @@ Switch to text-guided checklist mode only when requested or when desktop confirm
 ## Workflow
 
 1. Scope channels and mode.
+
 - Ask which channels to configure and process them one by one.
 - Default to overlay-guided mode.
 - Offer text-guided mode immediately as an option.
 
 2. Load only needed references.
+
 - Read `references/channel-matrix.md` for required env keys and checkpoint structure.
 - For platform details, read only target channel docs:
   - `.opencorvus/skill/opencorvus-slack-bot-config/references/openclaw.md`
@@ -33,6 +36,7 @@ Switch to text-guided checklist mode only when requested or when desktop confirm
   - and other channel references only if explicitly in scope.
 
 3. Run overlay-guided loop by default.
+
 - Ask user to open OpenCorvus overlay and stay in the `Bot Config` section.
 - Instruct the user to click `Environment Variables`.
 - For each channel key:
@@ -44,12 +48,14 @@ Switch to text-guided checklist mode only when requested or when desktop confirm
 - If desktop confirmation fails or times out, switch to text-guided mode and continue from the same step.
 
 4. Collect and apply config.
+
 - In overlay mode, write channel env keys through the `Environment Variables` panel then click `Save Config`.
 - In text-guided fallback, write channel env keys to `packages/bot/.env` (or system env if user requests).
 - Keep existing unrelated env keys unchanged.
 - Prefer canonical key names from `packages/bot/src/registry.ts`; keep `OPENCLAW_*` fallbacks as optional compatibility only.
 
 5. Validate and report.
+
 - In overlay mode:
   - use `Runtime` panel `Start` or restart flow;
   - use `Refresh` if needed;

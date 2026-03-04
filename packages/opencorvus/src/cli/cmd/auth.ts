@@ -447,4 +447,3 @@ export const AuthLogoutCommand = cmd({
     prompts.outro("Logout successful")
   },
 })
-

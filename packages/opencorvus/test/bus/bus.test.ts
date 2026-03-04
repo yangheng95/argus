@@ -6,15 +6,9 @@ import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
 // Define a test event for use in tests
-const TestEvent = BusEvent.define(
-  "test.event",
-  z.object({ value: z.string() }),
-)
+const TestEvent = BusEvent.define("test.event", z.object({ value: z.string() }))
 
-const CounterEvent = BusEvent.define(
-  "test.counter",
-  z.object({ count: z.number() }),
-)
+const CounterEvent = BusEvent.define("test.counter", z.object({ count: z.number() }))
 
 describe("Bus.subscribe / Bus.publish", () => {
   test("subscriber receives published event", async () => {

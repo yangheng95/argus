@@ -26,8 +26,14 @@ cancelEl.addEventListener("click", () => reply("cancel"))
 
 document.addEventListener("keydown", (e) => {
   if (!currentID) return
-  if (e.key === "Enter") { e.preventDefault(); reply("confirm") }
-  if (e.key === "Escape") { e.preventDefault(); reply("cancel") }
+  if (e.key === "Enter") {
+    e.preventDefault()
+    reply("confirm")
+  }
+  if (e.key === "Escape") {
+    e.preventDefault()
+    reply("cancel")
+  }
 })
 
 bridge.listen(bridge.events.showConfirm, (payload) => {

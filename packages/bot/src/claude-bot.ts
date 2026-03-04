@@ -9,8 +9,14 @@ const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN!
 const SLACK_APP_TOKEN = process.env.SLACK_APP_TOKEN!
 const ALLOWED_USERS = (() => {
   const raw = process.env.SLACK_ALLOWED_USER_IDS ?? ""
-  try { return JSON.parse(raw) as string[] } catch {}
-  return raw.replace(/[\[\]"]/g, "").split(",").map(s => s.trim()).filter(Boolean)
+  try {
+    return JSON.parse(raw) as string[]
+  } catch {}
+  return raw
+    .replace(/[\[\]"]/g, "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
 })()
 const PROJECT_DIR = process.env.OPENCORVUS_PROJECT_DIR ?? path.resolve(import.meta.dirname, "../../..")
 
@@ -68,7 +74,9 @@ async function runClaudeCode(task: string, channel: string, thread: string): Pro
         process.stdout.write(text) // mirror to bot console
         if (!progressSent && stdout.length > 200) {
           progressSent = true
-          postReply(channel, thread, `⚙️ Claude Code is working...\n\`\`\`\n${stdout.slice(0, 800)}\n\`\`\``).catch(() => {})
+          postReply(channel, thread, `⚙️ Claude Code is working...\n\`\`\`\n${stdout.slice(0, 800)}\n\`\`\``).catch(
+            () => {},
+          )
         }
       })
 
@@ -76,10 +84,13 @@ async function runClaudeCode(task: string, channel: string, thread: string): Pro
         stderr += chunk.toString()
       })
 
-      const timeout = setTimeout(() => {
-        proc.kill()
-        reject(new Error("Claude Code timed out after 10 minutes"))
-      }, 10 * 60 * 1000)
+      const timeout = setTimeout(
+        () => {
+          proc.kill()
+          reject(new Error("Claude Code timed out after 10 minutes"))
+        },
+        10 * 60 * 1000,
+      )
 
       proc.on("exit", (code) => {
         clearTimeout(timeout)
@@ -97,7 +108,11 @@ async function runClaudeCode(task: string, channel: string, thread: string): Pro
       await postReply(channel, thread, `✅ *Task completed!*\n\n${result.stdout.trim()}`)
     } else if (result.code !== 0) {
       const errMsg = result.stderr.trim() || result.stdout.trim() || "Unknown error"
-      await postReply(channel, thread, `❌ Claude Code exited with code ${result.code}:\n\`\`\`\n${errMsg.slice(0, 1500)}\n\`\`\``)
+      await postReply(
+        channel,
+        thread,
+        `❌ Claude Code exited with code ${result.code}:\n\`\`\`\n${errMsg.slice(0, 1500)}\n\`\`\``,
+      )
     } else {
       await postReply(channel, thread, "⚠️ Claude Code completed but produced no output.")
     }

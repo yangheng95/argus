@@ -11,7 +11,10 @@ export const TaskPlanTable = sqliteTable(
       .references(() => SessionTable.id, { onDelete: "cascade" }),
     parent_id: text(),
     goal: text().notNull(),
-    status: text().notNull().$type<"pending" | "in_progress" | "completed" | "blocked" | "cancelled">().default("pending"),
+    status: text()
+      .notNull()
+      .$type<"pending" | "in_progress" | "completed" | "blocked" | "cancelled">()
+      .default("pending"),
     priority: integer().notNull().default(0),
     notes: text(),
     progress_pct: integer().notNull().default(0),

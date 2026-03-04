@@ -231,8 +231,8 @@ function ApiMethod(props: ApiMethodProps) {
           "opencorvus-go": (
             <box gap={1}>
               <text fg={theme.textMuted}>
-                OpenCorvus Go is a $10 per month subscription that provides reliable access to popular open coding models
-                with generous usage limits.
+                OpenCorvus Go is a $10 per month subscription that provides reliable access to popular open coding
+                models with generous usage limits.
               </text>
               <text fg={theme.text}>
                 Go to <span style={{ fg: theme.primary }}>https://opencorvus.ai/zen</span> and enable OpenCorvus Go
@@ -257,4 +257,3 @@ function ApiMethod(props: ApiMethodProps) {
     />
   )
 }
-

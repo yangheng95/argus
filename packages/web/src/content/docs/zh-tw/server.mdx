@@ -18,13 +18,13 @@ opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 
 #### 選項
 
-| 旗標            | 描述                    | 預設             |
-| --------------- | ----------------------- | ---------------- |
-| `--port`        | 監聽連接埠              | `7878`           |
-| `--hostname`    | 監聽的主機名稱          | `127.0.0.1`      |
-| `--mdns`        | 啟用 mDNS 探索          | `false`          |
+| 旗標            | 描述                    | 預設               |
+| --------------- | ----------------------- | ------------------ |
+| `--port`        | 監聽連接埠              | `7878`             |
+| `--hostname`    | 監聽的主機名稱          | `127.0.0.1`        |
+| `--mdns`        | 啟用 mDNS 探索          | `false`            |
 | `--mdns-domain` | mDNS 服務的自訂網域名稱 | `opencorvus.local` |
-| `--cors`        | 額外允許的瀏覽器來源    | `[]`             |
+| `--cors`        | 額外允許的瀏覽器來源    | `[]`               |
 
 `--cors` 可以多次傳遞：
 
@@ -142,26 +142,26 @@ opencorvus 伺服器暴露以下 API。
 
 ### 工作階段
 
-| 方法     | 路徑                                     | 描述                           | 說明                                                                                |
-| -------- | ---------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
-| `GET`    | `/session`                               | 列出所有工作階段               | 回傳 <a href={typesUrl}><code>Session[]</code></a>                                  |
-| `POST`   | `/session`                               | 建立新工作階段                 | 請求主體：`{ parentID?, title? }`，回傳 <a href={typesUrl}><code>Session</code></a> |
-| `GET`    | `/session/status`                        | 取得所有工作階段的狀態         | 回傳 `{ [sessionID: string]: `<a href={typesUrl}>SessionStatus</a>` }`              |
-| `GET`    | `/session/:id`                           | 取得工作階段詳情               | 回傳 <a href={typesUrl}><code>Session</code></a>                                    |
-| `DELETE` | `/session/:id`                           | 刪除工作階段及其所有資料       | 回傳 `boolean`                                                                      |
-| `PATCH`  | `/session/:id`                           | 更新工作階段屬性               | 請求主體：`{ title? }`，回傳 <a href={typesUrl}><code>Session</code></a>            |
-| `GET`    | `/session/:id/children`                  | 取得工作階段的子工作階段       | 回傳 <a href={typesUrl}><code>Session[]</code></a>                                  |
-| `GET`    | `/session/:id/todo`                      | 取得工作階段的待辦事項清單     | 回傳 <a href={typesUrl}><code>Todo[]</code></a>                                     |
-| `POST`   | `/session/:id/init`                      | 分析應用程式並建立 `AGENTS.md` | 請求主體：`{ messageID, providerID, modelID }`，回傳 `boolean`                      |
-| `POST`   | `/session/:id/fork`                      | 在某條訊息處分岔現有工作階段   | 請求主體：`{ messageID? }`，回傳 <a href={typesUrl}><code>Session</code></a>        |
-| `POST`   | `/session/:id/abort`                     | 中止正在執行的工作階段         | 回傳 `boolean`                                                                      |
-| `POST`   | `/session/:id/share`                     | 分享工作階段                   | 回傳 <a href={typesUrl}><code>Session</code></a>                                    |
-| `DELETE` | `/session/:id/share`                     | 取消分享工作階段               | 回傳 <a href={typesUrl}><code>Session</code></a>                                    |
-| `GET`    | `/session/:id/diff`                      | 取得本次工作階段的差異         | 查詢參數：`messageID?`，回傳 <a href={typesUrl}><code>FileDiff[]</code></a>         |
-| `POST`   | `/session/:id/summarize`                 | 摘要工作階段                   | 請求主體：`{ providerID, modelID }`，回傳 `boolean`                                 |
-| `POST`   | `/session/:id/revert`                    | 還原訊息                       | 請求主體：`{ messageID, partID? }`，回傳 `boolean`                                  |
-| `POST`   | `/session/:id/unrevert`                  | 恢復所有已還原的訊息           | 回傳 `boolean`                                                                      |
-| `POST`   | `/permission/:requestID/reply` | 回應權限請求                   | 請求主體：`{ reply, message? }`，回傳 `boolean`                                 |
+| 方法     | 路徑                           | 描述                           | 說明                                                                                |
+| -------- | ------------------------------ | ------------------------------ | ----------------------------------------------------------------------------------- |
+| `GET`    | `/session`                     | 列出所有工作階段               | 回傳 <a href={typesUrl}><code>Session[]</code></a>                                  |
+| `POST`   | `/session`                     | 建立新工作階段                 | 請求主體：`{ parentID?, title? }`，回傳 <a href={typesUrl}><code>Session</code></a> |
+| `GET`    | `/session/status`              | 取得所有工作階段的狀態         | 回傳 `{ [sessionID: string]: `<a href={typesUrl}>SessionStatus</a>` }`              |
+| `GET`    | `/session/:id`                 | 取得工作階段詳情               | 回傳 <a href={typesUrl}><code>Session</code></a>                                    |
+| `DELETE` | `/session/:id`                 | 刪除工作階段及其所有資料       | 回傳 `boolean`                                                                      |
+| `PATCH`  | `/session/:id`                 | 更新工作階段屬性               | 請求主體：`{ title? }`，回傳 <a href={typesUrl}><code>Session</code></a>            |
+| `GET`    | `/session/:id/children`        | 取得工作階段的子工作階段       | 回傳 <a href={typesUrl}><code>Session[]</code></a>                                  |
+| `GET`    | `/session/:id/todo`            | 取得工作階段的待辦事項清單     | 回傳 <a href={typesUrl}><code>Todo[]</code></a>                                     |
+| `POST`   | `/session/:id/init`            | 分析應用程式並建立 `AGENTS.md` | 請求主體：`{ messageID, providerID, modelID }`，回傳 `boolean`                      |
+| `POST`   | `/session/:id/fork`            | 在某條訊息處分岔現有工作階段   | 請求主體：`{ messageID? }`，回傳 <a href={typesUrl}><code>Session</code></a>        |
+| `POST`   | `/session/:id/abort`           | 中止正在執行的工作階段         | 回傳 `boolean`                                                                      |
+| `POST`   | `/session/:id/share`           | 分享工作階段                   | 回傳 <a href={typesUrl}><code>Session</code></a>                                    |
+| `DELETE` | `/session/:id/share`           | 取消分享工作階段               | 回傳 <a href={typesUrl}><code>Session</code></a>                                    |
+| `GET`    | `/session/:id/diff`            | 取得本次工作階段的差異         | 查詢參數：`messageID?`，回傳 <a href={typesUrl}><code>FileDiff[]</code></a>         |
+| `POST`   | `/session/:id/summarize`       | 摘要工作階段                   | 請求主體：`{ providerID, modelID }`，回傳 `boolean`                                 |
+| `POST`   | `/session/:id/revert`          | 還原訊息                       | 請求主體：`{ messageID, partID? }`，回傳 `boolean`                                  |
+| `POST`   | `/session/:id/unrevert`        | 恢復所有已還原的訊息           | 回傳 `boolean`                                                                      |
+| `POST`   | `/permission/:requestID/reply` | 回應權限請求                   | 請求主體：`{ reply, message? }`，回傳 `boolean`                                     |
 
 ---
 

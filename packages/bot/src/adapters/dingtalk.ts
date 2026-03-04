@@ -89,8 +89,17 @@ export class DingTalkAdapter implements BotAdapter {
     return `${Date.now()}`
   }
 
-  async uploadImage(channel: string, thread: string, _imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
-    const text = title && title !== filename ? `${title}\n(image upload not supported in DingTalk text MVP)` : `Image "${filename}" generated (upload is not supported in DingTalk text MVP).`
+  async uploadImage(
+    channel: string,
+    thread: string,
+    _imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
+    const text =
+      title && title !== filename
+        ? `${title}\n(image upload not supported in DingTalk text MVP)`
+        : `Image "${filename}" generated (upload is not supported in DingTalk text MVP).`
     await this.sendMessage(channel, thread, text)
   }
 

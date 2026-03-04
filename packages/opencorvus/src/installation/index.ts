@@ -259,4 +259,3 @@ export namespace Installation {
       .then((data: any) => data.tag_name.replace(/^v/, ""))
   }
 }
-

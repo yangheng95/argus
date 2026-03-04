@@ -234,13 +234,19 @@ describe("scheduler.task-queue-service", () => {
         })
 
         await TaskQueueService.runNow()
-        const firstRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, first)).get())
-        const secondRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get())
+        const firstRow = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, first)).get(),
+        )
+        const secondRow = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get(),
+        )
         expect(firstRow?.status).toBe("completed")
         expect(secondRow?.status).toBe("queued")
 
         await TaskQueueService.runNow()
-        const finalRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get())
+        const finalRow = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, second)).get(),
+        )
         expect(finalRow?.status).toBe("completed")
       },
     })
@@ -299,12 +305,12 @@ describe("scheduler.task-queue-service", () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "2"
     const seen: string[] = []
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(
-      (async (input: Parameters<typeof SessionPrompt.prompt>[0]) => {
-        seen.push(input.sessionID)
-        return result()
-      }) as never,
-    )
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+      input: Parameters<typeof SessionPrompt.prompt>[0],
+    ) => {
+      seen.push(input.sessionID)
+      return result()
+    }) as never)
 
     await Instance.provide({
       directory: tmp.path,
@@ -433,7 +439,9 @@ describe("scheduler.task-queue-service", () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "1"
     const seen: string[] = []
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: Parameters<typeof SessionPrompt.prompt>[0]) => {
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async (
+      input: Parameters<typeof SessionPrompt.prompt>[0],
+    ) => {
       seen.push(input.sessionID)
       return result()
     }) as never)
@@ -513,9 +521,11 @@ describe("scheduler.task-queue-service", () => {
         await TaskQueueService.runNow()
 
         const blockedRow = Database.use((db) =>
-          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, blockedQueued)).get())
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, blockedQueued)).get(),
+        )
         const readyRow = Database.use((db) =>
-          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, readyQueued)).get())
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, readyQueued)).get(),
+        )
         expect(blockedRow?.status).toBe("queued")
         expect(readyRow?.status).toBe("completed")
         expect(seen).toEqual([ready.id])

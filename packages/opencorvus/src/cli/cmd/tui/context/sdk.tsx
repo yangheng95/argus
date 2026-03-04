@@ -99,5 +99,3 @@ export const { use: useSDK, provider: SDKProvider } = createSimpleContext({
     return { client: sdk, event: emitter, url: props.url }
   },
 })
-
-

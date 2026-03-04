@@ -249,4 +249,3 @@ export namespace LSPClient {
     return result
   }
 }
-

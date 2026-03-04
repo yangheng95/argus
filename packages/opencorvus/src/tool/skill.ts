@@ -20,11 +20,11 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
       })
     : skills
 
-  const compatible = accessibleSkills.filter((skill) =>
-    skill.platforms.length === 0 || skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
+  const compatible = accessibleSkills.filter(
+    (skill) => skill.platforms.length === 0 || skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
   )
-  const incompatible = accessibleSkills.filter((skill) =>
-    skill.platforms.length > 0 && !skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
+  const incompatible = accessibleSkills.filter(
+    (skill) => skill.platforms.length > 0 && !skill.platforms.includes(platform as "win32" | "darwin" | "linux"),
   )
 
   const description =

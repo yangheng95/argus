@@ -16,9 +16,9 @@ function wait(ms: number, abort: AbortSignal) {
 }
 
 function escaped(value: string) {
-  if (!value.includes("\"")) return `"${value}"`
+  if (!value.includes('"')) return `"${value}"`
   if (!value.includes("'")) return `'${value}'`
-  return `concat("${value.split("\"").join("\", '\"', \"")}")`
+  return `concat("${value.split('"').join('", \'"\', "')}")`
 }
 
 function detail(error: unknown) {
@@ -72,10 +72,7 @@ export namespace AppiumDriver {
 
   function selectors(target: Automation.Locator) {
     if (target.kind === "aid") {
-      return [
-        `~${target.value}`,
-        `//*[@content-desc=${escaped(target.value)} or @name=${escaped(target.value)}]`,
-      ]
+      return [`~${target.value}`, `//*[@content-desc=${escaped(target.value)} or @name=${escaped(target.value)}]`]
     }
     if (target.kind === "role") {
       if (target.name) {
@@ -123,39 +120,33 @@ export namespace AppiumDriver {
 
     return {
       locate: async (ctx) => {
-        const result = await sort(ctx.target).reduce(
-          async (hit, target) => {
-            const current = await hit
-            if (current) return current
-            if (ctx.abort.aborted) {
-              return {
-                ok: false,
-                kind: "aborted",
-                detail: "aborted",
-              } satisfies Automation.Probe<Automation.Node>
-            }
-            const found = await selectors(target).reduce(
-              async (value, selector) => {
-                const existing = await value
-                if (existing) return existing
-                const list = await client.$$(selector)
-                return list[0] ?? null
-              },
-              Promise.resolve<Element | null>(null),
-            )
-            if (!found) return null
-            const id = getId(found)
-            node.set(id, found)
+        const result = await sort(ctx.target).reduce(async (hit, target) => {
+          const current = await hit
+          if (current) return current
+          if (ctx.abort.aborted) {
             return {
-              ok: true,
-              data: {
-                id,
-                attrs: { kind: target.kind, value: target.value },
-              },
+              ok: false,
+              kind: "aborted",
+              detail: "aborted",
             } satisfies Automation.Probe<Automation.Node>
-          },
-          Promise.resolve<Automation.Probe<Automation.Node> | null>(null),
-        )
+          }
+          const found = await selectors(target).reduce(async (value, selector) => {
+            const existing = await value
+            if (existing) return existing
+            const list = await client.$$(selector)
+            return list[0] ?? null
+          }, Promise.resolve<Element | null>(null))
+          if (!found) return null
+          const id = getId(found)
+          node.set(id, found)
+          return {
+            ok: true,
+            data: {
+              id,
+              attrs: { kind: target.kind, value: target.value },
+            },
+          } satisfies Automation.Probe<Automation.Node>
+        }, Promise.resolve<Automation.Probe<Automation.Node> | null>(null))
         if (result) return result
         return {
           ok: false,
@@ -199,16 +190,17 @@ export namespace AppiumDriver {
           const first = await element.getRect()
           await wait(stableDelay, ctx.abort)
           const second = await element.getRect()
-          const ok = first.x === second.x
-            && first.y === second.y
-            && first.width === second.width
-            && first.height === second.height
+          const ok =
+            first.x === second.x &&
+            first.y === second.y &&
+            first.width === second.width &&
+            first.height === second.height
           return ok
             ? ({ ok: true } satisfies Automation.Probe)
             : ({ ok: false, kind: "state_mismatch", detail: "element is moving" } satisfies Automation.Probe)
         }
         if (check.key === "text") {
-          const text = await element.getText?.() ?? ""
+          const text = (await element.getText?.()) ?? ""
           const value = String(check.value)
           return text.includes(value)
             ? ({ ok: true } satisfies Automation.Probe)
@@ -232,41 +224,49 @@ export namespace AppiumDriver {
         const action = ctx.act
         const element = resolve(ctx.node)
         if (action.kind === "hotkey") {
-          return client.keys(action.keys)
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+          return client
+            .keys(action.keys)
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
         }
         if (action.kind === "scroll") {
           const amount = action.amount ?? 3
           const script = "mobile: scrollGesture"
-          const args = [{
-            direction: action.direction,
-            percent: Math.max(0.2, Math.min(1, amount / 5)),
-          }]
-          return client.execute(script, args)
-            .then(() => ({ ok: true } satisfies Automation.Probe))
+          const args = [
+            {
+              direction: action.direction,
+              percent: Math.max(0.2, Math.min(1, amount / 5)),
+            },
+          ]
+          return client
+            .execute(script, args)
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
             .catch(() => {
               const key = action.direction === "down" ? "PageDown" : "PageUp"
-              return client.keys([key])
-                .then(() => ({ ok: true } satisfies Automation.Probe))
-                .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+              return client
+                .keys([key])
+                .then(() => ({ ok: true }) satisfies Automation.Probe)
+                .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
             })
         }
         if (action.kind === "wait") {
-          return client.pause(action.ms)
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+          return client
+            .pause(action.ms)
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
         }
         if (action.kind === "custom") {
           if (action.name === "back" && client.back) {
-            return client.back()
-              .then(() => ({ ok: true } satisfies Automation.Probe))
-              .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+            return client
+              .back()
+              .then(() => ({ ok: true }) satisfies Automation.Probe)
+              .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
           }
           if (action.name === "activate_app" && client.activateApp && input.appId) {
-            return client.activateApp(input.appId)
-              .then(() => ({ ok: true } satisfies Automation.Probe))
-              .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+            return client
+              .activateApp(input.appId)
+              .then(() => ({ ok: true }) satisfies Automation.Probe)
+              .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
           }
           return {
             ok: false,
@@ -276,15 +276,20 @@ export namespace AppiumDriver {
         }
         if (action.kind === "type") {
           if (!element) {
-            return client.keys(action.text)
-              .then(() => ({ ok: true } satisfies Automation.Probe))
-              .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+            return client
+              .keys(action.text)
+              .then(() => ({ ok: true }) satisfies Automation.Probe)
+              .catch(
+                (error) => ({ ok: false, kind: "not_interactable", detail: detail(error) }) satisfies Automation.Probe,
+              )
           }
           const clear = element.clear ? element.clear() : Promise.resolve()
           return clear
             .then(() => element.setValue(action.text))
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch(
+              (error) => ({ ok: false, kind: "not_interactable", detail: detail(error) }) satisfies Automation.Probe,
+            )
         }
         if (!element) {
           return {
@@ -294,9 +299,12 @@ export namespace AppiumDriver {
           } satisfies Automation.Probe
         }
         if (action.kind === "click") {
-          return element.click()
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+          return element
+            .click()
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch(
+              (error) => ({ ok: false, kind: "not_interactable", detail: detail(error) }) satisfies Automation.Probe,
+            )
         }
         return {
           ok: false,
@@ -320,13 +328,15 @@ export namespace AppiumDriver {
         }
         if (ctx.kind !== "not_found" && ctx.kind !== "infra") return { ok: true } satisfies Automation.Probe
         if (!client.activateApp || !input.appId) return { ok: true } satisfies Automation.Probe
-        return client.activateApp(input.appId)
-          .then(() => ({ ok: true } satisfies Automation.Probe))
-          .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+        return client
+          .activateApp(input.appId)
+          .then(() => ({ ok: true }) satisfies Automation.Probe)
+          .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
       },
       snapshot: async (ctx) => {
         if (ctx.abort.aborted) return null
-        return client.takeScreenshot()
+        return client
+          .takeScreenshot()
           .then((base64) => {
             const hash = createHash("md5").update(Buffer.from(base64, "base64")).digest("hex")
             return {

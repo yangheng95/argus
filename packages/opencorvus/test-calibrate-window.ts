@@ -11,10 +11,10 @@ async function main() {
   console.log("Opening Settings (Win+I)...")
   await keyboard.pressKey(Key.LeftSuper, Key.I)
   await keyboard.releaseKey(Key.LeftSuper, Key.I)
-  await new Promise(r => setTimeout(r, 2000))
+  await new Promise((r) => setTimeout(r, 2000))
 
   const windows = Window.all()
-  const settingsWin = windows.find(w => w.title().includes("Settings") || w.title().includes("设置"))
+  const settingsWin = windows.find((w) => w.title().includes("Settings") || w.title().includes("设置"))
   if (!settingsWin) {
     console.log("Settings not found!")
     for (const w of windows) {
@@ -33,7 +33,9 @@ async function main() {
   const wScaleX = wPhysW / wLogW
   const wScaleY = wPhysH / wLogH
 
-  console.log(`Settings: logical(${wLogX},${wLogY}) ${wLogW}x${wLogH}, physical ${wPhysW}x${wPhysH}, scale ${wScaleX.toFixed(3)}x${wScaleY.toFixed(3)}`)
+  console.log(
+    `Settings: logical(${wLogX},${wLogY}) ${wLogW}x${wLogH}, physical ${wPhysW}x${wPhysH}, scale ${wScaleX.toFixed(3)}x${wScaleY.toFixed(3)}`,
+  )
 
   // Save Settings screenshot with overlay first
   const settingsOverlay = await addCoordinateOverlay(Buffer.from(wImg.toPngSync()))
@@ -56,13 +58,13 @@ async function main() {
 
     console.log(`\n  ${t.name}: phys(${t.px},${t.py}) → screenLog(${screenLogX},${screenLogY})`)
     await mouse.setPosition(new Point(screenLogX, screenLogY))
-    await new Promise(r => setTimeout(r, 800))
+    await new Promise((r) => setTimeout(r, 800))
 
     // Take fullscreen screenshot to see cursor position
     const m = Monitor.all()[0]
     const img = m.captureImageSync()
     const overlaid = await addCoordinateOverlay(Buffer.from(img.toPngSync()))
-    const fname = `test-cal-target-${t.name.replace(/[^a-zA-Z]/g, '-')}.png`
+    const fname = `test-cal-target-${t.name.replace(/[^a-zA-Z]/g, "-")}.png`
     writeFileSync(`D:/myhexin-local/argus-opencode/${fname}`, overlaid)
     console.log(`  Saved ${fname}`)
   }

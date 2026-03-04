@@ -115,18 +115,20 @@ const Step = z.object({
 
 const Driver = z.enum(["auto", "playwright", "appium"]).optional()
 
-const Run = z.object({
-  action: z.literal("run"),
-  driver: Driver.describe("auto (default), playwright, or appium"),
-  step: Step.optional(),
-  steps: z.array(Step).min(1).optional(),
-  stopOnFail: z.boolean().optional(),
-  timeoutMs: z.number().int().min(1).max(120000).optional(),
-  intervalMs: z.number().int().min(0).max(10000).optional(),
-  retryMax: z.number().int().min(1).max(10).optional(),
-  backoffMs: z.array(z.number().int().min(0)).optional(),
-  post_template: CheckTemplate.optional(),
-}).refine((x) => !!x.step || !!x.steps, { message: "Provide either step or steps." })
+const Run = z
+  .object({
+    action: z.literal("run"),
+    driver: Driver.describe("auto (default), playwright, or appium"),
+    step: Step.optional(),
+    steps: z.array(Step).min(1).optional(),
+    stopOnFail: z.boolean().optional(),
+    timeoutMs: z.number().int().min(1).max(120000).optional(),
+    intervalMs: z.number().int().min(0).max(10000).optional(),
+    retryMax: z.number().int().min(1).max(10).optional(),
+    backoffMs: z.array(z.number().int().min(0)).optional(),
+    post_template: CheckTemplate.optional(),
+  })
+  .refine((x) => !!x.step || !!x.steps, { message: "Provide either step or steps." })
   .refine((x) => !(x.step && x.steps), { message: "Use step or steps, not both." })
 
 const Params = z.discriminatedUnion("action", [
@@ -226,12 +228,12 @@ export const AutomationTool = Tool.define("automation", {
         appiumAppId: params.appium_app_id,
       })
       return {
-        title: attached.playwright || attached.appium
-          ? "Automation runtime attached"
-          : "Automation runtime attach skipped",
-        output: attached.playwright || attached.appium
-          ? JSON.stringify(attached)
-          : `No runtime found on globalThis. Expected keys: playwright=${attached.globals.playwright}, appium=${attached.globals.appium}.`,
+        title:
+          attached.playwright || attached.appium ? "Automation runtime attached" : "Automation runtime attach skipped",
+        output:
+          attached.playwright || attached.appium
+            ? JSON.stringify(attached)
+            : `No runtime found on globalThis. Expected keys: playwright=${attached.globals.playwright}, appium=${attached.globals.appium}.`,
         metadata: attached,
       }
     }
@@ -262,26 +264,30 @@ export const AutomationTool = Tool.define("automation", {
       }
     }
 
-    const selected = selectDriver(AutomationRuntime.merge({
-      kind: params.driver,
-    }))
+    const selected = selectDriver(
+      AutomationRuntime.merge({
+        kind: params.driver,
+      }),
+    )
     const engine = Automation.create(selected.driver, {
       timeoutMs: params.timeoutMs ?? 5000,
       intervalMs: params.intervalMs ?? 120,
       retryMax: params.retryMax ?? 2,
       backoffMs: params.backoffMs ?? [120, 320, 640],
     })
-    const steps = (params.step ? [params.step] : params.steps ?? []).map((step) => normalize(step, params.post_template))
-    const flow = steps.length === 1
-      ? await engine.run(steps[0], { abort: ctx.abort })
-        .then((step) => ({
-          ok: step.ok,
-          steps: [step],
-        }))
-      : await engine.runAll(steps, {
-        abort: ctx.abort,
-        stopOnFail: params.stopOnFail ?? true,
-      })
+    const steps = (params.step ? [params.step] : (params.steps ?? [])).map((step) =>
+      normalize(step, params.post_template),
+    )
+    const flow =
+      steps.length === 1
+        ? await engine.run(steps[0], { abort: ctx.abort }).then((step) => ({
+            ok: step.ok,
+            steps: [step],
+          }))
+        : await engine.runAll(steps, {
+            abort: ctx.abort,
+            stopOnFail: params.stopOnFail ?? true,
+          })
     const failed = flow.steps.filter((x) => !x.ok)
 
     return {

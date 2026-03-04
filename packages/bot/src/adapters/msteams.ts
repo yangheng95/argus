@@ -37,14 +37,7 @@ export class MSTeamsAdapter implements BotAdapter {
   private token?: string
   private expires = 0
 
-  constructor(opts: {
-    appId: string
-    appSecret: string
-    host?: string
-    port?: number
-    path?: string
-    serve?: Serve
-  }) {
+  constructor(opts: { appId: string; appSecret: string; host?: string; port?: number; path?: string; serve?: Serve }) {
     this.appId = opts.appId
     this.appSecret = opts.appSecret
     this.host = opts.host ?? "0.0.0.0"
@@ -81,8 +74,17 @@ export class MSTeamsAdapter implements BotAdapter {
     return this.send(channel, text)
   }
 
-  async uploadImage(channel: string, thread: string, _imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
-    const text = title && title !== filename ? `${title}\n(image upload not supported in MS Teams text MVP)` : `Image "${filename}" generated (upload is not supported in MS Teams text MVP).`
+  async uploadImage(
+    channel: string,
+    thread: string,
+    _imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
+    const text =
+      title && title !== filename
+        ? `${title}\n(image upload not supported in MS Teams text MVP)`
+        : `Image "${filename}" generated (upload is not supported in MS Teams text MVP).`
     await this.sendMessage(channel, thread, text)
   }
 
@@ -90,21 +92,24 @@ export class MSTeamsAdapter implements BotAdapter {
     const session = this.session.get(channel)
     if (!session) throw new Error(`MS Teams channel not initialized: ${channel}`)
     const token = await this.auth()
-    const res = await fetch(`${session.serviceUrl}/v3/conversations/${encodeURIComponent(session.conversationId)}/activities`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+    const res = await fetch(
+      `${session.serviceUrl}/v3/conversations/${encodeURIComponent(session.conversationId)}/activities`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          type: "message",
+          from: { id: this.appId },
+          conversation: { id: session.conversationId },
+          text,
+          replyToId: thread || undefined,
+        }),
+        signal: AbortSignal.timeout(30_000),
       },
-      body: JSON.stringify({
-        type: "message",
-        from: { id: this.appId },
-        conversation: { id: session.conversationId },
-        text,
-        replyToId: thread || undefined,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
+    )
     if (!res.ok) throw new Error(`MS Teams send failed: ${res.status} ${await res.text()}`)
     const data = (await res.json()) as { id?: string }
     return data.id ?? `${Date.now()}`

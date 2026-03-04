@@ -121,7 +121,8 @@ export const SessionDeleteCommand = cmd({
       }
 
       if (!args.yes) {
-        const message = targets.length === 1 ? `Delete session "${targets[0]!.title}"?` : `Delete ${targets.length} sessions?`
+        const message =
+          targets.length === 1 ? `Delete session "${targets[0]!.title}"?` : `Delete ${targets.length} sessions?`
         const confirm = await prompts.confirm({
           message,
           initialValue: false,

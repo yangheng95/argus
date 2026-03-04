@@ -147,9 +147,7 @@ export namespace Goal {
   }
 
   export function get(goalID: string): Info | null {
-    const row = Database.use((db) =>
-      db.select().from(GoalTable).where(eq(GoalTable.id, goalID)).get(),
-    )
+    const row = Database.use((db) => db.select().from(GoalTable).where(eq(GoalTable.id, goalID)).get())
     return row ? fromRow(row) : null
   }
 
@@ -168,9 +166,7 @@ export namespace Goal {
     if (changes.progressLog !== undefined) set.progress_log = JSON.stringify(changes.progressLog)
 
     if (Object.keys(set).length > 0) {
-      Database.use((db) =>
-        db.update(GoalTable).set(set).where(eq(GoalTable.id, goalID)).run(),
-      )
+      Database.use((db) => db.update(GoalTable).set(set).where(eq(GoalTable.id, goalID)).run())
     }
 
     const updated = get(goalID)!
@@ -187,20 +183,12 @@ export namespace Goal {
   }
 
   export function remove(goalID: string): void {
-    Database.use((db) =>
-      db.delete(GoalTable).where(eq(GoalTable.id, goalID)).run(),
-    )
+    Database.use((db) => db.delete(GoalTable).where(eq(GoalTable.id, goalID)).run())
     log.info("goal removed", { id: goalID })
   }
 
   export function list(sessionID: string): Info[] {
-    const rows = Database.use((db) =>
-      db
-        .select()
-        .from(GoalTable)
-        .where(eq(GoalTable.session_id, sessionID))
-        .all(),
-    )
+    const rows = Database.use((db) => db.select().from(GoalTable).where(eq(GoalTable.session_id, sessionID)).all())
     return rows.map(fromRow)
   }
 
@@ -366,9 +354,10 @@ Evaluate whether the goal has been achieved based on the evidence above.`
         result: {
           ...judgeResult,
           deadlock: true,
-          reasoning: goal.currentAttempts + 1 >= goal.maxAttempts
-            ? `Max attempts (${goal.maxAttempts}) reached. ${judgeResult.reasoning}`
-            : judgeResult.reasoning,
+          reasoning:
+            goal.currentAttempts + 1 >= goal.maxAttempts
+              ? `Max attempts (${goal.maxAttempts}) reached. ${judgeResult.reasoning}`
+              : judgeResult.reasoning,
         },
       }
     }
@@ -389,9 +378,7 @@ Evaluate whether the goal has been achieved based on the evidence above.`
     const lines: string[] = ["<session-goals>"]
     for (const goal of goals) {
       const icon = goal.priority === "blocking" ? "🚫" : "📋"
-      const progress = goal.currentAttempts > 0
-        ? ` (attempt ${goal.currentAttempts}/${goal.maxAttempts})`
-        : ""
+      const progress = goal.currentAttempts > 0 ? ` (attempt ${goal.currentAttempts}/${goal.maxAttempts})` : ""
       lines.push(`${icon} **${goal.description}**${progress} [${goal.id}]`)
       lines.push(`  Criteria: ${goal.criteria}`)
       if (goal.verifyCmd) lines.push(`  Verify: \`${goal.verifyCmd}\``)

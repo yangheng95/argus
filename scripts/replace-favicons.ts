@@ -12,10 +12,7 @@ import { resolve } from "path"
 const ROOT = resolve(import.meta.dir, "..")
 const SRC = `${ROOT}/packages/console/app/src/asset/brand/mascot-ar-icon.png`
 
-const PUBLIC_DIRS = [
-  `${ROOT}/packages/console/app/public`,
-  `${ROOT}/packages/web/public`,
-]
+const PUBLIC_DIRS = [`${ROOT}/packages/console/app/public`, `${ROOT}/packages/web/public`]
 
 interface IconSpec {
   filename: string
@@ -23,10 +20,10 @@ interface IconSpec {
 }
 
 const SPECS: IconSpec[] = [
-  { filename: "favicon-96x96.png",          size: 96  },
-  { filename: "favicon-96x96-v3.png",       size: 96  },
-  { filename: "apple-touch-icon.png",        size: 180 },
-  { filename: "apple-touch-icon-v3.png",     size: 180 },
+  { filename: "favicon-96x96.png", size: 96 },
+  { filename: "favicon-96x96-v3.png", size: 96 },
+  { filename: "apple-touch-icon.png", size: 180 },
+  { filename: "apple-touch-icon-v3.png", size: 180 },
   { filename: "web-app-manifest-192x192.png", size: 192 },
   { filename: "web-app-manifest-512x512.png", size: 512 },
 ]
@@ -106,22 +103,22 @@ async function buildIco(sizes: number[], src: string): Promise<Buffer> {
 
   const header = Buffer.alloc(headerSize)
   // ICONDIR
-  header.writeUInt16LE(0, 0)      // reserved
-  header.writeUInt16LE(1, 2)      // type = 1 (icon)
-  header.writeUInt16LE(count, 4)  // count
+  header.writeUInt16LE(0, 0) // reserved
+  header.writeUInt16LE(1, 2) // type = 1 (icon)
+  header.writeUInt16LE(count, 4) // count
 
   for (let i = 0; i < count; i++) {
     const size = sizes[i]
     const png = pngs[i]
     const entry = 6 + i * 16
-    header.writeUInt8(size >= 256 ? 0 : size, entry)      // width (0 = 256)
-    header.writeUInt8(size >= 256 ? 0 : size, entry + 1)  // height
-    header.writeUInt8(0, entry + 2)   // color count
-    header.writeUInt8(0, entry + 3)   // reserved
+    header.writeUInt8(size >= 256 ? 0 : size, entry) // width (0 = 256)
+    header.writeUInt8(size >= 256 ? 0 : size, entry + 1) // height
+    header.writeUInt8(0, entry + 2) // color count
+    header.writeUInt8(0, entry + 3) // reserved
     header.writeUInt16LE(1, entry + 4) // planes
     header.writeUInt16LE(32, entry + 6) // bit count
-    header.writeUInt32LE(png.length, entry + 8)  // size of image data
-    header.writeUInt32LE(offset, entry + 12)     // offset of image data
+    header.writeUInt32LE(png.length, entry + 8) // size of image data
+    header.writeUInt32LE(offset, entry + 12) // offset of image data
     offset += png.length
   }
 

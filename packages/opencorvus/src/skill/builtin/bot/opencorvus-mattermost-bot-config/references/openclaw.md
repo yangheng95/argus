@@ -15,16 +15,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/mattermost.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `MATTERMOST_SERVER_URL`, `MATTERMOST_BOT_TOKEN`
 - Optional: `MATTERMOST_WEBHOOK_HOST`, `MATTERMOST_WEBHOOK_PORT`, `MATTERMOST_WEBHOOK_PATH`
 - Compatibility fallback: `OPENCLAW_MATTERMOST_SERVER_URL`, `OPENCLAW_MATTERMOST_BOT_TOKEN`
 
 Runtime notes:
+
 - Adapter exposes webhook endpoint and accepts JSON or form payload.
 - Outbound send uses Mattermost `/api/v4/posts`.
 - Outbound image is supported through `/api/v4/files` upload.

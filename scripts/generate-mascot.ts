@@ -329,8 +329,8 @@ async function dashscopeCreate(prompt: string, size: string, apiKey: string): Pr
   // Supported: 1024*1024, 720*1280, 1280*720, 768*1024, 1024*768, 768*1152, 1152*768
   const sizeMap: Record<string, string> = {
     "1024x1024": "1024*1024",
-    "1024x1792": "720*1280",  // closest portrait
-    "1792x1024": "1280*720",  // closest landscape
+    "1024x1792": "720*1280", // closest portrait
+    "1792x1024": "1280*720", // closest landscape
   }
   const wanxSize = sizeMap[size] ?? "1024*1024"
 
@@ -406,8 +406,7 @@ async function generateWithDashScope(image: MascotImage, apiKey: string): Promis
 // ---------------------------------------------------------------------------
 
 async function generateWithOpenAI(image: MascotImage, apiKey: string): Promise<string> {
-  const dalleSize =
-    image.size === "1792x1024" ? "1792x1024" : image.size === "1024x1792" ? "1024x1792" : "1024x1024"
+  const dalleSize = image.size === "1792x1024" ? "1792x1024" : image.size === "1024x1792" ? "1024x1792" : "1024x1024"
 
   console.log("  [DALL-E 3] Generating...")
   const resp = await fetch("https://api.openai.com/v1/images/generations", {
@@ -502,9 +501,7 @@ async function main() {
   const dryRun = args.includes("--dry-run")
   const filter = args.filter((a) => !a.startsWith("--"))
 
-  const targets = filter.length
-    ? MASCOT_IMAGES.filter((img) => filter.includes(img.id))
-    : MASCOT_IMAGES
+  const targets = filter.length ? MASCOT_IMAGES.filter((img) => filter.includes(img.id)) : MASCOT_IMAGES
 
   if (filter.length && targets.length === 0) {
     console.error(`No image found with id(s): ${filter.join(", ")}`)
@@ -514,7 +511,9 @@ async function main() {
 
   console.log(`OpenCorvus Mascot Generator — "Corvus the chibi crow"`)
   console.log(`Mode: ${dryRun ? "DRY RUN (no API calls)" : "LIVE"}`)
-  console.log(`Provider: ${process.env.DASHSCOPE_API_KEY ? "DashScope Wanx" : process.env.OPENAI_API_KEY ? "DALL-E 3" : "NONE (set DASHSCOPE_API_KEY)"}`)
+  console.log(
+    `Provider: ${process.env.DASHSCOPE_API_KEY ? "DashScope Wanx" : process.env.OPENAI_API_KEY ? "DALL-E 3" : "NONE (set DASHSCOPE_API_KEY)"}`,
+  )
   console.log(`Images to generate: ${targets.length}`)
 
   // Ensure output dirs exist

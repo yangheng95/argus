@@ -61,11 +61,13 @@ describe("tool.desktop-state flow", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        expect(() => DesktopState.recordCapture({
-          scope: "window",
-          bounds: { x: 10, y: 10, width: 100, height: 80 },
-          screenshotHash: "bad",
-        })).toThrow("DesktopState.recordCapture(scope=window) requires window metadata")
+        expect(() =>
+          DesktopState.recordCapture({
+            scope: "window",
+            bounds: { x: 10, y: 10, width: 100, height: 80 },
+            screenshotHash: "bad",
+          }),
+        ).toThrow("DesktopState.recordCapture(scope=window) requires window metadata")
       },
     })
   })
@@ -75,11 +77,13 @@ describe("tool.desktop-state flow", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        expect(() => DesktopState.recordCapture({
-          scope: "monitor",
-          bounds: { x: 0, y: 0, width: 1920, height: 1080 },
-          screenshotHash: "bad",
-        })).toThrow("DesktopState.recordCapture(scope=monitor) requires monitor metadata")
+        expect(() =>
+          DesktopState.recordCapture({
+            scope: "monitor",
+            bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+            screenshotHash: "bad",
+          }),
+        ).toThrow("DesktopState.recordCapture(scope=monitor) requires monitor metadata")
       },
     })
   })

@@ -63,19 +63,22 @@ export class WeComAdapter implements BotAdapter {
 
   async sendMessage(channel: string, _thread: string, text: string): Promise<void> {
     const token = await this.auth()
-    const res = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${encodeURIComponent(token)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const res = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${encodeURIComponent(token)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          touser: channel,
+          msgtype: "text",
+          agentid: Number(this.agentId),
+          text: { content: text },
+        }),
+        signal: AbortSignal.timeout(30_000),
       },
-      body: JSON.stringify({
-        touser: channel,
-        msgtype: "text",
-        agentid: Number(this.agentId),
-        text: { content: text },
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
+    )
     if (!res.ok) throw new Error(`WeCom send failed: ${res.status} ${await res.text()}`)
     const data = (await res.json()) as { errcode?: number; errmsg?: string }
     if (data.errcode && data.errcode !== 0) throw new Error(`WeCom send failed: ${data.errcode} ${data.errmsg ?? ""}`)
@@ -86,37 +89,50 @@ export class WeComAdapter implements BotAdapter {
     return `${Date.now()}`
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
     const token = await this.auth()
     const form = new FormData()
     form.set("media", new Blob([Uint8Array.from(imageBuffer)]), filename)
-    const uploaded = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=${encodeURIComponent(token)}&type=image`, {
-      method: "POST",
-      body: form,
-      signal: AbortSignal.timeout(30_000),
-    })
+    const uploaded = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=${encodeURIComponent(token)}&type=image`,
+      {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(30_000),
+      },
+    )
     if (!uploaded.ok) throw new Error(`WeCom upload failed: ${uploaded.status} ${await uploaded.text()}`)
     const media = (await uploaded.json()) as {
       errcode?: number
       errmsg?: string
       media_id?: string
     }
-    if (media.errcode && media.errcode !== 0) throw new Error(`WeCom upload failed: ${media.errcode} ${media.errmsg ?? ""}`)
+    if (media.errcode && media.errcode !== 0)
+      throw new Error(`WeCom upload failed: ${media.errcode} ${media.errmsg ?? ""}`)
     if (!media.media_id) throw new Error("WeCom upload failed: missing media_id")
 
-    const sent = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${encodeURIComponent(token)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const sent = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${encodeURIComponent(token)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          touser: channel,
+          msgtype: "image",
+          agentid: Number(this.agentId),
+          image: { media_id: media.media_id },
+        }),
+        signal: AbortSignal.timeout(30_000),
       },
-      body: JSON.stringify({
-        touser: channel,
-        msgtype: "image",
-        agentid: Number(this.agentId),
-        image: { media_id: media.media_id },
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
+    )
     if (!sent.ok) throw new Error(`WeCom send image failed: ${sent.status} ${await sent.text()}`)
     if (!title || title === filename) return
     await this.sendMessage(channel, thread, title)
@@ -153,9 +169,12 @@ export class WeComAdapter implements BotAdapter {
 
   private async auth() {
     if (this.token && this.expires > Date.now()) return this.token
-    const res = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${encodeURIComponent(this.corpId)}&corpsecret=${encodeURIComponent(this.secret)}`, {
-      signal: AbortSignal.timeout(30_000),
-    })
+    const res = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${encodeURIComponent(this.corpId)}&corpsecret=${encodeURIComponent(this.secret)}`,
+      {
+        signal: AbortSignal.timeout(30_000),
+      },
+    )
     if (!res.ok) throw new Error(`WeCom token failed: ${res.status} ${await res.text()}`)
     const data = (await res.json()) as {
       errcode?: number

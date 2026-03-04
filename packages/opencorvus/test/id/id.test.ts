@@ -110,9 +110,20 @@ describe("Identifier.schema", () => {
 
   test("validates all prefix types", () => {
     const prefixes = [
-      "session", "message", "permission", "question", "user",
-      "part", "pty", "tool", "workspace", "memory",
-      "memchunk", "cron", "task", "goal",
+      "session",
+      "message",
+      "permission",
+      "question",
+      "user",
+      "part",
+      "pty",
+      "tool",
+      "workspace",
+      "memory",
+      "memchunk",
+      "cron",
+      "task",
+      "goal",
     ] as const
     for (const prefix of prefixes) {
       const schema = Identifier.schema(prefix)

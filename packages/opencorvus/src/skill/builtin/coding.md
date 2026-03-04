@@ -25,6 +25,7 @@ submission and completion must be tracked through session APIs.
 ### When to Use Direct Tools Instead
 
 Fall back to direct `bash`/`edit`/`write` tools when:
+
 - Session API path is unavailable
 - The task is a simple one-liner (e.g., `mkdir`, `git status`)
 - You need to read files for context (`read`, `glob`, `grep` are always fine)
@@ -51,16 +52,16 @@ Fall back to direct `bash`/`edit`/`write` tools when:
 
 ## Tools Overview
 
-| Tool | Purpose | When to use |
-|------|---------|------------|
-| `read` | Read files/dirs | Always read before editing |
-| `write` | Create/overwrite files | New files or complete rewrites |
-| `edit` | Exact string replacement | Preferred for existing files |
-| `bash` | Shell commands | Git, package mgr, build, test |
-| `glob` | Find files by pattern | Locate files before reading |
-| `grep` | Search file contents | Find code, trace usage |
-| `apply_patch` | Unified diff patches | Multi-file coordinated edits |
-| `task` | Sub-agent delegation | Heavy parallel exploration |
+| Tool          | Purpose                  | When to use                    |
+| ------------- | ------------------------ | ------------------------------ |
+| `read`        | Read files/dirs          | Always read before editing     |
+| `write`       | Create/overwrite files   | New files or complete rewrites |
+| `edit`        | Exact string replacement | Preferred for existing files   |
+| `bash`        | Shell commands           | Git, package mgr, build, test  |
+| `glob`        | Find files by pattern    | Locate files before reading    |
+| `grep`        | Search file contents     | Find code, trace usage         |
+| `apply_patch` | Unified diff patches     | Multi-file coordinated edits   |
+| `task`        | Sub-agent delegation     | Heavy parallel exploration     |
 
 **Critical**: Use specialized tools over bash for file operations.
 bash grep/cat/find → use grep/read/glob instead.
@@ -70,18 +71,21 @@ bash grep/cat/find → use grep/read/glob instead.
 Every coding task follows this cycle:
 
 ### 1. EXPLORE — Map the territory
+
 - `read(".")` → project structure, config files
 - `glob("src/**/*.ts")` → find source files
 - `grep("functionName")` → locate definitions and usages
 - Follow the import chain to trace data flow
 
 ### 2. UNDERSTAND — Read before acting
+
 - Read the files you'll modify and their dependencies
 - Check test files for expected behavior
 - Understand the architectural pattern before introducing changes
 - If unfamiliar with a framework/library, search docs first
 
 ### 3. PLAN — Think before coding
+
 - For non-trivial changes: outline what you'll modify and why
 - Identify all files that need changes
 - Consider edge cases and backward compatibility
@@ -90,12 +94,14 @@ Every coding task follows this cycle:
   load the `plan` skill for a structured exploration-and-decomposition workflow
 
 ### 4. MODIFY — Make targeted changes
+
 - `edit` for surgical modifications (preferred)
 - `write` for new files only
 - `apply_patch` for coordinated multi-file changes
 - One concern per edit — atomic, focused changes
 
 ### 5. VERIFY — Confirm it works
+
 - `bash("npm test")` or equivalent
 - `bash("tsc --noEmit")` for type checking
 - `bash("npm run lint")` for linting
@@ -104,23 +110,27 @@ Every coding task follows this cycle:
 ## Codebase Exploration
 
 ### Initial Orientation
+
 When entering an unfamiliar codebase:
+
 1. `read(".")` — top-level structure, README, config files
 2. `read("package.json")` — dependencies, scripts, project type
 3. `glob("src/**")` — source tree layout
 4. Identify entry points, core modules, test structure
 
 ### Finding Code
-| Goal | Tool | Example |
-|------|------|---------|
-| File by name | `glob` | `glob("**/auth*.ts")` |
-| File by content | `grep` | `grep("class UserService")` |
-| All usages of X | `grep` | `grep("handleAuth", type="ts")` |
-| Import chain | `grep` | `grep("from.*./auth")` |
-| Test files | `glob` | `glob("**/*.test.*")` or `glob("**/*.spec.*")` |
-| Config files | `glob` | `glob("**/tsconfig*.json")` |
+
+| Goal            | Tool   | Example                                        |
+| --------------- | ------ | ---------------------------------------------- |
+| File by name    | `glob` | `glob("**/auth*.ts")`                          |
+| File by content | `grep` | `grep("class UserService")`                    |
+| All usages of X | `grep` | `grep("handleAuth", type="ts")`                |
+| Import chain    | `grep` | `grep("from.*./auth")`                         |
+| Test files      | `glob` | `glob("**/*.test.*")` or `glob("**/*.spec.*")` |
+| Config files    | `glob` | `glob("**/tsconfig*.json")`                    |
 
 ### Tracing Architecture
+
 1. **Entry point** → find main/index file, read it
 2. **Follow imports** → trace from entry to the area of interest
 3. **Read interfaces/types** → understand data shapes
@@ -128,7 +138,9 @@ When entering an unfamiliar codebase:
 5. **Read config** → tsconfig, build config, linting rules
 
 ### Deep Exploration with Sub-Agents
+
 When a task requires exploring 10+ files across multiple directories:
+
 - Use `task` to spawn focused sub-agents
 - Give each sub-agent a specific search mission
 - Combine findings before modifying code
@@ -150,12 +162,14 @@ Need to change code?
 ```
 
 ### edit — Reliable Replacements
+
 - `oldString` must exactly match file content, including whitespace
 - `oldString` must be unique in the file — include surrounding context
 - Line number prefixes from `read` output are NOT part of file content
 - Use `replaceAll` for renaming identifiers across a file
 
 ### Writing Clean Code
+
 - **Match existing style** — indentation, naming, import order
 - **No unnecessary additions** — don't add docstrings, comments, type
   annotations to code you didn't change
@@ -169,6 +183,7 @@ Need to change code?
 ## Debugging & Error Recovery
 
 ### Systematic Debugging Method
+
 ```
 1. READ the error message carefully — what file, what line, what's wrong
 2. LOCATE the source — grep for error text, function name, or identifier
@@ -184,6 +199,7 @@ Never guess-and-check. Always form a theory before fixing.
 ### Build Failures
 
 #### Syntax / Parse Errors
+
 ```
 1. Read the exact error location (file:line)
 2. Read the file around that line
@@ -193,6 +209,7 @@ Never guess-and-check. Always form a theory before fixing.
 ```
 
 #### Module Not Found / Import Errors
+
 ```
 1. Verify the import path is correct: glob for the target file
 2. Check if the export exists: read the source file
@@ -205,6 +222,7 @@ Never guess-and-check. Always form a theory before fixing.
 ```
 
 #### Type Errors (TypeScript)
+
 ```
 1. bash("tsc --noEmit") → get all errors
 2. Read each error location
@@ -261,6 +279,7 @@ Never guess-and-check. Always form a theory before fixing.
 ## Git Workflow
 
 ### Checking State
+
 ```
 bash("git status")              → modified/untracked files
 bash("git diff")                → unstaged changes
@@ -286,6 +305,7 @@ Only commit when the user asks. Follow these steps:
 ```
 
 **Safety rules:**
+
 - Never use `--no-verify` unless explicitly asked
 - Never use `--amend` unless explicitly asked
 - Never force push to main/master
@@ -306,6 +326,7 @@ Only commit when the user asks. Follow these steps:
 ```
 
 **PR description format:**
+
 ```
 ## Summary
 <1-3 bullet points describing the changes>
@@ -315,6 +336,7 @@ Only commit when the user asks. Follow these steps:
 ```
 
 ### Branch Management
+
 - Create feature branches for non-trivial changes
 - Keep branches focused — one feature/fix per branch
 - Rebase on main before creating PR if needed
@@ -343,6 +365,7 @@ For tasks that touch 5+ files or require multiple logical steps:
 ### Handling Ambiguity
 
 When requirements are unclear:
+
 - Check existing code for patterns that suggest the intended approach
 - Look for TODO/FIXME comments that provide context
 - Read test files — they often specify expected behavior
@@ -352,6 +375,7 @@ When requirements are unclear:
 ## Anti-Patterns
 
 **DO NOT:**
+
 - Edit a file you haven't read — you'll break things you didn't see
 - Add comments/docstrings to code you didn't change
 - Add error handling for impossible scenarios
@@ -367,6 +391,7 @@ When requirements are unclear:
 - Skip running tests after making changes
 
 **DO:**
+
 - Read before writing, always
 - Follow existing code patterns exactly
 - Run verification after every change

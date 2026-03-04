@@ -56,7 +56,9 @@
   --font-mono: "JetBrains Mono", "Cascadia Code", "Consolas", monospace;
 }
 
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;

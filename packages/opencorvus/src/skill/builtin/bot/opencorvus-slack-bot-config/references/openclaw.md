@@ -15,16 +15,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/slack.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`
 - Optional: `SLACK_SIGNING_SECRET`
 - Compatibility fallback: `OPENCLAW_SLACK_BOT_TOKEN`, `OPENCLAW_SLACK_APP_TOKEN`, `OPENCLAW_SLACK_SIGNING_SECRET`
 
 Runtime notes:
+
 - `SlackAdapter` runs Socket Mode (`socketMode: true`).
 - Replies are sent as thread replies (`thread_ts`).
 - Adapter deduplicates repeated message events by `message.ts`.

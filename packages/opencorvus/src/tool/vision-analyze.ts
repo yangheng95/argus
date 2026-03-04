@@ -30,9 +30,7 @@ For cases where you need to see the raw screenshot yourself (e.g., reading fine 
 work), use screen.screenshot instead.`
 
 const VisionAnalyzeParams = z.object({
-  context: z
-    .string()
-    .describe("What you're looking for or trying to do — guides the analysis focus"),
+  context: z.string().describe("What you're looking for or trying to do — guides the analysis focus"),
   previous_summary: z
     .string()
     .optional()
@@ -74,13 +72,8 @@ const AnalysisResult = z.object({
   description: z.string().describe("Description of what's visible on screen"),
   elements: z.array(UIElement).describe("Interactive UI elements with coordinates"),
   suggestedAction: SuggestedAction.optional().describe("Suggested next action based on context"),
-  runningSummary: z
-    .string()
-    .describe("Persistent summary tracking screen state across analyses"),
-  errors: z
-    .array(z.string())
-    .optional()
-    .describe("Any error messages or warnings visible on screen"),
+  runningSummary: z.string().describe("Persistent summary tracking screen state across analyses"),
+  errors: z.array(z.string()).optional().describe("Any error messages or warnings visible on screen"),
 })
 
 interface VisionMetadata {
@@ -164,9 +157,7 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
       const binding = await WindowManager.getBinding()
       const monitorBinding = await MonitorManager.getBinding()
       if (binding) {
-        parts.push(
-          `## Window Info\nTitle: ${binding.info.title}\nSize: ${binding.info.width}x${binding.info.height}`,
-        )
+        parts.push(`## Window Info\nTitle: ${binding.info.title}\nSize: ${binding.info.width}x${binding.info.height}`)
       } else if (monitorBinding) {
         parts.push(
           `## Monitor Info\nName: ${monitorBinding.info.name}\nSize: ${monitorBinding.info.width}x${monitorBinding.info.height}`,

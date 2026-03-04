@@ -15,16 +15,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/matrix.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `MATRIX_HOMESERVER_URL`, `MATRIX_ACCESS_TOKEN`
 - Optional: `MATRIX_SINCE_TOKEN`
 - Compatibility fallback: `OPENCLAW_MATRIX_HOMESERVER_URL`, `OPENCLAW_MATRIX_ACCESS_TOKEN`
 
 Runtime notes:
+
 - Adapter starts sync loop and tracks `next_batch` (`since`) state in memory.
 - Adapter resolves own user id through `/_matrix/client/v3/account/whoami` to skip self messages.
 - Outbound image is supported via Matrix media upload API.

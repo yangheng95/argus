@@ -97,4 +97,3 @@ export namespace ConfigMarkdown {
     }),
   )
 }
-

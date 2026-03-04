@@ -46,7 +46,10 @@ export namespace BunProc {
     // In dev mode process.execPath is the bun binary itself.
     // In compiled mode process.execPath is the opencorvus binary — not a bun proxy.
     // Fall back to bun on PATH so `bun add` still works after compilation.
-    const base = path.basename(process.execPath).toLowerCase().replace(/\.exe$/, "")
+    const base = path
+      .basename(process.execPath)
+      .toLowerCase()
+      .replace(/\.exe$/, "")
     if (base === "bun") return process.execPath
     return Bun.which("bun") ?? process.execPath
   }
@@ -134,4 +137,3 @@ export namespace BunProc {
     return mod
   }
 }
-

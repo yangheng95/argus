@@ -49,30 +49,30 @@ mock.module("../../src/opencorvus/perception/capture", () => ({
     take: async () => {
       const scope = capturePlan.shift() ?? captureScope
       return scope === "window"
-      ? {
-          path: "x",
-          width: 1280,
-          height: 800,
-          buffer: Buffer.from("png"),
-          rawBuffer: Buffer.from("raw"),
-          timestamp: Date.now(),
-          windowBounds: { x: 100, y: 80, width: 1280, height: 800 },
-          scope: "window",
-          window: { id: 7, title: "Editor", appName: "Code" },
-          monitor: null,
-        }
-      : {
-          path: "x",
-          width: 1280,
-          height: 800,
-          buffer: Buffer.from("png"),
-          rawBuffer: Buffer.from("raw"),
-          timestamp: Date.now(),
-          windowBounds: { x: 0, y: 0, width: 1920, height: 1080 },
-          scope: "monitor",
-          window: null,
-          monitor: { id: 1, name: "Main", x: 0, y: 0, width: 1920, height: 1080, isPrimary: true, scaleFactor: 1 },
-        }
+        ? {
+            path: "x",
+            width: 1280,
+            height: 800,
+            buffer: Buffer.from("png"),
+            rawBuffer: Buffer.from("raw"),
+            timestamp: Date.now(),
+            windowBounds: { x: 100, y: 80, width: 1280, height: 800 },
+            scope: "window",
+            window: { id: 7, title: "Editor", appName: "Code" },
+            monitor: null,
+          }
+        : {
+            path: "x",
+            width: 1280,
+            height: 800,
+            buffer: Buffer.from("png"),
+            rawBuffer: Buffer.from("raw"),
+            timestamp: Date.now(),
+            windowBounds: { x: 0, y: 0, width: 1920, height: 1080 },
+            scope: "monitor",
+            window: null,
+            monitor: { id: 1, name: "Main", x: 0, y: 0, width: 1920, height: 1080, isPrimary: true, scaleFactor: 1 },
+          }
     },
     cleanup: async () => {},
   },

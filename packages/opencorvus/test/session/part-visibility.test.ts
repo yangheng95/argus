@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test"
-import { messageControlOnly, textAudience, textForACP, textForBoth, textForModel, textForUI } from "../../src/session/part-visibility"
+import {
+  messageControlOnly,
+  textAudience,
+  textForACP,
+  textForBoth,
+  textForModel,
+  textForUI,
+} from "../../src/session/part-visibility"
 
 describe("part-visibility", () => {
   test("uses legacy synthetic mapping", () => {

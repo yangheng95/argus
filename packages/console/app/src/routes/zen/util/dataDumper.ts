@@ -42,4 +42,3 @@ export function createDataDumper(sessionId: string, requestId: string, projectId
     },
   }
 }
-

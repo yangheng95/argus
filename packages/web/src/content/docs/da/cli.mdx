@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f` | Fil(er), der skal vedhæftes til meddelelsen                                         |
 | `--format`   |      | Format: standard (formateret) eller json (rå JSON hændelser)                        |
 | `--title`    |      | Titel for sessionen (bruger trunkeret prompt, hvis der ikke er angivet nogen værdi) |
-| `--attach`   |      | Tilslut til en kørende opencorvus-server (f.eks. http://localhost:7878)               |
+| `--attach`   |      | Tilslut til en kørende opencorvus-server (f.eks. http://localhost:7878)             |
 | `--port`     |      | Port til den lokale server (standard til vilkårlig port)                            |
 
 ---
@@ -553,32 +553,32 @@ opencorvus CLI tager følgende globale flag.
 
 OpenCorvus kan konfigureres ved hjælp af miljøvariabler.
 
-| Variabel                              | Skriv   | Beskrivelse                                                           |
-| ------------------------------------- | ------- | --------------------------------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | boolean | Del automatisk session                                                |
-| `OPENCORVUS_GIT_BASH_PATH`              | string  | Sti til Git Bash eksekverbar på Windows                               |
-| `OPENCORVUS_CONFIG`                     | string  | Sti til konfigurationsfil                                             |
-| `OPENCORVUS_CONFIG_DIR`                 | string  | Sti til konfigurationsmappe                                           |
-| `OPENCORVUS_CONFIG_CONTENT`             | string  | Indbygget json-konfigurationsindhold                                  |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Deaktiver automatisk opdateringskontrol                               |
-| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Deaktiver beskæring af gamle data                                     |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Deaktiver automatisk opdatering af terminaltitel                      |
-| `OPENCORVUS_PERMISSION`                 | string  | Indbygget json-tilladelseskonfiguration                               |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Deaktiver standard plugins                                            |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Deaktiver automatisk LSP-serverdownloads                              |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Aktive eksperimentelle modeller                                       |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Deaktiver automatisk kontekstkomprimering                             |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | Deaktiver læsning fra `.claude` (prompt + færdigheder)                |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Deaktiver læsning `~/.claude/CLAUDE.md`                               |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Deaktiver indlæsning af `.claude/skills`                              |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Deaktivering af modeller fra eksterne kilder                          |
-| `OPENCORVUS_FAKE_VCS`                   | string  | Falsk VCS-udbyder til testformål                                      |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Deaktiver filtidskontrol for optimering                               |
-| `OPENCORVUS_CLIENT`                     | string  | Klient-id (standard til `cli`)                                        |
-| `OPENCORVUS_ENABLE_EXA`                 | boolean | Aktiver Exa-websøgeværktøjer                                          |
-| `OPENCORVUS_SERVER_PASSWORD`            | string  | Aktiver grundlæggende godkendelse for `serve`/`web`                   |
+| Variabel                                | Skriv   | Beskrivelse                                                             |
+| --------------------------------------- | ------- | ----------------------------------------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | Del automatisk session                                                  |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Sti til Git Bash eksekverbar på Windows                                 |
+| `OPENCORVUS_CONFIG`                     | string  | Sti til konfigurationsfil                                               |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | Sti til konfigurationsmappe                                             |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | Indbygget json-konfigurationsindhold                                    |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Deaktiver automatisk opdateringskontrol                                 |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Deaktiver beskæring af gamle data                                       |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Deaktiver automatisk opdatering af terminaltitel                        |
+| `OPENCORVUS_PERMISSION`                 | string  | Indbygget json-tilladelseskonfiguration                                 |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Deaktiver standard plugins                                              |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Deaktiver automatisk LSP-serverdownloads                                |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Aktive eksperimentelle modeller                                         |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Deaktiver automatisk kontekstkomprimering                               |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | Deaktiver læsning fra `.claude` (prompt + færdigheder)                  |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Deaktiver læsning `~/.claude/CLAUDE.md`                                 |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Deaktiver indlæsning af `.claude/skills`                                |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Deaktivering af modeller fra eksterne kilder                            |
+| `OPENCORVUS_FAKE_VCS`                   | string  | Falsk VCS-udbyder til testformål                                        |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Deaktiver filtidskontrol for optimering                                 |
+| `OPENCORVUS_CLIENT`                     | string  | Klient-id (standard til `cli`)                                          |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | Aktiver Exa-websøgeværktøjer                                            |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | Aktiver grundlæggende godkendelse for `serve`/`web`                     |
 | `OPENCORVUS_SERVER_USERNAME`            | string  | Tilsidesæt grundlæggende godkendelsesbrugernavn (standard `opencorvus`) |
-| `OPENCORVUS_MODELS_URL`                 | string  | Brugerdefineret URL til hentning af modelkonfiguration                |
+| `OPENCORVUS_MODELS_URL`                 | string  | Brugerdefineret URL til hentning af modelkonfiguration                  |
 
 ---
 
@@ -586,8 +586,8 @@ OpenCorvus kan konfigureres ved hjælp af miljøvariabler.
 
 Disse miljøvariabler muliggør eksperimentelle funktioner, der kan ændres eller fjernes.
 
-| Variabel                                        | Skriv   | Beskrivelse                                |
-| ----------------------------------------------- | ------- | ------------------------------------------ |
+| Variabel                                          | Skriv   | Beskrivelse                                |
+| ------------------------------------------------- | ------- | ------------------------------------------ |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | Aktiver alle eksperimentelle funktioner    |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Aktiver ikonopdagelse                      |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Deaktiver kopi ved valg i TUI              |

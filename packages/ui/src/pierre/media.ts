@@ -108,4 +108,3 @@ export function hasMediaValue(value: MediaValue) {
   if (!record) return false
   return typeof record.content === "string" && record.content.length > 0
 }
-

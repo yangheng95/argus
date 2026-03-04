@@ -120,4 +120,3 @@ export const queryBillingInfo = query(async (workspaceID: string) => {
     }
   }, workspaceID)
 }, "billing.get")
-

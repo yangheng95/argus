@@ -11,7 +11,9 @@ describe("message formatter", () => {
 
   test("renders tool status with and without debug", () => {
     expect(formatToolStatus("bash", { command: "echo hi" }, {})).toBe("`$ bash`")
-    expect(formatToolStatus("bash", { command: "echo hi" }, { OPENCORVUS_BOT_DEBUG_TOOL_INPUT: "1" })).toBe("`$ echo hi`")
+    expect(formatToolStatus("bash", { command: "echo hi" }, { OPENCORVUS_BOT_DEBUG_TOOL_INPUT: "1" })).toBe(
+      "`$ echo hi`",
+    )
     expect(formatToolStatus("input", { action: "click", x: 1, y: 2 }, {})).toBe("`input.click`")
   })
 

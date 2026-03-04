@@ -5,8 +5,5 @@ import { SessionInteractionRoutes } from "./session-interaction"
 import { SessionManagementRoutes } from "./session-management"
 
 export const SessionRoutes = lazy(() =>
-  new Hono()
-    .use(SessionProxyMiddleware)
-    .route("/", SessionManagementRoutes())
-    .route("/", SessionInteractionRoutes()),
+  new Hono().use(SessionProxyMiddleware).route("/", SessionManagementRoutes()).route("/", SessionInteractionRoutes()),
 )

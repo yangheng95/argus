@@ -209,4 +209,3 @@ export function createResponseConverter(from: ZenData.Format, to: ZenData.Format
     if (to === "oa-compat") return toOaCompatibleResponse(raw)
   }
 }
-

@@ -69,7 +69,9 @@ export namespace MonitorManager {
     return null
   }
 
-  export async function getNativeMonitor(monitorId: number): Promise<InstanceType<typeof import("node-screenshots").Monitor> | null> {
+  export async function getNativeMonitor(
+    monitorId: number,
+  ): Promise<InstanceType<typeof import("node-screenshots").Monitor> | null> {
     const { Monitor } = await import("node-screenshots")
     const monitors = Monitor.all()
     return monitors.find((m) => m.id() === monitorId) ?? null

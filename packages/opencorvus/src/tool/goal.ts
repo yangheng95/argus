@@ -22,8 +22,17 @@ export const GoalTool = Tool.define("goal", {
       description: z.string().describe("What this goal should accomplish"),
       criteria: z.string().describe("Specific success criteria to evaluate achievement"),
       verify_cmd: z.string().optional().describe("Shell command to verify goal — exit 0 means achieved"),
-      priority: z.enum(["blocking", "advisory"]).optional().describe("blocking (default) prevents standby, advisory is tracked only"),
-      max_attempts: z.number().int().min(1).max(100).optional().describe("Max evaluation attempts before deadlock (default 10)"),
+      priority: z
+        .enum(["blocking", "advisory"])
+        .optional()
+        .describe("blocking (default) prevents standby, advisory is tracked only"),
+      max_attempts: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe("Max evaluation attempts before deadlock (default 10)"),
     }),
     z.object({
       action: z.literal("update_goal"),

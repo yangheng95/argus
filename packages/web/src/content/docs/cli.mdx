@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f`  | File(s) to attach to message                                            |
 | `--format`   |       | Format: default (formatted) or json (raw JSON events)                   |
 | `--title`    |       | Title for the session (uses truncated prompt if no value provided)      |
-| `--attach`   |       | Attach to a running opencorvus server (e.g., http://localhost:7878)       |
+| `--attach`   |       | Attach to a running opencorvus server (e.g., http://localhost:7878)     |
 | `--port`     |       | Port for the local server (defaults to random port)                     |
 
 ---
@@ -553,33 +553,33 @@ The opencorvus CLI takes the following global flags.
 
 OpenCorvus can be configured using environment variables.
 
-| Variable                              | Type    | Description                                       |
-| ------------------------------------- | ------- | ------------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | boolean | Automatically share sessions                      |
-| `OPENCORVUS_GIT_BASH_PATH`              | string  | Path to Git Bash executable on Windows            |
-| `OPENCORVUS_CONFIG`                     | string  | Path to config file                               |
-| `OPENCORVUS_TUI_CONFIG`                 | string  | Path to TUI config file                           |
-| `OPENCORVUS_CONFIG_DIR`                 | string  | Path to config directory                          |
-| `OPENCORVUS_CONFIG_CONTENT`             | string  | Inline json config content                        |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Disable automatic update checks                   |
-| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Disable pruning of old data                       |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Disable automatic terminal title updates          |
-| `OPENCORVUS_PERMISSION`                 | string  | Inlined json permissions config                   |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Disable default plugins                           |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Disable automatic LSP server downloads            |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Enable experimental models                        |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Disable automatic context compaction              |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | Disable reading from `.claude` (prompt + skills)  |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Disable reading `~/.claude/CLAUDE.md`             |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Disable loading `.claude/skills`                  |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Disable fetching models from remote sources       |
-| `OPENCORVUS_FAKE_VCS`                   | string  | Fake VCS provider for testing purposes            |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Disable file time checking for optimization       |
-| `OPENCORVUS_CLIENT`                     | string  | Client identifier (defaults to `cli`)             |
-| `OPENCORVUS_ENABLE_EXA`                 | boolean | Enable Exa web search tools                       |
-| `OPENCORVUS_SERVER_PASSWORD`            | string  | Enable basic auth for `serve`/`web`               |
+| Variable                                | Type    | Description                                         |
+| --------------------------------------- | ------- | --------------------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | Automatically share sessions                        |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Path to Git Bash executable on Windows              |
+| `OPENCORVUS_CONFIG`                     | string  | Path to config file                                 |
+| `OPENCORVUS_TUI_CONFIG`                 | string  | Path to TUI config file                             |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | Path to config directory                            |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | Inline json config content                          |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Disable automatic update checks                     |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Disable pruning of old data                         |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Disable automatic terminal title updates            |
+| `OPENCORVUS_PERMISSION`                 | string  | Inlined json permissions config                     |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Disable default plugins                             |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Disable automatic LSP server downloads              |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Enable experimental models                          |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Disable automatic context compaction                |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | Disable reading from `.claude` (prompt + skills)    |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Disable reading `~/.claude/CLAUDE.md`               |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Disable loading `.claude/skills`                    |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Disable fetching models from remote sources         |
+| `OPENCORVUS_FAKE_VCS`                   | string  | Fake VCS provider for testing purposes              |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Disable file time checking for optimization         |
+| `OPENCORVUS_CLIENT`                     | string  | Client identifier (defaults to `cli`)               |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | Enable Exa web search tools                         |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | Enable basic auth for `serve`/`web`                 |
 | `OPENCORVUS_SERVER_USERNAME`            | string  | Override basic auth username (default `opencorvus`) |
-| `OPENCORVUS_MODELS_URL`                 | string  | Custom URL for fetching models configuration      |
+| `OPENCORVUS_MODELS_URL`                 | string  | Custom URL for fetching models configuration        |
 
 ---
 
@@ -587,8 +587,8 @@ OpenCorvus can be configured using environment variables.
 
 These environment variables enable experimental features that may change or be removed.
 
-| Variable                                        | Type    | Description                             |
-| ----------------------------------------------- | ------- | --------------------------------------- |
+| Variable                                          | Type    | Description                             |
+| ------------------------------------------------- | ------- | --------------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | Enable all experimental features        |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Enable icon discovery                   |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Disable copy on select in TUI           |

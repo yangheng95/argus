@@ -12,8 +12,7 @@ export const EventJobTable = sqliteTable(
     project_id: text()
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
-    session_id: text()
-      .references(() => SessionTable.id, { onDelete: "set null" }),
+    session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
     name: text().notNull(),
     event_type: text().notNull(),
     match_json: text({ mode: "json" }).$type<Match>(),

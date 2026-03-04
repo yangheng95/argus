@@ -232,5 +232,3 @@ export interface Hooks {
    */
   "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: any }) => Promise<void>
 }
-
-

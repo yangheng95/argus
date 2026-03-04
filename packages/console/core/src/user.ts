@@ -224,4 +224,3 @@ export namespace User {
     )
   })
 }
-

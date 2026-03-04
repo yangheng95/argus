@@ -27,12 +27,11 @@ export namespace Skill {
   export const Info = z.object({
     name: z.string(),
     description: z.string(),
-    platforms: z.array(z.enum(["win32", "darwin", "linux"]))
+    platforms: z
+      .array(z.enum(["win32", "darwin", "linux"]))
       .optional()
       .default([]),
-    builtin: z.boolean()
-      .optional()
-      .default(false),
+    builtin: z.boolean().optional().default(false),
     location: z.string(),
     content: z.string(),
   })
@@ -108,7 +107,8 @@ export namespace Skill {
       const md = matter(raw.skill)
       const parsed = Info.pick({ name: true, description: true, platforms: true }).safeParse(md.data)
       if (!parsed.success) continue
-      const location = Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
+      const location =
+        Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
       skills[parsed.data.name] = {
         name: parsed.data.name,
         description: parsed.data.description,
@@ -255,4 +255,3 @@ export namespace Skill {
     return state().then((x) => x.dirs)
   }
 }
-

@@ -34,11 +34,7 @@ type SendPayload = {
 }
 
 function b64(raw: string) {
-  return Buffer.from(raw)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "")
+  return Buffer.from(raw).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
 }
 
 export class GoogleChatAdapter implements BotAdapter {
@@ -54,13 +50,7 @@ export class GoogleChatAdapter implements BotAdapter {
   private token?: string
   private expires = 0
 
-  constructor(opts: {
-    serviceAccount: string
-    host?: string
-    port?: number
-    path?: string
-    serve?: Serve
-  }) {
+  constructor(opts: { serviceAccount: string; host?: string; port?: number; path?: string; serve?: Serve }) {
     this.raw = opts.serviceAccount
     this.host = opts.host ?? "0.0.0.0"
     this.port = opts.port ?? 16668
@@ -97,8 +87,17 @@ export class GoogleChatAdapter implements BotAdapter {
     return data.thread?.name ?? data.name ?? `${Date.now()}`
   }
 
-  async uploadImage(channel: string, thread: string, _imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
-    const text = title && title !== filename ? `${title}\n(image upload not supported in Google Chat text MVP)` : `Image "${filename}" generated (upload is not supported in Google Chat text MVP).`
+  async uploadImage(
+    channel: string,
+    thread: string,
+    _imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
+    const text =
+      title && title !== filename
+        ? `${title}\n(image upload not supported in Google Chat text MVP)`
+        : `Image "${filename}" generated (upload is not supported in Google Chat text MVP).`
     await this.sendMessage(channel, thread, text)
   }
 
@@ -157,13 +156,15 @@ export class GoogleChatAdapter implements BotAdapter {
     const now = Math.floor(Date.now() / 1000)
     const uri = account.token_uri ?? "https://oauth2.googleapis.com/token"
     const header = b64(JSON.stringify({ alg: "RS256", typ: "JWT" }))
-    const payload = b64(JSON.stringify({
-      iss: account.client_email,
-      scope: "https://www.googleapis.com/auth/chat.bot",
-      aud: uri,
-      iat: now,
-      exp: now + 3600,
-    }))
+    const payload = b64(
+      JSON.stringify({
+        iss: account.client_email,
+        scope: "https://www.googleapis.com/auth/chat.bot",
+        aud: uri,
+        iat: now,
+        exp: now + 3600,
+      }),
+    )
     const sign = createSign("RSA-SHA256")
     sign.update(`${header}.${payload}`)
     sign.end()

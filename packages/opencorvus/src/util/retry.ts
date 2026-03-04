@@ -18,13 +18,9 @@ export async function withRetry<T>(
     } catch (err: any) {
       lastError = err
       const isRetryable =
-        err?.status === 429 ||
-        err?.status === 503 ||
-        err?.status === 502 ||
-        err?.code === "ECONNRESET"
+        err?.status === 429 || err?.status === 503 || err?.status === 502 || err?.code === "ECONNRESET"
       if (!isRetryable || attempt === maxAttempts) throw err
-      const delay =
-        baseDelayMs * Math.pow(2, attempt - 1) * (0.5 + Math.random() * 0.5)
+      const delay = baseDelayMs * Math.pow(2, attempt - 1) * (0.5 + Math.random() * 0.5)
       log.warn("retrying after failure", {
         label,
         attempt,

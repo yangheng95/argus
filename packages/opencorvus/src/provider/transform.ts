@@ -44,10 +44,7 @@ export namespace ProviderTransform {
     return undefined
   }
 
-  function normalizeMessages(
-    msgs: ModelMessage[],
-    model: Provider.Model,
-  ): ModelMessage[] {
+  function normalizeMessages(msgs: ModelMessage[], model: Provider.Model): ModelMessage[] {
     // Anthropic rejects messages with empty content - filter out empty string messages
     // and remove empty text/reasoning parts from array content
     if (model.api.npm === "@ai-sdk/anthropic") {

@@ -373,4 +373,3 @@ export default function BenchDetail() {
     </main>
   )
 }
-

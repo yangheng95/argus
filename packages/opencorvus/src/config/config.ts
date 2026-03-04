@@ -218,7 +218,10 @@ export namespace Config {
     }
 
     if (Flag.OPENCORVUS_PERMISSION) {
-      result.permission = mergeDeep((result.permission ?? {}) as object, JSON.parse(Flag.OPENCORVUS_PERMISSION)) as Config.Permission
+      result.permission = mergeDeep(
+        (result.permission ?? {}) as object,
+        JSON.parse(Flag.OPENCORVUS_PERMISSION),
+      ) as Config.Permission
     }
 
     // Backwards compatibility: legacy top-level `tools` config
@@ -373,12 +376,7 @@ export namespace Config {
       })
       if (!md) continue
 
-      const patterns = [
-        "/.opencorvus/command/",
-        "/.opencorvus/commands/",
-        "/command/",
-        "/commands/",
-      ]
+      const patterns = ["/.opencorvus/command/", "/.opencorvus/commands/", "/command/", "/commands/"]
       const file = rel(item, patterns) ?? path.basename(item)
       const name = trim(file)
 
@@ -417,12 +415,7 @@ export namespace Config {
       })
       if (!md) continue
 
-      const patterns = [
-        "/.opencorvus/agent/",
-        "/.opencorvus/agents/",
-        "/agent/",
-        "/agents/",
-      ]
+      const patterns = ["/.opencorvus/agent/", "/.opencorvus/agents/", "/agent/", "/agents/"]
       const file = rel(item, patterns) ?? path.basename(item)
       const agentName = trim(file)
 
@@ -1423,4 +1416,3 @@ export namespace Config {
     return state().then((x) => x.directories)
   }
 }
-

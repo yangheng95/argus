@@ -189,4 +189,3 @@ export namespace Share {
     },
   }
 }
-

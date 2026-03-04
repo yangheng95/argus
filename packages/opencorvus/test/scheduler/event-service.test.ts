@@ -160,11 +160,7 @@ describe("scheduler.event-service", () => {
         await Bus.publish(TestEvent, { value: "go" })
 
         const rows = Database.use((db) =>
-          db
-            .select()
-            .from(EventJobTable)
-            .where(eq(EventJobTable.project_id, Instance.project.id))
-            .all(),
+          db.select().from(EventJobTable).where(eq(EventJobTable.project_id, Instance.project.id)).all(),
         )
         expect(wake).toHaveBeenCalledTimes(2)
         expect(rows.filter((row) => typeof row.last_run === "number").length).toBe(1)
@@ -225,11 +221,7 @@ describe("scheduler.event-service", () => {
         await published
 
         const rows = Database.use((db) =>
-          db
-            .select()
-            .from(EventJobTable)
-            .where(eq(EventJobTable.project_id, Instance.project.id))
-            .all(),
+          db.select().from(EventJobTable).where(eq(EventJobTable.project_id, Instance.project.id)).all(),
         )
         expect(rows.filter((row) => typeof row.last_run === "number").length).toBe(2)
       },

@@ -15,15 +15,18 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/signal.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `SIGNAL_SERVICE_URL`, `SIGNAL_ACCOUNT`
 - Compatibility fallback: `OPENCLAW_SIGNAL_SERVICE_URL`, `OPENCLAW_SIGNAL_ACCOUNT`
 
 Runtime notes:
+
 - Adapter expects a running signal REST service and polls `/v1/receive/<account>`.
 - Outbound send uses `/v2/send`.
 - Image output uses base64 attachments through the same send API.

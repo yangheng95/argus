@@ -30,4 +30,3 @@ export async function POST(event: APIEvent) {
 
   return Response.json({ success: true }, { status: 200 })
 }
-

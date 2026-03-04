@@ -75,7 +75,7 @@ export const ScheduleTool = Tool.define("schedule", {
           }
         }
 
-        const oneShot = params.oneShot ?? (parsed.type === "interval")
+        const oneShot = params.oneShot ?? parsed.type === "interval"
         const now = Date.now()
         const nextRun = Cron.nextRun(parsed, now)
         const id = Identifier.ascending("cron")
@@ -112,11 +112,7 @@ export const ScheduleTool = Tool.define("schedule", {
 
       case "list": {
         const jobs = Database.use((db) =>
-          db
-            .select()
-            .from(CronJobTable)
-            .where(eq(CronJobTable.project_id, projectID))
-            .all(),
+          db.select().from(CronJobTable).where(eq(CronJobTable.project_id, projectID)).all(),
         )
         return {
           title: `${jobs.length} scheduled tasks`,
@@ -206,11 +202,7 @@ export const ScheduleTool = Tool.define("schedule", {
 
       case "list_event": {
         const jobs = Database.use((db) =>
-          db
-            .select()
-            .from(EventJobTable)
-            .where(eq(EventJobTable.project_id, projectID))
-            .all(),
+          db.select().from(EventJobTable).where(eq(EventJobTable.project_id, projectID)).all(),
         )
         return {
           title: `${jobs.length} event tasks`,

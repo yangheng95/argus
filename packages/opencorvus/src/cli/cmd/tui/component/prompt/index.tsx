@@ -1153,4 +1153,3 @@ export function Prompt(props: PromptProps) {
     </>
   )
 }
-

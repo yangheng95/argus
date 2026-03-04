@@ -36,5 +36,3 @@ export const GenerateCommand = {
     })
   },
 } satisfies CommandModule
-
-

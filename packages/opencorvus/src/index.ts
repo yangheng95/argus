@@ -195,7 +195,6 @@ let cli = yargs(hideBin(process.argv))
   .command(SessionCommand)
   .command(DbCommand)
 
-
 if (Installation.isLocal()) {
   cli = cli.command(WorkspaceServeCommand)
 }
@@ -261,4 +260,3 @@ try {
   // Explicitly exit to avoid any hanging subprocesses.
   process.exit()
 }
-

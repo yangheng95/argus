@@ -28,7 +28,8 @@ export class VisionPipeline {
       throw new Error(`Vision skipped: base64 payload too large (${base64MB.toFixed(1)}MB)`)
     }
 
-    const userPrompt = prompt ?? "Describe what you see on this screen. Focus on the main content, UI state, and any notable elements."
+    const userPrompt =
+      prompt ?? "Describe what you see on this screen. Focus on the main content, UI state, and any notable elements."
 
     const body = {
       model: this.model,
@@ -94,7 +95,9 @@ export class VisionPipeline {
       // Re-throw with more context for diagnosis
       if (err instanceof DOMException && err.name === "AbortError") {
         const elapsed = "timeout or SSL handshake failure"
-        throw new Error(`Vision API aborted (${elapsed}). URL: ${this.baseURL}. Tip: set SSL_CERT_FILE env var on Windows.`)
+        throw new Error(
+          `Vision API aborted (${elapsed}). URL: ${this.baseURL}. Tip: set SSL_CERT_FILE env var on Windows.`,
+        )
       }
       throw err
     } finally {

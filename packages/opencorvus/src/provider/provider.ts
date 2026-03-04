@@ -1332,7 +1332,13 @@ export namespace Provider {
   export function sort(models: Model[]) {
     return sortBy(
       models,
-      [(model) => priority.findIndex((filter) => model.id === filter || model.id.startsWith(filter + "-") || model.id.startsWith(filter + ".")), "desc"],
+      [
+        (model) =>
+          priority.findIndex(
+            (filter) => model.id === filter || model.id.startsWith(filter + "-") || model.id.startsWith(filter + "."),
+          ),
+        "desc",
+      ],
       [(model) => (model.id.includes("latest") ? 0 : 1), "asc"],
       [(model) => model.id, "desc"],
     )
@@ -1399,4 +1405,3 @@ export namespace Provider {
     }),
   )
 }
-

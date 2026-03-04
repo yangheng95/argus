@@ -271,7 +271,8 @@ export const dict = {
   "zen.api.error.modelDisabled": "El modelo está deshabilitado",
 
   "black.meta.title": "OpenCorvus Black | Accede a los mejores modelos de codificación del mundo",
-  "black.meta.description": "Obtén acceso a Claude, GPT, Gemini y más con los planes de suscripción de OpenCorvus Black.",
+  "black.meta.description":
+    "Obtén acceso a Claude, GPT, Gemini y más con los planes de suscripción de OpenCorvus Black.",
   "black.hero.title": "Accede a los mejores modelos de codificación del mundo",
   "black.hero.subtitle": "Incluyendo Claude, GPT, Gemini y más",
   "black.title": "OpenCorvus Black | Precios",

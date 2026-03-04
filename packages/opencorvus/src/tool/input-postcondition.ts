@@ -19,7 +19,7 @@ export namespace InputPostcondition {
   export async function boundWindowForeground(opt: Opt = {}): Promise<Automation.Probe> {
     const target = opt.target ?? DesktopState.getTarget()
     if (target?.scope !== "window") return { ok: true }
-    const binding = opt.binding ?? await WindowManager.getBinding()
+    const binding = opt.binding ?? (await WindowManager.getBinding())
     if (!binding) {
       return {
         ok: false,

@@ -31,14 +31,7 @@ export class LineAdapter implements BotAdapter {
   private serve: Serve
   private server?: Server
 
-  constructor(opts: {
-    token: string
-    host?: string
-    port?: number
-    path?: string
-    secret?: string
-    serve?: Serve
-  }) {
+  constructor(opts: { token: string; host?: string; port?: number; path?: string; secret?: string; serve?: Serve }) {
     this.token = opts.token
     this.host = opts.host ?? "0.0.0.0"
     this.port = opts.port ?? 16670
@@ -88,8 +81,17 @@ export class LineAdapter implements BotAdapter {
     return `${Date.now()}`
   }
 
-  async uploadImage(channel: string, thread: string, _imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
-    const text = title && title !== filename ? `${title}\n(image upload not supported in LINE text MVP)` : `Image "${filename}" generated (upload is not supported in LINE text MVP).`
+  async uploadImage(
+    channel: string,
+    thread: string,
+    _imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
+    const text =
+      title && title !== filename
+        ? `${title}\n(image upload not supported in LINE text MVP)`
+        : `Image "${filename}" generated (upload is not supported in LINE text MVP).`
     await this.sendMessage(channel, thread, text)
   }
 

@@ -114,4 +114,3 @@ export const getActor = async (workspace?: string): Promise<Actor.Info> => {
   })()
   return evt.locals.actor
 }
-

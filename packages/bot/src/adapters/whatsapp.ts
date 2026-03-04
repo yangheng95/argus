@@ -91,7 +91,13 @@ export class WhatsappAdapter implements BotAdapter {
     return this.send(channel, text)
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
     const form = new FormData()
     form.set("messaging_product", "whatsapp")
     form.set("file", new Blob([Uint8Array.from(imageBuffer)]), filename)
@@ -165,11 +171,11 @@ export class WhatsappAdapter implements BotAdapter {
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
     if (!this.handler) return Response.json({ ok: true })
 
-    const list = body.entry
-      ?.flatMap((entry) => entry.changes ?? [])
-      .flatMap((change) => change.value?.messages ?? [])
-      .filter((msg): msg is NonNullable<typeof msg> => Boolean(msg))
-      ?? []
+    const list =
+      body.entry
+        ?.flatMap((entry) => entry.changes ?? [])
+        .flatMap((change) => change.value?.messages ?? [])
+        .filter((msg): msg is NonNullable<typeof msg> => Boolean(msg)) ?? []
 
     for (const item of list) {
       if (!item.id || !item.from) continue

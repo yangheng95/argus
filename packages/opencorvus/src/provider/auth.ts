@@ -145,4 +145,3 @@ export namespace ProviderAuth {
 
   export const OauthCallbackFailed = NamedError.create("ProviderAuthOauthCallbackFailed", z.object({}))
 }
-

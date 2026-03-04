@@ -7,8 +7,5 @@ import { TuiControlRoutes } from "./tui-control"
 export { callTui } from "./tui-control"
 
 export const TuiRoutes = lazy(() =>
-  new Hono()
-    .route("/", TuiRuntimeRoutes())
-    .route("/", TuiActionRoutes())
-    .route("/control", TuiControlRoutes()),
+  new Hono().route("/", TuiRuntimeRoutes()).route("/", TuiActionRoutes()).route("/control", TuiControlRoutes()),
 )

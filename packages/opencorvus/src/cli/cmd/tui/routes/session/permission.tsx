@@ -682,4 +682,3 @@ function Prompt<const T extends Record<string, string>>(props: {
     </Show>
   )
 }
-

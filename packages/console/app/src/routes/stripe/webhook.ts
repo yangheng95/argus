@@ -366,4 +366,3 @@ export async function POST(input: APIEvent) {
       return Response.json({ message: error.message }, { status: 500 })
     })
 }
-

@@ -8,17 +8,15 @@
  */
 export namespace Cron {
   /** Parsed cron expression. */
-  export type Parsed =
-    | { type: "cron"; fields: CronFields }
-    | { type: "interval"; ms: number }
+  export type Parsed = { type: "cron"; fields: CronFields } | { type: "interval"; ms: number }
 
   /** 5-field cron: minute, hour, day-of-month, month, day-of-week */
   export interface CronFields {
-    minute: number[]  // 0-59
-    hour: number[]    // 0-23
-    dom: number[]     // 1-31
-    month: number[]   // 1-12
-    dow: number[]     // 0-6 (0=Sunday, 7 is normalized to 0)
+    minute: number[] // 0-59
+    hour: number[] // 0-23
+    dom: number[] // 1-31
+    month: number[] // 1-12
+    dow: number[] // 0-6 (0=Sunday, 7 is normalized to 0)
   }
 
   const INTERVAL_RE = /^(\d+)(m|h|d)$/i
@@ -168,8 +166,7 @@ export namespace Cron {
   }
 
   function parseDowField(field: string) {
-    const values = parseField(field, 0, 7)
-      .map((value) => (value === 7 ? 0 : value))
+    const values = parseField(field, 0, 7).map((value) => (value === 7 ? 0 : value))
     return Array.from(new Set(values)).sort((a, b) => a - b)
   }
 

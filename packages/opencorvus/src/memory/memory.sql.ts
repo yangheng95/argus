@@ -30,10 +30,7 @@ export const MemoryChunkTable = sqliteTable(
     token_count: integer().notNull(),
     ...Timestamps,
   },
-  (table) => [
-    index("memory_chunk_file_idx").on(table.file_id),
-    index("memory_chunk_project_idx").on(table.project_id),
-  ],
+  (table) => [index("memory_chunk_file_idx").on(table.file_id), index("memory_chunk_project_idx").on(table.project_id)],
 )
 
 export const MemoryEmbeddingTable = sqliteTable("memory_embedding", {

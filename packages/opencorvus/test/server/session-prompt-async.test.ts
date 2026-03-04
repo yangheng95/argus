@@ -36,7 +36,9 @@ describe("session prompt_async route", () => {
         expect(typeof json.taskID).toBe("string")
         expect(json.taskID.length).toBeGreaterThan(0)
 
-        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, json.taskID)).get())
+        const row = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, json.taskID)).get(),
+        )
         expect(row?.status).toBe("queued")
         expect(row?.session_id).toBe(session.id)
       },
@@ -67,7 +69,7 @@ describe("session prompt_async route", () => {
         })
 
         expect(created.status).toBe(202)
-        const { taskID } = await created.json() as { taskID: string }
+        const { taskID } = (await created.json()) as { taskID: string }
         const status = await app.request(`/session/${session.id}/prompt_async/${taskID}`, {
           method: "GET",
           headers: {
@@ -76,7 +78,7 @@ describe("session prompt_async route", () => {
         })
 
         expect(status.status).toBe(200)
-        const body = await status.json() as {
+        const body = (await status.json()) as {
           taskID: string
           sessionID: string
           status: string
@@ -104,7 +106,7 @@ describe("session prompt_async route", () => {
           },
         })
         expect(response.status).toBe(404)
-        const body = await response.json() as { message: string }
+        const body = (await response.json()) as { message: string }
         expect(body.message).toContain("task_missing_123")
       },
     })

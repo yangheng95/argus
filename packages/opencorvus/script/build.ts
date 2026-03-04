@@ -211,11 +211,13 @@ function overlayEnvKey(item: Target) {
 function overlayNames(item: Target) {
   const ext = overlayExt(item)
   const os = overlayOS(item)
-  return [...new Set([
-    `opencorvus-overlay-${os}-${item.arch}${item.abi ? `-${item.abi}` : ""}${ext}`,
-    `opencorvus-overlay-${os}-${item.arch}${ext}`,
-    overlayBaseName(item),
-  ])]
+  return [
+    ...new Set([
+      `opencorvus-overlay-${os}-${item.arch}${item.abi ? `-${item.abi}` : ""}${ext}`,
+      `opencorvus-overlay-${os}-${item.arch}${ext}`,
+      overlayBaseName(item),
+    ]),
+  ]
 }
 
 function localOverlay(item: Target) {
@@ -431,4 +433,3 @@ if (Script.release) {
 }
 
 export { binaries }
-

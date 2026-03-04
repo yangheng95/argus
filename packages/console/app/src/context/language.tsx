@@ -70,4 +70,3 @@ export const { use: useLanguage, provider: LanguageProvider } = createSimpleCont
     }
   },
 })
-

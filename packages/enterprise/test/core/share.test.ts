@@ -260,4 +260,3 @@ describe.concurrent("core.share", () => {
     await Share.remove({ id: share.id, secret: share.secret })
   })
 })
-

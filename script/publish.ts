@@ -81,4 +81,3 @@ await import(`../packages/plugin/script/publish.ts`)
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
-

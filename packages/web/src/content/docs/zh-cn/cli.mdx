@@ -335,20 +335,20 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 
 #### 标志
 
-| 标志         | 简写 | 描述                                                           |
-| ------------ | ---- | -------------------------------------------------------------- |
-| `--command`  |      | 要运行的命令，使用 message 作为参数                            |
-| `--continue` | `-c` | 继续上一个会话                                                 |
-| `--session`  | `-s` | 要继续的会话 ID                                                |
-| `--fork`     |      | 继续时分叉会话（与 `--continue` 或 `--session` 配合使用）      |
-| `--share`    |      | 分享会话                                                       |
-| `--model`    | `-m` | 要使用的模型，格式为 provider/model                            |
-| `--agent`    |      | 要使用的代理                                                   |
-| `--file`     | `-f` | 附加到消息的文件                                               |
-| `--format`   |      | 格式：default（格式化输出）或 json（原始 JSON 事件）           |
-| `--title`    |      | 会话标题（未提供值时使用截断的提示词）                         |
+| 标志         | 简写 | 描述                                                             |
+| ------------ | ---- | ---------------------------------------------------------------- |
+| `--command`  |      | 要运行的命令，使用 message 作为参数                              |
+| `--continue` | `-c` | 继续上一个会话                                                   |
+| `--session`  | `-s` | 要继续的会话 ID                                                  |
+| `--fork`     |      | 继续时分叉会话（与 `--continue` 或 `--session` 配合使用）        |
+| `--share`    |      | 分享会话                                                         |
+| `--model`    | `-m` | 要使用的模型，格式为 provider/model                              |
+| `--agent`    |      | 要使用的代理                                                     |
+| `--file`     | `-f` | 附加到消息的文件                                                 |
+| `--format`   |      | 格式：default（格式化输出）或 json（原始 JSON 事件）             |
+| `--title`    |      | 会话标题（未提供值时使用截断的提示词）                           |
 | `--attach`   |      | 连接到正在运行的 opencorvus 服务器（例如 http://localhost:7878） |
-| `--port`     |      | 本地服务器端口（默认为随机端口）                               |
+| `--port`     |      | 本地服务器端口（默认为随机端口）                                 |
 
 ---
 
@@ -553,32 +553,32 @@ OpenCorvus CLI 接受以下全局标志。
 
 OpenCorvus 可以通过环境变量进行配置。
 
-| 变量                                  | 类型    | 描述                                    |
-| ------------------------------------- | ------- | --------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | boolean | 自动分享会话                            |
-| `OPENCORVUS_GIT_BASH_PATH`              | string  | Windows 上 Git Bash 可执行文件的路径    |
-| `OPENCORVUS_CONFIG`                     | string  | 配置文件路径                            |
-| `OPENCORVUS_CONFIG_DIR`                 | string  | 配置目录路径                            |
-| `OPENCORVUS_CONFIG_CONTENT`             | string  | 内联 JSON 配置内容                      |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | 禁用自动更新检查                        |
-| `OPENCORVUS_DISABLE_PRUNE`              | boolean | 禁用旧数据清理                          |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | 禁用自动终端标题更新                    |
-| `OPENCORVUS_PERMISSION`                 | string  | 内联 JSON 权限配置                      |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | 禁用默认插件                            |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | 禁用 LSP 服务器自动下载                 |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | 启用实验性模型                          |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | 禁用自动上下文压缩                      |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | 禁用读取 `.claude`（提示词 + 技能）     |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | 禁用读取 `~/.claude/CLAUDE.md`          |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | 禁用加载 `.claude/skills`               |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | 禁用从远程源获取模型                    |
-| `OPENCORVUS_FAKE_VCS`                   | string  | 用于测试目的的模拟 VCS 提供商           |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | 禁用文件时间检查优化                    |
-| `OPENCORVUS_CLIENT`                     | string  | 客户端标识符（默认为 `cli`）            |
-| `OPENCORVUS_ENABLE_EXA`                 | boolean | 启用 Exa 网络搜索工具                   |
-| `OPENCORVUS_SERVER_PASSWORD`            | string  | 为 `serve`/`web` 启用基本认证           |
+| 变量                                    | 类型    | 描述                                      |
+| --------------------------------------- | ------- | ----------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | 自动分享会话                              |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Windows 上 Git Bash 可执行文件的路径      |
+| `OPENCORVUS_CONFIG`                     | string  | 配置文件路径                              |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | 配置目录路径                              |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | 内联 JSON 配置内容                        |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | 禁用自动更新检查                          |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | 禁用旧数据清理                            |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | 禁用自动终端标题更新                      |
+| `OPENCORVUS_PERMISSION`                 | string  | 内联 JSON 权限配置                        |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | 禁用默认插件                              |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | 禁用 LSP 服务器自动下载                   |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | 启用实验性模型                            |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | 禁用自动上下文压缩                        |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | 禁用读取 `.claude`（提示词 + 技能）       |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | 禁用读取 `~/.claude/CLAUDE.md`            |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | 禁用加载 `.claude/skills`                 |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | 禁用从远程源获取模型                      |
+| `OPENCORVUS_FAKE_VCS`                   | string  | 用于测试目的的模拟 VCS 提供商             |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | 禁用文件时间检查优化                      |
+| `OPENCORVUS_CLIENT`                     | string  | 客户端标识符（默认为 `cli`）              |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | 启用 Exa 网络搜索工具                     |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | 为 `serve`/`web` 启用基本认证             |
 | `OPENCORVUS_SERVER_USERNAME`            | string  | 覆盖基本认证用户名（默认为 `opencorvus`） |
-| `OPENCORVUS_MODELS_URL`                 | string  | 自定义模型配置获取 URL                  |
+| `OPENCORVUS_MODELS_URL`                 | string  | 自定义模型配置获取 URL                    |
 
 ---
 
@@ -586,8 +586,8 @@ OpenCorvus 可以通过环境变量进行配置。
 
 这些环境变量用于启用可能会更改或移除的实验性功能。
 
-| 变量                                            | 类型    | 描述                            |
-| ----------------------------------------------- | ------- | ------------------------------- |
+| 变量                                              | 类型    | 描述                            |
+| ------------------------------------------------- | ------- | ------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | 启用所有实验性功能              |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | 启用图标发现                    |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | 禁用 TUI 中的选中即复制         |

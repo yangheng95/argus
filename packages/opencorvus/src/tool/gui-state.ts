@@ -214,8 +214,7 @@ export namespace GuiState {
     if (!s.isGuiSession) return null
 
     // Grace period: don't trigger repetition alert within 3 steps of a focus change
-    const inFocusGracePeriod = s.lastFocusChangeStep >= 0 &&
-      (s.currentStep - s.lastFocusChangeStep) <= 3
+    const inFocusGracePeriod = s.lastFocusChangeStep >= 0 && s.currentStep - s.lastFocusChangeStep <= 3
     if (inFocusGracePeriod) return null
 
     const alerts: string[] = []
@@ -229,16 +228,12 @@ export namespace GuiState {
     }
 
     // Signal 2: same-area repeated clicks (within 30px radius, last 8 steps)
-    const recentClicks = s.repetition.recentClickCoords.filter(
-      (c) => c.step >= s.currentStep - 8,
-    )
+    const recentClicks = s.repetition.recentClickCoords.filter((c) => c.step >= s.currentStep - 8)
     if (recentClicks.length >= 4) {
       // Check if 4+ clicks cluster within 30px of each other
       for (let i = 0; i < recentClicks.length; i++) {
         const center = recentClicks[i]
-        const nearby = recentClicks.filter(
-          (c) => Math.abs(c.x - center.x) <= 30 && Math.abs(c.y - center.y) <= 30,
-        )
+        const nearby = recentClicks.filter((c) => Math.abs(c.x - center.x) <= 30 && Math.abs(c.y - center.y) <= 30)
         if (nearby.length >= 4) {
           alerts.push(
             `STOP: You have clicked the same area (${center.x},${center.y}) ${nearby.length} times in recent steps.`,
@@ -252,9 +247,7 @@ export namespace GuiState {
     // Signal 3: same screenshot hash appearing too many times
     for (const [, record] of s.screenshots) {
       if (record.seenCount >= 4 && record.step >= s.currentStep - 10) {
-        alerts.push(
-          `STOP: The same screenshot has appeared ${record.seenCount} times. The screen is not changing.`,
-        )
+        alerts.push(`STOP: The same screenshot has appeared ${record.seenCount} times. The screen is not changing.`)
         break
       }
     }

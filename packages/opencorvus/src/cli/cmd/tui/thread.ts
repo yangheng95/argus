@@ -163,7 +163,9 @@ function launchOverlay() {
     stdout: "ignore",
     stderr: "ignore",
     detached: true,
-    env: Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined)),
+    env: Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
+    ),
   })
   proc.unref()
   return true
@@ -338,4 +340,3 @@ export const TuiThreadCommand = cmd({
     process.exit(0)
   },
 })
-

@@ -126,11 +126,7 @@ export namespace Capture {
     }
   }
 
-  async function captureWindowById(
-    windowId: number,
-    filePath: string,
-    timestamp: number,
-  ): Promise<CaptureResult> {
+  async function captureWindowById(windowId: number, filePath: string, timestamp: number): Promise<CaptureResult> {
     const native = await WindowManager.getNativeWindow(windowId)
     if (!native) {
       throw new Error(`Window with id ${windowId} no longer exists`)
@@ -184,11 +180,7 @@ export namespace Capture {
     }
   }
 
-  async function captureMonitorById(
-    monitorId: number,
-    filePath: string,
-    timestamp: number,
-  ): Promise<CaptureResult> {
+  async function captureMonitorById(monitorId: number, filePath: string, timestamp: number): Promise<CaptureResult> {
     const native = await MonitorManager.getNativeMonitor(monitorId)
     if (!native) {
       throw new Error(`Monitor with id ${monitorId} no longer exists`)
@@ -259,9 +251,7 @@ export namespace Capture {
     }
 
     const focused = Window.all().find((w) => w.isFocused() && !w.isMinimized())
-    const target = focused?.currentMonitor()
-      ?? monitors.find((m) => m.isPrimary())
-      ?? monitors[0]
+    const target = focused?.currentMonitor() ?? monitors.find((m) => m.isPrimary()) ?? monitors[0]
     const source = focused ? "focused-window-monitor" : target.isPrimary() ? "primary-monitor" : "first-monitor"
 
     const image = await target.captureImage()
@@ -362,4 +352,3 @@ export namespace Capture {
     }
   }
 }
-

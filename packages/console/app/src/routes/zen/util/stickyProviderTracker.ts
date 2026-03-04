@@ -14,4 +14,3 @@ export function createStickyTracker(stickyProvider: "strict" | "prefer" | undefi
     },
   }
 }
-

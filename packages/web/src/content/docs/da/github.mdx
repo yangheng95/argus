@@ -105,14 +105,14 @@ Eller du kan indstille det manuelt.
 
 OpenCorvus kan udløses af følgende GitHub hændelser:
 
-| Begivenhedstype               | Udløst af                               | Detaljer                                                                                                                |
-| ----------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `issue_comment`               | Kommentarer og problemer eller PR       | Nævn `/opencorvus` eller `/oc` i din kommentar. OpenCorvus læser kontekst og kan oprette brancher, åbne PR'er eller svare.  |
-| `pull_request_review_comment` | Kommenter specifikke kodelinjer i en PR | Nævn `/opencorvus` eller `/oc`, mens du gennemgår koden. OpenCorvus modtager filsti, linjenumre og diff-kontekst.           |
-| `issues`                      | Udgave åbnet eller redigeret            | Udløs automatisk OpenCorvus, når problemer oprettes eller ændres. Kræver `prompt` input.                                  |
-| `pull_request`                | PR åbnet eller opdateret                | Udløs automatisk OpenCorvus, når PR'er åbnes, synkroniseres eller genåbnes. Nyttigt til automatiserede kodegennemgange.   |
-| `schedule`                    | Cron-baseret tidsplan                   | Kør OpenCorvus efter en tidsplan. Kræver `prompt` input. Output går til logfiler og PR'er (intet problem ved kommentere). |
-| `workflow_dispatch`           | Manuel trigger fra GitHub UI            | Udløs OpenCorvus efter behov via fanen Handlinger. Kræver `prompt` input. Output går til logfiler og PR'er.               |
+| Begivenhedstype               | Udløst af                               | Detaljer                                                                                                                   |
+| ----------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `issue_comment`               | Kommentarer og problemer eller PR       | Nævn `/opencorvus` eller `/oc` i din kommentar. OpenCorvus læser kontekst og kan oprette brancher, åbne PR'er eller svare. |
+| `pull_request_review_comment` | Kommenter specifikke kodelinjer i en PR | Nævn `/opencorvus` eller `/oc`, mens du gennemgår koden. OpenCorvus modtager filsti, linjenumre og diff-kontekst.          |
+| `issues`                      | Udgave åbnet eller redigeret            | Udløs automatisk OpenCorvus, når problemer oprettes eller ændres. Kræver `prompt` input.                                   |
+| `pull_request`                | PR åbnet eller opdateret                | Udløs automatisk OpenCorvus, når PR'er åbnes, synkroniseres eller genåbnes. Nyttigt til automatiserede kodegennemgange.    |
+| `schedule`                    | Cron-baseret tidsplan                   | Kør OpenCorvus efter en tidsplan. Kræver `prompt` input. Output går til logfiler og PR'er (intet problem ved kommentere).  |
+| `workflow_dispatch`           | Manuel trigger fra GitHub UI            | Udløs OpenCorvus efter behov via fanen Handlinger. Kræver `prompt` input. Output går til logfiler og PR'er.                |
 
 ### Tidsplan eksempel
 

@@ -73,9 +73,10 @@ function dataUrlToBuffer(url: string): Buffer | null {
     try {
       const fs = require("fs")
       const path = require("path")
-      const dataDir = process.env.XDG_DATA_HOME
-        || (process.platform === "win32"
-          ? (process.env.LOCALAPPDATA || path.join(require("os").homedir(), "AppData", "Local"))
+      const dataDir =
+        process.env.XDG_DATA_HOME ||
+        (process.platform === "win32"
+          ? process.env.LOCALAPPDATA || path.join(require("os").homedir(), "AppData", "Local")
           : path.join(require("os").homedir(), ".local", "share"))
       const rel = url.slice("opencorvus://screenshot/".length)
       const filepath = path.join(dataDir, "opencorvus", "screenshots", rel)
@@ -88,4 +89,3 @@ function dataUrlToBuffer(url: string): Buffer | null {
   if (!match) return null
   return Buffer.from(match[1], "base64")
 }
-

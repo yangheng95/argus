@@ -14,16 +14,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/googlechat.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `GOOGLECHAT_SERVICE_ACCOUNT_JSON`
 - Optional: `GOOGLECHAT_WEBHOOK_HOST`, `GOOGLECHAT_WEBHOOK_PORT`, `GOOGLECHAT_WEBHOOK_PATH`
 - Compatibility fallback: `OPENCLAW_GOOGLECHAT_SERVICE_ACCOUNT_JSON`
 
 Runtime notes:
+
 - `GOOGLECHAT_SERVICE_ACCOUNT_JSON` can be inline JSON or a file path.
 - Adapter exposes local webhook endpoint and calls Google Chat API with JWT bearer token.
 - Current adapter is text MVP for outbound media (image upload not implemented).

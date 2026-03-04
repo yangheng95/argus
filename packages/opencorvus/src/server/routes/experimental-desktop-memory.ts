@@ -3,7 +3,5 @@ import { ExperimentalDesktopWindowRoutes } from "./experimental-desktop-window"
 import { ExperimentalMemoryStorageRoutes } from "./experimental-memory-storage"
 
 export function ExperimentalDesktopMemoryRoutes() {
-  return new Hono()
-    .route("/", ExperimentalDesktopWindowRoutes())
-    .route("/", ExperimentalMemoryStorageRoutes())
+  return new Hono().route("/", ExperimentalDesktopWindowRoutes()).route("/", ExperimentalMemoryStorageRoutes())
 }

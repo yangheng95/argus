@@ -11,4 +11,3 @@ if (Resource.App.stage !== "frank") throw new Error("This script is only for fra
 for (const table of [AccountTable, BillingTable, KeyTable, PaymentTable, UsageTable, UserTable, WorkspaceTable]) {
   await Database.use((tx) => tx.delete(table))
 }
-

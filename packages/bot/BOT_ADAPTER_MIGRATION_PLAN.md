@@ -32,12 +32,15 @@ Tasks:
 
 1. Extend adapter contract to capability-based shape while preserving compatibility.
 2. Standardize inbound message fields:
+
 - `conversation_id`
 - `message_id`
 - `reply_to`
 - `mentions`
 - `raw_event`
+
 3. Add optional adapter capabilities:
+
 - typing indicator
 - ack/defer
 - reaction
@@ -90,8 +93,10 @@ Per-platform implementation checklist:
 2. Add env mapping in `src/registry.ts`.
 3. Add `.env.example` placeholders and notes.
 4. Add unit tests for:
+
 - inbound event mapping
 - outbound text send
+
 5. Add integration smoke test path (manual or scripted).
 
 ## Definition of Done (Per Platform)
@@ -126,13 +131,13 @@ Required test additions:
 ## Risks and Mitigations
 
 1. Risk: platform API differences break common abstraction.
-Mitigation: capability flags, optional methods, per-adapter feature gates.
+   Mitigation: capability flags, optional methods, per-adapter feature gates.
 
 2. Risk: rollout slows due to large cross-platform refactor.
-Mitigation: wave-based delivery, text-first MVP, strict DoD.
+   Mitigation: wave-based delivery, text-first MVP, strict DoD.
 
 3. Risk: regression in existing channels.
-Mitigation: preserve compatibility path and keep baseline tests green on each step.
+   Mitigation: preserve compatibility path and keep baseline tests green on each step.
 
 ## Suggested Milestones
 

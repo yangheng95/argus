@@ -532,8 +532,10 @@ export namespace MessageV2 {
           attachments?: Array<{ mime: string; url: string }>
         }
         const attachments = (outputObject.attachments ?? []).filter((attachment) => {
-          return ScreenshotStore.isFileUrl(attachment.url) ||
+          return (
+            ScreenshotStore.isFileUrl(attachment.url) ||
             (attachment.url.startsWith("data:") && attachment.url.includes(","))
+          )
         })
 
         return {
@@ -635,9 +637,8 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
-              const isOldScreenshot = part.tool === "screen"
-                && part.state.input.action === "screenshot"
-                && msg.info.id !== lastAssistantID
+              const isOldScreenshot =
+                part.tool === "screen" && part.state.input.action === "screenshot" && msg.info.id !== lastAssistantID
 
               let outputText: string
               if (part.state.time.compacted) {
@@ -651,9 +652,7 @@ export namespace MessageV2 {
               } else {
                 outputText = part.state.output
               }
-              const attachments = (part.state.time.compacted || isOldScreenshot)
-                ? []
-                : (part.state.attachments ?? [])
+              const attachments = part.state.time.compacted || isOldScreenshot ? [] : (part.state.attachments ?? [])
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message
@@ -939,4 +938,3 @@ export namespace MessageV2 {
     }
   }
 }
-

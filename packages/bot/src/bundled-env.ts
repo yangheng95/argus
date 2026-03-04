@@ -63,7 +63,7 @@ function parseValue(input: string) {
   if (value.length < 2) return value
   const head = value[0]
   const tail = value[value.length - 1]
-  if ((head === "\"" && tail === "\"") || (head === "'" && tail === "'")) {
+  if ((head === '"' && tail === '"') || (head === "'" && tail === "'")) {
     return value.slice(1, value.length - 1)
   }
   return value

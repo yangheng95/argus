@@ -16,9 +16,7 @@ describe("tui.runtime.submitTask", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        await expect(TuiRuntime.submitTask({ text: "hello", wait: false })).rejects.toThrow(
-          "sessionID is required",
-        )
+        await expect(TuiRuntime.submitTask({ text: "hello", wait: false })).rejects.toThrow("sessionID is required")
       },
     })
   })
@@ -44,12 +42,7 @@ describe("tui.runtime.submitTask", () => {
           db
             .select()
             .from(TaskQueueTable)
-            .where(
-              and(
-                eq(TaskQueueTable.session_id, session.id),
-                eq(TaskQueueTable.source, "tui.runtime.submit-task"),
-              ),
-            )
+            .where(and(eq(TaskQueueTable.session_id, session.id), eq(TaskQueueTable.source, "tui.runtime.submit-task")))
             .get(),
         )
         expect(row?.status).toBe("queued")
@@ -58,4 +51,3 @@ describe("tui.runtime.submitTask", () => {
     })
   })
 })
-

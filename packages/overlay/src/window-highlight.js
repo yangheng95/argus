@@ -25,9 +25,7 @@ function readDuration(value) {
 bridge.listen(bridge.events.showWindowHighlight, (payload) => {
   const data = payload ?? {}
   clearTimers()
-  labelEl.textContent = typeof data.label === "string" && data.label.trim()
-    ? data.label
-    : "OpenCorvus target window"
+  labelEl.textContent = typeof data.label === "string" && data.label.trim() ? data.label : "OpenCorvus target window"
   frame.classList.remove("visible")
   void frame.offsetWidth
   frame.classList.add("visible")

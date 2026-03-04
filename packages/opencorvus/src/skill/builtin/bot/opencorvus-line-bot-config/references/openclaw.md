@@ -14,16 +14,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/line.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `LINE_CHANNEL_ACCESS_TOKEN`
 - Optional: `LINE_CHANNEL_SECRET`, `LINE_WEBHOOK_HOST`, `LINE_WEBHOOK_PORT`, `LINE_WEBHOOK_PATH`
 - Compatibility fallback: `OPENCLAW_LINE_CHANNEL_ACCESS_TOKEN`
 
 Runtime notes:
+
 - Adapter exposes webhook endpoint and can validate `x-line-signature` when secret is set.
 - Outbound uses LINE push API.
 - Current adapter is text MVP for media output (image upload fallback to text notice).

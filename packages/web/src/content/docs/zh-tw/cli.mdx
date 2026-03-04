@@ -335,20 +335,20 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 
 #### 旗標
 
-| 旗標         | 簡寫 | 說明                                                           |
-| ------------ | ---- | -------------------------------------------------------------- |
-| `--command`  |      | 要執行的指令，使用 message 作為參數                            |
-| `--continue` | `-c` | 繼續上一個工作階段                                             |
-| `--session`  | `-s` | 要繼續的工作階段 ID                                            |
-| `--fork`     |      | 繼續時分岔工作階段（與 `--continue` 或 `--session` 搭配使用）  |
-| `--share`    |      | 分享工作階段                                                   |
-| `--model`    | `-m` | 要使用的模型，格式為 provider/model                            |
-| `--agent`    |      | 要使用的代理                                                   |
-| `--file`     | `-f` | 附加到訊息的檔案                                               |
-| `--format`   |      | 格式：default（格式化輸出）或 json（原始 JSON 事件）           |
-| `--title`    |      | 工作階段標題（未提供值時使用截斷的提示詞）                     |
+| 旗標         | 簡寫 | 說明                                                             |
+| ------------ | ---- | ---------------------------------------------------------------- |
+| `--command`  |      | 要執行的指令，使用 message 作為參數                              |
+| `--continue` | `-c` | 繼續上一個工作階段                                               |
+| `--session`  | `-s` | 要繼續的工作階段 ID                                              |
+| `--fork`     |      | 繼續時分岔工作階段（與 `--continue` 或 `--session` 搭配使用）    |
+| `--share`    |      | 分享工作階段                                                     |
+| `--model`    | `-m` | 要使用的模型，格式為 provider/model                              |
+| `--agent`    |      | 要使用的代理                                                     |
+| `--file`     | `-f` | 附加到訊息的檔案                                                 |
+| `--format`   |      | 格式：default（格式化輸出）或 json（原始 JSON 事件）             |
+| `--title`    |      | 工作階段標題（未提供值時使用截斷的提示詞）                       |
 | `--attach`   |      | 連接到正在執行的 opencorvus 伺服器（例如 http://localhost:7878） |
-| `--port`     |      | 本地伺服器連接埠（預設為隨機連接埠）                           |
+| `--port`     |      | 本地伺服器連接埠（預設為隨機連接埠）                             |
 
 ---
 
@@ -553,32 +553,32 @@ OpenCorvus CLI 接受以下全域旗標。
 
 OpenCorvus 可以透過環境變數進行設定。
 
-| 變數                                  | 類型    | 說明                                        |
-| ------------------------------------- | ------- | ------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | boolean | 自動分享工作階段                            |
-| `OPENCORVUS_GIT_BASH_PATH`              | string  | Windows 上 Git Bash 可執行檔的路徑          |
-| `OPENCORVUS_CONFIG`                     | string  | 設定檔路徑                                  |
-| `OPENCORVUS_CONFIG_DIR`                 | string  | 設定目錄路徑                                |
-| `OPENCORVUS_CONFIG_CONTENT`             | string  | 內嵌 JSON 設定內容                          |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | 停用自動更新檢查                            |
-| `OPENCORVUS_DISABLE_PRUNE`              | boolean | 停用舊資料清理                              |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | 停用自動終端機標題更新                      |
-| `OPENCORVUS_PERMISSION`                 | string  | 內嵌 JSON 權限設定                          |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | 停用預設外掛程式                            |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | 停用 LSP 伺服器自動下載                     |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | 啟用實驗性模型                              |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | 停用自動上下文壓縮                          |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | 停用讀取 `.claude`（提示詞 + 技能）         |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | 停用讀取 `~/.claude/CLAUDE.md`              |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | 停用載入 `.claude/skills`                   |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | 停用從遠端來源擷取模型                      |
-| `OPENCORVUS_FAKE_VCS`                   | string  | 用於測試目的的模擬 VCS 供應商               |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | 停用檔案時間檢查最佳化                      |
-| `OPENCORVUS_CLIENT`                     | string  | 用戶端識別碼（預設為 `cli`）                |
-| `OPENCORVUS_ENABLE_EXA`                 | boolean | 啟用 Exa 網路搜尋工具                       |
-| `OPENCORVUS_SERVER_PASSWORD`            | string  | 為 `serve`/`web` 啟用基本認證               |
+| 變數                                    | 類型    | 說明                                          |
+| --------------------------------------- | ------- | --------------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | 自動分享工作階段                              |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Windows 上 Git Bash 可執行檔的路徑            |
+| `OPENCORVUS_CONFIG`                     | string  | 設定檔路徑                                    |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | 設定目錄路徑                                  |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | 內嵌 JSON 設定內容                            |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | 停用自動更新檢查                              |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | 停用舊資料清理                                |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | 停用自動終端機標題更新                        |
+| `OPENCORVUS_PERMISSION`                 | string  | 內嵌 JSON 權限設定                            |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | 停用預設外掛程式                              |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | 停用 LSP 伺服器自動下載                       |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | 啟用實驗性模型                                |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | 停用自動上下文壓縮                            |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | 停用讀取 `.claude`（提示詞 + 技能）           |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | 停用讀取 `~/.claude/CLAUDE.md`                |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | 停用載入 `.claude/skills`                     |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | 停用從遠端來源擷取模型                        |
+| `OPENCORVUS_FAKE_VCS`                   | string  | 用於測試目的的模擬 VCS 供應商                 |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | 停用檔案時間檢查最佳化                        |
+| `OPENCORVUS_CLIENT`                     | string  | 用戶端識別碼（預設為 `cli`）                  |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | 啟用 Exa 網路搜尋工具                         |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | 為 `serve`/`web` 啟用基本認證                 |
 | `OPENCORVUS_SERVER_USERNAME`            | string  | 覆寫基本認證使用者名稱（預設為 `opencorvus`） |
-| `OPENCORVUS_MODELS_URL`                 | string  | 自訂模型設定擷取 URL                        |
+| `OPENCORVUS_MODELS_URL`                 | string  | 自訂模型設定擷取 URL                          |
 
 ---
 
@@ -586,8 +586,8 @@ OpenCorvus 可以透過環境變數進行設定。
 
 這些環境變數用於啟用可能會變更或移除的實驗性功能。
 
-| 變數                                            | 類型    | 說明                            |
-| ----------------------------------------------- | ------- | ------------------------------- |
+| 變數                                              | 類型    | 說明                            |
+| ------------------------------------------------- | ------- | ------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | 啟用所有實驗性功能              |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | 啟用圖示探索                    |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | 停用 TUI 中的選取即複製         |

@@ -367,7 +367,7 @@ const main = async () => {
     files: files.length,
     old_size: old,
     new_size: now,
-    saved_pct: Number((((1 - now / old) * 100) || 0).toFixed(3)),
+    saved_pct: Number(((1 - now / old) * 100 || 0).toFixed(3)),
   }
 
   console.log("")

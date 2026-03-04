@@ -19,18 +19,18 @@ If the platform-specific skill is available, treat it as the primary source for 
 
 ## Tools Quick Reference
 
-| Tool | Action | Parameters | What it does |
-|------|--------|-----------|-------------|
-| `screen` | `list_windows` | — | List all open windows (title, app, position, size) |
-| `screen` | `bind_window` | `window_id` or `title` | Bind to a window (prefer `window_id` from `list_windows`) — makes coordinates relative |
-| `screen` | `screenshot` | — | Capture screen/bound window (skips if unchanged) |
-| `input` | `click` | `x, y, button?` | Click at (x,y). button: left/right/double/middle |
-| `input` | `type` | `text` | Type text via clipboard paste |
-| `input` | `key` | `key` | Press key or combo: `enter`, `ctrl+c`, `alt+f4` |
-| `input` | `scroll` | `direction, amount?` | Scroll up/down (default 3 steps) |
-| `input` | `drag` | `startX, startY, endX, endY` | Drag between two points |
-| `input` | `move` | `x, y` | Move mouse without clicking (for hover) |
-| `input` | `wait` | `ms` | Wait 100-10000ms for UI to settle |
+| Tool     | Action         | Parameters                   | What it does                                                                           |
+| -------- | -------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| `screen` | `list_windows` | —                            | List all open windows (title, app, position, size)                                     |
+| `screen` | `bind_window`  | `window_id` or `title`       | Bind to a window (prefer `window_id` from `list_windows`) — makes coordinates relative |
+| `screen` | `screenshot`   | —                            | Capture screen/bound window (skips if unchanged)                                       |
+| `input`  | `click`        | `x, y, button?`              | Click at (x,y). button: left/right/double/middle                                       |
+| `input`  | `type`         | `text`                       | Type text via clipboard paste                                                          |
+| `input`  | `key`          | `key`                        | Press key or combo: `enter`, `ctrl+c`, `alt+f4`                                        |
+| `input`  | `scroll`       | `direction, amount?`         | Scroll up/down (default 3 steps)                                                       |
+| `input`  | `drag`         | `startX, startY, endX, endY` | Drag between two points                                                                |
+| `input`  | `move`         | `x, y`                       | Move mouse without clicking (for hover)                                                |
+| `input`  | `wait`         | `ms`                         | Wait 100-10000ms for UI to settle                                                      |
 
 ## Golden Rules
 
@@ -48,11 +48,11 @@ If the platform-specific skill is available, treat it as the primary source for 
 
 The screenshot output includes platform info (e.g. "Platform: Windows"). Use it to determine shortcuts:
 
-| Platform | Modifier | App launcher | Examples |
-|----------|----------|-------------|---------|
-| Windows | `ctrl` | `win` key → type name | `ctrl+c`, `win+e`, `alt+f4` |
-| macOS | `cmd` | `cmd+space` (Spotlight) | `cmd+c`, `cmd+space`, `cmd+w` |
-| Linux | `ctrl` | `super` key → type name | `ctrl+c`, `super`, `alt+f4` |
+| Platform | Modifier | App launcher            | Examples                      |
+| -------- | -------- | ----------------------- | ----------------------------- |
+| Windows  | `ctrl`   | `win` key → type name   | `ctrl+c`, `win+e`, `alt+f4`   |
+| macOS    | `cmd`    | `cmd+space` (Spotlight) | `cmd+c`, `cmd+space`, `cmd+w` |
+| Linux    | `ctrl`   | `super` key → type name | `ctrl+c`, `super`, `alt+f4`   |
 
 ---
 
@@ -61,16 +61,19 @@ The screenshot output includes platform info (e.g. "Platform: Windows"). Use it 
 ## 1. Opening Programs
 
 ### Windows
+
 ```
 input.key("win") → wait(10) → input.type("AppName") → wait(10) → input.key("enter") → wait(10) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
 ### macOS
+
 ```
 input.key("cmd+space") → wait(10) → input.type("AppName") → wait(10) → input.key("enter") → wait(10) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
 
 ### Linux
+
 ```
 input.key("super") → wait(10) → input.type("AppName") → wait(10) → input.key("enter") → wait(10) → screen.screenshot → (optional) screen.list_windows → screen.bind_window({window_id})
 ```
@@ -93,12 +96,14 @@ input.key("super") → wait(10) → input.type("AppName") → wait(10) → input
 ## 3. Text Selection & Clipboard
 
 ### Select all text in a field
+
 ```
 input.click(x, y)        ← click the field
 input.key("ctrl+a")      ← macOS: "cmd+a"
 ```
 
 ### Select specific text
+
 ```
 # Method A: Double-click to select a word
 input.click(x, y) with button="double"
@@ -116,6 +121,7 @@ input.key("ctrl+shift+right")        ← select next word (macOS: "alt+shift+rig
 ```
 
 ### Copy text from screen
+
 ```
 1. Select the text (see above)
 2. input.key("ctrl+c")               ← macOS: "cmd+c"
@@ -123,6 +129,7 @@ input.key("ctrl+shift+right")        ← select next word (macOS: "alt+shift+rig
 ```
 
 ### Cut and paste
+
 ```
 input.key("ctrl+x")  → move to target → input.click(x,y) → input.key("ctrl+v")
 ```
@@ -130,6 +137,7 @@ input.key("ctrl+x")  → move to target → input.click(x,y) → input.key("ctrl
 ## 4. Find & Replace within Apps
 
 ### Open Find dialog
+
 ```
 input.key("ctrl+f")                  ← macOS: "cmd+f" — opens Find bar
 input.type("search term")
@@ -139,6 +147,7 @@ input.key("esc")                     ← close Find bar
 ```
 
 ### Find and Replace
+
 ```
 input.key("ctrl+h")                  ← macOS: "cmd+alt+f" or "cmd+shift+h" (varies by app)
 input.type("find text")
@@ -152,12 +161,14 @@ input.key("enter")                   ← replace next
 ## 5. Form Interaction
 
 ### Tab between form fields
+
 ```
 input.key("tab")          ← next field
 input.key("shift+tab")    ← previous field
 ```
 
 ### Checkboxes and radio buttons
+
 ```
 input.click(x, y)         ← click the checkbox/radio
 # OR if focused:
@@ -165,6 +176,7 @@ input.key("space")        ← toggle checkbox
 ```
 
 ### Dropdown / Select box
+
 ```
 # Method A: Click to open, click to select
 input.click(x, y)         ← click dropdown to open it
@@ -185,6 +197,7 @@ input.key("enter")        ← select filtered result
 ```
 
 ### Buttons
+
 ```
 input.click(x, y)         ← click button
 # OR if focused:
@@ -197,6 +210,7 @@ input.key("space")        ← also activates buttons
 File dialogs are extremely common and vary significantly across platforms.
 
 ### Windows File Dialog
+
 ```
 # Navigate to a path:
 1. In the file dialog, click the path bar (usually at top)
@@ -212,6 +226,7 @@ File dialogs are extremely common and vary significantly across platforms.
 ```
 
 ### macOS File Dialog
+
 ```
 # Show path bar:
 1. input.key("cmd+shift+g")                 ← "Go to folder" dialog
@@ -224,6 +239,7 @@ File dialogs are extremely common and vary significantly across platforms.
 ```
 
 ### Linux (GTK/Qt)
+
 ```
 # Navigate via path:
 1. input.key("ctrl+l")                      ← show path entry (GTK)
@@ -232,6 +248,7 @@ File dialogs are extremely common and vary significantly across platforms.
 ```
 
 ### Common tips for file dialogs
+
 - **Type the filename** in the "File name" field at the bottom — faster than navigating
 - **Use path bar** to jump to any directory by typing the full path
 - **Ctrl+L** usually reveals a path entry bar
@@ -258,12 +275,14 @@ input.key("left")                            ← close submenu
 ## 8. Scrolling Strategies
 
 ### Basic scroll
+
 ```
 input.scroll(direction="down", amount=3)     ← scroll down 3 steps
 input.scroll(direction="up", amount=5)       ← scroll up 5 steps
 ```
 
 ### Scroll to find content
+
 ```
 # Pattern: scroll + screenshot loop
 1. screen.screenshot                         ← check current view
@@ -275,6 +294,7 @@ input.scroll(direction="up", amount=5)       ← scroll up 5 steps
 ```
 
 ### Jump to top / bottom
+
 ```
 input.key("ctrl+home")                       ← jump to top (macOS: "cmd+up")
 input.key("ctrl+end")                        ← jump to bottom (macOS: "cmd+down")
@@ -283,6 +303,7 @@ input.key("end")                             ← end of line
 ```
 
 ### Page navigation
+
 ```
 input.key("pageup")                          ← scroll up one page
 input.key("pagedown")                        ← scroll down one page
@@ -291,7 +312,9 @@ input.key("shift+space")                     ← page up (in browsers)
 ```
 
 ### Scroll to specific element
+
 If you need to reach an element you know exists but can't see:
+
 1. Try `ctrl+f` to search for nearby text
 2. Or use `ctrl+end` / `ctrl+home` to get to known positions
 3. Then scroll incrementally from there
@@ -299,6 +322,7 @@ If you need to reach an element you know exists but can't see:
 ## 9. Multi-Window Workflows
 
 ### Copy between apps
+
 ```
 1. screen.bind_window("SourceApp")
 2. screen.screenshot                         ← see source content
@@ -310,6 +334,7 @@ If you need to reach an element you know exists but can't see:
 ```
 
 ### Side-by-side comparison
+
 ```
 # Windows: Win+Left / Win+Right for split
 input.key("win+left")                        ← snap window to left half
@@ -319,6 +344,7 @@ input.key("win+right")                       ← snap to right half
 ```
 
 ### Alt-Tab cycling
+
 ```
 input.key("alt+tab")                         ← macOS: "cmd+tab"
 # To go to a specific window:
@@ -327,44 +353,45 @@ screen.list_windows → screen.bind_window({window_id})
 
 ## 10. Window Management (Keyboard)
 
-| Action | Windows | macOS | Linux (GNOME) |
-|--------|---------|-------|---------------|
-| Minimize | `win+down` | `cmd+m` | `super+h` |
-| Maximize | `win+up` | `ctrl+cmd+f` (fullscreen) | `super+up` |
-| Close | `alt+f4` | `cmd+w` (tab) / `cmd+q` (app) | `alt+f4` |
-| Snap left | `win+left` | — (use Rectangle app) | `super+left` |
-| Snap right | `win+right` | — | `super+right` |
-| Switch desktop | `ctrl+win+left/right` | `ctrl+left/right` | `super+pageup/pagedown` |
-| Show desktop | `win+d` | `f11` or `cmd+f3` | `super+d` |
-| Task view | `win+tab` | `ctrl+up` (Mission Control) | `super` |
-| Lock screen | `win+l` | `ctrl+cmd+q` | `super+l` |
+| Action         | Windows               | macOS                         | Linux (GNOME)           |
+| -------------- | --------------------- | ----------------------------- | ----------------------- |
+| Minimize       | `win+down`            | `cmd+m`                       | `super+h`               |
+| Maximize       | `win+up`              | `ctrl+cmd+f` (fullscreen)     | `super+up`              |
+| Close          | `alt+f4`              | `cmd+w` (tab) / `cmd+q` (app) | `alt+f4`                |
+| Snap left      | `win+left`            | — (use Rectangle app)         | `super+left`            |
+| Snap right     | `win+right`           | —                             | `super+right`           |
+| Switch desktop | `ctrl+win+left/right` | `ctrl+left/right`             | `super+pageup/pagedown` |
+| Show desktop   | `win+d`               | `f11` or `cmd+f3`             | `super+d`               |
+| Task view      | `win+tab`             | `ctrl+up` (Mission Control)   | `super`                 |
+| Lock screen    | `win+l`               | `ctrl+cmd+q`                  | `super+l`               |
 
 ## 11. Browser Tab Management
 
-| Action | Windows/Linux | macOS |
-|--------|--------------|-------|
-| New tab | `ctrl+t` | `cmd+t` |
-| Close tab | `ctrl+w` | `cmd+w` |
-| Reopen closed tab | `ctrl+shift+t` | `cmd+shift+t` |
-| Next tab | `ctrl+tab` | `ctrl+tab` or `cmd+alt+right` |
-| Previous tab | `ctrl+shift+tab` | `ctrl+shift+tab` or `cmd+alt+left` |
-| Go to tab N | `ctrl+1` to `ctrl+8` | `cmd+1` to `cmd+8` |
-| Last tab | `ctrl+9` | `cmd+9` |
-| Address bar | `ctrl+l` or `f6` | `cmd+l` |
-| Refresh | `ctrl+r` or `f5` | `cmd+r` |
-| Hard refresh | `ctrl+shift+r` | `cmd+shift+r` |
-| Back | `alt+left` | `cmd+[` |
-| Forward | `alt+right` | `cmd+]` |
-| Zoom in | `ctrl+=` | `cmd+=` |
-| Zoom out | `ctrl+-` | `cmd+-` |
-| Reset zoom | `ctrl+0` | `cmd+0` |
-| Downloads | `ctrl+j` | `cmd+alt+l` (Chrome) |
-| Dev Tools | `f12` or `ctrl+shift+i` | `cmd+alt+i` |
-| Bookmark | `ctrl+d` | `cmd+d` |
+| Action            | Windows/Linux           | macOS                              |
+| ----------------- | ----------------------- | ---------------------------------- |
+| New tab           | `ctrl+t`                | `cmd+t`                            |
+| Close tab         | `ctrl+w`                | `cmd+w`                            |
+| Reopen closed tab | `ctrl+shift+t`          | `cmd+shift+t`                      |
+| Next tab          | `ctrl+tab`              | `ctrl+tab` or `cmd+alt+right`      |
+| Previous tab      | `ctrl+shift+tab`        | `ctrl+shift+tab` or `cmd+alt+left` |
+| Go to tab N       | `ctrl+1` to `ctrl+8`    | `cmd+1` to `cmd+8`                 |
+| Last tab          | `ctrl+9`                | `cmd+9`                            |
+| Address bar       | `ctrl+l` or `f6`        | `cmd+l`                            |
+| Refresh           | `ctrl+r` or `f5`        | `cmd+r`                            |
+| Hard refresh      | `ctrl+shift+r`          | `cmd+shift+r`                      |
+| Back              | `alt+left`              | `cmd+[`                            |
+| Forward           | `alt+right`             | `cmd+]`                            |
+| Zoom in           | `ctrl+=`                | `cmd+=`                            |
+| Zoom out          | `ctrl+-`                | `cmd+-`                            |
+| Reset zoom        | `ctrl+0`                | `cmd+0`                            |
+| Downloads         | `ctrl+j`                | `cmd+alt+l` (Chrome)               |
+| Dev Tools         | `f12` or `ctrl+shift+i` | `cmd+alt+i`                        |
+| Bookmark          | `ctrl+d`                | `cmd+d`                            |
 
 ## 12. File Manager Operations
 
 ### Windows (Explorer)
+
 ```
 input.key("win+e")                           ← open File Explorer
 input.wait(10)
@@ -396,6 +423,7 @@ input.click(firstX, firstY) → input.key("shift") — NOT directly available
 ```
 
 ### macOS (Finder)
+
 ```
 # Open Finder: click Finder in Dock, or cmd+space → type "Finder"
 # Go to path: input.key("cmd+shift+g") → type path → enter
@@ -406,6 +434,7 @@ input.click(firstX, firstY) → input.key("shift") — NOT directly available
 ```
 
 ### Linux (Nautilus/Files)
+
 ```
 # Open: input.key("super") → type "Files" → enter
 # Go to path: input.key("ctrl+l") → type path → enter
@@ -428,6 +457,7 @@ input.click(firstX, firstY) → input.key("shift") — NOT directly available
 ## 14. Drag & Drop Patterns
 
 ### Drag a file
+
 ```
 1. screen.screenshot                         ← locate source file
 2. input.drag(fileX, fileY, targetX, targetY) ← drag file to destination
@@ -436,16 +466,19 @@ input.click(firstX, firstY) → input.key("shift") — NOT directly available
 ```
 
 ### Rearrange UI elements (tabs, panels)
+
 ```
 input.drag(tabX, tabY, newPosX, newPosY)     ← drag tab to new position
 ```
 
 ### Resize a panel/divider
+
 ```
 input.drag(dividerX, dividerY, newX, newY)   ← drag splitter/divider
 ```
 
 ### Selecting text by drag
+
 ```
 input.drag(startX, startY, endX, endY)       ← drag to select text range
 input.key("ctrl+c")                          ← copy selected text
@@ -454,6 +487,7 @@ input.key("ctrl+c")                          ← copy selected text
 ## 15. Dialog & Popup Handling
 
 ### Confirmation dialogs
+
 ```
 # Screenshot to read the dialog
 screen.screenshot
@@ -469,6 +503,7 @@ input.key("alt+n")                           ← No (some Windows dialogs)
 ```
 
 ### Cookie / consent banners (web)
+
 ```
 1. screen.screenshot                         ← see the banner
 2. Look for "Accept", "Reject", "Close", "X" button
@@ -478,6 +513,7 @@ input.key("alt+n")                           ← No (some Windows dialogs)
 ```
 
 ### Unexpected popups blocking interaction
+
 ```
 # Strategy: dismiss first, then continue
 1. screen.screenshot                         ← identify the popup
@@ -488,6 +524,7 @@ input.key("alt+n")                           ← No (some Windows dialogs)
 ```
 
 ### UAC / elevation prompts (Windows)
+
 ```
 # UAC dialogs require clicking Yes/No — keyboard alt+y may work
 input.key("alt+y")                           ← click "Yes" on UAC prompt
@@ -509,6 +546,7 @@ input.key("alt+y")                           ← click "Yes" on UAC prompt
 ```
 
 **Tips:**
+
 - If "Show password" toggle exists, use it to verify before submitting
 - Handle 2FA: screenshot to see the 2FA prompt, inform user if manual input needed
 - Cookie banners may appear before login — dismiss them first
@@ -516,22 +554,24 @@ input.key("alt+y")                           ← click "Yes" on UAC prompt
 ## 17. Text Editor / IDE Patterns
 
 ### VS Code / Editor shortcuts
-| Action | Windows/Linux | macOS |
-|--------|--------------|-------|
-| Open file | `ctrl+o` | `cmd+o` |
-| Quick open | `ctrl+p` | `cmd+p` |
-| Command palette | `ctrl+shift+p` | `cmd+shift+p` |
-| Save | `ctrl+s` | `cmd+s` |
-| Save all | `ctrl+k s` (chord) | `cmd+alt+s` |
-| Close file | `ctrl+w` | `cmd+w` |
-| Undo | `ctrl+z` | `cmd+z` |
-| Redo | `ctrl+y` or `ctrl+shift+z` | `cmd+shift+z` |
-| Go to line | `ctrl+g` | `ctrl+g` |
-| Toggle terminal | `` ctrl+` `` | `` ctrl+` `` |
-| Split editor | `ctrl+\` | `cmd+\` |
-| Toggle sidebar | `ctrl+b` | `cmd+b` |
+
+| Action          | Windows/Linux              | macOS         |
+| --------------- | -------------------------- | ------------- |
+| Open file       | `ctrl+o`                   | `cmd+o`       |
+| Quick open      | `ctrl+p`                   | `cmd+p`       |
+| Command palette | `ctrl+shift+p`             | `cmd+shift+p` |
+| Save            | `ctrl+s`                   | `cmd+s`       |
+| Save all        | `ctrl+k s` (chord)         | `cmd+alt+s`   |
+| Close file      | `ctrl+w`                   | `cmd+w`       |
+| Undo            | `ctrl+z`                   | `cmd+z`       |
+| Redo            | `ctrl+y` or `ctrl+shift+z` | `cmd+shift+z` |
+| Go to line      | `ctrl+g`                   | `ctrl+g`      |
+| Toggle terminal | `` ctrl+` ``               | `` ctrl+` ``  |
+| Split editor    | `ctrl+\`                   | `cmd+\`       |
+| Toggle sidebar  | `ctrl+b`                   | `cmd+b`       |
 
 ### Multi-cursor editing (VS Code)
+
 ```
 input.key("ctrl+d")                          ← select next occurrence
 input.key("ctrl+shift+l")                    ← select all occurrences
@@ -541,6 +581,7 @@ input.key("ctrl+shift+l")                    ← select all occurrences
 ## 18. Terminal Operations (via GUI)
 
 ### Open terminal
+
 ```
 # Windows:
 input.key("win") → type "Terminal" or "cmd" or "PowerShell" → enter
@@ -556,6 +597,7 @@ input.key("ctrl+`")                          ← toggle integrated terminal
 ```
 
 ### Terminal text interaction
+
 ```
 # Type command:
 input.type("ls -la")
@@ -618,6 +660,7 @@ When you encounter an unfamiliar application:
 ```
 
 **Menu exploration pattern:**
+
 ```
 input.click(menuX, menuY)                    ← click "File" or first menu
 input.wait(10)
@@ -630,16 +673,16 @@ input.key("esc")                             ← close menu
 
 Don't use fixed wait times blindly. Adjust based on the action:
 
-| Action | Suggested wait |
-|--------|---------------|
-| Key press / click | 10-50ms |
-| Menu open | 10-50ms |
-| Tab switch | 10-50ms |
-| App launch | 10-100ms |
-| Page load (web) | 10-100ms |
-| File dialog open | 10-100ms |
+| Action                           | Suggested wait                |
+| -------------------------------- | ----------------------------- |
+| Key press / click                | 10-50ms                       |
+| Menu open                        | 10-50ms                       |
+| Tab switch                       | 10-50ms                       |
+| App launch                       | 10-100ms                      |
+| Page load (web)                  | 10-100ms                      |
+| File dialog open                 | 10-100ms                      |
 | Heavy operation (install, build) | 10ms loop + screenshot checks |
-| Tooltip appear | 10-100ms |
+| Tooltip appear                   | 10-100ms                      |
 
 **If screenshot shows "unchanged":** Retry with short waits. Increase gradually only if needed (10 → 50 → 100).
 
@@ -664,6 +707,7 @@ Attempt 4: Reset state
 ```
 
 **Common failure modes:**
+
 - **Click missed the target** → Screenshot, re-read coordinates, try again
 - **Popup blocking interaction** → Dismiss with Esc or click X
 - **App not responding** → Wait longer (5000ms), or try alt+tab away and back
@@ -694,29 +738,29 @@ You CANNOT do OCR, but you can read text visible in screenshots:
 
 ## Modifiers
 
-| Key | Aliases |
-|-----|---------|
-| Control | `ctrl`, `control`, `LeftControl`, `rctrl` (right) |
-| Alt | `alt`, `option`, `LeftAlt`, `ralt` (right) |
-| Shift | `shift`, `LeftShift`, `rshift` (right) |
-| Windows/Super | `win`, `super`, `meta`, `cmd`, `command` |
+| Key           | Aliases                                           |
+| ------------- | ------------------------------------------------- |
+| Control       | `ctrl`, `control`, `LeftControl`, `rctrl` (right) |
+| Alt           | `alt`, `option`, `LeftAlt`, `ralt` (right)        |
+| Shift         | `shift`, `LeftShift`, `rshift` (right)            |
+| Windows/Super | `win`, `super`, `meta`, `cmd`, `command`          |
 
 **Combinations:** use `+` separator — `ctrl+c`, `alt+f4`, `ctrl+shift+s`, `win+e`
 
 ## Common Keys
 
-| Category | Keys |
-|----------|------|
-| Standard | `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert` |
-| Arrows | `up`, `down`, `left`, `right` |
-| Navigation | `home`, `end`, `pageup`, `pagedown` |
-| Function | `f1` through `f24` |
-| Letters | `a` through `z` (case-insensitive) |
-| Numbers | `0` through `9` |
-| Numpad | `numpad0`–`numpad9`, `decimal`, `add`, `subtract`, `multiply`, `divide` |
-| System | `printscreen`, `pause`, `capslock`, `numlock`, `scrolllock` |
-| Media | `mute`, `volumeup`, `volumedown`, `mediaplay`, `mediastop`, `mediaprev`, `medianext` |
-| Symbols | `` ` ``, `-`, `=`, `[`, `]`, `\`, `;`, `'`, `,`, `.`, `/` |
+| Category   | Keys                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------ |
+| Standard   | `enter`, `esc`, `tab`, `space`, `backspace`, `delete`, `insert`                      |
+| Arrows     | `up`, `down`, `left`, `right`                                                        |
+| Navigation | `home`, `end`, `pageup`, `pagedown`                                                  |
+| Function   | `f1` through `f24`                                                                   |
+| Letters    | `a` through `z` (case-insensitive)                                                   |
+| Numbers    | `0` through `9`                                                                      |
+| Numpad     | `numpad0`–`numpad9`, `decimal`, `add`, `subtract`, `multiply`, `divide`              |
+| System     | `printscreen`, `pause`, `capslock`, `numlock`, `scrolllock`                          |
+| Media      | `mute`, `volumeup`, `volumedown`, `mediaplay`, `mediastop`, `mediaprev`, `medianext` |
+| Symbols    | `` ` ``, `-`, `=`, `[`, `]`, `\`, `;`, `'`, `,`, `.`, `/`                            |
 
 ---
 
@@ -724,37 +768,37 @@ You CANNOT do OCR, but you can read text visible in screenshots:
 
 ## Universal Actions
 
-| Action | Windows/Linux | macOS |
-|--------|--------------|-------|
-| Copy | `ctrl+c` | `cmd+c` |
-| Paste | `ctrl+v` | `cmd+v` |
-| Cut | `ctrl+x` | `cmd+x` |
-| Undo | `ctrl+z` | `cmd+z` |
-| Redo | `ctrl+y` | `cmd+shift+z` |
-| Save | `ctrl+s` | `cmd+s` |
-| Select All | `ctrl+a` | `cmd+a` |
-| Find | `ctrl+f` | `cmd+f` |
-| Find & Replace | `ctrl+h` | `cmd+alt+f` |
-| Print | `ctrl+p` | `cmd+p` |
-| New | `ctrl+n` | `cmd+n` |
-| Open | `ctrl+o` | `cmd+o` |
-| Close tab/window | `ctrl+w` | `cmd+w` |
-| Quit app | `alt+f4` | `cmd+q` |
-| Switch app | `alt+tab` | `cmd+tab` |
-| Switch tab | `ctrl+tab` | `ctrl+tab` |
-| Address bar | `ctrl+l` | `cmd+l` |
-| New tab | `ctrl+t` | `cmd+t` |
-| Reopen tab | `ctrl+shift+t` | `cmd+shift+t` |
-| Zoom in | `ctrl+=` | `cmd+=` |
-| Zoom out | `ctrl+-` | `cmd+-` |
-| Reset zoom | `ctrl+0` | `cmd+0` |
-| Refresh | `ctrl+r` / `f5` | `cmd+r` |
-| App launcher | `win` | `cmd+space` |
-| File manager | `win+e` | (Spotlight → Finder) |
-| Task manager | `ctrl+shift+esc` | (Spotlight → Activity Monitor) |
-| Lock screen | `win+l` | `ctrl+cmd+q` |
-| Screenshot (system) | `win+shift+s` | `cmd+shift+4` |
-| Emoji picker | `win+.` | `ctrl+cmd+space` |
+| Action              | Windows/Linux    | macOS                          |
+| ------------------- | ---------------- | ------------------------------ |
+| Copy                | `ctrl+c`         | `cmd+c`                        |
+| Paste               | `ctrl+v`         | `cmd+v`                        |
+| Cut                 | `ctrl+x`         | `cmd+x`                        |
+| Undo                | `ctrl+z`         | `cmd+z`                        |
+| Redo                | `ctrl+y`         | `cmd+shift+z`                  |
+| Save                | `ctrl+s`         | `cmd+s`                        |
+| Select All          | `ctrl+a`         | `cmd+a`                        |
+| Find                | `ctrl+f`         | `cmd+f`                        |
+| Find & Replace      | `ctrl+h`         | `cmd+alt+f`                    |
+| Print               | `ctrl+p`         | `cmd+p`                        |
+| New                 | `ctrl+n`         | `cmd+n`                        |
+| Open                | `ctrl+o`         | `cmd+o`                        |
+| Close tab/window    | `ctrl+w`         | `cmd+w`                        |
+| Quit app            | `alt+f4`         | `cmd+q`                        |
+| Switch app          | `alt+tab`        | `cmd+tab`                      |
+| Switch tab          | `ctrl+tab`       | `ctrl+tab`                     |
+| Address bar         | `ctrl+l`         | `cmd+l`                        |
+| New tab             | `ctrl+t`         | `cmd+t`                        |
+| Reopen tab          | `ctrl+shift+t`   | `cmd+shift+t`                  |
+| Zoom in             | `ctrl+=`         | `cmd+=`                        |
+| Zoom out            | `ctrl+-`         | `cmd+-`                        |
+| Reset zoom          | `ctrl+0`         | `cmd+0`                        |
+| Refresh             | `ctrl+r` / `f5`  | `cmd+r`                        |
+| App launcher        | `win`            | `cmd+space`                    |
+| File manager        | `win+e`          | (Spotlight → Finder)           |
+| Task manager        | `ctrl+shift+esc` | (Spotlight → Activity Monitor) |
+| Lock screen         | `win+l`          | `ctrl+cmd+q`                   |
+| Screenshot (system) | `win+shift+s`    | `cmd+shift+4`                  |
+| Emoji picker        | `win+.`          | `ctrl+cmd+space`               |
 
 ---
 
@@ -774,6 +818,7 @@ You CANNOT do OCR, but you can read text visible in screenshots:
 ## Screenshot Dedup
 
 The screen tool detects identical screenshots. When you see "Screen has NOT changed":
+
 - The UI hasn't updated yet → use `input.wait(10)` then screenshot again
 - Your previous action may have failed → try a different approach
 - Increase slightly only if needed: 10 → 50 → 100

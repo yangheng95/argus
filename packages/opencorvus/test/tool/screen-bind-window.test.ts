@@ -6,11 +6,19 @@ const bindsById: number[] = []
 const bindsByTitle: string[] = []
 let monitorUnbinds = 0
 let windows = [
-  { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
+  {
+    id: 7,
+    title: "Editor",
+    appName: "Code",
+    x: 120,
+    y: 80,
+    width: 1400,
+    height: 900,
+    isMinimized: false,
+    isFocused: true,
+  },
 ]
-let monitors = [
-  { id: 1, name: "Main", x: 0, y: 0, width: 2560, height: 1440, isPrimary: true, scaleFactor: 1 },
-]
+let monitors = [{ id: 1, name: "Main", x: 0, y: 0, width: 2560, height: 1440, isPrimary: true, scaleFactor: 1 }]
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
@@ -21,7 +29,9 @@ mock.module("../../src/opencorvus/perception/window", () => ({
     findWindow: async (title: string) => {
       const query = title.trim().toLowerCase()
       if (!query) return null
-      return windows.find((w) => w.title.toLowerCase().includes(query) || w.appName.toLowerCase().includes(query)) ?? null
+      return (
+        windows.find((w) => w.title.toLowerCase().includes(query) || w.appName.toLowerCase().includes(query)) ?? null
+      )
     },
     bindById: async (windowId: number, matchTitle?: string) => {
       bindsById.push(windowId)
@@ -85,11 +95,19 @@ beforeEach(() => {
   bindsByTitle.length = 0
   monitorUnbinds = 0
   windows = [
-    { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
+    {
+      id: 7,
+      title: "Editor",
+      appName: "Code",
+      x: 120,
+      y: 80,
+      width: 1400,
+      height: 900,
+      isMinimized: false,
+      isFocused: true,
+    },
   ]
-  monitors = [
-    { id: 1, name: "Main", x: 0, y: 0, width: 2560, height: 1440, isPrimary: true, scaleFactor: 1 },
-  ]
+  monitors = [{ id: 1, name: "Main", x: 0, y: 0, width: 2560, height: 1440, isPrimary: true, scaleFactor: 1 }]
 })
 
 describe("tool.screen bind_window", () => {
@@ -114,7 +132,10 @@ describe("tool.screen bind_window", () => {
       directory: tmp.path,
       fn: async () => {
         const tool = await ScreenTool.init()
-        const result = await tool.execute({ action: "bind_window", title: "Missing Window", allow_single_monitor_fallback: true }, ctx)
+        const result = await tool.execute(
+          { action: "bind_window", title: "Missing Window", allow_single_monitor_fallback: true },
+          ctx,
+        )
         expect(result.metadata.title).toBe("Editor")
         expect(result.metadata.singleMonitorFallback).toBe(true)
         expect(result.metadata.allowSingleMonitorFallback).toBe(true)
@@ -149,8 +170,28 @@ describe("tool.screen bind_window", () => {
 
   test("binds exact window by window_id", async () => {
     windows = [
-      { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
-      { id: 11, title: "Editor", appName: "Code", x: 100, y: 100, width: 1280, height: 800, isMinimized: false, isFocused: false },
+      {
+        id: 7,
+        title: "Editor",
+        appName: "Code",
+        x: 120,
+        y: 80,
+        width: 1400,
+        height: 900,
+        isMinimized: false,
+        isFocused: true,
+      },
+      {
+        id: 11,
+        title: "Editor",
+        appName: "Code",
+        x: 100,
+        y: 100,
+        width: 1280,
+        height: 800,
+        isMinimized: false,
+        isFocused: false,
+      },
     ]
 
     await using tmp = await tmpdir()
@@ -170,8 +211,28 @@ describe("tool.screen bind_window", () => {
 
   test("accepts numeric string window_id", async () => {
     windows = [
-      { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
-      { id: 11, title: "Editor", appName: "Code", x: 100, y: 100, width: 1280, height: 800, isMinimized: false, isFocused: false },
+      {
+        id: 7,
+        title: "Editor",
+        appName: "Code",
+        x: 120,
+        y: 80,
+        width: 1400,
+        height: 900,
+        isMinimized: false,
+        isFocused: true,
+      },
+      {
+        id: 11,
+        title: "Editor",
+        appName: "Code",
+        x: 100,
+        y: 100,
+        width: 1280,
+        height: 800,
+        isMinimized: false,
+        isFocused: false,
+      },
     ]
 
     await using tmp = await tmpdir()

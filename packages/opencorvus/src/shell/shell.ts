@@ -40,11 +40,7 @@ export namespace Shell {
       return !item.toLowerCase().endsWith("\\windows\\system32\\bash.exe")
     })
 
-    return [
-      ...fromGit,
-      ...fromCommonInstalls,
-      ...genericBash,
-    ]
+    return [...fromGit, ...fromCommonInstalls, ...genericBash]
   }
 
   export async function killTree(proc: ChildProcess, opts?: { exited?: () => boolean }): Promise<void> {

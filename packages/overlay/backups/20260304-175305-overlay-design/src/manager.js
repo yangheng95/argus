@@ -74,7 +74,7 @@ function readArgs(input) {
       continue
     }
 
-    if (char === "\"" || char === "'") {
+    if (char === '"' || char === "'") {
       quote = char
       continue
     }
@@ -95,9 +95,9 @@ function readArgs(input) {
 }
 
 function quoteArg(input) {
-  if (!input) return "\"\""
+  if (!input) return '""'
   if (!/[\s"'\\]/.test(input)) return input
-  return `"${input.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`
+  return `"${input.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
 }
 
 function argsToText(list) {
@@ -460,7 +460,10 @@ function applySnapshot(snapshot) {
   if (typeof snapshot.prompt_running === "boolean") setSending(snapshot.prompt_running)
   setLogPath(snapshot.log_path)
   if (Array.isArray(snapshot.logs)) {
-    state.logs = snapshot.logs.map((item) => normalizeLog(item)).filter((item) => Boolean(item)).slice(-800)
+    state.logs = snapshot.logs
+      .map((item) => normalizeLog(item))
+      .filter((item) => Boolean(item))
+      .slice(-800)
     renderLogs()
   }
   if (!state.configLoaded) fillConfig(snapshot.config)

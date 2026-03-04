@@ -292,9 +292,11 @@ export namespace Worktree {
       base.slice(index + 1)
     const probe = path.join(parent, toggled)
 
-    const insensitive = await Promise.all([fs.stat(dir).catch(() => undefined), fs.stat(probe).catch(() => undefined)]).then(
-      ([original, variant]) =>
-        Boolean(original && variant && original.dev === variant.dev && original.ino === variant.ino),
+    const insensitive = await Promise.all([
+      fs.stat(dir).catch(() => undefined),
+      fs.stat(probe).catch(() => undefined),
+    ]).then(([original, variant]) =>
+      Boolean(original && variant && original.dev === variant.dev && original.ino === variant.ino),
     )
 
     caseInsensitiveCache.set(root, insensitive)
@@ -678,4 +680,3 @@ export namespace Worktree {
     return true
   })
 }
-

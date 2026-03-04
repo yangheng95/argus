@@ -7,8 +7,8 @@
     },
     "alibaba-cn": {
       "options": {
-        "baseURL": "https://coding.dashscope.aliyuncs.com/v1"
-      }
+        "baseURL": "https://coding.dashscope.aliyuncs.com/v1",
+      },
     },
   },
   "mcp": {},

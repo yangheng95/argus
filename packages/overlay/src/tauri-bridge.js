@@ -5,9 +5,12 @@
   const WARN_THROTTLE_MS = 3_000
 
   if (!protocol || typeof protocol !== "object") throw new Error("overlay protocol is unavailable")
-  if (!protocol.windows || typeof protocol.windows !== "object") throw new Error("overlay protocol windows are unavailable")
-  if (!protocol.events || typeof protocol.events !== "object") throw new Error("overlay protocol events are unavailable")
-  if (!protocol.commands || typeof protocol.commands !== "object") throw new Error("overlay protocol commands are unavailable")
+  if (!protocol.windows || typeof protocol.windows !== "object")
+    throw new Error("overlay protocol windows are unavailable")
+  if (!protocol.events || typeof protocol.events !== "object")
+    throw new Error("overlay protocol events are unavailable")
+  if (!protocol.commands || typeof protocol.commands !== "object")
+    throw new Error("overlay protocol commands are unavailable")
 
   const windows = protocol.windows
   const events = protocol.events

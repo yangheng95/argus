@@ -4,20 +4,23 @@ import { base } from "./http"
 type SyncResponse = {
   next_batch?: string
   rooms?: {
-    join?: Record<string, {
-      timeline?: {
-        events?: Array<{
-          event_id?: string
-          type?: string
-          sender?: string
-          content?: {
-            msgtype?: string
-            body?: string
-            [key: string]: unknown
-          }
-        }>
+    join?: Record<
+      string,
+      {
+        timeline?: {
+          events?: Array<{
+            event_id?: string
+            type?: string
+            sender?: string
+            content?: {
+              msgtype?: string
+              body?: string
+              [key: string]: unknown
+            }
+          }>
+        }
       }
-    }>
+    >
   }
 }
 
@@ -35,11 +38,7 @@ export class MatrixAdapter implements BotAdapter {
   private running = false
   private loop?: Promise<void>
 
-  constructor(opts: {
-    homeserver: string
-    token: string
-    since?: string
-  }) {
+  constructor(opts: { homeserver: string; token: string; since?: string }) {
     this.homeserver = base(opts.homeserver)
     this.token = opts.token
     this.since = opts.since
@@ -84,16 +83,25 @@ export class MatrixAdapter implements BotAdapter {
     return data.event_id ?? `${Date.now()}`
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
-    const uploaded = await fetch(`${this.homeserver}/_matrix/media/v3/upload?filename=${encodeURIComponent(filename)}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        "Content-Type": "application/octet-stream",
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
+    const uploaded = await fetch(
+      `${this.homeserver}/_matrix/media/v3/upload?filename=${encodeURIComponent(filename)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: Uint8Array.from(imageBuffer),
+        signal: AbortSignal.timeout(30_000),
       },
-      body: Uint8Array.from(imageBuffer),
-      signal: AbortSignal.timeout(30_000),
-    })
+    )
     if (!uploaded.ok) throw new Error(`Matrix upload failed: ${uploaded.status} ${await uploaded.text()}`)
     const data = (await uploaded.json()) as UploadResponse
     if (!data.content_uri) throw new Error("Matrix upload failed: missing content_uri")
@@ -117,15 +125,18 @@ export class MatrixAdapter implements BotAdapter {
 
   private async send(channel: string, payload: Record<string, unknown>) {
     const txn = `${Date.now()}-${Math.random().toString(36).slice(2)}`
-    const res = await fetch(`${this.homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(channel)}/send/m.room.message/${txn}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        "Content-Type": "application/json",
+    const res = await fetch(
+      `${this.homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(channel)}/send/m.room.message/${txn}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(30_000),
       },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30_000),
-    })
+    )
     if (!res.ok) throw new Error(`Matrix send failed: ${res.status} ${await res.text()}`)
     return (await res.json()) as { event_id?: string }
   }

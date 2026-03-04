@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f`    | ملف/ملفات لإرفاقها بالرسالة                                       |
 | `--format`   |         | التنسيق: default (منسق) أو json (أحداث JSON خام)                  |
 | `--title`    |         | عنوان للجلسة (يستخدم موجهًا مقتطعًا إن لم تُحدَّد قيمة)           |
-| `--attach`   |         | الإرفاق بخادم opencorvus قيد التشغيل (مثل http://localhost:7878)    |
+| `--attach`   |         | الإرفاق بخادم opencorvus قيد التشغيل (مثل http://localhost:7878)  |
 | `--port`     |         | منفذ الخادم المحلي (الافتراضي منفذ عشوائي)                        |
 
 ---
@@ -553,32 +553,32 @@ opencorvus upgrade v0.1.48
 
 يمكن تهيئة OpenCorvus باستخدام متغيرات البيئة.
 
-| المتغير                               | النوع   | الوصف                                                     |
-| ------------------------------------- | ------- | --------------------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | boolean | مشاركة الجلسات تلقائيا                                    |
-| `OPENCORVUS_GIT_BASH_PATH`              | string  | مسار ملف Git Bash التنفيذي على Windows                    |
-| `OPENCORVUS_CONFIG`                     | string  | مسار ملف التهيئة                                          |
-| `OPENCORVUS_CONFIG_DIR`                 | string  | مسار دليل التهيئة                                         |
-| `OPENCORVUS_CONFIG_CONTENT`             | string  | محتوى تهيئة JSON مُضمّن                                   |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | تعطيل التحقق التلقائي من التحديثات                        |
-| `OPENCORVUS_DISABLE_PRUNE`              | boolean | تعطيل تنقية البيانات القديمة                              |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | تعطيل تحديث عنوان terminal تلقائيا                        |
-| `OPENCORVUS_PERMISSION`                 | string  | تهيئة أذونات JSON مُضمّنة                                 |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | تعطيل الإضافات الافتراضية                                 |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | تعطيل تنزيل خوادم LSP تلقائيا                             |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | تفعيل النماذج التجريبية                                   |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | تعطيل ضغط السياق تلقائيا                                  |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | تعطيل القراءة من `.claude` (الموجه + المهارات)            |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | تعطيل قراءة `~/.claude/CLAUDE.md`                         |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | تعطيل تحميل `.claude/skills`                              |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | تعطيل جلب النماذج من مصادر بعيدة                          |
-| `OPENCORVUS_FAKE_VCS`                   | string  | مزود VCS وهمي لأغراض الاختبار                             |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | تعطيل التحقق من وقت الملف لتحسين الأداء                   |
-| `OPENCORVUS_CLIENT`                     | string  | معرّف العميل (الافتراضي `cli`)                            |
-| `OPENCORVUS_ENABLE_EXA`                 | boolean | تفعيل أدوات بحث الويب من Exa                              |
-| `OPENCORVUS_SERVER_PASSWORD`            | string  | تفعيل المصادقة الأساسية لخادمي `serve`/`web`              |
+| المتغير                                 | النوع   | الوصف                                                       |
+| --------------------------------------- | ------- | ----------------------------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | مشاركة الجلسات تلقائيا                                      |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | مسار ملف Git Bash التنفيذي على Windows                      |
+| `OPENCORVUS_CONFIG`                     | string  | مسار ملف التهيئة                                            |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | مسار دليل التهيئة                                           |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | محتوى تهيئة JSON مُضمّن                                     |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | تعطيل التحقق التلقائي من التحديثات                          |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | تعطيل تنقية البيانات القديمة                                |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | تعطيل تحديث عنوان terminal تلقائيا                          |
+| `OPENCORVUS_PERMISSION`                 | string  | تهيئة أذونات JSON مُضمّنة                                   |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | تعطيل الإضافات الافتراضية                                   |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | تعطيل تنزيل خوادم LSP تلقائيا                               |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | تفعيل النماذج التجريبية                                     |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | تعطيل ضغط السياق تلقائيا                                    |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | تعطيل القراءة من `.claude` (الموجه + المهارات)              |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | تعطيل قراءة `~/.claude/CLAUDE.md`                           |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | تعطيل تحميل `.claude/skills`                                |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | تعطيل جلب النماذج من مصادر بعيدة                            |
+| `OPENCORVUS_FAKE_VCS`                   | string  | مزود VCS وهمي لأغراض الاختبار                               |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | تعطيل التحقق من وقت الملف لتحسين الأداء                     |
+| `OPENCORVUS_CLIENT`                     | string  | معرّف العميل (الافتراضي `cli`)                              |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | تفعيل أدوات بحث الويب من Exa                                |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | تفعيل المصادقة الأساسية لخادمي `serve`/`web`                |
 | `OPENCORVUS_SERVER_USERNAME`            | string  | تجاوز اسم مستخدم المصادقة الأساسية (الافتراضي `opencorvus`) |
-| `OPENCORVUS_MODELS_URL`                 | string  | رابط مخصص لجلب تهيئة النماذج                              |
+| `OPENCORVUS_MODELS_URL`                 | string  | رابط مخصص لجلب تهيئة النماذج                                |
 
 ---
 
@@ -586,8 +586,8 @@ opencorvus upgrade v0.1.48
 
 تقوم متغيرات البيئة التالية بتفعيل ميزات تجريبية قد تتغير أو تتم إزالتها.
 
-| المتغير                                         | النوع   | الوصف                                       |
-| ----------------------------------------------- | ------- | ------------------------------------------- |
+| المتغير                                           | النوع   | الوصف                                       |
+| ------------------------------------------------- | ------- | ------------------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | تفعيل جميع الميزات التجريبية                |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | تفعيل اكتشاف الأيقونات                      |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | تعطيل النسخ عند التحديد في TUI              |

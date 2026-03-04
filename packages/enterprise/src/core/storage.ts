@@ -80,7 +80,11 @@ export namespace Storage {
       accessKeyId: process.env.OPENCORVUS_STORAGE_ACCESS_KEY_ID!,
       secretAccessKey: process.env.OPENCORVUS_STORAGE_SECRET_ACCESS_KEY!,
     })
-    return createAdapter(client, `https://${accountId}.r2.cloudflarestorage.com`, process.env.OPENCORVUS_STORAGE_BUCKET!)
+    return createAdapter(
+      client,
+      `https://${accountId}.r2.cloudflarestorage.com`,
+      process.env.OPENCORVUS_STORAGE_BUCKET!,
+    )
   }
 
   const adapter = lazy(() => {
@@ -127,4 +131,3 @@ export namespace Storage {
     return val
   }
 }
-

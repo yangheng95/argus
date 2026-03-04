@@ -10,12 +10,12 @@ function kind(error: unknown): Automation.ErrorKind {
   if (value.includes("abort")) return "aborted"
   if (value.includes("not found")) return "not_found"
   if (
-    value.includes("foreground")
-    || value.includes("focus")
-    || value.includes("interact")
-    || value.includes("click")
-    || value.includes("keyboard")
-    || value.includes("mouse")
+    value.includes("foreground") ||
+    value.includes("focus") ||
+    value.includes("interact") ||
+    value.includes("click") ||
+    value.includes("keyboard") ||
+    value.includes("mouse")
   ) {
     return "not_interactable"
   }

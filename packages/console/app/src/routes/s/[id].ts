@@ -26,4 +26,3 @@ export const PUT = handler
 export const DELETE = handler
 export const OPTIONS = handler
 export const PATCH = handler
-

@@ -15,13 +15,7 @@ function wait(ms: number, abort: AbortSignal) {
 }
 
 export namespace Automation {
-  export type ErrorKind =
-    | "not_found"
-    | "not_interactable"
-    | "state_mismatch"
-    | "infra"
-    | "timeout"
-    | "aborted"
+  export type ErrorKind = "not_found" | "not_interactable" | "state_mismatch" | "infra" | "timeout" | "aborted"
 
   export type Stage = "locate" | "pre" | "act" | "post" | "recover" | "snapshot"
 
@@ -117,11 +111,7 @@ export namespace Automation {
   }
 
   export interface Driver {
-    locate(input: {
-      step: Step
-      target: Locator[]
-      abort: AbortSignal
-    }): Promise<Probe<Node>>
+    locate(input: { step: Step; target: Locator[]; abort: AbortSignal }): Promise<Probe<Node>>
     check(input: {
       step: Step
       check: Check
@@ -129,12 +119,7 @@ export namespace Automation {
       stage: "pre" | "post"
       abort: AbortSignal
     }): Promise<Probe>
-    act(input: {
-      step: Step
-      act: Action
-      node: Node | null
-      abort: AbortSignal
-    }): Promise<Probe>
+    act(input: { step: Step; act: Action; node: Node | null; abort: AbortSignal }): Promise<Probe>
     recover?(input: {
       step: Step
       attempt: number
@@ -143,21 +128,13 @@ export namespace Automation {
       detail?: string
       abort: AbortSignal
     }): Promise<Probe>
-    snapshot?(input: {
-      step: Step
-      attempt: number
-      label: string
-      abort: AbortSignal
-    }): Promise<Snapshot | null>
+    snapshot?(input: { step: Step; attempt: number; label: string; abort: AbortSignal }): Promise<Snapshot | null>
   }
 
   export interface Engine {
     opts: Opt
     run(step: Step, input?: { abort?: AbortSignal }): Promise<StepResult>
-    runAll(
-      steps: Step[],
-      input?: { abort?: AbortSignal; stopOnFail?: boolean },
-    ): Promise<FlowResult>
+    runAll(steps: Step[], input?: { abort?: AbortSignal; stopOnFail?: boolean }): Promise<FlowResult>
   }
 
   function merge(base: Opt, step: Step): Opt {
@@ -264,13 +241,7 @@ export namespace Automation {
         detail,
         abort: input.abort,
       })
-      push(
-        input.trace,
-        input.step.id,
-        input.attempt,
-        "recover",
-        recovered,
-      )
+      push(input.trace, input.step.id, input.attempt, "recover", recovered)
     }
 
     if (input.driver.snapshot) {
@@ -281,14 +252,7 @@ export namespace Automation {
         abort: input.abort,
       })
       if (shot) {
-        push(
-          input.trace,
-          input.step.id,
-          input.attempt,
-          "snapshot",
-          { ok: true },
-          { shot: shot.id, elapsedMs: 0 },
-        )
+        push(input.trace, input.step.id, input.attempt, "snapshot", { ok: true }, { shot: shot.id, elapsedMs: 0 })
       }
     }
 
@@ -315,7 +279,7 @@ export namespace Automation {
     }
 
     const i = Math.min(input.attempt - 1, input.conf.backoffMs.length - 1)
-    const ms = i >= 0 ? input.conf.backoffMs[i] ?? 0 : 0
+    const ms = i >= 0 ? (input.conf.backoffMs[i] ?? 0) : 0
     await wait(ms, input.abort)
     return null
   }
@@ -338,18 +302,15 @@ export namespace Automation {
         let node: Node | null = null
 
         if (step.target && step.target.length > 0) {
-          const hit = await poll(
-            () => driver.locate({ step, target: step.target!, abort }),
-            conf,
-            abort,
-          )
-          const probe = !hit.ok || !hit.data
-            ? {
-                ok: false,
-                kind: hit.kind ?? "not_found",
-                detail: hit.detail ?? "target not found",
-              }
-            : hit
+          const hit = await poll(() => driver.locate({ step, target: step.target!, abort }), conf, abort)
+          const probe =
+            !hit.ok || !hit.data
+              ? {
+                  ok: false,
+                  kind: hit.kind ?? "not_found",
+                  detail: hit.detail ?? "target not found",
+                }
+              : hit
           push(trace, step.id, attempt, "locate", probe, { elapsedMs: hit.elapsedMs })
           if (!probe.ok) {
             const result = await fail({
@@ -377,11 +338,7 @@ export namespace Automation {
         const pre = step.pre ?? []
         let blocked = false
         for (const check of pre) {
-          const hit = await poll(
-            () => driver.check({ step, check, node, stage: "pre", abort }),
-            conf,
-            abort,
-          )
+          const hit = await poll(() => driver.check({ step, check, node, stage: "pre", abort }), conf, abort)
           push(trace, step.id, attempt, "pre", hit, {
             elapsedMs: hit.elapsedMs,
             check: check.kind,
@@ -442,11 +399,7 @@ export namespace Automation {
         const post = step.post ?? []
         let unstable = false
         for (const check of post) {
-          const hit = await poll(
-            () => driver.check({ step, check, node, stage: "post", abort }),
-            conf,
-            abort,
-          )
+          const hit = await poll(() => driver.check({ step, check, node, stage: "post", abort }), conf, abort)
           push(trace, step.id, attempt, "post", hit, {
             elapsedMs: hit.elapsedMs,
             check: check.kind,
@@ -482,10 +435,17 @@ export namespace Automation {
             abort,
           })
           if (shot) {
-            push(trace, step.id, attempt, "snapshot", { ok: true }, {
-              shot: shot.id,
-              elapsedMs: 0,
-            })
+            push(
+              trace,
+              step.id,
+              attempt,
+              "snapshot",
+              { ok: true },
+              {
+                shot: shot.id,
+                elapsedMs: 0,
+              },
+            )
           }
         }
 

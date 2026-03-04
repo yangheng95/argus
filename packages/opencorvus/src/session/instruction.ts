@@ -11,10 +11,7 @@ import type { MessageV2 } from "./message"
 
 const log = Log.create({ service: "instruction" })
 
-const FILES = [
-  "AGENTS.md",
-  "CLAUDE.md",
-]
+const FILES = ["AGENTS.md", "CLAUDE.md"]
 
 function globalFiles() {
   const files = []

@@ -155,5 +155,3 @@ function getAuthorizationHeader(): string | undefined {
   const username = Flag.OPENCORVUS_SERVER_USERNAME ?? "opencorvus"
   return `Basic ${btoa(`${username}:${password}`)}`
 }
-
-

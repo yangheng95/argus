@@ -97,4 +97,3 @@ export function formatPart(part: Part, options: TranscriptOptions): string {
 
   return ""
 }
-

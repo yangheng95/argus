@@ -43,4 +43,3 @@ describe("bot permission profile", () => {
     expect(Object.keys(permission)).toHaveLength(0)
   })
 })
-

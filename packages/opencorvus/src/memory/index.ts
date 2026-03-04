@@ -86,7 +86,9 @@ export namespace Memory {
   function ftsInsert(chunkId: string, projectId: string, content: string): void {
     try {
       Database.use((db) =>
-        db.run(sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`),
+        db.run(
+          sql`INSERT INTO memory_fts (content, chunk_id, project_id) VALUES (${content}, ${chunkId}, ${projectId})`,
+        ),
       )
     } catch (err) {
       log.warn("FTS insert failed (FTS5 may not be available)", { chunkId, err })
@@ -96,9 +98,7 @@ export namespace Memory {
   /** Delete a chunk from the FTS5 table by chunk_id. */
   function ftsDelete(chunkId: string): void {
     try {
-      Database.use((db) =>
-        db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId}`),
-      )
+      Database.use((db) => db.run(sql`DELETE FROM memory_fts WHERE chunk_id = ${chunkId}`))
     } catch (err) {
       log.warn("FTS delete failed", { chunkId, err })
     }
@@ -220,9 +220,7 @@ export namespace Memory {
   }
 
   export function getFile(fileId: string): MemoryFile | null {
-    const row = Database.use((db) =>
-      db.select().from(MemoryFileTable).where(eq(MemoryFileTable.id, fileId)).get(),
-    )
+    const row = Database.use((db) => db.select().from(MemoryFileTable).where(eq(MemoryFileTable.id, fileId)).get())
     if (!row) return null
     return {
       id: row.id,
@@ -236,11 +234,7 @@ export namespace Memory {
 
   export function getChunks(fileId: string): MemoryChunk[] {
     const rows = Database.use((db) =>
-      db
-        .select()
-        .from(MemoryChunkTable)
-        .where(eq(MemoryChunkTable.file_id, fileId))
-        .all(),
+      db.select().from(MemoryChunkTable).where(eq(MemoryChunkTable.file_id, fileId)).all(),
     )
     return rows.map((r) => ({
       id: r.id,

@@ -25,4 +25,3 @@ export const { use: useI18n, provider: I18nProvider } = createSimpleContext({
     }
   },
 })
-

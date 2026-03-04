@@ -105,14 +105,14 @@ Or you can set it up manually.
 
 OpenCorvus can be triggered by the following GitHub events:
 
-| Event Type                    | Triggered By                           | Details                                                                                                           |
-| ----------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Event Type                    | Triggered By                           | Details                                                                                                               |
+| ----------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `issue_comment`               | Comment on an issue or PR              | Mention `/opencorvus` or `/oc` in your comment. OpenCorvus reads context and can create branches, open PRs, or reply. |
 | `pull_request_review_comment` | Comment on specific code lines in a PR | Mention `/opencorvus` or `/oc` while reviewing code. OpenCorvus receives file path, line numbers, and diff context.   |
-| `issues`                      | Issue opened or edited                 | Automatically trigger OpenCorvus when issues are created or modified. Requires `prompt` input.                      |
-| `pull_request`                | PR opened or updated                   | Automatically trigger OpenCorvus when PRs are opened, synchronized, or reopened. Useful for automated reviews.      |
-| `schedule`                    | Cron-based schedule                    | Run OpenCorvus on a schedule. Requires `prompt` input. Output goes to logs and PRs (no issue to comment on).        |
-| `workflow_dispatch`           | Manual trigger from GitHub UI          | Trigger OpenCorvus on demand via Actions tab. Requires `prompt` input. Output goes to logs and PRs.                 |
+| `issues`                      | Issue opened or edited                 | Automatically trigger OpenCorvus when issues are created or modified. Requires `prompt` input.                        |
+| `pull_request`                | PR opened or updated                   | Automatically trigger OpenCorvus when PRs are opened, synchronized, or reopened. Useful for automated reviews.        |
+| `schedule`                    | Cron-based schedule                    | Run OpenCorvus on a schedule. Requires `prompt` input. Output goes to logs and PRs (no issue to comment on).          |
+| `workflow_dispatch`           | Manual trigger from GitHub UI          | Trigger OpenCorvus on demand via Actions tab. Requires `prompt` input. Output goes to logs and PRs.                   |
 
 ### Schedule Example
 

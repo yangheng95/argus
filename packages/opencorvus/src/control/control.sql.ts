@@ -14,7 +14,5 @@ export const ControlAccountTable = sqliteTable(
       .$default(() => false),
     ...Timestamps,
   },
-  (table) => [
-    primaryKey({ columns: [table.email, table.url] }),
-  ],
+  (table) => [primaryKey({ columns: [table.email, table.url] })],
 )

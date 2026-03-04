@@ -87,10 +87,7 @@ export namespace Tui {
     }
 
     /** Show a toast notification in the TUI */
-    async showToast(
-      message: string,
-      variant: "info" | "success" | "warning" | "error" = "info",
-    ): Promise<void> {
+    async showToast(message: string, variant: "info" | "success" | "warning" | "error" = "info"): Promise<void> {
       await this.post("/tui/show-toast", { message, variant })
     }
 
@@ -168,7 +165,9 @@ export namespace Tui {
   function isDevMode(): boolean {
     // In dev mode, import.meta.dir points into the source tree
     try {
-      return import.meta.dir.includes("packages/opencorvus/src") || import.meta.dir.includes("packages\\opencorvus\\src")
+      return (
+        import.meta.dir.includes("packages/opencorvus/src") || import.meta.dir.includes("packages\\opencorvus\\src")
+      )
     } catch {
       return false
     }
@@ -183,9 +182,19 @@ export namespace Tui {
   /** Find an available terminal emulator on Linux. */
   function findLinuxTerminal(): string | undefined {
     const terminals = [
-      "gnome-terminal", "konsole", "xfce4-terminal", "mate-terminal",
-      "tilix", "alacritty", "kitty", "wezterm", "foot",
-      "xterm", "lxterminal", "sakura", "terminator",
+      "gnome-terminal",
+      "konsole",
+      "xfce4-terminal",
+      "mate-terminal",
+      "tilix",
+      "alacritty",
+      "kitty",
+      "wezterm",
+      "foot",
+      "xterm",
+      "lxterminal",
+      "sakura",
+      "terminator",
     ]
     for (const t of terminals) {
       try {
@@ -269,13 +278,7 @@ export namespace Tui {
           ].join("\r\n"),
         )
       } else {
-        fs.writeFileSync(
-          batFile,
-          [
-            `@title OpenCorvus TUI`,
-            `@"${bin}" ${quotedArgs}`,
-          ].join("\r\n"),
-        )
+        fs.writeFileSync(batFile, [`@title OpenCorvus TUI`, `@"${bin}" ${quotedArgs}`].join("\r\n"))
       }
       proc = nodeSpawn("cmd.exe", ["/c", "start", "OpenCorvus TUI", "cmd.exe", "/k", batFile], {
         stdio: "ignore",
@@ -299,13 +302,7 @@ export namespace Tui {
           ].join("\n"),
         )
       } else {
-        fs.writeFileSync(
-          shFile,
-          [
-            `#!/bin/bash`,
-            `exec '${bin.replace(/'/g, "'\\''")}' ${escapedArgs}`,
-          ].join("\n"),
-        )
+        fs.writeFileSync(shFile, [`#!/bin/bash`, `exec '${bin.replace(/'/g, "'\\''")}' ${escapedArgs}`].join("\n"))
       }
       fs.chmodSync(shFile, 0o755)
       // Use `open -a Terminal.app <script>` to open in a new visible terminal window
@@ -331,13 +328,7 @@ export namespace Tui {
           ].join("\n"),
         )
       } else {
-        fs.writeFileSync(
-          shFile,
-          [
-            `#!/bin/bash`,
-            `exec '${bin.replace(/'/g, "'\\''")}' ${escapedArgs}`,
-          ].join("\n"),
-        )
+        fs.writeFileSync(shFile, [`#!/bin/bash`, `exec '${bin.replace(/'/g, "'\\''")}' ${escapedArgs}`].join("\n"))
       }
       fs.chmodSync(shFile, 0o755)
 

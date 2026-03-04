@@ -10,8 +10,7 @@ export const CronJobTable = sqliteTable(
     project_id: text()
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
-    session_id: text()
-      .references(() => SessionTable.id, { onDelete: "set null" }),
+    session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
     name: text().notNull(),
     expression: text().notNull(),
     prompt: text().notNull(),

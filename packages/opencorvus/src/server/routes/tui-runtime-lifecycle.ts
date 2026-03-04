@@ -32,21 +32,20 @@ export const TuiRuntimeLifecycleRoutes = lazy(() =>
       }),
       validator(
         "json",
-        z
-          .object({
-            mode: z.enum(["spawn", "connect"]).default("spawn"),
-            url: z.string().optional(),
-            directory: z.string().optional(),
-            sessionID: z.string().optional(),
-            model: z.string().optional(),
-            agent: z.string().optional(),
-            prompt: z.string().optional(),
-            continue: z.boolean().optional(),
-            fork: z.boolean().optional(),
-            port: z.number().int().optional(),
-            hostname: z.string().optional(),
-            bin: z.string().optional(),
-          }),
+        z.object({
+          mode: z.enum(["spawn", "connect"]).default("spawn"),
+          url: z.string().optional(),
+          directory: z.string().optional(),
+          sessionID: z.string().optional(),
+          model: z.string().optional(),
+          agent: z.string().optional(),
+          prompt: z.string().optional(),
+          continue: z.boolean().optional(),
+          fork: z.boolean().optional(),
+          port: z.number().int().optional(),
+          hostname: z.string().optional(),
+          bin: z.string().optional(),
+        }),
       ),
       async (c) => {
         const body = c.req.valid("json")

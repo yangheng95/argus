@@ -129,11 +129,13 @@ export namespace Filesystem {
       .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
       .join("|")
 
-    return p
-      // Git Bash for Windows paths are typically /<drive>/...
-      .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
-      // Cygwin/WSL/custom paths: /<mount>/<drive>/...
-      .replace(new RegExp(`^\\/(?:${escapedMounts})\\/([a-zA-Z])\\/`), (_, drive) => `${drive.toUpperCase()}:/`)
+    return (
+      p
+        // Git Bash for Windows paths are typically /<drive>/...
+        .replace(/^\/([a-zA-Z])\//, (_, drive) => `${drive.toUpperCase()}:/`)
+        // Cygwin/WSL/custom paths: /<mount>/<drive>/...
+        .replace(new RegExp(`^\\/(?:${escapedMounts})\\/([a-zA-Z])\\/`), (_, drive) => `${drive.toUpperCase()}:/`)
+    )
   }
   export function overlaps(a: string, b: string) {
     return contains(a, b) || contains(b, a)

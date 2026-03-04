@@ -51,7 +51,10 @@ class FakeClient {
 mock.module("discord.js", () => ({
   Client: FakeClient,
   AttachmentBuilder: class {
-    constructor(public buffer: Buffer, public options: { name: string }) {}
+    constructor(
+      public buffer: Buffer,
+      public options: { name: string },
+    ) {}
   },
   GatewayIntentBits: {
     Guilds: 1,

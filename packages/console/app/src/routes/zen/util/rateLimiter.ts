@@ -84,4 +84,3 @@ function buildYYYYMMDDHH(timestamp: number) {
     .replace(/[^0-9]/g, "")
     .substring(0, 10)
 }
-

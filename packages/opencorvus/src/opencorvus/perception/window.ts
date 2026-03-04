@@ -63,12 +63,14 @@ export namespace WindowManager {
     if (list.length === 0) return null
     const focused = list.find((w) => w.isFocused)
     if (focused) return focused
-    return [...list].sort((a, b) => {
-      if (a.isMinimized !== b.isMinimized) {
-        return a.isMinimized ? 1 : -1
-      }
-      return b.width * b.height - a.width * a.height
-    })[0] ?? null
+    return (
+      [...list].sort((a, b) => {
+        if (a.isMinimized !== b.isMinimized) {
+          return a.isMinimized ? 1 : -1
+        }
+        return b.width * b.height - a.width * a.height
+      })[0] ?? null
+    )
   }
 
   function sameRebindIdentity(binding: WindowBinding, candidate: WindowInfo): boolean {
@@ -98,7 +100,9 @@ export namespace WindowManager {
     const query = binding.matchTitle.trim().toLowerCase()
     if (!query) return null
     const windows = await listWindows(true)
-    const matches = windows.filter((w) => w.title.toLowerCase().includes(query) || w.appName.toLowerCase().includes(query))
+    const matches = windows.filter(
+      (w) => w.title.toLowerCase().includes(query) || w.appName.toLowerCase().includes(query),
+    )
     if (!binding.matchAppName) return pickBestWindow(matches)
     const app = binding.matchAppName.toLowerCase()
     const appMatches = matches.filter((w) => w.appName.toLowerCase() === app)
@@ -137,7 +141,9 @@ export namespace WindowManager {
     return match
   }
 
-  export async function getNativeWindow(windowId: number): Promise<InstanceType<typeof import("node-screenshots").Window> | null> {
+  export async function getNativeWindow(
+    windowId: number,
+  ): Promise<InstanceType<typeof import("node-screenshots").Window> | null> {
     const { Window } = await import("node-screenshots")
     const windows = Window.all()
     return windows.find((w) => w.id() === windowId) ?? null
@@ -188,7 +194,7 @@ export namespace WindowManager {
   }
 
   export async function ensureBoundForeground(binding?: WindowBinding | null): Promise<boolean> {
-    const current = binding ?? await getBinding()
+    const current = binding ?? (await getBinding())
     if (!current) return false
     return ensureForeground(current.windowId, current.info.appName)
   }

@@ -10,8 +10,8 @@ function list(): string[] {
   const bun = path.join(root, "node_modules", ".bun")
   const nested = existsSync(bun)
     ? readdirSync(bun, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory() && entry.name.startsWith("follow-redirects@"))
-      .map((entry) => path.join(bun, entry.name, "node_modules", "follow-redirects", "index.js"))
+        .filter((entry) => entry.isDirectory() && entry.name.startsWith("follow-redirects@"))
+        .map((entry) => path.join(bun, entry.name, "node_modules", "follow-redirects", "index.js"))
     : []
   const direct = path.join(root, "node_modules", "follow-redirects", "index.js")
   return [...new Set([...nested, direct].filter((file) => existsSync(file)))]

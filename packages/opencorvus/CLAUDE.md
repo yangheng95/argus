@@ -53,15 +53,18 @@ When asked to write or modify code, choose the best approach based on available 
 If the `bash` tool is available, you can launch the OpenCorvus TUI for high-efficiency coding:
 
 1. **Launch TUI in a new terminal window:**
+
    ```bash
    # Windows: start in a new cmd window
    start "OPENCORVUS_TUI" cmd /c "cd /d PROJECT_DIR/packages/opencorvus && bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts PROJECT_DIR"
    ```
+
    Replace `PROJECT_DIR` with the actual project directory path. The `--preload` flag is **required** for rendering.
 
 2. **Wait for TUI to start** — `input.wait(10)` then `screen.screenshot` (or `wait_for_change=true`)
 
 3. **Bind to TUI window** — Use `screen.list_windows` and pick the OPENCORVUS window id:
+
    ```
    screen.bind_window({ window_id: 123 })
    ```
@@ -75,6 +78,7 @@ If the `bash` tool is available, you can launch the OpenCorvus TUI for high-effi
 7. **When done**, the TUI shows the completed output. Screenshot and verify.
 
 Alternatively, if `bash` tool is available, you can use it directly:
+
 ```bash
 # Create files directly
 bash: echo '<html>...</html>' > filename.html
@@ -90,6 +94,7 @@ When you do NOT have bash/write/edit tools, you operate entirely through GUI too
 ### Step 1: Decompose the Task
 
 Before touching any UI, plan:
+
 - What files need to be created/modified?
 - How large is the code? (>500 chars = must use terminal, NOT direct typing)
 - What's the target directory?
@@ -97,6 +102,7 @@ Before touching any UI, plan:
 ### Step 2: Choose the Right Approach
 
 **For creating new files (preferred: terminal window approach):**
+
 1. Open a terminal window via GUI:
    - If VS Code is open: bind to VS Code → press `ctrl+`` (backtick) to toggle the integrated terminal panel
    - If no IDE: open standalone PowerShell via `Win` key → type "powershell" → `Enter` → `wait(10)` → `screen.screenshot` (only list/bind when ambiguous)
@@ -107,17 +113,20 @@ Before touching any UI, plan:
 3. Verify: type `cat filename.html | head -20` in the terminal and screenshot to check
 
 **For editing existing files:**
+
 1. Open file in VS Code: `ctrl+p` → type filename → Enter
 2. Navigate with `ctrl+g` (go to line) or `ctrl+f` (find text)
 3. Select text, then type replacement
 
 **NEVER do this:**
+
 - Type >1000 chars of code directly into the editor pane via `input.type` — use terminal commands instead
 - Create a new file with Ctrl+N then try to save — use terminal `echo` or `cat` to create the file directly
 
 ### Step 3: Break Large Code into Chunks
 
 For code >500 characters:
+
 1. Split into logical sections (HTML structure, CSS, JavaScript)
 2. Write each section via separate terminal commands
 3. Verify after each chunk with `cat filename | head -20`
@@ -125,25 +134,26 @@ For code >500 characters:
 ### Step 4: Verify
 
 After creating/editing:
+
 1. Open the file in VS Code: `ctrl+p` → filename
 2. Screenshot and verify content is correct
 3. If it's an HTML file, open in browser to test
 
 ### VS Code Keyboard Shortcuts (ALWAYS prefer over mouse clicks)
 
-| Action | Shortcut |
-|--------|----------|
+| Action          | Shortcut            |
+| --------------- | ------------------- |
 | Toggle terminal | `ctrl+`` (backtick) |
-| New terminal | `ctrl+shift+`` |
-| Quick file open | `ctrl+p` |
-| Go to line | `ctrl+g` |
-| Find/Replace | `ctrl+h` |
-| Save | `ctrl+s` |
-| Command palette | `ctrl+shift+p` |
-| Close tab | `ctrl+w` |
-| Switch tab | `ctrl+tab` |
-| Focus editor | `ctrl+1` |
-| Focus terminal | `` ctrl+` `` |
+| New terminal    | `ctrl+shift+``      |
+| Quick file open | `ctrl+p`            |
+| Go to line      | `ctrl+g`            |
+| Find/Replace    | `ctrl+h`            |
+| Save            | `ctrl+s`            |
+| Command palette | `ctrl+shift+p`      |
+| Close tab       | `ctrl+w`            |
+| Switch tab      | `ctrl+tab`          |
+| Focus editor    | `ctrl+1`            |
+| Focus terminal  | `` ctrl+` ``        |
 
 ## Opening Programs
 
@@ -172,6 +182,7 @@ When an action doesn't produce the expected result:
 
 **CRITICAL: 3-Strike Rule for Click Failures**
 If you click the same target area 3 times and it doesn't respond:
+
 - **STOP clicking.** Switch to keyboard shortcuts immediately.
 - Use Tab/Shift+Tab to navigate between UI elements.
 - Use keyboard shortcuts instead (see VS Code shortcuts above).

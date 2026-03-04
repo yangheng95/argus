@@ -46,4 +46,3 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     }
   },
 })
-

@@ -15,11 +15,7 @@ const toBuffer = async (path: string, width: number, height: number, background:
   sharp(path).resize(width, height, { fit: "contain", background }).png().toBuffer()
 
 const toPreview = async (path: string, background: string) => {
-  const content = await sharp(path)
-    .trim()
-    .resize(1800, 900, { fit: "inside" })
-    .png()
-    .toBuffer()
+  const content = await sharp(path).trim().resize(1800, 900, { fit: "inside" }).png().toBuffer()
 
   return sharp({
     create: {
@@ -64,8 +60,14 @@ async function main() {
   await write(`${BRAND}/opencorvus-wordmark-simple-light.png`, await readFile(`${BRAND}/opencorvus-wordmark-light.png`))
   await write(`${BRAND}/opencorvus-wordmark-simple-dark.png`, await readFile(`${BRAND}/opencorvus-wordmark-dark.png`))
 
-  await write(`${BRAND}/preview-opencorvus-logo-light.png`, await toPreview(`${BRAND}/opencorvus-logo-light.png`, LIGHT_BG))
-  await write(`${BRAND}/preview-opencorvus-logo-dark.png`, await toPreview(`${BRAND}/opencorvus-logo-dark.png`, DARK_BG))
+  await write(
+    `${BRAND}/preview-opencorvus-logo-light.png`,
+    await toPreview(`${BRAND}/opencorvus-logo-light.png`, LIGHT_BG),
+  )
+  await write(
+    `${BRAND}/preview-opencorvus-logo-dark.png`,
+    await toPreview(`${BRAND}/opencorvus-logo-dark.png`, DARK_BG),
+  )
   await write(
     `${BRAND}/preview-opencorvus-logo-light-square.png`,
     await toPreview(`${BRAND}/opencorvus-logo-light-square.png`, LIGHT_BG),
@@ -93,8 +95,14 @@ async function main() {
 
   await write(`${BRAND}/opencorvus-logo-light.svg`, await toSvg(`${BRAND}/opencorvus-logo-light.png`, 240, 300))
   await write(`${BRAND}/opencorvus-logo-dark.svg`, await toSvg(`${BRAND}/opencorvus-logo-dark.png`, 240, 300))
-  await write(`${BRAND}/opencorvus-logo-light-square.svg`, await toSvg(`${BRAND}/opencorvus-logo-light-square.png`, 300, 300))
-  await write(`${BRAND}/opencorvus-logo-dark-square.svg`, await toSvg(`${BRAND}/opencorvus-logo-dark-square.png`, 300, 300))
+  await write(
+    `${BRAND}/opencorvus-logo-light-square.svg`,
+    await toSvg(`${BRAND}/opencorvus-logo-light-square.png`, 300, 300),
+  )
+  await write(
+    `${BRAND}/opencorvus-logo-dark-square.svg`,
+    await toSvg(`${BRAND}/opencorvus-logo-dark-square.png`, 300, 300),
+  )
   await write(`${BRAND}/opencorvus-wordmark-light.svg`, await toSvg(`${BRAND}/opencorvus-wordmark-light.png`, 640, 115))
   await write(`${BRAND}/opencorvus-wordmark-dark.svg`, await toSvg(`${BRAND}/opencorvus-wordmark-dark.png`, 640, 115))
   await write(

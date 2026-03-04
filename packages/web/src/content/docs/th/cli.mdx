@@ -336,20 +336,20 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 
 #### แฟล็ก
 
-| แฟล็ก        | สั้น | คำอธิบาย                                                               |
-| ------------ | ---- | ---------------------------------------------------------------------- |
-| `--command`  |      | คำสั่งที่จะรัน (ใช้ส่วนที่เหลือของ args เป็นอาร์กิวเมนต์)              |
-| `--continue` | `-c` | ดำเนินการต่อจากเซสชันล่าสุด                                            |
-| `--session`  | `-s` | ID เซสชันเพื่อดำเนินการต่อ                                             |
-| `--fork`     |      | แยกเซสชันเมื่อทำต่อ (ใช้กับ `--continue` หรือ `--session`)             |
-| `--share`    |      | สร้างลิงก์แชร์สำหรับเซสชัน                                             |
-| `--model`    | `-m` | โมเดลที่จะใช้ในรูปแบบ provider/model                                   |
-| `--agent`    |      | เอเจนต์ที่จะใช้                                                        |
-| `--file`     | `-f` | แนบไฟล์ไปกับข้อความ                                                    |
-| `--format`   |      | รูปแบบเอาต์พุต: text (จัดรูปแบบ) หรือ json (JSON ดิบ)                  |
-| `--title`    |      | ชื่อสำหรับเซสชัน (หากไม่ได้ระบุ จะสร้างจากพรอมต์)                      |
+| แฟล็ก        | สั้น | คำอธิบาย                                                                 |
+| ------------ | ---- | ------------------------------------------------------------------------ |
+| `--command`  |      | คำสั่งที่จะรัน (ใช้ส่วนที่เหลือของ args เป็นอาร์กิวเมนต์)                |
+| `--continue` | `-c` | ดำเนินการต่อจากเซสชันล่าสุด                                              |
+| `--session`  | `-s` | ID เซสชันเพื่อดำเนินการต่อ                                               |
+| `--fork`     |      | แยกเซสชันเมื่อทำต่อ (ใช้กับ `--continue` หรือ `--session`)               |
+| `--share`    |      | สร้างลิงก์แชร์สำหรับเซสชัน                                               |
+| `--model`    | `-m` | โมเดลที่จะใช้ในรูปแบบ provider/model                                     |
+| `--agent`    |      | เอเจนต์ที่จะใช้                                                          |
+| `--file`     | `-f` | แนบไฟล์ไปกับข้อความ                                                      |
+| `--format`   |      | รูปแบบเอาต์พุต: text (จัดรูปแบบ) หรือ json (JSON ดิบ)                    |
+| `--title`    |      | ชื่อสำหรับเซสชัน (หากไม่ได้ระบุ จะสร้างจากพรอมต์)                        |
 | `--attach`   |      | แนบไปกับเซิร์ฟเวอร์ opencorvus ที่ทำงานอยู่ (เช่น http://localhost:7878) |
-| `--port`     |      | พอร์ตสำหรับเซิร์ฟเวอร์ภายในเครื่อง (หากไม่ได้ระบุ จะใช้พอร์ตสุ่ม)      |
+| `--port`     |      | พอร์ตสำหรับเซิร์ฟเวอร์ภายในเครื่อง (หากไม่ได้ระบุ จะใช้พอร์ตสุ่ม)        |
 
 ---
 
@@ -554,32 +554,32 @@ OpenCorvus CLI ยอมรับแฟล็กสากลต่อไปน�
 
 OpenCorvus สามารถกำหนดค่าโดยใช้ตัวแปรสภาพแวดล้อม
 
-| ตัวแปร                                | ชนิด    | คำอธิบาย                                                         |
-| ------------------------------------- | ------- | ---------------------------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | Boolean | แชร์เซสชันอัตโนมัติเมื่อสร้าง                                    |
-| `OPENCORVUS_GIT_BASH_PATH`              | String  | เส้นทางไปยัง Git Bash บน Windows                                 |
-| `OPENCORVUS_CONFIG`                     | String  | เส้นทางไปยังไฟล์การกำหนดค่า                                      |
-| `OPENCORVUS_CONFIG_DIR`                 | String  | เส้นทางไปยังไดเร็กทอรีการกำหนดค่า                                |
-| `OPENCORVUS_CONFIG_CONTENT`             | String  | เนื้อหาการกำหนดค่าแบบ inline JSON                                |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | Boolean | ปิดใช้งานการอัปเดตอัตโนมัติ                                      |
-| `OPENCORVUS_DISABLE_PRUNE`              | Boolean | ปิดใช้งานการลบข้อมูลเซสชันเก่า                                   |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | Boolean | ปิดใช้งานการตั้งชื่อหน้าต่าง terminal                            |
-| `OPENCORVUS_PERMISSION`                 | String  | การกำหนดค่าสิทธิ์แบบ inline JSON                                 |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | Boolean | ปิดใช้งานปลั๊กอินเริ่มต้น                                        |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | Boolean | ปิดใช้งานการดาวน์โหลด LSP อัตโนมัติ                              |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | Boolean | เปิดใช้งานโมเดลทดลอง                                             |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | Boolean | ปิดใช้งานการบีบอัดบริบทอัตโนมัติ                                 |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | Boolean | ปิดใช้งานการนำเข้าจาก `.claude` (prompt + skills)                |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | Boolean | ปิดใช้งานการนำเข้า `~/.claude/CLAUDE.md`                         |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | Boolean | ปิดใช้งานการนำเข้า `.claude/skills`                              |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | Boolean | ปิดใช้งานการดึงรายการโมเดลจากระยะไกล                             |
-| `OPENCORVUS_FAKE_VCS`                   | String  | เปิดใช้งาน VCS จำลองสำหรับการทดสอบ                               |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | Boolean | ปิดใช้งานการตรวจสอบเวลาแก้ไขไฟล์                                 |
-| `OPENCORVUS_CLIENT`                     | String  | ตัวระบุไคลเอนต์ (ค่าเริ่มต้นคือ `cli`)                           |
-| `OPENCORVUS_ENABLE_EXA`                 | Boolean | เปิดใช้งานการใช้ Exa แทน ls หากมี                                |
-| `OPENCORVUS_SERVER_PASSWORD`            | String  | รหัสผ่านสำหรับการตรวจสอบสิทธิ์พื้นฐาน `serve`/`web`              |
+| ตัวแปร                                  | ชนิด    | คำอธิบาย                                                           |
+| --------------------------------------- | ------- | ------------------------------------------------------------------ |
+| `OPENCORVUS_AUTO_SHARE`                 | Boolean | แชร์เซสชันอัตโนมัติเมื่อสร้าง                                      |
+| `OPENCORVUS_GIT_BASH_PATH`              | String  | เส้นทางไปยัง Git Bash บน Windows                                   |
+| `OPENCORVUS_CONFIG`                     | String  | เส้นทางไปยังไฟล์การกำหนดค่า                                        |
+| `OPENCORVUS_CONFIG_DIR`                 | String  | เส้นทางไปยังไดเร็กทอรีการกำหนดค่า                                  |
+| `OPENCORVUS_CONFIG_CONTENT`             | String  | เนื้อหาการกำหนดค่าแบบ inline JSON                                  |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | Boolean | ปิดใช้งานการอัปเดตอัตโนมัติ                                        |
+| `OPENCORVUS_DISABLE_PRUNE`              | Boolean | ปิดใช้งานการลบข้อมูลเซสชันเก่า                                     |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | Boolean | ปิดใช้งานการตั้งชื่อหน้าต่าง terminal                              |
+| `OPENCORVUS_PERMISSION`                 | String  | การกำหนดค่าสิทธิ์แบบ inline JSON                                   |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | Boolean | ปิดใช้งานปลั๊กอินเริ่มต้น                                          |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | Boolean | ปิดใช้งานการดาวน์โหลด LSP อัตโนมัติ                                |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | Boolean | เปิดใช้งานโมเดลทดลอง                                               |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | Boolean | ปิดใช้งานการบีบอัดบริบทอัตโนมัติ                                   |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | Boolean | ปิดใช้งานการนำเข้าจาก `.claude` (prompt + skills)                  |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | Boolean | ปิดใช้งานการนำเข้า `~/.claude/CLAUDE.md`                           |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | Boolean | ปิดใช้งานการนำเข้า `.claude/skills`                                |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | Boolean | ปิดใช้งานการดึงรายการโมเดลจากระยะไกล                               |
+| `OPENCORVUS_FAKE_VCS`                   | String  | เปิดใช้งาน VCS จำลองสำหรับการทดสอบ                                 |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | Boolean | ปิดใช้งานการตรวจสอบเวลาแก้ไขไฟล์                                   |
+| `OPENCORVUS_CLIENT`                     | String  | ตัวระบุไคลเอนต์ (ค่าเริ่มต้นคือ `cli`)                             |
+| `OPENCORVUS_ENABLE_EXA`                 | Boolean | เปิดใช้งานการใช้ Exa แทน ls หากมี                                  |
+| `OPENCORVUS_SERVER_PASSWORD`            | String  | รหัสผ่านสำหรับการตรวจสอบสิทธิ์พื้นฐาน `serve`/`web`                |
 | `OPENCORVUS_SERVER_USERNAME`            | String  | ชื่อผู้ใช้สำหรับการตรวจสอบสิทธิ์พื้นฐาน (ค่าเริ่มต้น `opencorvus`) |
-| `OPENCORVUS_MODELS_URL`                 | String  | URL ที่กำหนดเองสำหรับการดึงรายการโมเดล                           |
+| `OPENCORVUS_MODELS_URL`                 | String  | URL ที่กำหนดเองสำหรับการดึงรายการโมเดล                             |
 
 ---
 
@@ -587,8 +587,8 @@ OpenCorvus สามารถกำหนดค่าโดยใช้ตัว
 
 ตัวแปรสภาพแวดล้อมเหล่านี้เปิดใช้งานฟีเจอร์ทดลองที่อาจมีการเปลี่ยนแปลงหรือถูกลบออก
 
-| ตัวแปร                                          | ชนิด    | คำอธิบาย                                       |
-| ----------------------------------------------- | ------- | ---------------------------------------------- |
+| ตัวแปร                                            | ชนิด    | คำอธิบาย                                       |
+| ------------------------------------------------- | ------- | ---------------------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | Boolean | เปิดใช้งานฟีเจอร์ทดลองทั้งหมด                  |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | Boolean | การค้นหาไอคอนทดลอง                             |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | Boolean | ปิดใช้งานการคัดลอกเมื่อเลือกใน TUI             |

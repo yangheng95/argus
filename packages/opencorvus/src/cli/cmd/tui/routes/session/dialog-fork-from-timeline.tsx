@@ -24,9 +24,7 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
     const result = [] as DialogSelectOption<string>[]
     for (const message of messages) {
       if (message.role !== "user") continue
-      const part = (sync.data.part[message.id] ?? []).find(
-        (x) => x.type === "text" && textForBoth(x),
-      ) as TextPart
+      const part = (sync.data.part[message.id] ?? []).find((x) => x.type === "text" && textForBoth(x)) as TextPart
       if (!part) continue
       result.push({
         title: part.text.replace(/\n/g, " "),
@@ -63,4 +61,3 @@ export function DialogForkFromTimeline(props: { sessionID: string; onMove: (mess
 
   return <DialogSelect onMove={(option) => props.onMove(option.value)} title="Fork from message" options={options()} />
 }
-

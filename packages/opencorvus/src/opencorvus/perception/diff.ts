@@ -24,18 +24,19 @@ export namespace ScreenDiff {
 
     const expectedBytes = current.width * current.height * 4
     if (previous.rawBuffer.length !== previous.width * previous.height * 4) {
-      throw new Error(`rawBuffer length mismatch for previous: expected ${previous.width * previous.height * 4}, got ${previous.rawBuffer.length}`)
+      throw new Error(
+        `rawBuffer length mismatch for previous: expected ${previous.width * previous.height * 4}, got ${previous.rawBuffer.length}`,
+      )
     }
     if (current.rawBuffer.length !== expectedBytes) {
-      throw new Error(`rawBuffer length mismatch for current: expected ${expectedBytes}, got ${current.rawBuffer.length}`)
+      throw new Error(
+        `rawBuffer length mismatch for current: expected ${expectedBytes}, got ${current.rawBuffer.length}`,
+      )
     }
 
     // Different dimensions → 100% change
     if (previous.width !== current.width || previous.height !== current.height) {
-      const totalPixels = Math.max(
-        previous.width * previous.height,
-        current.width * current.height,
-      )
+      const totalPixels = Math.max(previous.width * previous.height, current.width * current.height)
       return {
         changed: true,
         diffPixels: totalPixels,
@@ -47,14 +48,9 @@ export namespace ScreenDiff {
     }
 
     const totalPixels = current.width * current.height
-    const diffPixels = pixelmatch(
-      previous.rawBuffer,
-      current.rawBuffer,
-      undefined,
-      current.width,
-      current.height,
-      { threshold: options?.threshold ?? 0.1 },
-    )
+    const diffPixels = pixelmatch(previous.rawBuffer, current.rawBuffer, undefined, current.width, current.height, {
+      threshold: options?.threshold ?? 0.1,
+    })
 
     const diffPercent = (diffPixels / totalPixels) * 100
     const diffThreshold = options?.diffThreshold ?? 1

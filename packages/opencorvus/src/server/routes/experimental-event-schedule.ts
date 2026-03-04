@@ -41,7 +41,9 @@ export function ExperimentalEventScheduleRoutes() {
       validator("query", z.object({ projectId: z.string() })),
       async (c) => {
         const { projectId } = c.req.valid("query")
-        const jobs = Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.project_id, projectId)).all())
+        const jobs = Database.use((db) =>
+          db.select().from(EventJobTable).where(eq(EventJobTable.project_id, projectId)).all(),
+        )
         return c.json(
           jobs.map((j) => ({
             id: j.id,

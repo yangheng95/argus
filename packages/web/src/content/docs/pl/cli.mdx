@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f`  | Pliki do załączenia do wiadomości                                       |
 | `--format`   |       | Format wyjściowy: `default` (sformatowany) lub `json` (surowy JSON)     |
 | `--title`    |       | Tytuł sesji (jeśli nie podano, zostanie wygenerowany z promptu)         |
-| `--attach`   |       | Dołącz do działającego serwera OpenCorvus (np. http://localhost:7878)     |
+| `--attach`   |       | Dołącz do działającego serwera OpenCorvus (np. http://localhost:7878)   |
 | `--port`     |       | Port dla serwera lokalnego (domyślnie losowy)                           |
 
 ---
@@ -553,8 +553,8 @@ Interfejs CLI OpenCorvus przyjmuje następujące flagi globalne dla każdego pol
 
 OpenCorvus można skonfigurować za pomocą zmiennych środowiskowych.
 
-| Zmienna                               | Typ     | Opis                                                        |
-| ------------------------------------- | ------- | ----------------------------------------------------------- |
+| Zmienna                                 | Typ     | Opis                                                        |
+| --------------------------------------- | ------- | ----------------------------------------------------------- |
 | `OPENCORVUS_AUTO_SHARE`                 | boolean | Automatycznie udostępniaj sesje                             |
 | `OPENCORVUS_GIT_BASH_PATH`              | string  | Ścieżka do pliku wykonywalnego Git Bash w systemie Windows  |
 | `OPENCORVUS_CONFIG`                     | string  | Ścieżka do pliku konfiguracyjnego                           |
@@ -577,7 +577,7 @@ OpenCorvus można skonfigurować za pomocą zmiennych środowiskowych.
 | `OPENCORVUS_CLIENT`                     | string  | Identyfikator klienta (domyślnie `cli`)                     |
 | `OPENCORVUS_ENABLE_EXA`                 | boolean | Włącz narzędzie wyszukiwania internetowego Exa              |
 | `OPENCORVUS_SERVER_PASSWORD`            | string  | Włącz uwierzytelnianie podstawowe dla `serve`/`web`         |
-| `OPENCORVUS_SERVER_USERNAME`            | string  | Nazwa użytkownika do autoryzacji (domyślnie `opencorvus`)     |
+| `OPENCORVUS_SERVER_USERNAME`            | string  | Nazwa użytkownika do autoryzacji (domyślnie `opencorvus`)   |
 | `OPENCORVUS_MODELS_URL`                 | string  | Niestandardowy adres URL do pobierania konfiguracji modeli  |
 
 ---
@@ -586,8 +586,8 @@ OpenCorvus można skonfigurować za pomocą zmiennych środowiskowych.
 
 Te zmienne włączają funkcje eksperymentalne, które mogą ulec zmianie lub zostać usunięte.
 
-| Zmienna                                         | Typ     | Opis                                         |
-| ----------------------------------------------- | ------- | -------------------------------------------- |
+| Zmienna                                           | Typ     | Opis                                         |
+| ------------------------------------------------- | ------- | -------------------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | Włącz wszystkie funkcje eksperymentalne      |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Włącz wykrywanie ikon                        |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Wyłącz kopiowanie przy zaznaczaniu w TUI     |

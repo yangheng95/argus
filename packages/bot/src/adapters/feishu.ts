@@ -60,9 +60,7 @@ function parse(raw: string) {
 }
 
 function clean(text: string) {
-  const t = text
-    .replace(/^@_user_\d+\s*/, "")
-    .replace(/^<at [^>]*>.*?<\/at>\s*/i, "")
+  const t = text.replace(/^@_user_\d+\s*/, "").replace(/^<at [^>]*>.*?<\/at>\s*/i, "")
   return t.trim()
 }
 
@@ -130,7 +128,13 @@ export class FeishuAdapter implements BotAdapter {
     await this.create(token, channel, payload)
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
     const token = await this.tenant()
     const form = new FormData()
     form.set("image_type", "message")
@@ -187,7 +191,12 @@ export class FeishuAdapter implements BotAdapter {
     if (body.type === "url_verification" && challenge) return Response.json({ challenge })
     if (challenge) return Response.json({ challenge })
 
-    const token = typeof body.header?.token === "string" ? body.header.token : typeof body.token === "string" ? body.token : undefined
+    const token =
+      typeof body.header?.token === "string"
+        ? body.header.token
+        : typeof body.token === "string"
+          ? body.token
+          : undefined
     if (this.verificationToken && token && token !== this.verificationToken) {
       return Response.json({ error: "invalid token" }, { status: 401 })
     }
@@ -204,9 +213,7 @@ export class FeishuAdapter implements BotAdapter {
     if (!text) return Response.json({ ok: true })
     if (!this.handler) return Response.json({ ok: true })
 
-    const user = body.event?.sender?.sender_id?.open_id
-      ?? body.event?.sender?.sender_id?.user_id
-      ?? "unknown"
+    const user = body.event?.sender?.sender_id?.open_id ?? body.event?.sender?.sender_id?.user_id ?? "unknown"
     const thread = msg.root_id ?? msg.parent_id ?? msg.message_id
 
     await this.handler({

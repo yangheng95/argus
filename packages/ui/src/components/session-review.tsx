@@ -897,4 +897,3 @@ export const SessionReview = (props: SessionReviewProps) => {
     </ScrollView>
   )
 }
-

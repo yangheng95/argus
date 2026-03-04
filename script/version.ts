@@ -32,4 +32,3 @@ if (process.env.GITHUB_OUTPUT) {
 }
 
 process.exit(0)
-

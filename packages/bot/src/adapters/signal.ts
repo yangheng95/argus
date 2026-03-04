@@ -40,10 +40,7 @@ export class SignalAdapter implements BotAdapter {
   private running = false
   private loop?: Promise<void>
 
-  constructor(opts: {
-    service: string
-    account: string
-  }) {
+  constructor(opts: { service: string; account: string }) {
     this.service = base(opts.service)
     this.account = opts.account
   }
@@ -80,7 +77,13 @@ export class SignalAdapter implements BotAdapter {
     return String(data.timestamp ?? Date.now())
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
     await this.send({
       recipients: [channel],
       message: title ?? filename,
@@ -123,10 +126,7 @@ export class SignalAdapter implements BotAdapter {
         const text = (envelope.dataMessage?.message ?? "").trim()
         if (!source || !text) continue
         const thread = String(
-          envelope.dataMessage?.quote?.id
-            ?? envelope.dataMessage?.timestamp
-            ?? envelope.timestamp
-            ?? Date.now(),
+          envelope.dataMessage?.quote?.id ?? envelope.dataMessage?.timestamp ?? envelope.timestamp ?? Date.now(),
         )
         await this.handler({
           platform: this.platform,

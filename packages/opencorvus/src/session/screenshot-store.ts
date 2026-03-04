@@ -11,11 +11,7 @@ export namespace ScreenshotStore {
     return url.startsWith(SCHEME)
   }
 
-  export async function save(
-    sessionID: string,
-    mime: string,
-    buffer: Buffer,
-  ): Promise<string> {
+  export async function save(sessionID: string, mime: string, buffer: Buffer): Promise<string> {
     const hash = createHash("sha256").update(buffer).digest("hex").slice(0, 16)
     const ext = mime === "image/jpeg" ? "jpg" : "png"
     const dir = path.join(SCREENSHOT_DIR, sessionID)

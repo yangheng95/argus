@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f`  | File da allegare al messaggio                                            |
 | `--format`   |       | Formato: default (formattato) o json (eventi JSON grezzi)                |
 | `--title`    |       | Titolo sessione (usa prompt troncato se non viene fornito un valore)     |
-| `--attach`   |       | Attach a un server opencorvus in esecuzione (es. http://localhost:7878)    |
+| `--attach`   |       | Attach a un server opencorvus in esecuzione (es. http://localhost:7878)  |
 | `--port`     |       | Porta per il server locale (di default una porta casuale)                |
 
 ---
@@ -553,8 +553,8 @@ La CLI di opencorvus accetta i seguenti flag globali.
 
 OpenCorvus può essere configurato tramite variabili d'ambiente.
 
-| Variabile                             | Tipo    | Descrizione                                                 |
-| ------------------------------------- | ------- | ----------------------------------------------------------- |
+| Variabile                               | Tipo    | Descrizione                                                 |
+| --------------------------------------- | ------- | ----------------------------------------------------------- |
 | `OPENCORVUS_AUTO_SHARE`                 | boolean | Condivide automaticamente le sessioni                       |
 | `OPENCORVUS_GIT_BASH_PATH`              | string  | Percorso all'eseguibile Git Bash su Windows                 |
 | `OPENCORVUS_CONFIG`                     | string  | Percorso al file di configurazione                          |
@@ -577,7 +577,7 @@ OpenCorvus può essere configurato tramite variabili d'ambiente.
 | `OPENCORVUS_CLIENT`                     | string  | Identificatore client (default `cli`)                       |
 | `OPENCORVUS_ENABLE_EXA`                 | boolean | Abilita gli strumenti di web search Exa                     |
 | `OPENCORVUS_SERVER_PASSWORD`            | string  | Abilita basic auth per `serve`/`web`                        |
-| `OPENCORVUS_SERVER_USERNAME`            | string  | Sovrascrive lo username basic auth (default `opencorvus`)     |
+| `OPENCORVUS_SERVER_USERNAME`            | string  | Sovrascrive lo username basic auth (default `opencorvus`)   |
 | `OPENCORVUS_MODELS_URL`                 | string  | URL personalizzato per recuperare la configurazione modelli |
 
 ---
@@ -586,8 +586,8 @@ OpenCorvus può essere configurato tramite variabili d'ambiente.
 
 Queste variabili d'ambiente abilitano funzionalità sperimentali che potrebbero cambiare o essere rimosse.
 
-| Variabile                                       | Tipo    | Descrizione                                |
-| ----------------------------------------------- | ------- | ------------------------------------------ |
+| Variabile                                         | Tipo    | Descrizione                                |
+| ------------------------------------------------- | ------- | ------------------------------------------ |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | Abilita tutte le funzionalità sperimentali |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Abilita icon discovery                     |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Disabilita copy on select nella TUI        |

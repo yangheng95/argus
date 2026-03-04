@@ -324,4 +324,3 @@ export namespace Pty {
     }
   }
 }
-

@@ -99,7 +99,13 @@ const Params = z.discriminatedUnion("action", [
     sessionID: z.string().optional(),
     agent: z.string().optional(),
     wait: z.boolean().default(true).optional(),
-    timeoutMs: z.number().int().min(1000).max(30 * 60 * 1000).default(5 * 60 * 1000).optional(),
+    timeoutMs: z
+      .number()
+      .int()
+      .min(1000)
+      .max(30 * 60 * 1000)
+      .default(5 * 60 * 1000)
+      .optional(),
   }),
   z.object({
     action: z.literal("proxy"),

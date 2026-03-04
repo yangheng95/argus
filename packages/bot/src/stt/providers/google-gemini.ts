@@ -22,31 +22,28 @@ export class GoogleGeminiProvider implements STTProvider {
     const base64Data = audio.data.toString("base64")
     const langHint = options?.language ? ` The audio is in ${options.language}.` : ""
 
-    const res = await fetch(
-      `${this.baseURL}/models/${this.model}:generateContent?key=${this.apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: audio.mime,
-                    data: base64Data,
-                  },
+    const res = await fetch(`${this.baseURL}/models/${this.model}:generateContent?key=${this.apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inline_data: {
+                  mime_type: audio.mime,
+                  data: base64Data,
                 },
-                {
-                  text: `Transcribe the audio exactly as spoken. Output ONLY the transcription text, nothing else.${langHint}`,
-                },
-              ],
-            },
-          ],
-        }),
-        signal: AbortSignal.timeout(30_000),
-      },
-    )
+              },
+              {
+                text: `Transcribe the audio exactly as spoken. Output ONLY the transcription text, nothing else.${langHint}`,
+              },
+            ],
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    })
 
     if (!res.ok) {
       const body = await res.text().catch(() => "")

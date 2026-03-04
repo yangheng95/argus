@@ -36,7 +36,14 @@ export namespace Mouse {
       log.info("double clicked", { x, y })
     } catch (e) {
       const err = asError(e)
-      log.error("doubleClick failed", { x, y, errorName: err.name, error: err.message, stack: err.stack, rawType: typeof e })
+      log.error("doubleClick failed", {
+        x,
+        y,
+        errorName: err.name,
+        error: err.message,
+        stack: err.stack,
+        rawType: typeof e,
+      })
       throw err
     }
   }
@@ -49,7 +56,14 @@ export namespace Mouse {
       log.info("right clicked", { x, y })
     } catch (e) {
       const err = asError(e)
-      log.error("rightClick failed", { x, y, errorName: err.name, error: err.message, stack: err.stack, rawType: typeof e })
+      log.error("rightClick failed", {
+        x,
+        y,
+        errorName: err.name,
+        error: err.message,
+        stack: err.stack,
+        rawType: typeof e,
+      })
       throw err
     }
   }
@@ -62,7 +76,14 @@ export namespace Mouse {
       log.info("middle clicked", { x, y })
     } catch (e) {
       const err = asError(e)
-      log.error("middleClick failed", { x, y, errorName: err.name, error: err.message, stack: err.stack, rawType: typeof e })
+      log.error("middleClick failed", {
+        x,
+        y,
+        errorName: err.name,
+        error: err.message,
+        stack: err.stack,
+        rawType: typeof e,
+      })
       throw err
     }
   }
@@ -78,7 +99,14 @@ export namespace Mouse {
       log.info("scrolled", { direction, amount })
     } catch (e) {
       const err = asError(e)
-      log.error("scroll failed", { direction, amount, errorName: err.name, error: err.message, stack: err.stack, rawType: typeof e })
+      log.error("scroll failed", {
+        direction,
+        amount,
+        errorName: err.name,
+        error: err.message,
+        stack: err.stack,
+        rawType: typeof e,
+      })
       throw err
     }
   }
@@ -102,7 +130,16 @@ export namespace Mouse {
       log.info("dragged", { startX, startY, endX, endY })
     } catch (e) {
       const err = asError(e)
-      log.error("drag failed", { startX, startY, endX, endY, errorName: err.name, error: err.message, stack: err.stack, rawType: typeof e })
+      log.error("drag failed", {
+        startX,
+        startY,
+        endX,
+        endY,
+        errorName: err.name,
+        error: err.message,
+        stack: err.stack,
+        rawType: typeof e,
+      })
       throw err
     }
   }

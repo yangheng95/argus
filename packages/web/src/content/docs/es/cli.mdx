@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f`  | Archivo(s) para adjuntar al mensaje                                                 |
 | `--format`   |       | Formato: predeterminado (formateado) o json (eventos JSON sin formato)              |
 | `--title`    |       | Título de la sesión (utiliza un mensaje truncado si no se proporciona ningún valor) |
-| `--attach`   |       | Adjuntar a un servidor opencorvus en ejecución (por ejemplo, http://localhost:7878)   |
+| `--attach`   |       | Adjuntar a un servidor opencorvus en ejecución (por ejemplo, http://localhost:7878) |
 | `--port`     |       | Puerto para el servidor local (el puerto predeterminado es aleatorio)               |
 
 ---
@@ -553,32 +553,32 @@ La CLI de OpenCorvus toma las siguientes banderas globales.
 
 OpenCorvus se puede configurar mediante variables de entorno.
 
-| Variable                              | Type     | Description                                                                     |
-| ------------------------------------- | -------- | ------------------------------------------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | booleano | Compartir sesiones automáticamente                                              |
-| `OPENCORVUS_GIT_BASH_PATH`              | cadena   | Ruta al ejecutable de Git Bash en Windows                                       |
-| `OPENCORVUS_CONFIG`                     | cadena   | Ruta al archivo de configuración                                                |
-| `OPENCORVUS_CONFIG_DIR`                 | cadena   | Ruta al directorio de configuración                                             |
-| `OPENCORVUS_CONFIG_CONTENT`             | cadena   | Contenido de configuración json en línea                                        |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | booleano | Deshabilitar las comprobaciones automáticas de actualizaciones                  |
-| `OPENCORVUS_DISABLE_PRUNE`              | booleano | Deshabilitar la poda de datos antiguos                                          |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | booleano | Deshabilitar las actualizaciones automáticas de títulos de terminal             |
-| `OPENCORVUS_PERMISSION`                 | cadena   | Configuración de permisos json incorporados                                     |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | booleano | Deshabilitar complementos predeterminados                                       |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | booleano | Deshabilitar las descargas automáticas del servidor LSP                         |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | booleano | Habilitar modelos experimentales                                                |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | booleano | Deshabilitar la compactación automática de contexto                             |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | booleano | Deshabilitar la lectura desde `.claude` (mensaje + habilidades)                 |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | booleano | Desactivar lectura `~/.claude/CLAUDE.md`                                        |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | booleano | Deshabilitar la carga `.claude/skills`                                          |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | booleano | Deshabilitar la recuperación de modelos desde fuentes remotas                   |
-| `OPENCORVUS_FAKE_VCS`                   | cadena   | Proveedor de VCS falso para fines de prueba                                     |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | booleano | Deshabilite la verificación del tiempo del archivo para optimizarlo             |
-| `OPENCORVUS_CLIENT`                     | cadena   | Identificador de cliente (por defecto `cli`)                                    |
-| `OPENCORVUS_ENABLE_EXA`                 | booleano | Habilitar las herramientas de búsqueda web de Exa                               |
-| `OPENCORVUS_SERVER_PASSWORD`            | cadena   | Habilite la autenticación básica para `serve`/`web`                             |
+| Variable                                | Type     | Description                                                                       |
+| --------------------------------------- | -------- | --------------------------------------------------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | booleano | Compartir sesiones automáticamente                                                |
+| `OPENCORVUS_GIT_BASH_PATH`              | cadena   | Ruta al ejecutable de Git Bash en Windows                                         |
+| `OPENCORVUS_CONFIG`                     | cadena   | Ruta al archivo de configuración                                                  |
+| `OPENCORVUS_CONFIG_DIR`                 | cadena   | Ruta al directorio de configuración                                               |
+| `OPENCORVUS_CONFIG_CONTENT`             | cadena   | Contenido de configuración json en línea                                          |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | booleano | Deshabilitar las comprobaciones automáticas de actualizaciones                    |
+| `OPENCORVUS_DISABLE_PRUNE`              | booleano | Deshabilitar la poda de datos antiguos                                            |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | booleano | Deshabilitar las actualizaciones automáticas de títulos de terminal               |
+| `OPENCORVUS_PERMISSION`                 | cadena   | Configuración de permisos json incorporados                                       |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | booleano | Deshabilitar complementos predeterminados                                         |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | booleano | Deshabilitar las descargas automáticas del servidor LSP                           |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | booleano | Habilitar modelos experimentales                                                  |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | booleano | Deshabilitar la compactación automática de contexto                               |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | booleano | Deshabilitar la lectura desde `.claude` (mensaje + habilidades)                   |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | booleano | Desactivar lectura `~/.claude/CLAUDE.md`                                          |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | booleano | Deshabilitar la carga `.claude/skills`                                            |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | booleano | Deshabilitar la recuperación de modelos desde fuentes remotas                     |
+| `OPENCORVUS_FAKE_VCS`                   | cadena   | Proveedor de VCS falso para fines de prueba                                       |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | booleano | Deshabilite la verificación del tiempo del archivo para optimizarlo               |
+| `OPENCORVUS_CLIENT`                     | cadena   | Identificador de cliente (por defecto `cli`)                                      |
+| `OPENCORVUS_ENABLE_EXA`                 | booleano | Habilitar las herramientas de búsqueda web de Exa                                 |
+| `OPENCORVUS_SERVER_PASSWORD`            | cadena   | Habilite la autenticación básica para `serve`/`web`                               |
 | `OPENCORVUS_SERVER_USERNAME`            | cadena   | Anular el nombre de usuario de autenticación básica (predeterminado `opencorvus`) |
-| `OPENCORVUS_MODELS_URL`                 | cadena   | URL personalizada para buscar la configuración de modelos                       |
+| `OPENCORVUS_MODELS_URL`                 | cadena   | URL personalizada para buscar la configuración de modelos                         |
 
 ---
 
@@ -586,8 +586,8 @@ OpenCorvus se puede configurar mediante variables de entorno.
 
 Estas variables de entorno habilitan funciones experimentales que pueden cambiar o eliminarse.
 
-| Variable                                        | Type     | Description                                                |
-| ----------------------------------------------- | -------- | ---------------------------------------------------------- |
+| Variable                                          | Type     | Description                                                |
+| ------------------------------------------------- | -------- | ---------------------------------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | booleano | Habilitar todas las funciones experimentales               |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | booleano | Habilitar descubrimiento de íconos                         |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | booleano | Deshabilitar copia al seleccionar en TUI                   |

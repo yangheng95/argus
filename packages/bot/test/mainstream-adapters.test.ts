@@ -65,22 +65,30 @@ describe("mainstream adapters", () => {
     })
     await adapter.start()
 
-    const challenge = await s.route()(new Request("http://127.0.0.1:19999/whatsapp?hub.mode=subscribe&hub.verify_token=check&hub.challenge=abc"))
+    const challenge = await s.route()(
+      new Request("http://127.0.0.1:19999/whatsapp?hub.mode=subscribe&hub.verify_token=check&hub.challenge=abc"),
+    )
     expect(await challenge.text()).toBe("abc")
 
     const inbound = {
-      entry: [{
-        changes: [{
-          value: {
-            messages: [{
-              id: "wamid.1",
-              from: "15550001",
-              type: "text",
-              text: { body: "hello" },
-            }],
-          },
-        }],
-      }],
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    id: "wamid.1",
+                    from: "15550001",
+                    type: "text",
+                    text: { body: "hello" },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
     }
     const ok = await s.route()(
       new Request("http://127.0.0.1:19999/whatsapp", {
@@ -109,8 +117,8 @@ describe("mainstream adapters", () => {
   })
 
   test("googlechat maps inbound and sends outbound with service account", async () => {
-    const key = generateKeyPairSync("rsa", { modulusLength: 1024 }).privateKey
-      .export({ type: "pkcs1", format: "pem" })
+    const key = generateKeyPairSync("rsa", { modulusLength: 1024 })
+      .privateKey.export({ type: "pkcs1", format: "pem" })
       .toString()
     const s = stub()
     const adapter = new GoogleChatAdapter({
@@ -232,11 +240,13 @@ describe("mainstream adapters", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          events: [{
-            type: "message",
-            source: { userId: "u-1" },
-            message: { id: "mid-1", type: "text", text: "hello" },
-          }],
+          events: [
+            {
+              type: "message",
+              source: { userId: "u-1" },
+              message: { id: "mid-1", type: "text", text: "hello" },
+            },
+          ],
         }),
       }),
     )

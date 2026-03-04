@@ -187,4 +187,3 @@ export namespace Message {
     })
   export type Info = z.infer<typeof Info>
 }
-

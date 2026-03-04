@@ -4,7 +4,5 @@ import { SessionManagementMutateCoreRoutes } from "./session-management-mutate-c
 import { SessionManagementMutateFlowRoutes } from "./session-management-mutate-flow"
 
 export const SessionManagementMutateRoutes = lazy(() =>
-  new Hono()
-    .route("/", SessionManagementMutateCoreRoutes())
-    .route("/", SessionManagementMutateFlowRoutes()),
+  new Hono().route("/", SessionManagementMutateCoreRoutes()).route("/", SessionManagementMutateFlowRoutes()),
 )

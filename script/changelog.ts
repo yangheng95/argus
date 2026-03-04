@@ -130,7 +130,10 @@ function getSection(areas: Set<string>): string {
   return "Core"
 }
 
-async function summarizeCommit(opencorvus: Awaited<ReturnType<typeof createOpenCorvus>>, message: string): Promise<string> {
+async function summarizeCommit(
+  opencorvus: Awaited<ReturnType<typeof createOpenCorvus>>,
+  message: string,
+): Promise<string> {
   console.log("summarizing commit:", message)
   const session = await opencorvus.client.session.create()
   const result = await opencorvus.client.session
@@ -298,6 +301,3 @@ Examples:
   console.log("\n=== Final Notes ===")
   console.log(notes.join("\n"))
 }
-
-
-

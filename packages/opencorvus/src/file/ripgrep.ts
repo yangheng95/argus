@@ -392,4 +392,3 @@ export namespace Ripgrep {
       .map((r) => r.data)
   }
 }
-

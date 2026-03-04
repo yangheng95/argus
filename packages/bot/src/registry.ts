@@ -22,9 +22,7 @@ export interface AdapterFactory {
 }
 
 function pick(env: Env, keys: readonly string[]) {
-  return keys
-    .map((key) => env[key]?.trim())
-    .find((val): val is string => Boolean(val))
+  return keys.map((key) => env[key]?.trim()).find((val): val is string => Boolean(val))
 }
 
 interface Rule {
@@ -49,38 +47,32 @@ const ready: Rule[] = [
     opt: {
       signingSecret: ["SLACK_SIGNING_SECRET", "OPENCLAW_SLACK_SIGNING_SECRET"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.slack({
-      token: vals.token!,
-      appToken: vals.appToken!,
-      signingSecret: vals.signingSecret,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.slack({
+        token: vals.token!,
+        appToken: vals.appToken!,
+        signingSecret: vals.signingSecret,
+      }),
   },
   {
     name: "telegram",
     req: {
       token: ["TELEGRAM_BOT_TOKEN", "OPENCLAW_TELEGRAM_BOT_TOKEN"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.telegram({
-      token: vals.token!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.telegram({
+        token: vals.token!,
+      }),
   },
   {
     name: "discord",
     req: {
       token: ["DISCORD_BOT_TOKEN"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.discord({
-      token: vals.token!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.discord({
+        token: vals.token!,
+      }),
   },
   {
     name: "feishu",
@@ -88,13 +80,11 @@ const ready: Rule[] = [
       appId: ["FEISHU_APP_ID", "OPENCLAW_FEISHU_APP_ID"],
       appSecret: ["FEISHU_APP_SECRET", "OPENCLAW_FEISHU_APP_SECRET"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.feishu({
-      appId: vals.appId!,
-      appSecret: vals.appSecret!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.feishu({
+        appId: vals.appId!,
+        appSecret: vals.appSecret!,
+      }),
   },
   {
     name: "whatsapp",
@@ -102,25 +92,21 @@ const ready: Rule[] = [
       token: ["WHATSAPP_ACCESS_TOKEN", "OPENCLAW_WHATSAPP_ACCESS_TOKEN"],
       numberId: ["WHATSAPP_PHONE_NUMBER_ID", "OPENCLAW_WHATSAPP_PHONE_NUMBER_ID"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.whatsapp({
-      token: vals.token!,
-      numberId: vals.numberId!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.whatsapp({
+        token: vals.token!,
+        numberId: vals.numberId!,
+      }),
   },
   {
     name: "googlechat",
     req: {
       serviceAccount: ["GOOGLECHAT_SERVICE_ACCOUNT_JSON", "OPENCLAW_GOOGLECHAT_SERVICE_ACCOUNT_JSON"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.googlechat({
-      serviceAccount: vals.serviceAccount!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.googlechat({
+        serviceAccount: vals.serviceAccount!,
+      }),
   },
   {
     name: "msteams",
@@ -128,25 +114,21 @@ const ready: Rule[] = [
       appId: ["MSTEAMS_APP_ID", "OPENCLAW_MSTEAMS_APP_ID"],
       appSecret: ["MSTEAMS_APP_SECRET", "OPENCLAW_MSTEAMS_APP_SECRET"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.msteams({
-      appId: vals.appId!,
-      appSecret: vals.appSecret!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.msteams({
+        appId: vals.appId!,
+        appSecret: vals.appSecret!,
+      }),
   },
   {
     name: "line",
     req: {
       token: ["LINE_CHANNEL_ACCESS_TOKEN", "OPENCLAW_LINE_CHANNEL_ACCESS_TOKEN"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.line({
-      token: vals.token!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.line({
+        token: vals.token!,
+      }),
   },
   {
     name: "matrix",
@@ -154,13 +136,11 @@ const ready: Rule[] = [
       homeserver: ["MATRIX_HOMESERVER_URL", "OPENCLAW_MATRIX_HOMESERVER_URL"],
       token: ["MATRIX_ACCESS_TOKEN", "OPENCLAW_MATRIX_ACCESS_TOKEN"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.matrix({
-      homeserver: vals.homeserver!,
-      token: vals.token!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.matrix({
+        homeserver: vals.homeserver!,
+        token: vals.token!,
+      }),
   },
   {
     name: "mattermost",
@@ -168,13 +148,11 @@ const ready: Rule[] = [
       url: ["MATTERMOST_SERVER_URL", "OPENCLAW_MATTERMOST_SERVER_URL"],
       token: ["MATTERMOST_BOT_TOKEN", "OPENCLAW_MATTERMOST_BOT_TOKEN"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.mattermost({
-      url: vals.url!,
-      token: vals.token!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.mattermost({
+        url: vals.url!,
+        token: vals.token!,
+      }),
   },
   {
     name: "signal",
@@ -182,13 +160,11 @@ const ready: Rule[] = [
       service: ["SIGNAL_SERVICE_URL", "OPENCLAW_SIGNAL_SERVICE_URL"],
       account: ["SIGNAL_ACCOUNT", "OPENCLAW_SIGNAL_ACCOUNT"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.signal({
-      service: vals.service!,
-      account: vals.account!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.signal({
+        service: vals.service!,
+        account: vals.account!,
+      }),
   },
   {
     name: "wecom",
@@ -197,14 +173,12 @@ const ready: Rule[] = [
       secret: ["WECOM_SECRET", "OPENCLAW_WECOM_SECRET"],
       agentId: ["WECOM_AGENT_ID", "OPENCLAW_WECOM_AGENT_ID"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.wecom({
-      corpId: vals.corpId!,
-      secret: vals.secret!,
-      agentId: vals.agentId!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.wecom({
+        corpId: vals.corpId!,
+        secret: vals.secret!,
+        agentId: vals.agentId!,
+      }),
   },
   {
     name: "dingtalk",
@@ -212,15 +186,13 @@ const ready: Rule[] = [
       appKey: ["DINGTALK_APP_KEY", "OPENCLAW_DINGTALK_APP_KEY"],
       appSecret: ["DINGTALK_APP_SECRET", "OPENCLAW_DINGTALK_APP_SECRET"],
     },
-    make: (
-      f: AdapterFactory,
-      vals: Record<string, string | undefined>,
-    ) => f.dingtalk({
-      appKey: vals.appKey!,
-      appSecret: vals.appSecret!,
-    }),
+    make: (f: AdapterFactory, vals: Record<string, string | undefined>) =>
+      f.dingtalk({
+        appKey: vals.appKey!,
+        appSecret: vals.appSecret!,
+      }),
   },
-] 
+]
 
 const planned: Plan[] = []
 
@@ -261,9 +233,9 @@ export function registerAdapters(
 
     const opt = item.opt
       ? Object.entries(item.opt).reduce<Record<string, string | undefined>>((acc, [key, keys]) => {
-        acc[key] = pick(env, keys)
-        return acc
-      }, {})
+          acc[key] = pick(env, keys)
+          return acc
+        }, {})
       : {}
     bot.register(item.make(create, { ...vals, ...opt }))
     names.push(item.name)

@@ -18,13 +18,13 @@ opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 
 #### Opções
 
-| Flag            | Descrição                                         | Padrão           |
-| --------------- | ------------------------------------------------- | ---------------- |
-| `--port`        | Porta para escutar                                | `7878`           |
-| `--hostname`    | Nome do host para escutar                         | `127.0.0.1`      |
-| `--mdns`        | Habilitar descoberta mDNS                         | `false`          |
+| Flag            | Descrição                                         | Padrão             |
+| --------------- | ------------------------------------------------- | ------------------ |
+| `--port`        | Porta para escutar                                | `7878`             |
+| `--hostname`    | Nome do host para escutar                         | `127.0.0.1`        |
+| `--mdns`        | Habilitar descoberta mDNS                         | `false`            |
 | `--mdns-domain` | Nome de domínio personalizado para o serviço mDNS | `opencorvus.local` |
-| `--cors`        | Origens adicionais de navegador a permitir        | `[]`             |
+| `--cors`        | Origens adicionais de navegador a permitir        | `[]`               |
 
 `--cors` pode ser passado várias vezes:
 
@@ -142,26 +142,26 @@ O servidor opencorvus expõe as seguintes APIs.
 
 ### Sessões
 
-| Método   | Caminho                                  | Descrição                                             | Notas                                                                               |
-| -------- | ---------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `GET`    | `/session`                               | Listar todas as sessões                               | Retorna <a href={typesUrl}><code>Session[]</code></a>                               |
-| `POST`   | `/session`                               | Criar uma nova sessão                                 | corpo: `{ parentID?, title? }`, retorna <a href={typesUrl}><code>Session</code></a> |
-| `GET`    | `/session/status`                        | Obter status da sessão para todas as sessões          | Retorna `{ [sessionID: string]: `<a href={typesUrl}>SessionStatus</a>` }`           |
-| `GET`    | `/session/:id`                           | Obter detalhes da sessão                              | Retorna <a href={typesUrl}><code>Session</code></a>                                 |
-| `DELETE` | `/session/:id`                           | Deletar uma sessão e todos os seus dados              | Retorna `boolean`                                                                   |
-| `PATCH`  | `/session/:id`                           | Atualizar propriedades da sessão                      | corpo: `{ title? }`, retorna <a href={typesUrl}><code>Session</code></a>            |
-| `GET`    | `/session/:id/children`                  | Obter as sessões filhas de uma sessão                 | Retorna <a href={typesUrl}><code>Session[]</code></a>                               |
-| `GET`    | `/session/:id/todo`                      | Obter a lista de tarefas para uma sessão              | Retorna <a href={typesUrl}><code>Todo[]</code></a>                                  |
-| `POST`   | `/session/:id/init`                      | Analisar o app e criar `AGENTS.md`                    | corpo: `{ messageID, providerID, modelID }`, retorna `boolean`                      |
-| `POST`   | `/session/:id/fork`                      | Fazer um fork de uma sessão existente em uma mensagem | corpo: `{ messageID? }`, retorna <a href={typesUrl}><code>Session</code></a>        |
-| `POST`   | `/session/:id/abort`                     | Abortar uma sessão em execução                        | Retorna `boolean`                                                                   |
-| `POST`   | `/session/:id/share`                     | Compartilhar uma sessão                               | Retorna <a href={typesUrl}><code>Session</code></a>                                 |
-| `DELETE` | `/session/:id/share`                     | Descompartilhar uma sessão                            | Retorna <a href={typesUrl}><code>Session</code></a>                                 |
-| `GET`    | `/session/:id/diff`                      | Obter a diferença para esta sessão                    | query: `messageID?`, retorna <a href={typesUrl}><code>FileDiff[]</code></a>         |
-| `POST`   | `/session/:id/summarize`                 | Resumir a sessão                                      | corpo: `{ providerID, modelID }`, retorna `boolean`                                 |
-| `POST`   | `/session/:id/revert`                    | Reverter uma mensagem                                 | corpo: `{ messageID, partID? }`, retorna `boolean`                                  |
-| `POST`   | `/session/:id/unrevert`                  | Restaurar todas as mensagens revertidas               | Retorna `boolean`                                                                   |
-| `POST`   | `/permission/:requestID/reply` | Responder a um pedido de permissão                    | corpo: `{ reply, message? }`, retorna `boolean`                                 |
+| Método   | Caminho                        | Descrição                                             | Notas                                                                               |
+| -------- | ------------------------------ | ----------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET`    | `/session`                     | Listar todas as sessões                               | Retorna <a href={typesUrl}><code>Session[]</code></a>                               |
+| `POST`   | `/session`                     | Criar uma nova sessão                                 | corpo: `{ parentID?, title? }`, retorna <a href={typesUrl}><code>Session</code></a> |
+| `GET`    | `/session/status`              | Obter status da sessão para todas as sessões          | Retorna `{ [sessionID: string]: `<a href={typesUrl}>SessionStatus</a>` }`           |
+| `GET`    | `/session/:id`                 | Obter detalhes da sessão                              | Retorna <a href={typesUrl}><code>Session</code></a>                                 |
+| `DELETE` | `/session/:id`                 | Deletar uma sessão e todos os seus dados              | Retorna `boolean`                                                                   |
+| `PATCH`  | `/session/:id`                 | Atualizar propriedades da sessão                      | corpo: `{ title? }`, retorna <a href={typesUrl}><code>Session</code></a>            |
+| `GET`    | `/session/:id/children`        | Obter as sessões filhas de uma sessão                 | Retorna <a href={typesUrl}><code>Session[]</code></a>                               |
+| `GET`    | `/session/:id/todo`            | Obter a lista de tarefas para uma sessão              | Retorna <a href={typesUrl}><code>Todo[]</code></a>                                  |
+| `POST`   | `/session/:id/init`            | Analisar o app e criar `AGENTS.md`                    | corpo: `{ messageID, providerID, modelID }`, retorna `boolean`                      |
+| `POST`   | `/session/:id/fork`            | Fazer um fork de uma sessão existente em uma mensagem | corpo: `{ messageID? }`, retorna <a href={typesUrl}><code>Session</code></a>        |
+| `POST`   | `/session/:id/abort`           | Abortar uma sessão em execução                        | Retorna `boolean`                                                                   |
+| `POST`   | `/session/:id/share`           | Compartilhar uma sessão                               | Retorna <a href={typesUrl}><code>Session</code></a>                                 |
+| `DELETE` | `/session/:id/share`           | Descompartilhar uma sessão                            | Retorna <a href={typesUrl}><code>Session</code></a>                                 |
+| `GET`    | `/session/:id/diff`            | Obter a diferença para esta sessão                    | query: `messageID?`, retorna <a href={typesUrl}><code>FileDiff[]</code></a>         |
+| `POST`   | `/session/:id/summarize`       | Resumir a sessão                                      | corpo: `{ providerID, modelID }`, retorna `boolean`                                 |
+| `POST`   | `/session/:id/revert`          | Reverter uma mensagem                                 | corpo: `{ messageID, partID? }`, retorna `boolean`                                  |
+| `POST`   | `/session/:id/unrevert`        | Restaurar todas as mensagens revertidas               | Retorna `boolean`                                                                   |
+| `POST`   | `/permission/:requestID/reply` | Responder a um pedido de permissão                    | corpo: `{ reply, message? }`, retorna `boolean`                                     |
 
 ---
 

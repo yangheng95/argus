@@ -10,7 +10,11 @@ import {
   polishText,
   splitText,
 } from "./message-formatter"
-import { permissionReply as permissionReplyRule, queueLimit as queueLimitRule, type PermissionReply } from "./bot-policy"
+import {
+  permissionReply as permissionReplyRule,
+  queueLimit as queueLimitRule,
+  type PermissionReply,
+} from "./bot-policy"
 import { SessionCoordinator } from "./session-coordinator"
 
 interface SessionEntry {
@@ -245,11 +249,7 @@ export class BotCore {
           thread: msg.thread,
           sessionId: session.sessionId,
         })
-        await adapter.sendMessage(
-          msg.channel,
-          msg.thread,
-          notice,
-        )
+        await adapter.sendMessage(msg.channel, msg.thread, notice)
         console.warn(`[BotCore] Dropped message for ${session.sessionId}, queue limit reached: ${queue.limit}`)
         return
       }
@@ -357,9 +357,9 @@ export class BotCore {
       "## The visibility principle",
       "Everything you do must be visible to the user. Using background tools (write, bash) to produce code silently is unacceptable - the user has no idea what you changed or whether it is correct.",
       "For coding tasks, open a visible coding tool first:",
-      "- **Claude Code**: `bash('start \"Claude Code\" cmd /k \"set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude\"')` — opens in a new terminal",
-      "- **OpenCorvus TUI (preferred)**: use the `tui` tool, e.g. `tui({ action: \"start\", mode: \"spawn\", directory: \"<project_dir>\" })`",
-      "- Then submit coding work with `tui({ action: \"submit_task\", text: \"<task>\", wait: true })`",
+      '- **Claude Code**: `bash(\'start "Claude Code" cmd /k "set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude"\')` — opens in a new terminal',
+      '- **OpenCorvus TUI (preferred)**: use the `tui` tool, e.g. `tui({ action: "start", mode: "spawn", directory: "<project_dir>" })`',
+      '- Then submit coding work with `tui({ action: "submit_task", text: "<task>", wait: true })`',
       "- Do NOT use `bun --preload ... src/index.ts` style launch commands in packaged/runtime environments.",
       "Exception: if the user explicitly asks for a specific tool ('use codex', 'use VS Code', 'run bash'), follow that instruction.",
       "",
@@ -378,7 +378,7 @@ export class BotCore {
       "Do NOT repeat the same shortcut if the first attempt opened the window — instead, rebind to see it.",
       "",
       "### Claude Code window binding workflow:",
-      "1. `bash('start \"Claude Code\" cmd /k \"set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude\"')` to launch",
+      '1. `bash(\'start "Claude Code" cmd /k "set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude"\')` to launch',
       "2. Skip wait when possible; if needed use `input.wait` with ms=10",
       "3. Run `screen.list_windows`, pick the Claude window `window_id`, then call `screen.bind_window` with that id",
       "4. If needed, fallback to title matching with 'claude' or 'Claude Code'",
@@ -443,7 +443,12 @@ export class BotCore {
     )
   }
 
-  private mirrorSessions(kind: "user" | "assistant" | "system", text: string, sessionId: string, sessions: SessionEntry[]) {
+  private mirrorSessions(
+    kind: "user" | "assistant" | "system",
+    text: string,
+    sessionId: string,
+    sessions: SessionEntry[],
+  ) {
     if (sessions.length === 0) {
       this.mirror(kind, text, { sessionId })
       return
@@ -477,7 +482,9 @@ export class BotCore {
 
   private async readSharedSessionFile() {
     const file = this.sharedFile()
-    const raw = (await Bun.file(file).json().catch(() => undefined)) as { session_id?: unknown } | undefined
+    const raw = (await Bun.file(file)
+      .json()
+      .catch(() => undefined)) as { session_id?: unknown } | undefined
     if (!raw) return undefined
     if (typeof raw.session_id !== "string") return undefined
     const id = raw.session_id.trim()
@@ -606,7 +613,9 @@ export class BotCore {
     initialAttachments?: ScreenAttachment[],
   ): Promise<void> {
     try {
-      let attachments = (initialAttachments ?? []).filter((att) => att.type === "file" && att.mime?.startsWith("image/"))
+      let attachments = (initialAttachments ?? []).filter(
+        (att) => att.type === "file" && att.mime?.startsWith("image/"),
+      )
       if (attachments.length === 0) {
         const msgResult = await this.client.session.message({
           sessionID: sessionId,
@@ -615,7 +624,9 @@ export class BotCore {
         if (msgResult.error) return
         const data = msgResult.data as { parts?: SessionMessagePart[] }
         const part = (data.parts ?? []).find((p) => p.id === partId)
-        attachments = (part?.state?.attachments ?? []).filter((att) => att.type === "file" && att.mime?.startsWith("image/"))
+        attachments = (part?.state?.attachments ?? []).filter(
+          (att) => att.type === "file" && att.mime?.startsWith("image/"),
+        )
       }
       for (const att of attachments) {
         const match = att.url?.match(/^data:[^;]+;base64,(.+)$/)
@@ -628,14 +639,18 @@ export class BotCore {
         // Skip vision for oversized screenshots (would timeout or OOM the API)
         const tooLarge = buffer.length >= 7 * 1024 * 1024
         if (tooLarge) {
-          console.log(`[BotCore] Vision skipped: screenshot too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB > 7MB)`)
+          console.log(
+            `[BotCore] Vision skipped: screenshot too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB > 7MB)`,
+          )
         }
 
         // Skip vision for trivial screen changes (cursor blinks, etc.)
         const visionDiffThreshold = Number(process.env.OPENCORVUS_MONITOR_DIFF_THRESHOLD) || 2
         const lowDiff = diffPercent !== undefined && diffPercent < visionDiffThreshold
         if (lowDiff) {
-          console.log(`[BotCore] Vision skipped: low screen change (${diffPercent.toFixed(1)}% < ${visionDiffThreshold}% threshold)`)
+          console.log(
+            `[BotCore] Vision skipped: low screen change (${diffPercent.toFixed(1)}% < ${visionDiffThreshold}% threshold)`,
+          )
         }
 
         // Run upload and vision analysis in parallel
@@ -664,7 +679,9 @@ export class BotCore {
         console.log(`[BotCore] Uploaded screenshot (${(buffer.length / 1024).toFixed(0)}KB)`)
 
         if (visionResult) {
-          console.log(`[BotCore] Vision analysis (${visionResult.tokens.prompt + visionResult.tokens.completion} tokens): ${visionResult.description.slice(0, 120)}...`)
+          console.log(
+            `[BotCore] Vision analysis (${visionResult.tokens.prompt + visionResult.tokens.completion} tokens): ${visionResult.description.slice(0, 120)}...`,
+          )
         }
       }
     } catch (err) {
@@ -683,7 +700,12 @@ export class BotCore {
       const sessions = this.findSessions(asked.sessionID)
       if (result.error) {
         console.error("[BotCore] permission.reply error:", JSON.stringify(result.error).slice(0, 500))
-        this.mirrorSessions("system", `Failed to reply permission request: ${asked.permission}`, asked.sessionID, sessions)
+        this.mirrorSessions(
+          "system",
+          `Failed to reply permission request: ${asked.permission}`,
+          asked.sessionID,
+          sessions,
+        )
         for (const session of sessions) {
           await session.adapter
             .sendMessage(session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
@@ -691,11 +713,20 @@ export class BotCore {
         }
         return
       }
-      this.mirrorSessions("system", `Auto-replied permission (${reply}): ${asked.permission}`, asked.sessionID, sessions)
+      this.mirrorSessions(
+        "system",
+        `Auto-replied permission (${reply}): ${asked.permission}`,
+        asked.sessionID,
+        sessions,
+      )
       for (const session of sessions) {
         const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
         await session.adapter
-          .sendMessage(session.channel, session.thread, `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`)
+          .sendMessage(
+            session.channel,
+            session.thread,
+            `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
+          )
           .catch(() => {})
       }
       console.log(`[BotCore] Auto-replied permission ${asked.id} with ${reply}`)
@@ -774,7 +805,6 @@ export class BotCore {
             await session.adapter.sendMessage(session.channel, session.thread, `Error: ${errMsg}`).catch(() => {})
           }
         }
-
       }
     }
 
@@ -846,7 +876,9 @@ export class BotCore {
           const err = String(part.state.error ?? "Unknown tool error")
           this.mirrorSessions("system", `${statusMsg} failed: ${err}`, part.sessionID, sessions)
           for (const session of sessions) {
-            await session.adapter.sendMessage(session.channel, session.thread, `${statusMsg} failed: ${err}`).catch(() => {})
+            await session.adapter
+              .sendMessage(session.channel, session.thread, `${statusMsg} failed: ${err}`)
+              .catch(() => {})
           }
         }
       }
@@ -872,11 +904,11 @@ export class BotCore {
           console.error(`[BotCore] event stream error, retrying in ${delay}ms:`, err)
         }
         if (this.running) {
-          await new Promise(resolve => setTimeout(resolve, delay))
+          await new Promise((resolve) => setTimeout(resolve, delay))
           delay = Math.min(delay * 2, 60_000) // exponential backoff, cap 60s
         }
       }
     }
-    reconnect().catch(err => console.error("[BotCore] fatal reconnect error:", err))
+    reconnect().catch((err) => console.error("[BotCore] fatal reconnect error:", err))
   }
 }

@@ -146,30 +146,33 @@ describe("playwright automation adapter", () => {
     const typed: string[] = []
     const wheel: number[] = []
     const page: PlaywrightDriver.Page = {
-      locator: () => new LocatorStub({
-        count: 0,
-        visible: true,
-        enabled: true,
-        text: "",
-        attrs: {},
-        rect: { x: 0, y: 0, width: 10, height: 10 },
-      }),
-      getByRole: () => new LocatorStub({
-        count: 0,
-        visible: true,
-        enabled: true,
-        text: "",
-        attrs: {},
-        rect: { x: 0, y: 0, width: 10, height: 10 },
-      }),
-      getByText: () => new LocatorStub({
-        count: 0,
-        visible: true,
-        enabled: true,
-        text: "",
-        attrs: {},
-        rect: { x: 0, y: 0, width: 10, height: 10 },
-      }),
+      locator: () =>
+        new LocatorStub({
+          count: 0,
+          visible: true,
+          enabled: true,
+          text: "",
+          attrs: {},
+          rect: { x: 0, y: 0, width: 10, height: 10 },
+        }),
+      getByRole: () =>
+        new LocatorStub({
+          count: 0,
+          visible: true,
+          enabled: true,
+          text: "",
+          attrs: {},
+          rect: { x: 0, y: 0, width: 10, height: 10 },
+        }),
+      getByText: () =>
+        new LocatorStub({
+          count: 0,
+          visible: true,
+          enabled: true,
+          text: "",
+          attrs: {},
+          rect: { x: 0, y: 0, width: 10, height: 10 },
+        }),
       keyboard: {
         press: async (key) => {
           keys.push(key)
@@ -256,7 +259,7 @@ describe("playwright automation adapter", () => {
       abort: new AbortController().signal,
     })
     expect(locate.ok).toBe(true)
-    expect(selector.includes("img[alt*=\"save-icon\"]")).toBe(true)
+    expect(selector.includes('img[alt*="save-icon"]')).toBe(true)
   })
 
   test("recovery scrolls node into view for interactability failures", async () => {
@@ -290,7 +293,7 @@ describe("playwright automation adapter", () => {
       target: [{ kind: "aid", value: "save" }],
       abort: new AbortController().signal,
     })
-    const ref = located.ok ? located.data ?? null : null
+    const ref = located.ok ? (located.data ?? null) : null
     const recovered = await driver.recover?.({
       step: { id: "btn", act: { kind: "click" } },
       attempt: 1,

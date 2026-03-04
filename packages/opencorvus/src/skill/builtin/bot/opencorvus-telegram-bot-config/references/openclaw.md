@@ -15,15 +15,18 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/telegram.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `TELEGRAM_BOT_TOKEN`
 - Compatibility fallback: `OPENCLAW_TELEGRAM_BOT_TOKEN`
 
 Runtime notes:
+
 - `TelegramAdapter` uses long polling (`bot.start()`).
 - Adapter supports text, voice note, and audio attachment input.
 - Replies use Telegram reply parameters for thread-like behavior.

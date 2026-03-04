@@ -486,4 +486,3 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     return result
   },
 })
-

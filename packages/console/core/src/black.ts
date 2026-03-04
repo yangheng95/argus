@@ -60,4 +60,3 @@ export namespace BlackData {
     },
   )
 }
-

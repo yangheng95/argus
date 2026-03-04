@@ -19,9 +19,7 @@ export class TelegramAdapter implements BotAdapter {
       if (!this.handler) return
 
       const channel = String(ctx.chat.id)
-      const thread = String(
-        ctx.message.reply_to_message?.message_id ?? ctx.message.message_id,
-      )
+      const thread = String(ctx.message.reply_to_message?.message_id ?? ctx.message.message_id)
       const user = String(ctx.from.id)
 
       await this.handler({
@@ -39,16 +37,10 @@ export class TelegramAdapter implements BotAdapter {
       if (!this.handler) return
 
       const channel = String(ctx.chat.id)
-      const thread = String(
-        ctx.message.reply_to_message?.message_id ?? ctx.message.message_id,
-      )
+      const thread = String(ctx.message.reply_to_message?.message_id ?? ctx.message.message_id)
       const user = String(ctx.from.id)
 
-      const audio = await this.downloadTelegramFile(
-        ctx.message.voice.file_id,
-        "audio/ogg",
-        ctx.message.voice.duration,
-      )
+      const audio = await this.downloadTelegramFile(ctx.message.voice.file_id, "audio/ogg", ctx.message.voice.duration)
 
       if (!audio) return
 
@@ -68,9 +60,7 @@ export class TelegramAdapter implements BotAdapter {
       if (!this.handler) return
 
       const channel = String(ctx.chat.id)
-      const thread = String(
-        ctx.message.reply_to_message?.message_id ?? ctx.message.message_id,
-      )
+      const thread = String(ctx.message.reply_to_message?.message_id ?? ctx.message.message_id)
       const user = String(ctx.from.id)
 
       const audio = await this.downloadTelegramFile(
@@ -149,14 +139,10 @@ export class TelegramAdapter implements BotAdapter {
     filename: string,
     title?: string,
   ): Promise<void> {
-    await this.bot.api.sendPhoto(
-      Number(channel),
-      new InputFile(imageBuffer, filename),
-      {
-        caption: title ?? filename,
-        reply_parameters: { message_id: Number(thread) },
-      },
-    )
+    await this.bot.api.sendPhoto(Number(channel), new InputFile(imageBuffer, filename), {
+      caption: title ?? filename,
+      reply_parameters: { message_id: Number(thread) },
+    })
   }
 
   onMessage(handler: MessageHandler): void {

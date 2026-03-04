@@ -19,8 +19,5 @@ export const GoalTable = sqliteTable(
     progress_log: text().notNull().default("[]"),
     ...Timestamps,
   },
-  (table) => [
-    index("goal_session_idx").on(table.session_id),
-    index("goal_status_idx").on(table.status),
-  ],
+  (table) => [index("goal_session_idx").on(table.session_id), index("goal_status_idx").on(table.status)],
 )

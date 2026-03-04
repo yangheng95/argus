@@ -118,4 +118,3 @@ describe("resolvePluginProviders", () => {
     expect(result).toEqual([])
   })
 })
-

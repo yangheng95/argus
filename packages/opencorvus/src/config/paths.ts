@@ -172,4 +172,3 @@ export namespace ConfigPaths {
     return data
   }
 }
-

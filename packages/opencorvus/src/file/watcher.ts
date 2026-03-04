@@ -105,11 +105,7 @@ export namespace FileWatcher {
     } satisfies Subscription
   }
 
-  function subscribeWithChokidar(
-    watcher: typeof import("chokidar"),
-    dir: string,
-    ignore: string[],
-  ) {
+  function subscribeWithChokidar(watcher: typeof import("chokidar"), dir: string, ignore: string[]) {
     const instance: FSWatcher = watcher.watch(dir, {
       ignoreInitial: true,
       ignored: ignored(dir, ignore),

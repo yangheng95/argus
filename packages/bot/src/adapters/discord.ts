@@ -106,7 +106,13 @@ export class DiscordAdapter implements BotAdapter {
     await this.sendReply(ch, thread, text)
   }
 
-  async uploadImage(channel: string, thread: string, imageBuffer: Buffer, filename: string, title?: string): Promise<void> {
+  async uploadImage(
+    channel: string,
+    thread: string,
+    imageBuffer: Buffer,
+    filename: string,
+    title?: string,
+  ): Promise<void> {
     const ch = await this.textChannel(channel)
     const file = new AttachmentBuilder(imageBuffer, { name: filename })
 

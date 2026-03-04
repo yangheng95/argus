@@ -1,9 +1,4 @@
-import {
-  Automation,
-  AutomationRuntime,
-  DesktopDriver,
-  selectDriver,
-} from "../opencorvus/automation"
+import { Automation, AutomationRuntime, DesktopDriver, selectDriver } from "../opencorvus/automation"
 import type { DriverKind } from "../opencorvus/automation"
 import { WindowManager } from "../opencorvus/perception/window"
 
@@ -20,13 +15,15 @@ async function recover() {
 }
 
 export function resolveInputDriver(kind?: DriverKind) {
-  const selected = selectDriver(AutomationRuntime.merge({
-    kind,
-    desktop: DesktopDriver.create({
-      id: "input.driver.resolve",
-      action: async () => {},
+  const selected = selectDriver(
+    AutomationRuntime.merge({
+      kind,
+      desktop: DesktopDriver.create({
+        id: "input.driver.resolve",
+        action: async () => {},
+      }),
     }),
-  }))
+  )
   return selected.kind
 }
 
@@ -42,39 +39,36 @@ export async function runInputAction(input: {
 }) {
   const max = input.retryMax ?? 2
   const backoff = input.backoffMs ?? [80, 180]
-  const selected = selectDriver(AutomationRuntime.merge({
-    kind: input.driver,
-    desktop: DesktopDriver.create({
-      id: input.id,
-      action: input.action,
-      recover,
-      check: async (ctx) => {
-        if (ctx.stage !== "post") return { ok: true }
-        if (!input.post) return { ok: true }
-        return input.post()
-      },
+  const selected = selectDriver(
+    AutomationRuntime.merge({
+      kind: input.driver,
+      desktop: DesktopDriver.create({
+        id: input.id,
+        action: input.action,
+        recover,
+        check: async (ctx) => {
+          if (ctx.stage !== "post") return { ok: true }
+          if (!input.post) return { ok: true }
+          return input.post()
+        },
+      }),
     }),
-  }))
+  )
   const act = input.act ?? ({ kind: "custom", name: input.id } satisfies Automation.Action)
   if (selected.kind !== "desktop" && !input.act) {
     throw new Error(`input action ${input.id} requires explicit act for driver=${selected.kind}`)
   }
-  const engine = Automation.create(
-    selected.driver,
-    {
-      timeoutMs: 50,
-      intervalMs: 0,
-      retryMax: max,
-      backoffMs: backoff,
-    },
-  )
+  const engine = Automation.create(selected.driver, {
+    timeoutMs: 50,
+    intervalMs: 0,
+    retryMax: max,
+    backoffMs: backoff,
+  })
   const result = await engine.run(
     {
       id: input.id,
       act,
-      post: input.post
-        ? [{ kind: "state", key: "post", value: true }]
-        : undefined,
+      post: input.post ? [{ kind: "state", key: "post", value: true }] : undefined,
       retry: {
         max,
         backoffMs: backoff,

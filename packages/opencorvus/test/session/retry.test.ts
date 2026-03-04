@@ -186,4 +186,3 @@ describe("session.message.fromError", () => {
     expect(result.data.isRetryable).toBe(true)
   })
 })
-

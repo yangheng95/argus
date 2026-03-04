@@ -179,4 +179,3 @@ if (!Script.preview) {
   await $`cd ./dist/homebrew-tap && git commit -m "Update to v${Script.version}"`
   await $`cd ./dist/homebrew-tap && git push`
 }
-

@@ -315,4 +315,3 @@ export function Sidebar(props: { sessionID: string; overlay?: boolean }) {
     </Show>
   )
 }
-

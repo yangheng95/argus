@@ -918,7 +918,8 @@ function logLine(item) {
 }
 
 function renderLogs() {
-  els.logs.textContent = state.logs.length === 0 ? "No runtime logs yet." : state.logs.map((item) => logLine(item)).join("\n")
+  els.logs.textContent =
+    state.logs.length === 0 ? "No runtime logs yet." : state.logs.map((item) => logLine(item)).join("\n")
   els.logs.scrollTop = els.logs.scrollHeight
 }
 
@@ -1084,7 +1085,9 @@ async function createSkill() {
 
 function sessionLabel(item, index) {
   const id = String(item?.id ?? "").trim()
-  const titleRaw = String(item?.title ?? "").replace(/\s+/g, " ").trim()
+  const titleRaw = String(item?.title ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
   const title = titleRaw || "(untitled)"
   const stamp = Number(item?.updated ?? 0)
   const updated = Number.isFinite(stamp) && stamp > 0 ? new Date(stamp).toLocaleString() : "-"
@@ -1093,7 +1096,10 @@ function sessionLabel(item, index) {
 
 function pickSessionId(list, action) {
   const limit = Math.min(24, list.length)
-  const sample = list.slice(0, limit).map((item, index) => sessionLabel(item, index)).join("\n")
+  const sample = list
+    .slice(0, limit)
+    .map((item, index) => sessionLabel(item, index))
+    .join("\n")
   const input = window.prompt(`Select session index (1-${limit}) or input session id to ${action}:\n\n${sample}`, "1")
   if (input === null) return ""
   const raw = input.trim()

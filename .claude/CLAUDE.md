@@ -20,7 +20,7 @@
 
 - 如果要进行调查，则优先使用sonnet agent，除非你需要使用Opus的特定功能或优势。
 - 如果使用Sonnet Agents，则最少使用5个agent，协同完成整个调查和分析过程，确保尽可能全面和深入的调查结果。
-  
+
 PRD：
 
 - OpenCorvus 是一个可以 coding 和操作 GUI 的助手。用户通过 Slack 与 OpenCorvus 交互，OpenCorvus 通过 Claude Code 终端执行命令，通过视觉分析监控屏幕，并通过 Slack 汇报进度和结果。
@@ -152,27 +152,27 @@ curl -s -X POST https://slack.com/api/chat.postMessage \
 
 关于修改 node_modules 这个问题：不是必须的，这是 @opentui/solid 包本身的 bug。
 
-  问题根源
+问题根源
 
-  @opentui/solid 的 package.json 中：
-  "./jsx-runtime": "./jsx-runtime.d.ts"  // 指向了 .d.ts 类型文件
+@opentui/solid 的 package.json 中：
+"./jsx-runtime": "./jsx-runtime.d.ts" // 指向了 .d.ts 类型文件
 
-  应该指向实际的 JS 文件，但该包根本没有提供 jsx-runtime.js。这是包作者的发布错误。
+应该指向实际的 JS 文件，但该包根本没有提供 jsx-runtime.js。这是包作者的发布错误。
 
-  对其他人的影响
+对其他人的影响
 
-  其他人 bun install 后会遇到同样的问题，因为 npm 上发布的包就是坏的。
+其他人 bun install 后会遇到同样的问题，因为 npm 上发布的包就是坏的。
 
-  正确的解决方案（不改 node_modules）
+正确的解决方案（不改 node_modules）
 
-  有两种方案可以让修复随代码一起分发：
+有两种方案可以让修复随代码一起分发：
 
-  方案 A：patch 文件（推荐）
-  用 patch-package 或 bun 的 --patch 功能生成 patch 文件，提交到代码库，其他人 install 后自动打补丁。
+方案 A：patch 文件（推荐）
+用 patch-package 或 bun 的 --patch 功能生成 patch 文件，提交到代码库，其他人 install 后自动打补丁。
 
-  方案 B：在 opencorvus 的 package.json 中加 overrides
-  "overrides": {
-    "@opentui/solid": {
-      ...
-    }
-  }
+方案 B：在 opencorvus 的 package.json 中加 overrides
+"overrides": {
+"@opentui/solid": {
+...
+}
+}

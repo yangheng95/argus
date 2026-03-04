@@ -94,7 +94,9 @@ export default function () {
           const match = createMemo(() => Binary.search(data().session, data().sessionID, (s) => s.id))
           if (!match().found) throw new Error(`Session ${data().sessionID} not found`)
           const info = createMemo(() => data().session[match().index])
-          const all = createMemo(() => (data().message[data().sessionID] ?? []).sort((a, b) => a.time.created - b.time.created))
+          const all = createMemo(() =>
+            (data().message[data().sessionID] ?? []).sort((a, b) => a.time.created - b.time.created),
+          )
           const users = createMemo(() => all().filter((x): x is UserMessage => x.role === "user"))
           const assists = createMemo(() => all().filter((x): x is AssistantMessage => x.role === "assistant"))
           const turn = createMemo(() =>
@@ -227,4 +229,3 @@ export default function () {
     </ErrorBoundary>
   )
 }
-

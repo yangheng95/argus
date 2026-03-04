@@ -1050,5 +1050,3 @@ async function revokeAppToken() {
     },
   })
 }
-
-

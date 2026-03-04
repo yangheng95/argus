@@ -38,18 +38,23 @@ describe("Coordinates.resolveDetailed", () => {
   })
 
   test("maps screenshot coordinates to logical coordinates when requested", () => {
-    const result = Coordinates.resolveDetailed(450, 300, {
-      x: 300,
-      y: 150,
-      width: 1200,
-      height: 900,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      logicalX: 200,
-      logicalY: 100,
-      logicalWidth: 800,
-      logicalHeight: 600,
-    }, "logical")
+    const result = Coordinates.resolveDetailed(
+      450,
+      300,
+      {
+        x: 300,
+        y: 150,
+        width: 1200,
+        height: 900,
+        scaleX: 1.5,
+        scaleY: 1.5,
+        logicalX: 200,
+        logicalY: 100,
+        logicalWidth: 800,
+        logicalHeight: 600,
+      },
+      "logical",
+    )
     expect(result.x).toBe(500)
     expect(result.y).toBe(300)
     expect(result.clamped).toBe(false)
@@ -75,14 +80,14 @@ describe("Coordinates.resolveDetailed", () => {
     }
 
     const result = Coordinates.resolveDetailed(300, 1900, dpi150, "logical")
-    expect(result.x).toBe(200)   // 300 / 1.5 = 200
-    expect(result.y).toBe(1267)  // 1900 / 1.5 ≈ 1267
+    expect(result.x).toBe(200) // 300 / 1.5 = 200
+    expect(result.y).toBe(1267) // 1900 / 1.5 ≈ 1267
     expect(result.clamped).toBe(false)
 
     // Verify the physical path would give wrong (off-screen) coordinates
     const physical = Coordinates.resolveDetailed(300, 1900, dpi150, "physical")
     expect(physical.x).toBe(300)
-    expect(physical.y).toBe(1900)  // This would be off-screen on a 1440-tall logical display
+    expect(physical.y).toBe(1900) // This would be off-screen on a 1440-tall logical display
   })
 
   test("auto mode chooses logical when dpi scale differs from 1", () => {
@@ -124,18 +129,23 @@ describe("Coordinates.resolveDetailed", () => {
   })
 
   test("falls back to physical mapping when logical metadata is incomplete", () => {
-    const result = Coordinates.resolveDetailed(450, 300, {
-      x: 300,
-      y: 150,
-      width: 1200,
-      height: 900,
-      scaleX: 1.5,
-      scaleY: 1.5,
-      logicalX: 200,
-      logicalY: 100,
-      logicalWidth: 0,
-      logicalHeight: 0,
-    }, "logical")
+    const result = Coordinates.resolveDetailed(
+      450,
+      300,
+      {
+        x: 300,
+        y: 150,
+        width: 1200,
+        height: 900,
+        scaleX: 1.5,
+        scaleY: 1.5,
+        logicalX: 200,
+        logicalY: 100,
+        logicalWidth: 0,
+        logicalHeight: 0,
+      },
+      "logical",
+    )
     expect(result.x).toBe(750)
     expect(result.y).toBe(450)
     expect(result.clamped).toBe(false)

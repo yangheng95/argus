@@ -16,16 +16,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/feishu.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
 - Optional: `FEISHU_WEBHOOK_HOST`, `FEISHU_WEBHOOK_PORT`, `FEISHU_WEBHOOK_PATH`, `FEISHU_VERIFICATION_TOKEN`
 - Compatibility fallback: `OPENCLAW_FEISHU_APP_ID`, `OPENCLAW_FEISHU_APP_SECRET`
 
 Runtime notes:
+
 - OpenCorvus adapter is webhook-first (HTTP server), not websocket long connection.
 - Adapter validates verification token only when configured.
 - Outbound API uses tenant access token and Feishu message APIs.

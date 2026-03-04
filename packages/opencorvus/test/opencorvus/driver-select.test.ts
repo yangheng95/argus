@@ -20,7 +20,8 @@ function page() {
     fill: async () => {},
     isVisible: async () => true,
     isEnabled: async () => true,
-    evaluate: async <T>(fn: (element: Element, arg?: unknown) => T | Promise<T>, arg?: unknown) => fn({} as Element, arg),
+    evaluate: async <T>(fn: (element: Element, arg?: unknown) => T | Promise<T>, arg?: unknown) =>
+      fn({} as Element, arg),
   }
   return {
     locator: () => locator,

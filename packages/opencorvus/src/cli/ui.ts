@@ -114,4 +114,3 @@ export namespace UI {
     return text
   }
 }
-

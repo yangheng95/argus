@@ -94,7 +94,7 @@ export function ExperimentalCronScheduleRoutes() {
         const now = Date.now()
         const nextRun = Cron.nextRun(parsed, now)
         const id = Identifier.ascending("cron")
-        const oneShot = body.oneShot ?? (parsed.type === "interval")
+        const oneShot = body.oneShot ?? parsed.type === "interval"
         Database.use((db) =>
           db
             .insert(CronJobTable)

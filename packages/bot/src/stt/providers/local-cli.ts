@@ -35,9 +35,7 @@ export class LocalCLIProvider implements STTProvider {
 
     try {
       // Build command by replacing template placeholders
-      let cmd = this.command!
-        .replace("{{MediaPath}}", mediaPath)
-        .replace("{{OutputDir}}", outputDir)
+      let cmd = this.command!.replace("{{MediaPath}}", mediaPath).replace("{{OutputDir}}", outputDir)
 
       if (options?.language) {
         cmd = cmd.replace("{{Language}}", options.language)
@@ -74,9 +72,13 @@ export class LocalCLIProvider implements STTProvider {
       try {
         unlinkSync(mediaPath)
         const txtPath = join(outputDir, "input.txt")
-        try { unlinkSync(txtPath) } catch {}
+        try {
+          unlinkSync(txtPath)
+        } catch {}
         // Remove the temp directory (may fail if other files exist, that's ok)
-        try { Bun.spawn(["rm", "-rf", outputDir]) } catch {}
+        try {
+          Bun.spawn(["rm", "-rf", outputDir])
+        } catch {}
       } catch {}
     }
   }

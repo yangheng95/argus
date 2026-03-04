@@ -59,4 +59,3 @@ export async function GET(input: APIEvent) {
     return disabledModels
   }
 }
-

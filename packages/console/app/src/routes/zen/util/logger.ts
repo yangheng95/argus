@@ -10,4 +10,3 @@ export const logger = {
     console.debug(message)
   },
 }
-

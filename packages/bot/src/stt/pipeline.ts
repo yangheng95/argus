@@ -47,7 +47,9 @@ export class STTPipeline {
   async transcribe(audio: AudioBuffer): Promise<STTResult | null> {
     const maxSize = this.config.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE
     if (audio.size > maxSize) {
-      console.warn(`[STT] Audio too large (${(audio.size / 1024 / 1024).toFixed(1)}MB > ${(maxSize / 1024 / 1024).toFixed(0)}MB limit)`)
+      console.warn(
+        `[STT] Audio too large (${(audio.size / 1024 / 1024).toFixed(1)}MB > ${(maxSize / 1024 / 1024).toFixed(0)}MB limit)`,
+      )
       return null
     }
 

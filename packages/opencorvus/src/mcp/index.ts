@@ -935,4 +935,3 @@ export namespace MCP {
     return expired ? "expired" : "authenticated"
   }
 }
-

@@ -59,12 +59,7 @@ export namespace TaskPlan {
     }
   }
 
-  export function add(input: {
-    sessionID: string
-    parentID?: string
-    goal: string
-    priority?: number
-  }): Task {
+  export function add(input: { sessionID: string; parentID?: string; goal: string; priority?: number }): Task {
     const id = Identifier.ascending("task")
     Database.use((db) =>
       db
@@ -87,9 +82,7 @@ export namespace TaskPlan {
   }
 
   export function get(taskID: string): Task | null {
-    const row = Database.use((db) =>
-      db.select().from(TaskPlanTable).where(eq(TaskPlanTable.id, taskID)).get(),
-    )
+    const row = Database.use((db) => db.select().from(TaskPlanTable).where(eq(TaskPlanTable.id, taskID)).get())
     return row ? fromRow(row) : null
   }
 
@@ -108,9 +101,7 @@ export namespace TaskPlan {
     if (changes.priority !== undefined) set.priority = changes.priority
 
     if (Object.keys(set).length > 0) {
-      Database.use((db) =>
-        db.update(TaskPlanTable).set(set).where(eq(TaskPlanTable.id, taskID)).run(),
-      )
+      Database.use((db) => db.update(TaskPlanTable).set(set).where(eq(TaskPlanTable.id, taskID)).run())
     }
 
     const updated = get(taskID)!
@@ -128,19 +119,13 @@ export namespace TaskPlan {
 
   export function remove(taskID: string): void {
     // Also removes child tasks via cascade or manual cleanup
-    Database.use((db) =>
-      db.delete(TaskPlanTable).where(eq(TaskPlanTable.id, taskID)).run(),
-    )
+    Database.use((db) => db.delete(TaskPlanTable).where(eq(TaskPlanTable.id, taskID)).run())
     log.info("task removed", { id: taskID })
   }
 
   export function list(sessionID: string): Task[] {
     const rows = Database.use((db) =>
-      db
-        .select()
-        .from(TaskPlanTable)
-        .where(eq(TaskPlanTable.session_id, sessionID))
-        .all(),
+      db.select().from(TaskPlanTable).where(eq(TaskPlanTable.session_id, sessionID)).all(),
     )
     return rows.map(fromRow)
   }
@@ -187,9 +172,7 @@ export namespace TaskPlan {
     for (const task of children) {
       const indent = "  ".repeat(depth)
       const icon = statusIcon(task.status)
-      const progress = task.progressPct > 0 && task.progressPct < 100
-        ? ` (${task.progressPct}%)`
-        : ""
+      const progress = task.progressPct > 0 && task.progressPct < 100 ? ` (${task.progressPct}%)` : ""
       const notes = task.notes ? ` — ${task.notes}` : ""
       lines.push(`${indent}${icon} ${task.goal}${progress}${notes} [${task.id}]`)
       renderTree(task.id, depth + 1, childrenMap, lines)
@@ -198,11 +181,16 @@ export namespace TaskPlan {
 
   function statusIcon(status: Status): string {
     switch (status) {
-      case "pending": return "[ ]"
-      case "in_progress": return "[~]"
-      case "completed": return "[x]"
-      case "blocked": return "[!]"
-      case "cancelled": return "[-]"
+      case "pending":
+        return "[ ]"
+      case "in_progress":
+        return "[~]"
+      case "completed":
+        return "[x]"
+      case "blocked":
+        return "[!]"
+      case "cancelled":
+        return "[-]"
     }
   }
 }

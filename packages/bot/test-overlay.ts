@@ -8,7 +8,15 @@ import path from "node:path"
 
 const projectRoot = path.resolve(import.meta.dirname, "../..")
 const debugBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "debug", "opencorvus-overlay.exe")
-const releaseBin = path.join(projectRoot, "packages", "overlay", "src-tauri", "target", "release", "opencorvus-overlay.exe")
+const releaseBin = path.join(
+  projectRoot,
+  "packages",
+  "overlay",
+  "src-tauri",
+  "target",
+  "release",
+  "opencorvus-overlay.exe",
+)
 const overlayBin = existsSync(releaseBin) ? releaseBin : debugBin
 
 if (!existsSync(overlayBin)) {
@@ -41,32 +49,32 @@ function send(event: Record<string, unknown>) {
 }
 
 // Wait for overlay to initialize
-await new Promise(r => setTimeout(r, 3000))
+await new Promise((r) => setTimeout(r, 3000))
 console.log("--- Overlay ready, sending test events ---")
 
 // Test 1: Click at center screen — popup should appear centered above this point
 send({ type: "hint", x: 960, y: 540, action: "click", label: "click (960, 540)" })
-await new Promise(r => setTimeout(r, 2500))
+await new Promise((r) => setTimeout(r, 2500))
 
 // Test 2: Click at top-left area
 send({ type: "hint", x: 300, y: 300, action: "click", label: "click (300, 300)" })
-await new Promise(r => setTimeout(r, 2500))
+await new Promise((r) => setTimeout(r, 2500))
 
 // Test 3: Type hint — should appear at same location (no coordinate change)
 send({ type: "hint", x: 300, y: 300, action: "type", label: "type: Hello World" })
-await new Promise(r => setTimeout(r, 2500))
+await new Promise((r) => setTimeout(r, 2500))
 
 // Test 4: Key hint at bottom-right
 send({ type: "hint", x: 1500, y: 800, action: "key", label: "key: Enter" })
-await new Promise(r => setTimeout(r, 2500))
+await new Promise((r) => setTimeout(r, 2500))
 
 // Test 5: Scroll hint
 send({ type: "hint", x: 960, y: 540, action: "scroll", label: "scroll down 3" })
-await new Promise(r => setTimeout(r, 2500))
+await new Promise((r) => setTimeout(r, 2500))
 
 // Test 6: Done status — green accent
 send({ type: "hint", x: 800, y: 400, action: "click", label: "done click (800, 400)", status: "done" })
-await new Promise(r => setTimeout(r, 2500))
+await new Promise((r) => setTimeout(r, 2500))
 
 // Test 7: Window highlight — should frame the specified rectangle
 send({
@@ -78,7 +86,7 @@ send({
   label: "Target Window",
   duration_ms: 3000,
 })
-await new Promise(r => setTimeout(r, 4000))
+await new Promise((r) => setTimeout(r, 4000))
 
 // Test 8: Smaller window highlight
 send({
@@ -90,10 +98,10 @@ send({
   label: "Small Dialog",
   duration_ms: 2000,
 })
-await new Promise(r => setTimeout(r, 3000))
+await new Promise((r) => setTimeout(r, 3000))
 
 console.log("--- All tests done, closing overlay ---")
 proc.stdin!.end()
-await new Promise(r => setTimeout(r, 2000))
+await new Promise((r) => setTimeout(r, 2000))
 proc.kill()
 process.exit(0)

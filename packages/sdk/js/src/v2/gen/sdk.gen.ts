@@ -141,6 +141,8 @@ import type {
   SessionMessagesResponses,
   SessionPromptAsyncErrors,
   SessionPromptAsyncResponses,
+  SessionPromptAsyncStatusErrors,
+  SessionPromptAsyncStatusResponses,
   SessionPromptErrors,
   SessionPromptResponses,
   SessionRevertErrors,
@@ -2317,6 +2319,42 @@ export class Session2 extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Get async prompt task status
+   *
+   * Get status for a previously submitted async prompt task.
+   */
+  public promptAsyncStatus<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionPromptAsyncStatusResponses,
+      SessionPromptAsyncStatusErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/prompt_async/{taskID}",
+      ...options,
+      ...params,
     })
   }
 

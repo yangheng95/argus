@@ -159,8 +159,6 @@ export namespace ToolRegistry {
     const result = await Promise.all(
       tools
         .filter((t) => {
-
-
           // use apply tool in same format as codex
           const usePatch =
             model.modelID.includes("gpt-") && !model.modelID.includes("oss") && !model.modelID.includes("gpt-4")
@@ -188,4 +186,3 @@ export namespace ToolRegistry {
     return result
   }
 }
-

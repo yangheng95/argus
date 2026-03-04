@@ -16,7 +16,7 @@ function wait(ms: number, abort: AbortSignal) {
 }
 
 function escaped(value: string) {
-  return value.replaceAll("\\", "\\\\").replaceAll("\"", "\\\"")
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
 }
 
 function escapedRegex(value: string) {
@@ -70,29 +70,27 @@ export namespace PlaywrightDriver {
     recover?: () => Promise<boolean>
   }
 
-function makeLocator(page: Page, target: Automation.Locator) {
-  if (target.kind === "aid") {
-    const q = escaped(target.value)
-    return page.locator(
-      `[data-testid="${q}"], [data-test-id="${q}"], [data-qa="${q}"], [aria-label="${q}"]`,
-      )
+  function makeLocator(page: Page, target: Automation.Locator) {
+    if (target.kind === "aid") {
+      const q = escaped(target.value)
+      return page.locator(`[data-testid="${q}"], [data-test-id="${q}"], [data-qa="${q}"], [aria-label="${q}"]`)
     }
     if (target.kind === "role") {
       return page.getByRole(target.value, target.name ? { name: target.name } : undefined)
     }
-  if (target.kind === "text") {
-    if (target.exact) return page.getByText(target.value, { exact: true })
-    return page.getByText(new RegExp(escapedRegex(target.value), "i"))
+    if (target.kind === "text") {
+      if (target.exact) return page.getByText(target.value, { exact: true })
+      return page.getByText(new RegExp(escapedRegex(target.value), "i"))
+    }
+    if (target.kind === "image") {
+      const q = escaped(target.value)
+      return page.locator(
+        `img[alt*="${q}"], img[src*="${q}"], [role="img"][aria-label*="${q}"], ` +
+          `[aria-label*="${q}"], [data-testid*="${q}"], [data-test-id*="${q}"], [data-qa*="${q}"]`,
+      )
+    }
+    return null
   }
-  if (target.kind === "image") {
-    const q = escaped(target.value)
-    return page.locator(
-      `img[alt*="${q}"], img[src*="${q}"], [role="img"][aria-label*="${q}"], `
-      + `[aria-label*="${q}"], [data-testid*="${q}"], [data-test-id*="${q}"], [data-qa*="${q}"]`,
-    )
-  }
-  return null
-}
 
   export function create(input: Opt): Automation.Driver {
     const page = input.page
@@ -121,25 +119,22 @@ function makeLocator(page: Page, target: Automation.Locator) {
 
     return {
       locate: async (ctx) => {
-        const result = await sort(ctx.target).reduce(
-          async (hit, target) => {
-            const current = await hit
-            if (current) return current
-            if (ctx.abort.aborted) {
-              return {
-                ok: false,
-                kind: "aborted",
-                detail: "aborted",
-              } satisfies Automation.Probe<Automation.Node>
-            }
-            const locator = makeLocator(page, target)
-            if (!locator) return null
-            const count = await locator.count()
-            if (count <= 0) return null
-            return store(locator, target)
-          },
-          Promise.resolve<Automation.Probe<Automation.Node> | null>(null),
-        )
+        const result = await sort(ctx.target).reduce(async (hit, target) => {
+          const current = await hit
+          if (current) return current
+          if (ctx.abort.aborted) {
+            return {
+              ok: false,
+              kind: "aborted",
+              detail: "aborted",
+            } satisfies Automation.Probe<Automation.Node>
+          }
+          const locator = makeLocator(page, target)
+          if (!locator) return null
+          const count = await locator.count()
+          if (count <= 0) return null
+          return store(locator, target)
+        }, Promise.resolve<Automation.Probe<Automation.Node> | null>(null))
         if (result) return result
         return {
           ok: false,
@@ -159,9 +154,7 @@ function makeLocator(page: Page, target: Automation.Locator) {
         const check = ctx.check
         if (check.kind === "exists") {
           const count = await locator.count()
-          return count > 0
-            ? { ok: true }
-            : { ok: false, kind: "not_found", detail: "element does not exist" }
+          return count > 0 ? { ok: true } : { ok: false, kind: "not_found", detail: "element does not exist" }
         }
         if (check.kind === "visible") {
           const ok = await locator.isVisible({ timeout })
@@ -185,9 +178,7 @@ function makeLocator(page: Page, target: Automation.Locator) {
             const rect = element.getBoundingClientRect()
             return `${rect.x}:${rect.y}:${rect.width}:${rect.height}`
           })
-          return first === second
-            ? { ok: true }
-            : { ok: false, kind: "state_mismatch", detail: "element is moving" }
+          return first === second ? { ok: true } : { ok: false, kind: "state_mismatch", detail: "element is moving" }
         }
         if (check.key === "text") {
           const text = await locator.evaluate((element) => element.textContent ?? "")
@@ -210,16 +201,18 @@ function makeLocator(page: Page, target: Automation.Locator) {
         const action = ctx.act
         const locator = resolve(ctx.node)
         if (action.kind === "hotkey") {
-          return page.keyboard.press(action.keys.join("+"))
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+          return page.keyboard
+            .press(action.keys.join("+"))
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
         }
         if (action.kind === "scroll") {
           const unit = action.amount ?? 3
           const y = action.direction === "down" ? unit * 120 : -unit * 120
-          return page.mouse.wheel(0, y)
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+          return page.mouse
+            .wheel(0, y)
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
         }
         if (action.kind === "wait") {
           await wait(action.ms, ctx.abort)
@@ -234,13 +227,19 @@ function makeLocator(page: Page, target: Automation.Locator) {
                 detail: "type requires target node or keyboard.type support",
               } satisfies Automation.Probe
             }
-            return page.keyboard.type(action.text)
-              .then(() => ({ ok: true } satisfies Automation.Probe))
-              .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+            return page.keyboard
+              .type(action.text)
+              .then(() => ({ ok: true }) satisfies Automation.Probe)
+              .catch(
+                (error) => ({ ok: false, kind: "not_interactable", detail: detail(error) }) satisfies Automation.Probe,
+              )
           }
-          return locator.fill(action.text)
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+          return locator
+            .fill(action.text)
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch(
+              (error) => ({ ok: false, kind: "not_interactable", detail: detail(error) }) satisfies Automation.Probe,
+            )
         }
         if (!locator) {
           return {
@@ -251,12 +250,15 @@ function makeLocator(page: Page, target: Automation.Locator) {
         }
         if (action.kind === "click") {
           const button = action.button === "double" ? "left" : action.button
-          const run = action.button === "double" && locator.dblclick
-            ? locator.dblclick({ button: "left" })
-            : locator.click({ button, clickCount: action.button === "double" ? 2 : undefined })
+          const run =
+            action.button === "double" && locator.dblclick
+              ? locator.dblclick({ button: "left" })
+              : locator.click({ button, clickCount: action.button === "double" ? 2 : undefined })
           return run
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+            .then(() => ({ ok: true }) satisfies Automation.Probe)
+            .catch(
+              (error) => ({ ok: false, kind: "not_interactable", detail: detail(error) }) satisfies Automation.Probe,
+            )
         }
         return {
           ok: false,
@@ -280,23 +282,26 @@ function makeLocator(page: Page, target: Automation.Locator) {
         }
         const locator = resolve(ctx.node)
         if (
-          locator
-          && locator.scrollIntoViewIfNeeded
-          && (ctx.kind === "not_interactable" || ctx.kind === "state_mismatch")
+          locator &&
+          locator.scrollIntoViewIfNeeded &&
+          (ctx.kind === "not_interactable" || ctx.kind === "state_mismatch")
         ) {
-          const scrolled = await locator.scrollIntoViewIfNeeded({ timeout })
+          const scrolled = await locator
+            .scrollIntoViewIfNeeded({ timeout })
             .then(() => true)
             .catch(() => false)
           if (scrolled) return { ok: true } satisfies Automation.Probe
         }
         if (!page.bringToFront) return { ok: true } satisfies Automation.Probe
-        return page.bringToFront()
-          .then(() => ({ ok: true } satisfies Automation.Probe))
-          .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) } satisfies Automation.Probe))
+        return page
+          .bringToFront()
+          .then(() => ({ ok: true }) satisfies Automation.Probe)
+          .catch((error) => ({ ok: false, kind: "infra", detail: detail(error) }) satisfies Automation.Probe)
       },
       snapshot: async (ctx) => {
         if (ctx.abort.aborted) return null
-        return page.screenshot({ type: "png" })
+        return page
+          .screenshot({ type: "png" })
           .then((image) => {
             const hash = createHash("md5").update(image).digest("hex")
             return { id: `pw:${ctx.label}:${hash}`, at: Date.now() } satisfies Automation.Snapshot

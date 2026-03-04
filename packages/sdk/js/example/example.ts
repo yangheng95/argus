@@ -54,5 +54,3 @@ await Promise.all(
     console.log("done", file)
   }),
 )
-
-

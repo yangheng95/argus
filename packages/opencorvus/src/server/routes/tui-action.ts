@@ -5,8 +5,5 @@ import { TuiActionDialogRoutes } from "./tui-action-dialog"
 import { TuiActionEventRoutes } from "./tui-action-event"
 
 export const TuiActionRoutes = lazy(() =>
-  new Hono()
-    .route("/", TuiActionInputRoutes())
-    .route("/", TuiActionDialogRoutes())
-    .route("/", TuiActionEventRoutes()),
+  new Hono().route("/", TuiActionInputRoutes()).route("/", TuiActionDialogRoutes()).route("/", TuiActionEventRoutes()),
 )

@@ -95,4 +95,3 @@ export function pickPermissionProfile(input: string | undefined): {
 export function permissionForProfile(profile: PermissionProfile): Record<string, string> {
   return { ...profiles[profile] }
 }
-

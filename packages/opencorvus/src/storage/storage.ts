@@ -218,4 +218,3 @@ export namespace Storage {
     }
   }
 }
-

@@ -68,7 +68,11 @@ export namespace PermissionNext {
         continue
       }
       ruleset.push(
-        ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action: action as "allow" | "ask" | "deny" })),
+        ...Object.entries(value).map(([pattern, action]) => ({
+          permission: key,
+          pattern: expand(pattern),
+          action: action as "allow" | "ask" | "deny",
+        })),
       )
     }
     return ruleset
@@ -238,13 +242,14 @@ export namespace PermissionNext {
         }
 
         Database.use((db) =>
-          db.insert(PermissionTable)
+          db
+            .insert(PermissionTable)
             .values({ project_id: Instance.project.id, data: s.approved })
             .onConflictDoUpdate({
               target: PermissionTable.project_id,
               set: { data: s.approved },
             })
-            .run()
+            .run(),
         )
         return
       }

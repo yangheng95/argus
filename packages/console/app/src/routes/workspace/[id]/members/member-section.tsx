@@ -366,4 +366,3 @@ export function MemberSection() {
     </section>
   )
 }
-

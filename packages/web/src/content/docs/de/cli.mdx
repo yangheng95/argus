@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f` | Datei(en) zum Anhängen an die Nachricht                                                             |
 | `--format`   |      | Format: default (formatiert) oder json (rohe JSON-Ereignisse)                                       |
 | `--title`    |      | Titel für die Sitzung (verwendet eine verkürzte Eingabeaufforderung, wenn kein Wert angegeben wird) |
-| `--attach`   |      | An einen laufenden OpenCorvus-Server anschließen (z.B. http://localhost:7878)                         |
+| `--attach`   |      | An einen laufenden OpenCorvus-Server anschließen (z.B. http://localhost:7878)                       |
 | `--port`     |      | Port für den lokalen Server (standardmäßig zufälliger Port)                                         |
 
 ---
@@ -553,32 +553,32 @@ Der OpenCorvus CLI akzeptiert die folgenden globalen Flags.
 
 OpenCorvus kann mithilfe von Umgebungsvariablen konfiguriert werden.
 
-| Variable                              | Typ             | Beschreibung                                                                     |
-| ------------------------------------- | --------------- | -------------------------------------------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | boolescher Wert | Sitzungen automatisch teilen                                                     |
-| `OPENCORVUS_GIT_BASH_PATH`              | Zeichenfolge    | Pfad zur ausführbaren Git Bash-Datei unter Windows                               |
-| `OPENCORVUS_CONFIG`                     | Zeichenfolge    | Pfad zur Konfigurationsdatei                                                     |
-| `OPENCORVUS_CONFIG_DIR`                 | Zeichenfolge    | Pfad zum Konfigurationsverzeichnis                                               |
-| `OPENCORVUS_CONFIG_CONTENT`             | Zeichenfolge    | Inline-JSON-Konfigurationsinhalt                                                 |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolescher Wert | Automatische Update-Prüfungen deaktivieren                                       |
-| `OPENCORVUS_DISABLE_PRUNE`              | boolescher Wert | Bereinigung alter Daten deaktivieren                                             |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolescher Wert | Deaktivieren Sie die automatische Aktualisierung von Terminaltiteln              |
-| `OPENCORVUS_PERMISSION`                 | Zeichenfolge    | Inline-JSON-Berechtigungskonfiguration                                           |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolescher Wert | Standard-Plugins deaktivieren                                                    |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolescher Wert | Automatische LSP-Server-Downloads deaktivieren                                   |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolescher Wert | Experimentelle Modelle aktivieren                                                |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolescher Wert | Automatische Kontextkomprimierung deaktivieren                                   |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolescher Wert | Deaktivieren Sie das Lesen von `.claude` (Prompt + Skills)                       |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolescher Wert | Deaktivieren Sie das Lesen von `~/.claude/CLAUDE.md`                             |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolescher Wert | Deaktivieren Sie das Laden von `.claude/skills`                                  |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolescher Wert | Deaktivieren Sie das Abrufen von Modellen aus Remote-Quellen                     |
-| `OPENCORVUS_FAKE_VCS`                   | Zeichenfolge    | Gefälschter VCS-Anbieter zu Testzwecken                                          |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolescher Wert | Dateizeitprüfung zur Optimierung deaktivieren                                    |
-| `OPENCORVUS_CLIENT`                     | Zeichenfolge    | Client-ID (standardmäßig `cli`)                                                  |
-| `OPENCORVUS_ENABLE_EXA`                 | boolescher Wert | Exa-Websuchtools aktivieren                                                      |
-| `OPENCORVUS_SERVER_PASSWORD`            | Zeichenfolge    | Aktivieren Sie die Basisauthentifizierung für `serve`/`web`                      |
+| Variable                                | Typ             | Beschreibung                                                                       |
+| --------------------------------------- | --------------- | ---------------------------------------------------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | boolescher Wert | Sitzungen automatisch teilen                                                       |
+| `OPENCORVUS_GIT_BASH_PATH`              | Zeichenfolge    | Pfad zur ausführbaren Git Bash-Datei unter Windows                                 |
+| `OPENCORVUS_CONFIG`                     | Zeichenfolge    | Pfad zur Konfigurationsdatei                                                       |
+| `OPENCORVUS_CONFIG_DIR`                 | Zeichenfolge    | Pfad zum Konfigurationsverzeichnis                                                 |
+| `OPENCORVUS_CONFIG_CONTENT`             | Zeichenfolge    | Inline-JSON-Konfigurationsinhalt                                                   |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolescher Wert | Automatische Update-Prüfungen deaktivieren                                         |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolescher Wert | Bereinigung alter Daten deaktivieren                                               |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolescher Wert | Deaktivieren Sie die automatische Aktualisierung von Terminaltiteln                |
+| `OPENCORVUS_PERMISSION`                 | Zeichenfolge    | Inline-JSON-Berechtigungskonfiguration                                             |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolescher Wert | Standard-Plugins deaktivieren                                                      |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolescher Wert | Automatische LSP-Server-Downloads deaktivieren                                     |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolescher Wert | Experimentelle Modelle aktivieren                                                  |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolescher Wert | Automatische Kontextkomprimierung deaktivieren                                     |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolescher Wert | Deaktivieren Sie das Lesen von `.claude` (Prompt + Skills)                         |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolescher Wert | Deaktivieren Sie das Lesen von `~/.claude/CLAUDE.md`                               |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolescher Wert | Deaktivieren Sie das Laden von `.claude/skills`                                    |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolescher Wert | Deaktivieren Sie das Abrufen von Modellen aus Remote-Quellen                       |
+| `OPENCORVUS_FAKE_VCS`                   | Zeichenfolge    | Gefälschter VCS-Anbieter zu Testzwecken                                            |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolescher Wert | Dateizeitprüfung zur Optimierung deaktivieren                                      |
+| `OPENCORVUS_CLIENT`                     | Zeichenfolge    | Client-ID (standardmäßig `cli`)                                                    |
+| `OPENCORVUS_ENABLE_EXA`                 | boolescher Wert | Exa-Websuchtools aktivieren                                                        |
+| `OPENCORVUS_SERVER_PASSWORD`            | Zeichenfolge    | Aktivieren Sie die Basisauthentifizierung für `serve`/`web`                        |
 | `OPENCORVUS_SERVER_USERNAME`            | Zeichenfolge    | Benutzernamen für die Basisauthentifizierung überschreiben (Standard `opencorvus`) |
-| `OPENCORVUS_MODELS_URL`                 | Zeichenfolge    | Benutzerdefinierte URL zum Abrufen der Modellkonfiguration                       |
+| `OPENCORVUS_MODELS_URL`                 | Zeichenfolge    | Benutzerdefinierte URL zum Abrufen der Modellkonfiguration                         |
 
 ---
 
@@ -586,8 +586,8 @@ OpenCorvus kann mithilfe von Umgebungsvariablen konfiguriert werden.
 
 Diese Umgebungsvariablen ermöglichen experimentelle Funktionen, die sich ändern oder entfernt werden können.
 
-| Variable                                        | Typ             | Beschreibung                                            |
-| ----------------------------------------------- | --------------- | ------------------------------------------------------- |
+| Variable                                          | Typ             | Beschreibung                                            |
+| ------------------------------------------------- | --------------- | ------------------------------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolescher Wert | Alle experimentellen Funktionen aktivieren              |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolescher Wert | Symbolerkennung aktivieren                              |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolescher Wert | Kopieren bei Auswahl in TUI deaktivieren                |

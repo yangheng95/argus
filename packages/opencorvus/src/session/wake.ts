@@ -38,7 +38,7 @@ export namespace SessionWake {
    */
   export async function wake(input: WakeInput): Promise<string> {
     // Resolve agent name: use provided name, or fall back to the default agent
-    const agent = input.agent ?? await Agent.defaultAgent()
+    const agent = input.agent ?? (await Agent.defaultAgent())
 
     // Resolve or create session
     let sessionID = input.sessionID

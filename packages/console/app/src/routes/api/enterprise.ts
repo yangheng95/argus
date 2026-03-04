@@ -48,4 +48,3 @@ ${body.email}`.trim()
     return Response.json({ error: dict["enterprise.form.error.internalServer"] }, { status: 500 })
   }
 }
-

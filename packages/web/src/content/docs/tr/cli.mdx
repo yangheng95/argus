@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript
 | `--file`     | `-f` | Mesaja eklenecek dosya(lar)                                                       |
 | `--format`   |      | Biçim: varsayılan (biçimlendirilmiş) veya json (ham JSON olayları)                |
 | `--title`    |      | Oturumun başlığı (değer sağlanmazsa kısaltılmış bilgi istemi kullanılır)          |
-| `--attach`   |      | Çalışan bir opencorvus sunucusuna ekleyin (ör. http://localhost:7878)               |
+| `--attach`   |      | Çalışan bir opencorvus sunucusuna ekleyin (ör. http://localhost:7878)             |
 | `--port`     |      | Yerel sunucunun bağlantı noktası (varsayılan olarak rastgele bağlantı noktasıdır) |
 
 ---
@@ -553,32 +553,32 @@ opencorvus CLI aşağıdaki global bayrakları destekler.
 
 opencorvus ortam değişkenleri kullanılarak yapılandırılabilir.
 
-| Değişken                              | Tip     | Açıklama                                                                    |
-| ------------------------------------- | ------- | --------------------------------------------------------------------------- |
-| `OPENCORVUS_AUTO_SHARE`                 | boolean | Oturumları otomatik olarak paylaş                                           |
-| `OPENCORVUS_GIT_BASH_PATH`              | string  | Windows'ta yürütülebilir Git Bash'in Yolu                                   |
-| `OPENCORVUS_CONFIG`                     | string  | Yapılandırma dosyasının yolu                                                |
-| `OPENCORVUS_CONFIG_DIR`                 | string  | Yapılandırma dizinine giden yol                                             |
-| `OPENCORVUS_CONFIG_CONTENT`             | string  | Satır içi JSON config içeriği                                               |
-| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Otomatik güncelleme kontrollerini devre dışı bırak                          |
-| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Eski verilerin temizlenmesini devre dışı bırak                              |
-| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Otomatik terminal başlığı güncellemelerini devre dışı bırakın               |
-| `OPENCORVUS_PERMISSION`                 | string  | Satır içi JSON izin config'i                                                |
-| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Varsayılan eklentileri devre dışı bırakın                                   |
-| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Otomatik LSP sunucu indirmelerini devre dışı bırakın                        |
-| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Deneysel modelleri etkinleştir                                              |
-| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Otomatik context sıkıştırmayı devre dışı bırak                              |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | `.claude`'den okumayı devre dışı bırak (istem + beceriler)                  |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | `~/.claude/CLAUDE.md` dosyasını okumayı devre dışı bırak                    |
-| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | `.claude/skills` yüklemesini devre dışı bırak                               |
-| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Uzak kaynaklardan model getirmeyi devre dışı bırakın                        |
-| `OPENCORVUS_FAKE_VCS`                   | string  | Test amaçlı sahte VCS sağlayıcısı                                           |
-| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Optimizasyon için dosya süresi kontrolünü devre dışı bırakın                |
-| `OPENCORVUS_CLIENT`                     | string  | Client kimliği (varsayılan: `cli`)                                          |
-| `OPENCORVUS_ENABLE_EXA`                 | boolean | Exa web arama araçlarını etkinleştir                                        |
-| `OPENCORVUS_SERVER_PASSWORD`            | string  | `serve`/`web` için temel kimlik doğrulamayı etkinleştirin                   |
+| Değişken                                | Tip     | Açıklama                                                                      |
+| --------------------------------------- | ------- | ----------------------------------------------------------------------------- |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | Oturumları otomatik olarak paylaş                                             |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Windows'ta yürütülebilir Git Bash'in Yolu                                     |
+| `OPENCORVUS_CONFIG`                     | string  | Yapılandırma dosyasının yolu                                                  |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | Yapılandırma dizinine giden yol                                               |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | Satır içi JSON config içeriği                                                 |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Otomatik güncelleme kontrollerini devre dışı bırak                            |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Eski verilerin temizlenmesini devre dışı bırak                                |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Otomatik terminal başlığı güncellemelerini devre dışı bırakın                 |
+| `OPENCORVUS_PERMISSION`                 | string  | Satır içi JSON izin config'i                                                  |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Varsayılan eklentileri devre dışı bırakın                                     |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Otomatik LSP sunucu indirmelerini devre dışı bırakın                          |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Deneysel modelleri etkinleştir                                                |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Otomatik context sıkıştırmayı devre dışı bırak                                |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | `.claude`'den okumayı devre dışı bırak (istem + beceriler)                    |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | `~/.claude/CLAUDE.md` dosyasını okumayı devre dışı bırak                      |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | `.claude/skills` yüklemesini devre dışı bırak                                 |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Uzak kaynaklardan model getirmeyi devre dışı bırakın                          |
+| `OPENCORVUS_FAKE_VCS`                   | string  | Test amaçlı sahte VCS sağlayıcısı                                             |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Optimizasyon için dosya süresi kontrolünü devre dışı bırakın                  |
+| `OPENCORVUS_CLIENT`                     | string  | Client kimliği (varsayılan: `cli`)                                            |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | Exa web arama araçlarını etkinleştir                                          |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | `serve`/`web` için temel kimlik doğrulamayı etkinleştirin                     |
 | `OPENCORVUS_SERVER_USERNAME`            | string  | Temel kimlik doğrulama kullanıcı adını geçersiz kıl (varsayılan `opencorvus`) |
-| `OPENCORVUS_MODELS_URL`                 | string  | Model yapılandırmasını almak için özel URL                                  |
+| `OPENCORVUS_MODELS_URL`                 | string  | Model yapılandırmasını almak için özel URL                                    |
 
 ---
 
@@ -586,8 +586,8 @@ opencorvus ortam değişkenleri kullanılarak yapılandırılabilir.
 
 Bu ortam değişkenleri değişebilecek veya kaldırılabilecek deneysel özellikleri etkinleştirir.
 
-| Değişken                                        | Tip     | Tanım                                                   |
-| ----------------------------------------------- | ------- | ------------------------------------------------------- |
+| Değişken                                          | Tip     | Tanım                                                   |
+| ------------------------------------------------- | ------- | ------------------------------------------------------- |
 | `OPENCORVUS_EXPERIMENTAL`                         | boolean | Tüm deneysel özellikleri etkinleştir                    |
 | `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Simge bulmayı etkinleştir                               |
 | `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | TUI'da seçim yapıldığında kopyalamayı devre dışı bırak  |

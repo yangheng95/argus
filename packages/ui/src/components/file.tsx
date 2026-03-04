@@ -1174,4 +1174,3 @@ export function File<T>(props: FileProps<T>) {
 
   return <FileMedia media={props.media} fallback={() => DiffViewer(props)} />
 }
-

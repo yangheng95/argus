@@ -125,11 +125,7 @@ export namespace MemorySearch {
   }
 
   /** Fallback LIKE-based search when FTS5 is unavailable. */
-  function searchLike(
-    query: string,
-    projectId: string,
-    limit: number,
-  ): Memory.SearchResult[] {
+  function searchLike(query: string, projectId: string, limit: number): Memory.SearchResult[] {
     const pattern = `%${query}%`
     const rows = Database.use((db) =>
       db.all<{

@@ -16,16 +16,19 @@ Research date: 2026-03-03.
 ## OpenCorvus mapping
 
 OpenCorvus source of truth:
+
 - `packages/bot/src/registry.ts`
 - `packages/bot/src/adapters/whatsapp.ts`
 - `packages/bot/.env.example`
 
 OpenCorvus env keys:
+
 - Required: `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`
 - Optional: `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_WEBHOOK_HOST`, `WHATSAPP_WEBHOOK_PORT`, `WHATSAPP_WEBHOOK_PATH`
 - Compatibility fallback: `OPENCLAW_WHATSAPP_ACCESS_TOKEN`, `OPENCLAW_WHATSAPP_PHONE_NUMBER_ID`
 
 Runtime notes:
+
 - OpenCorvus adapter targets Meta Graph API style send/media endpoints.
 - Inbound handling is webhook based.
 - Verification uses `hub.verify_token` when `WHATSAPP_VERIFY_TOKEN` is set.
