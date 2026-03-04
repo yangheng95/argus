@@ -649,22 +649,17 @@ export class BotCore {
         this.userMessageIds.add(info.id)
 
         // In shared mode, mirror the user's overlay prompt to Slack.
-        // message.part.updated for the user text arrives BEFORE this event, so the text
-        // may have been buffered under the user messageID — clean that up and fetch via API.
+        // message.part.updated arrives BEFORE this event and pre-captured the text in pendingPartTexts.
         if (isNew && this.sharedMode() && info.sessionID === this.sharedSessionId) {
+          // Clean up any user text that leaked into textBuffers before role was known
           this.textBuffers.delete(info.id)
-          let sessions = this.findSessions(info.sessionID)
-          if (sessions.length === 0) sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
-          if (sessions.length > 0) {
-            const msgResult = await this.client.session.message({ sessionID: info.sessionID, messageID: info.id })
-            if (!msgResult.error) {
-              const data = msgResult.data as { parts?: Array<{ type?: string; text?: string }> }
-              const text = (data.parts ?? []).filter((p) => p.type === "text").map((p) => p.text ?? "").join("").trim()
-              if (text) {
-                for (const session of sessions) {
-                  await session.adapter.sendMessage(session.channel, session.thread, `> ${text}`).catch(() => {})
-                }
-              }
+          const userText = this.pendingPartTexts.get(info.id)
+          this.pendingPartTexts.delete(info.id)
+          if (userText) {
+            let sessions = this.findSessions(info.sessionID)
+            if (sessions.length === 0) sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
+            for (const session of sessions) {
+              await session.adapter.sendMessage(session.channel, session.thread, `> ${userText.trim()}`).catch(() => {})
             }
           }
         }
