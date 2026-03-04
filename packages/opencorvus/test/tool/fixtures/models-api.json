@@ -20975,7 +20975,7 @@
   },
   "opencorvus": {
     "id": "opencorvus",
-    "env": ["OPENCODE_API_KEY"],
+    "env": ["OPENCORVUS_API_KEY"],
     "npm": "@ai-sdk/openai-compatible",
     "api": "https://opencorvus.ai/zen/v1",
     "name": "OpenCorvus Zen",
