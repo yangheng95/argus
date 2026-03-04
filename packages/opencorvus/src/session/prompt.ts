@@ -599,6 +599,248 @@ export namespace SessionPrompt {
     await waitForUserMessage(input.sessionID, input.abort, input.afterID)
   }
 
+  async function processTurn(input: {
+    step: number
+    sessionID: string
+    session: Session.Info
+    msgs: MessageV2.WithParts[]
+    lastUser: MessageV2.User
+    lastFinished: MessageV2.Assistant | undefined
+    model: Provider.Model
+    abort: AbortSignal
+  }) {
+    let structured: unknown | undefined
+    const agent = await Agent.get(input.lastUser.agent)
+    const maxSteps = agent.steps ?? Infinity
+    const isLastStep = input.step >= maxSteps
+    const processor = SessionProcessor.create({
+      assistantMessage: (await Session.updateMessage({
+        id: Identifier.ascending("message"),
+        parentID: input.lastUser.id,
+        role: "assistant",
+        mode: agent.name,
+        agent: agent.name,
+        variant: input.lastUser.variant,
+        path: {
+          cwd: Instance.directory,
+          root: Instance.worktree,
+        },
+        cost: 0,
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+        modelID: input.model.id,
+        providerID: input.model.providerID,
+        time: {
+          created: Date.now(),
+        },
+        sessionID: input.sessionID,
+      })) as MessageV2.Assistant,
+      sessionID: input.sessionID,
+      model: input.model,
+      abort: input.abort,
+    })
+    using _ = defer(() => InstructionPrompt.clear(processor.message.id))
+
+    const lastUserMsg = input.msgs.findLast((m) => m.info.role === "user")
+    const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+    const tools = await resolveTools({
+      agent,
+      session: input.session,
+      model: input.model,
+      tools: input.lastUser.tools,
+      processor,
+      bypassAgentCheck,
+      messages: input.msgs,
+    })
+    if (input.lastUser.format?.type === "json_schema") {
+      tools["StructuredOutput"] = createStructuredOutputTool({
+        schema: input.lastUser.format.schema,
+        onSuccess(output) {
+          structured = output
+        },
+      })
+    }
+
+    if (input.step === 1) {
+      SessionSummary.summarize({
+        sessionID: input.sessionID,
+        messageID: input.lastUser.id,
+      })
+    }
+
+    if (input.step > 1 && input.lastFinished) {
+      for (const msg of input.msgs) {
+        if (msg.info.role !== "user" || msg.info.id <= input.lastFinished.id) continue
+        for (const part of msg.parts) {
+          if (part.type !== "text" || !textForBoth(part)) continue
+          if (!part.text.trim()) continue
+          part.text = [
+            "<system-reminder>",
+            "The user sent the following message:",
+            part.text,
+            "",
+            "Please address this message and continue with your tasks.",
+            "</system-reminder>",
+          ].join("\n")
+        }
+      }
+    }
+
+    await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: input.msgs })
+
+    if (GuiState.get().isGuiSession) {
+      GuiState.setStep(input.step)
+      const actionSummary = GuiState.buildActionSummary()
+      const repetitionAlert = GuiState.checkRepetition()
+      if (actionSummary || repetitionAlert) {
+        const match = input.msgs.findLast((m) => m.info.role === "user")
+        if (match) {
+          const guiContext = [actionSummary, repetitionAlert].filter(Boolean).join("\n\n")
+          match.parts.push({
+            id: Identifier.ascending("part"),
+            messageID: match.info.id,
+            sessionID: match.info.sessionID,
+            type: "text",
+            text: guiContext,
+            synthetic: true,
+          } as MessageV2.TextPart)
+        }
+      }
+    }
+
+    const system = [...(await SystemPrompt.environment(input.model)), ...(await InstructionPrompt.system())]
+    const format = input.lastUser.format ?? { type: "text" }
+    if (format.type === "json_schema") {
+      system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+    }
+
+    const memoryInstruction = await MemoryInjection.systemPromptSection()
+    if (memoryInstruction) system.push(memoryInstruction)
+    const scratchpadSection = Scratchpad.systemPromptSection(input.sessionID)
+    if (scratchpadSection) system.push(scratchpadSection)
+    const taskPlanSection = TaskPlan.toMarkdown(input.sessionID)
+    if (taskPlanSection) system.push(taskPlanSection)
+    const goalSection = Goal.toMarkdown(input.sessionID)
+    if (goalSection) system.push(goalSection)
+
+    const modelMessages = [
+      ...MessageV2.toModelMessages(input.msgs, input.model),
+      ...(isLastStep
+        ? [
+            {
+              role: "assistant" as const,
+              content: MAX_STEPS,
+            },
+          ]
+        : []),
+    ]
+
+    {
+      const systemChars = system.reduce((sum, s) => sum + s.length, 0)
+      const systemTokensEst = Math.round(systemChars / 4)
+      const toolCount = Object.keys(tools).length
+      let userMsgCount = 0
+      let assistantMsgCount = 0
+      let totalContentChars = 0
+      let imageCount = 0
+      let toolCallCount = 0
+
+      for (const msg of modelMessages) {
+        if (msg.role === "user") userMsgCount++
+        if (msg.role === "assistant") assistantMsgCount++
+
+        if (typeof msg.content === "string") {
+          totalContentChars += msg.content.length
+        } else if (Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
+            if ("type" in part && part.type === "image") imageCount++
+            if ("type" in part && part.type === "tool-result") toolCallCount++
+          }
+        }
+      }
+
+      const contentTokensEst = Math.round(totalContentChars / 4)
+      const imageTokensEst = imageCount * 1600
+      log.info("context-diagnostics", {
+        step: input.step,
+        systemPromptParts: system.length,
+        systemChars,
+        systemTokensEst,
+        toolCount,
+        toolNames: Object.keys(tools).join(","),
+        messageCount: modelMessages.length,
+        userMsgCount,
+        assistantMsgCount,
+        totalContentChars,
+        contentTokensEst,
+        imageCount,
+        imageTokensEst,
+        toolCallCount,
+        totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
+      })
+
+      const guiS = GuiState.get()
+      if (guiS.isGuiSession) {
+        log.info("gui-context-diagnostics", {
+          step: input.step,
+          isGuiSession: true,
+          actionCount: guiS.actions.length,
+          screenshotCount: guiS.screenshots.size,
+          descriptionsStored: Array.from(guiS.screenshots.values()).filter((s) => s.description).length,
+          lastScreenshotHash: guiS.lastScreenshotHash?.substring(0, 8) ?? "none",
+          consecutiveNoChange: guiS.repetition.consecutiveNoChange,
+          recentClickCoords: guiS.repetition.recentClickCoords.length,
+          currentStep: guiS.currentStep,
+        })
+      }
+    }
+
+    const result = await processor.process({
+      user: input.lastUser,
+      agent,
+      abort: input.abort,
+      sessionID: input.sessionID,
+      system,
+      messages: modelMessages,
+      tools,
+      model: input.model,
+      toolChoice: format.type === "json_schema" ? "required" : undefined,
+    })
+
+    if (structured !== undefined) {
+      processor.message.structured = structured
+      processor.message.finish = processor.message.finish ?? "stop"
+      await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
+
+    const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
+    if (modelFinished && !processor.message.error && format.type === "json_schema") {
+      processor.message.error = new MessageV2.StructuredOutputError({
+        message: "Model did not produce structured output",
+        retries: 0,
+      }).toObject()
+      await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
+
+    if (result === "stop") return "stop" as const
+    if (result === "compact") {
+      await SessionCompaction.create({
+        sessionID: input.sessionID,
+        agent: input.lastUser.agent,
+        model: input.lastUser.model,
+        auto: true,
+      })
+    }
+    return "continue" as const
+  }
+
   export const LoopInput = z.object({
     sessionID: Identifier.schema("session"),
     resume_existing: z.boolean().optional(),
@@ -622,8 +864,6 @@ export namespace SessionPrompt {
     // callbacks at each task completion so prompt() callers get their results.
     void (async () => {
       try {
-        let structuredOutput: unknown | undefined
-
         let step = 0
         const session = await Session.get(sessionID)
         while (true) {
@@ -650,7 +890,6 @@ export namespace SessionPrompt {
 
             GuiState.markNewTask()
             step = 0
-            structuredOutput = undefined
             continue
           }
 
@@ -710,259 +949,17 @@ export namespace SessionPrompt {
             continue
           }
 
-          // normal processing
-          const agent = await Agent.get(lastUser.agent)
-          const maxSteps = agent.steps ?? Infinity
-          const isLastStep = step >= maxSteps
-
-          const processor = SessionProcessor.create({
-            assistantMessage: (await Session.updateMessage({
-              id: Identifier.ascending("message"),
-              parentID: lastUser.id,
-              role: "assistant",
-              mode: agent.name,
-              agent: agent.name,
-              variant: lastUser.variant,
-              path: {
-                cwd: Instance.directory,
-                root: Instance.worktree,
-              },
-              cost: 0,
-              tokens: {
-                input: 0,
-                output: 0,
-                reasoning: 0,
-                cache: { read: 0, write: 0 },
-              },
-              modelID: model.id,
-              providerID: model.providerID,
-              time: {
-                created: Date.now(),
-              },
-              sessionID,
-            })) as MessageV2.Assistant,
-            sessionID: sessionID,
-            model,
-            abort,
-          })
-          using _ = defer(() => InstructionPrompt.clear(processor.message.id))
-
-          // Check if user explicitly invoked an agent via @ in this turn
-          const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-          const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
-
-          const tools = await resolveTools({
-            agent,
-            session,
-            model,
-            tools: lastUser.tools,
-            processor,
-            bypassAgentCheck,
-            messages: msgs,
-          })
-
-          // Inject StructuredOutput tool if JSON schema mode enabled
-          if (lastUser.format?.type === "json_schema") {
-            tools["StructuredOutput"] = createStructuredOutputTool({
-              schema: lastUser.format.schema,
-              onSuccess(output) {
-                structuredOutput = output
-              },
-            })
-          }
-
-          if (step === 1) {
-            SessionSummary.summarize({
-              sessionID: sessionID,
-              messageID: lastUser.id,
-            })
-          }
-
-          // Ephemerally wrap queued user messages with a reminder to stay on track
-          if (step > 1 && lastFinished) {
-            for (const msg of msgs) {
-              if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
-              for (const part of msg.parts) {
-                if (part.type !== "text" || !textForBoth(part)) continue
-                if (!part.text.trim()) continue
-                part.text = [
-                  "<system-reminder>",
-                  "The user sent the following message:",
-                  part.text,
-                  "",
-                  "Please address this message and continue with your tasks.",
-                  "</system-reminder>",
-                ].join("\n")
-              }
-            }
-          }
-
-          await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-
-          // Inject GUI action history and repetition alerts for GUI sessions
-          if (GuiState.get().isGuiSession) {
-            GuiState.setStep(step)
-            const actionSummary = GuiState.buildActionSummary()
-            const repetitionAlert = GuiState.checkRepetition()
-
-            if (actionSummary || repetitionAlert) {
-              const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-              if (lastUserMsg) {
-                const guiContext = [actionSummary, repetitionAlert].filter(Boolean).join("\n\n")
-                lastUserMsg.parts.push({
-                  id: Identifier.ascending("part"),
-                  messageID: lastUserMsg.info.id,
-                  sessionID: lastUserMsg.info.sessionID,
-                  type: "text",
-                  text: guiContext,
-                  synthetic: true,
-                } as MessageV2.TextPart)
-              }
-            }
-          }
-
-          // Build system prompt, adding structured output instruction if needed
-          const system = [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())]
-          const format = lastUser.format ?? { type: "text" }
-          if (format.type === "json_schema") {
-            system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
-          }
-
-          // Add memory recall instruction (OpenClaw pattern: tool-call, not auto-injection)
-          const memoryInstruction = await MemoryInjection.systemPromptSection()
-          if (memoryInstruction) system.push(memoryInstruction)
-
-          // Add scratchpad and task plan to system prompt (Phase 3)
-          const scratchpadSection = Scratchpad.systemPromptSection(sessionID)
-          if (scratchpadSection) system.push(scratchpadSection)
-          const taskPlanSection = TaskPlan.toMarkdown(sessionID)
-          if (taskPlanSection) system.push(taskPlanSection)
-          const goalSection = Goal.toMarkdown(sessionID)
-          if (goalSection) system.push(goalSection)
-
-          const modelMessages = [
-            ...MessageV2.toModelMessages(msgs, model),
-            ...(isLastStep
-              ? [
-                  {
-                    role: "assistant" as const,
-                    content: MAX_STEPS,
-                  },
-                ]
-              : []),
-          ]
-
-          // Context diagnostics logging
-          {
-            const systemChars = system.reduce((sum, s) => sum + s.length, 0)
-            const systemTokensEst = Math.round(systemChars / 4)
-            const toolCount = Object.keys(tools).length
-
-            let userMsgCount = 0
-            let assistantMsgCount = 0
-            let totalContentChars = 0
-            let imageCount = 0
-            let toolCallCount = 0
-
-            for (const msg of modelMessages) {
-              if (msg.role === "user") userMsgCount++
-              else if (msg.role === "assistant") assistantMsgCount++
-
-              if (typeof msg.content === "string") {
-                totalContentChars += msg.content.length
-              } else if (Array.isArray(msg.content)) {
-                for (const part of msg.content) {
-                  if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
-                  if ("type" in part && part.type === "image") imageCount++
-                  if ("type" in part && part.type === "tool-result") toolCallCount++
-                }
-              }
-            }
-
-            const contentTokensEst = Math.round(totalContentChars / 4)
-            const imageTokensEst = imageCount * 1600 // ~1600 tokens per screenshot
-
-            log.info("context-diagnostics", {
-              step,
-              systemPromptParts: system.length,
-              systemChars,
-              systemTokensEst,
-              toolCount,
-              toolNames: Object.keys(tools).join(","),
-              messageCount: modelMessages.length,
-              userMsgCount,
-              assistantMsgCount,
-              totalContentChars,
-              contentTokensEst,
-              imageCount,
-              imageTokensEst,
-              toolCallCount,
-              totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
-            })
-
-            // GUI-specific diagnostics
-            const guiS = GuiState.get()
-            if (guiS.isGuiSession) {
-              log.info("gui-context-diagnostics", {
-                step,
-                isGuiSession: true,
-                actionCount: guiS.actions.length,
-                screenshotCount: guiS.screenshots.size,
-                descriptionsStored: Array.from(guiS.screenshots.values()).filter((s) => s.description).length,
-                lastScreenshotHash: guiS.lastScreenshotHash?.substring(0, 8) ?? "none",
-                consecutiveNoChange: guiS.repetition.consecutiveNoChange,
-                recentClickCoords: guiS.repetition.recentClickCoords.length,
-                currentStep: guiS.currentStep,
-              })
-            }
-          }
-
-          const result = await processor.process({
-            user: lastUser,
-            agent,
-            abort,
+          const turn = await processTurn({
+            step,
             sessionID,
-            system,
-            messages: modelMessages,
-            tools,
+            session,
+            msgs,
+            lastUser,
+            lastFinished,
             model,
-            toolChoice: format.type === "json_schema" ? "required" : undefined,
+            abort,
           })
-
-          // If structured output was captured, save it and exit immediately
-          // This takes priority because the StructuredOutput tool was called successfully
-          if (structuredOutput !== undefined) {
-            processor.message.structured = structuredOutput
-            processor.message.finish = processor.message.finish ?? "stop"
-            await Session.updateMessage(processor.message)
-            break
-          }
-
-          // Check if model finished (finish reason is not "tool-calls" or "unknown")
-          const modelFinished =
-            processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
-
-          if (modelFinished && !processor.message.error) {
-            if (format.type === "json_schema") {
-              // Model stopped without calling StructuredOutput tool
-              processor.message.error = new MessageV2.StructuredOutputError({
-                message: "Model did not produce structured output",
-                retries: 0,
-              }).toObject()
-              await Session.updateMessage(processor.message)
-              break
-            }
-          }
-
-          if (result === "stop") break
-          if (result === "compact") {
-            await SessionCompaction.create({
-              sessionID,
-              agent: lastUser.agent,
-              model: lastUser.model,
-              auto: true,
-            })
-          }
+          if (turn === "stop") break
           continue
         }
         // Loop exited (abort or fatal break) — flush remaining callbacks
