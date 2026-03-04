@@ -235,11 +235,83 @@ export namespace Tui {
         windowsHide: false,
       })
       proc.unref()
-    } else {
-      proc = nodeSpawn(bin, args, {
-        stdio: "inherit",
-        cwd,
+    } else if (process.platform === "darwin") {
+      // macOS: launch TUI in a new Terminal.app window via a shell script.
+      const shFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.sh`)
+      const escapedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ")
+      if (devMode) {
+        const pkgRoot = packageRoot()
+        const entryScript = path.join(pkgRoot, "src", "index.ts")
+        fs.writeFileSync(
+          shFile,
+          [
+            `#!/bin/bash`,
+            `cd '${pkgRoot.replace(/'/g, "'\\''")}'`,
+            `exec bun --preload @opentui/solid/preload --conditions=browser '${entryScript.replace(/'/g, "'\\''")}' ${escapedArgs}`,
+          ].join("\n"),
+        )
+      } else {
+        fs.writeFileSync(
+          shFile,
+          [
+            `#!/bin/bash`,
+            `exec '${bin.replace(/'/g, "'\\''")}' ${escapedArgs}`,
+          ].join("\n"),
+        )
+      }
+      fs.chmodSync(shFile, 0o755)
+      // Use `open -a Terminal.app <script>` to open in a new visible terminal window
+      proc = nodeSpawn("open", ["-a", "Terminal.app", shFile], {
+        stdio: "ignore",
+        detached: true,
       })
+      proc.unref()
+    } else {
+      // Linux: launch TUI in a new terminal emulator window.
+      // Try common terminal emulators in order of popularity.
+      const shFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.sh`)
+      const escapedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ")
+      if (devMode) {
+        const pkgRoot = packageRoot()
+        const entryScript = path.join(pkgRoot, "src", "index.ts")
+        fs.writeFileSync(
+          shFile,
+          [
+            `#!/bin/bash`,
+            `cd '${pkgRoot.replace(/'/g, "'\\''")}'`,
+            `exec bun --preload @opentui/solid/preload --conditions=browser '${entryScript.replace(/'/g, "'\\''")}' ${escapedArgs}`,
+          ].join("\n"),
+        )
+      } else {
+        fs.writeFileSync(
+          shFile,
+          [
+            `#!/bin/bash`,
+            `exec '${bin.replace(/'/g, "'\\''")}' ${escapedArgs}`,
+          ].join("\n"),
+        )
+      }
+      fs.chmodSync(shFile, 0o755)
+
+      const terminal = findLinuxTerminal()
+      if (terminal) {
+        // Launch in a new terminal window
+        const termArgs = linuxTerminalArgs(terminal, "OpenCorvus TUI", shFile)
+        proc = nodeSpawn(terminal, termArgs, {
+          stdio: "ignore",
+          detached: true,
+          cwd,
+        })
+        proc.unref()
+      } else {
+        // Fallback: run in background with own PTY (no visible window)
+        proc = nodeSpawn(shFile, [], {
+          stdio: "ignore",
+          detached: true,
+          cwd,
+        })
+        proc.unref()
+      }
     }
 
     const url = `http://${hostname}:${port}`
