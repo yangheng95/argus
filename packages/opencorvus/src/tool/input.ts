@@ -20,23 +20,6 @@ function coordinateSpace(): Coordinates.CoordinateSpace {
   return "auto"
 }
 
-<<<<<<< HEAD
-const FOCUS_CHANGING_KEYS = new Set([
-  "win",
-  "super",
-  "meta",
-  "cmd",
-  "alt+tab",
-  "alt+shift+tab",
-  "cmd+tab",
-  "cmd+shift+tab",
-  "alt+f4",
-  "cmd+q",
-])
-
-function isFocusChangingKey(key: string): boolean {
-  return FOCUS_CHANGING_KEYS.has(key.trim().toLowerCase())
-=======
 function split(input: string) {
   return input
     .split("+")
@@ -48,7 +31,20 @@ function focusKey(key: string) {
   const parts = split(key)
   if (!parts.includes("tab")) return false
   return parts.some((part) => part === "alt" || part === "cmd" || part === "command" || part === "meta" || part === "super" || part === "win" || part === "windows")
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
+}
+
+const FOCUS_CHANGING_KEYS = new Set([
+  "win",
+  "super",
+  "meta",
+  "cmd",
+  "alt+f4",
+  "cmd+q",
+])
+
+function isFocusChangingKey(key: string): boolean {
+  if (FOCUS_CHANGING_KEYS.has(key.trim().toLowerCase())) return true
+  return focusKey(key)
 }
 
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, wait, and request desktop confirmation.
