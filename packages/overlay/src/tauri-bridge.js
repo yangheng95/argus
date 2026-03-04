@@ -1,17 +1,17 @@
 ;(function () {
   const tauri = window.__TAURI__
+  const protocol = window.opencorvusOverlayProtocol
   const warns = new Map()
   const WARN_THROTTLE_MS = 3_000
 
-  const events = Object.freeze({
-    showOverlay: "show-overlay",
-    showConfirm: "show-confirm",
-    showWindowHighlight: "show-window-highlight",
-    managerLog: "manager-log",
-    managerState: "manager-state",
-    managerChat: "manager-chat",
-    overlayDiagnostic: "overlay-diagnostic",
-  })
+  if (!protocol || typeof protocol !== "object") throw new Error("overlay protocol is unavailable")
+  if (!protocol.windows || typeof protocol.windows !== "object") throw new Error("overlay protocol windows are unavailable")
+  if (!protocol.events || typeof protocol.events !== "object") throw new Error("overlay protocol events are unavailable")
+  if (!protocol.commands || typeof protocol.commands !== "object") throw new Error("overlay protocol commands are unavailable")
+
+  const windows = protocol.windows
+  const events = protocol.events
+  const commands = protocol.commands
 
   async function invoke(cmd, payload = {}) {
     if (!tauri?.core?.invoke) throw new Error("Tauri core invoke is unavailable")
@@ -43,7 +43,9 @@
   }
 
   window.opencorvusBridge = Object.freeze({
+    windows,
     events,
+    commands,
     invoke,
     invokeSafe,
     listen,

@@ -381,6 +381,11 @@ fn process_json_line(app: &AppHandle, value: &serde_json::Value, output: &mut St
         return false;
     };
 
+    // Silently discard structural / metadata events that should not appear in chat output.
+    if matches!(kind, "step_start" | "step_finish" | "reasoning" | "reasoning_delta" | "tool_use") {
+        return true;
+    }
+
     if kind == "text_delta" {
         let Some(delta) = value.get("delta").and_then(|item| item.as_str()) else {
             return true;

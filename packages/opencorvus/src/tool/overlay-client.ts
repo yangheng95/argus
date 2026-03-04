@@ -4,6 +4,7 @@ import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { Log } from "../util/log"
 import { Global } from "../global"
+import { overlayProtocol } from "./overlay-protocol"
 
 declare const OPENCORVUS_EMBEDDED_OVERLAY_B64: string | undefined
 declare const OPENCORVUS_EMBEDDED_OVERLAY_HASH: string | undefined
@@ -79,6 +80,7 @@ const BINARY_PATH = resolveBinaryPath()
 const log = Log.create({ service: "overlay-client" })
 const WARN_THROTTLE_MS = 15_000
 const encoder = new TextEncoder()
+const msg = overlayProtocol.messages
 // Global singleton strategy for overlay subprocess management.
 const SINGLETON_MODE = (process.env.OPENCORVUS_OVERLAY_SINGLETON_MODE ?? "kill-old-start-new").toLowerCase()
 
@@ -225,7 +227,7 @@ function pushDiagnostic(event: string, detail?: Record<string, unknown>) {
   if (!input || typeof input === "number") return
   const line =
     JSON.stringify({
-      type: "diagnostic",
+      type: msg.diagnostic,
       event,
       ts: Date.now(),
       available: diagnostic.available,
@@ -333,7 +335,7 @@ function parse(line: string): { id: string; answer: ConfirmAnswer } | undefined 
   }
   if (!raw || typeof raw !== "object") return
   const obj = raw as Record<string, unknown>
-  if (obj.type !== "confirm-reply") return
+  if (obj.type !== msg.confirmReply) return
   if (typeof obj.id !== "string") return
   if (obj.answer !== "confirm" && obj.answer !== "cancel" && obj.answer !== "timeout") return
   return { id: obj.id, answer: obj.answer }
@@ -477,7 +479,7 @@ export function showOverlay(
     const x = resolveOverlayCoord(screenX, last.x)
     const y = resolveOverlayCoord(screenY, last.y)
     last = { x, y }
-    await send({ type: "hint", x, y, action, label, status })
+    await send({ type: msg.hint, x, y, action, label, status })
   })()
 }
 
@@ -488,7 +490,7 @@ export function showWindowHighlight(input: WindowHighlightInput) {
     if (width < 20 || height < 20) return
     const duration = Number.isFinite(input.durationMs) ? Math.round(input.durationMs!) : 1400
     await send({
-      type: "window-highlight",
+      type: msg.windowHighlight,
       x: Number.isFinite(input.x) ? Math.round(input.x) : 0,
       y: Number.isFinite(input.y) ? Math.round(input.y) : 0,
       width,
@@ -520,7 +522,7 @@ export async function requestOverlayConfirm(input: {
     pending.set(id, { done, timer })
 
     void send({
-      type: "confirm",
+      type: msg.confirm,
       id,
       x,
       y,

@@ -137,7 +137,7 @@ pub fn hide_window(window: WebviewWindow) {
 pub fn confirm_reply(window: WebviewWindow, id: String, answer: String) {
     log_result("confirm_reply.hide", window.hide());
     let payload = serde_json::json!({
-        "type": "confirm-reply",
+        "type": events::MSG_CONFIRM_REPLY,
         "id": id,
         "answer": answer,
     });
@@ -210,7 +210,7 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 cancel,
                                 timeout_ms,
                             } => {
-                                if let Some(window) = handle.get_webview_window("confirm") {
+                                if let Some(window) = handle.get_webview_window(events::WINDOW_CONFIRM) {
                                     let (width, height) = window_size(&window, CONFIRM_WIDTH, CONFIRM_HEIGHT);
                                     log_result(
                                         "stdin_bridge.confirm.set_position",

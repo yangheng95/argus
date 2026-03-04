@@ -37,7 +37,7 @@ bridge.listen(bridge.events.showWindowHighlight, (payload) => {
     frame.classList.remove("visible")
     hideTimer = setTimeout(() => {
       hideTimer = null
-      void bridge.invokeSafe("hide_window", { window: "window-highlight" })
+      void bridge.invokeSafe(bridge.commands.hideWindow, { window: bridge.windows.highlight })
     }, 140)
   }, readDuration(data.duration_ms))
 })

@@ -90,12 +90,7 @@ export function ExperimentalDesktopWindowRoutes() {
             ? await WindowManager.bindById(body.window_id, body.title)
             : await WindowManager.bind(body.title!.trim())
         MonitorManager.unbind()
-        DesktopState.setBounds(null)
-        DesktopState.setTarget({
-          scope: "window",
-          windowId: binding.windowId,
-          title: binding.info.title,
-        })
+        DesktopState.bindWindow(binding.windowId, binding.info.title)
         const refreshed = await WindowManager.getBinding()
         return c.json({
           windowId: binding.windowId,

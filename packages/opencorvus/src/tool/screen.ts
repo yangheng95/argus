@@ -229,11 +229,11 @@ export const ScreenTool = Tool.define("screen", {
           }
         }
         const hash = createHash("md5").update(result.buffer).digest("hex")
-        const capturedBinding = result.scope === "window" ? await WindowManager.getBinding() : null
+        const capturedWindow = result.scope === "window" ? result.window : null
         DesktopState.recordCapture({
           scope: result.scope,
           bounds: result.windowBounds,
-          window: capturedBinding ? { windowId: capturedBinding.windowId, title: capturedBinding.info.title } : null,
+          window: capturedWindow ? { windowId: capturedWindow.id, title: capturedWindow.title } : null,
           monitor: result.monitor ? { id: result.monitor.id, name: result.monitor.name } : null,
           screenshotHash: hash,
         })

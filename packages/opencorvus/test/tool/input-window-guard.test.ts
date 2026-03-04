@@ -124,6 +124,23 @@ describe("tool.input bound window guard", () => {
     })
   })
 
+  test("blocks pointer action when desktop anchor points to stale window binding", async () => {
+    binding = null
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.setBounds({ x: 0, y: 0, width: 1000, height: 700 })
+        DesktopState.setTarget({ scope: "window", windowId: 7, title: "Editor" })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 180, y: 220, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("stale_window_anchor")
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
   test("executes middle click with middle button", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
@@ -153,6 +170,27 @@ describe("tool.input bound window guard", () => {
         const result = await tool.execute({ action: "key", key: "enter" }, ctx)
         expect(result.metadata.blocked).toBe(true)
         expect(result.metadata.reason).toBe("bound_window_not_foreground")
+        expect(hotkeys).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks key action when active window binding drifts from anchor", async () => {
+    binding = {
+      windowId: 9,
+      info: { title: "Terminal", appName: "Terminal" },
+    }
+    foreground = true
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.setTarget({ scope: "window", windowId: 7, title: "Editor" })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "enter" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("window_binding_drifted")
         expect(hotkeys).toHaveLength(0)
       },
     })

@@ -30,6 +30,7 @@ export namespace Capture {
     timestamp: number
     windowBounds: WindowBounds | null
     scope: "window" | "monitor"
+    window: { id: number; title: string; appName: string } | null
     monitor: MonitorManager.MonitorInfo | null
   }
 
@@ -89,7 +90,7 @@ export namespace Capture {
       if (options.mode === "auto") {
         const windowBinding = await WindowManager.getBinding()
         if (windowBinding && !windowBinding.info.isMinimized) {
-          return await captureWindowById(windowBinding.windowId, windowBinding.info, filePath, timestamp)
+          return await captureWindowById(windowBinding.windowId, filePath, timestamp)
         }
         const monitorBinding = await MonitorManager.getBinding()
         if (monitorBinding) {
@@ -101,7 +102,7 @@ export namespace Capture {
       if (options.mode === "window" && options.windowTitle) {
         const info = await WindowManager.findWindow(options.windowTitle)
         if (info) {
-          return await captureWindowById(info.id, info, filePath, timestamp)
+          return await captureWindowById(info.id, filePath, timestamp)
         }
         log.warn("window not found, falling back to fullscreen", { windowTitle: options.windowTitle })
         return await captureFullscreen(filePath, timestamp)
@@ -127,7 +128,6 @@ export namespace Capture {
 
   async function captureWindowById(
     windowId: number,
-    info: WindowManager.WindowInfo,
     filePath: string,
     timestamp: number,
   ): Promise<CaptureResult> {
@@ -145,6 +145,11 @@ export namespace Capture {
     const logicalY = native.y()
     const logicalWidth = native.width()
     const logicalHeight = native.height()
+    const window = {
+      id: native.id(),
+      title: native.title(),
+      appName: native.appName(),
+    }
     const bounds = scaleWindowBounds({
       logicalX,
       logicalY,
@@ -157,7 +162,7 @@ export namespace Capture {
     log.info("captured window", {
       path: filePath,
       windowId,
-      title: info.title,
+      title: window.title,
       width: image.width,
       height: image.height,
       bounds,
@@ -174,6 +179,7 @@ export namespace Capture {
       timestamp,
       windowBounds: bounds,
       scope: "window",
+      window,
       monitor: null,
     }
   }
@@ -232,6 +238,7 @@ export namespace Capture {
       timestamp,
       windowBounds: bounds,
       scope: "monitor",
+      window: null,
       monitor,
     }
   }
@@ -301,6 +308,7 @@ export namespace Capture {
       timestamp,
       windowBounds: bounds,
       scope: "monitor",
+      window: null,
       monitor: {
         id: target.id(),
         name: target.name(),
@@ -342,3 +350,4 @@ export namespace Capture {
     }
   }
 }
+

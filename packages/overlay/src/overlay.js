@@ -159,7 +159,7 @@ function scheduleHide(status) {
     hideWindowTimer = setTimeout(() => {
       hideWindowTimer = null
       last = null
-      void bridge.invokeSafe("hide_window", { window: "overlay" })
+      void bridge.invokeSafe(bridge.commands.hideWindow, { window: bridge.windows.overlay })
     }, 260)
   }, HIDE_MS[status] ?? HIDE_MS.start)
 }

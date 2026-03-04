@@ -1,5 +1,6 @@
 const bridge = window.opencorvusBridge
 const invoke = bridge.invoke
+const cmd = bridge.commands
 
 const els = {
   statusBadge: document.getElementById("statusBadge"),
@@ -462,39 +463,39 @@ function applySnapshot(snapshot) {
 }
 
 async function refreshState() {
-  const snapshot = await invoke("manager_get")
+  const snapshot = await invoke(cmd.managerGet)
   applySnapshot(snapshot)
 }
 
 async function startBot() {
-  const snapshot = await invoke("manager_start")
+  const snapshot = await invoke(cmd.managerStart)
   applySnapshot(snapshot)
 }
 
 async function stopBot() {
-  const snapshot = await invoke("manager_stop")
+  const snapshot = await invoke(cmd.managerStop)
   applySnapshot(snapshot)
 }
 
 async function clearLogs() {
-  const snapshot = await invoke("manager_clear_logs")
+  const snapshot = await invoke(cmd.managerClearLogs)
   applySnapshot(snapshot)
 }
 
 async function saveConfig() {
-  const snapshot = await invoke("manager_save", { config: readConfig() })
+  const snapshot = await invoke(cmd.managerSave, { config: readConfig() })
   state.configLoaded = false
   applySnapshot(snapshot)
   addMessage("system", "Configuration saved.")
 }
 
 async function openMcpConfig() {
-  const file = await invoke("manager_open_mcp_config")
+  const file = await invoke(cmd.managerOpenMcpConfig)
   addMessage("system", `MCP config opened: ${file}`)
 }
 
 async function openSkillFolder() {
-  const dir = await invoke("manager_open_skill_dir")
+  const dir = await invoke(cmd.managerOpenSkillDir)
   addMessage("system", `Skills folder opened: ${dir}`)
 }
 
@@ -508,7 +509,7 @@ async function addMcp() {
   if (remote) {
     const url = window.prompt("Remote MCP URL", "https://example.com/mcp")
     if (!url) return
-    const file = await invoke("manager_add_mcp", {
+    const file = await invoke(cmd.managerAddMcp, {
       name: trimmed,
       config: {
         type: "remote",
@@ -523,7 +524,7 @@ async function addMcp() {
   if (!cmd) return
   const command = readArgs(cmd)
   if (command.length === 0) return
-  const file = await invoke("manager_add_mcp", {
+  const file = await invoke(cmd.managerAddMcp, {
     name: trimmed,
     config: {
       type: "local",
@@ -540,7 +541,7 @@ async function createSkill() {
   if (!trimmed) return
   const description = window.prompt("Skill description", "Describe when and why this skill should be used.")
   if (description === null) return
-  const file = await invoke("manager_create_skill", {
+  const file = await invoke(cmd.managerCreateSkill, {
     name: trimmed,
     description: description.trim(),
   })
@@ -549,7 +550,7 @@ async function createSkill() {
 
 async function sendPrompt(prompt) {
   state.stream = null
-  const result = await invoke("manager_send", { prompt })
+  const result = await invoke(cmd.managerSend, { prompt })
   if (result?.accepted) return
   throw new Error("prompt not accepted")
 }

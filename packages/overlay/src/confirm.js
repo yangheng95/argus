@@ -18,7 +18,7 @@ function reply(answer) {
   const id = currentID
   currentID = ""
   clearTimeoutTimer()
-  void bridge.invokeSafe("confirm_reply", { window: "confirm", id, answer })
+  void bridge.invokeSafe(bridge.commands.confirmReply, { window: bridge.windows.confirm, id, answer })
 }
 
 okEl.addEventListener("click", () => reply("confirm"))

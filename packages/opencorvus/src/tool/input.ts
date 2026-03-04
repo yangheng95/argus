@@ -154,11 +154,13 @@ export const InputTool = Tool.define("input", {
     GuiState.activate()
     DesktopState.markTask(GuiState.get().taskEpoch)
     await WindowManager.rebindForTask(GuiState.get().taskEpoch)
-    const lastWindowBounds = DesktopState.getBounds()
     const space = coordinateSpace()
 
-    const requireBounds = async (action: "click" | "drag" | "move") => {
-      if (lastWindowBounds) return null
+    const requireBounds = async (
+      action: "click" | "drag" | "move",
+    ): Promise<Coordinates.WindowBounds | { title: string; output: string; metadata: Record<string, any> }> => {
+      const bounds = DesktopState.getBounds()
+      if (bounds) return bounds
       showOverlay(undefined, undefined, action, "blocked: screenshot anchor required", "error")
       return {
         title: "Pointer action blocked: no coordinate anchor",
@@ -252,14 +254,14 @@ export const InputTool = Tool.define("input", {
 
     switch (params.action) {
       case "click": {
-        const blocked = await requireBounds("click")
-        if (blocked) return blocked
+        const anchored = await requireBounds("click")
+        if ("title" in anchored) return anchored
         const anchorBlocked = await ensureWindowAnchor("click")
         if (anchorBlocked) return anchorBlocked
         const windowBlocked = await ensureBoundWindowForeground("click")
         if (windowBlocked) return windowBlocked
-        const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, lastWindowBounds!, space)
-        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds, space)
+        const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
+        const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
         const action = params.button === "double" ? "double" : params.button === "right" ? "right" : params.button === "middle" ? "middle" : "click"
         showOverlay(
           screen.x,
@@ -270,19 +272,19 @@ export const InputTool = Tool.define("input", {
         log.info("click-resolve", {
           windowRelative: `${params.x},${params.y}`,
           screenAbsolute: `${screen.x},${screen.y}`,
-          bounds: lastWindowBounds
-            ? `${lastWindowBounds.width}x${lastWindowBounds.height}@${lastWindowBounds.x},${lastWindowBounds.y}`
+          bounds: anchored
+            ? `${anchored.width}x${anchored.height}@${anchored.x},${anchored.y}`
             : "none",
           coordinateSpaceRequested: space,
           coordinateSpaceResolved: resolvedSpace,
           button: params.button ?? "left",
           clamped: screen.clamped,
         })
-        if (screen.clamped && lastWindowBounds) {
+        if (screen.clamped) {
           log.warn("click-coordinate-clamped", {
             requested: `${params.x},${params.y}`,
             clampedTo: `${screen.x},${screen.y}`,
-            bounds: `${lastWindowBounds.width}x${lastWindowBounds.height}`,
+            bounds: `${anchored.width}x${anchored.height}`,
           })
         }
         if (params.button === "double") {
@@ -295,7 +297,7 @@ export const InputTool = Tool.define("input", {
           await GUI.click(screen.x, screen.y)
         }
         showOverlay(screen.x, screen.y, action, "done", "done")
-        const coordDetail = lastWindowBounds
+        const coordDetail = anchored
           ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y}${screen.clamped ? " [CLAMPED]" : ""})`
           : ""
         GuiState.recordAction({
@@ -384,19 +386,19 @@ export const InputTool = Tool.define("input", {
       }
 
       case "drag": {
-        const blocked = await requireBounds("drag")
-        if (blocked) return blocked
+        const anchored = await requireBounds("drag")
+        if ("title" in anchored) return anchored
         const anchorBlocked = await ensureWindowAnchor("drag")
         if (anchorBlocked) return anchorBlocked
         const windowBlocked = await ensureBoundWindowForeground("drag")
         if (windowBlocked) return windowBlocked
-        const resolvedSpace = Coordinates.resolveSpace(params.startX, params.startY, lastWindowBounds!, space)
-        const start = Coordinates.resolveDetailed(params.startX, params.startY, lastWindowBounds, space)
-        const end = Coordinates.resolveDetailed(params.endX, params.endY, lastWindowBounds, space)
+        const resolvedSpace = Coordinates.resolveSpace(params.startX, params.startY, anchored, space)
+        const start = Coordinates.resolveDetailed(params.startX, params.startY, anchored, space)
+        const end = Coordinates.resolveDetailed(params.endX, params.endY, anchored, space)
         showOverlay(start.x, start.y, "drag", `→(${params.endX},${params.endY})`)
         await GUI.drag(start.x, start.y, end.x, end.y)
         showOverlay(end.x, end.y, "drag", "done", "done")
-        const coordDetail = lastWindowBounds
+        const coordDetail = anchored
           ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y}${start.clamped || end.clamped ? " [CLAMPED]" : ""})`
           : ""
         GuiState.recordAction({
@@ -429,14 +431,14 @@ export const InputTool = Tool.define("input", {
       }
 
       case "move": {
-        const blocked = await requireBounds("move")
-        if (blocked) return blocked
+        const anchored = await requireBounds("move")
+        if ("title" in anchored) return anchored
         const anchorBlocked = await ensureWindowAnchor("move")
         if (anchorBlocked) return anchorBlocked
         const windowBlocked = await ensureBoundWindowForeground("move")
         if (windowBlocked) return windowBlocked
-        const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, lastWindowBounds!, space)
-        const screen = Coordinates.resolveDetailed(params.x, params.y, lastWindowBounds, space)
+        const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
+        const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
         showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)
         await GUI.moveTo(screen.x, screen.y)
         showOverlay(screen.x, screen.y, "move", "done", "done")

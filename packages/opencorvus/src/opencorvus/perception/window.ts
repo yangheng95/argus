@@ -24,6 +24,8 @@ export namespace WindowManager {
   export interface WindowBinding {
     windowId: number
     matchTitle: string
+    matchWindowId?: number
+    matchAppName?: string
     info: WindowInfo
   }
 
@@ -57,6 +59,34 @@ export namespace WindowManager {
     return result
   }
 
+  function pickBestWindow(list: WindowInfo[]): WindowInfo | null {
+    if (list.length === 0) return null
+    const focused = list.find((w) => w.isFocused)
+    if (focused) return focused
+    return [...list].sort((a, b) => {
+      if (a.isMinimized !== b.isMinimized) {
+        return a.isMinimized ? 1 : -1
+      }
+      return b.width * b.height - a.width * a.height
+    })[0] ?? null
+  }
+
+  async function findWindowForRebind(binding: WindowBinding): Promise<WindowInfo | null> {
+    if (typeof binding.matchWindowId === "number") {
+      const byId = await findWindowById(binding.matchWindowId)
+      if (byId) return byId
+    }
+    const query = binding.matchTitle.trim().toLowerCase()
+    if (!query) return null
+    const windows = await listWindows(true)
+    const matches = windows.filter((w) => w.title.toLowerCase().includes(query) || w.appName.toLowerCase().includes(query))
+    if (!binding.matchAppName) return pickBestWindow(matches)
+    const app = binding.matchAppName.toLowerCase()
+    const appMatches = matches.filter((w) => w.appName.toLowerCase() === app)
+    if (appMatches.length > 0) return pickBestWindow(appMatches)
+    return pickBestWindow(matches)
+  }
+
   export async function findWindow(titleQuery: string): Promise<WindowInfo | null> {
     // Include minimized windows so bind/rebind can restore them to foreground.
     const windows = await listWindows(true)
@@ -75,17 +105,7 @@ export namespace WindowManager {
       return null
     }
 
-    // Priority: focused > non-minimized > largest area
-    const focused = matches.find((w) => w.isFocused)
-    if (focused) return focused
-
-    matches.sort((a, b) => {
-      if (a.isMinimized !== b.isMinimized) {
-        return a.isMinimized ? 1 : -1
-      }
-      return b.width * b.height - a.width * a.height
-    })
-    return matches[0]
+    return pickBestWindow(matches)
   }
 
   export async function findWindowById(windowId: number): Promise<WindowInfo | null> {
@@ -133,6 +153,9 @@ export namespace WindowManager {
   }
 
   export async function ensureForeground(windowId: number, appName?: string): Promise<boolean> {
+    const current = await getNativeWindow(windowId)
+    if (current?.isFocused()) return true
+
     for (let attempt = 1; attempt <= 3; attempt++) {
       await focusWindow(windowId, appName)
       await sleep(200 + attempt * 100)
@@ -165,6 +188,7 @@ export namespace WindowManager {
     windowState().binding = {
       windowId: info.id,
       matchTitle: normalizedQuery,
+      matchAppName: info.appName,
       info,
     }
 
@@ -187,6 +211,8 @@ export namespace WindowManager {
     windowState().binding = {
       windowId: info.id,
       matchTitle: matchTitle?.trim() || info.title || info.appName || String(info.id),
+      matchWindowId: info.id,
+      matchAppName: info.appName,
       info,
     }
 
@@ -200,8 +226,8 @@ export namespace WindowManager {
   }
 
   /**
-   * At new task boundaries, re-search previous binding by matchTitle.
-   * This avoids stale window IDs and supports task-to-task rebinding.
+   * At new task boundaries, re-search previous binding by id first then title.
+   * This avoids stale window IDs while preventing drift across duplicate titles.
    */
   export async function rebindForTask(taskEpoch: number): Promise<WindowBinding | null> {
     const ws = windowState()
@@ -214,11 +240,13 @@ export namespace WindowManager {
 
     const previous = ws.binding
     try {
-      const info = await findWindow(previous.matchTitle)
+      const info = await findWindowForRebind(previous)
       if (!info) {
         log.warn("task rebind failed: previous window no longer found", {
           matchTitle: previous.matchTitle,
           previousWindowId: previous.windowId,
+          matchWindowId: previous.matchWindowId ?? null,
+          matchAppName: previous.matchAppName ?? null,
         })
         ws.binding = null
         ws.lastTaskEpoch = taskEpoch
@@ -228,6 +256,8 @@ export namespace WindowManager {
       ws.binding = {
         windowId: info.id,
         matchTitle: previous.matchTitle,
+        matchWindowId: previous.matchWindowId,
+        matchAppName: previous.matchAppName ?? info.appName,
         info,
       }
 
