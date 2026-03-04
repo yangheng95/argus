@@ -532,7 +532,8 @@ export namespace MessageV2 {
           attachments?: Array<{ mime: string; url: string }>
         }
         const attachments = (outputObject.attachments ?? []).filter((attachment) => {
-          return attachment.url.startsWith("data:") && attachment.url.includes(",")
+          return ScreenshotStore.isFileUrl(attachment.url) ||
+            (attachment.url.startsWith("data:") && attachment.url.includes(","))
         })
 
         return {
@@ -543,6 +544,10 @@ export namespace MessageV2 {
               type: "media",
               mediaType: attachment.mime,
               data: iife(() => {
+                if (ScreenshotStore.isFileUrl(attachment.url)) {
+                  const resolved = ScreenshotStore.resolveSync(attachment.url)
+                  return resolved ? resolved.buffer.toString("base64") : ""
+                }
                 const commaIndex = attachment.url.indexOf(",")
                 return commaIndex === -1 ? attachment.url : attachment.url.slice(commaIndex + 1)
               }),
