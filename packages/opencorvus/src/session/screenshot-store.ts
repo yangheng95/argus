@@ -2,6 +2,7 @@ import path from "path"
 import fs from "fs/promises"
 import { createHash } from "crypto"
 import { Global } from "../global"
+import { Log } from "../util/log"
 
 const SCREENSHOT_DIR = path.join(Global.Path.data, "screenshots")
 const SCHEME = "opencorvus://screenshot/"
