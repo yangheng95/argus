@@ -656,12 +656,25 @@ async function sendPrompt(prompt) {
 function bindEvents() {
   els.sendForm.addEventListener("submit", async (event) => {
     event.preventDefault()
-    if (state.sending) return
+
+    // Stop mode: clicking Send while running aborts the task
+    if (state.sending) {
+      try {
+        await stopBot()
+      } catch (error) {
+        addMessage("system", `Stop failed: ${error?.message || String(error)}`)
+      }
+      return
+    }
+
     const prompt = els.promptInput.value.trim()
     if (!prompt) return
 
+    historyPush(prompt)
     addMessage("user", prompt)
     els.promptInput.value = ""
+    resizeTextarea()
+    updateCharCount()
 
     setSending(true)
     try {
@@ -673,12 +686,38 @@ function bindEvents() {
   })
 
   els.promptInput.addEventListener("keydown", (event) => {
+    // History navigation with ↑/↓ (only when caret is at start/end)
+    if (event.key === "ArrowUp" && !event.shiftKey && !event.isComposing) {
+      const pos = els.promptInput.selectionStart
+      if (pos === 0) {
+        event.preventDefault()
+        historyNavigate(1)
+        return
+      }
+    }
+    if (event.key === "ArrowDown" && !event.shiftKey && !event.isComposing) {
+      const pos = els.promptInput.selectionStart
+      if (pos === els.promptInput.value.length) {
+        event.preventDefault()
+        historyNavigate(-1)
+        return
+      }
+    }
+
     if (event.key !== "Enter") return
     if (event.shiftKey) return
     if (event.isComposing) return
     event.preventDefault()
-    if (state.sending) return
     els.sendForm.requestSubmit()
+  })
+
+  els.promptInput.addEventListener("input", () => {
+    resizeTextarea()
+    updateCharCount()
+  })
+
+  els.clearChatBtn?.addEventListener("click", () => {
+    clearChat()
   })
 
   els.startBtn.addEventListener("click", async () => {
