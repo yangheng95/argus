@@ -33,7 +33,7 @@ fn main() {
             commands::manager_add_mcp,
             commands::manager_create_skill
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let state = app.state::<manager::Shared>();
             manager::init(state.inner(), &app.handle());
             if !sidecar {
