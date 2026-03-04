@@ -21,6 +21,13 @@ pub struct EnvItem {
     pub value: String,
 }
 
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum McpQuickConfig {
+    Local { command: Vec<String> },
+    Remote { url: String },
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 pub struct ManagerConfig {
     pub command: String,
@@ -33,6 +40,7 @@ pub struct ManagerConfig {
 #[derive(Serialize, Clone)]
 pub struct ManagerSnapshot {
     pub running: bool,
+    pub prompt_running: bool,
     pub pid: Option<u32>,
     pub config: ManagerConfig,
     pub logs: Vec<LogEntry>,
@@ -44,6 +52,11 @@ pub struct SendResult {
     pub success: bool,
     pub code: i32,
     pub output: String,
+}
+
+#[derive(Serialize)]
+pub struct SendAck {
+    pub accepted: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -70,6 +83,7 @@ pub struct ManagerState {
     logs: VecDeque<LogEntry>,
     log_path: String,
     bot: Option<Child>,
+    prompt_running: bool,
 }
 
 pub type Shared = Arc<Mutex<ManagerState>>;
@@ -102,6 +116,7 @@ impl ManagerState {
             logs: VecDeque::new(),
             log_path: String::new(),
             bot: None,
+            prompt_running: false,
         }
     }
 }
@@ -189,32 +204,49 @@ fn work_dir(shared: &Shared) -> PathBuf {
     root.join(path)
 }
 
-fn mcp_config_path(base: &Path) -> PathBuf {
-    let candidates = [
-        base.join("opencorvus.jsonc"),
-        base.join("opencorvus.json"),
-        base.join(".opencorvus").join("opencorvus.jsonc"),
-        base.join(".opencorvus").join("opencorvus.json"),
-    ];
-    for item in candidates {
-        if item.exists() {
-            return item;
-        }
-    }
-    base.join("opencorvus.jsonc")
+fn opencode_config_path(base: &Path) -> PathBuf {
+    base.join(".opencorvus").join("opencorvus.json")
 }
 
-fn ensure_mcp_config(path: &Path) -> Result<(), String> {
+fn ensure_opencode_config(path: &Path) -> Result<(), String> {
     if path.exists() {
         return Ok(());
     }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
-    let content = format!(
-        "{{\n  \"$schema\": \"{CONFIG_SCHEMA}\",\n  \"mcp\": {{}}\n}}\n"
-    );
+    let content = format!("{{\n  \"$schema\": \"{CONFIG_SCHEMA}\",\n  \"mcp\": {{}}\n}}\n");
     fs::write(path, content).map_err(|error| error.to_string())
+}
+
+fn valid_name(input: &str) -> bool {
+    if input.is_empty() || input.len() > 64 {
+        return false;
+    }
+    let bytes = input.as_bytes();
+    if bytes[0] == b'-' || bytes[bytes.len() - 1] == b'-' {
+        return false;
+    }
+    let mut dash = false;
+    for byte in bytes {
+        if byte.is_ascii_lowercase() || byte.is_ascii_digit() {
+            dash = false;
+            continue;
+        }
+        if *byte == b'-' {
+            if dash {
+                return false;
+            }
+            dash = true;
+            continue;
+        }
+        return false;
+    }
+    true
+}
+
+fn yaml_text(input: &str) -> String {
+    input.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 fn open_target(path: &Path) -> Result<(), String> {
@@ -541,6 +573,18 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         format!("command failed with code {code}")
     };
 
+    if !success {
+        emit_chat(
+            app,
+            "system",
+            Some(format!("Command failed (code {code}): {text}")),
+            None,
+            None,
+            None,
+            None,
+        );
+    }
+
     emit_chat(app, "done", None, None, None, Some(success), Some(code));
     SendResult { success, code, output: text }
 }
@@ -560,6 +604,7 @@ pub fn snapshot(shared: &Shared) -> ManagerSnapshot {
     let state = shared.lock().unwrap();
     ManagerSnapshot {
         running: state.bot.is_some(),
+        prompt_running: state.prompt_running,
         pid: state.bot.as_ref().map(|child| child.id()),
         config: state.config.clone(),
         logs: state.logs.iter().cloned().collect(),
@@ -760,8 +805,8 @@ pub fn save(shared: &Shared, app: &AppHandle, config: ManagerConfig) -> Result<M
 }
 
 pub fn open_mcp_config(shared: &Shared, app: &AppHandle) -> Result<String, String> {
-    let path = mcp_config_path(&work_dir(shared));
-    ensure_mcp_config(&path)?;
+    let path = opencode_config_path(&work_dir(shared));
+    ensure_opencode_config(&path)?;
     open_target(&path)?;
     let value = path.to_string_lossy().to_string();
     push_log(shared, app, format!("opened MCP config: {value}"));
@@ -777,10 +822,143 @@ pub fn open_skill_dir(shared: &Shared, app: &AppHandle) -> Result<String, String
     Ok(value)
 }
 
-pub fn send(shared: &Shared, app: &AppHandle, prompt: String) -> Result<SendResult, String> {
+pub fn add_mcp(
+    shared: &Shared,
+    app: &AppHandle,
+    name: String,
+    config: McpQuickConfig,
+) -> Result<String, String> {
+    let name = name.trim().to_string();
+    if !valid_name(&name) {
+        return Err("invalid MCP name, use lowercase letters/numbers and single '-'".into());
+    }
+
+    let path = opencode_config_path(&work_dir(shared));
+    ensure_opencode_config(&path)?;
+    let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
+    let mut data: serde_json::Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
+    let Some(root) = data.as_object_mut() else {
+        return Err("invalid config root, expected JSON object".into());
+    };
+
+    if !root.contains_key("$schema") {
+        root.insert("$schema".into(), serde_json::Value::String(CONFIG_SCHEMA.into()));
+    }
+
+    if !root.contains_key("mcp") {
+        root.insert("mcp".into(), serde_json::json!({}));
+    }
+
+    let Some(mcp) = root.get_mut("mcp").and_then(|item| item.as_object_mut()) else {
+        return Err("invalid `mcp` field, expected object".into());
+    };
+
+    let value = match config {
+        McpQuickConfig::Local { command } => {
+            let command = command
+                .into_iter()
+                .map(|item| item.trim().to_string())
+                .filter(|item| !item.is_empty())
+                .collect::<Vec<_>>();
+            if command.is_empty() {
+                return Err("local MCP command is empty".into());
+            }
+            serde_json::json!({
+                "type": "local",
+                "command": command,
+            })
+        }
+        McpQuickConfig::Remote { url } => {
+            let url = url.trim().to_string();
+            if url.is_empty() || !url.starts_with("http") {
+                return Err("remote MCP URL must start with http/https".into());
+            }
+            serde_json::json!({
+                "type": "remote",
+                "url": url,
+            })
+        }
+    };
+
+    mcp.insert(name.clone(), value);
+
+    let output = serde_json::to_string_pretty(&data).map_err(|error| error.to_string())?;
+    fs::write(&path, format!("{output}\n")).map_err(|error| error.to_string())?;
+    open_target(&path)?;
+    let value = path.to_string_lossy().to_string();
+    push_log(shared, app, format!("added MCP `{name}` in {value}"));
+    Ok(value)
+}
+
+pub fn create_skill(
+    shared: &Shared,
+    app: &AppHandle,
+    name: String,
+    description: String,
+) -> Result<String, String> {
+    let name = name.trim().to_string();
+    if !valid_name(&name) {
+        return Err("invalid skill name, use lowercase letters/numbers and single '-'".into());
+    }
+
+    let description = {
+        let text = description.trim();
+        if text.is_empty() {
+            "Describe when and why this skill should be used.".to_string()
+        } else {
+            text.to_string()
+        }
+    };
+
+    let dir = work_dir(shared).join(".opencorvus").join("skills").join(&name);
+    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    let path = dir.join("SKILL.md");
+    if !path.exists() {
+        let content = format!(
+            "---\nname: {name}\ndescription: \"{}\"\n---\n\n## Purpose\n\n## When To Use\n\n## Steps\n\n",
+            yaml_text(&description)
+        );
+        fs::write(&path, content).map_err(|error| error.to_string())?;
+    }
+    open_target(&path)?;
+    let value = path.to_string_lossy().to_string();
+    push_log(shared, app, format!("created skill scaffold: {value}"));
+    Ok(value)
+}
+
+pub fn send(shared: &Shared, app: &AppHandle, prompt: String) -> Result<SendAck, String> {
     let prompt = prompt.trim().to_string();
     if prompt.is_empty() {
         return Err("prompt is empty".into());
     }
-    Ok(run_prompt(shared, app, prompt))
+
+    {
+        let mut state = shared.lock().unwrap();
+        if state.prompt_running {
+            return Err("a prompt is already running".into());
+        }
+        state.prompt_running = true;
+    }
+
+    emit_state(shared, app);
+
+    let shared2 = shared.clone();
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        let result = run_prompt(&shared2, &app2, prompt);
+        if !result.success {
+            push_log(
+                &shared2,
+                &app2,
+                format!("prompt failed (code {}): {}", result.code, result.output),
+            );
+        }
+        {
+            let mut state = shared2.lock().unwrap();
+            state.prompt_running = false;
+        }
+        emit_state(&shared2, &app2);
+    });
+
+    Ok(SendAck { accepted: true })
 }

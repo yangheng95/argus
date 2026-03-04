@@ -18,6 +18,8 @@ const els = {
   saveBtn: document.getElementById("saveBtn"),
   openMcpBtn: document.getElementById("openMcpBtn"),
   openSkillBtn: document.getElementById("openSkillBtn"),
+  addMcpBtn: document.getElementById("addMcpBtn"),
+  createSkillBtn: document.getElementById("createSkillBtn"),
   serveCmdInput: document.getElementById("serveCmdInput"),
   runCmdInput: document.getElementById("runCmdInput"),
   cwdInput: document.getElementById("cwdInput"),
@@ -30,6 +32,11 @@ const state = {
   configLoaded: false,
   sending: false,
   stream: null,
+}
+
+function setSending(next) {
+  state.sending = !!next
+  els.sendBtn.disabled = state.sending
 }
 
 function readLines(input) {
@@ -396,7 +403,13 @@ function streamImage(url, alt) {
 }
 
 function streamDone(payload) {
-  void payload
+  const item = state.stream
+  if (!item) return
+  if (!item.touched && payload?.success) {
+    item.entry = makeMessage("assistant")
+    renderMessage(item.entry, "(empty response)", false)
+    item.touched = true
+  }
 }
 
 function renderLogs() {
@@ -439,6 +452,7 @@ function appendLog(item) {
 function applySnapshot(snapshot) {
   if (!snapshot) return
   setStatus(snapshot.running, snapshot.pid)
+  if (typeof snapshot.prompt_running === "boolean") setSending(snapshot.prompt_running)
   setLogPath(snapshot.log_path)
   if (Array.isArray(snapshot.logs)) {
     state.logs = snapshot.logs.map((item) => normalizeLog(item)).filter((item) => Boolean(item)).slice(-800)
@@ -484,18 +498,60 @@ async function openSkillFolder() {
   addMessage("system", `Skills folder opened: ${dir}`)
 }
 
+async function addMcp() {
+  const name = window.prompt("MCP name (kebab-case)")
+  if (!name) return
+  const trimmed = name.trim()
+  if (!trimmed) return
+
+  const remote = window.confirm("Use remote MCP? OK=remote URL, Cancel=local command")
+  if (remote) {
+    const url = window.prompt("Remote MCP URL", "https://example.com/mcp")
+    if (!url) return
+    const file = await invoke("manager_add_mcp", {
+      name: trimmed,
+      config: {
+        type: "remote",
+        url: url.trim(),
+      },
+    })
+    addMessage("system", `MCP "${trimmed}" added in ${file}`)
+    return
+  }
+
+  const cmd = window.prompt("Local MCP command", "npx -y @modelcontextprotocol/server-filesystem .")
+  if (!cmd) return
+  const command = readArgs(cmd)
+  if (command.length === 0) return
+  const file = await invoke("manager_add_mcp", {
+    name: trimmed,
+    config: {
+      type: "local",
+      command,
+    },
+  })
+  addMessage("system", `MCP "${trimmed}" added in ${file}`)
+}
+
+async function createSkill() {
+  const name = window.prompt("Skill name (kebab-case)")
+  if (!name) return
+  const trimmed = name.trim()
+  if (!trimmed) return
+  const description = window.prompt("Skill description", "Describe when and why this skill should be used.")
+  if (description === null) return
+  const file = await invoke("manager_create_skill", {
+    name: trimmed,
+    description: description.trim(),
+  })
+  addMessage("system", `Skill scaffold ready: ${file}`)
+}
+
 async function sendPrompt(prompt) {
   state.stream = null
   const result = await invoke("manager_send", { prompt })
-  if (result.success) {
-    if (!state.stream?.touched) {
-      addMessage("assistant", result.output || "(empty response)", { markdown: true })
-    }
-    return
-  }
-  if (!state.stream?.touched) {
-    addMessage("system", `Command failed (code ${result.code}): ${result.output}`)
-  }
+  if (result?.accepted) return
+  throw new Error("prompt not accepted")
 }
 
 function bindEvents() {
@@ -508,16 +564,12 @@ function bindEvents() {
     addMessage("user", prompt)
     els.promptInput.value = ""
 
-    state.sending = true
-    els.sendBtn.disabled = true
+    setSending(true)
     try {
       await sendPrompt(prompt)
-      await refreshState()
     } catch (error) {
       addMessage("system", `Send failed: ${error?.message || String(error)}`)
-    } finally {
-      state.sending = false
-      els.sendBtn.disabled = false
+      setSending(false)
     }
   })
 
@@ -585,6 +637,22 @@ function bindEvents() {
       addMessage("system", `Open skills folder failed: ${error?.message || String(error)}`)
     }
   })
+
+  els.addMcpBtn.addEventListener("click", async () => {
+    try {
+      await addMcp()
+    } catch (error) {
+      addMessage("system", `Add MCP failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.createSkillBtn.addEventListener("click", async () => {
+    try {
+      await createSkill()
+    } catch (error) {
+      addMessage("system", `Create skill failed: ${error?.message || String(error)}`)
+    }
+  })
 }
 
 function bindTauriEvents() {
@@ -627,6 +695,8 @@ function bindTauriEvents() {
 
     if (kind === "done") {
       streamDone(payload)
+      setSending(false)
+      void refreshState()
     }
   })
 }
