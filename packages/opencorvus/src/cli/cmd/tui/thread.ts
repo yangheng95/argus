@@ -217,9 +217,11 @@ export const TuiThreadCommand = cmd({
     }
 
     // Show provider selection before Worker spawn so env vars are inherited.
-    // Skip if --model is specified (model already chosen) or stdin is not a TTY
-    // (non-interactive env, e.g. spawned by bot or CI).
-    if (!args.model && process.stdin.isTTY) {
+    // Skip if --model is specified (model already chosen), stdin is not a TTY
+    // (non-interactive env, e.g. spawned by bot or CI), or --port is specified
+    // (programmatic spawn via Tui.spawn() API — must not block server startup).
+    const isServerMode = process.argv.includes("--port") || process.argv.includes("--hostname")
+    if (!args.model && process.stdin.isTTY && !isServerMode) {
       try {
         await promptProviderSelection()
       } catch {
