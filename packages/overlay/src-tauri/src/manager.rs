@@ -122,7 +122,7 @@ impl Default for ManagerConfig {
             run_args: vec!["run".into()],
             bot_command: "bun".into(),
             bot_args: default_bot_args(),
-            server_url: "http://127.0.0.1:4096".into(),
+            server_url: "http://127.0.0.1:7878".into(),
             cwd: String::new(),
             env: vec![],
         }
