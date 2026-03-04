@@ -217,19 +217,50 @@ function setStatus(snapshot) {
 function setLogPath(value) {
   const text = typeof value === "string" && value.trim() ? value.trim() : "-"
   state.logPath = text
-  els.logPathText.textContent = `Log file: ${text}`
+  els.logPathText.textContent = `Log: ${text}`
 }
 
 function scrollChat() {
   els.chat.scrollTop = els.chat.scrollHeight
 }
 
+function copyText(text) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).catch(() => {})
+  }
+}
+
 function makeMessage(role) {
+  // Remove empty placeholder
+  const empty = els.chat.querySelector(".chat-empty")
+  if (empty) empty.remove()
+
   const box = document.createElement("div")
   box.className = `msg ${role}`
+
   const body = document.createElement("div")
   body.className = "msg-body"
   box.appendChild(body)
+
+  // Copy button
+  const copyBtn = document.createElement("button")
+  copyBtn.className = "msg-copy"
+  copyBtn.title = "Copy"
+  copyBtn.textContent = "⎘"
+  copyBtn.addEventListener("click", (e) => {
+    e.stopPropagation()
+    copyText(body.textContent ?? "")
+    copyBtn.textContent = "✓"
+    setTimeout(() => { copyBtn.textContent = "⎘" }, 1200)
+  })
+  box.appendChild(copyBtn)
+
+  // Timestamp
+  const meta = document.createElement("div")
+  meta.className = "msg-meta"
+  meta.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  box.appendChild(meta)
+
   els.chat.appendChild(box)
   scrollChat()
   return { box, body, role, markdown: role === "assistant", text: "" }
