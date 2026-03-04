@@ -199,22 +199,27 @@ export namespace Tui {
     let proc: ChildProcess
     if (process.platform === "win32") {
       if (devMode) {
-        // Dev mode on Windows: write a temp .bat and run it with cmd.exe detached.
-        // detached: true on Windows allocates a new visible console for the child,
-        // so the TUI renders in its own window with full terminal capabilities.
+        // Dev mode on Windows: write a launcher .bat that `start`s the TUI .bat in a new console.
+        // nodeSpawn's detached mode doesn't reliably create a visible console with proper TTY,
+        // but `cmd /c start ... cmd /k tui.bat` does — verified by manual testing.
         const pkgRoot = packageRoot()
         const entryScript = path.join(pkgRoot, "src", "index.ts")
-        const batContent = [
-          `@title OpenCorvus TUI`,
-          `@cd /d "${pkgRoot}"`,
-          `@bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${args.map((a) => `"${a}"`).join(" ")}`,
-        ].join("\r\n")
-        const batPath = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
-        fs.writeFileSync(batPath, batContent)
-        proc = nodeSpawn("cmd.exe", ["/c", batPath], {
-          stdio: ["ignore", "ignore", "ignore"],
+        const tuiBat = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
+        fs.writeFileSync(
+          tuiBat,
+          [
+            `@title OpenCorvus TUI`,
+            `@cd /d "${pkgRoot}"`,
+            `@bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${args.map((a) => `"${a}"`).join(" ")}`,
+          ].join("\r\n"),
+        )
+        // Launcher bat: `start` opens a new visible console window, then exits.
+        const launcherBat = path.join(os.tmpdir(), `opencorvus-tui-launcher-${port}.bat`)
+        fs.writeFileSync(launcherBat, `@start "OpenCorvus TUI" cmd /k "${tuiBat}"\r\n`)
+        proc = nodeSpawn("cmd.exe", ["/c", launcherBat], {
+          stdio: "ignore",
           detached: true,
-          cwd: pkgRoot,
+          windowsHide: true,
         })
         proc.unref()
       } else {
