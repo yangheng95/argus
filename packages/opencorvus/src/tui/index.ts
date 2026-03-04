@@ -161,11 +161,28 @@ export namespace Tui {
    *
    * The TUI inherits the parent's stdio so it renders in the same terminal.
    */
+  /** Detect if we are running in dev mode (bun + source tree) rather than a compiled binary. */
+  function isDevMode(): boolean {
+    // In dev mode, import.meta.dir points into the source tree
+    try {
+      return import.meta.dir.includes("packages/opencorvus/src") || import.meta.dir.includes("packages\\opencorvus\\src")
+    } catch {
+      return false
+    }
+  }
+
+  /** Resolve the opencorvus package root (two levels up from src/tui/). */
+  function packageRoot(): string {
+    // import.meta.dir = .../packages/opencorvus/src/tui
+    return import.meta.dir.replace(/[/\\]src[/\\]tui$/, "")
+  }
+
   export async function spawn(opts: SpawnOptions = {}): Promise<Handle> {
     const port = opts.port ?? (await allocatePort())
     const hostname = opts.hostname ?? "127.0.0.1"
     const bin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH ?? "opencorvus"
     const cwd = opts.directory ?? process.cwd()
+    const devMode = isDevMode() && !opts.bin && !process.env.OPENCORVUS_BIN_PATH
 
     // Pass directory as positional arg to trigger TUI mode (not headless serve)
     const args: string[] = [cwd, "--port", String(port), "--hostname", hostname]
@@ -178,15 +195,30 @@ export namespace Tui {
 
     let proc: ChildProcess
     if (process.platform === "win32") {
-      // On Windows, use PowerShell Start-Process to open TUI in a new visible console window.
-      // cmd.exe "start" has quoting issues with paths containing spaces.
-      const psArgs = args.map((a) => `"${a}"`).join(",")
-      proc = nodeSpawn(
-        "powershell.exe",
-        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `Start-Process -FilePath '${bin}' -ArgumentList ${psArgs} -WorkingDirectory '${cwd}'`],
-        { stdio: "ignore", detached: true },
-      )
-      proc.unref()
+      if (devMode) {
+        // Dev mode: use cmd.exe to open a new console running bun with TUI preloads.
+        // The compiled binary's TUI mode doesn't work reliably on Windows.
+        const pkgRoot = packageRoot()
+        const entryScript = `${pkgRoot}/src/index.ts`
+        const tuiArgs = args.map((a) => `"${a}"`).join(" ")
+        const cmdLine = `bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${tuiArgs}`
+        proc = nodeSpawn(
+          "cmd.exe",
+          ["/c", "start", "OPENCORVUS_TUI", "cmd", "/c", `cd /d "${pkgRoot}" && ${cmdLine}`],
+          { stdio: "ignore", detached: true, cwd: pkgRoot },
+        )
+        proc.unref()
+      } else {
+        // Production: use PowerShell Start-Process to open TUI in a new visible console window.
+        // cmd.exe "start" has quoting issues with paths containing spaces.
+        const psArgs = args.map((a) => `"${a}"`).join(",")
+        proc = nodeSpawn(
+          "powershell.exe",
+          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `Start-Process -FilePath '${bin}' -ArgumentList ${psArgs} -WorkingDirectory '${cwd}'`],
+          { stdio: "ignore", detached: true },
+        )
+        proc.unref()
+      }
     } else {
       proc = nodeSpawn(bin, args, {
         stdio: "inherit",

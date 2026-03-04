@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/yangheng95/opencorvus">
-    <img src="assets/readme-head-gemini.png" width="160" alt="OpenCorvus head image">
+    <img src="assets/readme-head-gemini.png" alt="OpenCorvus head image">
   </a>
 </p>
 
@@ -335,4 +335,3 @@ OpenCorvus is built upon code originally from [OpenCode](https://github.com/nice
 ## License
 
 [MIT](./LICENSE)
-
