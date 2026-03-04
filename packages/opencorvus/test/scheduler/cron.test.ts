@@ -221,6 +221,16 @@ describe("Cron.matches", () => {
     expect(Cron.matches(parsed, match)).toBe(true)
     expect(Cron.matches(parsed, noMatch)).toBe(false)
   })
+
+  test("uses OR semantics when both day-of-month and day-of-week are restricted", () => {
+    const parsed = Cron.parse("0 9 1 * 1")
+    const byDow = new Date("2024-07-08T09:00:00.000Z").getTime() // Monday, day=8
+    const byDom = new Date("2024-08-01T09:00:00.000Z").getTime() // day=1, Thursday
+    const none = new Date("2024-08-08T09:00:00.000Z").getTime() // day=8, Thursday
+    expect(Cron.matches(parsed, byDow)).toBe(true)
+    expect(Cron.matches(parsed, byDom)).toBe(true)
+    expect(Cron.matches(parsed, none)).toBe(false)
+  })
 })
 
 // ─── Cron.describe ────────────────────────────────────────────────────────────

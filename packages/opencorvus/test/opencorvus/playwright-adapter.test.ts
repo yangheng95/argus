@@ -4,6 +4,7 @@ import { PlaywrightDriver } from "../../src/opencorvus/automation/adapters/playw
 class LocatorStub implements PlaywrightDriver.Locator {
   clicks = 0
   fills: string[] = []
+  scrolls = 0
 
   constructor(
     private state: {
@@ -50,6 +51,11 @@ class LocatorStub implements PlaywrightDriver.Locator {
       getBoundingClientRect: () => this.state.rect,
     } as unknown as Element
     return Promise.resolve(fn(element, arg))
+  }
+
+  scrollIntoViewIfNeeded() {
+    this.scrolls += 1
+    return Promise.resolve()
   }
 }
 
@@ -207,5 +213,94 @@ describe("playwright automation adapter", () => {
     })
     expect(scroll.ok).toBe(true)
     expect(wheel).toEqual([240])
+  })
+
+  test("locates image target via metadata selector", async () => {
+    const miss = new LocatorStub({
+      count: 0,
+      visible: true,
+      enabled: true,
+      text: "",
+      attrs: {},
+      rect: { x: 0, y: 0, width: 10, height: 10 },
+    })
+    const image = new LocatorStub({
+      count: 1,
+      visible: true,
+      enabled: true,
+      text: "",
+      attrs: {},
+      rect: { x: 0, y: 0, width: 10, height: 10 },
+    })
+    let selector = ""
+    const page: PlaywrightDriver.Page = {
+      locator: (value) => {
+        selector = value
+        if (value.includes("save-icon")) return image
+        return miss
+      },
+      getByRole: () => miss,
+      getByText: () => miss,
+      keyboard: {
+        press: async () => {},
+      },
+      mouse: {
+        wheel: async () => {},
+      },
+      screenshot: async () => new Uint8Array([3]),
+    }
+    const driver = PlaywrightDriver.create({ page })
+    const locate = await driver.locate({
+      step: { id: "img", act: { kind: "click" } },
+      target: [{ kind: "image", value: "save-icon" }],
+      abort: new AbortController().signal,
+    })
+    expect(locate.ok).toBe(true)
+    expect(selector.includes("img[alt*=\"save-icon\"]")).toBe(true)
+  })
+
+  test("recovery scrolls node into view for interactability failures", async () => {
+    const node = new LocatorStub({
+      count: 1,
+      visible: true,
+      enabled: true,
+      text: "",
+      attrs: {},
+      rect: { x: 0, y: 0, width: 10, height: 10 },
+    })
+    let bring = 0
+    const page: PlaywrightDriver.Page = {
+      locator: () => node,
+      getByRole: () => node,
+      getByText: () => node,
+      keyboard: {
+        press: async () => {},
+      },
+      mouse: {
+        wheel: async () => {},
+      },
+      screenshot: async () => new Uint8Array([4]),
+      bringToFront: async () => {
+        bring++
+      },
+    }
+    const driver = PlaywrightDriver.create({ page })
+    const located = await driver.locate({
+      step: { id: "btn", act: { kind: "click" }, target: [{ kind: "aid", value: "save" }] },
+      target: [{ kind: "aid", value: "save" }],
+      abort: new AbortController().signal,
+    })
+    const ref = located.ok ? located.data ?? null : null
+    const recovered = await driver.recover?.({
+      step: { id: "btn", act: { kind: "click" } },
+      attempt: 1,
+      node: ref,
+      kind: "not_interactable",
+      detail: "covered",
+      abort: new AbortController().signal,
+    })
+    expect(recovered?.ok).toBe(true)
+    expect(node.scrolls).toBe(1)
+    expect(bring).toBe(0)
   })
 })

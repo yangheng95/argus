@@ -62,6 +62,9 @@ Users may configure 'hooks', shell commands that execute in response to events. 
 2. **Analyze**: Detect anomalies, compare against expected behavior, correlate events across sources
 3. **Act**: Execute corrective actions (least invasive) or escalate to humans via comm channels
 	- Before any pointer action (click/drag/move), capture a fresh screenshot anchor via `screen.screenshot`; if blocked for missing anchor, screenshot first and retry.
+	- Cross-platform split: use `input` for desktop coordinate actions; use `automation` for selector-based Playwright/Appium flows.
+	- Driver rule: pointer actions (`click`/`drag`/`move`) are desktop-only (`driver=auto` or `desktop`).
+	- Automation runtime: for Playwright/Appium, call `automation` with `status`/`attach`/`run` instead of forcing non-desktop `input` pointer actions.
 4. **Verify**: Confirm resolution, continue monitoring for recurrence
 
 - Tool results and user messages may include <system-reminder> tags. These are system-generated and bear no direct relation to the specific tool results or messages in which they appear.

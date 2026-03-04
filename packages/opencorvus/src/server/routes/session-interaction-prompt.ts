@@ -5,6 +5,8 @@ import { MessageV2 } from "../../session/message"
 import { SessionPrompt } from "../../session/prompt"
 import { errors } from "../error"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
+import { TaskQueueTable } from "@/scheduler/task-queue.sql"
+import { Database, and, eq } from "@/storage/db"
 
 export function SessionInteractionPromptRoutes() {
   return new Hono()
@@ -88,6 +90,73 @@ export function SessionInteractionPromptRoutes() {
           source: "session.prompt_async",
         })
         return c.json({ taskID }, 202)
+      },
+    )
+    .get(
+      "/:sessionID/prompt_async/:taskID",
+      describeRoute({
+        summary: "Get async prompt task status",
+        description: "Get status for a previously submitted async prompt task.",
+        operationId: "session.prompt_async_status",
+        responses: {
+          200: {
+            description: "Task status",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    taskID: z.string(),
+                    sessionID: z.string(),
+                    status: z.enum(["queued", "retrying", "running", "completed", "failed"]),
+                    retryCount: z.number().int(),
+                    maxRetries: z.number().int(),
+                    source: z.string(),
+                    prompt: z.string(),
+                    error: z.string().nullable(),
+                    startedAt: z.number().int().nullable(),
+                    completedAt: z.number().int().nullable(),
+                    updatedAt: z.number().int(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: z.string().meta({ description: "Session ID" }),
+          taskID: z.string().meta({ description: "Task ID" }),
+        }),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const taskID = c.req.valid("param").taskID
+        const row = Database.use((db) =>
+          db
+            .select()
+            .from(TaskQueueTable)
+            .where(and(eq(TaskQueueTable.id, taskID), eq(TaskQueueTable.session_id, sessionID)))
+            .get(),
+        )
+        if (!row) {
+          return c.json({ message: `Task ${taskID} not found` }, 404)
+        }
+        return c.json({
+          taskID: row.id,
+          sessionID: row.session_id,
+          status: row.status,
+          retryCount: row.retry_count,
+          maxRetries: row.max_retries,
+          source: row.source,
+          prompt: row.prompt,
+          error: row.error_message ?? null,
+          startedAt: row.time_started ?? null,
+          completedAt: row.time_completed ?? null,
+          updatedAt: row.time_updated,
+        })
       },
     )
     .post(

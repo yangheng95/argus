@@ -17,6 +17,7 @@ const ctx = {
 
 class LocatorStub implements PlaywrightDriver.Locator {
   clicks = 0
+  visible = true
 
   count() {
     return Promise.resolve(1)
@@ -36,7 +37,7 @@ class LocatorStub implements PlaywrightDriver.Locator {
   }
 
   isVisible() {
-    return Promise.resolve(true)
+    return Promise.resolve(this.visible)
   }
 
   isEnabled() {
@@ -164,5 +165,61 @@ describe("tool.automation", () => {
     expect(payload.ok).toBe(true)
     expect(payload.driver).toBe("appium")
     expect(element.value).toBe("alice")
+  })
+
+  test("attaches runtime from global keys and clears it", async () => {
+    const locator = new LocatorStub()
+    const page: PlaywrightDriver.Page = {
+      locator: () => locator,
+      getByRole: () => locator,
+      getByText: () => locator,
+      keyboard: { press: async () => {} },
+      mouse: { wheel: async () => {} },
+      screenshot: async () => new Uint8Array([1]),
+    }
+    Reflect.set(globalThis as object, "__opencorvus_playwright_page", page)
+
+    const tool = await AutomationTool.init()
+    const attached = await tool.execute({ action: "attach" }, ctx)
+    expect(attached.metadata.playwright).toBe(true)
+
+    const status = await tool.execute({ action: "status" }, ctx)
+    expect(status.metadata.playwright).toBe(true)
+
+    const cleared = await tool.execute({ action: "clear", kind: "playwright" }, ctx)
+    expect(cleared.metadata.playwright).toBe(false)
+    Reflect.deleteProperty(globalThis as object, "__opencorvus_playwright_page")
+  })
+
+  test("applies post_template when step.post is omitted", async () => {
+    const locator = new LocatorStub()
+    locator.visible = false
+    const page: PlaywrightDriver.Page = {
+      locator: () => locator,
+      getByRole: () => locator,
+      getByText: () => locator,
+      keyboard: { press: async () => {} },
+      mouse: { wheel: async () => {} },
+      screenshot: async () => new Uint8Array([1]),
+    }
+    AutomationRuntime.setPlaywright({ page })
+
+    const tool = await AutomationTool.init()
+    const result = await tool.execute({
+      action: "run",
+      driver: "playwright",
+      post_template: "visible",
+      timeoutMs: 20,
+      intervalMs: 0,
+      retryMax: 1,
+      step: {
+        id: "save",
+        target: [{ kind: "role", value: "button", name: "Save" }],
+        act: { kind: "click" },
+      },
+    }, ctx)
+    const payload = JSON.parse(result.output) as { ok: boolean; failed: number }
+    expect(payload.ok).toBe(false)
+    expect(payload.failed).toBe(1)
   })
 })

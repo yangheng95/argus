@@ -99,12 +99,17 @@ export namespace Cron {
 
     const d = new Date(timestamp)
     const { fields } = parsed
+    const dom = fields.dom.includes(d.getDate())
+    const dow = fields.dow.includes(d.getDay())
+    const domAny = wildcard(fields.dom, 1, 31)
+    const dowAny = wildcard(fields.dow, 0, 6)
+    const day = domAny || dowAny ? dom && dow : dom || dow
+
     return (
       fields.minute.includes(d.getMinutes()) &&
       fields.hour.includes(d.getHours()) &&
-      fields.dom.includes(d.getDate()) &&
       fields.month.includes(d.getMonth() + 1) &&
-      fields.dow.includes(d.getDay())
+      day
     )
   }
 
@@ -127,9 +132,15 @@ export namespace Cron {
   // --- Internal helpers ---
 
   function fieldStr(values: number[]): string {
-    // Check if it covers all values in the range — simplify to "*"
-    // This is a heuristic; just show the values
     return values.join(",")
+  }
+
+  function wildcard(values: number[], min: number, max: number) {
+    if (values.length !== max - min + 1) return false
+    for (let i = min; i <= max; i++) {
+      if (values[i - min] !== i) return false
+    }
+    return true
   }
 
   /** Parse a single cron field (e.g. star/5, "1,3,5", "1-10", "*") */

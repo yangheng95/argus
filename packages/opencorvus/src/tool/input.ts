@@ -6,10 +6,11 @@ import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
 import { WindowManager } from "../opencorvus/perception/window"
 import { Log } from "../util/log"
-import { overlayDiagnostic, requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
+import { overlayDiagnostic, requestOverlayConfirm, showOverlay } from "./overlay-client"
 import { Capability } from "../platform/capability"
-import { runInputAction } from "./input-action-engine"
+import { resolveInputDriver, runInputAction } from "./input-action-engine"
 import { InputPostcondition } from "./input-postcondition"
+import { InputGuard } from "./input-guard"
 
 const log = Log.create({ service: "input" })
 
@@ -165,7 +166,7 @@ const InputParams = z.discriminatedUnion("action", [
 export const InputTool = Tool.define("input", {
   description: DESCRIPTION,
   parameters: InputParams,
-  async execute(params, ctx): Promise<{ title: string; output: string; metadata: Record<string, any> }> {
+  async execute(params, ctx): Promise<{ title: string; output: string; metadata: Record<string, unknown> }> {
     await ctx.ask({
       permission: "input",
       patterns: [params.action],
@@ -178,179 +179,21 @@ export const InputTool = Tool.define("input", {
     await WindowManager.rebindForTask(GuiState.get().taskEpoch)
     const space = coordinateSpace()
 
-    const requireBounds = async (
-      action: "click" | "drag" | "move",
-    ): Promise<Coordinates.WindowBounds | { title: string; output: string; metadata: Record<string, any> }> => {
-      const bounds = DesktopState.getBounds()
-      if (bounds) return bounds
-      showOverlay(undefined, undefined, action, "blocked: screenshot anchor required", "error")
-      return {
-        title: "Pointer action blocked: no coordinate anchor",
-        output: "Cannot run pointer action without a recent screenshot anchor. Take screen.screenshot first so coordinates are bound to one target (window or single monitor), then retry.",
-        metadata: { blocked: true, reason: "no_bounds" },
-      }
-    }
-
-    const ensureWindowAnchor = async (
-      action: "click" | "drag" | "move",
-      anchored: Coordinates.WindowBounds,
-      binding: Awaited<ReturnType<typeof WindowManager.getBinding>>,
-    ) => {
-      const target = DesktopState.getTarget()
-      if (target?.scope !== "window") return null
-      if (!binding || (typeof target.windowId === "number" && binding.windowId !== target.windowId)) {
-        showOverlay(undefined, undefined, action, "blocked: stale window anchor", "error")
-        return {
-          title: "Pointer action blocked: stale window anchor",
-          output:
-            "The previous screenshot anchor belongs to a window binding that is no longer active. Re-bind with screen.bind_window and take a fresh screen.screenshot before retrying pointer actions.",
-          metadata: {
-            blocked: true,
-            reason: "stale_window_anchor",
-            expectedWindowId: target.windowId ?? null,
-            expectedTitle: target.title ?? null,
-            actualWindowId: binding?.windowId ?? null,
-          },
-        }
-      }
-      const sx = typeof anchored.scaleX === "number" && anchored.scaleX > 0 ? anchored.scaleX : 1
-      const sy = typeof anchored.scaleY === "number" && anchored.scaleY > 0 ? anchored.scaleY : 1
-      const expected = {
-        x: typeof anchored.logicalX === "number" ? anchored.logicalX : Math.round(anchored.x / sx),
-        y: typeof anchored.logicalY === "number" ? anchored.logicalY : Math.round(anchored.y / sy),
-        width: typeof anchored.logicalWidth === "number" ? anchored.logicalWidth : Math.round(anchored.width / sx),
-        height: typeof anchored.logicalHeight === "number" ? anchored.logicalHeight : Math.round(anchored.height / sy),
-      }
-      const actual = {
-        x: binding.info.x,
-        y: binding.info.y,
-        width: binding.info.width,
-        height: binding.info.height,
-      }
-      const complete = Number.isFinite(actual.x) && Number.isFinite(actual.y) && Number.isFinite(actual.width) && Number.isFinite(actual.height)
-      if (!complete) return null
-      const drifted = Math.abs(expected.x - actual.x) > 2
-        || Math.abs(expected.y - actual.y) > 2
-        || Math.abs(expected.width - actual.width) > 2
-        || Math.abs(expected.height - actual.height) > 2
-      if (!drifted) return null
-      showOverlay(undefined, undefined, action, "blocked: window geometry drifted", "error")
-      return {
-        title: "Pointer action blocked: window geometry drifted",
-        output:
-          "The bound window moved or resized since the last screenshot anchor. Take a fresh screen.screenshot before retrying pointer actions so coordinates map to the current window geometry.",
-        metadata: {
-          blocked: true,
-          reason: "window_geometry_drifted",
-          expectedWindowId: target.windowId ?? null,
-          expectedTitle: target.title ?? null,
-          actualWindowId: binding.windowId,
-          expectedBounds: expected,
-          actualBounds: actual,
-        },
-      }
-    }
-
-    const ensureBoundWindowForeground = async (
-      action: "click" | "type" | "key" | "scroll" | "drag" | "move",
-      allowFocusRecovery = false,
-      bindingHint?: Awaited<ReturnType<typeof WindowManager.getBinding>>,
-    ) => {
-      const binding = bindingHint ?? await WindowManager.getBinding()
-      const target = DesktopState.getTarget()
-      if (target?.scope === "monitor") return null
-      if (!binding) {
-        if (target?.scope !== "window") return null
-        showOverlay(undefined, undefined, action, "blocked: stale window binding", "error")
-        return {
-          title: "Action blocked: stale window binding",
-          output: "The previously bound window is no longer active. Re-bind with screen.bind_window and retry.",
-          metadata: {
-            blocked: true,
-            reason: "stale_window_binding",
-            expectedWindowId: target.windowId ?? null,
-            expectedTitle: target.title ?? null,
-          },
-        }
-      }
-      if (target?.scope === "window" && typeof target.windowId === "number" && binding.windowId !== target.windowId) {
-        showOverlay(undefined, undefined, action, "blocked: window binding drifted", "error")
-        return {
-          title: "Action blocked: window binding drifted",
-          output: "Current window binding drifted from the screenshot anchor. Re-bind with screen.bind_window and take a fresh screen.screenshot.",
-          metadata: {
-            blocked: true,
-            reason: "window_binding_drifted",
-            expectedWindowId: target.windowId,
-            actualWindowId: binding.windowId,
-          },
-        }
-      }
-      const ok = await WindowManager.ensureBoundForeground(binding)
-      if (ok) {
-        showWindowHighlight({
-          x: binding.info.x,
-          y: binding.info.y,
-          width: binding.info.width,
-          height: binding.info.height,
-          label: binding.info.title,
-          durationMs: 1200,
-        })
-        return null
-      }
-      if (allowFocusRecovery) {
-        showOverlay(undefined, undefined, action, "allowing focus recovery key", "running")
-        return null
-      }
-      showOverlay(undefined, undefined, action, "blocked: bound window not foreground", "error")
-      return {
-        title: "Action blocked: bound window not foreground",
-        output:
-          "The bound window is not in foreground (possibly occluded or minimized). Re-bind with screen.bind_window before retrying. If your action uses coordinates, take a fresh screen.screenshot after re-bind.",
-        metadata: {
-          blocked: true,
-          reason: "bound_window_not_foreground",
-          title: binding.info.title,
-          appName: binding.info.appName,
-        },
-      }
-    }
-
     const postcheck = (
       input: "none" | "bound_window_foreground" | undefined,
       opt: Parameters<typeof InputPostcondition.resolve>[1] = {},
     ) => InputPostcondition.resolve(input ?? "bound_window_foreground", opt)
 
-    const pointerDriverBlock = (
-      action: "click" | "drag" | "move",
-      driver: z.infer<typeof DriverMode>,
-    ) => {
-      if (!driver || driver === "auto" || driver === "desktop") return null
-      showOverlay(undefined, undefined, action, `blocked: driver=${driver} unsupported`, "error")
-      return {
-        title: `Pointer action blocked: driver ${driver} unsupported`,
-        output:
-          `Action "${action}" requires desktop coordinate input and does not run on ${driver} driver. `
-          + `Use input with driver=desktop (or auto), or use selector-based automation flow for ${driver}.`,
-        metadata: {
-          blocked: true,
-          reason: "pointer_driver_unsupported",
-          action,
-          driver,
-        },
-      }
-    }
-
     switch (params.action) {
       case "click": {
-        const driverBlocked = pointerDriverBlock("click", params.driver)
+        const driverBlocked = InputGuard.pointerDriverBlock("click", params.driver)
         if (driverBlocked) return driverBlocked
-        const anchored = await requireBounds("click")
+        const anchored = InputGuard.requireBounds("click")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
-        const anchorBlocked = await ensureWindowAnchor("click", anchored, binding)
+        const anchorBlocked = InputGuard.ensureWindowAnchor("click", anchored, binding)
         if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await ensureBoundWindowForeground("click", false, binding)
+        const windowBlocked = await InputGuard.ensureBoundWindowForeground("click", false, binding)
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
@@ -382,7 +225,7 @@ export const InputTool = Tool.define("input", {
         const clickResult = await runInputAction({
           id: `input.click.${params.button ?? "left"}`,
           abort: ctx.abort,
-          driver: params.driver,
+          driver: InputGuard.pointerDriver(params.driver),
           post: postcheck(params.post, {
             binding,
             target: DesktopState.getTarget(),
@@ -424,17 +267,27 @@ export const InputTool = Tool.define("input", {
       }
 
       case "type": {
-        const windowBlocked = await ensureBoundWindowForeground("type")
-        if (windowBlocked) return windowBlocked
+        let selected: ReturnType<typeof resolveInputDriver>
+        try {
+          selected = resolveInputDriver(params.driver)
+        } catch (error) {
+          return InputGuard.driverUnavailable("type", params.driver, error)
+        }
+        if (selected === "desktop") {
+          const windowBlocked = await InputGuard.ensureBoundWindowForeground("type")
+          if (windowBlocked) return windowBlocked
+        }
         showOverlay(undefined, undefined, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
         const typeResult = await runInputAction({
           id: "input.type",
           abort: ctx.abort,
           driver: params.driver,
           act: { kind: "type", text: params.text },
-          post: postcheck(params.post, {
-            target: DesktopState.getTarget(),
-          }),
+          post: selected === "desktop"
+            ? postcheck(params.post, {
+              target: DesktopState.getTarget(),
+            })
+            : undefined,
           action: () => GUI.paste(params.text),
         })
         if (typeResult.tries > 1) {
@@ -461,8 +314,16 @@ export const InputTool = Tool.define("input", {
       }
 
       case "key": {
-        const windowBlocked = await ensureBoundWindowForeground("key", focusKey(params.key))
-        if (windowBlocked) return windowBlocked
+        let selected: ReturnType<typeof resolveInputDriver>
+        try {
+          selected = resolveInputDriver(params.driver)
+        } catch (error) {
+          return InputGuard.driverUnavailable("key", params.driver, error)
+        }
+        if (selected === "desktop") {
+          const windowBlocked = await InputGuard.ensureBoundWindowForeground("key", focusKey(params.key))
+          if (windowBlocked) return windowBlocked
+        }
         showOverlay(undefined, undefined, "key", params.key)
         const parts = params.key.split("+").map((k) => k.trim())
         const keyResult = await runInputAction({
@@ -473,9 +334,11 @@ export const InputTool = Tool.define("input", {
             kind: "hotkey",
             keys: parts,
           },
-          post: postcheck(params.post, {
-            target: DesktopState.getTarget(),
-          }),
+          post: selected === "desktop"
+            ? postcheck(params.post, {
+              target: DesktopState.getTarget(),
+            })
+            : undefined,
           action: () => {
             if (parts.length > 1) return GUI.hotkey(...parts)
             return GUI.pressKey(parts[0])
@@ -505,8 +368,16 @@ export const InputTool = Tool.define("input", {
       }
 
       case "scroll": {
-        const windowBlocked = await ensureBoundWindowForeground("scroll")
-        if (windowBlocked) return windowBlocked
+        let selected: ReturnType<typeof resolveInputDriver>
+        try {
+          selected = resolveInputDriver(params.driver)
+        } catch (error) {
+          return InputGuard.driverUnavailable("scroll", params.driver, error)
+        }
+        if (selected === "desktop") {
+          const windowBlocked = await InputGuard.ensureBoundWindowForeground("scroll")
+          if (windowBlocked) return windowBlocked
+        }
         showOverlay(undefined, undefined, "scroll", `${params.direction} ${params.amount}`)
         const scrollResult = await runInputAction({
           id: "input.scroll",
@@ -517,9 +388,11 @@ export const InputTool = Tool.define("input", {
             direction: params.direction,
             amount: params.amount,
           },
-          post: postcheck(params.post, {
-            target: DesktopState.getTarget(),
-          }),
+          post: selected === "desktop"
+            ? postcheck(params.post, {
+              target: DesktopState.getTarget(),
+            })
+            : undefined,
           action: () => GUI.scroll(params.direction, params.amount),
         })
         if (scrollResult.tries > 1) {
@@ -547,14 +420,14 @@ export const InputTool = Tool.define("input", {
       }
 
       case "drag": {
-        const driverBlocked = pointerDriverBlock("drag", params.driver)
+        const driverBlocked = InputGuard.pointerDriverBlock("drag", params.driver)
         if (driverBlocked) return driverBlocked
-        const anchored = await requireBounds("drag")
+        const anchored = InputGuard.requireBounds("drag")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
-        const anchorBlocked = await ensureWindowAnchor("drag", anchored, binding)
+        const anchorBlocked = InputGuard.ensureWindowAnchor("drag", anchored, binding)
         if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await ensureBoundWindowForeground("drag", false, binding)
+        const windowBlocked = await InputGuard.ensureBoundWindowForeground("drag", false, binding)
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.startX, params.startY, anchored, space)
         const start = Coordinates.resolveDetailed(params.startX, params.startY, anchored, space)
@@ -563,7 +436,7 @@ export const InputTool = Tool.define("input", {
         const dragResult = await runInputAction({
           id: "input.drag",
           abort: ctx.abort,
-          driver: params.driver,
+          driver: InputGuard.pointerDriver(params.driver),
           post: postcheck(params.post, {
             binding,
             target: DesktopState.getTarget(),
@@ -614,14 +487,14 @@ export const InputTool = Tool.define("input", {
       }
 
       case "move": {
-        const driverBlocked = pointerDriverBlock("move", params.driver)
+        const driverBlocked = InputGuard.pointerDriverBlock("move", params.driver)
         if (driverBlocked) return driverBlocked
-        const anchored = await requireBounds("move")
+        const anchored = InputGuard.requireBounds("move")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
-        const anchorBlocked = await ensureWindowAnchor("move", anchored, binding)
+        const anchorBlocked = InputGuard.ensureWindowAnchor("move", anchored, binding)
         if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await ensureBoundWindowForeground("move", false, binding)
+        const windowBlocked = await InputGuard.ensureBoundWindowForeground("move", false, binding)
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
@@ -629,7 +502,7 @@ export const InputTool = Tool.define("input", {
         const moveResult = await runInputAction({
           id: "input.move",
           abort: ctx.abort,
-          driver: params.driver,
+          driver: InputGuard.pointerDriver(params.driver),
           post: postcheck(params.post, {
             binding,
             target: DesktopState.getTarget(),

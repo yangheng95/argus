@@ -58,6 +58,7 @@ export namespace Automation {
     pre?: Check[]
     act: Action
     post?: Check[]
+    recoverOn?: ErrorKind[]
     timeoutMs?: number
     intervalMs?: number
     retry?: Retry
@@ -175,6 +176,13 @@ export namespace Automation {
     return "infra"
   }
 
+  function recoverable(step: Step, kind: ErrorKind) {
+    if (!step.recoverOn || step.recoverOn.length === 0) {
+      return kind === "not_interactable" || kind === "state_mismatch" || kind === "infra"
+    }
+    return step.recoverOn.includes(kind)
+  }
+
   async function poll<T>(
     fn: () => Promise<Probe<T>>,
     opts: Opt,
@@ -247,7 +255,7 @@ export namespace Automation {
     const kind = input.probe.kind ?? fallback(input.stage)
     const detail = input.probe.detail
 
-    if (input.driver.recover) {
+    if (input.driver.recover && recoverable(input.step, kind)) {
       const recovered = await input.driver.recover({
         step: input.step,
         attempt: input.attempt,

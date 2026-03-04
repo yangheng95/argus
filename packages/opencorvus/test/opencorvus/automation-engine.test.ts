@@ -83,6 +83,68 @@ describe("automation engine", () => {
     expect(result.trace.some((x) => x.stage === "recover" && x.ok)).toBe(true)
   })
 
+  test("skips recovery on not_found by default", async () => {
+    let recoverCount = 0
+    const driver: Automation.Driver = {
+      locate: async () => bad("not_found", "no node"),
+      check: async () => ok(),
+      act: async () => ok(),
+      recover: async () => {
+        recoverCount++
+        return ok()
+      },
+    }
+    const engine = Automation.create(driver, {
+      timeoutMs: 5,
+      intervalMs: 0,
+      retryMax: 1,
+      backoffMs: [0],
+    })
+
+    const result = await engine.run({
+      id: "missing",
+      target: [{ kind: "text", value: "Missing" }],
+      act: { kind: "click" },
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.kind).toBe("not_found")
+    expect(recoverCount).toBe(0)
+  })
+
+  test("runs recovery on not_found when recoverOn includes not_found", async () => {
+    let ready = false
+    let recoverCount = 0
+    const driver: Automation.Driver = {
+      locate: async () => ready ? ok({ id: "save" }) : bad("not_found", "first miss"),
+      check: async () => ok(),
+      act: async () => ok(),
+      recover: async () => {
+        ready = true
+        recoverCount++
+        return ok()
+      },
+    }
+    const engine = Automation.create(driver, {
+      timeoutMs: 20,
+      intervalMs: 0,
+      retryMax: 2,
+      backoffMs: [0, 0],
+    })
+
+    const result = await engine.run({
+      id: "save",
+      target: [{ kind: "text", value: "Save" }],
+      act: { kind: "click" },
+      recoverOn: ["not_found"],
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.tries).toBe(2)
+    expect(recoverCount).toBe(1)
+    expect(result.trace.some((x) => x.stage === "recover" && x.ok)).toBe(true)
+  })
+
   test("returns not_found when locator never resolves", async () => {
     let locateCount = 0
     const driver: Automation.Driver = {

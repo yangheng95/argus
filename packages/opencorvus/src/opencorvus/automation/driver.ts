@@ -47,6 +47,7 @@ export function selectDriver(input: DriverInput): DriverResult {
   if (wanted !== "auto") {
     const chosen = create(input, wanted)
     if (chosen) return chosen
+    throw new Error(`Requested automation driver is unavailable (requested=${wanted})`)
   }
 
   const order: Array<Exclude<DriverKind, "auto">> = ["playwright", "appium", "desktop"]
@@ -57,4 +58,3 @@ export function selectDriver(input: DriverInput): DriverResult {
 
   throw new Error(`No automation driver available (requested=${wanted})`)
 }
-

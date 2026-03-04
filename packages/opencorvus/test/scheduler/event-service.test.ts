@@ -23,6 +23,15 @@ const TestOnce = BusEvent.define(
   }),
 )
 
+async function waitUntil(check: () => boolean, timeout = 2000) {
+  const end = Date.now() + timeout
+  while (Date.now() < end) {
+    if (check()) return
+    await Bun.sleep(10)
+  }
+  throw new Error("timed out")
+}
+
 describe("scheduler.event-service", () => {
   afterEach(async () => {
     await Instance.disposeAll()
@@ -100,6 +109,129 @@ describe("scheduler.event-service", () => {
         expect(wake).toHaveBeenCalledTimes(1)
         expect(row?.enabled).toBe(false)
         expect(row?.last_event).toBe("test.once")
+      },
+    })
+
+    wake.mockRestore()
+  })
+
+  test("one failed job does not block other matching jobs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const wake = spyOn(SessionWake, "wake")
+    wake.mockImplementationOnce(async () => {
+      throw new Error("wake failed")
+    })
+    wake.mockResolvedValue("ses_evt_ok")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const idA = "crn_evt_a_" + Math.random().toString(36).slice(2)
+        const idB = "crn_evt_b_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(EventJobTable)
+            .values([
+              {
+                id: idA,
+                project_id: Instance.project.id,
+                name: "job-a",
+                event_type: "test.event",
+                prompt: "run a",
+                enabled: true,
+                one_shot: false,
+                cooldown_ms: 0,
+              },
+              {
+                id: idB,
+                project_id: Instance.project.id,
+                name: "job-b",
+                event_type: "test.event",
+                prompt: "run b",
+                enabled: true,
+                one_shot: false,
+                cooldown_ms: 0,
+              },
+            ])
+            .run(),
+        )
+
+        EventService.init()
+        await Bus.publish(TestEvent, { value: "go" })
+
+        const rows = Database.use((db) =>
+          db
+            .select()
+            .from(EventJobTable)
+            .where(eq(EventJobTable.project_id, Instance.project.id))
+            .all(),
+        )
+        expect(wake).toHaveBeenCalledTimes(2)
+        expect(rows.filter((row) => typeof row.last_run === "number").length).toBe(1)
+      },
+    })
+
+    wake.mockRestore()
+  })
+
+  test("runs matching jobs in parallel without head-of-line blocking", async () => {
+    await using tmp = await tmpdir({ git: true })
+    let release = () => {}
+    const gate = new Promise<string>((resolve) => {
+      release = () => resolve("ses_evt_slow")
+    })
+    const wake = spyOn(SessionWake, "wake").mockImplementation(async (input) => {
+      if (input.prompt === "slow") return gate
+      return "ses_evt_fast"
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const idSlow = "crn_evt_slow_" + Math.random().toString(36).slice(2)
+        const idFast = "crn_evt_fast_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(EventJobTable)
+            .values([
+              {
+                id: idSlow,
+                project_id: Instance.project.id,
+                name: "job-slow",
+                event_type: "test.event",
+                prompt: "slow",
+                enabled: true,
+                one_shot: false,
+                cooldown_ms: 0,
+              },
+              {
+                id: idFast,
+                project_id: Instance.project.id,
+                name: "job-fast",
+                event_type: "test.event",
+                prompt: "fast",
+                enabled: true,
+                one_shot: false,
+                cooldown_ms: 0,
+              },
+            ])
+            .run(),
+        )
+
+        EventService.init()
+        const published = Bus.publish(TestEvent, { value: "go" })
+        await waitUntil(() => wake.mock.calls.length === 2)
+        release()
+        await published
+
+        const rows = Database.use((db) =>
+          db
+            .select()
+            .from(EventJobTable)
+            .where(eq(EventJobTable.project_id, Instance.project.id))
+            .all(),
+        )
+        expect(rows.filter((row) => typeof row.last_run === "number").length).toBe(2)
       },
     })
 

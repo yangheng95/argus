@@ -95,6 +95,12 @@ export namespace AppiumDriver {
         `//*[contains(@text, ${escaped(target.value)}) or contains(@label, ${escaped(target.value)}) or contains(@name, ${escaped(target.value)})]`,
       ]
     }
+    if (target.kind === "image") {
+      return [
+        `//*[@content-desc=${escaped(target.value)} or @name=${escaped(target.value)} or @label=${escaped(target.value)} or @resource-id=${escaped(target.value)}]`,
+        `//*[contains(@content-desc, ${escaped(target.value)}) or contains(@name, ${escaped(target.value)}) or contains(@label, ${escaped(target.value)}) or contains(@resource-id, ${escaped(target.value)})]`,
+      ]
+    }
     return []
   }
 
@@ -312,6 +318,7 @@ export namespace AppiumDriver {
             ? ({ ok: true } satisfies Automation.Probe)
             : ({ ok: false, kind: "state_mismatch", detail: "custom recovery failed" } satisfies Automation.Probe)
         }
+        if (ctx.kind !== "not_found" && ctx.kind !== "infra") return { ok: true } satisfies Automation.Probe
         if (!client.activateApp || !input.appId) return { ok: true } satisfies Automation.Probe
         return client.activateApp(input.appId)
           .then(() => ({ ok: true } satisfies Automation.Probe))

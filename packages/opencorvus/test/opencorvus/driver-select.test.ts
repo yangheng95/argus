@@ -63,9 +63,18 @@ describe("automation driver select", () => {
     expect(result.kind).toBe("playwright")
   })
 
-  test("falls back to desktop when requested appium is unavailable", () => {
+  test("throws when explicitly requested driver is unavailable", () => {
+    expect(() =>
+      selectDriver({
+        kind: "appium",
+        desktop: desktop(),
+      }),
+    ).toThrow("Requested automation driver is unavailable")
+  })
+
+  test("auto falls back to desktop when appium/playwright are unavailable", () => {
     const result = selectDriver({
-      kind: "appium",
+      kind: "auto",
       desktop: desktop(),
     })
     expect(result.kind).toBe("desktop")
@@ -87,6 +96,6 @@ describe("automation driver select", () => {
   })
 
   test("throws when no driver is available", () => {
-    expect(() => selectDriver({ kind: "desktop" })).toThrow("No automation driver available")
+    expect(() => selectDriver({ kind: "desktop" })).toThrow("Requested automation driver is unavailable")
   })
 })

@@ -20,6 +20,7 @@ export namespace CronService {
 
   const POLL_INTERVAL_MS = 60 * 1000
   const LEASE_MS = 2 * 60 * 1000
+  const LEASE_RENEW_MS = 30 * 1000
   const MAX_BACKOFF_MS = 5 * 60 * 1000
 
   const state = Instance.state(() => ({
@@ -116,10 +117,25 @@ export namespace CronService {
   async function execute(job: typeof CronJobTable.$inferSelect, owner: string, now: number): Promise<void> {
     log.info("executing cron job", { jobId: job.id, name: job.name, prompt: job.prompt.slice(0, 100) })
 
+    const timer = setInterval(() => {
+      try {
+        renew(job.id, owner)
+      } catch (error) {
+        log.warn("cron lease renew failed", {
+          jobId: job.id,
+          name: job.name,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }, LEASE_RENEW_MS)
+    timer.unref()
+
     const sessionID = await SessionWake.wake({
       sessionID: job.session_id ?? undefined,
       prompt: job.prompt,
       agent: job.agent === "default" ? undefined : job.agent,
+    }).finally(() => {
+      clearInterval(timer)
     })
 
     if (job.one_shot) {
@@ -168,6 +184,18 @@ export namespace CronService {
       sessionID,
       nextRun: new Date(nextRun).toISOString(),
     })
+  }
+
+  function renew(id: string, owner: string) {
+    Database.use((db) =>
+      db
+        .update(CronJobTable)
+        .set({
+          lease_until: Date.now() + LEASE_MS,
+        })
+        .where(and(eq(CronJobTable.id, id), eq(CronJobTable.lease_owner, owner)))
+        .run(),
+    )
   }
 
   async function fail(

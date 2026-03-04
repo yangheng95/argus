@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { AutomationRuntime } from "../../src/opencorvus/automation"
+import { PlaywrightDriver } from "../../src/opencorvus/automation/adapters/playwright"
 
 let binding: any = null
 const bindings: any[] = []
@@ -11,6 +13,7 @@ const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
 const hotkeys: string[][] = []
 const keys: string[] = []
+const pastes: string[] = []
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
@@ -40,7 +43,9 @@ mock.module("../../src/opencorvus/gui/index", () => ({
     scroll: async (_direction: "up" | "down", _amount = 3) => {},
     moveTo: async (_x: number, _y: number) => {},
     drag: async (_startX: number, _startY: number, _endX: number, _endY: number) => {},
-    paste: async (_text: string) => {},
+    paste: async (text: string) => {
+      pastes.push(text)
+    },
     pressKey: async (key: string) => {
       keys.push(key)
     },
@@ -81,6 +86,36 @@ mock.module("../../src/tool/overlay-client", () => ({
 
 const { InputTool } = await import("../../src/tool/input")
 const { DesktopState } = await import("../../src/tool/desktop-state")
+
+class LocatorStub implements PlaywrightDriver.Locator {
+  count() {
+    return Promise.resolve(0)
+  }
+
+  first() {
+    return this
+  }
+
+  click() {
+    return Promise.resolve()
+  }
+
+  fill() {
+    return Promise.resolve()
+  }
+
+  isVisible() {
+    return Promise.resolve(true)
+  }
+
+  isEnabled() {
+    return Promise.resolve(true)
+  }
+
+  evaluate<T>(fn: (element: Element, arg?: unknown) => T | Promise<T>, arg?: unknown) {
+    return Promise.resolve(fn({} as Element, arg))
+  }
+}
 
 const ctx = {
   sessionID: "test",
@@ -143,6 +178,8 @@ beforeEach(() => {
   middleClicks.length = 0
   hotkeys.length = 0
   keys.length = 0
+  pastes.length = 0
+  AutomationRuntime.clear()
   delete process.env.OPENCORVUS_COORDINATE_SPACE
 })
 
@@ -418,6 +455,43 @@ describe("tool.input bound window guard", () => {
         const result = await tool.execute({ action: "key", key: "alt+tab" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(hotkeys).toEqual([["alt", "tab"]])
+      },
+    })
+  })
+
+  test("skips desktop foreground guard for playwright type action", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+    const page: PlaywrightDriver.Page = {
+      locator: () => new LocatorStub(),
+      getByRole: () => new LocatorStub(),
+      getByText: () => new LocatorStub(),
+      keyboard: {
+        press: async () => {},
+        type: async () => {},
+      },
+      mouse: {
+        wheel: async () => {},
+      },
+      screenshot: async () => new Uint8Array([1]),
+    }
+    AutomationRuntime.setPlaywright({ page })
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.bindWindow(7, "Editor")
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "type", text: "hello", driver: "playwright" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(pastes).toHaveLength(0)
       },
     })
   })

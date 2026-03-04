@@ -19,6 +19,17 @@ async function recover() {
   } satisfies Automation.Probe
 }
 
+export function resolveInputDriver(kind?: DriverKind) {
+  const selected = selectDriver(AutomationRuntime.merge({
+    kind,
+    desktop: DesktopDriver.create({
+      id: "input.driver.resolve",
+      action: async () => {},
+    }),
+  }))
+  return selected.kind
+}
+
 export async function runInputAction(input: {
   id: string
   action: () => Promise<void>

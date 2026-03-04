@@ -82,7 +82,7 @@ const WARN_THROTTLE_MS = 15_000
 const encoder = new TextEncoder()
 const msg = overlayProtocol.messages
 // Global singleton strategy for overlay subprocess management.
-const SINGLETON_MODE = (process.env.OPENCORVUS_OVERLAY_SINGLETON_MODE ?? "kill-old-start-new").toLowerCase()
+const SINGLETON_MODE = (process.env.OPENCORVUS_OVERLAY_SINGLETON_MODE ?? "reuse").toLowerCase()
 
 function envInt(name: string, fallback: number, min = 1) {
   const value = Number(process.env[name])

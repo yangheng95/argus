@@ -8,12 +8,21 @@ Use this tool for Playwright (web) or Appium (mobile) sessions that are already 
 
 Actions:
 - status: Show whether Playwright/Appium runtime context is attached.
+- attach: Attach Playwright/Appium runtime from globalThis references.
+- clear: Clear attached runtime context.
 - run: Execute one step or a flow of steps with locate/pre/act/post checks.
 
 Driver:
 - auto (default): prefers Playwright, then Appium.
 - playwright: require Playwright runtime.
-- appium: require Appium runtime.`
+- appium: require Appium runtime.
+
+Locator notes:
+- image locator currently matches accessibility/metadata fields (e.g. alt/aria-label/content-desc/resource-id), not pixel template matching.
+
+Step helpers:
+- post_template: quick post-check template: "none" | "exists" | "visible" | "enabled" | "focused" | "stable".
+- recover_on: when to trigger recovery for a failed attempt (defaults to: not_interactable/state_mismatch/infra).`
 
 const Locator = z.discriminatedUnion("kind", [
   z.object({
@@ -88,12 +97,17 @@ const Retry = z.object({
   backoffMs: z.array(z.number().int().min(0)).optional(),
 })
 
+const RecoverKind = z.enum(["not_found", "not_interactable", "state_mismatch", "infra", "timeout", "aborted"])
+const CheckTemplate = z.enum(["none", "exists", "visible", "enabled", "focused", "stable"])
+
 const Step = z.object({
   id: z.string().min(1),
   target: z.array(Locator).min(1).optional(),
   pre: z.array(Check).optional(),
   act: Action,
   post: z.array(Check).optional(),
+  post_template: CheckTemplate.optional(),
+  recover_on: z.array(RecoverKind).min(1).optional(),
   timeoutMs: z.number().int().min(1).max(120000).optional(),
   intervalMs: z.number().int().min(0).max(10000).optional(),
   retry: Retry.optional(),
@@ -111,12 +125,23 @@ const Run = z.object({
   intervalMs: z.number().int().min(0).max(10000).optional(),
   retryMax: z.number().int().min(1).max(10).optional(),
   backoffMs: z.array(z.number().int().min(0)).optional(),
+  post_template: CheckTemplate.optional(),
 }).refine((x) => !!x.step || !!x.steps, { message: "Provide either step or steps." })
   .refine((x) => !(x.step && x.steps), { message: "Use step or steps, not both." })
 
 const Params = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("status"),
+  }),
+  z.object({
+    action: z.literal("attach"),
+    playwright_global: z.string().min(1).optional().describe("globalThis key that stores a Playwright page"),
+    appium_global: z.string().min(1).optional().describe("globalThis key that stores an Appium/WebDriver client"),
+    appium_app_id: z.string().min(1).optional().describe("Optional app id for activate-app recovery"),
+  }),
+  z.object({
+    action: z.literal("clear"),
+    kind: z.enum(["playwright", "appium", "all"]).default("all").optional(),
   }),
   Run,
 ])
@@ -156,6 +181,25 @@ function compact(step: Automation.StepResult) {
   }
 }
 
+function template(name: z.infer<typeof CheckTemplate> | undefined) {
+  if (!name || name === "none") return undefined
+  return [{ kind: name } satisfies Automation.Check]
+}
+
+function normalize(step: z.infer<typeof Step>, post: z.infer<typeof CheckTemplate> | undefined): Automation.Step {
+  return {
+    id: step.id,
+    target: step.target,
+    pre: step.pre,
+    act: step.act,
+    post: step.post ?? template(step.post_template ?? post),
+    recoverOn: step.recover_on,
+    timeoutMs: step.timeoutMs,
+    intervalMs: step.intervalMs,
+    retry: step.retry,
+  }
+}
+
 export const AutomationTool = Tool.define("automation", {
   description: DESCRIPTION,
   parameters: Params,
@@ -171,6 +215,33 @@ export const AutomationTool = Tool.define("automation", {
       const runtime = AutomationRuntime.status()
       return {
         title: "Automation runtime status",
+        output: JSON.stringify(runtime),
+        metadata: runtime,
+      }
+    }
+    if (params.action === "attach") {
+      const attached = AutomationRuntime.attach({
+        playwrightGlobal: params.playwright_global,
+        appiumGlobal: params.appium_global,
+        appiumAppId: params.appium_app_id,
+      })
+      return {
+        title: attached.playwright || attached.appium
+          ? "Automation runtime attached"
+          : "Automation runtime attach skipped",
+        output: attached.playwright || attached.appium
+          ? JSON.stringify(attached)
+          : `No runtime found on globalThis. Expected keys: playwright=${attached.globals.playwright}, appium=${attached.globals.appium}.`,
+        metadata: attached,
+      }
+    }
+    if (params.action === "clear") {
+      if (params.kind === "all") AutomationRuntime.clear()
+      if (params.kind === "playwright") AutomationRuntime.clear("playwright")
+      if (params.kind === "appium") AutomationRuntime.clear("appium")
+      const runtime = AutomationRuntime.status()
+      return {
+        title: "Automation runtime cleared",
         output: JSON.stringify(runtime),
         metadata: runtime,
       }
@@ -200,7 +271,7 @@ export const AutomationTool = Tool.define("automation", {
       retryMax: params.retryMax ?? 2,
       backoffMs: params.backoffMs ?? [120, 320, 640],
     })
-    const steps = params.step ? [params.step] : params.steps ?? []
+    const steps = (params.step ? [params.step] : params.steps ?? []).map((step) => normalize(step, params.post_template))
     const flow = steps.length === 1
       ? await engine.run(steps[0], { abort: ctx.abort })
         .then((step) => ({

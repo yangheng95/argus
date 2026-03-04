@@ -165,4 +165,63 @@ describe("appium automation adapter", () => {
     expect(result.ok).toBe(true)
     expect(used).toEqual(["hello"])
   })
+
+  test("locates image target via accessibility metadata selectors", async () => {
+    const image = new ElementStub("img-1")
+    const selectors: string[] = []
+    const client: AppiumDriver.Client = {
+      $$: async (selector) => {
+        selectors.push(selector)
+        if (selector.includes("save-icon")) return [image]
+        return []
+      },
+      keys: async () => {},
+      pause: async () => {},
+      execute: async () => true,
+      takeScreenshot: async () => "",
+    }
+    const driver = AppiumDriver.create({ client })
+    const result = await driver.locate({
+      step: { id: "img", act: { kind: "click" } },
+      target: [{ kind: "image", value: "save-icon" }],
+      abort: new AbortController().signal,
+    })
+    expect(result.ok).toBe(true)
+    expect(selectors.some((selector) => selector.includes("content-desc"))).toBe(true)
+  })
+
+  test("activateApp recovery only runs for not_found/infra", async () => {
+    let activated = 0
+    const client: AppiumDriver.Client = {
+      $$: async () => [],
+      keys: async () => {},
+      pause: async () => {},
+      execute: async () => true,
+      takeScreenshot: async () => "",
+      activateApp: async () => {
+        activated++
+      },
+    }
+    const driver = AppiumDriver.create({ client, appId: "com.demo.app" })
+
+    const skip = await driver.recover?.({
+      step: { id: "noop", act: { kind: "wait", ms: 1 } },
+      attempt: 1,
+      node: null,
+      kind: "state_mismatch",
+      abort: new AbortController().signal,
+    })
+    expect(skip?.ok).toBe(true)
+    expect(activated).toBe(0)
+
+    const run = await driver.recover?.({
+      step: { id: "noop", act: { kind: "wait", ms: 1 } },
+      attempt: 1,
+      node: null,
+      kind: "not_found",
+      abort: new AbortController().signal,
+    })
+    expect(run?.ok).toBe(true)
+    expect(activated).toBe(1)
+  })
 })

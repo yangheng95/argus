@@ -70,22 +70,29 @@ export namespace PlaywrightDriver {
     recover?: () => Promise<boolean>
   }
 
-  function makeLocator(page: Page, target: Automation.Locator) {
-    if (target.kind === "aid") {
-      const q = escaped(target.value)
-      return page.locator(
-        `[data-testid="${q}"], [data-test-id="${q}"], [data-qa="${q}"], [aria-label="${q}"]`,
+function makeLocator(page: Page, target: Automation.Locator) {
+  if (target.kind === "aid") {
+    const q = escaped(target.value)
+    return page.locator(
+      `[data-testid="${q}"], [data-test-id="${q}"], [data-qa="${q}"], [aria-label="${q}"]`,
       )
     }
     if (target.kind === "role") {
       return page.getByRole(target.value, target.name ? { name: target.name } : undefined)
     }
-    if (target.kind === "text") {
-      if (target.exact) return page.getByText(target.value, { exact: true })
-      return page.getByText(new RegExp(escapedRegex(target.value), "i"))
-    }
-    return null
+  if (target.kind === "text") {
+    if (target.exact) return page.getByText(target.value, { exact: true })
+    return page.getByText(new RegExp(escapedRegex(target.value), "i"))
   }
+  if (target.kind === "image") {
+    const q = escaped(target.value)
+    return page.locator(
+      `img[alt*="${q}"], img[src*="${q}"], [role="img"][aria-label*="${q}"], `
+      + `[aria-label*="${q}"], [data-testid*="${q}"], [data-test-id*="${q}"], [data-qa*="${q}"]`,
+    )
+  }
+  return null
+}
 
   export function create(input: Opt): Automation.Driver {
     const page = input.page
@@ -124,9 +131,6 @@ export namespace PlaywrightDriver {
                 kind: "aborted",
                 detail: "aborted",
               } satisfies Automation.Probe<Automation.Node>
-            }
-            if (target.kind === "image") {
-              return null
             }
             const locator = makeLocator(page, target)
             if (!locator) return null
@@ -273,6 +277,17 @@ export namespace PlaywrightDriver {
           return ok
             ? ({ ok: true } satisfies Automation.Probe)
             : ({ ok: false, kind: "state_mismatch", detail: "custom recovery failed" } satisfies Automation.Probe)
+        }
+        const locator = resolve(ctx.node)
+        if (
+          locator
+          && locator.scrollIntoViewIfNeeded
+          && (ctx.kind === "not_interactable" || ctx.kind === "state_mismatch")
+        ) {
+          const scrolled = await locator.scrollIntoViewIfNeeded({ timeout })
+            .then(() => true)
+            .catch(() => false)
+          if (scrolled) return { ok: true } satisfies Automation.Probe
         }
         if (!page.bringToFront) return { ok: true } satisfies Automation.Probe
         return page.bringToFront()
