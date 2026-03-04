@@ -470,6 +470,7 @@ function streamEntry() {
   const item = streamPrepare()
   if (item.entry) return item.entry
   item.entry = makeMessage("assistant")
+  item.entry.body.classList.add("stream-cursor")
   renderMessage(item.entry, "", true)
   return item.entry
 }
