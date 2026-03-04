@@ -76,7 +76,7 @@ export namespace CronService {
       const claimed = claim(row.id, projectID, owner, now)
       if (!claimed) continue
       await execute(claimed, owner, now).catch(async (err) => {
-        await fail(claimed, owner, now, err)
+        await fail(claimed, owner, err)
       })
     }
   }
@@ -137,13 +137,14 @@ export namespace CronService {
     }).finally(() => {
       clearInterval(timer)
     })
+    const committedAt = Date.now()
 
     if (job.one_shot) {
       Database.use((db) =>
         db
           .update(CronJobTable)
           .set({
-            last_run: now,
+            last_run: committedAt,
             enabled: false,
             failure_count: 0,
             last_error: null,
@@ -163,12 +164,12 @@ export namespace CronService {
     }
 
     const parsed = Cron.parse(job.expression)
-    const nextRun = Cron.nextRun(parsed, now)
+    const nextRun = Cron.nextRun(parsed, committedAt)
     Database.use((db) =>
       db
         .update(CronJobTable)
         .set({
-          last_run: now,
+          last_run: committedAt,
           next_run: nextRun,
           failure_count: 0,
           last_error: null,
@@ -201,9 +202,9 @@ export namespace CronService {
   async function fail(
     job: typeof CronJobTable.$inferSelect,
     owner: string,
-    now: number,
     err: unknown,
   ): Promise<void> {
+    const now = Date.now()
     const step = Math.min(job.failure_count + 1, 8)
     const wait = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** step)
     const nextRun = Math.max(job.next_run, now + wait)

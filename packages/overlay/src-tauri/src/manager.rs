@@ -459,6 +459,7 @@ fn watch_pipe<R: Read + Send + 'static>(shared: Shared, app: AppHandle, source: 
                 Ok(text) if !text.trim().is_empty() => {
                     if tag == "channel" {
                         if let Some(event) = parse_channel_mirror(&text) {
+                            push_log(&shared, &app, format!("[mirror:{}] {}", event.kind, event.text.as_deref().unwrap_or("")));
                             let _ = app.emit_to(events::WINDOW_CONSOLE, events::EVT_MANAGER_CHAT, event);
                             continue;
                         }

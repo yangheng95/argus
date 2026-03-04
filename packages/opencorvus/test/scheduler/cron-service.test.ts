@@ -158,4 +158,43 @@ describe("scheduler.cron-service", () => {
 
     expect(wake).toHaveBeenCalledTimes(1)
   })
+
+  test("interval next_run is computed from completion time", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const wake = spyOn(SessionWake, "wake").mockImplementation(async () => {
+      await Bun.sleep(120)
+      return "ses_mock"
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const id = "crn_interval_" + Math.random().toString(36).slice(2)
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id,
+              project_id: Instance.project.id,
+              name: "interval",
+              expression: "1m",
+              prompt: "hello",
+              enabled: true,
+              one_shot: false,
+              next_run: now - 1000,
+            })
+            .run(),
+        )
+
+        const startedAt = Date.now()
+        await CronService.runNow()
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())
+        expect((row?.last_run ?? 0) - startedAt).toBeGreaterThanOrEqual(80)
+        expect((row?.next_run ?? 0) - (row?.last_run ?? 0)).toBe(60 * 1000)
+      },
+    })
+
+    expect(wake).toHaveBeenCalledTimes(1)
+  })
 })
