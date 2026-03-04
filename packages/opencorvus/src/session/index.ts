@@ -644,6 +644,7 @@ export namespace Session {
         await remove(child.id)
       }
       await unshare(sessionID).catch(() => {})
+      await ScreenshotStore.removeSession(sessionID).catch(() => {})
       // CASCADE delete handles messages and parts automatically
       Database.use((db) => {
         db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
