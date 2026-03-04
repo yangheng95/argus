@@ -30,8 +30,14 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
 
     let icon = match Image::from_bytes(include_bytes!("../icons/tray.ico")) {
         Ok(icon) => icon,
-        Err(tray_error) => Image::from_bytes(include_bytes!("../icons/icon.ico"))
-            .map_err(|icon_error| format!("load tray icon failed: tray.ico={tray_error}; icon.ico={icon_error}"))?,
+        Err(tray_error) => match Image::from_bytes(include_bytes!("../icons/icon.ico")) {
+            Ok(icon) => icon,
+            Err(icon_error) => {
+                // Fallback to PNG which is guaranteed RGBA
+                Image::from_bytes(include_bytes!("../icons/icon.png"))
+                    .map_err(|png_error| format!("load tray icon failed: tray.ico={tray_error}; icon.ico={icon_error}; icon.png={png_error}"))?
+            }
+        },
     };
 
     let _tray = TrayIconBuilder::new()
