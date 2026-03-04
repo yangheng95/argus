@@ -336,13 +336,7 @@ export const InputTool = Tool.define("input", {
       }
 
       case "key": {
-<<<<<<< HEAD
         const focusChanging = isFocusChangingKey(params.key)
-        // Skip ensureBoundWindowForeground for focus-changing keys
-        // to avoid pulling the old window back to front
-        if (!focusChanging) {
-          const windowBlocked = await ensureBoundWindowForeground("key")
-=======
         let selected: ReturnType<typeof resolveInputDriver>
         try {
           selected = resolveInputDriver(params.driver)
@@ -350,8 +344,7 @@ export const InputTool = Tool.define("input", {
           return InputGuard.driverUnavailable("key", params.driver, error)
         }
         if (selected === "desktop") {
-          const windowBlocked = await InputGuard.ensureBoundWindowForeground("key", focusKey(params.key))
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
+          const windowBlocked = await InputGuard.ensureBoundWindowForeground("key", focusChanging)
           if (windowBlocked) return windowBlocked
         }
         showOverlay(undefined, undefined, "key", params.key)
