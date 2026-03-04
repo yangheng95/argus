@@ -22,13 +22,13 @@ export namespace ScreenshotStore {
     const hash = createHash("sha256").update(buffer).digest("hex").slice(0, 16)
     const ext = mime === "image/jpeg" ? "jpg" : "png"
     const dir = path.join(SCREENSHOT_DIR, sessionID)
-    console.log("[ScreenshotStore] save called", { dir, sessionID, mime, bufLen: buffer.length })
+    log.info("save called", { dir, sessionID, mime, bufLen: buffer.length })
     await fs.mkdir(dir, { recursive: true })
     const filename = `${hash}.${ext}`
     const filepath = path.join(dir, filename)
     await fs.writeFile(filepath, buffer)
     const url = `${SCHEME}${sessionID}/${filename}`
-    console.log("[ScreenshotStore] saved", { filepath, url })
+    log.info("saved", { filepath, url })
     return url
   }
 
