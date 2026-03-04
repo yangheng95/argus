@@ -320,9 +320,29 @@ export namespace WindowManager {
     // Refresh window position — the window may have moved or been closed.
     const native = await getNativeWindow(ws.binding.windowId)
     if (!native) {
-      log.warn("bound window disappeared", { windowId: ws.binding.windowId, title: ws.binding.matchTitle })
-      ws.binding = null
-      return null
+      // Window id gone — attempt recovery by app/title identity before giving up.
+      const info = await findWindowForRebind(ws.binding)
+      if (!info) {
+        log.warn("bound window disappeared and no rebind candidate found", {
+          windowId: ws.binding.windowId,
+          matchTitle: ws.binding.matchTitle,
+        })
+        ws.binding = null
+        return null
+      }
+      log.info("bound window id changed, rebound by identity", {
+        previousWindowId: ws.binding.windowId,
+        newWindowId: info.id,
+        appName: info.appName,
+      })
+      ws.binding = {
+        windowId: info.id,
+        matchTitle: ws.binding.matchTitle,
+        matchWindowId: ws.binding.matchWindowId,
+        matchAppName: ws.binding.matchAppName ?? info.appName,
+        info,
+      }
+      return ws.binding
     }
 
     ws.binding.info = {
