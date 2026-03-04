@@ -45,6 +45,16 @@ pub struct SendResult {
     pub output: String,
 }
 
+#[derive(Serialize, Clone)]
+pub struct ChatEvent {
+    pub kind: String,
+    pub text: Option<String>,
+    pub url: Option<String>,
+    pub alt: Option<String>,
+    pub success: Option<bool>,
+    pub code: Option<i32>,
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 pub struct LogEntry {
     pub ts: u64,
@@ -182,6 +192,153 @@ fn watch_pipe<R: Read + Send + 'static>(shared: Shared, app: AppHandle, source: 
     });
 }
 
+fn emit_chat(
+    app: &AppHandle,
+    kind: &str,
+    text: Option<String>,
+    url: Option<String>,
+    alt: Option<String>,
+    success: Option<bool>,
+    code: Option<i32>,
+) {
+    let _ = app.emit_to(
+        events::WINDOW_CONSOLE,
+        events::EVT_MANAGER_CHAT,
+        ChatEvent {
+            kind: kind.into(),
+            text,
+            url,
+            alt,
+            success,
+            code,
+        },
+    );
+}
+
+fn ensure_json_format(args: Vec<String>) -> Vec<String> {
+    let mut out = Vec::with_capacity(args.len() + 2);
+    let mut seen = false;
+    let mut i = 0usize;
+    while i < args.len() {
+        let item = &args[i];
+        if item == "--format" {
+            out.push("--format".into());
+            out.push("json".into());
+            seen = true;
+            i += 1;
+            if i < args.len() {
+                i += 1;
+            }
+            continue;
+        }
+        if item.starts_with("--format=") {
+            out.push("--format=json".into());
+            seen = true;
+            i += 1;
+            continue;
+        }
+        out.push(item.clone());
+        i += 1;
+    }
+    if !seen {
+        out.push("--format".into());
+        out.push("json".into());
+    }
+    out
+}
+
+fn emit_delta(app: &AppHandle, output: &mut String, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    output.push_str(text);
+    emit_chat(app, "delta", Some(text.into()), None, None, None, None);
+}
+
+fn emit_replace(app: &AppHandle, output: &mut String, text: &str) {
+    output.clear();
+    output.push_str(text);
+    emit_chat(app, "replace", Some(text.into()), None, None, None, None);
+}
+
+fn process_json_line(app: &AppHandle, value: &serde_json::Value, output: &mut String, delta_seen: &mut bool) -> bool {
+    let Some(kind) = value.get("type").and_then(|item| item.as_str()) else {
+        return false;
+    };
+
+    if kind == "text_delta" {
+        let Some(delta) = value.get("delta").and_then(|item| item.as_str()) else {
+            return true;
+        };
+        *delta_seen = true;
+        emit_delta(app, output, delta);
+        return true;
+    }
+
+    if kind == "text" {
+        let Some(text) = value.pointer("/part/text").and_then(|item| item.as_str()) else {
+            return true;
+        };
+        if !*delta_seen {
+            emit_replace(app, output, text);
+        }
+        return true;
+    }
+
+    if kind == "file" {
+        let Some(mime) = value.pointer("/part/mime").and_then(|item| item.as_str()) else {
+            return true;
+        };
+        if !mime.starts_with("image/") {
+            return true;
+        }
+        let Some(url) = value.pointer("/part/url").and_then(|item| item.as_str()) else {
+            return true;
+        };
+        let alt = value
+            .pointer("/part/filename")
+            .and_then(|item| item.as_str())
+            .unwrap_or("image");
+        emit_chat(app, "image", None, Some(url.into()), Some(alt.into()), None, None);
+        return true;
+    }
+
+    if kind == "tool_use" {
+        let Some(items) = value.pointer("/part/state/attachments").and_then(|item| item.as_array()) else {
+            return true;
+        };
+        for item in items {
+            let Some(mime) = item.get("mime").and_then(|x| x.as_str()) else {
+                continue;
+            };
+            if !mime.starts_with("image/") {
+                continue;
+            }
+            let Some(url) = item.get("url").and_then(|x| x.as_str()) else {
+                continue;
+            };
+            let alt = item
+                .get("filename")
+                .and_then(|x| x.as_str())
+                .unwrap_or("image");
+            emit_chat(app, "image", None, Some(url.into()), Some(alt.into()), None, None);
+        }
+        return true;
+    }
+
+    if kind == "error" {
+        let text = value
+            .pointer("/error/data/message")
+            .and_then(|item| item.as_str())
+            .or_else(|| value.pointer("/error/name").and_then(|item| item.as_str()))
+            .unwrap_or("Unknown error");
+        emit_chat(app, "system", Some(text.into()), None, None, None, None);
+        return true;
+    }
+
+    false
+}
+
 fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
     let config = {
         let state = shared.lock().unwrap();
@@ -190,18 +347,26 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
 
     push_log(shared, app, format!("prompt> {prompt}"));
 
-    let mut args = config.run_args.clone();
+    let mut args = if config.run_args.first().map(|item| item.as_str()) == Some("run") {
+        ensure_json_format(config.run_args.clone())
+    } else {
+        config.run_args.clone()
+    };
     args.push(prompt);
 
     let mut cmd = build_command(&config, &args);
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    let output = match cmd.output() {
-        Ok(output) => output,
+    emit_chat(app, "start", None, None, None, None, None);
+
+    let mut child = match cmd.spawn() {
+        Ok(child) => child,
         Err(error) => {
             let message = format!("failed to run prompt command: {error}");
             push_log(shared, app, message.clone());
+            emit_chat(app, "system", Some(message.clone()), None, None, None, None);
+            emit_chat(app, "done", None, None, None, Some(false), Some(-1));
             return SendResult {
                 success: false,
                 code: -1,
@@ -210,20 +375,82 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         }
     };
 
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-
-    for line in stdout.lines() {
-        push_log(shared, app, format!("[run] {line}"));
+    let mut stderr_task = None;
+    if let Some(stderr) = child.stderr.take() {
+        let app2 = app.clone();
+        let shared2 = shared.clone();
+        stderr_task = Some(std::thread::spawn(move || {
+            let mut text = String::new();
+            for line in BufReader::new(stderr).lines() {
+                match line {
+                    Ok(item) if !item.trim().is_empty() => {
+                        push_log(&shared2, &app2, format!("[run:err] {item}"));
+                        if !text.is_empty() {
+                            text.push('\n');
+                        }
+                        text.push_str(item.trim_end());
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        push_log(&shared2, &app2, format!("[run:err] stream read failed: {error}"));
+                        break;
+                    }
+                }
+            }
+            text
+        }));
     }
-    for line in stderr.lines() {
-        push_log(shared, app, format!("[run:err] {line}"));
+
+    let mut out = String::new();
+    let mut delta_seen = false;
+    if let Some(stdout) = child.stdout.take() {
+        for line in BufReader::new(stdout).lines() {
+            match line {
+                Ok(item) if !item.trim().is_empty() => {
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&item) {
+                        if process_json_line(app, &value, &mut out, &mut delta_seen) {
+                            continue;
+                        }
+                    }
+                    push_log(shared, app, format!("[run] {item}"));
+                    let chunk = format!("{item}\n");
+                    emit_delta(app, &mut out, &chunk);
+                    delta_seen = true;
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    let line = format!("[run] stream read failed: {error}");
+                    push_log(shared, app, line.clone());
+                    emit_chat(app, "system", Some(line), None, None, None, None);
+                    break;
+                }
+            }
+        }
     }
 
-    let success = output.status.success();
-    let code = output.status.code().unwrap_or(if success { 0 } else { -1 });
-    let text = if !stdout.is_empty() {
-        stdout
+    let stderr = stderr_task
+        .map(|task| task.join().unwrap_or_default())
+        .unwrap_or_default();
+
+    let status = match child.wait() {
+        Ok(item) => item,
+        Err(error) => {
+            let message = format!("failed to wait prompt command: {error}");
+            push_log(shared, app, message.clone());
+            emit_chat(app, "system", Some(message.clone()), None, None, None, None);
+            emit_chat(app, "done", None, None, None, Some(false), Some(-1));
+            return SendResult {
+                success: false,
+                code: -1,
+                output: message,
+            };
+        }
+    };
+
+    let success = status.success();
+    let code = status.code().unwrap_or(if success { 0 } else { -1 });
+    let text = if !out.trim().is_empty() {
+        out.trim_end().into()
     } else if !stderr.is_empty() {
         stderr
     } else if success {
@@ -232,11 +459,8 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         format!("command failed with code {code}")
     };
 
-    SendResult {
-        success,
-        code,
-        output: text,
-    }
+    emit_chat(app, "done", None, None, None, Some(success), Some(code));
+    SendResult { success, code, output: text }
 }
 
 pub fn new_shared() -> Shared {

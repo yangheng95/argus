@@ -446,6 +446,10 @@ export const RunCommand = cmd({
             const part = event.properties.part
             if (part.sessionID !== sessionID) continue
 
+            if (part.type === "file") {
+              if (emit("file", { part })) continue
+            }
+
             if (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error")) {
               if (emit("tool_use", { part })) continue
               if (part.state.status === "completed") {
@@ -504,6 +508,12 @@ export const RunCommand = cmd({
               }
               process.stdout.write(line + EOL)
             }
+          }
+
+          if (event.type === "message.part.delta") {
+            const delta = event.properties
+            if (delta.sessionID !== sessionID) continue
+            if (emit("text_delta", delta)) continue
           }
 
           if (event.type === "session.error") {
