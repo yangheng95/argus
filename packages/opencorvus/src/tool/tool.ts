@@ -4,7 +4,11 @@ import type { Agent } from "../agent/agent"
 import type { PermissionNext } from "../permission/next"
 import { Truncate } from "./truncation"
 
-/** Coerce string booleans that LLMs sometimes produce for boolean fields */
+/**
+ * Coerce string values that LLMs sometimes produce for non-string fields.
+ * Only converts unambiguous cases: "true"/"false" to boolean.
+ * Number coercion is intentionally skipped to avoid breaking string IDs.
+ */
 function coerceArgs(args: unknown): unknown {
   if (args === null || args === undefined || typeof args !== "object" || Array.isArray(args)) return args
   const out: Record<string, unknown> = {}

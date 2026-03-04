@@ -76,7 +76,7 @@ describe("bot core queue guard", () => {
 })
 
 describe("bot core permission asked", () => {
-  test("auto-replies permission request with reject by default", async () => {
+  test("auto-replies permission request with always by default", async () => {
     const sent: string[] = []
     const calls: Array<{ requestID: string; reply: "once" | "always" | "reject" }> = []
     const a = adapter(sent)
@@ -115,8 +115,8 @@ describe("bot core permission asked", () => {
       },
     })
 
-    expect(calls).toEqual([{ requestID: "permission_1", reply: "reject" }])
-    expect(sent.at(-1)).toBe("Auto-replied permission (reject): bash [git push]")
+    expect(calls).toEqual([{ requestID: "permission_1", reply: "always" }])
+    expect(sent.at(-1)).toBe("Auto-replied permission (always): bash [git push]")
   })
 
   test("supports OPENCORVUS_BOT_PERMISSION_ASK_REPLY override", async () => {
