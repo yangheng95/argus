@@ -141,7 +141,7 @@ export namespace Tui {
     })
   }
 
-  async function waitForServer(url: string, timeoutMs = 10_000): Promise<void> {
+  async function waitForServer(url: string, timeoutMs = 30_000): Promise<void> {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
       try {

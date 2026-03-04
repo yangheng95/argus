@@ -51,7 +51,10 @@ describe("bot core queue guard", () => {
     const a = adapter(sent)
     const core = new BotCore() as unknown as {
       adapters: BotAdapter[]
-      session: SessionCoordinator<{ sessionId: string; adapter: BotAdapter; channel: string; thread: string }, IncomingMessage>
+      session: SessionCoordinator<
+        { sessionId: string; adapter: BotAdapter; channel: string; thread: string },
+        IncomingMessage
+      >
       handleMessage(msg: IncomingMessage): Promise<void>
     }
 
@@ -81,7 +84,10 @@ describe("bot core permission asked", () => {
     const calls: Array<{ requestID: string; reply: "once" | "always" | "reject" }> = []
     const a = adapter(sent)
     const core = new BotCore() as unknown as {
-      session: SessionCoordinator<{ sessionId: string; adapter: BotAdapter; channel: string; thread: string }, IncomingMessage>
+      session: SessionCoordinator<
+        { sessionId: string; adapter: BotAdapter; channel: string; thread: string },
+        IncomingMessage
+      >
       client: {
         permission: {
           reply(input: { requestID: string; reply: "once" | "always" | "reject" }): Promise<{ error?: unknown }>
@@ -125,7 +131,10 @@ describe("bot core permission asked", () => {
     const calls: Array<{ requestID: string; reply: "once" | "always" | "reject" }> = []
     const a = adapter(sent)
     const core = new BotCore() as unknown as {
-      session: SessionCoordinator<{ sessionId: string; adapter: BotAdapter; channel: string; thread: string }, IncomingMessage>
+      session: SessionCoordinator<
+        { sessionId: string; adapter: BotAdapter; channel: string; thread: string },
+        IncomingMessage
+      >
       client: {
         permission: {
           reply(input: { requestID: string; reply: "once" | "always" | "reject" }): Promise<{ error?: unknown }>

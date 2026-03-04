@@ -71,7 +71,14 @@ const envGroups = [
         key: "OPENCORVUS_BOT_PERMISSION_PROFILE",
         use: "Set permission preset: restricted/standard/permissive/passthrough.",
       },
-      { key: "OPENCORVUS_BOT_PERMISSION_ASK_REPLY", use: "Set default confirmation behavior: once/always/reject." },
+      {
+        key: "OPENCORVUS_PERMISSION_ASK_REPLY",
+        use: "Default permission auto-reply for run path: once/always/reject (default always).",
+      },
+      {
+        key: "OPENCORVUS_BOT_PERMISSION_ASK_REPLY",
+        use: "Set bot permission auto-reply: once/always/reject (default always).",
+      },
       { key: "OPENCORVUS_BOT_SESSION_QUEUE_LIMIT", use: "Limit queued requests per channel session." },
       { key: "OPENCORVUS_BOT_DEBUG_TOOL_INPUT", use: "Show tool input details in status logs when set to 1." },
       { key: "OPENCORVUS_VISION_MODEL", use: "Default vision model for screenshot analysis." },
@@ -769,7 +776,7 @@ function streamFinalize(item, payload) {
     if (item.touched) renderMessage(item.entry, item.text, true)
   }
   if (!item.touched && payload?.success) {
-    item.entry = makeMessage("assistant")
+    if (!item.entry) item.entry = makeMessage("assistant")
     renderMessage(item.entry, "(empty response)", false)
     item.touched = true
   }

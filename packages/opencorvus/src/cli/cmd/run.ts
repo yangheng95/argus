@@ -356,6 +356,13 @@ export const RunCommand = cmd({
         pattern: "*",
       },
     ]
+    const autoReply: "once" | "always" | "reject" = (() => {
+      const raw = process.env.OPENCORVUS_PERMISSION_ASK_REPLY?.trim().toLowerCase()
+      if (raw === "once") return "once"
+      if (raw === "always") return "always"
+      if (raw === "reject") return "reject"
+      return "always"
+    })()
 
     function title() {
       if (args.title === undefined) return
@@ -550,11 +557,11 @@ export const RunCommand = cmd({
             UI.println(
               UI.Style.TEXT_WARNING_BOLD + "!",
               UI.Style.TEXT_NORMAL +
-                `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
+                `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-replying (${autoReply})`,
             )
             await sdk.permission.reply({
               requestID: permission.id,
-              reply: "reject",
+              reply: autoReply,
             })
           }
         }
