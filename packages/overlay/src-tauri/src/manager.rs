@@ -1365,15 +1365,11 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
 
     {
         let mut state = shared.lock().unwrap();
-<<<<<<< HEAD
         state.config = config.clone();
-        state.bot = Some(child);
-=======
         state.core = Some(child);
     }
     if let Err(error) = write_pid(app, CORE_PID_FILE, pid) {
         push_log(shared, app, format!("failed to persist OpenCorvus pid {pid}: {error}"));
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     }
 
     push_log(
