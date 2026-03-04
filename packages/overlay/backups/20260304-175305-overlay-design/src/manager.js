@@ -362,13 +362,6 @@ function renderMessage(entry, text, markdownEnabled = entry.role === "assistant"
 function addMessage(role, text, options = {}) {
   const entry = makeMessage(role)
   renderMessage(entry, text, !!options.markdown)
-  if (role === "system") {
-    setTimeout(() => {
-      entry.box.style.transition = "opacity 0.4s"
-      entry.box.style.opacity = "0"
-      setTimeout(() => entry.box.remove(), 400)
-    }, 4000)
-  }
   return entry
 }
 
