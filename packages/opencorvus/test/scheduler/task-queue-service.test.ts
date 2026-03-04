@@ -248,14 +248,61 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(2)
   })
 
+  test("prefers high priority task over older low priority task in same session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "1"
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+    let high = ""
+    let low = ""
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        low = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "low",
+              },
+            ],
+          },
+          priority: "low",
+        })
+        high = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "high",
+              },
+            ],
+          },
+          priority: "high",
+        })
+
+        await TaskQueueService.runNow()
+        const highRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, high)).get())
+        const lowRow = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, low)).get())
+        expect(highRow?.status).toBe("completed")
+        expect(lowRow?.status).toBe("queued")
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
   test("scans deep queue and still picks another session", async () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "2"
     const seen: string[] = []
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async (input) => {
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(async (input: Parameters<typeof SessionPrompt.prompt>[0]) => {
       seen.push(input.sessionID)
       return result()
-    }) as never)
+    })
 
     await Instance.provide({
       directory: tmp.path,

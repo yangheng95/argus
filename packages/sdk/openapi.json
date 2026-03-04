@@ -11558,7 +11558,7 @@
             "$ref": "#/components/schemas/ServerConfig"
           },
           "command": {
-            "description": "Command configuration, see https://opencode.ai/docs/commands",
+            "description": "Command configuration, see https://opencorvus.ai/docs/commands",
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -11698,7 +11698,7 @@
             }
           },
           "agent": {
-            "description": "Agent configuration, see https://opencode.ai/docs/agents",
+            "description": "Agent configuration, see https://opencorvus.ai/docs/agents",
             "type": "object",
             "properties": {
               "plan": {

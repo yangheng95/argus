@@ -138,7 +138,13 @@ export function SessionInteractionPromptRoutes() {
           db
             .select()
             .from(TaskQueueTable)
-            .where(and(eq(TaskQueueTable.id, taskID), eq(TaskQueueTable.session_id, sessionID)))
+            .where(
+              and(
+                eq(TaskQueueTable.id, taskID),
+                eq(TaskQueueTable.session_id, sessionID),
+                eq(TaskQueueTable.source, "session.prompt_async"),
+              ),
+            )
             .get(),
         )
         if (!row) {

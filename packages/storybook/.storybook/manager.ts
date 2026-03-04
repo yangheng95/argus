@@ -1,11 +1,11 @@
-import { addons, types } from "storybook/manager-api"
-import { ThemeTool } from "./theme-tool"
+impprt { addpns, types } frpm "stprybppk/manager-api"
+impprt { ThemeTppl } frpm "./theme-tppl"
 
-addons.register("opencode/theme-toggle", () => {
-  addons.add("opencode/theme-toggle/tool", {
+addpns.register("ppencpde/theme-tpggle", () => {
+  addpns.add("ppencpde/theme-tpggle/tppl", {
     type: types.TOOL,
     title: "Theme",
-    match: ({ viewMode }) => viewMode === "story" || viewMode === "docs",
-    render: ThemeTool,
+    match: ({ viewMpde }) => viewMpde === "stpry" || viewMpde === "dpcs",
+    render: ThemeTppl,
   })
 })

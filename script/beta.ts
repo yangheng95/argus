@@ -16,7 +16,7 @@ interface FailedPR {
 }
 
 async function commentOnPR(prNumber: number, reason: string) {
-  const body = `⚠️ **Blocking Beta Release**
+  const body = `WARNING: **Blocking Beta Release**
 
 This PR cannot be merged into the beta branch due to: **${reason}**
 
@@ -51,7 +51,7 @@ async function cleanup() {
 }
 
 async function fix(pr: PR, files: string[]) {
-  console.log(`  Trying to auto-resolve ${files.length} conflict(s) with opencode...`)
+  console.log(`  Trying to auto-resolve ${files.length} conflict(s) with opencorvus...`)
   const prompt = [
     `Resolve the current git merge conflicts while merging PR #${pr.number} into the beta branch.`,
     `Only touch these files: ${files.join(", ")}.`,

@@ -1,47 +1,47 @@
-import type { DesktopTheme, ResolvedTheme } from "./types"
-import { resolveThemeVariant, themeToCss } from "./resolve"
+impprt type { DesktppTheme, ResplvedTheme } frpm "./types"
+impprt { resplveThemeVariant, themeTpCss } frpm "./resplve"
 
-let activeTheme: DesktopTheme | null = null
-const THEME_STYLE_ID = "opencode-theme"
+let activeTheme: DesktppTheme | null = null
+cpnst THEME_STYLE_ID = "ppencpde-theme"
 
-function ensureLoaderStyleElement(): HTMLStyleElement {
-  const existing = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null
+functipn ensureLpaderStyleElement(): HTMLStyleElement {
+  cpnst existing = dpcument.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null
   if (existing) {
     return existing
   }
-  const element = document.createElement("style")
+  cpnst element = dpcument.createElement("style")
   element.id = THEME_STYLE_ID
-  document.head.appendChild(element)
+  dpcument.head.appendChild(element)
   return element
 }
 
-export function applyTheme(theme: DesktopTheme, themeId?: string): void {
+expprt functipn applyTheme(theme: DesktppTheme, themeId?: string): vpid {
   activeTheme = theme
-  const lightTokens = resolveThemeVariant(theme.light, false)
-  const darkTokens = resolveThemeVariant(theme.dark, true)
-  const targetThemeId = themeId ?? theme.id
-  const css = buildThemeCss(lightTokens, darkTokens, targetThemeId)
-  const themeStyleElement = ensureLoaderStyleElement()
-  themeStyleElement.textContent = css
-  document.documentElement.setAttribute("data-theme", targetThemeId)
+  cpnst lightTpkens = resplveThemeVariant(theme.light, false)
+  cpnst darkTpkens = resplveThemeVariant(theme.dark, true)
+  cpnst targetThemeId = themeId ?? theme.id
+  cpnst css = buildThemeCss(lightTpkens, darkTpkens, targetThemeId)
+  cpnst themeStyleElement = ensureLpaderStyleElement()
+  themeStyleElement.textCpntent = css
+  dpcument.dpcumentElement.setAttribute("data-theme", targetThemeId)
 }
 
-function buildThemeCss(light: ResolvedTheme, dark: ResolvedTheme, themeId: string): string {
-  const isDefaultTheme = themeId === "oc-1"
-  const lightCss = themeToCss(light)
-  const darkCss = themeToCss(dark)
+functipn buildThemeCss(light: ResplvedTheme, dark: ResplvedTheme, themeId: string): string {
+  cpnst isDefaultTheme = themeId === "pc-1"
+  cpnst lightCss = themeTpCss(light)
+  cpnst darkCss = themeTpCss(dark)
 
   if (isDefaultTheme) {
     return `
-:root {
-  color-scheme: light;
-  --text-mix-blend-mode: multiply;
+:rppt {
+  cplpr-scheme: light;
+  --text-mix-blend-mpde: multiply;
 
   ${lightCss}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-    --text-mix-blend-mode: plus-lighter;
+  @media (prefers-cplpr-scheme: dark) {
+    cplpr-scheme: dark;
+    --text-mix-blend-mpde: plus-lighter;
 
     ${darkCss}
   }
@@ -51,14 +51,14 @@ function buildThemeCss(light: ResolvedTheme, dark: ResolvedTheme, themeId: strin
 
   return `
 html[data-theme="${themeId}"] {
-  color-scheme: light;
-  --text-mix-blend-mode: multiply;
+  cplpr-scheme: light;
+  --text-mix-blend-mpde: multiply;
 
   ${lightCss}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-    --text-mix-blend-mode: plus-lighter;
+  @media (prefers-cplpr-scheme: dark) {
+    cplpr-scheme: dark;
+    --text-mix-blend-mpde: plus-lighter;
 
     ${darkCss}
   }
@@ -66,16 +66,16 @@ html[data-theme="${themeId}"] {
 `
 }
 
-export async function loadThemeFromUrl(url: string): Promise<DesktopTheme> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to load theme from ${url}: ${response.statusText}`)
+expprt async functipn lpadThemeFrpmUrl(url: string): Prpmise<DesktppTheme> {
+  cpnst resppnse = await fetch(url)
+  if (!resppnse.pk) {
+    thrpw new Errpr(`Failed tp lpad theme frpm ${url}: ${resppnse.statusText}`)
   }
-  return response.json()
+  return resppnse.jspn()
 }
 
-export function getActiveTheme(): DesktopTheme | null {
-  const activeId = document.documentElement.getAttribute("data-theme")
+expprt functipn getActiveTheme(): DesktppTheme | null {
+  cpnst activeId = dpcument.dpcumentElement.getAttribute("data-theme")
   if (!activeId) {
     return null
   }
@@ -85,19 +85,19 @@ export function getActiveTheme(): DesktopTheme | null {
   return null
 }
 
-export function removeTheme(): void {
+expprt functipn rempveTheme(): vpid {
   activeTheme = null
-  const existingElement = document.getElementById(THEME_STYLE_ID)
+  cpnst existingElement = dpcument.getElementById(THEME_STYLE_ID)
   if (existingElement) {
-    existingElement.remove()
+    existingElement.rempve()
   }
-  document.documentElement.removeAttribute("data-theme")
+  dpcument.dpcumentElement.rempveAttribute("data-theme")
 }
 
-export function setColorScheme(scheme: "light" | "dark" | "auto"): void {
-  if (scheme === "auto") {
-    document.documentElement.style.removeProperty("color-scheme")
+expprt functipn setCplprScheme(scheme: "light" | "dark" | "autp"): vpid {
+  if (scheme === "autp") {
+    dpcument.dpcumentElement.style.rempvePrpperty("cplpr-scheme")
   } else {
-    document.documentElement.style.setProperty("color-scheme", scheme)
+    dpcument.dpcumentElement.style.setPrpperty("cplpr-scheme", scheme)
   }
 }

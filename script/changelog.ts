@@ -130,14 +130,14 @@ function getSection(areas: Set<string>): string {
   return "Core"
 }
 
-async function summarizeCommit(opencode: Awaited<ReturnType<typeof createOpenCorvus>>, message: string): Promise<string> {
+async function summarizeCommit(opencorvus: Awaited<ReturnType<typeof createOpenCorvus>>, message: string): Promise<string> {
   console.log("summarizing commit:", message)
-  const session = await opencode.client.session.create()
-  const result = await opencode.client.session
+  const session = await opencorvus.client.session.create()
+  const result = await opencorvus.client.session
     .prompt(
       {
         sessionID: session.data!.id,
-        model: { providerID: "opencode", modelID: "claude-sonnet-4-5" },
+        model: { providerID: "opencorvus", modelID: "claude-sonnet-4-5" },
         tools: {
           "*": false,
         },
@@ -158,13 +158,13 @@ Commit: ${message}`,
   return result.trim()
 }
 
-export async function generateChangelog(commits: Commit[], opencode: Awaited<ReturnType<typeof createOpenCorvus>>) {
+export async function generateChangelog(commits: Commit[], opencorvus: Awaited<ReturnType<typeof createOpenCorvus>>) {
   // Summarize commits in parallel with max 10 concurrent requests
   const BATCH_SIZE = 10
   const summaries: string[] = []
   for (let i = 0; i < commits.length; i += BATCH_SIZE) {
     const batch = commits.slice(i, i + BATCH_SIZE)
-    const results = await Promise.all(batch.map((c) => summarizeCommit(opencode, c.message)))
+    const results = await Promise.all(batch.map((c) => summarizeCommit(opencorvus, c.message)))
     summaries.push(...results)
   }
 
@@ -221,11 +221,11 @@ export async function buildNotes(from: string, to: string) {
 
   console.log("generating changelog since " + from)
 
-  const opencode = await createOpenCorvus({ port: 0 })
+  const opencorvus = await createOpenCorvus({ port: 0 })
   const notes: string[] = []
 
   try {
-    const lines = await generateChangelog(commits, opencode)
+    const lines = await generateChangelog(commits, opencorvus)
     notes.push(...lines)
     console.log("---- Generated Changelog ----")
     console.log(notes.join("\n"))
@@ -241,7 +241,7 @@ export async function buildNotes(from: string, to: string) {
       throw error
     }
   } finally {
-    await opencode.server.close()
+    await opencorvus.server.close()
   }
   console.log("changelog generation complete")
 

@@ -30,7 +30,6 @@ export namespace TaskQueueService {
   const HEARTBEAT_ENV = "OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS"
   const HEARTBEAT_MS = 15 * 1000
   const BATCH_SIZE = 10
-  const CANDIDATE_MULTIPLIER = 8
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
 
@@ -133,54 +132,75 @@ export namespace TaskQueueService {
   }
 
   function pending(limit: number) {
-    const size = Math.max(BATCH_SIZE, limit * CANDIDATE_MULTIPLIER)
-    const result: Array<{ id: string; session_id: string }> = []
-    const seen = new Set<string>()
-    let offset = 0
-
-    while (result.length < limit) {
-      const list = Database.use((db) =>
-        db
-          .select({
-            id: TaskQueueTable.id,
-            session_id: TaskQueueTable.session_id,
-          })
-          .from(TaskQueueTable)
-          .where(
-            sql`${TaskQueueTable.status} IN ('queued', 'retrying')
-              AND ${TaskQueueTable.session_id} IN (
-                SELECT ${SessionTable.id}
-                FROM ${SessionTable}
-                WHERE ${SessionTable.project_id} = ${Instance.project.id}
-              )`,
-          )
-          .orderBy(
-            sql`CASE ${TaskQueueTable.priority}
-              WHEN 'high' THEN 0
-              WHEN 'normal' THEN 1
-              WHEN 'low' THEN 2
-              ELSE 3
-            END`,
-            TaskQueueTable.time_created,
-          )
-          .limit(size)
-          .offset(offset)
-          .all(),
-      )
-      if (list.length === 0) break
-
-      for (const item of list) {
-        if (seen.has(item.session_id)) continue
-        seen.add(item.session_id)
-        result.push(item)
-        if (result.length >= limit) break
-      }
-
-      if (list.length < size) break
-      offset += list.length
-    }
-
-    return result
+    return Database.use((db) =>
+      db
+        .select({
+          id: TaskQueueTable.id,
+          session_id: TaskQueueTable.session_id,
+        })
+        .from(TaskQueueTable)
+        .where(
+          sql`${TaskQueueTable.status} IN ('queued', 'retrying')
+            AND ${TaskQueueTable.session_id} IN (
+              SELECT ${SessionTable.id}
+              FROM ${SessionTable}
+              WHERE ${SessionTable.project_id} = ${Instance.project.id}
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM a2a_task_queue better
+              WHERE better.session_id = ${TaskQueueTable.session_id}
+                AND better.status IN ('queued', 'retrying')
+                AND (
+                  CASE better.priority
+                    WHEN 'high' THEN 0
+                    WHEN 'normal' THEN 1
+                    WHEN 'low' THEN 2
+                    ELSE 3
+                  END
+                    < CASE ${TaskQueueTable.priority}
+                        WHEN 'high' THEN 0
+                        WHEN 'normal' THEN 1
+                        WHEN 'low' THEN 2
+                        ELSE 3
+                      END
+                  OR (
+                    CASE better.priority
+                      WHEN 'high' THEN 0
+                      WHEN 'normal' THEN 1
+                      WHEN 'low' THEN 2
+                      ELSE 3
+                    END
+                      = CASE ${TaskQueueTable.priority}
+                          WHEN 'high' THEN 0
+                          WHEN 'normal' THEN 1
+                          WHEN 'low' THEN 2
+                          ELSE 3
+                        END
+                    AND (
+                      better.time_created < ${TaskQueueTable.time_created}
+                      OR (
+                        better.time_created = ${TaskQueueTable.time_created}
+                        AND better.id < ${TaskQueueTable.id}
+                      )
+                    )
+                  )
+                )
+            )`,
+        )
+        .orderBy(
+          sql`CASE ${TaskQueueTable.priority}
+            WHEN 'high' THEN 0
+            WHEN 'normal' THEN 1
+            WHEN 'low' THEN 2
+            ELSE 3
+          END`,
+          TaskQueueTable.time_created,
+          TaskQueueTable.id,
+        )
+        .limit(limit)
+        .all(),
+    )
   }
 
   function claim(id: string, sessionID: string) {

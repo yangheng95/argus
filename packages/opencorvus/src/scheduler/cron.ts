@@ -18,7 +18,7 @@ export namespace Cron {
     hour: number[]    // 0-23
     dom: number[]     // 1-31
     month: number[]   // 1-12
-    dow: number[]     // 0-6 (0=Sunday)
+    dow: number[]     // 0-6 (0=Sunday, 7 is normalized to 0)
   }
 
   const INTERVAL_RE = /^(\d+)(m|h|d)$/i
@@ -58,7 +58,7 @@ export namespace Cron {
         hour: parseField(parts[1], 0, 23),
         dom: parseField(parts[2], 1, 31),
         month: parseField(parts[3], 1, 12),
-        dow: parseField(parts[4], 0, 6),
+        dow: parseDowField(parts[4]),
       },
     }
   }
@@ -165,6 +165,12 @@ export namespace Cron {
 
     if (values.size === 0) throw new Error(`Empty field: ${field}`)
     return Array.from(values).sort((a, b) => a - b)
+  }
+
+  function parseDowField(field: string) {
+    const values = parseField(field, 0, 7)
+      .map((value) => (value === 7 ? 0 : value))
+    return Array.from(new Set(values)).sort((a, b) => a - b)
   }
 
   /** Parse a range like "1-5" or "*" or "3" */

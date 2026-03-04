@@ -369,10 +369,7 @@ export class BotCore {
     text: string,
     info?: { sessionId?: string; platform?: string; channel?: string; thread?: string },
   ) {
-    if (process.env.OPENCORVUS_MIRROR_STDOUT !== "1") {
-      process.stderr.write(`[BotCore][DEBUG] mirror(${kind}) skipped: OPENCORVUS_MIRROR_STDOUT=${JSON.stringify(process.env.OPENCORVUS_MIRROR_STDOUT)}\n`)
-      return
-    }
+    if (process.env.OPENCORVUS_MIRROR_STDOUT !== "1") return
     const value = text.trim()
     if (!value) return
     console.log(

@@ -1,6 +1,12 @@
 // Apply embedded env vars (baked in at build time via --embed-env).
 // External env vars take priority so users can still override at runtime.
 declare const OPENCORVUS_EMBEDDED_ENV: Record<string, string> | undefined
+
+function warn(step: string, error: unknown) {
+  const detail = error instanceof Error ? error.message : String(error)
+  process.stderr.write(`[opencorvus bootstrap] ${step}: ${detail}\n`)
+}
+
 try {
   if (typeof OPENCORVUS_EMBEDDED_ENV === "object" && OPENCORVUS_EMBEDDED_ENV) {
     for (const [key, value] of Object.entries(OPENCORVUS_EMBEDDED_ENV)) {
@@ -9,14 +15,18 @@ try {
       }
     }
   }
-} catch {}
+} catch (error) {
+  warn("apply embedded env", error)
+}
 
 // Restore original CWD if launched via the self-contained launcher
 // (launcher.ts changes CWD to the binary's directory for native module resolution)
 if (process.env.OPENCORVUS_ORIGINAL_CWD) {
   try {
     process.chdir(process.env.OPENCORVUS_ORIGINAL_CWD)
-  } catch {}
+  } catch (error) {
+    warn("restore original cwd", error)
+  }
 }
 
 import yargs from "yargs"

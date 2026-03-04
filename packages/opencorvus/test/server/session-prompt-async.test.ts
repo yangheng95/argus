@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { Instance } from "../../src/project/instance"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
+import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { tmpdir } from "../fixture/fixture"
@@ -85,6 +86,56 @@ describe("session prompt_async route", () => {
         expect(body.sessionID).toBe(session.id)
         expect(body.status).toBe("queued")
         expect(body.retryCount).toBe(0)
+      },
+    })
+  })
+
+  test("returns 404 when prompt_async task does not exist", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const app = Server.App()
+        const response = await app.request(`/session/${session.id}/prompt_async/task_missing_123`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(response.status).toBe(404)
+        const body = await response.json() as { message: string }
+        expect(body.message).toContain("task_missing_123")
+      },
+    })
+  })
+
+  test("returns 404 when task exists but is not created by prompt_async route", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const taskID = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "queued prompt",
+              },
+            ],
+          },
+          source: "test",
+        })
+        const app = Server.App()
+        const response = await app.request(`/session/${session.id}/prompt_async/${taskID}`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(response.status).toBe(404)
       },
     })
   })

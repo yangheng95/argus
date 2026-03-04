@@ -13,7 +13,7 @@ use crate::events;
 const CONFIG_FILE: &str = "opencorvus-manager.json";
 const LOG_FILE: &str = "opencorvus-manager-log.jsonl";
 const MAX_LOGS: usize = 800;
-const CONFIG_SCHEMA: &str = "https://opencode.ai/config.json";
+const CONFIG_SCHEMA: &str = "https://opencorvus.ai/config.json";
 const SHARED_SESSION_FILE: &str = "shared-session.json";
 const MIRROR_PREFIX: &str = "[opencorvus-mirror]";
 const CORE_PID_FILE: &str = "opencorvus-core.pid";

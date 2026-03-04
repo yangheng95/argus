@@ -101,6 +101,14 @@ describe("Cron.parse — standard 5-field cron", () => {
     }
   })
 
+  test("accepts day-of-week 7 and normalizes it to Sunday (0)", () => {
+    const parsed = Cron.parse("0 9 * * 7")
+    expect(parsed.type).toBe("cron")
+    if (parsed.type === "cron") {
+      expect(parsed.fields.dow).toEqual([0])
+    }
+  })
+
   test("parses month field (1-12)", () => {
     const parsed = Cron.parse("0 0 1 6 *")
     expect(parsed.type).toBe("cron")
@@ -130,7 +138,7 @@ describe("Cron.parse — error cases", () => {
     expect(() => Cron.parse("* 24 * * *")).toThrow()
     expect(() => Cron.parse("* * 0 * *")).toThrow()
     expect(() => Cron.parse("* * * 13 *")).toThrow()
-    expect(() => Cron.parse("* * * * 7")).toThrow()
+    expect(() => Cron.parse("* * * * 8")).toThrow()
   })
 
   test("throws on invalid step (0)", () => {

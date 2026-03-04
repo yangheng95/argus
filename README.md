@@ -191,7 +191,7 @@ OPENCORVUS_CONFIG_CONTENT='{"model":"openai/gpt-4o","provider":{"openai":{"env":
 OPENAI_API_KEY=sk-...
 ```
 
-> 完整的 provider 配置选项请参考 [OpenCorvus 配置文档](https://opencode.ai/docs/config)。
+> 完整的 provider 配置选项请参考 [OpenCorvus 配置文档](https://opencorvus.ai/docs/config)。
 
 #### 权限配置
 

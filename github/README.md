@@ -1,6 +1,6 @@
 # opencorvus GitHub Action
 
-A GitHub Action that integrates [opencorvus](https://opencode.ai) directly into your GitHub workflow.
+A GitHub Action that integrates [opencorvus](https://opencorvus.ai) directly into your GitHub workflow.
 
 Mention `/opencorvus` in your comment, and opencorvus will execute tasks within your GitHub Actions runner.
 
