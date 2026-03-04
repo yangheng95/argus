@@ -117,7 +117,7 @@ impl Default for ManagerConfig {
             serve_args: vec![
                 "serve".into(),
                 "--hostname=127.0.0.1".into(),
-                "--port=4096".into(),
+                "--port=7878".into(),
             ],
             run_args: vec!["run".into()],
             bot_command: "bun".into(),
