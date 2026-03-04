@@ -881,6 +881,8 @@
             <span class="status-dot"></span>
             <span id="statusText">Stopped</span>
           </div>
+          <button class="btn-primary" id="startBtn" type="button">Start</button>
+          <button class="btn-danger" id="stopBtn" type="button">Stop</button>
         </div>
       </header>
 
@@ -915,16 +917,10 @@
         <div class="side">
           <!-- Runtime -->
           <section class="card">
-            <div class="card-head">
-              Runtime
-              <div class="card-actions">
-                <button class="icon-btn" id="refreshBtn" title="Refresh state">Refresh</button>
-                <button class="icon-btn" id="clearLogsBtn" title="Clear logs">Clear</button>
-              </div>
-            </div>
+            <div class="card-head">Runtime</div>
             <div class="toolbar">
-              <button class="btn-primary" id="startBtn" type="button">Start</button>
-              <button class="btn-danger" id="stopBtn" type="button">Stop</button>
+              <button id="refreshBtn" type="button" title="Refresh state">Refresh</button>
+              <button id="clearLogsBtn" type="button" title="Clear logs">Clear</button>
               <button id="openLogPanelBtn" type="button">Log Path</button>
             </div>
             <pre class="log-body" id="logs"></pre>
