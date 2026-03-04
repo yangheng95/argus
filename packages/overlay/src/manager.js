@@ -57,6 +57,13 @@ function readLines(input) {
     .filter((item) => item.length > 0)
 }
 
+function readArgs(input) {
+  return input
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+}
+
 function envToText(env) {
   if (!Array.isArray(env)) return ""
   return env.map((item) => `${item.key ?? ""}=${item.value ?? ""}`).join("\n")
