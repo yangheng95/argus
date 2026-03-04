@@ -221,6 +221,7 @@ export const TuiThreadCommand = cmd({
     // (non-interactive env, e.g. spawned by bot or CI), or --port is specified
     // (programmatic spawn via Tui.spawn() API — must not block server startup).
     const isServerMode = process.argv.includes("--port") || process.argv.includes("--hostname")
+    console.log(`[thread] argv=${JSON.stringify(process.argv)} isServerMode=${isServerMode} args.model=${args.model} isTTY=${process.stdin.isTTY}`)
     if (!args.model && process.stdin.isTTY && !isServerMode) {
       try {
         await promptProviderSelection()
