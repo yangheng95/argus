@@ -59,6 +59,8 @@ jobs:
         with:
           workspaces: packages/overlay/src-tauri -> target
 
+      - uses: ./.github/actions/setup-bun
+
       - name: Build overlay
         run: cargo build --release --manifest-path packages/overlay/src-tauri/Cargo.toml
 

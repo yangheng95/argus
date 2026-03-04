@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh workflow:*)",
+      "Bash(gh run:*)",
+      "Bash(/c/Users/chuan/.cargo/bin/cargo build:*)",
+      "Bash(SSL_CERT_FILE=/usr/ssl/certs/ca-bundle.crt curl:*)",
+      "Bash(gh api:*)",
+      "Bash(SSL_CERT_FILE=/usr/ssl/certs/ca-bundle.crt MODELS_DEV_API_JSON=/tmp/models-api-clean.json bun run:*)",
+      "Bash(pkill:*)"
+    ]
+  }
+}
