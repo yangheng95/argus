@@ -2,7 +2,7 @@
 set -eu
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-SKILL_DIR="$ROOT_DIR/.opencorvus/skill"
+SKILL_DIR="$ROOT_DIR/packages/opencorvus/src/skill/builtin/bot"
 CODEX_HOME_DIR=${CODEX_HOME:-"$HOME/.codex"}
 VALIDATOR="$CODEX_HOME_DIR/skills/.system/skill-creator/scripts/quick_validate.py"
 TMP_DIR="$ROOT_DIR/.tmp-py"

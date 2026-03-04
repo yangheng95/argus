@@ -4,8 +4,6 @@
   </a>
 </p>
 
-<h1 align="center">OpenCorvus</h1>
-
 <p align="center">From prompt to shipped result: one agent for code and GUI.</p>
 
 <p align="center">

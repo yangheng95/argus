@@ -7,7 +7,7 @@ import fs from "fs/promises"
 
 // Filter out built-in skills so tests focus on user-defined/project skills only
 function nonBuiltin(skills: Skill.Info[]) {
-  return skills.filter((s) => s.location !== "builtin")
+  return skills.filter((s) => !s.builtin)
 }
 
 async function createGlobalSkill(homeDir: string) {

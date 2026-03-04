@@ -20,6 +20,7 @@ import desktopWindowsMd from "./builtin/desktop-windows.md" with { type: "text" 
 import desktopMacosMd from "./builtin/desktop-macos.md" with { type: "text" }
 import desktopLinuxMd from "./builtin/desktop-linux.md" with { type: "text" }
 import planMd from "./builtin/plan.md" with { type: "text" }
+import { botBundles } from "./builtin/bot"
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -29,6 +30,9 @@ export namespace Skill {
     platforms: z.array(z.enum(["win32", "darwin", "linux"]))
       .optional()
       .default([]),
+    builtin: z.boolean()
+      .optional()
+      .default(false),
     location: z.string(),
     content: z.string(),
   })
@@ -58,21 +62,59 @@ export namespace Skill {
   const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
   const OPENCORVUS_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
   const SKILL_PATTERN = "**/SKILL.md"
+  const BUILTIN_PATH = path.join(Global.Path.cache, "builtin-skills")
+
+  const builtins = [
+    {
+      skill: codingMd,
+      files: {},
+    },
+    {
+      skill: desktopMd,
+      files: {},
+    },
+    {
+      skill: desktopWindowsMd,
+      files: {},
+    },
+    {
+      skill: desktopMacosMd,
+      files: {},
+    },
+    {
+      skill: desktopLinuxMd,
+      files: {},
+    },
+    {
+      skill: planMd,
+      files: {},
+    },
+    ...botBundles,
+  ] as const
+
+  async function install(id: string, skill: string, files: Readonly<Record<string, string>>) {
+    const dir = path.join(BUILTIN_PATH, id)
+    await Filesystem.write(path.join(dir, "SKILL.md"), skill)
+    await Promise.all(Object.entries(files).map(([file, content]) => Filesystem.write(path.join(dir, file), content)))
+    return path.join(dir, "SKILL.md")
+  }
 
   export const state = Instance.state(async () => {
     const skills: Record<string, Info> = {}
     const dirs = new Set<string>()
 
     // Register built-in skills (lowest priority — user skills with same name override)
-    for (const raw of [codingMd, desktopMd, desktopWindowsMd, desktopMacosMd, desktopLinuxMd, planMd]) {
-      const md = matter(raw)
+    for (const raw of builtins) {
+      const md = matter(raw.skill)
       const parsed = Info.pick({ name: true, description: true, platforms: true }).safeParse(md.data)
       if (!parsed.success) continue
+      const location = Object.keys(raw.files).length === 0 ? "builtin" : await install(parsed.data.name, raw.skill, raw.files)
       skills[parsed.data.name] = {
         name: parsed.data.name,
         description: parsed.data.description,
         platforms: parsed.data.platforms,
-        location: "builtin",
+        builtin: true,
+        location,
         content: md.content,
       }
     }
@@ -107,6 +149,7 @@ export namespace Skill {
         name: parsed.data.name,
         description: parsed.data.description,
         platforms: parsed.data.platforms,
+        builtin: false,
         location: match,
         content: md.content,
       }
