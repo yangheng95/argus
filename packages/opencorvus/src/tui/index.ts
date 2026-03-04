@@ -1,5 +1,8 @@
-import { spawn as nodeSpawn } from "child_process"
+import { spawn as nodeSpawn, execSync } from "child_process"
 import net from "net"
+import fs from "fs"
+import os from "os"
+import path from "path"
 import type { ChildProcess } from "child_process"
 
 export namespace Tui {
