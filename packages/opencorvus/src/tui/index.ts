@@ -199,15 +199,21 @@ export namespace Tui {
     let proc: ChildProcess
     if (process.platform === "win32") {
       if (devMode) {
-        // Dev mode on Windows: spawn bun with TUI preloads as a detached background process.
-        // The TUI terminal rendering won't be visible but the HTTP server will be accessible.
+        // Dev mode on Windows: write a temp .bat script and launch it in a new console via `start`.
+        // Direct cmd.exe argument passing mangles quotes/backslashes; a .bat file avoids this.
         const pkgRoot = packageRoot()
-        const entryScript = `${pkgRoot}/src/index.ts`.replace(/\\/g, "/")
-        proc = nodeSpawn(
-          "bun",
-          ["--preload", "@opentui/solid/preload", "--conditions=browser", entryScript, ...args],
-          { stdio: "ignore", detached: true, cwd: pkgRoot },
-        )
+        const entryScript = path.join(pkgRoot, "src", "index.ts")
+        const batContent = [
+          "@echo off",
+          `cd /d "${pkgRoot}"`,
+          `bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${args.map((a) => `"${a}"`).join(" ")}`,
+        ].join("\r\n")
+        const batPath = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
+        fs.writeFileSync(batPath, batContent)
+        proc = nodeSpawn("cmd.exe", ["/c", "start", "OpenCorvus TUI", "cmd", "/k", batPath], {
+          stdio: "ignore",
+          detached: true,
+        })
         proc.unref()
       } else {
         // Production: use PowerShell Start-Process to open TUI in a new visible console window.
