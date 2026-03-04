@@ -6,7 +6,8 @@ type Out = {
   text: string
 }
 
-const root = process.cwd()
+// Use script location (scripts/) to find the workspace root regardless of CWD.
+const root = path.resolve(import.meta.dir, "..")
 const src = path.join(root, "packages", "overlay", "protocol", "schema.json")
 const schema = await Bun.file(src).json()
 const check = process.argv.includes("--check")
