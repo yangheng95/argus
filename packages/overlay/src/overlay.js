@@ -144,19 +144,21 @@ function render(event, merged) {
   updateFocus(event.action, event.status)
 }
 
-function scheduleHide(status) {
+function hideNow() {
   clearTimers()
-  hideStartTimer = setTimeout(() => {
-    hideStartTimer = null
-    popup.classList.remove("visible")
-    popup.classList.add("hiding")
-    focus.classList.remove("visible")
-    hideWindowTimer = setTimeout(() => {
-      hideWindowTimer = null
-      last = null
-      void bridge.invokeSafe(bridge.commands.hideWindow, { window: bridge.windows.overlay })
-    }, 260)
-  }, HIDE_MS[status] ?? HIDE_MS.start)
+  popup.classList.remove("visible")
+  popup.classList.add("hiding")
+  focus.classList.remove("visible")
+  hideWindowTimer = setTimeout(() => {
+    hideWindowTimer = null
+    last = null
+    void bridge.invokeSafe(bridge.commands.hideWindow, { window: bridge.windows.overlay })
+  }, 260)
+}
+
+function scheduleHide() {
+  clearTimers()
+  hideStartTimer = setTimeout(hideNow, MAX_DISPLAY_MS)
 }
 
 function showEvent(action, label, status) {
