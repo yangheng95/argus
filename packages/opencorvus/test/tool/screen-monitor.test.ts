@@ -4,18 +4,14 @@ import { tmpdir } from "../fixture/fixture"
 
 let unbound = 0
 let overlayCalls = 0
-<<<<<<< HEAD
 let clickMarkerCalls = 0
 const bindByIdCalls: number[] = []
-let monitorBinding: any = null
-=======
 let bindCalls = 0
 let monitorBinding: any = {
   monitorId: 2,
   match: "2",
   info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
 }
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
