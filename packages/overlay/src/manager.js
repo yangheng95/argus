@@ -57,7 +57,7 @@ const defaults = Object.freeze({
   serve_args: ["serve", "--hostname=127.0.0.1", "--port=4096"],
   run_args: ["run"],
   bot_command: "bun",
-  bot_args: ["run", "--no-env-file", "--env-file", ".env", "packages/bot/src/main.ts"],
+  bot_args: ["run", "--cwd", "packages/bot", "--no-env-file", "--env-file", ".env", "src/main.ts"],
   server_url: "http://127.0.0.1:4096",
 })
 

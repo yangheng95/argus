@@ -198,16 +198,14 @@ export namespace Tui {
     let proc: ChildProcess
     if (process.platform === "win32") {
       if (devMode) {
-        // Dev mode: use cmd.exe to open a new console running bun with TUI preloads.
-        // The compiled binary's TUI mode doesn't work reliably on Windows.
+        // Dev mode on Windows: spawn bun with TUI preloads as a detached background process.
+        // The TUI terminal rendering won't be visible but the HTTP server will be accessible.
         const pkgRoot = packageRoot()
-        const entryScript = `${pkgRoot}/src/index.ts`
-        const tuiArgs = args.map((a) => `"${a}"`).join(" ")
-        const cmdLine = `bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${tuiArgs}`
-        console.log(`[TUI spawn] pkgRoot=${pkgRoot} cmdLine=${cmdLine}`)
+        const entryScript = `${pkgRoot}/src/index.ts`.replace(/\\/g, "/")
+        console.log(`[TUI spawn] dev mode: pkgRoot=${pkgRoot} entry=${entryScript} port=${port}`)
         proc = nodeSpawn(
-          "cmd.exe",
-          ["/c", "start", "OPENCORVUS_TUI", "cmd", "/c", `cd /d "${pkgRoot}" && ${cmdLine}`],
+          "bun",
+          ["--preload", "@opentui/solid/preload", "--conditions=browser", entryScript, ...args],
           { stdio: "ignore", detached: true, cwd: pkgRoot },
         )
         proc.unref()

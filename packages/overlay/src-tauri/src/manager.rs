@@ -121,13 +121,7 @@ impl Default for ManagerConfig {
             ],
             run_args: vec!["run".into()],
             bot_command: "bun".into(),
-            bot_args: vec![
-                "run".into(),
-                "--no-env-file".into(),
-                "--env-file".into(),
-                ".env".into(),
-                "packages/bot/src/main.ts".into(),
-            ],
+            bot_args: default_bot_args(),
             server_url: "http://127.0.0.1:4096".into(),
             cwd: String::new(),
             env: vec![],
@@ -162,8 +156,49 @@ fn norm_list(list: Vec<String>) -> Vec<String> {
         .collect()
 }
 
+fn default_bot_args() -> Vec<String> {
+    vec![
+        "run".into(),
+        "--cwd".into(),
+        "packages/bot".into(),
+        "--no-env-file".into(),
+        "--env-file".into(),
+        ".env".into(),
+        "src/main.ts".into(),
+    ]
+}
+
+fn legacy_bot_args(args: &[String]) -> bool {
+    args.len() == 5
+        && args[0] == "run"
+        && args[1] == "--no-env-file"
+        && args[2] == "--env-file"
+        && args[3] == ".env"
+        && args[4] == "packages/bot/src/main.ts"
+}
+
+fn norm_bot_args(args: Vec<String>) -> Vec<String> {
+    let args = norm_list(args);
+    if args.is_empty() {
+        return default_bot_args();
+    }
+    if legacy_bot_args(&args) {
+        return default_bot_args();
+    }
+    args
+}
+
+fn has_cwd_arg(args: &[String]) -> bool {
+    args.iter().any(|item| {
+        let item = item.trim();
+        item == "--cwd" || item.starts_with("--cwd=") || item == "-C"
+    })
+}
+
 fn norm_config(config: ManagerConfig) -> ManagerConfig {
     let defaults = ManagerConfig::default();
+    let bot_command = config.bot_command.trim().to_string();
+    let bot_args = norm_bot_args(config.bot_args);
     ManagerConfig {
         command: {
             let item = config.command.trim();
@@ -176,8 +211,8 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
         },
         serve_args: norm_list(config.serve_args),
         run_args: norm_list(config.run_args),
-        bot_command: config.bot_command.trim().into(),
-        bot_args: norm_list(config.bot_args),
+        bot_command,
+        bot_args,
         server_url: {
             let item = config.server_url.trim();
             if item.is_empty() {
@@ -1133,7 +1168,9 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
     }
 
     let args = config.bot_args.clone();
-    let mut cmd = build_process(&config.bot_command, &args, &config.cwd, &config.env);
+    let bot_cwd = if has_cwd_arg(&args) { "" } else { &config.cwd };
+    let mut cmd = build_process(&config.bot_command, &args, bot_cwd, &config.env);
+    let bot_cwd_log = resolve_work_dir(bot_cwd).to_string_lossy().to_string();
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -1180,7 +1217,8 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
         shared,
         app,
         format!(
-            "channel bot started (pid {pid}) with: {} {}",
+            "channel bot started (pid {pid}) cwd={} with: {} {}",
+            bot_cwd_log,
             config.bot_command,
             config.bot_args.join(" ")
         ),
