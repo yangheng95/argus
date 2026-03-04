@@ -40,7 +40,7 @@ Das startet Server und Client.
 | Option     | Type          | Description                    | Default     |
 | ---------- | ------------- | ------------------------------ | ----------- |
 | `hostname` | `string`      | Server hostname                | `127.0.0.1` |
-| `port`     | `number`      | Server port                    | `4096`      |
+| `port`     | `number`      | Server port                    | `7878`      |
 | `signal`   | `AbortSignal` | Abort signal for cancellation  | `undefined` |
 | `timeout`  | `number`      | Timeout in ms for server start | `5000`      |
 | `config`   | `Config`      | Configuration object           | `{}`        |
@@ -57,7 +57,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -76,7 +76,7 @@ Wenn opencorvus bereits laeuft, kannst du nur einen Client erstellen und verbind
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -84,7 +84,7 @@ const client = createOpenCorvusClient({
 
 | Option          | Type       | Description                      | Default                 |
 | --------------- | ---------- | -------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | URL of the server                | `http://localhost:4096` |
+| `baseUrl`       | `string`   | URL of the server                | `http://localhost:7878` |
 | `fetch`         | `function` | Custom fetch implementation      | `globalThis.fetch`      |
 | `parseAs`       | `string`   | Response parsing method          | `auto`                  |
 | `responseStyle` | `string`   | Return style: `data` or `fields` | `fields`                |

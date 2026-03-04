@@ -40,7 +40,7 @@ const { client } = await createOpenCorvus()
 | オプション | タイプ        | 説明                                | デフォルト  |
 | ---------- | ------------- | ----------------------------------- | ----------- |
 | `hostname` | `string`      | サーバーのホスト名                  | `127.0.0.1` |
-| `port`     | `number`      | サーバーポート                      | `4096`      |
+| `port`     | `number`      | サーバーポート                      | `7878`      |
 | `signal`   | `AbortSignal` | キャンセルのためのアボート信号      | `undefined` |
 | `timeout`  | `number`      | サーバー起動のタイムアウト (ミリ秒) | `5000`      |
 | `config`   | `Config`      | 設定オブジェクト                    | `{}`        |
@@ -56,7 +56,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -75,7 +75,7 @@ opencorvus.server.close()
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -83,7 +83,7 @@ const client = createOpenCorvusClient({
 
 | オプション      | タイプ     | 説明                                     | デフォルト              |
 | --------------- | ---------- | ---------------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | サーバーの URL                           | `http://localhost:4096` |
+| `baseUrl`       | `string`   | サーバーの URL                           | `http://localhost:7878` |
 | `fetch`         | `function` | カスタムフェッチの実装                   | `globalThis.fetch`      |
 | `parseAs`       | `string`   | 応答解析方法                             | `auto`                  |
 | `responseStyle` | `string`   | 戻り値のスタイル: `data` または `fields` | `fields`                |

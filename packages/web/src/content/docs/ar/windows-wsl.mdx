@@ -49,13 +49,13 @@ import { Steps } from "@astrojs/starlight/components"
 1. **ابدأ الخادم داخل WSL** مع `--hostname 0.0.0.0` للسماح بالاتصالات الخارجية:
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **اربط تطبيق سطح المكتب** على `http://localhost:4096`
+2. **اربط تطبيق سطح المكتب** على `http://localhost:7878`
 
 :::note
-إذا لم يعمل `localhost` في إعدادك، اتصل باستخدام عنوان IP الخاص بـ WSL بدلًا منه (من داخل WSL: `hostname -I`) واستخدم `http://<wsl-ip>:4096`.
+إذا لم يعمل `localhost` في إعدادك، اتصل باستخدام عنوان IP الخاص بـ WSL بدلًا منه (من داخل WSL: `hostname -I`) واستخدم `http://<wsl-ip>:7878`.
 :::
 
 :::caution

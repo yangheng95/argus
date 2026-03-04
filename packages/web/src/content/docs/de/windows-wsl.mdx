@@ -50,13 +50,13 @@ Wenn du die OpenCorvus-Desktop-App nutzen willst, den Server aber in WSL betreib
 1. **Starte den Server in WSL** mit `--hostname 0.0.0.0`, damit externe Verbindungen moeglich sind:
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **Verbinde die Desktop-App** mit `http://localhost:4096`
+2. **Verbinde die Desktop-App** mit `http://localhost:7878`
 
 :::note
-Wenn `localhost` in deiner Umgebung nicht funktioniert, nutze stattdessen die WSL-IP-Adresse (in WSL: `hostname -I`) und verbinde dich mit `http://<wsl-ip>:4096`.
+Wenn `localhost` in deiner Umgebung nicht funktioniert, nutze stattdessen die WSL-IP-Adresse (in WSL: `hostname -I`) und verbinde dich mit `http://<wsl-ip>:7878`.
 :::
 
 :::caution

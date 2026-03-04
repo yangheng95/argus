@@ -9,7 +9,10 @@ fn check_protocol() {
     let root = root_raw.canonicalize().unwrap_or(root_raw);
     let script = root.join("scripts").join("generate-overlay-protocol.ts");
     if !script.exists() {
-        panic!("overlay protocol generator is missing: {}", script.display());
+        panic!(
+            "overlay protocol generator is missing: {}",
+            script.display()
+        );
     }
 
     let bun = std::env::var("BUN").unwrap_or_else(|_| "bun".into());

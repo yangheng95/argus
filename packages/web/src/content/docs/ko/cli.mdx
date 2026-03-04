@@ -70,10 +70,10 @@ opencorvus attach [url]
 
 ```bash
 # Start the backend server for web/mobile access
-opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 7878 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-opencorvus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:7878
 ```
 
 #### 플래그
@@ -330,7 +330,7 @@ opencorvus run Explain the use of context in Go
 opencorvus serve
 
 # In another terminal, run commands that attach to it
-opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript"
 ```
 
 #### 플래그
@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript
 | `--file`     | `-f` | 메시지에 첨부할 파일                                                   |
 | `--format`   |      | 출력 형식: default(포맷됨) 또는 json(원시 JSON 이벤트)                 |
 | `--title`    |      | 세션 제목(값이 없으면 프롬프트를 잘라 자동 생성)                       |
-| `--attach`   |      | 실행 중인 opencorvus 서버에 연결(예: http://localhost:4096)              |
+| `--attach`   |      | 실행 중인 opencorvus 서버에 연결(예: http://localhost:7878)              |
 | `--port`     |      | 로컬 서버 포트(기본값: 랜덤 포트)                                      |
 
 ---

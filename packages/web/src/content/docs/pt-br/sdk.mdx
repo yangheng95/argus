@@ -40,7 +40,7 @@ Isso inicia tanto um servidor quanto um cliente.
 | Opção      | Tipo          | Descrição                                  | Padrão      |
 | ---------- | ------------- | ------------------------------------------ | ----------- |
 | `hostname` | `string`      | Nome do host do servidor                   | `127.0.0.1` |
-| `port`     | `number`      | Porta do servidor                          | `4096`      |
+| `port`     | `number`      | Porta do servidor                          | `7878`      |
 | `signal`   | `AbortSignal` | Sinal de abortar para cancelamento         | `undefined` |
 | `timeout`  | `number`      | Tempo limite em ms para iniciar o servidor | `5000`      |
 | `config`   | `Config`      | Objeto de configuração                     | `{}`        |
@@ -56,7 +56,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -75,7 +75,7 @@ Se você já tem uma instância do opencorvus em execução, pode criar uma inst
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -83,7 +83,7 @@ const client = createOpenCorvusClient({
 
 | Opção           | Tipo       | Descrição                             | Padrão                  |
 | --------------- | ---------- | ------------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | URL do servidor                       | `http://localhost:4096` |
+| `baseUrl`       | `string`   | URL do servidor                       | `http://localhost:7878` |
 | `fetch`         | `function` | Implementação de fetch personalizada  | `globalThis.fetch`      |
 | `parseAs`       | `string`   | Método de análise da resposta         | `auto`                  |
 | `responseStyle` | `string`   | Estilo de retorno: `data` ou `fields` | `fields`                |

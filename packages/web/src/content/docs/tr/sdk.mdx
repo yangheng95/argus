@@ -40,7 +40,7 @@ Bu, hem bir sunucu hem de bir istemci başlatır
 | Seçenek    | Tip           | Açıklama                                      | Varsayılan  |
 | ---------- | ------------- | --------------------------------------------- | ----------- |
 | `hostname` | `string`      | Sunucu ana bilgisayar adı                     | `127.0.0.1` |
-| `port`     | `number`      | Sunucu bağlantı noktası                       | `4096`      |
+| `port`     | `number`      | Sunucu bağlantı noktası                       | `7878`      |
 | `signal`   | `AbortSignal` | İptal için durdurma sinyali                   | `undefined` |
 | `timeout`  | `number`      | Sunucu başlatma için ms cinsinden zaman aşımı | `5000`      |
 | `config`   | `Config`      | Yapılandırma nesnesi                          | `{}`        |
@@ -56,7 +56,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -75,7 +75,7 @@ Halihazırda çalışan bir opencorvus örneğiniz varsa, ona bağlanmak için b
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -83,7 +83,7 @@ const client = createOpenCorvusClient({
 
 | Seçenek         | Tip        | Açıklama                          | Varsayılan              |
 | --------------- | ---------- | --------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | Sunucunun URL'si                  | `http://localhost:4096` |
+| `baseUrl`       | `string`   | Sunucunun URL'si                  | `http://localhost:7878` |
 | `fetch`         | `function` | Özel fetch uygulaması             | `globalThis.fetch`      |
 | `parseAs`       | `string`   | Yanıt ayrıştırma yöntemi          | `auto`                  |
 | `responseStyle` | `string`   | Dönüş stili: `data` veya `fields` | `fields`                |

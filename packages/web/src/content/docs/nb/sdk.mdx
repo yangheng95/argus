@@ -40,7 +40,7 @@ Dette starter både en server og en klient
 | Alternativ | Type          | Beskrivelse                      | Standard    |
 | ---------- | ------------- | -------------------------------- | ----------- |
 | `hostname` | `string`      | Server vertsnavn                 | `127.0.0.1` |
-| `port`     | `number`      | Serverport                       | `4096`      |
+| `port`     | `number`      | Serverport                       | `7878`      |
 | `signal`   | `AbortSignal` | AbortSignal for avbrudd          | `undefined` |
 | `timeout`  | `number`      | Tidsavbrudd i ms for serverstart | `5000`      |
 | `config`   | `Config`      | Konfigurasjonsobjekt             | `{}`        |
@@ -56,7 +56,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -75,7 +75,7 @@ Hvis du allerede har en kjørende forekomst av OpenCorvus, kan du opprette en kl
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -83,7 +83,7 @@ const client = createOpenCorvusClient({
 
 | Alternativ      | Type       | Beskrivelse                       | Standard                |
 | --------------- | ---------- | --------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | URL av serveren                   | `http://localhost:4096` |
+| `baseUrl`       | `string`   | URL av serveren                   | `http://localhost:7878` |
 | `fetch`         | `function` | Egendefinert fetch-implementasjon | `globalThis.fetch`      |
 | `parseAs`       | `string`   | Metode for responsparsing         | `auto`                  |
 | `responseStyle` | `string`   | Returstil: `data` eller `fields`  | `fields`                |

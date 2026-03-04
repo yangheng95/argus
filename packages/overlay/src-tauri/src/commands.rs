@@ -1,6 +1,8 @@
 use tauri::{AppHandle, State, WebviewWindow};
 
-use crate::manager::{self, ManagerConfig, ManagerSnapshot, McpQuickConfig, SendAck, Shared};
+use crate::manager::{
+    self, ManagerConfig, ManagerSnapshot, McpQuickConfig, SendAck, SessionListItem, Shared,
+};
 use crate::overlay;
 
 #[tauri::command]
@@ -56,7 +58,11 @@ pub fn manager_save(
 }
 
 #[tauri::command]
-pub fn manager_send(state: State<'_, Shared>, app: AppHandle, prompt: String) -> Result<SendAck, String> {
+pub fn manager_send(
+    state: State<'_, Shared>,
+    app: AppHandle,
+    prompt: String,
+) -> Result<SendAck, String> {
     manager::send(state.inner(), &app, prompt)
 }
 
@@ -88,4 +94,30 @@ pub fn manager_create_skill(
     description: String,
 ) -> Result<String, String> {
     manager::create_skill(state.inner(), &app, name, description)
+}
+
+#[tauri::command]
+pub fn manager_list_sessions(
+    state: State<'_, Shared>,
+    app: AppHandle,
+) -> Result<Vec<SessionListItem>, String> {
+    manager::list_sessions(state.inner(), &app)
+}
+
+#[tauri::command]
+pub fn manager_use_session(
+    state: State<'_, Shared>,
+    app: AppHandle,
+    session_id: String,
+) -> Result<ManagerSnapshot, String> {
+    manager::use_session(state.inner(), &app, session_id)
+}
+
+#[tauri::command]
+pub fn manager_delete_session(
+    state: State<'_, Shared>,
+    app: AppHandle,
+    session_id: String,
+) -> Result<ManagerSnapshot, String> {
+    manager::delete_session(state.inner(), &app, session_id)
 }

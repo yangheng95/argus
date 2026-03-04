@@ -8,6 +8,8 @@ const els = {
   pidText: document.getElementById("pidText"),
   chat: document.getElementById("chat"),
   logs: document.getElementById("logs"),
+  runtimeCard: document.getElementById("runtimeCard"),
+  toggleLogsBtn: document.getElementById("toggleLogsBtn"),
   openLogPanelBtn: document.getElementById("openLogPanelBtn"),
   logPanel: document.getElementById("logPanel"),
   closeLogPanelBtn: document.getElementById("closeLogPanelBtn"),
@@ -29,6 +31,8 @@ const els = {
   createSkillBtn: document.getElementById("createSkillBtn"),
   cwdInput: document.getElementById("cwdInput"),
   openEnvPanelBtn: document.getElementById("openEnvPanelBtn"),
+  loadSessionBtn: document.getElementById("loadSessionBtn"),
+  deleteSessionBtn: document.getElementById("deleteSessionBtn"),
   envPanel: document.getElementById("envPanel"),
   closeEnvPanelBtn: document.getElementById("closeEnvPanelBtn"),
   addEnvBtn: document.getElementById("addEnvBtn"),
@@ -48,17 +52,19 @@ const state = {
   pendingInput: "",
   config: null,
   envRows: [],
+  logsCollapsed: false,
 }
 
 const STREAM_CHAR_DELAY = 10
+const LOGS_COLLAPSE_KEY = "opencorvus.manager.logs.collapsed"
 
 const defaults = Object.freeze({
   command: "opencorvus",
-  serve_args: ["serve", "--hostname=127.0.0.1", "--port=4096"],
+  serve_args: ["serve", "--hostname=127.0.0.1", "--port=7878"],
   run_args: ["run"],
   bot_command: "bun",
   bot_args: ["run", "--cwd", "packages/bot", "--no-env-file", "--env-file", ".env", "src/main.ts"],
-  server_url: "http://127.0.0.1:4096",
+  server_url: "http://127.0.0.1:7878",
 })
 
 const envGroups = [
@@ -879,9 +885,68 @@ function mirrorReset() {
   state.mirrorQueue = []
 }
 
+function logTime(ts) {
+  const value = Number(ts)
+  if (!Number.isFinite(value) || value <= 0) return "--:--:--"
+  return new Date(value * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  })
+}
+
+function logDetail(detail) {
+  if (detail === null || detail === undefined) return ""
+  if (typeof detail === "string") return detail
+  try {
+    return JSON.stringify(detail)
+  } catch {
+    return String(detail)
+  }
+}
+
+function logLine(item) {
+  const level = String(item.level ?? "info").toUpperCase()
+  const tag = String(item.tag ?? "manager")
+  const message = String(item.message ?? "")
+  const detail = logDetail(item.detail)
+  const suffix = detail ? ` | ${detail}` : ""
+  const text = `[${logTime(item.ts)}] ${level} [${tag}] ${message}${suffix}`
+  if (text.length <= 600) return text
+  return `${text.slice(0, 597)}...`
+}
+
 function renderLogs() {
-  els.logs.textContent = state.logs.map((item) => JSON.stringify(item)).join("\n")
+  els.logs.textContent = state.logs.length === 0 ? "No runtime logs yet." : state.logs.map((item) => logLine(item)).join("\n")
   els.logs.scrollTop = els.logs.scrollHeight
+}
+
+function setLogsCollapsed(next, persist = true) {
+  state.logsCollapsed = !!next
+  if (els.runtimeCard) {
+    els.runtimeCard.classList.toggle("collapsed", state.logsCollapsed)
+  }
+  if (els.toggleLogsBtn) {
+    els.toggleLogsBtn.textContent = state.logsCollapsed ? "Expand" : "Collapse"
+    els.toggleLogsBtn.title = state.logsCollapsed ? "Expand logs" : "Collapse logs"
+  }
+  if (!persist) return
+  if (!window.localStorage) return
+  window.localStorage.setItem(LOGS_COLLAPSE_KEY, state.logsCollapsed ? "1" : "0")
+}
+
+function loadLogLayout() {
+  if (!window.localStorage) {
+    setLogsCollapsed(true, false)
+    return
+  }
+  const stored = window.localStorage.getItem(LOGS_COLLAPSE_KEY)
+  if (stored === null) {
+    setLogsCollapsed(true, false)
+    return
+  }
+  setLogsCollapsed(stored === "1", false)
 }
 
 function normalizeLog(item) {
@@ -1017,6 +1082,68 @@ async function createSkill() {
   addMessage("system", `Skill scaffold ready: ${file}`)
 }
 
+function sessionLabel(item, index) {
+  const id = String(item?.id ?? "").trim()
+  const titleRaw = String(item?.title ?? "").replace(/\s+/g, " ").trim()
+  const title = titleRaw || "(untitled)"
+  const stamp = Number(item?.updated ?? 0)
+  const updated = Number.isFinite(stamp) && stamp > 0 ? new Date(stamp).toLocaleString() : "-"
+  return `${index + 1}. ${id} | ${title} | ${updated}`
+}
+
+function pickSessionId(list, action) {
+  const limit = Math.min(24, list.length)
+  const sample = list.slice(0, limit).map((item, index) => sessionLabel(item, index)).join("\n")
+  const input = window.prompt(`Select session index (1-${limit}) or input session id to ${action}:\n\n${sample}`, "1")
+  if (input === null) return ""
+  const raw = input.trim()
+  if (!raw) return ""
+
+  const idx = Number.parseInt(raw, 10)
+  if (!Number.isFinite(idx)) return raw
+  if (idx < 1 || idx > limit) return raw
+  return String(list[idx - 1]?.id ?? "").trim()
+}
+
+async function loadSession() {
+  const list = await invoke(cmd.managerListSessions)
+  if (!Array.isArray(list) || list.length === 0) {
+    addMessage("system", "No sessions found in database.")
+    return
+  }
+
+  const sessionId = pickSessionId(list, "load")
+  if (!sessionId) {
+    addMessage("system", "Invalid session selection.")
+    return
+  }
+
+  const snapshot = await invoke(cmd.managerUseSession, { sessionId })
+  applySnapshot(snapshot)
+  addMessage("system", `Loaded session: ${sessionId}`)
+}
+
+async function deleteSession() {
+  const list = await invoke(cmd.managerListSessions)
+  if (!Array.isArray(list) || list.length === 0) {
+    addMessage("system", "No sessions found in database.")
+    return
+  }
+
+  const sessionId = pickSessionId(list, "delete")
+  if (!sessionId) {
+    addMessage("system", "Invalid session selection.")
+    return
+  }
+
+  const approved = window.confirm(`Delete session ${sessionId} from database?\n\nThis action cannot be undone.`)
+  if (!approved) return
+
+  const snapshot = await invoke(cmd.managerDeleteSession, { sessionId })
+  applySnapshot(snapshot)
+  addMessage("system", `Deleted session: ${sessionId}`)
+}
+
 async function sendPrompt(prompt) {
   streamReset()
   const result = await invoke(cmd.managerSend, { prompt })
@@ -1131,6 +1258,10 @@ function bindEvents() {
     }
   })
 
+  els.toggleLogsBtn?.addEventListener("click", () => {
+    setLogsCollapsed(!state.logsCollapsed)
+  })
+
   els.openLogPanelBtn?.addEventListener("click", () => {
     openPanel(els.logPanel)
   })
@@ -1193,6 +1324,22 @@ function bindEvents() {
       await createSkill()
     } catch (error) {
       addMessage("system", `Create skill failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.loadSessionBtn?.addEventListener("click", async () => {
+    try {
+      await loadSession()
+    } catch (error) {
+      addMessage("system", `Load session failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.deleteSessionBtn?.addEventListener("click", async () => {
+    try {
+      await deleteSession()
+    } catch (error) {
+      addMessage("system", `Delete session failed: ${error?.message || String(error)}`)
     }
   })
 }
@@ -1260,6 +1407,7 @@ function bindTauriEvents() {
 }
 
 async function boot() {
+  loadLogLayout()
   bindEvents()
   bindTauriEvents()
   addMessage("system", "OpenCorvus manager is ready.")

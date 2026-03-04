@@ -59,6 +59,7 @@ export class BotCore {
   /** Base URL of the OpenCorvus server */
   private serverUrl!: string
   private sharedSessionId?: string
+  private runtimeSession?: string
   /** Prevent creating duplicate overlay mirror threads */
   private overlayMirrorBound = false
 
@@ -118,6 +119,7 @@ export class BotCore {
 
   async stop(): Promise<void> {
     this.running = false
+    this.runtimeSession = undefined
     for (const adapter of this.adapters) {
       await adapter.stop()
     }
@@ -284,6 +286,10 @@ export class BotCore {
   private async submitTask(sessionID: string, text: string, platform: string) {
     const fastMode = this.taskMode() === "tui-runtime"
     if (fastMode) {
+      const runtimeReady = await this.startRuntime(sessionID)
+      if (!runtimeReady) {
+        console.warn(`[BotCore] tui.runtime.start failed, fallback submit path for session ${sessionID}`)
+      }
       const result = await this.client.tui.runtime.submitTask({
         sessionID,
         text,
@@ -307,6 +313,28 @@ export class BotCore {
       return false
     }
     console.log(`[BotCore] Prompt sent via session.promptAsync for session ${sessionID}`)
+    return true
+  }
+
+  private async startRuntime(sessionID: string) {
+    if (this.runtimeSession === sessionID) return true
+
+    const directory = process.env.OPENCORVUS_PROJECT_DIR?.trim() || process.cwd()
+    const bin = process.env.OPENCORVUS_BIN_PATH?.trim()
+    const result = await this.client.tui.runtime.start({
+      mode: "spawn",
+      query_directory: directory,
+      body_directory: directory,
+      sessionID,
+      ...(bin ? { bin } : {}),
+    })
+    if (result.error) {
+      console.error("[BotCore] tui.runtime.start error:", JSON.stringify(result.error).slice(0, 500))
+      return false
+    }
+
+    this.runtimeSession = sessionID
+    console.log(`[BotCore] TUI runtime started for session ${sessionID}`)
     return true
   }
 

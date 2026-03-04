@@ -70,10 +70,10 @@ Bu, TUI öğesinin uzak bir opencorvus arka ucuyla kullanılmasına olanak tanı
 
 ```bash
 # Start the backend server for web/mobile access
-opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 7878 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-opencorvus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:7878
 ```
 
 #### Bayraklar
@@ -330,7 +330,7 @@ Ayrıca, her çalıştırmada MCP sunucusunun soğuk önyükleme sürelerini ön
 opencorvus serve
 
 # In another terminal, run commands that attach to it
-opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript"
 ```
 
 #### Bayraklar
@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript
 | `--file`     | `-f` | Mesaja eklenecek dosya(lar)                                                       |
 | `--format`   |      | Biçim: varsayılan (biçimlendirilmiş) veya json (ham JSON olayları)                |
 | `--title`    |      | Oturumun başlığı (değer sağlanmazsa kısaltılmış bilgi istemi kullanılır)          |
-| `--attach`   |      | Çalışan bir opencorvus sunucusuna ekleyin (ör. http://localhost:4096)               |
+| `--attach`   |      | Çalışan bir opencorvus sunucusuna ekleyin (ör. http://localhost:7878)               |
 | `--port`     |      | Yerel sunucunun bağlantı noktası (varsayılan olarak rastgele bağlantı noktasıdır) |
 
 ---

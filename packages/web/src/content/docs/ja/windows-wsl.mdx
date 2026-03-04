@@ -51,15 +51,15 @@ OpenCorvus デスクトップアプリを使いつつ、サーバーは WSL で�
    外部接続を許可するため、`--hostname 0.0.0.0` を付けて起動します。
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
 2. **デスクトップアプリを接続する**
 
-   `http://localhost:4096` に接続します。
+   `http://localhost:7878` に接続します。
 
 :::note
-環境によって `localhost` が使えない場合は、WSL 側で `hostname -I` を実行して IP アドレスを確認し、`http://<wsl-ip>:4096` に接続してください。
+環境によって `localhost` が使えない場合は、WSL 側で `hostname -I` を実行して IP アドレスを確認し、`http://<wsl-ip>:7878` に接続してください。
 :::
 :::caution
 `--hostname 0.0.0.0` を使う場合は、`OPENCORVUS_SERVER_PASSWORD` を設定してサーバーを保護してください。

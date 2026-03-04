@@ -49,13 +49,13 @@ Hvis du foretrækker OpenCorvus Desktop-appen, men vil køre serveren i WSL:
 1. **Start serveren i WSL** med `--hostname 0.0.0.0` for at tillade eksterne forbindelser:
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **Forbind Desktop-appen** til `http://localhost:4096`
+2. **Forbind Desktop-appen** til `http://localhost:7878`
 
 :::note
-Hvis `localhost` ikke virker i din opsætning, så forbind i stedet med WSL-IP-adressen (fra WSL: `hostname -I`) og brug `http://<wsl-ip>:4096`.
+Hvis `localhost` ikke virker i din opsætning, så forbind i stedet med WSL-IP-adressen (fra WSL: `hostname -I`) og brug `http://<wsl-ip>:7878`.
 :::
 
 :::caution

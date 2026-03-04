@@ -40,7 +40,7 @@ Ovo pokrece i server i klijent
 | Opcija     | Tip           | Opis                          | Default     |
 | ---------- | ------------- | ----------------------------- | ----------- |
 | `hostname` | `string`      | Hostname servera              | `127.0.0.1` |
-| `port`     | `number`      | Port servera                  | `4096`      |
+| `port`     | `number`      | Port servera                  | `7878`      |
 | `signal`   | `AbortSignal` | Abort signal za otkazivanje   | `undefined` |
 | `timeout`  | `number`      | Timeout u ms za start servera | `5000`      |
 | `config`   | `Config`      | Konfiguracijski objekat       | `{}`        |
@@ -56,7 +56,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -75,7 +75,7 @@ Ako vec imate pokrenutu opencorvus instancu, mozete napraviti klijentsku instanc
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -83,7 +83,7 @@ const client = createOpenCorvusClient({
 
 | Opcija          | Tip        | Opis                              | Default                 |
 | --------------- | ---------- | --------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | URL servera                       | `http://localhost:4096` |
+| `baseUrl`       | `string`   | URL servera                       | `http://localhost:7878` |
 | `fetch`         | `function` | Prilagodena fetch implementacija  | `globalThis.fetch`      |
 | `parseAs`       | `string`   | Metoda parsiranja odgovora        | `auto`                  |
 | `responseStyle` | `string`   | Stil povrata: `data` ili `fields` | `fields`                |

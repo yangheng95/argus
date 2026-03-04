@@ -70,10 +70,10 @@ opencorvus attach [url]
 
 ```bash
 # Start the backend server for web/mobile access
-opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 7878 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-opencorvus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:7878
 ```
 
 #### Флаги
@@ -330,7 +330,7 @@ opencorvus run Explain the use of context in Go
 opencorvus serve
 
 # In another terminal, run commands that attach to it
-opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript"
 ```
 
 #### Флаги
@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript
 | `--file`     | `-f`     | Файл(ы) для прикрепления к сообщению                                             |
 | `--format`   |          | Формат: по умолчанию (отформатированный) или json (необработанные события JSON). |
 | `--title`    |          | Название сеанса (использует усеченное приглашение, если значение не указано)     |
-| `--attach`   |          | Подключитесь к работающему серверу opencorvus (например, http://localhost:4096)    |
+| `--attach`   |          | Подключитесь к работающему серверу opencorvus (например, http://localhost:7878)    |
 | `--port`     |          | Порт локального сервера (по умолчанию случайный порт)                            |
 
 ---

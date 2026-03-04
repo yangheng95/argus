@@ -147,9 +147,11 @@ fn parse_inbound(line: &str) -> Result<InboundEvent, String> {
         item if item == events::MSG_CONFIRM => serde_json::from_value::<ConfirmInput>(raw)
             .map(InboundEvent::Confirm)
             .map_err(|error| format!("invalid {} payload: {error}", events::MSG_CONFIRM)),
-        item if item == events::MSG_WINDOW_HIGHLIGHT => serde_json::from_value::<WindowHighlightInput>(raw)
-            .map(InboundEvent::WindowHighlight)
-            .map_err(|error| format!("invalid {} payload: {error}", events::MSG_WINDOW_HIGHLIGHT)),
+        item if item == events::MSG_WINDOW_HIGHLIGHT => serde_json::from_value::<
+            WindowHighlightInput,
+        >(raw)
+        .map(InboundEvent::WindowHighlight)
+        .map_err(|error| format!("invalid {} payload: {error}", events::MSG_WINDOW_HIGHLIGHT)),
         item if item == events::MSG_DIAGNOSTIC => serde_json::from_value::<DiagnosticInput>(raw)
             .map(InboundEvent::Diagnostic)
             .map_err(|error| format!("invalid {} payload: {error}", events::MSG_DIAGNOSTIC)),
@@ -183,7 +185,10 @@ pub fn confirm_reply(window: WebviewWindow, id: String, answer: String) {
 pub fn apply_overlay_window_style(app: &tauri::App) {
     for name in [events::WINDOW_OVERLAY, events::WINDOW_HIGHLIGHT] {
         if let Some(win) = app.get_webview_window(name) {
-            log_result("apply_overlay_window_style.set_ignore_cursor_events", win.set_ignore_cursor_events(true));
+            log_result(
+                "apply_overlay_window_style.set_ignore_cursor_events",
+                win.set_ignore_cursor_events(true),
+            );
         }
     }
 }
@@ -205,33 +210,41 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                             InboundEvent::Hint(item) => {
                                 // All coordinates are logical (DPI-aware) from OpenCorvus.
                                 // Position overlay so focus ring center aligns with target.
-                                if let Some(window) = handle.get_webview_window(events::WINDOW_OVERLAY) {
-                                    let (width, height) = window_size(&window, OVERLAY_WIDTH, OVERLAY_HEIGHT);
+                                if let Some(window) =
+                                    handle.get_webview_window(events::WINDOW_OVERLAY)
+                                {
+                                    let (width, height) =
+                                        window_size(&window, OVERLAY_WIDTH, OVERLAY_HEIGHT);
                                     let win_x = item.x as f64 - width / 2.0;
                                     let win_y = item.y as f64 - height * FOCUS_Y_RATIO;
                                     log_result(
                                         "stdin_bridge.hint.set_position",
-                                        window.set_position(tauri::LogicalPosition::new(win_x, win_y)),
+                                        window.set_position(tauri::LogicalPosition::new(
+                                            win_x, win_y,
+                                        )),
                                     );
                                     log_result("stdin_bridge.hint.show", window.show());
                                 }
                                 log_result(
                                     "stdin_bridge.hint.emit",
                                     handle.emit(
-                                    events::EVT_SHOW_OVERLAY,
-                                    ShowPayload {
-                                        x: item.x,
-                                        y: item.y,
-                                        action: item.action,
-                                        label: item.label,
-                                        status: item.status,
-                                    },
-                                ),
+                                        events::EVT_SHOW_OVERLAY,
+                                        ShowPayload {
+                                            x: item.x,
+                                            y: item.y,
+                                            action: item.action,
+                                            label: item.label,
+                                            status: item.status,
+                                        },
+                                    ),
                                 );
                             }
                             InboundEvent::Confirm(item) => {
-                                if let Some(window) = handle.get_webview_window(events::WINDOW_CONFIRM) {
-                                    let (width, height) = window_size(&window, CONFIRM_WIDTH, CONFIRM_HEIGHT);
+                                if let Some(window) =
+                                    handle.get_webview_window(events::WINDOW_CONFIRM)
+                                {
+                                    let (width, height) =
+                                        window_size(&window, CONFIRM_WIDTH, CONFIRM_HEIGHT);
                                     log_result(
                                         "stdin_bridge.confirm.set_position",
                                         window.set_position(tauri::LogicalPosition::new(
@@ -240,36 +253,55 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                         )),
                                     );
                                     log_result("stdin_bridge.confirm.show", window.show());
-                                    log_result("stdin_bridge.confirm.set_focus", window.set_focus());
+                                    log_result(
+                                        "stdin_bridge.confirm.set_focus",
+                                        window.set_focus(),
+                                    );
                                 }
                                 log_result(
                                     "stdin_bridge.confirm.emit",
                                     handle.emit(
-                                    events::EVT_SHOW_CONFIRM,
-                                    ConfirmPayload {
-                                        id: item.id,
-                                        x: item.x,
-                                        y: item.y,
-                                        title: item.title,
-                                        message: item.message,
-                                        confirm: item.confirm.unwrap_or("Confirm".into()),
-                                        cancel: item.cancel.unwrap_or("Cancel".into()),
-                                        timeout_ms: item.timeout_ms,
-                                    },
-                                ),
+                                        events::EVT_SHOW_CONFIRM,
+                                        ConfirmPayload {
+                                            id: item.id,
+                                            x: item.x,
+                                            y: item.y,
+                                            title: item.title,
+                                            message: item.message,
+                                            confirm: item.confirm.unwrap_or("Confirm".into()),
+                                            cancel: item.cancel.unwrap_or("Cancel".into()),
+                                            timeout_ms: item.timeout_ms,
+                                        },
+                                    ),
                                 );
                             }
                             InboundEvent::WindowHighlight(item) => {
                                 // Coordinates are logical (DPI-aware) — use LogicalSize/LogicalPosition
-                                if let Some(window) = handle.get_webview_window(events::WINDOW_HIGHLIGHT) {
+                                if let Some(window) =
+                                    handle.get_webview_window(events::WINDOW_HIGHLIGHT)
+                                {
                                     const HIGHLIGHT_MIN_SIZE: u32 = 40;
                                     const HIGHLIGHT_MAX_SIZE: u32 = 10000;
-                                    let w = (item.width.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
-                                    let h = (item.height.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
-                                    log_result("stdin_bridge.window_highlight.set_size", window.set_size(tauri::LogicalSize::new(w, h)));
+                                    let w = (item
+                                        .width
+                                        .max(HIGHLIGHT_MIN_SIZE)
+                                        .min(HIGHLIGHT_MAX_SIZE))
+                                        as f64;
+                                    let h = (item
+                                        .height
+                                        .max(HIGHLIGHT_MIN_SIZE)
+                                        .min(HIGHLIGHT_MAX_SIZE))
+                                        as f64;
+                                    log_result(
+                                        "stdin_bridge.window_highlight.set_size",
+                                        window.set_size(tauri::LogicalSize::new(w, h)),
+                                    );
                                     log_result(
                                         "stdin_bridge.window_highlight.set_position",
-                                        window.set_position(tauri::LogicalPosition::new(item.x as f64, item.y as f64)),
+                                        window.set_position(tauri::LogicalPosition::new(
+                                            item.x as f64,
+                                            item.y as f64,
+                                        )),
                                     );
                                     log_result("stdin_bridge.window_highlight.show", window.show());
                                     log_result(

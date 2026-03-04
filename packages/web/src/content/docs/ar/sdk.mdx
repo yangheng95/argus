@@ -40,7 +40,7 @@ const { client } = await createOpenCorvus()
 | الخيار     | النوع         | الوصف                         | الافتراضي   |
 | ---------- | ------------- | ----------------------------- | ----------- |
 | `hostname` | `string`      | اسم مضيف الخادم               | `127.0.0.1` |
-| `port`     | `number`      | منفذ الخادم                   | `4096`      |
+| `port`     | `number`      | منفذ الخادم                   | `7878`      |
 | `signal`   | `AbortSignal` | إشارة إلغاء للإيقاف           | `undefined` |
 | `timeout`  | `number`      | مهلة بدء الخادم بالمللي ثانية | `5000`      |
 | `config`   | `Config`      | كائن الإعدادات                | `{}`        |
@@ -56,7 +56,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -75,7 +75,7 @@ opencorvus.server.close()
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -83,7 +83,7 @@ const client = createOpenCorvusClient({
 
 | الخيار          | النوع      | الوصف                             | الافتراضي               |
 | --------------- | ---------- | --------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | عنوان URL للخادم                  | `http://localhost:4096` |
+| `baseUrl`       | `string`   | عنوان URL للخادم                  | `http://localhost:7878` |
 | `fetch`         | `function` | تنفيذ fetch مخصص                  | `globalThis.fetch`      |
 | `parseAs`       | `string`   | طريقة تحليل الاستجابة             | `auto`                  |
 | `responseStyle` | `string`   | أسلوب الإرجاع: `data` أو `fields` | `fields`                |

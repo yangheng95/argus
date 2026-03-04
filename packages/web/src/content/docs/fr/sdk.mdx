@@ -40,7 +40,7 @@ Cela démarre à la fois un serveur et un client
 | Options    | Tapez         | Descriptif                                         | Par défaut  |
 | ---------- | ------------- | -------------------------------------------------- | ----------- |
 | `hostname` | `string`      | Nom d'hôte du serveur                              | `127.0.0.1` |
-| `port`     | `number`      | Port du serveur                                    | `4096`      |
+| `port`     | `number`      | Port du serveur                                    | `7878`      |
 | `signal`   | `AbortSignal` | Signal d'abandon pour annulation                   | `undefined` |
 | `timeout`  | `number`      | Délai d'attente en ms pour le démarrage du serveur | `5000`      |
 | `config`   | `Config`      | Objet de configuration                             | `{}`        |
@@ -56,7 +56,7 @@ import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
-  port: 4096,
+  port: 7878,
   config: {
     model: "anthropic/claude-3-5-sonnet-20241022",
   },
@@ -75,7 +75,7 @@ Si vous disposez déjà d'une instance en cours d'exécution de opencorvus, vous
 import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
-  baseUrl: "http://localhost:4096",
+  baseUrl: "http://localhost:7878",
 })
 ```
 
@@ -83,7 +83,7 @@ const client = createOpenCorvusClient({
 
 | Options         | Tapez      | Descriptif                                   | Par défaut              |
 | --------------- | ---------- | -------------------------------------------- | ----------------------- |
-| `baseUrl`       | `string`   | URL du serveur                               | `http://localhost:4096` |
+| `baseUrl`       | `string`   | URL du serveur                               | `http://localhost:7878` |
 | `fetch`         | `function` | Implémentation de récupération personnalisée | `globalThis.fetch`      |
 | `parseAs`       | `string`   | Méthode d'analyse des réponses               | `auto`                  |
 | `responseStyle` | `string`   | Style de retour : `data` ou `fields`         | `fields`                |

@@ -32,7 +32,10 @@ fn main() {
             commands::manager_open_mcp_config,
             commands::manager_open_skill_dir,
             commands::manager_add_mcp,
-            commands::manager_create_skill
+            commands::manager_create_skill,
+            commands::manager_list_sessions,
+            commands::manager_use_session,
+            commands::manager_delete_session
         ])
         .setup(move |app| {
             let state = app.state::<manager::Shared>();
@@ -46,7 +49,11 @@ fn main() {
                     );
                 }
                 if let Err(error) = tray::setup(&app.handle()) {
-                    manager::push_log(state.inner(), &app.handle(), format!("tray setup failed: {error}"));
+                    manager::push_log(
+                        state.inner(),
+                        &app.handle(),
+                        format!("tray setup failed: {error}"),
+                    );
                 }
                 manager::show_console(&app.handle());
             }
@@ -64,11 +71,7 @@ fn main() {
                     return;
                 }
                 if let Err(error) = manager::stop_bot(state.inner(), app) {
-                    manager::push_log(
-                        state.inner(),
-                        app,
-                        format!("shutdown stop failed: {error}"),
-                    );
+                    manager::push_log(state.inner(), app, format!("shutdown stop failed: {error}"));
                 }
             };
 

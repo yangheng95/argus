@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
@@ -90,6 +91,17 @@ pub struct LogEntry {
     pub detail: Option<serde_json::Value>,
 }
 
+#[derive(Deserialize, Serialize, Clone)]
+pub struct SessionListItem {
+    pub id: String,
+    pub title: String,
+    pub updated: u64,
+    pub created: u64,
+    #[serde(rename = "projectId")]
+    pub project_id: Option<String>,
+    pub directory: Option<String>,
+}
+
 pub struct ManagerState {
     config: ManagerConfig,
     logs: VecDeque<LogEntry>,
@@ -101,6 +113,46 @@ pub struct ManagerState {
 
 pub type Shared = Arc<Mutex<ManagerState>>;
 
+fn repo_root(path: &Path) -> Option<PathBuf> {
+    let mut node = if path.is_file() {
+        path.parent().map(|item| item.to_path_buf())?
+    } else {
+        path.to_path_buf()
+    };
+    loop {
+        let pkg = node.join("packages");
+        if pkg.join("bot").is_dir() && pkg.join("opencorvus").is_dir() {
+            return Some(node);
+        }
+        if !node.pop() {
+            return None;
+        }
+    }
+}
+
+fn infer_cwd(command: &str) -> Option<PathBuf> {
+    let cmd = command.trim();
+    if !cmd.is_empty() {
+        let path = PathBuf::from(cmd);
+        if path.is_absolute() {
+            if let Some(root) = repo_root(&path) {
+                return Some(root);
+            }
+        }
+    }
+    if let Ok(path) = std::env::current_exe() {
+        if let Some(root) = repo_root(&path) {
+            return Some(root);
+        }
+    }
+    if let Ok(path) = std::env::current_dir() {
+        if let Some(root) = repo_root(&path) {
+            return Some(root);
+        }
+    }
+    None
+}
+
 impl Default for ManagerConfig {
     fn default() -> Self {
         // Prefer sibling binary in the same directory as this overlay executable.
@@ -111,6 +163,9 @@ impl Default for ManagerConfig {
             .filter(|p| p.exists())
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| "opencorvus".into());
+        let cwd = infer_cwd(&command)
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
 
         Self {
             command,
@@ -123,7 +178,7 @@ impl Default for ManagerConfig {
             bot_command: "bun".into(),
             bot_args: default_bot_args(),
             server_url: "http://127.0.0.1:7878".into(),
-            cwd: String::new(),
+            cwd,
             env: vec![],
         }
     }
@@ -154,6 +209,65 @@ fn norm_list(list: Vec<String>) -> Vec<String> {
         .map(|item| item.trim().to_string())
         .filter(|item| !item.is_empty())
         .collect()
+}
+
+fn serve_port(args: &[String]) -> Option<u16> {
+    let mut i = 0;
+    while i < args.len() {
+        let item = args[i].trim();
+        if let Some(value) = item.strip_prefix("--port=") {
+            if let Ok(port) = value.trim().parse::<u16>() {
+                return Some(port);
+            }
+        }
+        if item == "--port" && i + 1 < args.len() {
+            if let Ok(port) = args[i + 1].trim().parse::<u16>() {
+                return Some(port);
+            }
+            i += 2;
+            continue;
+        }
+        i += 1;
+    }
+    None
+}
+
+fn with_port(args: Vec<String>, port: u16) -> Vec<String> {
+    let mut out = Vec::with_capacity(args.len() + 2);
+    let mut set = false;
+    let mut i = 0;
+    while i < args.len() {
+        let item = args[i].trim();
+        if item.starts_with("--port=") {
+            out.push(format!("--port={port}"));
+            set = true;
+            i += 1;
+            continue;
+        }
+        if item == "--port" && i + 1 < args.len() {
+            out.push("--port".into());
+            out.push(port.to_string());
+            set = true;
+            i += 2;
+            continue;
+        }
+        out.push(args[i].clone());
+        i += 1;
+    }
+    if !set {
+        out.push("--port".into());
+        out.push(port.to_string());
+    }
+    out
+}
+
+fn port_busy(port: u16) -> bool {
+    TcpListener::bind(("127.0.0.1", port)).is_err()
+}
+
+fn free_port() -> Option<u16> {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).ok()?;
+    listener.local_addr().ok().map(|addr| addr.port())
 }
 
 fn default_bot_args() -> Vec<String> {
@@ -195,20 +309,79 @@ fn has_cwd_arg(args: &[String]) -> bool {
     })
 }
 
+fn abs_cwd_args(args: Vec<String>, base: &Path) -> Vec<String> {
+    let mut out = Vec::with_capacity(args.len());
+    let mut i = 0;
+    while i < args.len() {
+        let item = args[i].trim();
+        if item == "--cwd" || item == "-C" {
+            out.push(args[i].clone());
+            if i + 1 < args.len() {
+                let next = args[i + 1].trim();
+                if next.is_empty() {
+                    out.push(args[i + 1].clone());
+                } else {
+                    let path = PathBuf::from(next);
+                    if path.is_absolute() {
+                        out.push(path.to_string_lossy().to_string());
+                    } else {
+                        out.push(base.join(path).to_string_lossy().to_string());
+                    }
+                }
+                i += 2;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+
+        if let Some(value) = item.strip_prefix("--cwd=") {
+            let value = value.trim();
+            if value.is_empty() {
+                out.push(args[i].clone());
+            } else {
+                let path = PathBuf::from(value);
+                if path.is_absolute() {
+                    out.push(args[i].clone());
+                } else {
+                    out.push(format!("--cwd={}", base.join(path).to_string_lossy()));
+                }
+            }
+            i += 1;
+            continue;
+        }
+
+        out.push(args[i].clone());
+        i += 1;
+    }
+    out
+}
+
 fn norm_config(config: ManagerConfig) -> ManagerConfig {
     let defaults = ManagerConfig::default();
     let bot_command = config.bot_command.trim().to_string();
     let bot_args = norm_bot_args(config.bot_args);
+    let command = {
+        let item = config.command.trim();
+        if item.is_empty() {
+            // Empty command in config: use sibling binary detection same as Default.
+            defaults.command
+        } else {
+            item.into()
+        }
+    };
+    let cwd = {
+        let item = config.cwd.trim();
+        if !item.is_empty() {
+            item.into()
+        } else {
+            infer_cwd(&command)
+                .map(|path| path.to_string_lossy().into_owned())
+                .unwrap_or(defaults.cwd)
+        }
+    };
     ManagerConfig {
-        command: {
-            let item = config.command.trim();
-            if item.is_empty() {
-                // Empty command in config: use sibling binary detection same as Default.
-                defaults.command
-            } else {
-                item.into()
-            }
-        },
+        command,
         serve_args: norm_list(config.serve_args),
         run_args: norm_list(config.run_args),
         bot_command,
@@ -221,7 +394,7 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
                 item.into()
             }
         },
-        cwd: config.cwd.trim().into(),
+        cwd,
         env: config
             .env
             .into_iter()
@@ -234,22 +407,33 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
     }
 }
 
-fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_config_dir().map_err(|error| error.to_string())?;
+fn state_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Ok(value) = std::env::var("OPENCORVUS_OVERLAY_STATE_DIR") {
+        let item = value.trim();
+        if !item.is_empty() {
+            let dir = PathBuf::from(item);
+            fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+            return Ok(dir);
+        }
+    }
+    let dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    Ok(dir.join(CONFIG_FILE))
+    Ok(dir)
+}
+
+fn config_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(state_dir(app)?.join(CONFIG_FILE))
 }
 
 fn log_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_config_dir().map_err(|error| error.to_string())?;
-    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    Ok(dir.join(LOG_FILE))
+    Ok(state_dir(app)?.join(LOG_FILE))
 }
 
 fn pid_path(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
-    let dir = app.path().app_config_dir().map_err(|error| error.to_string())?;
-    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-    Ok(dir.join(name))
+    Ok(state_dir(app)?.join(name))
 }
 
 fn read_pid(path: &Path) -> Option<u32> {
@@ -328,10 +512,18 @@ fn clear_stale_pid(shared: &Shared, app: &AppHandle, name: &str, label: &str) {
     }
     match kill_pid(pid) {
         Ok(()) => {
-            push_log(shared, app, format!("killed stale {label} process (pid {pid})"));
+            push_log(
+                shared,
+                app,
+                format!("killed stale {label} process (pid {pid})"),
+            );
         }
         Err(error) => {
-            push_log(shared, app, format!("failed to kill stale {label} process (pid {pid}): {error}"));
+            push_log(
+                shared,
+                app,
+                format!("failed to kill stale {label} process (pid {pid}): {error}"),
+            );
         }
     }
     let _ = fs::remove_file(path);
@@ -379,7 +571,9 @@ fn work_dir(shared: &Shared) -> PathBuf {
 }
 
 fn shared_session_path(shared: &Shared) -> PathBuf {
-    work_dir(shared).join(".opencorvus").join(SHARED_SESSION_FILE)
+    work_dir(shared)
+        .join(".opencorvus")
+        .join(SHARED_SESSION_FILE)
 }
 
 fn read_shared_session(shared: &Shared) -> Option<String> {
@@ -408,6 +602,15 @@ fn write_shared_session(shared: &Shared, session_id: &str) -> Result<(), String>
     });
     let text = serde_json::to_string_pretty(&body).map_err(|error| error.to_string())?;
     fs::write(path, format!("{text}\n")).map_err(|error| error.to_string())
+}
+
+fn clear_shared_session(shared: &Shared) -> Result<bool, String> {
+    let path = shared_session_path(shared);
+    if !path.exists() {
+        return Ok(false);
+    }
+    fs::remove_file(path).map_err(|error| error.to_string())?;
+    Ok(true)
 }
 
 fn opencorvus_config_path(base: &Path) -> PathBuf {
@@ -504,14 +707,23 @@ fn build_process(command: &str, args: &[String], cwd: &str, env: &[EnvItem]) -> 
     cmd
 }
 
-fn watch_pipe<R: Read + Send + 'static>(shared: Shared, app: AppHandle, source: R, tag: &'static str) {
+fn watch_pipe<R: Read + Send + 'static>(
+    shared: Shared,
+    app: AppHandle,
+    source: R,
+    tag: &'static str,
+) {
     std::thread::spawn(move || {
         for line in BufReader::new(source).lines() {
             match line {
                 Ok(text) if !text.trim().is_empty() => {
                     if tag == "channel" {
                         if let Some(event) = parse_channel_mirror(&text) {
-                            let _ = app.emit_to(events::WINDOW_CONSOLE, events::EVT_MANAGER_CHAT, event);
+                            let _ = app.emit_to(
+                                events::WINDOW_CONSOLE,
+                                events::EVT_MANAGER_CHAT,
+                                event,
+                            );
                             continue;
                         }
                     }
@@ -519,7 +731,11 @@ fn watch_pipe<R: Read + Send + 'static>(shared: Shared, app: AppHandle, source: 
                 }
                 Ok(_) => {}
                 Err(error) => {
-                    push_log(&shared, &app, format!("[{tag}] stream read failed: {error}"));
+                    push_log(
+                        &shared,
+                        &app,
+                        format!("[{tag}] stream read failed: {error}"),
+                    );
                     break;
                 }
             }
@@ -743,13 +959,21 @@ fn emit_replace(app: &AppHandle, output: &mut String, text: &str) {
     emit_chat(app, "replace", Some(text.into()), None, None, None, None);
 }
 
-fn process_json_line(app: &AppHandle, value: &serde_json::Value, output: &mut String, delta_seen: &mut bool) -> bool {
+fn process_json_line(
+    app: &AppHandle,
+    value: &serde_json::Value,
+    output: &mut String,
+    delta_seen: &mut bool,
+) -> bool {
     let Some(kind) = value.get("type").and_then(|item| item.as_str()) else {
         return false;
     };
 
     // Silently discard structural / metadata events that should not appear in chat output.
-    if matches!(kind, "step_start" | "step_finish" | "reasoning" | "reasoning_delta") {
+    if matches!(
+        kind,
+        "step_start" | "step_finish" | "reasoning" | "reasoning_delta"
+    ) {
         return true;
     }
 
@@ -786,12 +1010,23 @@ fn process_json_line(app: &AppHandle, value: &serde_json::Value, output: &mut St
             .pointer("/part/filename")
             .and_then(|item| item.as_str())
             .unwrap_or("image");
-        emit_chat(app, "image", None, Some(url.into()), Some(alt.into()), None, None);
+        emit_chat(
+            app,
+            "image",
+            None,
+            Some(url.into()),
+            Some(alt.into()),
+            None,
+            None,
+        );
         return true;
     }
 
     if kind == "tool_use" {
-        let Some(items) = value.pointer("/part/state/attachments").and_then(|item| item.as_array()) else {
+        let Some(items) = value
+            .pointer("/part/state/attachments")
+            .and_then(|item| item.as_array())
+        else {
             return true;
         };
         for item in items {
@@ -808,7 +1043,15 @@ fn process_json_line(app: &AppHandle, value: &serde_json::Value, output: &mut St
                 .get("filename")
                 .and_then(|x| x.as_str())
                 .unwrap_or("image");
-            emit_chat(app, "image", None, Some(url.into()), Some(alt.into()), None, None);
+            emit_chat(
+                app,
+                "image",
+                None,
+                Some(url.into()),
+                Some(alt.into()),
+                None,
+                None,
+            );
         }
         return true;
     }
@@ -892,7 +1135,11 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
                     }
                     Ok(_) => {}
                     Err(error) => {
-                        push_log(&shared2, &app2, format!("[run:err] stream read failed: {error}"));
+                        push_log(
+                            &shared2,
+                            &app2,
+                            format!("[run:err] stream read failed: {error}"),
+                        );
                         break;
                     }
                 }
@@ -910,7 +1157,9 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
                 Ok(item) if !item.trim().is_empty() => {
                     if let Ok(value) = serde_json::from_str::<serde_json::Value>(&item) {
                         if captured_session.is_none() {
-                            if let Some(session_id) = value.get("sessionID").and_then(|entry| entry.as_str()) {
+                            if let Some(session_id) =
+                                value.get("sessionID").and_then(|entry| entry.as_str())
+                            {
                                 let next = session_id.trim();
                                 if !next.is_empty() {
                                     captured_session = Some(next.to_string());
@@ -983,14 +1232,22 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
     if shared_session.is_none() {
         if let Some(session_id) = captured_session {
             if write_shared_session(shared, &session_id).is_ok() {
-                push_log(shared, app, format!("shared session captured: {session_id}"));
+                push_log(
+                    shared,
+                    app,
+                    format!("shared session captured: {session_id}"),
+                );
                 emit_state(shared, app);
             }
         }
     }
 
     emit_chat(app, "done", None, None, None, Some(success), Some(code));
-    SendResult { success, code, output: text }
+    SendResult {
+        success,
+        code,
+        output: text,
+    }
 }
 
 pub fn new_shared() -> Shared {
@@ -1025,7 +1282,11 @@ pub fn snapshot(shared: &Shared) -> ManagerSnapshot {
 }
 
 pub fn emit_state(shared: &Shared, app: &AppHandle) {
-    let _ = app.emit_to(events::WINDOW_CONSOLE, events::EVT_MANAGER_STATE, snapshot(shared));
+    let _ = app.emit_to(
+        events::WINDOW_CONSOLE,
+        events::EVT_MANAGER_STATE,
+        snapshot(shared),
+    );
 }
 
 fn persist_log(app: &AppHandle, item: &LogEntry) {
@@ -1103,7 +1364,10 @@ pub fn probe(shared: &Shared, app: &AppHandle) {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     state.core = None;
-                    let code = status.code().map(|item| item.to_string()).unwrap_or_else(|| "signal".into());
+                    let code = status
+                        .code()
+                        .map(|item| item.to_string())
+                        .unwrap_or_else(|| "signal".into());
                     lines.push(format!("OpenCorvus exited ({code})"));
                     core_done = true;
                 }
@@ -1119,7 +1383,10 @@ pub fn probe(shared: &Shared, app: &AppHandle) {
             match child.try_wait() {
                 Ok(Some(status)) => {
                     state.channel = None;
-                    let code = status.code().map(|item| item.to_string()).unwrap_or_else(|| "signal".into());
+                    let code = status
+                        .code()
+                        .map(|item| item.to_string())
+                        .unwrap_or_else(|| "signal".into());
                     lines.push(format!("channel bot exited ({code})"));
                     channel_done = true;
                 }
@@ -1177,7 +1444,7 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
         return Ok(());
     }
 
-    let args = config.bot_args.clone();
+    let args = abs_cwd_args(config.bot_args.clone(), &config_work_dir(config));
     let bot_cwd = if has_cwd_arg(&args) { "" } else { &config.cwd };
     let mut cmd = build_process(&config.bot_command, &args, bot_cwd, &config.env);
     let bot_cwd_log = resolve_work_dir(bot_cwd).to_string_lossy().to_string();
@@ -1211,9 +1478,12 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
         );
     }
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|error| format!("failed to start channel bot ({}): {error}", config.bot_command))?;
+    let mut child = cmd.spawn().map_err(|error| {
+        format!(
+            "failed to start channel bot ({}): {error}",
+            config.bot_command
+        )
+    })?;
 
     let pid = child.id();
     if let Some(stdout) = child.stdout.take() {
@@ -1228,7 +1498,11 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
         state.channel = Some(child);
     }
     if let Err(error) = write_pid(app, CHANNEL_PID_FILE, pid) {
-        push_log(shared, app, format!("failed to persist channel pid {pid}: {error}"));
+        push_log(
+            shared,
+            app,
+            format!("failed to persist channel pid {pid}: {error}"),
+        );
     }
 
     push_log(
@@ -1247,7 +1521,7 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
 pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     probe(shared, app);
 
-    let config = {
+    let mut config = {
         let state = shared.lock().unwrap();
         if state.core.is_some() {
             push_log(shared, app, "OpenCorvus is already running");
@@ -1255,6 +1529,47 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         }
         state.config.clone()
     };
+
+    if let Some(port) = serve_port(&config.serve_args) {
+        if port_busy(port) {
+            if let Some(next) = free_port() {
+                if next != port {
+                    config.serve_args = with_port(config.serve_args.clone(), next);
+                    config.server_url = format!("http://127.0.0.1:{next}");
+                    {
+                        let mut state = shared.lock().unwrap();
+                        state.config = config.clone();
+                    }
+                    if let Err(error) = save_config(app, &config) {
+                        push_log(
+                            shared,
+                            app,
+                            format!("failed to save auto-updated port config: {error}"),
+                        );
+                    }
+                    push_log(
+                        shared,
+                        app,
+                        format!("port {port} is busy, switched OpenCorvus to {next}"),
+                    );
+                }
+            }
+        }
+    }
+
+    match clear_shared_session(shared) {
+        Ok(true) => push_log(
+            shared,
+            app,
+            "shared session reset for startup (create new session)",
+        ),
+        Ok(false) => {}
+        Err(error) => push_log(
+            shared,
+            app,
+            format!("failed to reset shared session: {error}"),
+        ),
+    }
 
     clear_stale_pid(shared, app, CHANNEL_PID_FILE, "channel bot");
     clear_stale_pid(shared, app, CORE_PID_FILE, "OpenCorvus");
@@ -1281,17 +1596,29 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         state.core = Some(child);
     }
     if let Err(error) = write_pid(app, CORE_PID_FILE, pid) {
-        push_log(shared, app, format!("failed to persist OpenCorvus pid {pid}: {error}"));
+        push_log(
+            shared,
+            app,
+            format!("failed to persist OpenCorvus pid {pid}: {error}"),
+        );
     }
 
     push_log(
         shared,
         app,
-        format!("OpenCorvus started (pid {pid}) with: {} {}", config.command, config.serve_args.join(" ")),
+        format!(
+            "OpenCorvus started (pid {pid}) with: {} {}",
+            config.command,
+            config.serve_args.join(" ")
+        ),
     );
 
     if let Err(error) = start_channel(shared, app, &config) {
-        push_log(shared, app, format!("channel bot auto-start failed: {error}"));
+        push_log(
+            shared,
+            app,
+            format!("channel bot auto-start failed: {error}"),
+        );
     }
 
     emit_state(shared, app);
@@ -1309,13 +1636,15 @@ pub fn stop_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     };
 
     if let Some(proc) = channel.as_mut() {
-        proc.kill().map_err(|error| format!("failed to stop channel bot: {error}"))?;
+        proc.kill()
+            .map_err(|error| format!("failed to stop channel bot: {error}"))?;
         let _ = proc.wait();
         push_log(shared, app, "channel bot stopped");
     }
 
     if let Some(proc) = core.as_mut() {
-        proc.kill().map_err(|error| format!("failed to stop OpenCorvus: {error}"))?;
+        proc.kill()
+            .map_err(|error| format!("failed to stop OpenCorvus: {error}"))?;
         let _ = proc.wait();
         push_log(shared, app, "OpenCorvus stopped");
     } else {
@@ -1338,7 +1667,11 @@ pub fn clear_logs(shared: &Shared, app: &AppHandle) -> ManagerSnapshot {
     snapshot(shared)
 }
 
-pub fn save(shared: &Shared, app: &AppHandle, config: ManagerConfig) -> Result<ManagerSnapshot, String> {
+pub fn save(
+    shared: &Shared,
+    app: &AppHandle,
+    config: ManagerConfig,
+) -> Result<ManagerSnapshot, String> {
     let config = norm_config(config);
     save_config(app, &config)?;
 
@@ -1384,13 +1717,17 @@ pub fn add_mcp(
     let path = opencorvus_config_path(&work_dir(shared));
     ensure_opencorvus_config(&path)?;
     let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
-    let mut data: serde_json::Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
+    let mut data: serde_json::Value =
+        serde_json::from_str(&text).map_err(|error| error.to_string())?;
     let Some(root) = data.as_object_mut() else {
         return Err("invalid config root, expected JSON object".into());
     };
 
     if !root.contains_key("$schema") {
-        root.insert("$schema".into(), serde_json::Value::String(CONFIG_SCHEMA.into()));
+        root.insert(
+            "$schema".into(),
+            serde_json::Value::String(CONFIG_SCHEMA.into()),
+        );
     }
 
     if !root.contains_key("mcp") {
@@ -1458,7 +1795,10 @@ pub fn create_skill(
         }
     };
 
-    let dir = work_dir(shared).join(".opencorvus").join("skills").join(&name);
+    let dir = work_dir(shared)
+        .join(".opencorvus")
+        .join("skills")
+        .join(&name);
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     let path = dir.join("SKILL.md");
     if !path.exists() {
@@ -1472,6 +1812,124 @@ pub fn create_skill(
     let value = path.to_string_lossy().to_string();
     push_log(shared, app, format!("created skill scaffold: {value}"));
     Ok(value)
+}
+
+pub fn list_sessions(shared: &Shared, app: &AppHandle) -> Result<Vec<SessionListItem>, String> {
+    let config = {
+        let state = shared.lock().unwrap();
+        state.config.clone()
+    };
+
+    let mut cmd = build_command(
+        &config,
+        &[
+            "session".into(),
+            "list".into(),
+            "--format".into(),
+            "json".into(),
+            "--max-count".into(),
+            "120".into(),
+        ],
+    );
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let output = cmd
+        .output()
+        .map_err(|error| format!("failed to load sessions from database: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if !output.status.success() {
+        let hint = if stderr.is_empty() {
+            "unknown error".to_string()
+        } else {
+            stderr
+        };
+        return Err(format!("failed to run `session list`: {hint}"));
+    }
+
+    if stdout.is_empty() {
+        push_log(shared, app, "loaded 0 sessions from database");
+        return Ok(vec![]);
+    }
+
+    let list = serde_json::from_str::<Vec<SessionListItem>>(&stdout)
+        .map_err(|error| format!("failed to parse session list JSON: {error}"))?;
+    push_log(
+        shared,
+        app,
+        format!("loaded {} sessions from database", list.len()),
+    );
+    Ok(list)
+}
+
+pub fn use_session(
+    shared: &Shared,
+    app: &AppHandle,
+    session_id: String,
+) -> Result<ManagerSnapshot, String> {
+    let id = session_id.trim().to_string();
+    if id.is_empty() {
+        return Err("session id is empty".into());
+    }
+    write_shared_session(shared, &id)?;
+    push_log(shared, app, format!("session loaded from database: {id}"));
+    emit_state(shared, app);
+    Ok(snapshot(shared))
+}
+
+pub fn delete_session(
+    shared: &Shared,
+    app: &AppHandle,
+    session_id: String,
+) -> Result<ManagerSnapshot, String> {
+    let id = session_id.trim().to_string();
+    if id.is_empty() {
+        return Err("session id is empty".into());
+    }
+
+    let config = {
+        let state = shared.lock().unwrap();
+        state.config.clone()
+    };
+
+    let mut cmd = build_command(&config, &["session".into(), "delete".into(), id.clone()]);
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let output = cmd
+        .output()
+        .map_err(|error| format!("failed to delete session from database: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    if !output.status.success() {
+        let hint = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            "unknown error".to_string()
+        };
+        return Err(format!("failed to run `session delete`: {hint}"));
+    }
+
+    if read_shared_session(shared).as_deref() == Some(id.as_str()) {
+        match clear_shared_session(shared) {
+            Ok(true) => push_log(shared, app, "shared session cleared after deletion"),
+            Ok(false) => {}
+            Err(error) => push_log(
+                shared,
+                app,
+                format!("failed to clear shared session after deletion: {error}"),
+            ),
+        }
+    }
+
+    push_log(shared, app, format!("session deleted from database: {id}"));
+    emit_state(shared, app);
+    Ok(snapshot(shared))
 }
 
 pub fn send(shared: &Shared, app: &AppHandle, prompt: String) -> Result<SendAck, String> {

@@ -70,10 +70,10 @@ Cela permet d'utiliser le TUI avec un backend OpenCorvus distant. Par exemple :
 
 ```bash
 # Start the backend server for web/mobile access
-opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 7878 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-opencorvus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:7878
 ```
 
 #### Options
@@ -330,7 +330,7 @@ Vous pouvez également vous connecter à une instance `opencorvus serve` en cour
 opencorvus serve
 
 # In another terminal, run commands that attach to it
-opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript"
 ```
 
 #### Options
@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript
 | `--file`     | `-f`  | Fichier(s) à joindre au message                                                                |
 | `--format`   |       | Format : par défaut (formaté) ou json (événements JSON bruts)                                  |
 | `--title`    |       | Titre de la session (utilise un prompt tronqué si aucune valeur n'est fournie)                 |
-| `--attach`   |       | Connectez-vous à un serveur opencorvus en cours d'exécution (par exemple, http://localhost:4096) |
+| `--attach`   |       | Connectez-vous à un serveur opencorvus en cours d'exécution (par exemple, http://localhost:7878) |
 | `--port`     |       | Port du serveur local (port aléatoire par défaut)                                              |
 
 ---

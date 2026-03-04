@@ -70,10 +70,10 @@ opencorvus attach [url]
 
 ```bash
 # Start the backend server for web/mobile access
-opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 7878 --hostname 0.0.0.0
 
 # In another terminal, attach the TUI to the running backend
-opencorvus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:7878
 ```
 
 #### 旗標
@@ -330,7 +330,7 @@ opencorvus run Explain the use of context in Go
 opencorvus serve
 
 # In another terminal, run commands that attach to it
-opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript"
 ```
 
 #### 旗標
@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript
 | `--file`     | `-f` | 附加到訊息的檔案                                               |
 | `--format`   |      | 格式：default（格式化輸出）或 json（原始 JSON 事件）           |
 | `--title`    |      | 工作階段標題（未提供值時使用截斷的提示詞）                     |
-| `--attach`   |      | 連接到正在執行的 opencorvus 伺服器（例如 http://localhost:4096） |
+| `--attach`   |      | 連接到正在執行的 opencorvus 伺服器（例如 http://localhost:7878） |
 | `--port`     |      | 本地伺服器連接埠（預設為隨機連接埠）                           |
 
 ---

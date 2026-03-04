@@ -49,13 +49,13 @@ Jesli wolisz aplikacje desktopowa opencorvus, ale chcesz uruchamiac serwer w WSL
 1. **Uruchom serwer w WSL** z `--hostname 0.0.0.0`, aby zezwolic na polaczenia zewnetrzne:
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **Polacz aplikacje desktopowa** z `http://localhost:4096`
+2. **Polacz aplikacje desktopowa** z `http://localhost:7878`
 
 :::note
-Jesli `localhost` nie dziala w Twojej konfiguracji, polacz sie przez adres IP WSL (w WSL: `hostname -I`) i uzyj `http://<wsl-ip>:4096`.
+Jesli `localhost` nie dziala w Twojej konfiguracji, polacz sie przez adres IP WSL (w WSL: `hostname -I`) i uzyj `http://<wsl-ip>:7878`.
 :::
 
 :::caution

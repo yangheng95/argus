@@ -13,8 +13,14 @@ const MENU_STOP: &str = "stop-bot";
 const MENU_QUIT: &str = "quit-app";
 
 pub fn setup(app: &AppHandle) -> Result<(), String> {
-    let open = MenuItem::with_id(app, MENU_OPEN, "Open OpenCorvus Console", true, None::<&str>)
-        .map_err(|error| error.to_string())?;
+    let open = MenuItem::with_id(
+        app,
+        MENU_OPEN,
+        "Open OpenCorvus Console",
+        true,
+        None::<&str>,
+    )
+    .map_err(|error| error.to_string())?;
     let mcp = MenuItem::with_id(app, MENU_MCP, "Open MCP Config", true, None::<&str>)
         .map_err(|error| error.to_string())?;
     let skill = MenuItem::with_id(app, MENU_SKILL, "Open Skills Folder", true, None::<&str>)
@@ -23,10 +29,11 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     let stop = MenuItem::with_id(app, MENU_STOP, "Stop OpenCorvus", true, None::<&str>)
         .map_err(|error| error.to_string())?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>).map_err(|error| error.to_string())?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
 
-    let menu =
-        Menu::with_items(app, &[&open, &mcp, &skill, &start, &stop, &quit]).map_err(|error| error.to_string())?;
+    let menu = Menu::with_items(app, &[&open, &mcp, &skill, &start, &stop, &quit])
+        .map_err(|error| error.to_string())?;
 
     let icon = match Image::from_bytes(include_bytes!("../icons/icon.png")) {
         Ok(icon) => icon,

@@ -21,10 +21,10 @@
 
       .shell {
         height: 100%;
-        padding: 14px;
+        padding: 10px;
         display: grid;
         grid-template-rows: auto 1fr;
-        gap: 10px;
+        gap: 8px;
       }
 
       /* Header */
@@ -34,7 +34,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        padding: 12px 18px;
+        padding: 10px 16px;
         border-radius: var(--radius-lg);
         border: 1px solid var(--glass-border);
         background: var(--glass);
@@ -124,8 +124,29 @@
       .main {
         min-height: 0;
         display: grid;
-        grid-template-columns: 1.5fr 1fr;
-        gap: 10px;
+        grid-template-rows: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      .content {
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.3fr);
+        gap: 8px;
+      }
+
+      .runtime {
+        min-height: 0;
+      }
+
+      .runtime-body {
+        min-height: 0;
+        display: grid;
+        grid-template-rows: auto minmax(96px, 168px);
+      }
+
+      .runtime.collapsed .runtime-body {
+        display: none;
       }
 
       /* Cards */
@@ -527,14 +548,6 @@
         box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.09);
       }
 
-      /* Side panels */
-      .side {
-        min-height: 0;
-        display: grid;
-        grid-template-rows: 0.92fr 1.08fr;
-        gap: 10px;
-      }
-
       .toolbar {
         display: flex;
         gap: 5px;
@@ -860,11 +873,8 @@
       }
 
       @media (max-width: 1100px) {
-        .main {
+        .content {
           grid-template-columns: 1fr;
-        }
-        .side {
-          grid-template-rows: 300px 1fr;
         }
       }
     </style>
@@ -887,43 +897,32 @@
       </header>
 
       <div class="main">
-        <!-- Conversation -->
-        <section class="card">
-          <div class="card-head">
-            Conversation
-            <div class="card-actions">
-              <button class="icon-btn" id="clearChatBtn" title="Clear chat">Clear</button>
-            </div>
-          </div>
-          <div class="chat" id="chat">
-            <div class="chat-empty">No messages yet - send an instruction below</div>
-          </div>
-          <form class="composer" id="sendForm">
-            <div class="composer-input-wrap">
-              <textarea
-                id="promptInput"
-                rows="3"
-                placeholder="Send instruction to OpenCorvus... (Enter to send, Shift+Enter for newline)"
-              ></textarea>
-              <span class="char-count" id="charCount"></span>
-            </div>
-            <div class="composer-actions">
-              <span class="composer-hint" id="composerHint">Up/Down history | Enter send</span>
-              <button class="btn-send" id="sendBtn" type="submit">Send</button>
-            </div>
-          </form>
-        </section>
-
-        <div class="side">
-          <!-- Runtime -->
+        <div class="content">
+          <!-- Conversation -->
           <section class="card">
-            <div class="card-head">Runtime</div>
-            <div class="toolbar">
-              <button id="refreshBtn" type="button" title="Refresh state">Refresh</button>
-              <button id="clearLogsBtn" type="button" title="Clear logs">Clear</button>
-              <button id="openLogPanelBtn" type="button">Log Path</button>
+            <div class="card-head">
+              Conversation
+              <div class="card-actions">
+                <button class="icon-btn" id="clearChatBtn" title="Clear chat">Clear</button>
+              </div>
             </div>
-            <pre class="log-body" id="logs"></pre>
+            <div class="chat" id="chat">
+              <div class="chat-empty">No messages yet - send an instruction below</div>
+            </div>
+            <form class="composer" id="sendForm">
+              <div class="composer-input-wrap">
+                <textarea
+                  id="promptInput"
+                  rows="3"
+                  placeholder="Send instruction to OpenCorvus... (Enter to send, Shift+Enter for newline)"
+                ></textarea>
+                <span class="char-count" id="charCount"></span>
+              </div>
+              <div class="composer-actions">
+                <span class="composer-hint" id="composerHint">Up/Down history | Enter send</span>
+                <button class="btn-send" id="sendBtn" type="submit">Send</button>
+              </div>
+            </form>
           </section>
 
           <!-- Config -->
@@ -945,6 +944,8 @@
               <p class="cfg-hint">Open the environment panel to edit runtime variables and usage notes.</p>
               <div class="cfg-entry">
                 <button id="openEnvPanelBtn" type="button">Environment Variables</button>
+                <button id="loadSessionBtn" type="button">Load DB Session</button>
+                <button class="btn-danger" id="deleteSessionBtn" type="button">Delete DB Session</button>
               </div>
               <div class="save-wrap">
                 <button id="saveBtn" type="button">Save Config</button>
@@ -952,6 +953,24 @@
             </div>
           </section>
         </div>
+
+        <!-- Runtime -->
+        <section class="card runtime" id="runtimeCard">
+          <div class="card-head">
+            Runtime Logs (All)
+            <div class="card-actions">
+              <button class="icon-btn" id="toggleLogsBtn" type="button" title="Expand logs">Expand</button>
+            </div>
+          </div>
+          <div class="runtime-body" id="runtimeBody">
+            <div class="toolbar">
+              <button id="refreshBtn" type="button" title="Refresh state">Refresh</button>
+              <button id="clearLogsBtn" type="button" title="Clear logs">Clear</button>
+              <button id="openLogPanelBtn" type="button">Log Path</button>
+            </div>
+            <pre class="log-body" id="logs"></pre>
+          </div>
+        </section>
       </div>
     </div>
     <div class="panel-backdrop" id="logPanel" aria-hidden="true">

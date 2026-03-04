@@ -70,10 +70,10 @@ opencorvus attach [url]
 
 ```bash
 # ابدأ خادم الواجهة الخلفية للوصول عبر الويب/الجوال
-opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 7878 --hostname 0.0.0.0
 
 # في محطة طرفية (terminal) أخرى، اربط TUI بالواجهة الخلفية قيد التشغيل
-opencorvus attach http://10.20.30.40:4096
+opencorvus attach http://10.20.30.40:7878
 ```
 
 #### الرايات
@@ -330,7 +330,7 @@ opencorvus run Explain the use of context in Go
 opencorvus serve
 
 # في محطة طرفية أخرى، شغّل الأوامر التي ترتبط به
-opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript"
+opencorvus run --attach http://localhost:7878 "Explain async/await in JavaScript"
 ```
 
 #### الرايات
@@ -347,7 +347,7 @@ opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript
 | `--file`     | `-f`    | ملف/ملفات لإرفاقها بالرسالة                                       |
 | `--format`   |         | التنسيق: default (منسق) أو json (أحداث JSON خام)                  |
 | `--title`    |         | عنوان للجلسة (يستخدم موجهًا مقتطعًا إن لم تُحدَّد قيمة)           |
-| `--attach`   |         | الإرفاق بخادم opencorvus قيد التشغيل (مثل http://localhost:4096)    |
+| `--attach`   |         | الإرفاق بخادم opencorvus قيد التشغيل (مثل http://localhost:7878)    |
 | `--port`     |         | منفذ الخادم المحلي (الافتراضي منفذ عشوائي)                        |
 
 ---

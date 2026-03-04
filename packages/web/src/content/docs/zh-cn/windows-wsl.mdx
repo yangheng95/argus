@@ -49,13 +49,13 @@ WSL 提供更出色的文件系统性能、完整的终端支持，以及与 Ope
 1. **在 WSL 中启动服务器**，添加 `--hostname 0.0.0.0` 以允许外部连接：
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **在桌面应用中连接到** `http://localhost:4096`
+2. **在桌面应用中连接到** `http://localhost:7878`
 
 :::note
-如果 `localhost` 在你的环境中无法使用，请改用 WSL 的 IP 地址进行连接（在 WSL 中运行：`hostname -I`），使用 `http://<wsl-ip>:4096`。
+如果 `localhost` 在你的环境中无法使用，请改用 WSL 的 IP 地址进行连接（在 WSL 中运行：`hostname -I`），使用 `http://<wsl-ip>:7878`。
 :::
 
 :::caution

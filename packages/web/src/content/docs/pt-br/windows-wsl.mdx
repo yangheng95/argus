@@ -49,13 +49,13 @@ Se você prefere usar o app desktop do opencorvus, mas quer rodar o servidor no 
 1. **Inicie o servidor no WSL** com `--hostname 0.0.0.0` para permitir conexões externas:
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **Conecte o app desktop** em `http://localhost:4096`
+2. **Conecte o app desktop** em `http://localhost:7878`
 
 :::note
-Se `localhost` não funcionar no seu ambiente, conecte usando o IP do WSL (no WSL: `hostname -I`) e use `http://<wsl-ip>:4096`.
+Se `localhost` não funcionar no seu ambiente, conecte usando o IP do WSL (no WSL: `hostname -I`) e use `http://<wsl-ip>:7878`.
 :::
 
 :::caution

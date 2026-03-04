@@ -43,6 +43,13 @@ beforeEach(() => {
 
 describe("bot core submit mode", () => {
   test("uses tui.runtime.submitTask by default", async () => {
+    const startCalls: Array<{
+      mode: "spawn"
+      query_directory: string
+      body_directory: string
+      sessionID: string
+      bin?: string
+    }> = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
     const a = adapter()
@@ -55,6 +62,13 @@ describe("bot core submit mode", () => {
       client: {
         tui: {
           runtime: {
+            start(input: {
+              mode: "spawn"
+              query_directory: string
+              body_directory: string
+              sessionID: string
+              bin?: string
+            }): Promise<{ error?: unknown }>
             submitTask(input: { sessionID: string; text: string; wait: boolean }): Promise<{ error?: unknown }>
           }
         }
@@ -79,6 +93,10 @@ describe("bot core submit mode", () => {
     core.client = {
       tui: {
         runtime: {
+          start: async (input) => {
+            startCalls.push(input)
+            return {}
+          },
           submitTask: async (input) => {
             submitCalls.push(input)
             return {}
@@ -95,6 +113,9 @@ describe("bot core submit mode", () => {
 
     await core.handleMessage(incoming("ship it"))
 
+    expect(startCalls).toHaveLength(1)
+    expect(startCalls[0]?.mode).toBe("spawn")
+    expect(startCalls[0]?.sessionID).toBe("session_1")
     expect(submitCalls).toHaveLength(1)
     expect(submitCalls[0]).toEqual({
       sessionID: "session_1",
@@ -105,6 +126,13 @@ describe("bot core submit mode", () => {
   })
 
   test("falls back to session.promptAsync when tui runtime submit fails", async () => {
+    const startCalls: Array<{
+      mode: "spawn"
+      query_directory: string
+      body_directory: string
+      sessionID: string
+      bin?: string
+    }> = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
     const a = adapter()
@@ -117,6 +145,13 @@ describe("bot core submit mode", () => {
       client: {
         tui: {
           runtime: {
+            start(input: {
+              mode: "spawn"
+              query_directory: string
+              body_directory: string
+              sessionID: string
+              bin?: string
+            }): Promise<{ error?: unknown }>
             submitTask(input: { sessionID: string; text: string; wait: boolean }): Promise<{ error?: unknown }>
           }
         }
@@ -141,6 +176,10 @@ describe("bot core submit mode", () => {
     core.client = {
       tui: {
         runtime: {
+          start: async (input) => {
+            startCalls.push(input)
+            return {}
+          },
           submitTask: async (input) => {
             submitCalls.push(input)
             return { error: { message: "submit failed" } }
@@ -157,6 +196,9 @@ describe("bot core submit mode", () => {
 
     await core.handleMessage(incoming("fallback"))
 
+    expect(startCalls).toHaveLength(1)
+    expect(startCalls[0]?.mode).toBe("spawn")
+    expect(startCalls[0]?.sessionID).toBe("session_1")
     expect(submitCalls).toHaveLength(1)
     expect(promptCalls).toHaveLength(1)
     expect(promptCalls[0]?.sessionID).toBe("session_1")
@@ -166,6 +208,13 @@ describe("bot core submit mode", () => {
 
   test("supports OPENCORVUS_BOT_TASK_MODE=session-async", async () => {
     process.env.OPENCORVUS_BOT_TASK_MODE = "session-async"
+    const startCalls: Array<{
+      mode: "spawn"
+      query_directory: string
+      body_directory: string
+      sessionID: string
+      bin?: string
+    }> = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
     const a = adapter()
@@ -178,6 +227,13 @@ describe("bot core submit mode", () => {
       client: {
         tui: {
           runtime: {
+            start(input: {
+              mode: "spawn"
+              query_directory: string
+              body_directory: string
+              sessionID: string
+              bin?: string
+            }): Promise<{ error?: unknown }>
             submitTask(input: { sessionID: string; text: string; wait: boolean }): Promise<{ error?: unknown }>
           }
         }
@@ -202,6 +258,10 @@ describe("bot core submit mode", () => {
     core.client = {
       tui: {
         runtime: {
+          start: async (input) => {
+            startCalls.push(input)
+            return {}
+          },
           submitTask: async (input) => {
             submitCalls.push(input)
             return {}
@@ -218,6 +278,7 @@ describe("bot core submit mode", () => {
 
     await core.handleMessage(incoming("legacy"))
 
+    expect(startCalls).toHaveLength(0)
     expect(submitCalls).toHaveLength(0)
     expect(promptCalls).toHaveLength(1)
     expect(promptCalls[0]?.parts[0]?.text).toBe("legacy")

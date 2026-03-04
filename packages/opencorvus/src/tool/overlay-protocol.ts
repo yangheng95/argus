@@ -37,5 +37,8 @@ export const overlayProtocol = {
     managerOpenSkillDir: "manager_open_skill_dir",
     managerAddMcp: "manager_add_mcp",
     managerCreateSkill: "manager_create_skill",
+    managerListSessions: "manager_list_sessions",
+    managerUseSession: "manager_use_session",
+    managerDeleteSession: "manager_delete_session",
   },
 } as const

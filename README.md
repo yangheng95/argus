@@ -4,31 +4,33 @@
   </a>
 </p>
 
-<p align="center">From prompt to shipped result: one agent for code and GUI.</p>
-
-<p align="center">
-  <a href="https://www.npmjs.com/package/opencorvus-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencorvus-ai?style=flat-square" /></a>
-  <a href="https://github.com/yangheng95/opencorvus/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/yangheng95/opencorvus/publish.yml?style=flat-square&branch=dev" /></a>
-  <a href="https://github.com/yangheng95/opencorvus/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/yangheng95/opencorvus?style=flat-square" /></a>
-</p>
+<h2 align="center">From prompt to shipped result: one agent for code, terminal, and desktop UI.</h2>
 
 ---
 
-## Early-stage Notice
+## What Is OpenCorvus
 
-OpenCorvus is still in early development.
+OpenCorvus is an AI execution agent for real software work.
 
-- The product is usable today, but APIs, config keys, and UI details can change quickly.
-- README focuses on **how to run and use it now**.
-- If you need deep internals, use docs + source code.
+- It can work on your repository (read/edit code, run commands, apply fixes).
+- It can operate desktop UI (click/type/scroll and validate visual states).
+- It can run in local TUI, API server mode, or optional chat channels.
 
-## What You Can Do
+## Core Features
 
-OpenCorvus is an execution agent for software tasks.
+- One workflow for code + terminal + desktop UI automation.
+- Session-based work, so tasks can continue from previous context.
+- Multiple entry points: TUI (`opencorvus`), API server (`opencorvus serve`), and overlay manager.
+- Optional channel integrations (Slack, Telegram, Feishu/Lark).
+- Human-in-the-loop control with approval and runtime visibility.
 
-- Work on real repositories: read/edit code, run commands, fix issues
-- Operate desktop UI: click/type/scroll and verify pages visually
-- Continue from chat channels (optional): Slack, Telegram, and more
+## Typical Use Cases
+
+- Fix a bug from a short natural-language description and apply patch in repo.
+- Implement a feature across backend + frontend, then verify behavior in UI.
+- Run repetitive engineering tasks (refactor, tests, config cleanup, regression checks).
+- Drive coding tasks from chat channels when your team operates in Slack/Telegram.
+- Review and continue old work by loading previous sessions.
 
 ## Install
 
@@ -54,14 +56,14 @@ nix run nixpkgs#opencorvus
 ## 3-Minute Start
 
 ```bash
-# 1) Enter your project
+# 1) Go to your project
 cd /path/to/your/project
 
 # 2) Launch OpenCorvus TUI
 opencorvus
 ```
 
-That is enough to start giving tasks in natural language.
+Now you can start giving natural-language tasks directly.
 
 ## Common Commands
 
@@ -79,72 +81,85 @@ opencorvus serve
 opencorvus serve --port 8080
 ```
 
-## Use From Source (Repo Developers)
+## Optional: Overlay + Channel Bot
 
 ```bash
-# at repo root
-bun install
+# 1) Start overlay manager
 bun dev
-```
 
-Notes:
-
-- `bun dev` starts the overlay console (local chat entry).
-- Install includes an automatic compatibility patch for desktop input.
-- If desktop input breaks after reinstall, run:
-
-```bash
-bun run patch:follow-redirects
-```
-
-## Optional: Remote Chat Channels (Slack / Telegram / More)
-
-If you want to drive OpenCorvus from chat tools, use bot runtime.
-
-### Fast Path (Recommended)
-
-1. Start overlay locally:
-
-```bash
-bun dev
-```
-
-2. In overlay, open:
-   `Bot Config` -> `Environment Variables`
-
-3. Fill channel credentials in `Channel Integrations` (or add custom envs).
-
-4. Click `Save Config`, then in `Runtime` click `Start`.
-
-### CLI Path
-
-```bash
-# 1) prepare bot env
-cp packages/bot/.env.example packages/bot/.env
-
-# 2) run bot runtime
+# 2) (optional) run bot runtime directly
 bun dev:bot
 ```
 
-Minimal env keys to begin:
+In overlay:
+
+- Open `Bot Config` -> `Environment Variables`.
+- Fill required channel credentials.
+- Click `Save Config`, then click `Start` in runtime section.
+
+Minimal env keys:
 
 - Slack: `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` (optional `SLACK_SIGNING_SECRET`)
 - Telegram: `TELEGRAM_BOT_TOKEN`
 - Feishu/Lark: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
 
-`bun dev:bot` only loads `packages/bot/.env` (plus system env), not root `.env`.
+## Use From Source (Repo Developers)
+
+```bash
+# repo root
+bun install
+bun dev
+```
+
+If desktop input breaks after reinstall:
+
+```bash
+bun run patch:follow-redirects
+```
 
 ## FAQ
 
-### Why do behaviors change between versions?
+### Is OpenCorvus production-ready?
 
-Because the project is still evolving quickly in early stage.
+Not fully. It is usable, but still early-stage and changing quickly.
 
-### Where are full configuration details?
+### What is the fastest way to start?
 
-- Docs: https://opencorvus.ai/docs
+Run `opencorvus` inside your project directory and give it a concrete task.
+
+### When should I use `opencorvus serve`?
+
+Use it when you need API/server mode, automation scripts, or bot integrations.
+
+### Can it drive desktop applications, not just code files?
+
+Yes. OpenCorvus can operate desktop UI and verify screen-level behavior.
+
+### Can I trigger tasks from Slack/Telegram?
+
+Yes. Configure credentials in overlay environment settings and run the channel bot.
+
+### Can I continue an old task/session?
+
+Yes. Session history can be loaded and reused from the overlay manager.
+
+### Where should I configure environment variables?
+
+Use overlay `Environment Variables` panel, or set env vars directly in your shell.
+
+### Where are detailed config references?
+
+- Docs: <https://opencorvus.ai/docs>
 - Bot env reference: `packages/bot/.env.example`
-- Contribution guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+- Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+
+## Early-stage Notice
+
+OpenCorvus is still in early development.
+
+- It is usable now, but commands, config keys, and UI details may change quickly.
+- This README focuses on how to use it, not internal architecture.
+- For deeper internals, see source code and docs.
 
 ## Acknowledgments
 

@@ -49,13 +49,13 @@ WSL 提供更出色的檔案系統效能、完整的終端機支援，以及與 
 1. **在 WSL 中啟動伺服器**，新增 `--hostname 0.0.0.0` 以允許外部連線：
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **在桌面應用程式中連線到** `http://localhost:4096`
+2. **在桌面應用程式中連線到** `http://localhost:7878`
 
 :::note
-如果 `localhost` 在你的環境中無法使用，請改用 WSL 的 IP 位址進行連線（在 WSL 中執行：`hostname -I`），使用 `http://<wsl-ip>:4096`。
+如果 `localhost` 在你的環境中無法使用，請改用 WSL 的 IP 位址進行連線（在 WSL 中執行：`hostname -I`），使用 `http://<wsl-ip>:7878`。
 :::
 
 :::caution

@@ -33,3 +33,6 @@ pub const CMD_MANAGER_OPEN_MCP_CONFIG: &str = "manager_open_mcp_config";
 pub const CMD_MANAGER_OPEN_SKILL_DIR: &str = "manager_open_skill_dir";
 pub const CMD_MANAGER_ADD_MCP: &str = "manager_add_mcp";
 pub const CMD_MANAGER_CREATE_SKILL: &str = "manager_create_skill";
+pub const CMD_MANAGER_LIST_SESSIONS: &str = "manager_list_sessions";
+pub const CMD_MANAGER_USE_SESSION: &str = "manager_use_session";
+pub const CMD_MANAGER_DELETE_SESSION: &str = "manager_delete_session";

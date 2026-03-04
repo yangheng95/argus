@@ -51,15 +51,15 @@ opencorvus 데스크톱 앱을 쓰면서 서버는 WSL에서 실행하고 싶다
    외부 연결을 허용하려면 `--hostname 0.0.0.0` 옵션을 사용하세요.
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
 2. **데스크톱 앱 연결하기**
 
-   `http://localhost:4096`로 연결하세요.
+   `http://localhost:7878`로 연결하세요.
 
 :::note
-환경에 따라 `localhost`가 동작하지 않으면 WSL의 IP 주소를 사용하세요(WSL에서 `hostname -I` 실행). 이후 `http://<wsl-ip>:4096`로 접속하면 됩니다.
+환경에 따라 `localhost`가 동작하지 않으면 WSL의 IP 주소를 사용하세요(WSL에서 `hostname -I` 실행). 이후 `http://<wsl-ip>:7878`로 접속하면 됩니다.
 :::
 
 :::caution

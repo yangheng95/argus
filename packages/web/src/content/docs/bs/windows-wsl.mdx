@@ -49,13 +49,13 @@ Ako preferirate OpenCorvus Desktop aplikaciju, ali zelite da server radi u WSL-u
 1. **Pokrenite server u WSL-u** sa `--hostname 0.0.0.0` da dozvolite vanjske konekcije:
 
    ```bash
-   opencorvus serve --hostname 0.0.0.0 --port 4096
+   opencorvus serve --hostname 0.0.0.0 --port 7878
    ```
 
-2. **Povezite Desktop aplikaciju** na `http://localhost:4096`
+2. **Povezite Desktop aplikaciju** na `http://localhost:7878`
 
 :::note
-Ako `localhost` ne radi u vasem setupu, povezte se preko WSL IP adrese (u WSL-u: `hostname -I`) i koristite `http://<wsl-ip>:4096`.
+Ako `localhost` ne radi u vasem setupu, povezte se preko WSL IP adrese (u WSL-u: `hostname -I`) i koristite `http://<wsl-ip>:7878`.
 :::
 
 :::caution
