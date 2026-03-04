@@ -284,7 +284,6 @@ export namespace WindowManager {
   }
 
   /**
-<<<<<<< HEAD
    * Bind to a window by ID without bringing it to foreground.
    * Used by auto-bind in screenshot to avoid focus-stealing.
    */
@@ -305,12 +304,8 @@ export namespace WindowManager {
   }
 
   /**
-   * At new task boundaries, re-search previous binding by matchTitle.
-   * This avoids stale window IDs and supports task-to-task rebinding.
-=======
    * At new task boundaries, re-search previous binding by id first then title.
    * This avoids stale window IDs while preventing drift across duplicate titles.
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
    */
   export async function rebindForTask(taskEpoch: number): Promise<WindowBinding | null> {
     const ws = windowState()
