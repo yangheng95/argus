@@ -169,22 +169,62 @@ export const InputTool = Tool.define("input", {
       }
     }
 
-    const ensureWindowAnchor = async (action: "click" | "drag" | "move") => {
+    const ensureWindowAnchor = async (
+      action: "click" | "drag" | "move",
+      anchored: Coordinates.WindowBounds,
+      binding: Awaited<ReturnType<typeof WindowManager.getBinding>>,
+    ) => {
       const target = DesktopState.getTarget()
       if (target?.scope !== "window") return null
-      const binding = await WindowManager.getBinding()
-      if (binding && (typeof target.windowId !== "number" || binding.windowId === target.windowId)) return null
-      showOverlay(undefined, undefined, action, "blocked: stale window anchor", "error")
+      if (!binding || (typeof target.windowId === "number" && binding.windowId !== target.windowId)) {
+        showOverlay(undefined, undefined, action, "blocked: stale window anchor", "error")
+        return {
+          title: "Pointer action blocked: stale window anchor",
+          output:
+            "The previous screenshot anchor belongs to a window binding that is no longer active. Re-bind with screen.bind_window and take a fresh screen.screenshot before retrying pointer actions.",
+          metadata: {
+            blocked: true,
+            reason: "stale_window_anchor",
+            expectedWindowId: target.windowId ?? null,
+            expectedTitle: target.title ?? null,
+            actualWindowId: binding?.windowId ?? null,
+          },
+        }
+      }
+      const sx = typeof anchored.scaleX === "number" && anchored.scaleX > 0 ? anchored.scaleX : 1
+      const sy = typeof anchored.scaleY === "number" && anchored.scaleY > 0 ? anchored.scaleY : 1
+      const expected = {
+        x: typeof anchored.logicalX === "number" ? anchored.logicalX : Math.round(anchored.x / sx),
+        y: typeof anchored.logicalY === "number" ? anchored.logicalY : Math.round(anchored.y / sy),
+        width: typeof anchored.logicalWidth === "number" ? anchored.logicalWidth : Math.round(anchored.width / sx),
+        height: typeof anchored.logicalHeight === "number" ? anchored.logicalHeight : Math.round(anchored.height / sy),
+      }
+      const actual = {
+        x: binding.info.x,
+        y: binding.info.y,
+        width: binding.info.width,
+        height: binding.info.height,
+      }
+      const complete = Number.isFinite(actual.x) && Number.isFinite(actual.y) && Number.isFinite(actual.width) && Number.isFinite(actual.height)
+      if (!complete) return null
+      const drifted = Math.abs(expected.x - actual.x) > 2
+        || Math.abs(expected.y - actual.y) > 2
+        || Math.abs(expected.width - actual.width) > 2
+        || Math.abs(expected.height - actual.height) > 2
+      if (!drifted) return null
+      showOverlay(undefined, undefined, action, "blocked: window geometry drifted", "error")
       return {
-        title: "Pointer action blocked: stale window anchor",
+        title: "Pointer action blocked: window geometry drifted",
         output:
-          "The previous screenshot anchor belongs to a window binding that is no longer active. Re-bind with screen.bind_window and take a fresh screen.screenshot before retrying pointer actions.",
+          "The bound window moved or resized since the last screenshot anchor. Take a fresh screen.screenshot before retrying pointer actions so coordinates map to the current window geometry.",
         metadata: {
           blocked: true,
-          reason: "stale_window_anchor",
+          reason: "window_geometry_drifted",
           expectedWindowId: target.windowId ?? null,
           expectedTitle: target.title ?? null,
-          actualWindowId: binding?.windowId ?? null,
+          actualWindowId: binding.windowId,
+          expectedBounds: expected,
+          actualBounds: actual,
         },
       }
     }
@@ -192,11 +232,11 @@ export const InputTool = Tool.define("input", {
     const ensureBoundWindowForeground = async (
       action: "click" | "type" | "key" | "scroll" | "drag" | "move",
       allowFocusRecovery = false,
+      bindingHint?: Awaited<ReturnType<typeof WindowManager.getBinding>>,
     ) => {
-      const binding = await WindowManager.getBinding()
+      const binding = bindingHint ?? await WindowManager.getBinding()
       const target = DesktopState.getTarget()
-      const pointer = action === "click" || action === "drag" || action === "move"
-      if (pointer && target?.scope === "monitor") return null
+      if (target?.scope === "monitor") return null
       if (!binding) {
         if (target?.scope !== "window") return null
         showOverlay(undefined, undefined, action, "blocked: stale window binding", "error")
@@ -224,7 +264,7 @@ export const InputTool = Tool.define("input", {
           },
         }
       }
-      const ok = await WindowManager.ensureBoundForeground()
+      const ok = await WindowManager.ensureBoundForeground(binding)
       if (ok) {
         showWindowHighlight({
           x: binding.info.x,
@@ -258,9 +298,10 @@ export const InputTool = Tool.define("input", {
       case "click": {
         const anchored = await requireBounds("click")
         if ("title" in anchored) return anchored
-        const anchorBlocked = await ensureWindowAnchor("click")
+        const binding = await WindowManager.getBinding()
+        const anchorBlocked = await ensureWindowAnchor("click", anchored, binding)
         if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await ensureBoundWindowForeground("click")
+        const windowBlocked = await ensureBoundWindowForeground("click", false, binding)
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
@@ -390,9 +431,10 @@ export const InputTool = Tool.define("input", {
       case "drag": {
         const anchored = await requireBounds("drag")
         if ("title" in anchored) return anchored
-        const anchorBlocked = await ensureWindowAnchor("drag")
+        const binding = await WindowManager.getBinding()
+        const anchorBlocked = await ensureWindowAnchor("drag", anchored, binding)
         if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await ensureBoundWindowForeground("drag")
+        const windowBlocked = await ensureBoundWindowForeground("drag", false, binding)
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.startX, params.startY, anchored, space)
         const start = Coordinates.resolveDetailed(params.startX, params.startY, anchored, space)
@@ -435,9 +477,10 @@ export const InputTool = Tool.define("input", {
       case "move": {
         const anchored = await requireBounds("move")
         if ("title" in anchored) return anchored
-        const anchorBlocked = await ensureWindowAnchor("move")
+        const binding = await WindowManager.getBinding()
+        const anchorBlocked = await ensureWindowAnchor("move", anchored, binding)
         if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await ensureBoundWindowForeground("move")
+        const windowBlocked = await ensureBoundWindowForeground("move", false, binding)
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)

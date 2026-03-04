@@ -164,7 +164,83 @@ export const ScreenTool = Tool.define("screen", {
         await WindowManager.rebindForTask(GuiState.get().taskEpoch)
         let foregroundFailed = false
         let currentBinding = await WindowManager.getBinding()
+        const target = DesktopState.getTarget()
+        const staleBindingBlock = (binding: Awaited<ReturnType<typeof WindowManager.getBinding>>) => {
+          if (binding || target?.scope !== "window") return null
+          return {
+            title: "Screenshot blocked: stale window binding",
+            output: `The previously bound window "${target.title ?? target.windowId ?? "unknown"}" is no longer active. Re-run screen.bind_window for the target window, then retry screenshot.`,
+            metadata: {
+              blocked: true,
+              reason: "stale_window_binding",
+              expectedWindowId: target.windowId ?? null,
+              expectedTitle: target.title ?? null,
+            },
+          }
+        }
+        const driftBlock = (
+          binding: Awaited<ReturnType<typeof WindowManager.getBinding>>,
+          capture: Awaited<ReturnType<typeof Capture.take>>,
+        ) => {
+          if (!binding) return null
+          if (capture.scope !== "window") {
+            log.warn("bound window capture drifted to non-window scope", {
+              expectedWindowId: binding.windowId,
+              expectedTitle: binding.info.title,
+              actualScope: capture.scope,
+              monitorId: capture.monitor?.id ?? null,
+            })
+            return {
+              title: "Screenshot blocked: bound window capture drifted",
+              output: `Bound window "${binding.info.title}" could not be captured and capture drifted to ${capture.scope}. Re-run screen.bind_window for the target window and retry screenshot.`,
+              metadata: {
+                blocked: true,
+                reason: "bound_window_capture_fallback",
+                expectedWindowId: binding.windowId,
+                expectedTitle: binding.info.title,
+                actualScope: capture.scope,
+                monitor: capture.monitor,
+              },
+            }
+          }
+          if (!capture.window || capture.window.id !== binding.windowId) {
+            log.warn("bound window capture drifted to different window", {
+              expectedWindowId: binding.windowId,
+              expectedTitle: binding.info.title,
+              actualWindowId: capture.window?.id ?? null,
+              actualTitle: capture.window?.title ?? null,
+            })
+            return {
+              title: "Screenshot blocked: bound window capture mismatch",
+              output: `Bound window "${binding.info.title}" was not captured as the active window image. Re-run screen.bind_window for the target window and retry screenshot.`,
+              metadata: {
+                blocked: true,
+                reason: "bound_window_capture_mismatch",
+                expectedWindowId: binding.windowId,
+                expectedTitle: binding.info.title,
+                actualWindowId: capture.window?.id ?? null,
+                actualTitle: capture.window?.title ?? null,
+              },
+            }
+          }
+          return null
+        }
+        const staleBeforeCapture = staleBindingBlock(currentBinding)
+        if (staleBeforeCapture) return staleBeforeCapture
         if (currentBinding) {
+          if (currentBinding.info.isMinimized) {
+            return {
+              title: "Screenshot blocked: bound window is minimized",
+              output: `Bound window "${currentBinding.info.title}" is minimized. Restore it, re-run screen.bind_window for this target, then take a fresh screenshot.`,
+              metadata: {
+                blocked: true,
+                reason: "bound_window_minimized",
+                expectedWindowId: currentBinding.windowId,
+                expectedTitle: currentBinding.info.title,
+                appName: currentBinding.info.appName,
+              },
+            }
+          }
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
             log.warn("bound window not foreground, will try window capture anyway", {
@@ -177,6 +253,8 @@ export const ScreenTool = Tool.define("screen", {
           }
         }
         let result = await Capture.take({ mode: "auto" })
+        const driftBeforeWait = driftBlock(currentBinding, result)
+        if (driftBeforeWait) return driftBeforeWait
 
         if (params.wait_for_change && result.rawBuffer) {
           const firstHash = createHash("md5").update(result.buffer).digest("hex")
@@ -228,6 +306,11 @@ export const ScreenTool = Tool.define("screen", {
             }
           }
         }
+        currentBinding = await WindowManager.getBinding()
+        const staleAfterWait = staleBindingBlock(currentBinding)
+        if (staleAfterWait) return staleAfterWait
+        const driftAfterWait = driftBlock(currentBinding, result)
+        if (driftAfterWait) return driftAfterWait
         const hash = createHash("md5").update(result.buffer).digest("hex")
         const capturedWindow = result.scope === "window" ? result.window : null
         DesktopState.recordCapture({

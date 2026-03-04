@@ -109,7 +109,36 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
     const timer = log.time("vision analysis")
 
     try {
+      const boundBeforeCapture = await WindowManager.getBinding()
+      if (boundBeforeCapture?.info.isMinimized) {
+        return {
+          title: "Vision analysis blocked: bound window is minimized",
+          output: `Bound window "${boundBeforeCapture.info.title}" is minimized. Restore and re-bind it, then run vision_analyze again.`,
+          metadata: {
+            width: 0,
+            height: 0,
+            screenshotHash: "",
+            elementsFound: 0,
+            runningSummary: "",
+            error: true,
+          },
+        }
+      }
       const capture = await Capture.take({ mode: "auto" })
+      if (boundBeforeCapture && capture.scope !== "window") {
+        return {
+          title: "Vision analysis blocked: bound window capture drifted",
+          output: `Bound window "${boundBeforeCapture.info.title}" could not be captured and capture drifted to ${capture.scope}. Re-bind with screen.bind_window and retry.`,
+          metadata: {
+            width: capture.width,
+            height: capture.height,
+            screenshotHash: "",
+            elementsFound: 0,
+            runningSummary: "",
+            error: true,
+          },
+        }
+      }
 
       // Add coordinate overlay
       const overlaid = await Overlay.add(capture.buffer)

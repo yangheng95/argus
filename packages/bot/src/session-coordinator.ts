@@ -1,6 +1,6 @@
 export class SessionCoordinator<TSession extends { sessionId: string }, TMessage> {
   private sessions = new Map<string, TSession>()
-  private sessionIndex = new Map<string, string>()
+  private sessionIndex = new Map<string, Set<string>>()
   private sessionQueues = new Map<string, Array<{ msg: TMessage; text: string }>>()
   private sessionProcessing = new Set<string>()
 
@@ -10,13 +10,30 @@ export class SessionCoordinator<TSession extends { sessionId: string }, TMessage
 
   bind(threadKey: string, session: TSession) {
     this.sessions.set(threadKey, session)
-    this.sessionIndex.set(session.sessionId, threadKey)
+    const keys = this.sessionIndex.get(session.sessionId) ?? new Set<string>()
+    keys.add(threadKey)
+    this.sessionIndex.set(session.sessionId, keys)
   }
 
   findSession(sessionId: string) {
-    const threadKey = this.sessionIndex.get(sessionId)
-    if (!threadKey) return undefined
-    return this.sessions.get(threadKey)
+    const keys = this.sessionIndex.get(sessionId)
+    if (!keys || keys.size === 0) return undefined
+    for (const key of keys) {
+      const session = this.sessions.get(key)
+      if (session) return session
+    }
+    return undefined
+  }
+
+  findSessions(sessionId: string) {
+    const keys = this.sessionIndex.get(sessionId)
+    if (!keys || keys.size === 0) return []
+    const out: TSession[] = []
+    for (const key of keys) {
+      const session = this.sessions.get(key)
+      if (session) out.push(session)
+    }
+    return out
   }
 
   processing(sessionId: string) {

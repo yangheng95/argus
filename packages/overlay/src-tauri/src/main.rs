@@ -10,6 +10,10 @@ use tauri::Manager;
 
 fn main() {
     let shared = manager::new_shared();
+    let sidecar = std::env::var("OPENCORVUS_OVERLAY_MODE")
+        .ok()
+        .map(|item| item == "sidecar")
+        .unwrap_or(false);
 
     tauri::Builder::default()
         .manage(shared)
@@ -32,17 +36,19 @@ fn main() {
         .setup(|app| {
             let state = app.state::<manager::Shared>();
             manager::init(state.inner(), &app.handle());
-            if let Err(error) = manager::start_bot(state.inner(), &app.handle()) {
-                manager::push_log(
-                    state.inner(),
-                    &app.handle(),
-                    format!("auto-start failed: {error}"),
-                );
+            if !sidecar {
+                if let Err(error) = manager::start_bot(state.inner(), &app.handle()) {
+                    manager::push_log(
+                        state.inner(),
+                        &app.handle(),
+                        format!("auto-start failed: {error}"),
+                    );
+                }
+                let _ = tray::setup(&app.handle());
+                manager::show_console(&app.handle());
             }
-            let _ = tray::setup(&app.handle());
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
-            manager::show_console(&app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())

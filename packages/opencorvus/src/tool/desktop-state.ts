@@ -43,21 +43,7 @@ const desktopState = Instance.state(
 
 export namespace DesktopState {
   export function getBounds() { return desktopState().bounds }
-  export function setBounds(b: Coordinates.WindowBounds | null) {
-    const s = desktopState()
-    s.bounds = b
-    if (!b) s.anchorHash = null
-    s.phase = phase(s.target, s.bounds)
-    touch(s)
-  }
   export function getTarget() { return desktopState().target }
-  export function setTarget(target: AnchorTarget | null) {
-    const s = desktopState()
-    s.target = target
-    if (!target) s.anchorHash = null
-    s.phase = phase(s.target, s.bounds)
-    touch(s)
-  }
   export function getPhase() { return desktopState().phase }
   export function getTaskEpoch() { return desktopState().taskEpoch }
   export function getAnchorHash() { return desktopState().anchorHash }
@@ -105,13 +91,16 @@ export namespace DesktopState {
     monitor?: { id: number; name?: string } | null
     screenshotHash?: string | null
   }) {
+    if (input.scope === "window" && !input.window) {
+      throw new Error("DesktopState.recordCapture(scope=window) requires window metadata")
+    }
+    if (input.scope === "monitor" && !input.monitor) {
+      throw new Error("DesktopState.recordCapture(scope=monitor) requires monitor metadata")
+    }
     const s = desktopState()
     s.bounds = input.bounds
     if (input.scope === "window") {
-      const fallback = s.target?.scope === "window" && typeof s.target.windowId === "number"
-        ? { windowId: s.target.windowId, title: s.target.title }
-        : null
-      const window = input.window ?? fallback
+      const window = input.window
       s.target = window
         ? {
             scope: "window",

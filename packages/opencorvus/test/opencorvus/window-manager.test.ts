@@ -154,4 +154,40 @@ describe("opencorvus.window rebind", () => {
       },
     })
   })
+
+  test("ignores by-id candidate when app identity no longer matches", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await WindowManager.bindById(7, "Editor")
+        windows = [
+          {
+            id: 7,
+            title: "Terminal",
+            appName: "Terminal",
+            x: 200,
+            y: 120,
+            width: 1300,
+            height: 860,
+            isMinimized: false,
+            isFocused: true,
+          },
+          {
+            id: 11,
+            title: "Editor",
+            appName: "Code",
+            x: 120,
+            y: 100,
+            width: 1280,
+            height: 820,
+            isMinimized: false,
+            isFocused: true,
+          },
+        ]
+        const rebound = await WindowManager.rebindForTask(1)
+        expect(rebound?.windowId).toBe(11)
+      },
+    })
+  })
 })

@@ -418,6 +418,7 @@ function ensureProcess() {
       stderr: "ignore",
       env: {
         ...process.env,
+        OPENCORVUS_OVERLAY_MODE: "sidecar",
         OPENCORVUS_OVERLAY_STDIN_EXIT: "1",
       },
     })

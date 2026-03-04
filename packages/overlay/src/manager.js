@@ -151,10 +151,14 @@ function readConfig() {
   }
 }
 
-function setStatus(running, pid) {
-  els.statusBadge.classList.toggle("running", !!running)
+function setStatus(snapshot) {
+  const running = !!snapshot?.running
+  const pid = snapshot?.pid ?? "-"
+  const channel = snapshot?.channel_running ? ` | Channel PID: ${snapshot.channel_pid ?? "-"}` : " | Channel: stopped"
+  const session = snapshot?.shared_session_id ? ` | Session: ${snapshot.shared_session_id}` : ""
+  els.statusBadge.classList.toggle("running", running)
   els.statusText.textContent = running ? "Running" : "Stopped"
-  els.pidText.textContent = `PID: ${pid ?? "-"}`
+  els.pidText.textContent = `Core PID: ${pid}${channel}${session}`
 }
 
 function setLogPath(value) {
@@ -452,7 +456,7 @@ function appendLog(item) {
 
 function applySnapshot(snapshot) {
   if (!snapshot) return
-  setStatus(snapshot.running, snapshot.pid)
+  setStatus(snapshot)
   if (typeof snapshot.prompt_running === "boolean") setSending(snapshot.prompt_running)
   setLogPath(snapshot.log_path)
   if (Array.isArray(snapshot.logs)) {
@@ -667,6 +671,23 @@ function bindTauriEvents() {
 
   bridge.listen(bridge.events.managerChat, (payload) => {
     const kind = typeof payload?.kind === "string" ? payload.kind : ""
+    const text = typeof payload?.text === "string" ? payload.text : ""
+
+    if (kind === "mirror_user") {
+      if (text) addMessage("user", text)
+      return
+    }
+
+    if (kind === "mirror_assistant") {
+      if (state.sending) return
+      if (text) addMessage("assistant", text, { markdown: true })
+      return
+    }
+
+    if (kind === "mirror_system") {
+      if (text) addMessage("system", text)
+      return
+    }
 
     if (kind === "start") {
       streamPrepare()
@@ -689,7 +710,6 @@ function bindTauriEvents() {
     }
 
     if (kind === "system") {
-      const text = typeof payload?.text === "string" ? payload.text : ""
       if (text) addMessage("system", text)
       return
     }

@@ -6,6 +6,9 @@ mock.module("@opencorvus-ai/sdk", () => ({
   createOpencode: async () => {
     throw new Error("not used in this test")
   },
+  createOpencodeClient: () => {
+    throw new Error("not used in this test")
+  },
 }))
 
 const { BotCore } = await import("../src/core")

@@ -44,6 +44,15 @@ function displayServer(): string | undefined {
   return "headless"
 }
 
+function utcOffset(now: Date): string {
+  const min = -now.getTimezoneOffset()
+  const sign = min >= 0 ? "+" : "-"
+  const abs = Math.abs(min)
+  const h = String(Math.floor(abs / 60)).padStart(2, "0")
+  const m = String(abs % 60).padStart(2, "0")
+  return `${sign}${h}:${m}`
+}
+
 export namespace SystemPrompt {
   export function instructions() {
     return PROMPT_CODEX.trim()
@@ -66,6 +75,8 @@ export namespace SystemPrompt {
     const hostname = os.hostname()
     const shell = Shell.acceptable()
     const display = displayServer()
+    const now = new Date()
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "unknown"
 
     return [
       [
@@ -78,7 +89,9 @@ export namespace SystemPrompt {
         `  Hostname: ${hostname}`,
         `  Shell: ${shell}`,
         ...(display ? [`  Display-Server: ${display}`] : []),
-        `  Today's date: ${new Date().toDateString()}`,
+        `  Today's date: ${now.toDateString()}`,
+        `  Current time (ISO-8601): ${now.toISOString()}`,
+        `  Local timezone: ${zone} (UTC${utcOffset(now)})`,
         `</env>`,
       ].join("\n"),
       TUI_WORKFLOW,

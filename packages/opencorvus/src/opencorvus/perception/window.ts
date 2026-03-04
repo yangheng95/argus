@@ -71,10 +71,29 @@ export namespace WindowManager {
     })[0] ?? null
   }
 
+  function sameRebindIdentity(binding: WindowBinding, candidate: WindowInfo): boolean {
+    if (binding.matchAppName && candidate.appName.toLowerCase() !== binding.matchAppName.toLowerCase()) {
+      return false
+    }
+    const query = binding.matchTitle.trim().toLowerCase()
+    if (!query) return true
+    return candidate.title.toLowerCase().includes(query) || candidate.appName.toLowerCase().includes(query)
+  }
+
   async function findWindowForRebind(binding: WindowBinding): Promise<WindowInfo | null> {
     if (typeof binding.matchWindowId === "number") {
       const byId = await findWindowById(binding.matchWindowId)
-      if (byId) return byId
+      if (byId && sameRebindIdentity(binding, byId)) return byId
+      if (byId) {
+        log.warn("rebind id candidate rejected due identity mismatch", {
+          previousWindowId: binding.windowId,
+          matchWindowId: binding.matchWindowId,
+          matchTitle: binding.matchTitle,
+          matchAppName: binding.matchAppName ?? null,
+          candidateTitle: byId.title,
+          candidateAppName: byId.appName,
+        })
+      }
     }
     const query = binding.matchTitle.trim().toLowerCase()
     if (!query) return null
@@ -168,10 +187,10 @@ export namespace WindowManager {
     return false
   }
 
-  export async function ensureBoundForeground(): Promise<boolean> {
-    const binding = await getBinding()
-    if (!binding) return false
-    return ensureForeground(binding.windowId, binding.info.appName)
+  export async function ensureBoundForeground(binding?: WindowBinding | null): Promise<boolean> {
+    const current = binding ?? await getBinding()
+    if (!current) return false
+    return ensureForeground(current.windowId, current.info.appName)
   }
 
   export async function bind(titleQuery: string): Promise<WindowBinding> {
