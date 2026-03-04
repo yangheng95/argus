@@ -10,6 +10,7 @@ import { GuiState } from "./gui-state"
 import { addCoordinateOverlay } from "../opencorvus/perception/overlay"
 import { Log } from "../util/log"
 import { showWindowHighlight } from "./overlay-client"
+import { ScreenshotStore } from "../session/screenshot-store"
 
 const log = Log.create({ service: "screen" })
 const MAX_ATTACHMENT_BYTES = Number(process.env.OPENCORVUS_SCREEN_MAX_ATTACHMENT_MB ?? "32") * 1024 * 1024
