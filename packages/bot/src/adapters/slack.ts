@@ -9,6 +9,8 @@ export class SlackAdapter implements BotAdapter {
   private botUserId?: string
   /** Deduplicate: Slack Socket Mode can deliver the same message event twice */
   private processedMessages = new Set<string>()
+  /** Ignore messages older than this timestamp (seconds) to prevent replay on restart */
+  private startTs = (Date.now() / 1000).toString()
 
   constructor(opts: { token: string; signingSecret?: string; appToken: string }) {
     this.token = opts.token
