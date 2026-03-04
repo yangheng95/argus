@@ -199,25 +199,23 @@ export namespace Tui {
     let proc: ChildProcess
     if (process.platform === "win32") {
       if (devMode) {
-        // Dev mode on Windows: write a temp .bat script and execute it via `start` to get a visible console.
-        // Direct cmd.exe argument passing mangles quotes/backslashes; a .bat file avoids this.
+        // Dev mode on Windows: write a temp .bat and run it with cmd.exe detached.
+        // detached: true on Windows allocates a new visible console for the child,
+        // so the TUI renders in its own window with full terminal capabilities.
         const pkgRoot = packageRoot()
         const entryScript = path.join(pkgRoot, "src", "index.ts")
         const batContent = [
-          "@echo off",
-          `cd /d "${pkgRoot}"`,
-          `bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${args.map((a) => `"${a}"`).join(" ")}`,
+          `@title OpenCorvus TUI`,
+          `@cd /d "${pkgRoot}"`,
+          `@bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${args.map((a) => `"${a}"`).join(" ")}`,
         ].join("\r\n")
         const batPath = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
         fs.writeFileSync(batPath, batContent)
-        // Use execSync to fire-and-forget: `start` returns immediately, opening a new console window.
-        try {
-          execSync(`start "OpenCorvus TUI" cmd /k "${batPath}"`, { stdio: "ignore", windowsHide: true })
-        } catch {
-          // start command may exit with non-zero but still launch the window
-        }
-        // Create a dummy proc for the Handle (we don't own the detached process)
-        proc = nodeSpawn("cmd.exe", ["/c", "echo"], { stdio: "ignore" })
+        proc = nodeSpawn("cmd.exe", ["/c", batPath], {
+          stdio: ["ignore", "ignore", "ignore"],
+          detached: true,
+          cwd: pkgRoot,
+        })
         proc.unref()
       } else {
         // Production: use PowerShell Start-Process to open TUI in a new visible console window.
