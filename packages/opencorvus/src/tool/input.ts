@@ -30,7 +30,37 @@ function split(input: string) {
 function focusKey(key: string) {
   const parts = split(key)
   if (!parts.includes("tab")) return false
-  return parts.some((part) => part === "alt" || part === "cmd" || part === "command" || part === "meta" || part === "super" || part === "win" || part === "windows")
+  return parts.some(
+    (part) =>
+      part === "alt" ||
+      part === "cmd" ||
+      part === "command" ||
+      part === "meta" ||
+      part === "super" ||
+      part === "win" ||
+      part === "windows",
+  )
+}
+
+function capabilityBlock(action: string) {
+  const item = Capability.cachedItem("desktop_input")
+  if (!item || item.state !== "fail") return null
+  const hint = item.hint ? ` Hint: ${item.hint}` : ""
+  return {
+    title: `Input action unavailable: ${action}`,
+    output: `Cannot run input.${action}: ${item.detail}.${hint}`,
+    metadata: {
+      blocked: true,
+      reason: "desktop_input_unavailable",
+      action,
+      capability: {
+        id: item.id,
+        state: item.state,
+        detail: item.detail,
+        hint: item.hint ?? null,
+      },
+    },
+  }
 }
 
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, wait, and request desktop confirmation.
@@ -93,7 +123,10 @@ const ClickAction = z.object({
   action: z.literal("click"),
   x: coord.describe("X coordinate to click"),
   y: coord.describe("Y coordinate to click"),
-  button: z.enum(["left", "right", "double", "middle"]).default("left").describe("Mouse button: left, right, double, or middle"),
+  button: z
+    .enum(["left", "right", "double", "middle"])
+    .default("left")
+    .describe("Mouse button: left, right, double, or middle"),
   driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
   post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
@@ -115,7 +148,9 @@ const KeyAction = z.object({
 const ScrollAction = z.object({
   action: z.literal("scroll"),
   direction: z.enum(["up", "down"]).describe("Scroll direction"),
-  amount: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().default(3)).describe("Number of scroll steps"),
+  amount: z
+    .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().default(3))
+    .describe("Number of scroll steps"),
   driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
   post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
@@ -140,7 +175,9 @@ const MoveAction = z.object({
 
 const WaitAction = z.object({
   action: z.literal("wait"),
-  ms: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(10).max(1000).default(10)).describe("Milliseconds to wait (10-1000, default 10)"),
+  ms: z
+    .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(10).max(1000).default(10))
+    .describe("Milliseconds to wait (10-1000, default 10)"),
 })
 
 const ConfirmAction = z.object({
@@ -149,7 +186,9 @@ const ConfirmAction = z.object({
   message: z.string().min(1).max(1000).describe("Dialog body text"),
   confirm: z.string().min(1).max(30).default("Confirm").describe("Confirm button label"),
   cancel: z.string().min(1).max(30).default("Cancel").describe("Cancel button label"),
-  timeoutMs: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(1000).max(120000).default(30000)).describe("Dialog timeout in milliseconds"),
+  timeoutMs: z
+    .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().min(1000).max(120000).default(30000))
+    .describe("Dialog timeout in milliseconds"),
 })
 
 const InputParams = z.discriminatedUnion("action", [
@@ -188,6 +227,8 @@ export const InputTool = Tool.define("input", {
       case "click": {
         const driverBlocked = InputGuard.pointerDriverBlock("click", params.driver)
         if (driverBlocked) return driverBlocked
+        const backendBlocked = capabilityBlock("click")
+        if (backendBlocked) return backendBlocked
         const anchored = InputGuard.requireBounds("click")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
@@ -197,19 +238,19 @@ export const InputTool = Tool.define("input", {
         if (windowBlocked) return windowBlocked
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
-        const action = params.button === "double" ? "double" : params.button === "right" ? "right" : params.button === "middle" ? "middle" : "click"
-        showOverlay(
-          screen.x,
-          screen.y,
-          action,
-          `${params.button ?? "left"} (${params.x},${params.y})`,
-        )
+        const action =
+          params.button === "double"
+            ? "double"
+            : params.button === "right"
+              ? "right"
+              : params.button === "middle"
+                ? "middle"
+                : "click"
+        showOverlay(screen.x, screen.y, action, `${params.button ?? "left"} (${params.x},${params.y})`)
         log.info("click-resolve", {
           windowRelative: `${params.x},${params.y}`,
           screenAbsolute: `${screen.x},${screen.y}`,
-          bounds: anchored
-            ? `${anchored.width}x${anchored.height}@${anchored.x},${anchored.y}`
-            : "none",
+          bounds: anchored ? `${anchored.width}x${anchored.height}@${anchored.x},${anchored.y}` : "none",
           coordinateSpaceRequested: space,
           coordinateSpaceResolved: resolvedSpace,
           button: params.button ?? "left",
@@ -262,7 +303,18 @@ export const InputTool = Tool.define("input", {
         return {
           title: `Clicked (${params.x}, ${params.y})`,
           output: `${params.button ?? "left"} click at (${params.x}, ${params.y})${coordDetail}`,
-          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, button: params.button, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY, coordinateSpaceRequested: space, coordinateSpace: resolvedSpace },
+          metadata: {
+            x: params.x,
+            y: params.y,
+            screenX: screen.x,
+            screenY: screen.y,
+            button: params.button,
+            clamped: screen.clamped,
+            clampedX: screen.clampedX,
+            clampedY: screen.clampedY,
+            coordinateSpaceRequested: space,
+            coordinateSpace: resolvedSpace,
+          },
         }
       }
 
@@ -274,6 +326,8 @@ export const InputTool = Tool.define("input", {
           return InputGuard.driverUnavailable("type", params.driver, error)
         }
         if (selected === "desktop") {
+          const backendBlocked = capabilityBlock("type")
+          if (backendBlocked) return backendBlocked
           const windowBlocked = await InputGuard.ensureBoundWindowForeground("type")
           if (windowBlocked) return windowBlocked
         }
@@ -283,11 +337,12 @@ export const InputTool = Tool.define("input", {
           abort: ctx.abort,
           driver: params.driver,
           act: { kind: "type", text: params.text },
-          post: selected === "desktop"
-            ? postcheck(params.post, {
-              target: DesktopState.getTarget(),
-            })
-            : undefined,
+          post:
+            selected === "desktop"
+              ? postcheck(params.post, {
+                  target: DesktopState.getTarget(),
+                })
+              : undefined,
           action: () => GUI.paste(params.text),
         })
         if (typeResult.tries > 1) {
@@ -321,6 +376,8 @@ export const InputTool = Tool.define("input", {
           return InputGuard.driverUnavailable("key", params.driver, error)
         }
         if (selected === "desktop") {
+          const backendBlocked = capabilityBlock("key")
+          if (backendBlocked) return backendBlocked
           const windowBlocked = await InputGuard.ensureBoundWindowForeground("key", focusKey(params.key))
           if (windowBlocked) return windowBlocked
         }
@@ -334,11 +391,12 @@ export const InputTool = Tool.define("input", {
             kind: "hotkey",
             keys: parts,
           },
-          post: selected === "desktop"
-            ? postcheck(params.post, {
-              target: DesktopState.getTarget(),
-            })
-            : undefined,
+          post:
+            selected === "desktop"
+              ? postcheck(params.post, {
+                  target: DesktopState.getTarget(),
+                })
+              : undefined,
           action: () => {
             if (parts.length > 1) return GUI.hotkey(...parts)
             return GUI.pressKey(parts[0])
@@ -375,6 +433,8 @@ export const InputTool = Tool.define("input", {
           return InputGuard.driverUnavailable("scroll", params.driver, error)
         }
         if (selected === "desktop") {
+          const backendBlocked = capabilityBlock("scroll")
+          if (backendBlocked) return backendBlocked
           const windowBlocked = await InputGuard.ensureBoundWindowForeground("scroll")
           if (windowBlocked) return windowBlocked
         }
@@ -388,11 +448,12 @@ export const InputTool = Tool.define("input", {
             direction: params.direction,
             amount: params.amount,
           },
-          post: selected === "desktop"
-            ? postcheck(params.post, {
-              target: DesktopState.getTarget(),
-            })
-            : undefined,
+          post:
+            selected === "desktop"
+              ? postcheck(params.post, {
+                  target: DesktopState.getTarget(),
+                })
+              : undefined,
           action: () => GUI.scroll(params.direction, params.amount),
         })
         if (scrollResult.tries > 1) {
@@ -422,6 +483,8 @@ export const InputTool = Tool.define("input", {
       case "drag": {
         const driverBlocked = InputGuard.pointerDriverBlock("drag", params.driver)
         if (driverBlocked) return driverBlocked
+        const backendBlocked = capabilityBlock("drag")
+        if (backendBlocked) return backendBlocked
         const anchored = InputGuard.requireBounds("drag")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
@@ -489,6 +552,8 @@ export const InputTool = Tool.define("input", {
       case "move": {
         const driverBlocked = InputGuard.pointerDriverBlock("move", params.driver)
         if (driverBlocked) return driverBlocked
+        const backendBlocked = capabilityBlock("move")
+        if (backendBlocked) return backendBlocked
         const anchored = InputGuard.requireBounds("move")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
@@ -530,7 +595,17 @@ export const InputTool = Tool.define("input", {
         return {
           title: `Moved to (${params.x}, ${params.y})`,
           output: `Mouse moved to (${params.x}, ${params.y})${screen.clamped ? " [CLAMPED]" : ""}`,
-          metadata: { x: params.x, y: params.y, screenX: screen.x, screenY: screen.y, clamped: screen.clamped, clampedX: screen.clampedX, clampedY: screen.clampedY, coordinateSpaceRequested: space, coordinateSpace: resolvedSpace },
+          metadata: {
+            x: params.x,
+            y: params.y,
+            screenX: screen.x,
+            screenY: screen.y,
+            clamped: screen.clamped,
+            clampedX: screen.clampedX,
+            clampedY: screen.clampedY,
+            coordinateSpaceRequested: space,
+            coordinateSpace: resolvedSpace,
+          },
         }
       }
 
@@ -563,7 +638,7 @@ export const InputTool = Tool.define("input", {
         const accepted = answer === "confirm"
         const unavailable = answer === "unavailable"
         const overlay = overlayDiagnostic()
-        const unavailableReason = unavailable ? overlay.reason ?? "unknown" : undefined
+        const unavailableReason = unavailable ? (overlay.reason ?? "unknown") : undefined
         const capabilityHint = unavailable
           ? Capability.cachedItem("overlay_confirm")?.hint || Capability.overlayItem().hint
           : undefined
@@ -597,7 +672,14 @@ export const InputTool = Tool.define("input", {
               : answer === "timeout"
                 ? "Confirmation timed out. Treat as not confirmed and ask a follow-up if needed."
                 : "User cancelled the next step.",
-          metadata: { answer, confirmed: accepted, timeout: answer === "timeout", unavailable, unavailableReason, capabilityHint },
+          metadata: {
+            answer,
+            confirmed: accepted,
+            timeout: answer === "timeout",
+            unavailable,
+            unavailableReason,
+            capabilityHint,
+          },
         }
       }
     }

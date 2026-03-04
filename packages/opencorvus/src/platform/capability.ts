@@ -50,6 +50,10 @@ export namespace Capability {
     return value.includes("microsoft") || value.includes("wsl")
   }
 
+  function session() {
+    return process.env.XDG_SESSION_TYPE?.trim().toLowerCase() ?? ""
+  }
+
   function watcherPkg() {
     const base = `@parcel/watcher-${process.platform}-${process.arch}`
     if (process.platform !== "linux") return base
@@ -72,6 +76,50 @@ export namespace Capability {
     }
   }
 
+  function displaySession() {
+    if (process.platform !== "linux") {
+      return line("display_session", "Display session", "ok", "n/a")
+    }
+    if (wsl()) {
+      return line(
+        "display_session",
+        "Display session",
+        "warn",
+        `wsl (${release()})`,
+        "WSL GUI automation needs WSLg/X server. For headless use Xvfb and set DISPLAY.",
+      )
+    }
+    const type = session()
+    if (type === "x11") {
+      return line("display_session", "Display session", "ok", "x11")
+    }
+    if (type === "wayland") {
+      return line(
+        "display_session",
+        "Display session",
+        "warn",
+        "wayland",
+        "Wayland support depends on compositor. If capture/input is unstable, try X11.",
+      )
+    }
+    if (type) {
+      return line(
+        "display_session",
+        "Display session",
+        "warn",
+        type,
+        "Unknown Linux display session. Verify capture/input compatibility.",
+      )
+    }
+    return line(
+      "display_session",
+      "Display session",
+      "warn",
+      "unknown",
+      "XDG_SESSION_TYPE is not set. Verify display server environment variables.",
+    )
+  }
+
   function overlayHint(reason: string | undefined, present: boolean) {
     if (!present) {
       return "Set OPENCORVUS_OVERLAY_BIN to a valid overlay binary, or build packages/overlay/src-tauri."
@@ -81,7 +129,8 @@ export namespace Capability {
     if (reason === "spawn_failed") return "Check binary permissions and antivirus/quarantine, then retry."
     if (reason === "process_exited") return "Overlay process exited unexpectedly. Check logs for crash details."
     if (reason === "retry_backoff") return "Overlay is recovering from repeated failures. Wait a moment, then retry."
-    if (reason === "circuit_open") return "Overlay entered self-protection mode after repeated failures. Wait for cooldown and retry."
+    if (reason === "circuit_open")
+      return "Overlay entered self-protection mode after repeated failures. Wait for cooldown and retry."
     if (reason === "stdin_unavailable" || reason === "stdout_unavailable") {
       return "Overlay stdio is unavailable. Restart the process and check terminal sandbox policies."
     }
@@ -121,7 +170,9 @@ export namespace Capability {
     if (read && write) {
       return line("clipboard", "Clipboard bridge", "ok", `read=${path.basename(read)} write=${path.basename(write)}`)
     }
-    const miss = [read ? undefined : "read", write ? undefined : "write"].filter((x): x is string => Boolean(x)).join("+")
+    const miss = [read ? undefined : "read", write ? undefined : "write"]
+      .filter((x): x is string => Boolean(x))
+      .join("+")
     return line(
       "clipboard",
       "Clipboard bridge",
@@ -163,6 +214,22 @@ export namespace Capability {
     return line("clipboard", "Clipboard bridge", "warn", `platform ${process.platform} not explicitly validated`)
   }
 
+  function screenHint() {
+    if (process.platform === "darwin") {
+      return "Grant Screen Recording permission to OpenCorvus/Terminal and restart the app."
+    }
+    if (process.platform === "linux" && wsl()) {
+      return "WSL needs WSLg/X server for screen capture. For headless use Xvfb and set DISPLAY."
+    }
+    if (process.platform === "linux" && session() === "wayland") {
+      return "Wayland capture may be restricted by compositor. Try OC_ALLOW_WAYLAND=1 or switch to X11."
+    }
+    if (process.platform === "linux") {
+      return "Ensure a desktop session is active and DISPLAY is set, then retry."
+    }
+    return "Install platform display dependencies and verify node-screenshots native module."
+  }
+
   async function screen() {
     try {
       const mod = await import("node-screenshots")
@@ -173,17 +240,27 @@ export namespace Capability {
         "Screen capture backend",
         "warn",
         "node-screenshots loaded but no monitor detected",
-        "Check display server/session permissions and retry.",
+        screenHint(),
       )
     } catch (err) {
-      return line(
-        "screen_capture",
-        "Screen capture backend",
-        "fail",
-        text(err),
-        "Install platform display dependencies and verify node-screenshots native module.",
-      )
+      return line("screen_capture", "Screen capture backend", "fail", text(err), screenHint())
     }
+  }
+
+  function inputHint() {
+    if (process.platform === "darwin") {
+      return "Grant Accessibility permission to OpenCorvus/Terminal and restart the app."
+    }
+    if (process.platform === "linux" && wsl()) {
+      return "WSL input automation needs WSLg/X server. For headless use Xvfb and set DISPLAY."
+    }
+    if (process.platform === "linux" && session() === "wayland") {
+      return "Wayland may block synthetic input on some compositors. Prefer X11 for reliability."
+    }
+    if (process.platform === "linux") {
+      return "Ensure a desktop session is active and libnut dependencies are installed."
+    }
+    return "Reinstall @nut-tree-fork packages for this platform and verify accessibility permissions."
   }
 
   function input() {
@@ -193,13 +270,7 @@ export namespace Capability {
       require(lib)
       return line("desktop_input", "Desktop input backend", "ok", "nut-js + libnut")
     } catch (err) {
-      return line(
-        "desktop_input",
-        "Desktop input backend",
-        "fail",
-        text(err),
-        "Reinstall @nut-tree-fork packages for this platform and verify accessibility permissions.",
-      )
+      return line("desktop_input", "Desktop input backend", "fail", text(err), inputHint())
     }
   }
 
@@ -224,7 +295,15 @@ export namespace Capability {
   }
 
   async function collectFresh() {
-    const checks = [screen(), winFfi(), Promise.resolve(watcher()), Promise.resolve(overlayItem()), Promise.resolve(clipboard()), Promise.resolve(input())]
+    const checks = [
+      screen(),
+      winFfi(),
+      Promise.resolve(watcher()),
+      Promise.resolve(displaySession()),
+      Promise.resolve(overlayItem()),
+      Promise.resolve(clipboard()),
+      Promise.resolve(input()),
+    ]
     const items = await Promise.all(checks)
     const total = items.reduce(
       (acc, item) => ({
@@ -266,5 +345,4 @@ export namespace Capability {
   export async function collect(force = false) {
     return preflight(force)
   }
-
 }

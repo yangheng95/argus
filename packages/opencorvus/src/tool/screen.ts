@@ -11,6 +11,7 @@ import { addCoordinateOverlay } from "../opencorvus/perception/overlay"
 import { Log } from "../util/log"
 import { showWindowHighlight } from "./overlay-client"
 import { ScreenshotStore } from "../session/screenshot-store"
+import { Capability } from "../platform/capability"
 
 const log = Log.create({ service: "screen" })
 const MAX_ATTACHMENT_BYTES = Number(process.env.OPENCORVUS_SCREEN_MAX_ATTACHMENT_MB ?? "32") * 1024 * 1024
@@ -74,6 +75,26 @@ function pickWindow(windows: WindowManager.WindowInfo[]): WindowManager.WindowIn
   return candidateWindows(windows)[0] ?? null
 }
 
+function capabilityBlock(action: string) {
+  const item = Capability.cachedItem("screen_capture")
+  if (!item || item.state !== "fail") return null
+  const hint = item.hint ? ` Hint: ${item.hint}` : ""
+  return {
+    title: `Screen action unavailable: ${action}`,
+    output: `Cannot run screen.${action}: ${item.detail}.${hint}`,
+    metadata: {
+      blocked: true,
+      reason: "screen_capture_unavailable",
+      capability: {
+        id: item.id,
+        state: item.state,
+        detail: item.detail,
+        hint: item.hint ?? null,
+      },
+    },
+  }
+}
+
 const DESCRIPTION = `Observe the desktop environment. Use this tool to take screenshots, list windows, list monitors, and bind a target window or monitor.
 
 Actions:
@@ -97,17 +118,28 @@ Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1 to render coordinate 
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
-  wait_for_change: z.boolean().optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
+  wait_for_change: z
+    .boolean()
+    .optional()
+    .describe(
+      "If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations.",
+    ),
 })
 
 const BindWindowAction = z.object({
   action: z.literal("bind_window"),
-  window_id: z.coerce.number().int().optional().describe("Exact window id from list_windows. Preferred for deterministic binding."),
+  window_id: z.coerce
+    .number()
+    .int()
+    .optional()
+    .describe("Exact window id from list_windows. Preferred for deterministic binding."),
   title: z.string().optional().describe("Fallback window title/app substring when window_id is unavailable."),
   allow_single_monitor_fallback: z
     .boolean()
     .optional()
-    .describe("If true, allows single-monitor fallback to the best visible window when window_id/title matching fails."),
+    .describe(
+      "If true, allows single-monitor fallback to the best visible window when window_id/title matching fails.",
+    ),
 })
 
 const ListWindowsAction = z.object({
@@ -120,7 +152,7 @@ const ListMonitorsAction = z.object({
 
 const BindMonitorAction = z.object({
   action: z.literal("bind_monitor"),
-  monitor: z.union([z.number().int(), z.string()]).describe("Monitor id or name (e.g. 1, \"DELL\", \"primary\")"),
+  monitor: z.union([z.number().int(), z.string()]).describe('Monitor id or name (e.g. 1, "DELL", "primary")'),
 })
 
 const ScreenParams = z.discriminatedUnion("action", [
@@ -134,7 +166,15 @@ const ScreenParams = z.discriminatedUnion("action", [
 export const ScreenTool = Tool.define("screen", {
   description: DESCRIPTION,
   parameters: ScreenParams,
-  async execute(params, ctx): Promise<{ title: string; output: string; metadata: Record<string, any>; attachments?: { type: "file"; mime: string; url: string }[] }> {
+  async execute(
+    params,
+    ctx,
+  ): Promise<{
+    title: string
+    output: string
+    metadata: Record<string, any>
+    attachments?: { type: "file"; mime: string; url: string }[]
+  }> {
     await ctx.ask({
       permission: "screen",
       patterns: [params.action],
@@ -157,6 +197,9 @@ export const ScreenTool = Tool.define("screen", {
       if (v === "true") (params as any).allow_single_monitor_fallback = true
       else if (v === "false") (params as any).allow_single_monitor_fallback = false
     }
+
+    const blocked = capabilityBlock(params.action)
+    if (blocked) return blocked
 
     switch (params.action) {
       case "screenshot": {
@@ -338,27 +381,33 @@ export const ScreenTool = Tool.define("screen", {
           windowBounds: result.windowBounds
             ? `${result.windowBounds.width}x${result.windowBounds.height}@${result.windowBounds.x},${result.windowBounds.y}`
             : "none",
-          pixelScale: result.windowBounds?.scaleX && result.windowBounds?.scaleY
-            ? `${result.windowBounds.scaleX.toFixed(3)}x${result.windowBounds.scaleY.toFixed(3)}`
-            : "1.000x1.000",
+          pixelScale:
+            result.windowBounds?.scaleX && result.windowBounds?.scaleY
+              ? `${result.windowBounds.scaleX.toFixed(3)}x${result.windowBounds.scaleY.toFixed(3)}`
+              : "1.000x1.000",
           consecutiveNoChange: GuiState.get().repetition.consecutiveNoChange,
         })
 
-        const hasScaleCompensation = !!result.windowBounds && (
-          Math.abs((result.windowBounds.scaleX ?? 1) - 1) > 0.01 ||
-          Math.abs((result.windowBounds.scaleY ?? 1) - 1) > 0.01
-        )
+        const hasScaleCompensation =
+          !!result.windowBounds &&
+          (Math.abs((result.windowBounds.scaleX ?? 1) - 1) > 0.01 ||
+            Math.abs((result.windowBounds.scaleY ?? 1) - 1) > 0.01)
         const scaleInfo = hasScaleCompensation
           ? ` DPI scale compensation active (${(result.windowBounds?.scaleX ?? 1).toFixed(2)}x, ${(result.windowBounds?.scaleY ?? 1).toFixed(2)}x).`
           : ""
-        const coordInfo = result.scope === "window" && result.windowBounds
-          ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
-          : result.windowBounds
-            ? `Coordinates are relative to monitor "${result.monitor?.name ?? result.monitor?.id ?? "unknown"}" (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
-            : "Coordinates are screen-absolute."
+        const coordInfo =
+          result.scope === "window" && result.windowBounds
+            ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
+            : result.windowBounds
+              ? `Coordinates are relative to monitor "${result.monitor?.name ?? result.monitor?.id ?? "unknown"}" (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
+              : "Coordinates are screen-absolute."
 
-        const platformName = process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : "Windows"
-        const shortcutHint = process.platform === "darwin" ? "Use Cmd for shortcuts (Cmd+C, Cmd+V, etc.)." : "Use Ctrl for shortcuts (Ctrl+C, Ctrl+V, etc.)."
+        const platformName =
+          process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : "Windows"
+        const shortcutHint =
+          process.platform === "darwin"
+            ? "Use Cmd for shortcuts (Cmd+C, Cmd+V, etc.)."
+            : "Use Ctrl for shortcuts (Ctrl+C, Ctrl+V, etc.)."
 
         if (isDuplicate) {
           GuiState.recordAction({
@@ -399,7 +448,9 @@ export const ScreenTool = Tool.define("screen", {
           ? await image(result.buffer)
           : { mime: "image/png", buffer: result.buffer, compressed: false }
         const debugOverlay = debugCoordinateOverlay()
-        const attachment = debugOverlay ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer) : encoded.buffer
+        const attachment = debugOverlay
+          ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
+          : encoded.buffer
         const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
         const screenshotUrl = await ScreenshotStore.save(ctx.sessionID, outputMime, attachment)
         const overlayInfo = debugOverlay
@@ -410,7 +461,8 @@ export const ScreenTool = Tool.define("screen", {
         if (rep.consecutiveNoChange >= 6) {
           return {
             title: `Screenshot captured (${result.width}x${result.height}) - STUCK`,
-            output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}\n\n` +
+            output:
+              `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}\n\n` +
               `${overlayInfo}\n\n` +
               `*** STUCK: ${rep.consecutiveNoChange} previous actions had no effect. ***\n` +
               `You MUST try a fundamentally different approach.\n` +
@@ -479,13 +531,11 @@ export const ScreenTool = Tool.define("screen", {
         const allowSingleMonitorFallback = params.allow_single_monitor_fallback === true
         const requestedWindowId = params.window_id
         const [windows, monitors] = await Promise.all([WindowManager.listWindows(true), MonitorManager.listMonitors()])
-        const pickedById = typeof requestedWindowId === "number"
-          ? windows.find((w) => w.id === requestedWindowId) ?? null
-          : null
+        const pickedById =
+          typeof requestedWindowId === "number" ? (windows.find((w) => w.id === requestedWindowId) ?? null) : null
         const match = pickedById ?? (query ? await WindowManager.findWindow(query) : null)
-        const fallback = allowSingleMonitorFallback && !match && query && monitors.length === 1
-          ? pickWindow(windows)
-          : null
+        const fallback =
+          allowSingleMonitorFallback && !match && query && monitors.length === 1 ? pickWindow(windows) : null
         const picked = match ?? fallback
         if (!picked) {
           if (typeof requestedWindowId === "number" && query) {
@@ -502,9 +552,10 @@ export const ScreenTool = Tool.define("screen", {
         const mode = pickedById ? "window_id" : fallback ? "single_monitor_fallback" : "title"
         const binding = await WindowManager.bindById(picked.id, query || undefined)
         MonitorManager.unbind()
-        const idFallbackNote = typeof requestedWindowId === "number" && !pickedById && query
-          ? ` Requested window_id ${requestedWindowId} did not match any window, so title matching selected "${binding.info.title}".`
-          : ""
+        const idFallbackNote =
+          typeof requestedWindowId === "number" && !pickedById && query
+            ? ` Requested window_id ${requestedWindowId} did not match any window, so title matching selected "${binding.info.title}".`
+            : ""
         const fallbackNote = fallback
           ? ` Requested "${query || "focused"}" did not match any window, so single-monitor fallback bound "${binding.info.title}".`
           : ""
@@ -579,7 +630,8 @@ export const ScreenTool = Tool.define("screen", {
           }
         })
         const lines = enriched.map(
-          (w) => `[${w.id}] "${w.title}" (${w.appName}) - pos: (${w.x},${w.y}), size: ${w.width}x${w.height}, monitor: ${w.monitorId ?? "?"}${w.isFocused ? " [focused]" : ""}`,
+          (w) =>
+            `[${w.id}] "${w.title}" (${w.appName}) - pos: (${w.x},${w.y}), size: ${w.width}x${w.height}, monitor: ${w.monitorId ?? "?"}${w.isFocused ? " [focused]" : ""}`,
         )
         const candidates = candidateWindows(enriched).map((w) => ({
           window_id: w.id,
@@ -590,19 +642,26 @@ export const ScreenTool = Tool.define("screen", {
           width: w.width,
           height: w.height,
         }))
-        const candidateLines = candidates.slice(0, 8).map(
-          (w, i) => `${i === 0 ? "*" : "-"} window_id=${w.window_id} "${w.title}" (${w.appName}) on monitor ${w.monitorId ?? "?"}${w.isFocused ? " [focused]" : ""}`,
-        )
-        const candidateHint = candidateLines.length > 0
-          ? `\n\nSelectable targets (best first):\n${candidateLines.join("\n")}\nBind one with: screen.bind_window({ window_id: <id> })`
-          : ""
-        const monitorFallbackHint = "\nIf target app/window is not listed, then use screen.list_monitors and screen.bind_monitor to switch desktop/monitor."
-        const singleMonitorHint = "\nOn single-monitor setups you often can continue with screen.screenshot + input directly without list_windows."
+        const candidateLines = candidates
+          .slice(0, 8)
+          .map(
+            (w, i) =>
+              `${i === 0 ? "*" : "-"} window_id=${w.window_id} "${w.title}" (${w.appName}) on monitor ${w.monitorId ?? "?"}${w.isFocused ? " [focused]" : ""}`,
+          )
+        const candidateHint =
+          candidateLines.length > 0
+            ? `\n\nSelectable targets (best first):\n${candidateLines.join("\n")}\nBind one with: screen.bind_window({ window_id: <id> })`
+            : ""
+        const monitorFallbackHint =
+          "\nIf target app/window is not listed, then use screen.list_monitors and screen.bind_monitor to switch desktop/monitor."
+        const singleMonitorHint =
+          "\nOn single-monitor setups you often can continue with screen.screenshot + input directly without list_windows."
         return {
           title: `Found ${enriched.length} windows`,
-          output: lines.length > 0
-            ? lines.join("\n") + candidateHint + singleMonitorHint + monitorFallbackHint
-            : "No visible windows found. Use screen.list_monitors and screen.bind_monitor if the app may be on another desktop/monitor.",
+          output:
+            lines.length > 0
+              ? lines.join("\n") + candidateHint + singleMonitorHint + monitorFallbackHint
+              : "No visible windows found. Use screen.list_monitors and screen.bind_monitor if the app may be on another desktop/monitor.",
           metadata: { count: enriched.length, windows: enriched, candidates },
         }
       }
@@ -611,7 +670,8 @@ export const ScreenTool = Tool.define("screen", {
         GuiState.activate()
         const monitors = await MonitorManager.listMonitors()
         const lines = monitors.map(
-          (m) => `[${m.id}] "${m.name}" - pos: (${m.x},${m.y}), size: ${m.width}x${m.height}, scale: ${m.scaleFactor}${m.isPrimary ? " [primary]" : ""}`,
+          (m) =>
+            `[${m.id}] "${m.name}" - pos: (${m.x},${m.y}), size: ${m.width}x${m.height}, scale: ${m.scaleFactor}${m.isPrimary ? " [primary]" : ""}`,
         )
         return {
           title: `Found ${monitors.length} monitors`,
