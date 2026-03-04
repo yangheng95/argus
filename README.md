@@ -14,67 +14,34 @@
 
 ---
 
-## Slogan
+## Early-stage Notice
 
-**写下目标，交付结果。**  
-**Write the goal. Ship the outcome.**
+OpenCorvus is still in early development.
 
-## Positioning
+- The product is usable today, but APIs, config keys, and UI details can change quickly.
+- README focuses on **how to run and use it now**.
+- If you need deep internals, use docs + source code.
 
-OpenCorvus is an **execution agent** for software teams.
-It is not only a coding copilot, and not a traditional RPA bot.
-It bridges three worlds in one loop:
+## What You Can Do
 
-- **Code** — implement and refactor in real repositories
-- **Desktop** — operate browser and GUI apps like a human operator
-- **Workflow** — report progress in Slack/Telegram and continue autonomously
+OpenCorvus is an execution agent for software tasks.
 
-## Vision
+- Work on real repositories: read/edit code, run commands, fix issues
+- Operate desktop UI: click/type/scroll and verify pages visually
+- Continue from chat channels (optional): Slack, Telegram, and more
 
-Build a general AI teammate that can complete real-world software tasks end-to-end:
-
-- From requirement to merged PR
-- From code change to UI verification
-- From local development to team collaboration channels
-
-## Mission
-
-Make "intent-to-delivery" the default way of building software: humans define direction, OpenCorvus executes across tools.
-
-## What is OpenCorvus?
-
-OpenCorvus is an AI-powered desktop assistant that combines **code development** and **GUI automation** in a single agent. It can:
-
-- **Write & edit code** — explore codebases, make targeted edits, run tests, manage git workflows
-- **Control the desktop** — observe the screen, click, type, scroll, and interact with any GUI application
-- **Combine both** — e.g., write code in the editor, then switch to the browser to test it visually
-
-Unlike pure coding agents, OpenCorvus can see and interact with your entire desktop environment, making it suitable for tasks that span the terminal and graphical applications.
-
-## Features
-
-- **Dual-mode agent** — coding tools (read/write/edit/bash/glob/grep) + desktop tools (screenshot/click/type/key/scroll)
-- **Skill system** — loadable skills for coding, desktop automation, and more
-- **Multi-provider** — works with Claude, OpenAI, Google, Qwen, and other LLM providers via AI SDK
-- **TUI** — built-in terminal user interface (SolidJS + opentui, 30 themes, session management, undo/redo)
-- **Client/server architecture** — headless server with SDK, TUI, and remote chat channels
-- **LSP support** — built-in Language Server Protocol integration for code intelligence
-- **MCP support** — Model Context Protocol for extending tool capabilities
-- **Sub-agent system** — spawn focused sub-agents for parallel exploration and complex tasks
-
-## Installation
+## Install
 
 ```bash
-# npm (or bun/pnpm/yarn)
+# npm
 npm i -g opencorvus-ai@latest
 
-# macOS and Linux (Homebrew)
+# Homebrew (macOS/Linux)
 brew install yangheng95/tap/opencorvus
 
-# Windows (Scoop)
+# Windows
 scoop install opencorvus
-
-# Windows (Chocolatey)
+# or
 choco install opencorvus
 
 # Arch Linux
@@ -84,251 +51,104 @@ sudo pacman -S opencorvus
 nix run nixpkgs#opencorvus
 ```
 
-> [!TIP]
-> Remove versions older than 0.1.x before installing.
-
-## Quick Start
+## 3-Minute Start
 
 ```bash
-# Launch TUI in the current directory
+# 1) Enter your project
+cd /path/to/your/project
+
+# 2) Launch OpenCorvus TUI
+opencorvus
+```
+
+That is enough to start giving tasks in natural language.
+
+## Common Commands
+
+```bash
+# Run TUI in current directory
 opencorvus
 
-# Launch TUI in a specific directory
+# Run TUI for a target project
 opencorvus /path/to/project
 
-# Start headless API server only
+# Start API server only (headless)
 opencorvus serve
 
-# Start server on a specific port
+# Custom server port
 opencorvus serve --port 8080
 ```
 
-> [!TIP]
-> For local source development, run `bun install` once at repo root.  
-> The install now auto-applies the Bun + nut-js `follow-redirects` compatibility patch via `postinstall`.  
-> If you reinstall dependencies and desktop input fails, rerun `bun run patch:follow-redirects`.
-
-## Agents
-
-OpenCorvus includes two built-in agents, switchable with the `Tab` key in the TUI:
-
-- **build** — Default, full-access agent for development and desktop automation
-- **plan** — Read-only agent for analysis and code exploration
-  - Denies file edits by default
-  - Asks permission before running bash commands
-  - Ideal for exploring unfamiliar codebases or planning changes
-
-A **general** subagent is also available for complex searches and multistep tasks.
-
-## Skills
-
-OpenCorvus uses a skill system to load specialized instructions on demand:
-
-| Skill | Loaded when | Capabilities |
-|-------|------------|-------------|
-| **coding** | Any software engineering task | Code exploration, editing, debugging, testing, git workflow |
-| **desktop** | Any GUI automation task | Screen observation, window management, mouse/keyboard interaction |
-
-Skills are loaded automatically based on the task. Only one skill is active at a time.
-
-## Remote Chat Channels (Slack / Telegram / More)
-
-OpenCorvus core is always-on. Overlay is its visual chat UI and starts with the core (`bun dev`). Slack / Telegram and other chat bots are optional remote channels selected in overlay, and reusable after configuration.
-You can also build OpenCorvus-native chat bots from skills.
-
-### 快速启动
+## Use From Source (Repo Developers)
 
 ```bash
-# 1. 复制并填写环境变量
-cp packages/bot/.env.example packages/bot/.env
-
-# 2. 启动 Bot（同时自动启动 OpenCorvus 服务器）
-bun dev:bot
-```
-
-> `bun dev` starts the overlay console (required local chat entry).
-> `bun dev:bot` equals `bun run --cwd packages/bot --no-env-file --env-file .env src/main.ts` (optional remote chat channels entry).
-> `bun dev:bot` only loads `packages/bot/.env` (plus system env), and does not auto-load repo root `.env`.
-
-### 环境变量配置
-
-在 `packages/bot/.env`（或系统环境变量）中配置以下参数：
-
-#### Slack 通道
-
-| 变量 | 说明 |
-|------|------|
-| `SLACK_BOT_TOKEN` | Bot Token，格式 `xoxb-...`。在 Slack App 的 **OAuth & Permissions** 页面获取 |
-| `SLACK_SIGNING_SECRET` | 签名密钥，在 **Basic Information → App Credentials** 获取 |
-| `SLACK_APP_TOKEN` | Socket Mode App-Level Token，格式 `xapp-...`。在 **Basic Information → App-Level Tokens** 创建，需 `connections:write` 权限 |
-
-> Slack App 需开启 **Socket Mode**，并在 **Event Subscriptions** 订阅 `message.channels`、`message.im` 等事件。
-
-#### Telegram 通道
-
-| 变量 | 说明 |
-|------|------|
-| `TELEGRAM_BOT_TOKEN` | 通过 [@BotFather](https://t.me/BotFather) 创建 Bot 后获取 |
-
-> Slack 和 Telegram 可同时配置，Bot 会启用两个通道。
-
-#### LLM 模型配置
-
-Bot 通过 `OPENCORVUS_CONFIG_CONTENT` 环境变量以 JSON 格式注入 OpenCorvus 配置，**不依赖**项目目录中的配置文件。
-
-```bash
-# 使用 Qwen（DashScope）
-OPENCORVUS_CONFIG_CONTENT='{"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}}}'
-
-# 使用 Claude（Anthropic）
-OPENCORVUS_CONFIG_CONTENT='{"model":"anthropic/claude-sonnet-4-6","provider":{"anthropic":{"env":"ANTHROPIC_API_KEY"}}}'
-ANTHROPIC_API_KEY=sk-ant-...
-
-# 使用 OpenAI
-OPENCORVUS_CONFIG_CONTENT='{"model":"openai/gpt-4o","provider":{"openai":{"env":"OPENAI_API_KEY"}}}'
-OPENAI_API_KEY=sk-...
-```
-
-> 完整的 provider 配置选项请参考 [OpenCorvus 配置文档](https://opencorvus.ai/docs/config)。
-
-#### 权限配置
-
-`OPENCORVUS_CONFIG_CONTENT` 中的 `permission` 字段控制 Bot 可以执行哪些工具：
-
-```json
-{
-  "permission": {
-    "*": "deny",
-    "screen": "allow",
-    "input": "allow",
-    "bash": "allow",
-    "edit": "allow",
-    "write": "allow",
-    "read": "allow",
-    "glob": "allow",
-    "grep": "allow",
-    "websearch": "allow",
-    "webfetch": "allow",
-    "skill": "allow",
-    "external_directory": "allow"
-  }
-}
-```
-
-> 生产环境建议将 `bash` 设为 `"ask"` 而非 `"allow"`，防止未经审查的命令执行。
-
-Bot runtime can also apply a permission profile via `OPENCORVUS_BOT_PERMISSION_PROFILE`:
-
-- `restricted`: read-only style bot, denies `bash/edit/write/input/task/skill/external_directory`
-- `standard` (default): allows normal coding tools, but denies `external_directory`, `doom_loop`, `question`
-- `permissive`: legacy-compatible broad permissions
-- `passthrough`: do not inject bot-specific permission overrides
-- `OPENCORVUS_BOT_SESSION_QUEUE_LIMIT` (default `20`): max pending inbound messages per session before new messages are rejected
-- `OPENCORVUS_BOT_PERMISSION_ASK_REPLY` (default `reject`): auto-reply mode for `permission.asked` events (`once | always | reject`)
-
-#### 可选：语音识别（STT）
-
-| 变量 | 说明 |
-|------|------|
-| `STT_PROVIDERS` | 逗号分隔的 STT 提供商列表，默认 `groq,openai-whisper,deepgram,google-gemini,local-cli` |
-| `GROQ_API_KEY` | Groq STT（推荐，速度快且免费额度大） |
-| `OPENAI_API_KEY` | OpenAI Whisper |
-| `DEEPGRAM_API_KEY` | Deepgram |
-| `GOOGLE_API_KEY` | Google Gemini STT |
-| `STT_LOCAL_COMMAND` | 本地 CLI 命令（如 `whisper`） |
-| `STT_LANGUAGE` | 转录语言，如 `zh`、`en`（留空自动检测） |
-
-#### 可选：视觉分析（Vision）
-
-当 `DASHSCOPE_API_KEY` 存在时，Bot 会对每张截图自动运行视觉分析并发送到 Slack 线程：
-
-| 变量 | 说明 |
-|------|------|
-| `DASHSCOPE_API_KEY` | DashScope API Key（开启视觉分析） |
-| `OPENCORVUS_VISION_MODEL` | 视觉模型，默认 `qwen3.5-plus` |
-
-#### 其他配置
-
-| 变量 | 说明 |
-|------|------|
-| `TUI_PROJECT_DIR` | Bot 指挥 TUI 工作的默认项目目录，默认 `process.cwd()` |
-| `OPENCORVUS_BOT_SESSION_QUEUE_LIMIT` | 单会话排队上限，超过后拒绝新消息（默认 `20`） |
-| `OPENCORVUS_BOT_PERMISSION_ASK_REPLY` | 收到 `permission.asked` 时自动回复策略（默认 `reject`） |
-
-### 完整 `.env` 示例
-
-```bash
-# === LLM 模型（必填） ===
-OPENCORVUS_CONFIG_CONTENT={"model":"alibaba-cn/qwen3.5-plus","provider":{"alibaba-cn":{"options":{"baseURL":"https://coding.dashscope.aliyuncs.com/v1"}}},"permission":{"*":"deny","screen":"allow","input":"allow","bash":"allow","edit":"allow","write":"allow","read":"allow","glob":"allow","grep":"allow","websearch":"allow","webfetch":"allow","skill":"allow","external_directory":"allow"}}
-
-# === Slack（与 Telegram 二选一或同时配置）===
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_SIGNING_SECRET=...
-SLACK_APP_TOKEN=xapp-...
-
-# === Telegram（可选）===
-# TELEGRAM_BOT_TOKEN=...
-
-# === 语音识别（可选）===
-GROQ_API_KEY=gsk_...
-
-# === 视觉分析（可选）===
-DASHSCOPE_API_KEY=sk-...
-
-# === 项目目录（可选）===
-TUI_PROJECT_DIR=D:/my-project
-```
-
-### 启动方式对照
-
-| 命令 | 用途 |
-|------|------|
-| `bun dev` | **Start overlay console** (required local chat entry) |
-| `bun dev:bot` | Start optional remote chat channels configured from overlay |
-
----
-
-## Architecture
-
-```
-┌──────────────────────────────────┐
-│        OpenCorvus Server         │
-│  (packages/opencorvus)                │
-│  ┌──────────┐  ┌──────────────┐  │
-│  │ Sessions │  │ Tool System  │  │
-│  │ & Agents │  │ (code+desktop│  │
-│  └──────────┘  └──────────────┘  │
-│  ┌──────────┐  ┌──────────────┐  │
-│  │ Provider │  │   Skills &   │  │
-│  │ (AI SDK) │  │     MCP      │  │
-│  └──────────┘  └──────────────┘  │
-└────────┬──────────┬────────┬──┘
-         │          │        │
-    ┌────┴──┐  ┌────┴──┐ ┌───┴──┐
-    │  TUI  │  │  SDK  │ │ Bot  │
-    │       │  │  (JS) │ │Adapt.│
-    └───────┘  └───────┘ └──────┘
-```
-
-- **packages/opencorvus** — Core: agents, sessions, tools, providers, skills, LSP, TUI
-- **packages/sdk** — JavaScript SDK for programmatic access
-- **packages/bot** — Remote chat channels (Slack, Telegram)
-- **packages/plugin** — Plugin system (`@opencorvus-ai/plugin`)
-
-## Contributing
-
-If you're interested in contributing to OpenCorvus, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
-
-**Requirements:** Bun 1.3+
-
-```bash
+# at repo root
 bun install
 bun dev
 ```
 
+Notes:
+
+- `bun dev` starts the overlay console (local chat entry).
+- Install includes an automatic compatibility patch for desktop input.
+- If desktop input breaks after reinstall, run:
+
+```bash
+bun run patch:follow-redirects
+```
+
+## Optional: Remote Chat Channels (Slack / Telegram / More)
+
+If you want to drive OpenCorvus from chat tools, use bot runtime.
+
+### Fast Path (Recommended)
+
+1. Start overlay locally:
+
+```bash
+bun dev
+```
+
+2. In overlay, open:
+   `Bot Config` -> `Environment Variables`
+
+3. Fill channel credentials in `Channel Integrations` (or add custom envs).
+
+4. Click `Save Config`, then in `Runtime` click `Start`.
+
+### CLI Path
+
+```bash
+# 1) prepare bot env
+cp packages/bot/.env.example packages/bot/.env
+
+# 2) run bot runtime
+bun dev:bot
+```
+
+Minimal env keys to begin:
+
+- Slack: `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` (optional `SLACK_SIGNING_SECRET`)
+- Telegram: `TELEGRAM_BOT_TOKEN`
+- Feishu/Lark: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
+
+`bun dev:bot` only loads `packages/bot/.env` (plus system env), not root `.env`.
+
+## FAQ
+
+### Why do behaviors change between versions?
+
+Because the project is still evolving quickly in early stage.
+
+### Where are full configuration details?
+
+- Docs: https://opencorvus.ai/docs
+- Bot env reference: `packages/bot/.env.example`
+- Contribution guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+
 ## Acknowledgments
 
-OpenCorvus is built upon code originally from [OpenCode](https://github.com/nicepkg/opencode). We are grateful to the OpenCode contributors for their foundational work. The project has since diverged in positioning and functionality — OpenCorvus extends the original coding agent with desktop GUI automation, a skill system, and a headless server architecture.
+OpenCorvus is built upon code originally from [OpenCode](https://github.com/nicepkg/opencode). We are grateful to the OpenCode contributors for their foundational work.
 
 ## License
 
