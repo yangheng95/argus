@@ -4,14 +4,13 @@ import type { Agent } from "../agent/agent"
 import type { PermissionNext } from "../permission/next"
 import { Truncate } from "./truncation"
 
-/** Coerce string values that LLMs sometimes produce for non-string fields */
+/** Coerce string booleans that LLMs sometimes produce for boolean fields */
 function coerceArgs(args: unknown): unknown {
   if (args === null || args === undefined || typeof args !== "object" || Array.isArray(args)) return args
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(args as Record<string, unknown>)) {
     if (v === "true") out[k] = true
     else if (v === "false") out[k] = false
-    else if (typeof v === "string" && /^\d+$/.test(v)) out[k] = Number(v)
     else out[k] = v
   }
   return out
