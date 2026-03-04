@@ -200,7 +200,6 @@ export namespace Tui {
         // The TUI terminal rendering won't be visible but the HTTP server will be accessible.
         const pkgRoot = packageRoot()
         const entryScript = `${pkgRoot}/src/index.ts`.replace(/\\/g, "/")
-        console.log(`[TUI spawn] dev mode: pkgRoot=${pkgRoot} entry=${entryScript} port=${port}`)
         proc = nodeSpawn(
           "bun",
           ["--preload", "@opentui/solid/preload", "--conditions=browser", entryScript, ...args],
