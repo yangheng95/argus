@@ -86,7 +86,7 @@ TEST_PROMPT='你的测试指令' bun run src/main.ts 2>&1 | tee /tmp/bot.log
 
 # 3. 仅启动 OpenCorvus server（不含 bot）
 cd packages/opencorvus
-bun run --conditions=browser ./src/index.ts serve --hostname=127.0.0.1 --port=4096
+bun run --conditions=browser ./src/index.ts serve --hostname=127.0.0.1 --port=7878
 ```
 
 ### Auth 验证
@@ -104,32 +104,32 @@ echo '{"alibaba-cn":{"type":"api","key":"sk-sp-YOUR_KEY"}}' > ~/.local/share/ope
 
 ```bash
 # 测试 provider 加载
-curl -s http://127.0.0.1:4096/provider | jq '.[] | select(.id == "alibaba-cn") | {id, modelCount: (.models | length)}'
+curl -s http://127.0.0.1:7878/provider | jq '.[] | select(.id == "alibaba-cn") | {id, modelCount: (.models | length)}'
 
 # 创建 session
-curl -s -X POST http://127.0.0.1:4096/session -H 'Content-Type: application/json' \
+curl -s -X POST http://127.0.0.1:7878/session -H 'Content-Type: application/json' \
   -d '{"model":"alibaba-cn/qwen3.5-plus"}' | jq .id
 
 # 发送 prompt（同步）
-curl -s -X POST http://127.0.0.1:4096/session/SESSION_ID/message \
+curl -s -X POST http://127.0.0.1:7878/session/SESSION_ID/message \
   -H 'Content-Type: application/json' -d '{"content":"hello"}'
 
 # 发送 prompt（异步 - bot 模式）
-curl -s -X POST http://127.0.0.1:4096/session/SESSION_ID/prompt_async \
+curl -s -X POST http://127.0.0.1:7878/session/SESSION_ID/prompt_async \
   -H 'Content-Type: application/json' -d '{"content":"hello"}'
 
 # 查看 session 消息
-curl -s http://127.0.0.1:4096/session/SESSION_ID/message | jq '.[].role'
+curl -s http://127.0.0.1:7878/session/SESSION_ID/message | jq '.[].role'
 
 # 查看可用工具
-curl -s "http://127.0.0.1:4096/experimental/tool?provider=alibaba-cn&model=qwen3.5-plus" | jq '.[].id'
+curl -s "http://127.0.0.1:7878/experimental/tool?provider=alibaba-cn&model=qwen3.5-plus" | jq '.[].id'
 ```
 
 ### SSE 事件监控
 
 ```bash
 # 监听所有 SSE 事件
-curl -N -s http://127.0.0.1:4096/event
+curl -N -s http://127.0.0.1:7878/event
 ```
 
 ### Slack 调试
