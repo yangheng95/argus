@@ -39,13 +39,6 @@ bridge.listen(bridge.events.showConfirm, (payload) => {
   msgEl.textContent = data.message || "Continue?"
   okEl.textContent = data.confirm || "Confirm"
   cancelEl.textContent = data.cancel || "Cancel"
-
-  const px = Number(data.x)
-  const py = Number(data.y)
-  const x = Number.isFinite(px) ? Math.round(px - (window.innerWidth || 460) / 2) : -9999
-  const y = Number.isFinite(py) ? Math.round(py - (window.innerHeight || 220) / 2) : -9999
-
-  void bridge.invokeSafe("position_window", { window: "confirm", x, y })
   clearTimeoutTimer()
 
   const ms = Number(data.timeout_ms)

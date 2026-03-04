@@ -1,5 +1,7 @@
 ;(function () {
   const tauri = window.__TAURI__
+  const warns = new Map()
+  const WARN_THROTTLE_MS = 3_000
 
   const events = Object.freeze({
     showOverlay: "show-overlay",
@@ -16,10 +18,21 @@
     return tauri.core.invoke(cmd, payload)
   }
 
+  function warn(cmd, error) {
+    const key = String(cmd)
+    const now = Date.now()
+    const last = warns.get(key) ?? 0
+    if (now - last < WARN_THROTTLE_MS) return
+    warns.set(key, now)
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(`[overlay-bridge] invokeSafe failed: ${key}: ${message}`)
+  }
+
   async function invokeSafe(cmd, payload = {}) {
     try {
       return await invoke(cmd, payload)
-    } catch {
+    } catch (error) {
+      warn(cmd, error)
       return undefined
     }
   }

@@ -14,6 +14,12 @@ const FOCUS_Y_RATIO: f64 = 0.74;
 const CONFIRM_WIDTH: f64 = 460.0;
 const CONFIRM_HEIGHT: f64 = 220.0;
 
+fn log_result<T, E: std::fmt::Display>(context: &str, result: Result<T, E>) {
+    if let Err(error) = result {
+        eprintln!("[overlay] {context} failed: {error}");
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 struct ShowPayload {
     x: i32,
@@ -98,29 +104,32 @@ enum InboundEvent {
 }
 
 pub fn position_window(window: WebviewWindow, x: i32, y: i32) {
-    let _ = window.set_position(tauri::LogicalPosition::new(x as f64, y as f64));
-    let _ = window.show();
+    log_result(
+        "position_window.set_position",
+        window.set_position(tauri::LogicalPosition::new(x as f64, y as f64)),
+    );
+    log_result("position_window.show", window.show());
 }
 
 pub fn hide_window(window: WebviewWindow) {
-    let _ = window.hide();
+    log_result("hide_window.hide", window.hide());
 }
 
 pub fn confirm_reply(window: WebviewWindow, id: String, answer: String) {
-    let _ = window.hide();
+    log_result("confirm_reply.hide", window.hide());
     let payload = serde_json::json!({
         "type": "confirm-reply",
         "id": id,
         "answer": answer,
     });
     println!("{}", payload.to_string());
-    let _ = std::io::stdout().flush();
+    log_result("confirm_reply.flush", std::io::stdout().flush());
 }
 
 pub fn apply_overlay_window_style(app: &tauri::App) {
     for name in [events::WINDOW_OVERLAY, events::WINDOW_HIGHLIGHT] {
         if let Some(win) = app.get_webview_window(name) {
-            let _ = win.set_ignore_cursor_events(true);
+            log_result("apply_overlay_window_style.set_ignore_cursor_events", win.set_ignore_cursor_events(true));
         }
     }
 }
@@ -151,10 +160,15 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_OVERLAY) {
                                     let win_x = x as f64 - OVERLAY_WIDTH / 2.0;
                                     let win_y = y as f64 - OVERLAY_HEIGHT * FOCUS_Y_RATIO;
-                                    let _ = window.set_position(tauri::LogicalPosition::new(win_x, win_y));
-                                    let _ = window.show();
+                                    log_result(
+                                        "stdin_bridge.hint.set_position",
+                                        window.set_position(tauri::LogicalPosition::new(win_x, win_y)),
+                                    );
+                                    log_result("stdin_bridge.hint.show", window.show());
                                 }
-                                let _ = handle.emit(
+                                log_result(
+                                    "stdin_bridge.hint.emit",
+                                    handle.emit(
                                     events::EVT_SHOW_OVERLAY,
                                     ShowPayload {
                                         x,
@@ -163,6 +177,7 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                         label,
                                         status,
                                     },
+                                ),
                                 );
                             }
                             InboundEvent::Confirm {
@@ -176,14 +191,19 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 timeout_ms,
                             } => {
                                 if let Some(window) = handle.get_webview_window("confirm") {
-                                    let _ = window.set_position(tauri::LogicalPosition::new(
-                                        x as f64 - CONFIRM_WIDTH / 2.0,
-                                        y as f64 - CONFIRM_HEIGHT / 2.0,
-                                    ));
-                                    let _ = window.show();
-                                    let _ = window.set_focus();
+                                    log_result(
+                                        "stdin_bridge.confirm.set_position",
+                                        window.set_position(tauri::LogicalPosition::new(
+                                            x as f64 - CONFIRM_WIDTH / 2.0,
+                                            y as f64 - CONFIRM_HEIGHT / 2.0,
+                                        )),
+                                    );
+                                    log_result("stdin_bridge.confirm.show", window.show());
+                                    log_result("stdin_bridge.confirm.set_focus", window.set_focus());
                                 }
-                                let _ = handle.emit(
+                                log_result(
+                                    "stdin_bridge.confirm.emit",
+                                    handle.emit(
                                     events::EVT_SHOW_CONFIRM,
                                     ConfirmPayload {
                                         id,
@@ -195,6 +215,7 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                         cancel: cancel.unwrap_or("Cancel".into()),
                                         timeout_ms,
                                     },
+                                ),
                                 );
                             }
                             InboundEvent::WindowHighlight {
@@ -211,13 +232,19 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                     const HIGHLIGHT_MAX_SIZE: u32 = 10000;
                                     let w = (width.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
                                     let h = (height.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
-                                    let _ = window.set_size(tauri::LogicalSize::new(w, h));
-                                    let _ = window.set_position(tauri::LogicalPosition::new(x as f64, y as f64));
-                                    let _ = window.show();
-                                    let _ = handle.emit_to(
-                                        events::WINDOW_HIGHLIGHT,
-                                        events::EVT_SHOW_WINDOW_HIGHLIGHT,
-                                        WindowHighlightPayload { label, duration_ms },
+                                    log_result("stdin_bridge.window_highlight.set_size", window.set_size(tauri::LogicalSize::new(w, h)));
+                                    log_result(
+                                        "stdin_bridge.window_highlight.set_position",
+                                        window.set_position(tauri::LogicalPosition::new(x as f64, y as f64)),
+                                    );
+                                    log_result("stdin_bridge.window_highlight.show", window.show());
+                                    log_result(
+                                        "stdin_bridge.window_highlight.emit",
+                                        handle.emit_to(
+                                            events::WINDOW_HIGHLIGHT,
+                                            events::EVT_SHOW_WINDOW_HIGHLIGHT,
+                                            WindowHighlightPayload { label, duration_ms },
+                                        ),
                                     );
                                 }
                             }
@@ -245,10 +272,13 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                     circuit_open_until,
                                     detail,
                                 };
-                                let _ = handle.emit_to(
-                                    events::WINDOW_CONSOLE,
-                                    events::EVT_OVERLAY_DIAGNOSTIC,
-                                    payload.clone(),
+                                log_result(
+                                    "stdin_bridge.diagnostic.emit",
+                                    handle.emit_to(
+                                        events::WINDOW_CONSOLE,
+                                        events::EVT_OVERLAY_DIAGNOSTIC,
+                                        payload.clone(),
+                                    ),
                                 );
                                 let shared = handle.state::<manager::Shared>();
                                 let level = if payload.available.unwrap_or(false) {
