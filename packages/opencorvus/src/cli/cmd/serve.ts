@@ -71,7 +71,7 @@ async function killOldProcess(port: number) {
 }
 
 export const ServeCommand = cmd({
-  command: ["serve", "$0"],
+  command: "serve",
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "starts a headless opencorvus server",
   handler: async (args) => {
