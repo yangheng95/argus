@@ -28,7 +28,7 @@ export namespace Server {
   let _corsWhitelist: string[] = []
 
   export function url(): URL {
-    return _url ?? new URL("http://localhost:4096")
+    return _url ?? new URL("http://localhost:7878")
   }
 
   function decodeDirectory(raw: string) {
