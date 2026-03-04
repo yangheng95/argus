@@ -155,7 +155,7 @@ export namespace Server {
         return undefined
       }
     }
-    const server = opts.port === 0 ? (tryServe(4096) ?? tryServe(0)) : tryServe(opts.port)
+    const server = opts.port === 0 ? (tryServe(7878) ?? tryServe(0)) : tryServe(opts.port)
     if (!server) {
       const detail = failure instanceof Error ? failure.message : failure ? String(failure) : "unknown"
       throw new Error(`Failed to start server on port ${opts.port}: ${detail}`)
