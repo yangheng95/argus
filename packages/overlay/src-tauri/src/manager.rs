@@ -1181,6 +1181,14 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
         "OPENCORVUS_SHARED_SESSION_FILE",
         shared_session_path(shared).to_string_lossy().to_string(),
     );
+    if !config.command.trim().is_empty()
+        && !config
+            .env
+            .iter()
+            .any(|item| item.key.trim() == "OPENCORVUS_BIN_PATH")
+    {
+        cmd.env("OPENCORVUS_BIN_PATH", config.command.clone());
+    }
     if !config.cwd.trim().is_empty()
         && !config
             .env

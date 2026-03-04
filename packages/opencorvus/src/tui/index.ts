@@ -180,10 +180,16 @@ export namespace Tui {
     return import.meta.dir.replace(/[/\\]src[/\\]tui$/, "")
   }
 
+  function selfBin(): string | undefined {
+    const name = path.basename(process.execPath).toLowerCase()
+    if (name === "opencorvus" || name === "opencorvus.exe") return process.execPath
+    return undefined
+  }
+
   export async function spawn(opts: SpawnOptions = {}): Promise<Handle> {
     const port = opts.port ?? (await allocatePort())
     const hostname = opts.hostname ?? "127.0.0.1"
-    const bin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH ?? "opencorvus"
+    const bin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH ?? selfBin() ?? "opencorvus"
     const cwd = opts.directory ?? process.cwd()
     const devMode = isDevMode() && !opts.bin && !process.env.OPENCORVUS_BIN_PATH
 

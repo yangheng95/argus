@@ -266,17 +266,9 @@ export class BotCore {
     // Mark session as processing before sending prompt
     this.session.start(session.sessionId)
 
-    // promptAsync enqueues work and returns immediately.
-    // System prompt is injected via the `system` field (appended to LLM system prompt in llm.ts:76).
-    const result = await this.client.session.promptAsync({
-      sessionID: session.sessionId,
-      parts: [{ type: "text", text }],
-      system: this.buildSystemPrompt(msg.platform),
-    })
-
-    if (result.error) {
+    const result = await this.submitTask(session.sessionId, text, msg.platform)
+    if (!result) {
       this.session.stop(session.sessionId)
-      console.error("[BotCore] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
       const notice = "Failed to send prompt."
       this.mirror("system", notice, {
         platform: msg.platform,
@@ -287,8 +279,41 @@ export class BotCore {
       await adapter.sendMessage(msg.channel, msg.thread, notice)
       return
     }
+  }
 
-    console.log(`[BotCore] Prompt sent for session ${session.sessionId}`)
+  private async submitTask(sessionID: string, text: string, platform: string) {
+    const fastMode = this.taskMode() === "tui-runtime"
+    if (fastMode) {
+      const result = await this.client.tui.runtime.submitTask({
+        sessionID,
+        text,
+        wait: true,
+      })
+      if (!result.error) {
+        console.log(`[BotCore] Task completed via tui.runtime.submitTask for session ${sessionID}`)
+        return true
+      }
+      console.error("[BotCore] tui.runtime.submitTask error:", JSON.stringify(result.error).slice(0, 500))
+    }
+
+    // Fallback for compatibility or when tui runtime submission fails.
+    const result = await this.client.session.promptAsync({
+      sessionID,
+      parts: [{ type: "text", text }],
+      system: this.buildSystemPrompt(platform),
+    })
+    if (result.error) {
+      console.error("[BotCore] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
+      return false
+    }
+    console.log(`[BotCore] Prompt sent via session.promptAsync for session ${sessionID}`)
+    return true
+  }
+
+  private taskMode() {
+    const raw = process.env.OPENCORVUS_BOT_TASK_MODE?.trim().toLowerCase()
+    if (raw === "session-async") return "session-async"
+    return "tui-runtime"
   }
 
   /**
@@ -298,8 +323,6 @@ export class BotCore {
    */
   private buildSystemPrompt(platform: string): string {
     const channel = platform === "slack" ? "Slack" : platform === "discord" ? "Discord" : platform
-    const projectRoot = path.resolve(import.meta.dirname, "../../..")
-    const opencorvusSrc = path.join(projectRoot, "packages", "opencorvus", "src", "index.ts")
     return [
       `You are OpenCorvus - a coding and desktop automation assistant. The user talks to you via ${channel}, and they also watch your screen. They need to SEE what you are doing.`,
       "",
@@ -307,7 +330,9 @@ export class BotCore {
       "Everything you do must be visible to the user. Using background tools (write, bash) to produce code silently is unacceptable - the user has no idea what you changed or whether it is correct.",
       "For coding tasks, open a visible coding tool first:",
       "- **Claude Code**: `bash('start \"Claude Code\" cmd /k \"set CLAUDECODE= && set CLAUDE_CODE_SSE_PORT= && claude\"')` — opens in a new terminal",
-      `- **OpenCorvus TUI**: \`bash('start "OpenCorvus" cmd /k "bun --preload @opentui/solid/preload --conditions=browser ${opencorvusSrc} <project_dir>"')\``,
+      "- **OpenCorvus TUI (preferred)**: use the `tui` tool, e.g. `tui({ action: \"start\", mode: \"spawn\", directory: \"<project_dir>\" })`",
+      "- Then submit coding work with `tui({ action: \"submit_task\", text: \"<task>\", wait: true })`",
+      "- Do NOT use `bun --preload ... src/index.ts` style launch commands in packaged/runtime environments.",
       "Exception: if the user explicitly asks for a specific tool ('use codex', 'use VS Code', 'run bash'), follow that instruction.",
       "",
       "## Window discovery and binding (CRITICAL)",

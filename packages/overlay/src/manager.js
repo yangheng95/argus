@@ -79,6 +79,10 @@ const envGroups = [
         key: "OPENCORVUS_BOT_PERMISSION_ASK_REPLY",
         use: "Set bot permission auto-reply: once/always/reject (default always).",
       },
+      {
+        key: "OPENCORVUS_BOT_TASK_MODE",
+        use: "Bot task submit path: tui-runtime (default, faster) or session-async (legacy).",
+      },
       { key: "OPENCORVUS_BOT_SESSION_QUEUE_LIMIT", use: "Limit queued requests per channel session." },
       { key: "OPENCORVUS_BOT_DEBUG_TOOL_INPUT", use: "Show tool input details in status logs when set to 1." },
       { key: "OPENCORVUS_VISION_MODEL", use: "Default vision model for screenshot analysis." },
