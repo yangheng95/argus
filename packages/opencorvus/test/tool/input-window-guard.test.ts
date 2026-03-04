@@ -5,6 +5,8 @@ import { tmpdir } from "../fixture/fixture"
 let binding: any = null
 const bindings: any[] = []
 let foreground: boolean | ((binding: any) => boolean) = true
+let foregroundCalls = 0
+let clickFailures = 0
 const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
 const hotkeys: string[][] = []
@@ -13,7 +15,10 @@ const keys: string[] = []
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
     getBinding: async () => bindings.shift() ?? binding,
-    ensureBoundForeground: async (current?: any) => typeof foreground === "function" ? foreground(current) : foreground,
+    ensureBoundForeground: async (current?: any) => {
+      foregroundCalls++
+      return typeof foreground === "function" ? foreground(current) : foreground
+    },
     rebindForTask: async (_taskEpoch: number) => null,
   },
 }))
@@ -21,6 +26,10 @@ mock.module("../../src/opencorvus/perception/window", () => ({
 mock.module("../../src/opencorvus/gui/index", () => ({
   GUI: {
     click: async (x: number, y: number) => {
+      if (clickFailures > 0) {
+        clickFailures--
+        throw new Error("transient click failure")
+      }
       clicks.push({ x, y })
     },
     doubleClick: async (_x: number, _y: number) => {},
@@ -128,6 +137,8 @@ beforeEach(() => {
   binding = null
   bindings.length = 0
   foreground = true
+  foregroundCalls = 0
+  clickFailures = 0
   clicks.length = 0
   middleClicks.length = 0
   hotkeys.length = 0
@@ -270,6 +281,28 @@ describe("tool.input bound window guard", () => {
         const result = await tool.execute({ action: "click", x: 200, y: 240, button: "left" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(clicks).toEqual([{ x: 200, y: 240 }])
+      },
+    })
+  })
+
+  test("retries pointer action once after transient click failure", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code", x: 0, y: 0, width: 1000, height: 700 },
+    }
+    clickFailures = 1
+    foreground = true
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 260, y: 280, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(clicks).toEqual([{ x: 260, y: 280 }])
+        expect(foregroundCalls).toBe(2)
       },
     })
   })

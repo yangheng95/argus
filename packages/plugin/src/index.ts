@@ -10,7 +10,7 @@ import type {
   Part,
   Auth,
   Config,
-} from "@opencorvus-ai/sdk"
+} from "@opencorvus-ai/sdk/v2"
 
 import type { BunShell } from "./shell"
 import { type ToolDefinition } from "./tool"

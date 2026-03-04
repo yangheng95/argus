@@ -1,5 +1,5 @@
 import path from "node:path"
-import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk"
+import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk/v2"
 import { mkdir } from "node:fs/promises"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
@@ -57,6 +57,8 @@ export class BotCore {
   /** Base URL of the OpenCorvus server */
   private serverUrl!: string
   private sharedSessionId?: string
+  /** Prevent creating duplicate overlay mirror threads */
+  private overlayMirrorBound = false
 
   constructor(private options?: BotCoreOptions) {}
 

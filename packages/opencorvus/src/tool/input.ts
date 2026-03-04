@@ -8,6 +8,7 @@ import { WindowManager } from "../opencorvus/perception/window"
 import { Log } from "../util/log"
 import { overlayDiagnostic, requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
 import { Capability } from "../platform/capability"
+import { runInputAction } from "./input-action-engine"
 
 const log = Log.create({ service: "input" })
 
@@ -330,14 +331,23 @@ export const InputTool = Tool.define("input", {
             bounds: `${anchored.width}x${anchored.height}`,
           })
         }
-        if (params.button === "double") {
-          await GUI.doubleClick(screen.x, screen.y)
-        } else if (params.button === "right") {
-          await GUI.rightClick(screen.x, screen.y)
-        } else if (params.button === "middle") {
-          await GUI.middleClick(screen.x, screen.y)
-        } else {
-          await GUI.click(screen.x, screen.y)
+        const clickResult = await runInputAction({
+          id: `input.click.${params.button ?? "left"}`,
+          abort: ctx.abort,
+          action: async () => {
+            if (params.button === "double") return GUI.doubleClick(screen.x, screen.y)
+            if (params.button === "right") return GUI.rightClick(screen.x, screen.y)
+            if (params.button === "middle") return GUI.middleClick(screen.x, screen.y)
+            return GUI.click(screen.x, screen.y)
+          },
+        })
+        if (clickResult.tries > 1) {
+          log.warn("input-action-retried", {
+            action: `click.${params.button ?? "left"}`,
+            tries: clickResult.tries,
+            x: screen.x,
+            y: screen.y,
+          })
         }
         showOverlay(screen.x, screen.y, action, "done", "done")
         const coordDetail = anchored
@@ -364,7 +374,18 @@ export const InputTool = Tool.define("input", {
         const windowBlocked = await ensureBoundWindowForeground("type")
         if (windowBlocked) return windowBlocked
         showOverlay(undefined, undefined, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
-        await GUI.paste(params.text)
+        const typeResult = await runInputAction({
+          id: "input.type",
+          abort: ctx.abort,
+          action: () => GUI.paste(params.text),
+        })
+        if (typeResult.tries > 1) {
+          log.warn("input-action-retried", {
+            action: "type",
+            tries: typeResult.tries,
+            length: params.text.length,
+          })
+        }
         showOverlay(undefined, undefined, "type", `done ${params.text.length} chars`, "done")
         GuiState.recordAction({
           time: Date.now(),
@@ -386,10 +407,20 @@ export const InputTool = Tool.define("input", {
         if (windowBlocked) return windowBlocked
         showOverlay(undefined, undefined, "key", params.key)
         const parts = params.key.split("+").map((k) => k.trim())
-        if (parts.length > 1) {
-          await GUI.hotkey(...parts)
-        } else {
-          await GUI.pressKey(parts[0])
+        const keyResult = await runInputAction({
+          id: parts.length > 1 ? "input.key.hotkey" : "input.key.single",
+          abort: ctx.abort,
+          action: () => {
+            if (parts.length > 1) return GUI.hotkey(...parts)
+            return GUI.pressKey(parts[0])
+          },
+        })
+        if (keyResult.tries > 1) {
+          log.warn("input-action-retried", {
+            action: parts.length > 1 ? "key.hotkey" : "key.single",
+            tries: keyResult.tries,
+            key: params.key,
+          })
         }
         showOverlay(undefined, undefined, "key", `done ${params.key}`, "done")
         GuiState.recordAction({
@@ -411,7 +442,19 @@ export const InputTool = Tool.define("input", {
         const windowBlocked = await ensureBoundWindowForeground("scroll")
         if (windowBlocked) return windowBlocked
         showOverlay(undefined, undefined, "scroll", `${params.direction} ${params.amount}`)
-        await GUI.scroll(params.direction, params.amount)
+        const scrollResult = await runInputAction({
+          id: "input.scroll",
+          abort: ctx.abort,
+          action: () => GUI.scroll(params.direction, params.amount),
+        })
+        if (scrollResult.tries > 1) {
+          log.warn("input-action-retried", {
+            action: "scroll",
+            tries: scrollResult.tries,
+            direction: params.direction,
+            amount: params.amount,
+          })
+        }
         showOverlay(undefined, undefined, "scroll", `done ${params.direction}`, "done")
         GuiState.recordAction({
           time: Date.now(),
@@ -440,7 +483,21 @@ export const InputTool = Tool.define("input", {
         const start = Coordinates.resolveDetailed(params.startX, params.startY, anchored, space)
         const end = Coordinates.resolveDetailed(params.endX, params.endY, anchored, space)
         showOverlay(start.x, start.y, "drag", `→(${params.endX},${params.endY})`)
-        await GUI.drag(start.x, start.y, end.x, end.y)
+        const dragResult = await runInputAction({
+          id: "input.drag",
+          abort: ctx.abort,
+          action: () => GUI.drag(start.x, start.y, end.x, end.y),
+        })
+        if (dragResult.tries > 1) {
+          log.warn("input-action-retried", {
+            action: "drag",
+            tries: dragResult.tries,
+            startX: start.x,
+            startY: start.y,
+            endX: end.x,
+            endY: end.y,
+          })
+        }
         showOverlay(end.x, end.y, "drag", "done", "done")
         const coordDetail = anchored
           ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y}${start.clamped || end.clamped ? " [CLAMPED]" : ""})`
@@ -485,7 +542,19 @@ export const InputTool = Tool.define("input", {
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
         showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)
-        await GUI.moveTo(screen.x, screen.y)
+        const moveResult = await runInputAction({
+          id: "input.move",
+          abort: ctx.abort,
+          action: () => GUI.moveTo(screen.x, screen.y),
+        })
+        if (moveResult.tries > 1) {
+          log.warn("input-action-retried", {
+            action: "move",
+            tries: moveResult.tries,
+            x: screen.x,
+            y: screen.y,
+          })
+        }
         showOverlay(screen.x, screen.y, "move", "done", "done")
         GuiState.recordAction({
           time: Date.now(),

@@ -5,7 +5,7 @@ function ok<T>(data?: T): Automation.Probe<T> {
   return { ok: true, data }
 }
 
-function bad(kind: Automation.ErrorKind, detail: string): Automation.Probe {
+function bad<T = undefined>(kind: Automation.ErrorKind, detail: string): Automation.Probe<T> {
   return { ok: false, kind, detail }
 }
 
@@ -141,4 +141,3 @@ describe("automation engine", () => {
     expect(calls).toEqual(["a", "b"])
   })
 })
-
