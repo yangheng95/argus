@@ -199,7 +199,7 @@ export namespace Tui {
     let proc: ChildProcess
     if (process.platform === "win32") {
       if (devMode) {
-        // Dev mode on Windows: write a temp .bat script and launch it in a new console via `start`.
+        // Dev mode on Windows: write a temp .bat script and execute it via `start` to get a visible console.
         // Direct cmd.exe argument passing mangles quotes/backslashes; a .bat file avoids this.
         const pkgRoot = packageRoot()
         const entryScript = path.join(pkgRoot, "src", "index.ts")
@@ -210,10 +210,14 @@ export namespace Tui {
         ].join("\r\n")
         const batPath = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
         fs.writeFileSync(batPath, batContent)
-        proc = nodeSpawn("cmd.exe", ["/c", "start", "OpenCorvus TUI", "cmd", "/k", batPath], {
-          stdio: "ignore",
-          detached: true,
-        })
+        // Use execSync to fire-and-forget: `start` returns immediately, opening a new console window.
+        try {
+          execSync(`start "OpenCorvus TUI" cmd /k "${batPath}"`, { stdio: "ignore", windowsHide: true })
+        } catch {
+          // start command may exit with non-zero but still launch the window
+        }
+        // Create a dummy proc for the Handle (we don't own the detached process)
+        proc = nodeSpawn("cmd.exe", ["/c", "echo"], { stdio: "ignore" })
         proc.unref()
       } else {
         // Production: use PowerShell Start-Process to open TUI in a new visible console window.
