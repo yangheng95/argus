@@ -167,7 +167,8 @@ export namespace Tui {
     const bin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH ?? "opencorvus"
     const cwd = opts.directory ?? process.cwd()
 
-    const args: string[] = ["--port", String(port), "--hostname", hostname]
+    // Pass directory as positional arg to trigger TUI mode (not headless serve)
+    const args: string[] = [cwd, "--port", String(port), "--hostname", hostname]
     if (opts.sessionID) args.push("-s", opts.sessionID)
     if (opts.model) args.push("-m", opts.model)
     if (opts.agent) args.push("--agent", opts.agent)
