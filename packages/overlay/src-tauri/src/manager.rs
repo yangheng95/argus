@@ -1128,6 +1128,15 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
 }
 
 pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
+    // DEBUG: write directly to file to verify start_bot is being called
+    if let Ok(path) = log_path(app) {
+        let _ = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut f| writeln!(f, "{{\"DEBUG\":\"start_bot entered\"}}"));
+    }
+
     probe(shared, app);
 
     let config = {
@@ -1138,6 +1147,16 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         }
         state.config.clone()
     };
+
+    // DEBUG: log the command that will be used
+    if let Ok(path) = log_path(app) {
+        let _ = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut f| writeln!(f, "{{\"DEBUG\":\"command={:?} cwd={:?}\"}}", config.command, config.cwd));
+    }
+
     clear_stale_pid(shared, app, CHANNEL_PID_FILE, "channel bot");
     clear_stale_pid(shared, app, CORE_PID_FILE, "OpenCorvus");
 
