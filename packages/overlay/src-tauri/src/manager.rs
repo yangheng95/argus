@@ -158,38 +158,38 @@ fn stamp() -> u64 {
         .unwrap_or(0)
 }
 
-fn norm_config(config: ManagerConfig) -> ManagerConfig {
-<<<<<<< HEAD
-    let serve_args: Vec<String> = config
-        .serve_args
+fn norm_list(items: Vec<String>) -> Vec<String> {
+    items
         .into_iter()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .collect();
-    let run_args: Vec<String> = config
-        .run_args
-        .into_iter()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect();
+        .collect()
+}
 
-=======
+fn norm_config(config: ManagerConfig) -> ManagerConfig {
     let defaults = ManagerConfig::default();
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
+    let serve_args = norm_list(config.serve_args);
+    let run_args = norm_list(config.run_args);
+
     ManagerConfig {
         command: {
             let item = config.command.trim();
             if item.is_empty() {
-                // Empty command in config: use sibling binary detection same as Default.
                 defaults.command
             } else {
                 item.into()
             }
         },
-<<<<<<< HEAD
-=======
-        serve_args: norm_list(config.serve_args),
-        run_args: norm_list(config.run_args),
+        serve_args: if serve_args.is_empty() {
+            defaults.serve_args
+        } else {
+            serve_args
+        },
+        run_args: if run_args.is_empty() {
+            defaults.run_args
+        } else {
+            run_args
+        },
         bot_command: config.bot_command.trim().into(),
         bot_args: norm_list(config.bot_args),
         server_url: {
@@ -200,7 +200,6 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
                 item.into()
             }
         },
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
         cwd: config.cwd.trim().into(),
         env: config
             .env
@@ -211,16 +210,6 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
             })
             .filter(|item| !item.key.is_empty())
             .collect(),
-        serve_args: if serve_args.is_empty() {
-            vec!["serve".into()]
-        } else {
-            serve_args
-        },
-        run_args: if run_args.is_empty() {
-            vec!["run".into(), "--continue".into()]
-        } else {
-            run_args
-        },
     }
 }
 
