@@ -43,18 +43,13 @@ pub enum McpQuickConfig {
 #[serde(default)]
 pub struct ManagerConfig {
     pub command: String,
-<<<<<<< HEAD
-=======
     pub serve_args: Vec<String>,
     pub run_args: Vec<String>,
     pub bot_command: String,
     pub bot_args: Vec<String>,
     pub server_url: String,
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     pub cwd: String,
     pub env: Vec<EnvItem>,
-    pub serve_args: Vec<String>,
-    pub run_args: Vec<String>,
 }
 
 #[derive(Serialize, Clone)]
