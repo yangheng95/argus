@@ -180,6 +180,54 @@ export namespace Tui {
     return import.meta.dir.replace(/[/\\]src[/\\]tui$/, "")
   }
 
+  /** Find an available terminal emulator on Linux. */
+  function findLinuxTerminal(): string | undefined {
+    const terminals = [
+      "gnome-terminal", "konsole", "xfce4-terminal", "mate-terminal",
+      "tilix", "alacritty", "kitty", "wezterm", "foot",
+      "xterm", "lxterminal", "sakura", "terminator",
+    ]
+    for (const t of terminals) {
+      try {
+        execSync(`which ${t}`, { stdio: "ignore" })
+        return t
+      } catch {
+        // not found
+      }
+    }
+    return undefined
+  }
+
+  /** Build terminal-specific args to run a script in a new window. */
+  function linuxTerminalArgs(terminal: string, title: string, script: string): string[] {
+    switch (terminal) {
+      case "gnome-terminal":
+        return ["--title", title, "--", script]
+      case "konsole":
+        return ["--new-tab", "-p", `tabtitle=${title}`, "-e", script]
+      case "xfce4-terminal":
+      case "mate-terminal":
+      case "tilix":
+      case "terminator":
+        return ["--title", title, "-e", script]
+      case "alacritty":
+        return ["--title", title, "-e", script]
+      case "kitty":
+        return ["--title", title, script]
+      case "wezterm":
+        return ["start", "--", script]
+      case "foot":
+        return ["--title", title, script]
+      case "xterm":
+        return ["-title", title, "-e", script]
+      case "lxterminal":
+      case "sakura":
+        return ["--title", title, "-e", script]
+      default:
+        return ["-e", script]
+    }
+  }
+
   function selfBin(): string | undefined {
     const name = path.basename(process.execPath).toLowerCase()
     if (name === "opencorvus" || name === "opencorvus.exe") return process.execPath
