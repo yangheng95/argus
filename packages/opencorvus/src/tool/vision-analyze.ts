@@ -115,11 +115,11 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
       const overlaid = await Overlay.add(capture.buffer)
       const base64 = overlaid.toString("base64")
       const hash = createHash("md5").update(capture.buffer).digest("hex")
-      const capturedBinding = capture.scope === "window" ? await WindowManager.getBinding() : null
+      const capturedWindow = capture.scope === "window" ? capture.window : null
       DesktopState.recordCapture({
         scope: capture.scope,
         bounds: capture.windowBounds,
-        window: capturedBinding ? { windowId: capturedBinding.windowId, title: capturedBinding.info.title } : null,
+        window: capturedWindow ? { windowId: capturedWindow.id, title: capturedWindow.title } : null,
         monitor: capture.monitor ? { id: capture.monitor.id, name: capture.monitor.name } : null,
         screenshotHash: hash,
       })

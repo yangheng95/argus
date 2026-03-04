@@ -428,6 +428,8 @@ export const RunCommand = cmd({
 
       async function loop() {
         const toggles = new Map<string, boolean>()
+        // Track reasoning part IDs so their deltas are not emitted as text_delta.
+        const reasoningPartIDs = new Set<string>()
 
         for await (const event of events.stream) {
           if (
@@ -495,24 +497,30 @@ export const RunCommand = cmd({
               UI.empty()
             }
 
-            if (part.type === "reasoning" && part.time?.end && args.thinking) {
-              if (emit("reasoning", { part })) continue
-              const text = part.text.trim()
-              if (!text) continue
-              const line = `Thinking: ${text}`
-              if (process.stdout.isTTY) {
-                UI.empty()
-                UI.println(`${UI.Style.TEXT_DIM}\u001b[3m${line}\u001b[0m${UI.Style.TEXT_NORMAL}`)
-                UI.empty()
-                continue
+            if (part.type === "reasoning") {
+              // Track this part ID so its deltas are skipped in the text_delta handler.
+              reasoningPartIDs.add(part.id)
+              if (part.time?.end && args.thinking) {
+                if (emit("reasoning", { part })) continue
+                const text = part.text.trim()
+                if (!text) continue
+                const line = `Thinking: ${text}`
+                if (process.stdout.isTTY) {
+                  UI.empty()
+                  UI.println(`${UI.Style.TEXT_DIM}\u001b[3m${line}\u001b[0m${UI.Style.TEXT_NORMAL}`)
+                  UI.empty()
+                  continue
+                }
+                process.stdout.write(line + EOL)
               }
-              process.stdout.write(line + EOL)
             }
           }
 
           if (event.type === "message.part.delta") {
             const delta = event.properties
             if (delta.sessionID !== sessionID) continue
+            // Skip reasoning deltas — they should not appear as chat text output.
+            if (reasoningPartIDs.has(delta.partID)) continue
             if (emit("text_delta", delta)) continue
           }
 
