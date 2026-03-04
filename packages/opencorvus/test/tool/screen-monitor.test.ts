@@ -179,12 +179,9 @@ const ctx = {
 beforeEach(() => {
   unbound = 0
   overlayCalls = 0
-<<<<<<< HEAD
   clickMarkerCalls = 0
   bindByIdCalls.length = 0
-=======
   bindCalls = 0
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   monitorBinding = {
     monitorId: 2,
     match: "2",
