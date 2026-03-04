@@ -491,6 +491,13 @@ fn build_process(command: &str, args: &[String], cwd: &str, env: &[EnvItem]) -> 
     for item in env {
         cmd.env(&item.key, &item.value);
     }
+    // Hide console windows for background processes on Windows.
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd
 }
 
