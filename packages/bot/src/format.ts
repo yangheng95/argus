@@ -68,6 +68,22 @@ export function formatToolUpdate(part: ToolPart): { text?: string; images: Image
 }
 
 function dataUrlToBuffer(url: string): Buffer | null {
+  // Handle opencorvus:// file-backed screenshots
+  if (url.startsWith("opencorvus://screenshot/")) {
+    try {
+      const fs = require("fs")
+      const path = require("path")
+      const dataDir = process.env.XDG_DATA_HOME
+        || (process.platform === "win32"
+          ? (process.env.LOCALAPPDATA || path.join(require("os").homedir(), "AppData", "Local"))
+          : path.join(require("os").homedir(), ".local", "share"))
+      const rel = url.slice("opencorvus://screenshot/".length)
+      const filepath = path.join(dataDir, "opencorvus", "screenshots", rel)
+      return fs.readFileSync(filepath)
+    } catch {
+      return null
+    }
+  }
   const match = url.match(/^data:[^;]+;base64,(.+)$/)
   if (!match) return null
   return Buffer.from(match[1], "base64")
