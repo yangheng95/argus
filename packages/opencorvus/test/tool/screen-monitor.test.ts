@@ -31,34 +31,11 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         isFocused: true,
       },
     ],
-<<<<<<< HEAD
-    bind: async (_title: string) => ({
-      windowId: 7,
-      matchTitle: "editor",
-      info: {
-        id: 7,
-        title: "Editor",
-        appName: "Code",
-        x: 2100,
-        y: 120,
-        width: 1200,
-        height: 800,
-        isMinimized: false,
-        isFocused: true,
-      },
-    }),
-    bindById: async (windowId: number, matchTitle?: string) => {
-      bindByIdCalls.push(windowId)
-      return {
-        windowId: 7,
-        matchTitle: matchTitle ?? "editor",
-=======
     bind: async (_title: string) => {
       bindCalls += 1
       return {
         windowId: 7,
         matchTitle: "editor",
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
         info: {
           id: 7,
           title: "Editor",
@@ -72,7 +49,24 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         },
       }
     },
-<<<<<<< HEAD
+    bindById: async (windowId: number, matchTitle?: string) => {
+      bindByIdCalls.push(windowId)
+      return {
+        windowId: 7,
+        matchTitle: matchTitle ?? "editor",
+        info: {
+          id: 7,
+          title: "Editor",
+          appName: "Code",
+          x: 2100,
+          y: 120,
+          width: 1200,
+          height: 800,
+          isMinimized: false,
+          isFocused: true,
+        },
+      }
+    },
     bindByIdQuiet: async (windowId: number, matchTitle?: string) => {
       bindByIdCalls.push(windowId)
       return {
@@ -92,8 +86,6 @@ mock.module("../../src/opencorvus/perception/window", () => ({
       }
     },
     consumeFocusChange: () => false,
-=======
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     unbind: () => {
       unbound += 1
     },
