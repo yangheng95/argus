@@ -1,11 +1,8 @@
 const bridge = window.opencorvusBridge
 const invoke = bridge.invoke
-<<<<<<< HEAD
+const cmd = bridge.commands
 const FIXED_SERVE_ARGS = ["serve"]
 const FIXED_RUN_ARGS = ["run", "--continue"]
-=======
-const cmd = bridge.commands
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
 
 const els = {
   statusBadge: document.getElementById("statusBadge"),
