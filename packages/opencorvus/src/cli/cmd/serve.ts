@@ -65,7 +65,7 @@ async function killOldProcess(port: number) {
     }
     for (const pid of pids) {
       if (pid === process.pid || pid <= 0) continue
-      Bun.spawnSync(["taskkill", "/F", "/PID", String(pid)], { stdio: "ignore" })
+      Bun.spawnSync(["taskkill", "/F", "/PID", String(pid)], { stdio: ["ignore", "ignore", "ignore"] })
     }
   } catch {}
 }
