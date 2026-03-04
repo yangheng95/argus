@@ -7,6 +7,8 @@ import { Log } from "../util/log"
 const SCREENSHOT_DIR = path.join(Global.Path.data, "screenshots")
 const SCHEME = "opencorvus://screenshot/"
 
+const log = Log.create({ service: "screenshot-store" })
+
 export namespace ScreenshotStore {
   export function isFileUrl(url: string): boolean {
     return url.startsWith(SCHEME)
