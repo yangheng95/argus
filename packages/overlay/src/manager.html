@@ -20,19 +20,20 @@
 
     .shell {
       height: 100%;
-      padding: 16px;
+      padding: 14px;
       display: grid;
       grid-template-rows: auto 1fr;
-      gap: 12px;
+      gap: 10px;
     }
 
     /* ── Header ── */
     .top {
+      position: relative;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 14px 18px;
+      padding: 12px 18px;
       border-radius: var(--radius-lg);
       border: 1px solid var(--glass-border);
       background: var(--glass);
@@ -40,30 +41,25 @@
       -webkit-backdrop-filter: var(--blur);
     }
 
-    /* Top gradient accent line */
     .top::before {
       content: "";
       position: absolute;
-      top: 0;
-      left: 18px;
-      right: 18px;
+      top: 0; left: 18px; right: 18px;
       height: 1px;
       background: var(--brand-gradient);
       opacity: 0.5;
       border-radius: 1px;
     }
 
-    .top { position: relative; }
-
     .title {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 2px;
     }
 
     .title strong {
-      font-size: 16px;
-      font-weight: 600;
+      font-size: 15px;
+      font-weight: 700;
       letter-spacing: -0.01em;
       background: var(--brand-gradient);
       -webkit-background-clip: text;
@@ -72,15 +68,21 @@
     }
 
     .title span {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--text-muted);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .status {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 7px 14px;
+      padding: 6px 14px;
       border-radius: var(--radius-pill);
       font-size: 12px;
       font-weight: 500;
@@ -91,23 +93,28 @@
     .status-dot {
       width: 8px;
       height: 8px;
-      border-radius: var(--radius-pill);
-      background: var(--text-muted);
-      box-shadow: 0 0 0 4px rgba(var(--text-muted-rgb), 0.12);
-      transition: background 200ms var(--ease), box-shadow 200ms var(--ease);
+      border-radius: 50%;
+      background: rgba(var(--text-muted-rgb), 0.6);
+      transition: background 300ms var(--ease), box-shadow 300ms var(--ease);
+    }
+
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 0 0 0 rgba(var(--color-done-rgb), 0.5); }
+      70%  { box-shadow: 0 0 0 6px rgba(var(--color-done-rgb), 0); }
+      100% { box-shadow: 0 0 0 0 rgba(var(--color-done-rgb), 0); }
     }
 
     .status.running .status-dot {
       background: var(--color-done);
-      box-shadow: 0 0 0 4px rgba(var(--color-done-tint-rgb), 0.15);
+      animation: pulse-ring 1.8s ease-out infinite;
     }
 
     /* ── Main layout ── */
     .main {
       min-height: 0;
       display: grid;
-      grid-template-columns: 1.45fr 1fr;
-      gap: 12px;
+      grid-template-columns: 1.5fr 1fr;
+      gap: 10px;
     }
 
     /* ── Cards ── */
@@ -124,33 +131,81 @@
     }
 
     .card-head {
-      padding: 10px 16px;
-      border-bottom: 1px solid rgba(20, 50, 94, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(20, 50, 94, 0.08);
       font-size: 11px;
       font-weight: 600;
       color: var(--text-muted);
-      letter-spacing: 0.08em;
+      letter-spacing: 0.07em;
       text-transform: uppercase;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 0;
+      transition: background 120ms, color 120ms;
+    }
+
+    .icon-btn:hover {
+      background: rgba(20, 50, 94, 0.08);
+      color: var(--text-primary);
     }
 
     /* ── Chat ── */
     .chat {
       min-height: 0;
       flex: 1;
-      padding: 14px;
+      padding: 12px;
       overflow: auto;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+    }
+
+    .chat-empty {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      opacity: 0.6;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    @keyframes msg-in {
+      from { opacity: 0; transform: translateY(6px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
     }
 
     .msg {
-      max-width: 90%;
-      padding: 10px 14px;
+      position: relative;
+      max-width: 88%;
+      padding: 9px 13px;
       border-radius: var(--radius-md);
-      line-height: 1.45;
+      line-height: 1.5;
       font-size: 13px;
       border: 1px solid transparent;
+      animation: msg-in 200ms var(--ease) both;
     }
 
     .msg-body {
@@ -158,78 +213,85 @@
       word-break: break-word;
     }
 
-    .msg-body.markdown {
-      white-space: normal;
+    .msg-copy {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 5px;
+      background: rgba(255,255,255,0.75);
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 0;
+      transition: background 100ms, color 100ms;
     }
 
-    .msg-body.markdown > :first-child {
-      margin-top: 0;
+    .msg:hover .msg-copy {
+      display: flex;
     }
 
-    .msg-body.markdown > :last-child {
-      margin-bottom: 0;
+    .msg-copy:hover {
+      background: rgba(255,255,255,0.95);
+      color: var(--text-primary);
     }
 
+    .msg-meta {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      opacity: 0;
+      transition: opacity 150ms;
+    }
+
+    .msg:hover .msg-meta {
+      opacity: 0.7;
+    }
+
+    /* markdown */
+    .msg-body.markdown { white-space: normal; }
+    .msg-body.markdown > :first-child { margin-top: 0; }
+    .msg-body.markdown > :last-child  { margin-bottom: 0; }
     .msg-body.markdown p,
     .msg-body.markdown ul,
     .msg-body.markdown ol,
     .msg-body.markdown blockquote,
     .msg-body.markdown pre,
-    .msg-body.markdown hr,
     .msg-body.markdown h1,
     .msg-body.markdown h2,
     .msg-body.markdown h3,
     .msg-body.markdown h4,
     .msg-body.markdown h5,
-    .msg-body.markdown h6 {
-      margin: 0.5em 0;
-    }
-
+    .msg-body.markdown h6 { margin: 0.45em 0; }
     .msg-body.markdown h1,
     .msg-body.markdown h2,
     .msg-body.markdown h3,
     .msg-body.markdown h4,
     .msg-body.markdown h5,
-    .msg-body.markdown h6 {
-      line-height: 1.25;
-      font-weight: 650;
-    }
-
-    .msg-body.markdown h1 {
-      font-size: 1.22em;
-    }
-
-    .msg-body.markdown h2 {
-      font-size: 1.16em;
-    }
-
-    .msg-body.markdown h3 {
-      font-size: 1.1em;
-    }
-
+    .msg-body.markdown h6 { line-height: 1.25; font-weight: 650; }
+    .msg-body.markdown h1 { font-size: 1.2em; }
+    .msg-body.markdown h2 { font-size: 1.12em; }
+    .msg-body.markdown h3 { font-size: 1.06em; }
     .msg-body.markdown ul,
-    .msg-body.markdown ol {
-      padding-left: 1.15em;
-    }
-
-    .msg-body.markdown li + li {
-      margin-top: 0.2em;
-    }
-
+    .msg-body.markdown ol  { padding-left: 1.15em; }
+    .msg-body.markdown li + li { margin-top: 0.2em; }
     .msg-body.markdown blockquote {
-      border-left: 2px solid rgba(20, 50, 94, 0.2);
+      border-left: 2px solid rgba(20,50,94,0.2);
       padding-left: 10px;
       color: var(--text-muted);
     }
-
     .msg-body.markdown code {
       font-family: var(--font-mono);
-      background: rgba(20, 50, 94, 0.09);
-      border-radius: 6px;
-      padding: 0.08em 0.35em;
-      font-size: 0.93em;
+      background: rgba(20,50,94,0.09);
+      border-radius: 5px;
+      padding: 0.07em 0.32em;
+      font-size: 0.91em;
     }
-
     .msg-body.markdown pre {
       background: rgba(var(--surface-dark-rgb), 0.55);
       border: 1px solid var(--glass-border);
@@ -237,103 +299,155 @@
       padding: 10px;
       overflow: auto;
     }
-
-    .msg-body.markdown pre code {
-      background: transparent;
-      padding: 0;
-    }
-
-    .msg-body.markdown a {
-      color: var(--color-click);
-      text-decoration: none;
-    }
-
-    .msg-body.markdown a:hover {
-      text-decoration: underline;
-    }
-
+    .msg-body.markdown pre code { background: transparent; padding: 0; }
+    .msg-body.markdown a { color: var(--color-click); text-decoration: none; }
+    .msg-body.markdown a:hover { text-decoration: underline; }
     .msg-body.markdown img {
       display: block;
-      max-width: min(100%, 520px);
+      max-width: min(100%, 480px);
       height: auto;
       border-radius: var(--radius-sm);
-      margin: 8px 0;
-      border: 1px solid rgba(20, 50, 94, 0.16);
+      margin: 6px 0;
+      border: 1px solid rgba(20,50,94,0.14);
     }
 
+    /* message roles */
     .msg.user {
       align-self: flex-end;
-      background: linear-gradient(135deg, rgba(var(--brand-from-rgb), 0.2), rgba(var(--brand-to-rgb), 0.12));
-      border-color: rgba(var(--brand-from-rgb), 0.22);
+      background: linear-gradient(135deg, rgba(var(--brand-from-rgb), 0.88), rgba(var(--brand-to-rgb), 0.72));
+      border-color: rgba(var(--brand-from-rgb), 0.3);
+      color: #fff;
+      border-bottom-right-radius: 4px;
     }
+
+    .msg.user .msg-body.markdown code { background: rgba(255,255,255,0.18); }
+    .msg.user .msg-meta { color: rgba(255,255,255,0.7); }
+    .msg.user .msg-copy { background: rgba(255,255,255,0.25); color: rgba(255,255,255,0.9); }
+    .msg.user .msg-copy:hover { background: rgba(255,255,255,0.4); color: #fff; }
 
     .msg.assistant {
       align-self: flex-start;
-      background: rgba(20, 50, 94, 0.05);
-      border-color: rgba(20, 50, 94, 0.12);
+      background: rgba(20, 50, 94, 0.045);
+      border-color: rgba(20, 50, 94, 0.1);
+      border-left: 2.5px solid rgba(var(--brand-from-rgb), 0.45);
+      border-bottom-left-radius: 4px;
     }
 
     .msg.system {
       align-self: center;
       max-width: 96%;
-      background: rgba(var(--color-system-rgb), 0.08);
-      border-color: rgba(var(--color-system-rgb), 0.2);
-      color: rgba(var(--color-system-rgb), 0.85);
-      font-size: 12px;
+      background: rgba(var(--color-system-rgb), 0.07);
+      border-color: rgba(var(--color-system-rgb), 0.18);
+      color: rgba(130, 90, 10, 0.88);
+      font-size: 11.5px;
+    }
+
+    /* streaming cursor */
+    @keyframes blink { 50% { opacity: 0; } }
+    .stream-cursor::after {
+      content: "▋";
+      font-size: 0.85em;
+      animation: blink 0.8s step-start infinite;
+      color: var(--brand-from);
+      margin-left: 1px;
     }
 
     /* ── Composer ── */
     .composer {
-      border-top: 1px solid rgba(20, 50, 94, 0.1);
-      padding: 12px;
+      border-top: 1px solid rgba(20, 50, 94, 0.08);
+      padding: 10px;
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
+      grid-template-rows: auto auto;
+      gap: 8px;
     }
 
-    textarea,
+    .composer-input-wrap {
+      position: relative;
+    }
+
+    textarea#promptInput {
+      width: 100%;
+      color: var(--text-primary);
+      background: rgba(var(--surface-dark-rgb), 0.55);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: 9px 12px;
+      font-family: var(--font-ui);
+      font-size: 13px;
+      resize: none;
+      outline: none;
+      min-height: 64px;
+      max-height: 160px;
+      overflow-y: auto;
+      line-height: 1.5;
+      transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
+    }
+
+    textarea#promptInput:focus {
+      border-color: rgba(var(--brand-from-rgb), 0.45);
+      box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.09);
+    }
+
+    .char-count {
+      position: absolute;
+      bottom: 7px;
+      right: 10px;
+      font-size: 10px;
+      color: var(--text-muted);
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .composer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .composer-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+
+    .btn-send {
+      min-width: 90px;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 8px 18px;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 13px;
+      color: #fff;
+      background: var(--brand-gradient);
+      cursor: pointer;
+      transition: opacity 120ms var(--ease), box-shadow 120ms var(--ease), background 200ms;
+    }
+
+    .btn-send:hover { opacity: 0.9; box-shadow: 0 4px 16px rgba(var(--brand-from-rgb), 0.3); }
+    .btn-send:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-send.stopping {
+      background: linear-gradient(135deg, var(--color-error), #f97316);
+    }
+
+    /* inputs */
     input {
       width: 100%;
       color: var(--text-primary);
-      background: rgba(var(--surface-dark-rgb), 0.6);
+      background: rgba(var(--surface-dark-rgb), 0.55);
       border: 1px solid var(--glass-border);
       border-radius: var(--radius-sm);
-      padding: 10px 12px;
+      padding: 8px 11px;
       font-family: var(--font-mono);
       font-size: 12px;
-      resize: none;
       outline: none;
       transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
     }
 
-    textarea:focus,
     input:focus {
-      border-color: rgba(var(--brand-from-rgb), 0.5);
-      box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.1);
-    }
-
-    .send {
-      min-width: 100px;
-      border: none;
-      border-radius: var(--radius-sm);
-      padding: 0 16px;
-      font-family: var(--font-ui);
-      font-weight: 600;
-      font-size: 13px;
-      color: var(--surface-0);
-      background: var(--brand-gradient);
-      cursor: pointer;
-      transition: opacity 120ms var(--ease), box-shadow 120ms var(--ease);
-    }
-
-    .send:hover {
-      opacity: 0.9;
-      box-shadow: 0 4px 16px rgba(var(--brand-from-rgb), 0.25);
-    }
-
-    .send:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+      border-color: rgba(var(--brand-from-rgb), 0.45);
+      box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.09);
     }
 
     /* ── Side panels ── */
@@ -341,24 +455,26 @@
       min-height: 0;
       display: grid;
       grid-template-rows: 0.92fr 1.08fr;
-      gap: 12px;
+      gap: 10px;
     }
 
     .toolbar {
       display: flex;
-      gap: 6px;
-      padding: 10px 12px;
-      border-bottom: 1px solid rgba(20, 50, 94, 0.1);
+      gap: 5px;
+      padding: 8px 10px;
+      border-bottom: 1px solid rgba(20, 50, 94, 0.08);
+      flex-wrap: wrap;
     }
 
     .log-path {
-      padding: 8px 12px;
-      border-bottom: 1px solid rgba(20, 50, 94, 0.08);
+      padding: 6px 12px;
+      border-bottom: 1px solid rgba(20, 50, 94, 0.06);
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--text-muted);
       white-space: pre-wrap;
       word-break: break-all;
+      opacity: 0.75;
     }
 
     button {
@@ -366,7 +482,7 @@
       background: rgba(20, 50, 94, 0.04);
       color: var(--text-secondary);
       border-radius: var(--radius-sm);
-      padding: 7px 12px;
+      padding: 6px 11px;
       cursor: pointer;
       font-family: var(--font-ui);
       font-size: 12px;
@@ -381,25 +497,23 @@
     }
 
     .btn-primary {
-      background: rgba(var(--color-done-tint-rgb), 0.1);
-      border-color: rgba(var(--color-done-tint-rgb), 0.3);
+      background: rgba(var(--color-done-tint-rgb), 0.09);
+      border-color: rgba(var(--color-done-tint-rgb), 0.28);
       color: var(--color-done);
     }
-
     .btn-primary:hover {
-      background: rgba(var(--color-done-tint-rgb), 0.18);
-      border-color: rgba(var(--color-done-tint-rgb), 0.45);
+      background: rgba(var(--color-done-tint-rgb), 0.16);
+      border-color: rgba(var(--color-done-tint-rgb), 0.42);
     }
 
     .btn-danger {
-      background: rgba(var(--color-error-tint-rgb), 0.08);
-      border-color: rgba(var(--color-error-tint-rgb), 0.25);
+      background: rgba(var(--color-error-tint-rgb), 0.07);
+      border-color: rgba(var(--color-error-tint-rgb), 0.22);
       color: var(--color-error);
     }
-
     .btn-danger:hover {
-      background: rgba(var(--color-error-tint-rgb), 0.15);
-      border-color: rgba(var(--color-error-tint-rgb), 0.4);
+      background: rgba(var(--color-error-tint-rgb), 0.14);
+      border-color: rgba(var(--color-error-tint-rgb), 0.38);
     }
 
     /* ── Logs ── */
@@ -407,11 +521,11 @@
       min-height: 0;
       flex: 1;
       margin: 0;
-      padding: 12px;
+      padding: 10px 12px;
       overflow: auto;
       font-family: var(--font-mono);
       font-size: 11px;
-      line-height: 1.5;
+      line-height: 1.55;
       color: var(--text-secondary);
       white-space: pre-wrap;
       word-break: break-word;
@@ -422,20 +536,39 @@
       min-height: 0;
       flex: 1;
       overflow: auto;
-      padding: 14px;
+      padding: 12px;
       display: grid;
-      gap: 10px;
+      gap: 9px;
       align-content: start;
     }
 
     .cfg label {
       display: grid;
-      gap: 5px;
+      gap: 4px;
       font-size: 11px;
       font-weight: 500;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.06em;
+    }
+
+    .cfg textarea {
+      width: 100%;
+      color: var(--text-primary);
+      background: rgba(var(--surface-dark-rgb), 0.55);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: 8px 11px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+      transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
+    }
+
+    .cfg textarea:focus {
+      border-color: rgba(var(--brand-from-rgb), 0.45);
+      box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.09);
     }
 
     .cfg-hint {
@@ -448,22 +581,19 @@
     .cfg-entry {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
       margin-bottom: 2px;
     }
 
-    .cfg-entry button {
-      flex: 1;
-      min-width: 120px;
-    }
+    .cfg-entry button { flex: 1; min-width: 100px; }
 
     .cfg details {
-      border: 1px solid rgba(20, 50, 94, 0.12);
+      border: 1px solid rgba(20,50,94,0.1);
       border-radius: var(--radius-sm);
       padding: 8px 10px;
-      background: rgba(20, 50, 94, 0.03);
+      background: rgba(20,50,94,0.025);
       display: grid;
-      gap: 10px;
+      gap: 9px;
     }
 
     .cfg summary {
@@ -476,9 +606,7 @@
       text-transform: uppercase;
     }
 
-    .cfg details[open] summary {
-      color: var(--text-secondary);
-    }
+    .cfg details[open] summary { color: var(--text-secondary); }
 
     .save-wrap {
       display: flex;
@@ -486,31 +614,17 @@
     }
 
     /* ── Scrollbars ── */
-    ::-webkit-scrollbar {
-      width: 5px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb {
-      background: rgba(20, 50, 94, 0.2);
+      background: rgba(20,50,94,0.18);
       border-radius: 4px;
     }
-
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(20, 50, 94, 0.3);
-    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(20,50,94,0.28); }
 
     @media (max-width: 1100px) {
-      .main {
-        grid-template-columns: 1fr;
-      }
-
-      .side {
-        grid-template-rows: 340px 1fr;
-      }
+      .main { grid-template-columns: 1fr; }
+      .side { grid-template-rows: 300px 1fr; }
     }
   </style>
 </head>
@@ -519,55 +633,76 @@
     <header class="top">
       <div class="title">
         <strong>OpenCorvus Console</strong>
-        <span>System tray + command console + bot configuration</span>
+        <span id="pidText">Core PID: –  ·  Channel: –</span>
       </div>
-      <div class="status" id="statusBadge">
-        <span class="status-dot"></span>
-        <span id="statusText">Stopped</span>
-        <span id="pidText">PID: -</span>
+      <div class="header-right">
+        <div class="status" id="statusBadge">
+          <span class="status-dot"></span>
+          <span id="statusText">Stopped</span>
+        </div>
       </div>
     </header>
 
     <div class="main">
+      <!-- Conversation -->
       <section class="card">
-        <div class="card-head">Conversation</div>
-        <div class="chat" id="chat"></div>
+        <div class="card-head">
+          Conversation
+          <div class="card-actions">
+            <button class="icon-btn" id="clearChatBtn" title="Clear chat">🗑</button>
+          </div>
+        </div>
+        <div class="chat" id="chat">
+          <div class="chat-empty">No messages yet — send an instruction below</div>
+        </div>
         <form class="composer" id="sendForm">
-          <textarea id="promptInput" rows="3" placeholder="Send instruction to OpenCorvus..."></textarea>
-          <button class="send" id="sendBtn" type="submit">Send</button>
+          <div class="composer-input-wrap">
+            <textarea id="promptInput" rows="3" placeholder="Send instruction to OpenCorvus… (Enter to send, Shift+Enter for newline)"></textarea>
+            <span class="char-count" id="charCount"></span>
+          </div>
+          <div class="composer-actions">
+            <span class="composer-hint" id="composerHint">↑↓ history · Enter send</span>
+            <button class="btn-send" id="sendBtn" type="submit">Send</button>
+          </div>
         </form>
       </section>
 
       <div class="side">
+        <!-- Runtime -->
         <section class="card">
-          <div class="card-head">Runtime</div>
-          <div class="toolbar">
-            <button class="btn-primary" id="startBtn" type="button">Start</button>
-            <button class="btn-danger" id="stopBtn" type="button">Stop</button>
-            <button id="refreshBtn" type="button">Refresh</button>
-            <button id="clearLogsBtn" type="button">Clear</button>
+          <div class="card-head">
+            Runtime
+            <div class="card-actions">
+              <button class="icon-btn" id="refreshBtn" title="Refresh state">↺</button>
+              <button class="icon-btn" id="clearLogsBtn" title="Clear logs">🗑</button>
+            </div>
           </div>
-          <div class="log-path" id="logPathText">Log file: -</div>
+          <div class="toolbar">
+            <button class="btn-primary" id="startBtn" type="button">▶ Start</button>
+            <button class="btn-danger"  id="stopBtn"  type="button">■ Stop</button>
+          </div>
+          <div class="log-path" id="logPathText">Log: –</div>
           <pre class="log-body" id="logs"></pre>
         </section>
 
+        <!-- Config -->
         <section class="card">
           <div class="card-head">Bot Config</div>
           <div class="cfg">
-            <p class="cfg-hint">Keep it simple: use full command lines, advanced options only when needed.</p>
+            <p class="cfg-hint">Keep it simple — use full command lines; advanced options only when needed.</p>
             <div class="cfg-entry">
-              <button id="openMcpBtn" type="button">MCP Config</button>
-              <button id="openSkillBtn" type="button">Skills Folder</button>
+              <button id="openMcpBtn"    type="button">MCP Config</button>
+              <button id="openSkillBtn"  type="button">Skills Folder</button>
             </div>
             <div class="cfg-entry">
-              <button id="addMcpBtn" type="button">Add MCP</button>
-              <button id="createSkillBtn" type="button">Create Skill</button>
+              <button id="addMcpBtn"      type="button">+ Add MCP</button>
+              <button id="createSkillBtn" type="button">+ Create Skill</button>
             </div>
             <label>Start Command
               <input id="serveCmdInput" placeholder='opencorvus serve --host "127.0.0.1"' />
             </label>
             <label>Prompt Command
-              <input id="runCmdInput" placeholder='opencorvus run --continue --model "openai/gpt-5"' />
+              <input id="runCmdInput" placeholder='opencorvus run --continue' />
             </label>
             <details>
               <summary>Advanced (optional)</summary>
