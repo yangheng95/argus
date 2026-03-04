@@ -502,6 +502,8 @@ function streamImage(url, alt) {
 function streamDone(payload) {
   const item = state.stream
   if (!item) return
+  // Remove streaming cursor
+  if (item.entry) item.entry.body.classList.remove("stream-cursor")
   if (!item.touched && payload?.success) {
     item.entry = makeMessage("assistant")
     renderMessage(item.entry, "(empty response)", false)
