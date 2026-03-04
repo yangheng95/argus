@@ -23,7 +23,7 @@ export namespace Plugin {
 
   const state = Instance.state(async () => {
     const client = createOpenCorvusClient({
-      baseUrl: "http://localhost:4096",
+      baseUrl: "http://localhost:7878",
       directory: Instance.directory,
       // @ts-ignore - fetch type incompatibility
       fetch: async (...args) => Server.App().fetch(...args),
