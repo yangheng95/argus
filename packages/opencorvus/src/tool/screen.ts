@@ -475,14 +475,10 @@ export const ScreenTool = Tool.define("screen", {
           }
         }
 
-<<<<<<< HEAD
-        const foregroundNote = foregroundFailed ? " [not focused]" : ""
-        const focusChangeNote = hadFocusChange ? " [focus changed]" : ""
-=======
         const foregroundNote = foregroundFailed
           ? " Note: The bound window was not in the foreground, but the screenshot was captured from it anyway. If input actions miss the target, re-run screen.bind_window for this window and take a fresh screenshot before retrying."
           : ""
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
+        const focusChangeNote = hadFocusChange ? " [focus changed]" : ""
         return {
           title: `Screenshot (${result.width}x${result.height})${foregroundNote}`,
           output: `${result.width}x${result.height}. ${coordInfo}${overlayInfo}${foregroundNote}${focusChangeNote}`,
