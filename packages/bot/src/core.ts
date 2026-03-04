@@ -648,7 +648,10 @@ export class BotCore {
 
       // Flush buffered text when assistant message (one agentic step) completes
       if (info.role === "assistant" && info.time.completed) {
-        const sessions = this.findSessions(info.sessionID)
+        let sessions = this.findSessions(info.sessionID)
+        if (sessions.length === 0 && this.sharedMode() && info.sessionID === this.sharedSessionId) {
+          sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
+        }
         if (sessions.length === 0) return
 
         const text = this.textBuffers.get(info.id)
