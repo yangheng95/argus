@@ -6,14 +6,26 @@ mod manager;
 mod overlay;
 mod tray;
 
+use std::io::Write;
 use tauri::Manager;
 
+fn debug_write(msg: &str) {
+    let path = "C:\\Users\\chuan\\AppData\\Roaming\\dev.opencorvus.overlay\\debug-main.txt";
+    let _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .and_then(|mut f| writeln!(f, "{}", msg));
+}
+
 fn main() {
+    debug_write("main() started");
     let shared = manager::new_shared();
     let sidecar = std::env::var("OPENCORVUS_OVERLAY_MODE")
         .ok()
         .map(|item| item == "sidecar")
         .unwrap_or(false);
+    debug_write(&format!("sidecar={sidecar}"));
 
     tauri::Builder::default()
         .manage(shared)
@@ -34,9 +46,15 @@ fn main() {
             commands::manager_create_skill
         ])
         .setup(move |app| {
+            debug_write("setup() entered");
             let state = app.state::<manager::Shared>();
             manager::init(state.inner(), &app.handle());
+            debug_write(&format!(
+                "init() done, log_path={:?}",
+                app.path().app_config_dir().ok()
+            ));
             if !sidecar {
+                debug_write("calling start_bot");
                 if let Err(error) = manager::start_bot(state.inner(), &app.handle()) {
                     manager::push_log(
                         state.inner(),
@@ -49,6 +67,7 @@ fn main() {
             }
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
+            debug_write("setup() complete");
             Ok(())
         })
         .run(tauri::generate_context!())
