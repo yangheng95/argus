@@ -278,7 +278,7 @@ export const RunCommand = cmd({
       })
       .option("attach", {
         type: "string",
-        describe: "attach to a running opencorvus server (e.g., http://localhost:4096)",
+        describe: "attach to a running opencorvus server (e.g., http://localhost:7878)",
       })
       .option("dir", {
         type: "string",
