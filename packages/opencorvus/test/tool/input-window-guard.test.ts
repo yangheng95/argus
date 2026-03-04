@@ -302,7 +302,31 @@ describe("tool.input bound window guard", () => {
         const result = await tool.execute({ action: "click", x: 260, y: 280, button: "left" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(clicks).toEqual([{ x: 260, y: 280 }])
-        expect(foregroundCalls).toBe(2)
+        expect(foregroundCalls).toBe(3)
+      },
+    })
+  })
+
+  test("skips postcondition check when post=none", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code", x: 0, y: 0, width: 1000, height: 700 },
+    }
+    foreground = true
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", x: 280, y: 300, button: "left", post: "none" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(clicks).toEqual([{ x: 280, y: 300 }])
+        expect(foregroundCalls).toBe(1)
       },
     })
   })
@@ -317,6 +341,24 @@ describe("tool.input bound window guard", () => {
         const result = await tool.execute({ action: "click", x: 320, y: 360, button: "middle" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(middleClicks).toEqual([{ x: 320, y: 360 }])
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks pointer action when non-desktop driver is requested", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", x: 320, y: 360, button: "left", driver: "playwright" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("pointer_driver_unsupported")
         expect(clicks).toHaveLength(0)
       },
     })

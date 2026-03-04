@@ -4,7 +4,7 @@ description: Typowany klient JS dla serwera OpenCorvus.
 ---
 
 import config from "../../../../config.mjs"
-export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
+export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/v2/gen/types.gen.ts`
 
 Pakiet SDK JS/TS OpenCorvus zapewnia klienta z bezpiecznym typowaniem (type-safe) do interakcji z serwerem.
 Użyj go do budowania integracji i programowej kontroli OpenCorvus.
@@ -28,7 +28,7 @@ npm install @opencorvus-ai/sdk
 Utwórz instancję OpenCorvus:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const { client } = await createOpenCorvus()
 ```
@@ -52,7 +52,7 @@ Spowoduje to uruchomienie zarówno serwera, jak i klienta.
 Można przekazać obiekt konfiguracyjny, aby dostosować zachowanie. Instancja nadal pobiera `opencorvus.json`, ale możesz zastąpić lub dodać konfigurację bezpośrednio:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
@@ -72,7 +72,7 @@ opencorvus.server.close()
 Jeśli masz już działającą instancję OpenCorvus, możesz utworzyć instancję klienta, aby się z nią połączyć:
 
 ```javascript
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 Zestaw SDK zawiera definicje TypeScript dla wszystkich typów API. Zaimportuj je bezpośrednio:
 
 ```typescript
-import type { Session, Message, Part } from "@opencorvus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk/v2"
 ```
 
 Wszystkie typy są generowane na podstawie specyfikacji OpenAPI serwera i dostępne w <a href={typesUrl}>pliku typów</a>.

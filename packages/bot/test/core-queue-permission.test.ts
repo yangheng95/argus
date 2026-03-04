@@ -2,14 +2,17 @@ import { beforeEach, describe, expect, mock, test } from "bun:test"
 import type { BotAdapter, IncomingMessage } from "../src/adapter"
 import { SessionCoordinator } from "../src/session-coordinator"
 
-mock.module("@opencorvus-ai/sdk", () => ({
+const sdk = {
   createOpencode: async () => {
     throw new Error("not used in this test")
   },
   createOpencodeClient: () => {
     throw new Error("not used in this test")
   },
-}))
+}
+
+mock.module("@opencorvus-ai/sdk", () => sdk)
+mock.module("@opencorvus-ai/sdk/v2", () => sdk)
 
 const { BotCore } = await import("../src/core")
 

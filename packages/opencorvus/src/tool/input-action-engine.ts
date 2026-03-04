@@ -1,27 +1,11 @@
-import { Automation } from "../opencorvus/automation"
+import {
+  Automation,
+  AutomationRuntime,
+  DesktopDriver,
+  DriverKind,
+  selectDriver,
+} from "../opencorvus/automation"
 import { WindowManager } from "../opencorvus/perception/window"
-
-function text(error: unknown) {
-  if (error instanceof Error && error.message) return error.message
-  return String(error)
-}
-
-function kind(error: unknown): Automation.ErrorKind {
-  const value = text(error).toLowerCase()
-  if (value.includes("abort")) return "aborted"
-  if (value.includes("not found")) return "not_found"
-  if (
-    value.includes("foreground")
-    || value.includes("focus")
-    || value.includes("interact")
-    || value.includes("click")
-    || value.includes("keyboard")
-    || value.includes("mouse")
-  ) {
-    return "not_interactable"
-  }
-  return "infra"
-}
 
 async function recover() {
   const binding = await WindowManager.getBinding()
@@ -41,30 +25,31 @@ export async function runInputAction(input: {
   abort: AbortSignal
   retryMax?: number
   backoffMs?: number[]
+  driver?: DriverKind
+  act?: Automation.Action
+  post?: () => Promise<Automation.Probe | boolean>
 }) {
   const max = input.retryMax ?? 2
   const backoff = input.backoffMs ?? [80, 180]
-  const engine = Automation.create(
-    {
-      locate: async () => ({
-        ok: true,
-        data: { id: input.id },
-      }),
-      check: async () => ({ ok: true }),
-      act: async () => {
-        try {
-          await input.action()
-          return { ok: true }
-        } catch (error) {
-          return {
-            ok: false,
-            kind: kind(error),
-            detail: text(error),
-          } satisfies Automation.Probe
-        }
-      },
+  const selected = selectDriver(AutomationRuntime.merge({
+    kind: input.driver,
+    desktop: DesktopDriver.create({
+      id: input.id,
+      action: input.action,
       recover,
-    },
+      check: async (ctx) => {
+        if (ctx.stage !== "post") return { ok: true }
+        if (!input.post) return { ok: true }
+        return input.post()
+      },
+    }),
+  }))
+  const act = input.act ?? { kind: "custom", name: input.id } satisfies Automation.Action
+  if (selected.kind !== "desktop" && !input.act) {
+    throw new Error(`input action ${input.id} requires explicit act for driver=${selected.kind}`)
+  }
+  const engine = Automation.create(
+    selected.driver,
     {
       timeoutMs: 50,
       intervalMs: 0,
@@ -75,7 +60,10 @@ export async function runInputAction(input: {
   const result = await engine.run(
     {
       id: input.id,
-      act: { kind: "custom", name: input.id },
+      act,
+      post: input.post
+        ? [{ kind: "state", key: "post", value: true }]
+        : undefined,
       retry: {
         max,
         backoffMs: backoff,
@@ -84,8 +72,7 @@ export async function runInputAction(input: {
     { abort: input.abort },
   )
   if (result.ok) return result
-  const error = new Error(result.detail ?? `${input.id} failed`)
+  const error = new Error(result.detail ?? `${input.id} failed (${selected.kind})`)
   Object.assign(error, { cause: result })
   throw error
 }
-

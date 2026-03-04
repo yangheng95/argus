@@ -9,6 +9,7 @@ import { Log } from "../util/log"
 import { overlayDiagnostic, requestOverlayConfirm, showOverlay, showWindowHighlight } from "./overlay-client"
 import { Capability } from "../platform/capability"
 import { runInputAction } from "./input-action-engine"
+import { InputPostcondition } from "./input-postcondition"
 
 const log = Log.create({ service: "input" })
 
@@ -46,6 +47,11 @@ Actions:
 If a window is bound via the screen tool, all coordinates are relative to that window.
 Pointer actions (click/drag/move) require a recent screen.screenshot anchor. If no anchor exists, they are blocked.
 
+Advanced options for interactive actions:
+- driver (optional): "auto" (default), "desktop", "playwright", "appium".
+  Pointer actions (click/drag/move) only support "auto" or "desktop".
+- post (optional): postcondition template. "bound_window_foreground" (default) or "none".
+
 Key names (case-insensitive): enter, esc, tab, space, backspace, delete, insert,
   ctrl, alt, shift, win/super/meta/cmd, f1-f24, a-z, 0-9,
   up/down/left/right, home, end, pageup, pagedown, capslock, printscreen, pause.
@@ -79,27 +85,38 @@ const coord = z.preprocess((val) => {
   return undefined
 }, z.number().int())
 
+const DriverMode = z.enum(["auto", "desktop", "playwright", "appium"]).optional()
+const PostMode = z.enum(["none", "bound_window_foreground"]).optional()
+
 const ClickAction = z.object({
   action: z.literal("click"),
   x: coord.describe("X coordinate to click"),
   y: coord.describe("Y coordinate to click"),
   button: z.enum(["left", "right", "double", "middle"]).default("left").describe("Mouse button: left, right, double, or middle"),
+  driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
+  post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
 
 const TypeAction = z.object({
   action: z.literal("type"),
   text: z.string().describe("Text to type (pasted via clipboard for reliability)"),
+  driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
+  post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
 
 const KeyAction = z.object({
   action: z.literal("key"),
   key: z.string().describe('Key or combination to press (e.g. "Enter", "ctrl+c", "alt+tab")'),
+  driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
+  post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
 
 const ScrollAction = z.object({
   action: z.literal("scroll"),
   direction: z.enum(["up", "down"]).describe("Scroll direction"),
   amount: z.preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().default(3)).describe("Number of scroll steps"),
+  driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
+  post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
 
 const DragAction = z.object({
@@ -108,12 +125,16 @@ const DragAction = z.object({
   startY: coord.describe("Start Y coordinate"),
   endX: coord.describe("End X coordinate"),
   endY: coord.describe("End Y coordinate"),
+  driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
+  post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
 
 const MoveAction = z.object({
   action: z.literal("move"),
   x: coord.describe("X coordinate to move to"),
   y: coord.describe("Y coordinate to move to"),
+  driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
+  post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
 })
 
 const WaitAction = z.object({
@@ -295,8 +316,35 @@ export const InputTool = Tool.define("input", {
       }
     }
 
+    const postcheck = (
+      input: "none" | "bound_window_foreground" | undefined,
+      opt: Parameters<typeof InputPostcondition.resolve>[1] = {},
+    ) => InputPostcondition.resolve(input ?? "bound_window_foreground", opt)
+
+    const pointerDriverBlock = (
+      action: "click" | "drag" | "move",
+      driver: z.infer<typeof DriverMode>,
+    ) => {
+      if (!driver || driver === "auto" || driver === "desktop") return null
+      showOverlay(undefined, undefined, action, `blocked: driver=${driver} unsupported`, "error")
+      return {
+        title: `Pointer action blocked: driver ${driver} unsupported`,
+        output:
+          `Action "${action}" requires desktop coordinate input and does not run on ${driver} driver. `
+          + `Use input with driver=desktop (or auto), or use selector-based automation flow for ${driver}.`,
+        metadata: {
+          blocked: true,
+          reason: "pointer_driver_unsupported",
+          action,
+          driver,
+        },
+      }
+    }
+
     switch (params.action) {
       case "click": {
+        const driverBlocked = pointerDriverBlock("click", params.driver)
+        if (driverBlocked) return driverBlocked
         const anchored = await requireBounds("click")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
@@ -334,6 +382,11 @@ export const InputTool = Tool.define("input", {
         const clickResult = await runInputAction({
           id: `input.click.${params.button ?? "left"}`,
           abort: ctx.abort,
+          driver: params.driver,
+          post: postcheck(params.post, {
+            binding,
+            target: DesktopState.getTarget(),
+          }),
           action: async () => {
             if (params.button === "double") return GUI.doubleClick(screen.x, screen.y)
             if (params.button === "right") return GUI.rightClick(screen.x, screen.y)
@@ -377,6 +430,11 @@ export const InputTool = Tool.define("input", {
         const typeResult = await runInputAction({
           id: "input.type",
           abort: ctx.abort,
+          driver: params.driver,
+          act: { kind: "type", text: params.text },
+          post: postcheck(params.post, {
+            target: DesktopState.getTarget(),
+          }),
           action: () => GUI.paste(params.text),
         })
         if (typeResult.tries > 1) {
@@ -410,6 +468,14 @@ export const InputTool = Tool.define("input", {
         const keyResult = await runInputAction({
           id: parts.length > 1 ? "input.key.hotkey" : "input.key.single",
           abort: ctx.abort,
+          driver: params.driver,
+          act: {
+            kind: "hotkey",
+            keys: parts,
+          },
+          post: postcheck(params.post, {
+            target: DesktopState.getTarget(),
+          }),
           action: () => {
             if (parts.length > 1) return GUI.hotkey(...parts)
             return GUI.pressKey(parts[0])
@@ -445,6 +511,15 @@ export const InputTool = Tool.define("input", {
         const scrollResult = await runInputAction({
           id: "input.scroll",
           abort: ctx.abort,
+          driver: params.driver,
+          act: {
+            kind: "scroll",
+            direction: params.direction,
+            amount: params.amount,
+          },
+          post: postcheck(params.post, {
+            target: DesktopState.getTarget(),
+          }),
           action: () => GUI.scroll(params.direction, params.amount),
         })
         if (scrollResult.tries > 1) {
@@ -472,6 +547,8 @@ export const InputTool = Tool.define("input", {
       }
 
       case "drag": {
+        const driverBlocked = pointerDriverBlock("drag", params.driver)
+        if (driverBlocked) return driverBlocked
         const anchored = await requireBounds("drag")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
@@ -486,6 +563,11 @@ export const InputTool = Tool.define("input", {
         const dragResult = await runInputAction({
           id: "input.drag",
           abort: ctx.abort,
+          driver: params.driver,
+          post: postcheck(params.post, {
+            binding,
+            target: DesktopState.getTarget(),
+          }),
           action: () => GUI.drag(start.x, start.y, end.x, end.y),
         })
         if (dragResult.tries > 1) {
@@ -532,6 +614,8 @@ export const InputTool = Tool.define("input", {
       }
 
       case "move": {
+        const driverBlocked = pointerDriverBlock("move", params.driver)
+        if (driverBlocked) return driverBlocked
         const anchored = await requireBounds("move")
         if ("title" in anchored) return anchored
         const binding = await WindowManager.getBinding()
@@ -545,6 +629,11 @@ export const InputTool = Tool.define("input", {
         const moveResult = await runInputAction({
           id: "input.move",
           abort: ctx.abort,
+          driver: params.driver,
+          post: postcheck(params.post, {
+            binding,
+            target: DesktopState.getTarget(),
+          }),
           action: () => GUI.moveTo(screen.x, screen.y),
         })
         if (moveResult.tries > 1) {

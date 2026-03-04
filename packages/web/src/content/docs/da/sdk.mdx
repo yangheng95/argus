@@ -4,7 +4,7 @@ description: Typesikker JS-klient for åpen kodeserver.
 ---
 
 import config from "../../../../config.mjs"
-export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
+export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/v2/gen/types.gen.ts`
 
 Åpenkoden JS/TS SDK gir en typesikker klient for samhandling med serveren.
 Brug den til at bygge integrasjoner og kontrollere opencorvus programmatisk.
@@ -28,7 +28,7 @@ npm install @opencorvus-ai/sdk
 Opret en forekomst av opencorvus:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const { client } = await createOpenCorvus()
 ```
@@ -52,7 +52,7 @@ Dette starter både en server og en klient
 Du kan sende et konfigurasjonsobjekt for at tilpasse virkemåten. Forekomsten henter fortsatt din `opencorvus.json`, men du kan overstyre eller tilføje til konfigurasjon inline:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
@@ -72,7 +72,7 @@ opencorvus.server.close()
 Hvis du allerede har en kjørende forekomst av opencorvus, kan du oprete en klientforekomst for at koble til den:
 
 ```javascript
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 SDK inkluderer TypeScript-definisjoner for alle API-typer. Importer dem direkte:
 
 ```typescript
-import type { Session, Message, Part } from "@opencorvus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk/v2"
 ```
 
 Alle typer er generert fra serverens OpenAPI-spesifikasjon og tilgængelig i <a href={typesUrl}>types-filen</a>.

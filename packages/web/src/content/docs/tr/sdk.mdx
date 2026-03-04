@@ -4,7 +4,7 @@ description: opencorvus sunucusu için type-safe JS istemcisi.
 ---
 
 import config from "../../../../config.mjs"
-export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
+export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/v2/gen/types.gen.ts`
 
 opencorvus JS/TS SDK, sunucu ile etkileşmek için type-safe bir istemci sağlar.
 opencorvus'u programatik olarak kontrol etmek ve entegrasyonlar oluşturmak için kullanabilirsiniz.
@@ -28,7 +28,7 @@ npm install @opencorvus-ai/sdk
 Bir opencorvus örneği oluşturun:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const { client } = await createOpenCorvus()
 ```
@@ -52,7 +52,7 @@ Bu, hem bir sunucu hem de bir istemci başlatır
 Davranışı özelleştirmek için bir yapılandırma nesnesi iletebilirsiniz. Örnek yine de `opencorvus.json` dosyanızı alır, ancak yapılandırmayı satır içi olarak geçersiz kılabilir veya ekleyebilirsiniz:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
@@ -72,7 +72,7 @@ opencorvus.server.close()
 Halihazırda çalışan bir opencorvus örneğiniz varsa, ona bağlanmak için bir istemci örneği oluşturabilirsiniz:
 
 ```javascript
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 SDK, tüm API türleri için TypeScript tanımlarını içerir. Bunları doğrudan içe aktarın:
 
 ```typescript
-import type { Session, Message, Part } from "@opencorvus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk/v2"
 ```
 
 Tüm tipler, sunucunun OpenAPI spesifikasyonundan oluşturulur ve <a href={typesUrl}>tipler dosyasında</a> mevcuttur.

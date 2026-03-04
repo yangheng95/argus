@@ -684,8 +684,19 @@ export class BotCore {
     if (event.type === "message.part.updated") {
       const part = (event as EventMessagePartUpdated).properties.part
 
-      // Skip parts belonging to user messages
-      if (this.userMessageIds.has(part.messageID)) return
+      // Skip parts belonging to user messages.
+      // Exception: in shared mode, mirror user text to Slack so overlay-originated
+      // prompts are visible alongside the bot's reply.
+      if (this.userMessageIds.has(part.messageID)) {
+        if (this.sharedMode() && part.sessionID === this.sharedSessionId && part.type === "text" && part.text?.trim()) {
+          let sessions = this.findSessions(part.sessionID)
+          if (sessions.length === 0) sessions = await this.bindOverlayMirrorIfNeeded(part.sessionID)
+          for (const session of sessions) {
+            await session.adapter.sendMessage(session.channel, session.thread, `> ${part.text}`).catch(() => {})
+          }
+        }
+        return
+      }
 
       let sessions = this.findSessions(part.sessionID)
       if (sessions.length === 0 && this.sharedMode() && part.sessionID === this.sharedSessionId) {
