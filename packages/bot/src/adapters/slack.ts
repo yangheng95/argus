@@ -80,6 +80,9 @@ export class SlackAdapter implements BotAdapter {
       // Skip if no text and no audio
       if (!text && !audio) return
 
+      // Skip messages from before this bot instance started (prevents replay on restart)
+      if (message.ts < this.startTs) return
+
       // Deduplicate by message ts — Slack Socket Mode delivers thread events twice
       const msgTs = message.ts
       if (this.processedMessages.has(msgTs)) return
