@@ -269,11 +269,12 @@ export namespace Tui {
           ].join("\r\n"),
         )
       } else {
+        const logFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.log`)
         fs.writeFileSync(
           batFile,
           [
             `@title OpenCorvus TUI`,
-            `@"${bin}" ${quotedArgs}`,
+            `@"${bin}" ${quotedArgs} 2>"${logFile}"`,
           ].join("\r\n"),
         )
       }
