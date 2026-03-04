@@ -13,6 +13,7 @@ import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { GuiState } from "@/tool/gui-state"
+import { ScreenshotStore } from "./screenshot-store"
 import { textForModel } from "./part-visibility"
 
 export namespace MessageV2 {
