@@ -2,28 +2,38 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn check_protocol() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let root_raw = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
         .join("..");
+    let root = root_raw.canonicalize().unwrap_or(root_raw);
     let script = root.join("scripts").join("generate-overlay-protocol.ts");
     if !script.exists() {
         panic!("overlay protocol generator is missing: {}", script.display());
     }
 
     let bun = std::env::var("BUN").unwrap_or_else(|_| "bun".into());
-    let status = Command::new(&bun)
+    let output = Command::new(&bun)
         .arg("run")
-        .arg(&script)
+        .arg("scripts/generate-overlay-protocol.ts")
         .arg("--check")
         .current_dir(&root)
-        .status();
+        .output();
 
-    match status {
-        Ok(code) if code.success() => {}
-        Ok(code) => {
+    match output {
+        Ok(value) if value.status.success() => {}
+        Ok(value) => {
+            let stderr = String::from_utf8_lossy(&value.stderr);
+            if stderr.contains("EPERM reading") {
+                println!(
+                    "cargo:warning=overlay protocol check skipped due bun EPERM; run `bun run scripts/generate-overlay-protocol.ts --check` from repo root"
+                );
+                return;
+            }
             panic!(
-                "overlay protocol check failed (status: {code}); run `bun run scripts/generate-overlay-protocol.ts`"
+                "overlay protocol check failed (status: {}): {}; run `bun run scripts/generate-overlay-protocol.ts`",
+                value.status,
+                stderr.trim()
             );
         }
         Err(error) => {

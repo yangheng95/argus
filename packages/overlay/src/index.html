@@ -28,15 +28,16 @@
       position: absolute;
       left: 50%;
       top: var(--focus-y);
-      width: 40px;
-      height: 40px;
+      width: 46px;
+      height: 46px;
       transform: translate(-50%, -50%) scale(0.8);
       border-radius: var(--radius-pill);
-      border: 2px solid var(--accent);
+      border: 2px solid color-mix(in oklab, var(--accent) 76%, #ffffff);
       background: transparent !important;
       box-shadow:
-        0 0 0 1px rgba(20, 50, 94, 0.14),
-        0 0 16px rgba(20, 50, 94, 0.18);
+        0 0 0 2px rgba(255, 255, 255, 0.5),
+        0 0 0 6px color-mix(in oklab, var(--accent) 20%, transparent),
+        0 0 18px rgba(20, 50, 94, 0.24);
       opacity: 0;
       transition: opacity 120ms var(--ease), transform 180ms var(--ease);
     }
@@ -100,24 +101,26 @@
       position: absolute;
       left: 50%;
       top: auto;
-      bottom: calc(100% - var(--focus-y) + 28px);
+      bottom: calc(100% - var(--focus-y) + 34px);
       transform: translate(-50%, 6px);
-      min-width: 260px;
+      min-width: 300px;
       max-width: 420px;
       display: grid;
       grid-template-columns: auto auto minmax(0, 1fr);
       align-items: center;
-      column-gap: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: var(--glass);
-      border: 1px solid var(--glass-border);
+      column-gap: 11px;
+      padding: 11px 13px;
+      border-radius: 14px;
+      background:
+        linear-gradient(125deg, rgba(255, 255, 255, 0.94), rgba(241, 249, 255, 0.9)),
+        radial-gradient(circle at 100% 0%, rgba(56, 189, 248, 0.2), transparent 45%);
+      border: 1px solid rgba(27, 56, 104, 0.2);
       backdrop-filter: var(--blur);
       -webkit-backdrop-filter: var(--blur);
       color: var(--text-primary);
       font-family: var(--font-ui);
       opacity: 0;
-      box-shadow: var(--shadow-sm);
+      box-shadow: 0 8px 24px rgba(31, 69, 124, 0.2), 0 0 18px rgba(56, 189, 248, 0.16);
       transition:
         opacity 120ms var(--ease),
         transform 120ms var(--ease),
@@ -128,7 +131,7 @@
     #popup.visible {
       opacity: 1;
       transform: translate(-50%, 0);
-      box-shadow: var(--shadow-md);
+      box-shadow: 0 14px 32px rgba(31, 69, 124, 0.24), 0 0 20px rgba(56, 189, 248, 0.2);
     }
 
     #popup.hiding {
@@ -150,12 +153,12 @@
 
     #popup[data-status="done"] {
       --accent: var(--color-done);
-      border-color: rgba(var(--color-done-rgb), 0.3);
+      border-color: rgba(var(--color-done-rgb), 0.42);
     }
 
     #popup[data-status="error"] {
       --accent: var(--color-error);
-      border-color: rgba(var(--color-error-rgb), 0.35);
+      border-color: rgba(var(--color-error-rgb), 0.44);
     }
 
     #status-dot {
@@ -203,7 +206,7 @@
       color: var(--text-primary);
       font-size: 13px;
       line-height: 1.2;
-      font-weight: 600;
+      font-weight: 650;
       letter-spacing: 0.01em;
     }
 
