@@ -725,11 +725,18 @@ export namespace MessageV2 {
                   type: "text" as const,
                   text: "Attached image(s) from tool result:",
                 },
-                ...media.map((attachment) => ({
-                  type: "file" as const,
-                  url: attachment.url,
-                  mediaType: attachment.mime,
-                })),
+                ...media.map((attachment) => {
+                  let url = attachment.url
+                  if (ScreenshotStore.isFileUrl(url)) {
+                    const resolved = ScreenshotStore.resolveSync(url)
+                    if (resolved) url = `data:${resolved.mime};base64,${resolved.buffer.toString("base64")}`
+                  }
+                  return {
+                    type: "file" as const,
+                    url,
+                    mediaType: attachment.mime,
+                  }
+                }),
               ],
             })
           }
