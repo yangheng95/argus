@@ -61,7 +61,7 @@ export namespace Tool {
           }
           let parsed: typeof args
           try {
-            parsed = toolInfo.parameters.parse(args)
+            parsed = toolInfo.parameters.parse(coerceArgs(args))
           } catch (error) {
             if (error instanceof z.ZodError && toolInfo.formatValidationError) {
               throw new Error(toolInfo.formatValidationError(error), { cause: error })
