@@ -92,6 +92,12 @@ export namespace SessionCompaction {
       for (const part of toPrune) {
         if (part.state.status === "completed") {
           part.state.time.compacted = Date.now()
+          // Delete file-backed screenshot files for compacted parts
+          for (const att of part.state.attachments ?? []) {
+            if (ScreenshotStore.isFileUrl(att.url)) {
+              await ScreenshotStore.removeByUrl(att.url).catch(() => {})
+            }
+          }
           await Session.updatePart(part)
         }
       }
