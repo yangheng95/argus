@@ -34,7 +34,7 @@ const generate = async (output: string) =>
       {
         name: "@hey-api/client-fetch",
         exportFromIndex: false,
-        baseUrl: "http://localhost:4096",
+        baseUrl: "http://localhost:7878",
       },
     ],
   })
