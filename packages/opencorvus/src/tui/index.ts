@@ -233,10 +233,8 @@ export namespace Tui {
         stdio: "ignore",
         detached: true,
         windowsHide: false,
-        })
-        proc.on("exit", (code: number | null) => console.log(`[Tui.spawn:cmd:exit] code=${code}`))
-        proc.unref()
-      }
+      })
+      proc.unref()
     } else {
       proc = nodeSpawn(bin, args, {
         stdio: "inherit",
