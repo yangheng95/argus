@@ -33,7 +33,7 @@ include:
   - component: $CI_SERVER_FQDN/nagyv/gitlab-opencorvus/opencorvus@2
     inputs:
       config_dir: ${CI_PROJECT_DIR}/opencorvus-config
-      auth_json: $OPENCODE_AUTH_JSON # The variable name for your OpenCorvus authentication JSON
+      auth_json: $OPENCORVUS_AUTH_JSON # The variable name for your OpenCorvus authentication JSON
       command: optional-custom-command
       message: "Your prompt here"
 ```

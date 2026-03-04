@@ -1,6 +1,6 @@
 use tauri::{AppHandle, State, WebviewWindow};
 
-use crate::manager::{self, ManagerConfig, ManagerSnapshot, SendResult, Shared};
+use crate::manager::{self, ManagerConfig, ManagerSnapshot, McpQuickConfig, SendAck, Shared};
 use crate::overlay;
 
 #[tauri::command]
@@ -56,10 +56,45 @@ pub fn manager_save(
 }
 
 #[tauri::command]
+<<<<<<< HEAD
 pub async fn manager_send(state: State<'_, Shared>, app: AppHandle, prompt: String) -> Result<SendResult, String> {
     let shared = state.inner().clone();
     let app2 = app.clone();
     tauri::async_runtime::spawn_blocking(move || manager::send(&shared, &app2, prompt))
         .await
         .map_err(|error| error.to_string())?
+=======
+pub fn manager_send(state: State<'_, Shared>, app: AppHandle, prompt: String) -> Result<SendAck, String> {
+    manager::send(state.inner(), &app, prompt)
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
+}
+
+#[tauri::command]
+pub fn manager_open_mcp_config(state: State<'_, Shared>, app: AppHandle) -> Result<String, String> {
+    manager::open_mcp_config(state.inner(), &app)
+}
+
+#[tauri::command]
+pub fn manager_open_skill_dir(state: State<'_, Shared>, app: AppHandle) -> Result<String, String> {
+    manager::open_skill_dir(state.inner(), &app)
+}
+
+#[tauri::command]
+pub fn manager_add_mcp(
+    state: State<'_, Shared>,
+    app: AppHandle,
+    name: String,
+    config: McpQuickConfig,
+) -> Result<String, String> {
+    manager::add_mcp(state.inner(), &app, name, config)
+}
+
+#[tauri::command]
+pub fn manager_create_skill(
+    state: State<'_, Shared>,
+    app: AppHandle,
+    name: String,
+    description: String,
+) -> Result<String, String> {
+    manager::create_skill(state.inner(), &app, name, description)
 }

@@ -1354,7 +1354,7 @@ export type Config = {
   logLevel?: LogLevel
   server?: ServerConfig
   /**
-   * Command configuration, see https://opencode.ai/docs/commands
+   * Command configuration, see https://opencorvus.ai/docs/commands
    */
   command?: {
     [key: string]: {
@@ -1428,7 +1428,7 @@ export type Config = {
     [key: string]: AgentConfig | undefined
   }
   /**
-   * Agent configuration, see https://opencode.ai/docs/agents
+   * Agent configuration, see https://opencorvus.ai/docs/agents
    */
   agent?: {
     plan?: AgentConfig
@@ -2772,7 +2772,8 @@ export type ExperimentalWindowsListResponse = ExperimentalWindowsListResponses[k
 
 export type ExperimentalBindWindowData = {
   body?: {
-    title: string
+    window_id?: number | string
+    title?: string
   }
   path?: never
   query?: {
@@ -2800,6 +2801,7 @@ export type ExperimentalBindWindowResponses = {
     title: string
     appName: string
     focused: boolean
+    selectionMode: "window_id" | "title"
   }
 }
 
@@ -4888,6 +4890,37 @@ export type TuiRuntimeStopResponses = {
 
 export type TuiRuntimeStopResponse = TuiRuntimeStopResponses[keyof TuiRuntimeStopResponses]
 
+export type TuiStatusData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/status"
+}
+
+export type TuiStatusResponses = {
+  /**
+   * TUI status
+   */
+  200: {
+    runtime: {
+      running: boolean
+      mode: "none" | "spawned" | "connected"
+      url: string | null
+      sessionID: string | null
+    }
+    sessions: {
+      [key: string]: SessionStatus
+    }
+    commands: {
+      aliases: Array<string>
+    }
+  }
+}
+
+export type TuiStatusResponse = TuiStatusResponses[keyof TuiStatusResponses]
+
 export type TuiRuntimeSubmitTaskData = {
   body?: {
     text: string
@@ -4984,6 +5017,42 @@ export type TuiAppendPromptResponses = {
 
 export type TuiAppendPromptResponse = TuiAppendPromptResponses[keyof TuiAppendPromptResponses]
 
+export type TuiSubmitPromptData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/submit-prompt"
+}
+
+export type TuiSubmitPromptResponses = {
+  /**
+   * Prompt submitted successfully
+   */
+  200: boolean
+}
+
+export type TuiSubmitPromptResponse = TuiSubmitPromptResponses[keyof TuiSubmitPromptResponses]
+
+export type TuiClearPromptData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/clear-prompt"
+}
+
+export type TuiClearPromptResponses = {
+  /**
+   * Prompt cleared successfully
+   */
+  200: boolean
+}
+
+export type TuiClearPromptResponse = TuiClearPromptResponses[keyof TuiClearPromptResponses]
+
 export type TuiOpenHelpData = {
   body?: never
   path?: never
@@ -5055,42 +5124,6 @@ export type TuiOpenModelsResponses = {
 }
 
 export type TuiOpenModelsResponse = TuiOpenModelsResponses[keyof TuiOpenModelsResponses]
-
-export type TuiSubmitPromptData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/submit-prompt"
-}
-
-export type TuiSubmitPromptResponses = {
-  /**
-   * Prompt submitted successfully
-   */
-  200: boolean
-}
-
-export type TuiSubmitPromptResponse = TuiSubmitPromptResponses[keyof TuiSubmitPromptResponses]
-
-export type TuiClearPromptData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/clear-prompt"
-}
-
-export type TuiClearPromptResponses = {
-  /**
-   * Prompt cleared successfully
-   */
-  200: boolean
-}
-
-export type TuiClearPromptResponse = TuiClearPromptResponses[keyof TuiClearPromptResponses]
 
 export type TuiExecuteCommandData = {
   body?: {

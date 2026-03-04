@@ -25,7 +25,10 @@ export namespace TaskQueueService {
   const log = Log.create({ service: "task-queue-service" })
 
   const POLL_INTERVAL_MS = 2000
-  const RUN_TIMEOUT_MS = 6 * 60 * 60 * 1000
+  const RUN_TIMEOUT_ENV = "OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS"
+  const RUN_TIMEOUT_MS = 30 * 60 * 1000
+  const HEARTBEAT_ENV = "OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS"
+  const HEARTBEAT_MS = 15 * 1000
   const BATCH_SIZE = 10
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
@@ -104,18 +107,15 @@ export namespace TaskQueueService {
 
   async function run(now: number): Promise<void> {
     recover(now)
-    const queued = pending()
+    const limit = concurrency()
+    const queued = pending(limit)
     if (queued.length === 0) return
     log.info("found queued tasks", { count: queued.length, projectID: Instance.project.id })
-    const limit = concurrency()
-    const seen = new Set<string>()
     const list: Array<typeof TaskQueueTable.$inferSelect> = []
     for (const item of queued) {
       if (list.length >= limit) break
-      if (seen.has(item.session_id)) continue
-      const task = claim(item.id)
+      const task = claim(item.id, item.session_id)
       if (!task) continue
-      seen.add(item.session_id)
       list.push(task)
     }
     if (list.length === 0) return
@@ -131,7 +131,7 @@ export namespace TaskQueueService {
     return Math.min(Math.floor(value), BATCH_SIZE)
   }
 
-  function pending() {
+  function pending(limit: number) {
     return Database.use((db) =>
       db
         .select({
@@ -145,6 +145,53 @@ export namespace TaskQueueService {
               SELECT ${SessionTable.id}
               FROM ${SessionTable}
               WHERE ${SessionTable.project_id} = ${Instance.project.id}
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM a2a_task_queue running
+              WHERE running.session_id = ${TaskQueueTable.session_id}
+                AND running.status = 'running'
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM a2a_task_queue better
+              WHERE better.session_id = ${TaskQueueTable.session_id}
+                AND better.status IN ('queued', 'retrying')
+                AND (
+                  CASE better.priority
+                    WHEN 'high' THEN 0
+                    WHEN 'normal' THEN 1
+                    WHEN 'low' THEN 2
+                    ELSE 3
+                  END
+                    < CASE ${TaskQueueTable.priority}
+                        WHEN 'high' THEN 0
+                        WHEN 'normal' THEN 1
+                        WHEN 'low' THEN 2
+                        ELSE 3
+                      END
+                  OR (
+                    CASE better.priority
+                      WHEN 'high' THEN 0
+                      WHEN 'normal' THEN 1
+                      WHEN 'low' THEN 2
+                      ELSE 3
+                    END
+                      = CASE ${TaskQueueTable.priority}
+                          WHEN 'high' THEN 0
+                          WHEN 'normal' THEN 1
+                          WHEN 'low' THEN 2
+                          ELSE 3
+                        END
+                    AND (
+                      better.time_created < ${TaskQueueTable.time_created}
+                      OR (
+                        better.time_created = ${TaskQueueTable.time_created}
+                        AND better.id < ${TaskQueueTable.id}
+                      )
+                    )
+                  )
+                )
             )`,
         )
         .orderBy(
@@ -155,13 +202,14 @@ export namespace TaskQueueService {
             ELSE 3
           END`,
           TaskQueueTable.time_created,
+          TaskQueueTable.id,
         )
-        .limit(BATCH_SIZE)
+        .limit(limit)
         .all(),
     )
   }
 
-  function claim(id: string) {
+  function claim(id: string, sessionID: string) {
     const now = Date.now()
     return Database.use((db) =>
       db
@@ -175,7 +223,15 @@ export namespace TaskQueueService {
         })
         .where(
           sql`${TaskQueueTable.id} = ${id}
+            AND ${TaskQueueTable.session_id} = ${sessionID}
             AND ${TaskQueueTable.status} IN ('queued', 'retrying')
+            AND NOT EXISTS (
+              SELECT 1
+              FROM a2a_task_queue running
+              WHERE running.session_id = ${sessionID}
+                AND running.status = 'running'
+                AND running.id != ${id}
+            )
             AND ${TaskQueueTable.session_id} IN (
               SELECT ${SessionTable.id}
               FROM ${SessionTable}
@@ -192,10 +248,24 @@ export namespace TaskQueueService {
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
     }
+    const timer = setInterval(() => {
+      try {
+        touch(task.id)
+      } catch (error) {
+        log.warn("task heartbeat update failed", {
+          id: task.id,
+          sessionID: task.session_id,
+          error: message(error),
+        })
+      }
+    }, heartbeat())
+    timer.unref()
     await executePrompt({
       sessionID: task.session_id,
       prompt: metadata.data.input,
       source: "task-queue-service",
+    }).finally(() => {
+      clearInterval(timer)
     })
     const now = Date.now()
     Database.use((db) =>
@@ -214,13 +284,20 @@ export namespace TaskQueueService {
   }
 
   function recover(now: number) {
+    const timeout = runTimeout()
     const stale = Database.use((db) =>
       db
         .select()
         .from(TaskQueueTable)
         .where(
           sql`${TaskQueueTable.status} = 'running'
-            AND ${TaskQueueTable.time_started} <= ${now - RUN_TIMEOUT_MS}
+            AND (
+              ${TaskQueueTable.time_updated} <= ${now - timeout}
+              OR (
+                ${TaskQueueTable.time_updated} IS NULL
+                AND ${TaskQueueTable.time_started} <= ${now - timeout}
+              )
+            )
             AND ${TaskQueueTable.session_id} IN (
               SELECT ${SessionTable.id}
               FROM ${SessionTable}
@@ -282,6 +359,36 @@ export namespace TaskQueueService {
       failed,
       error: message(error),
     })
+  }
+
+  function touch(id: string) {
+    Database.use((db) =>
+      db
+        .update(TaskQueueTable)
+        .set({
+          time_updated: Date.now(),
+        })
+        .where(and(eq(TaskQueueTable.id, id), eq(TaskQueueTable.status, "running")))
+        .run(),
+    )
+  }
+
+  function runTimeout() {
+    const raw = process.env[RUN_TIMEOUT_ENV]
+    if (!raw) return RUN_TIMEOUT_MS
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return RUN_TIMEOUT_MS
+    if (value < 1000) return 1000
+    return Math.floor(value)
+  }
+
+  function heartbeat() {
+    const raw = process.env[HEARTBEAT_ENV]
+    if (!raw) return HEARTBEAT_MS
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return HEARTBEAT_MS
+    if (value < 1000) return 1000
+    return Math.floor(value)
   }
 }
 

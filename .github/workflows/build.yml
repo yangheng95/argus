@@ -160,9 +160,9 @@ jobs:
         env:
           MODELS_DEV_API_JSON: /tmp/models-api-clean.json
           OPENCORVUS_OVERLAY_BIN_DIR: /tmp/overlay-dir
-          OPENCODE_RELEASE:  ${{ steps.meta.outputs.release == '1' && '1' || '' }}
-          OPENCODE_VERSION:  ${{ steps.meta.outputs.version }}
-          OPENCODE_CHANNEL:  ${{ steps.meta.outputs.release == '1' && 'latest' || '' }}
+          OPENCORVUS_RELEASE:  ${{ steps.meta.outputs.release == '1' && '1' || '' }}
+          OPENCORVUS_VERSION:  ${{ steps.meta.outputs.version }}
+          OPENCORVUS_CHANNEL:  ${{ steps.meta.outputs.release == '1' && 'latest' || '' }}
           GH_REPO:           ${{ github.repository }}
           GH_TOKEN:          ${{ secrets.GITHUB_TOKEN }}
         run: bun run script/build.ts --all

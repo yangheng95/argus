@@ -4,7 +4,7 @@ description: تفاعل مع خادم opencorvus عبر HTTP.
 ---
 
 import config from "../../../../config.mjs"
-export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
+export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/v2/gen/types.gen.ts`
 
 يشغّل الأمر `opencorvus serve` خادما HTTP دون واجهة ويعرض نقطة نهاية OpenAPI يمكن لعميل opencorvus استخدامها.
 
@@ -36,10 +36,10 @@ opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 
 ### المصادقة
 
-عيّن `OPENCODE_SERVER_PASSWORD` لحماية الخادم باستخدام مصادقة HTTP الأساسية. اسم المستخدم افتراضيا هو `opencorvus`، أو عيّن `OPENCODE_SERVER_USERNAME` لتغييره. ينطبق ذلك على كل من `opencorvus serve` و `opencorvus web`.
+عيّن `OPENCORVUS_SERVER_PASSWORD` لحماية الخادم باستخدام مصادقة HTTP الأساسية. اسم المستخدم افتراضيا هو `opencorvus`، أو عيّن `OPENCORVUS_SERVER_USERNAME` لتغييره. ينطبق ذلك على كل من `opencorvus serve` و `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
+OPENCORVUS_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---

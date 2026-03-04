@@ -16,7 +16,10 @@ export namespace ShareNext {
     return Config.get().then((x) => x.enterprise?.url ?? "https://opncd.ai")
   }
 
-  const disabled = process.env["OPENCORVUS_DISABLE_SHARE"] === "true" || process.env["OPENCORVUS_DISABLE_SHARE"] === "1"
+  const disabled = (() => {
+    const value = process.env["OPENCORVUS_DISABLE_SHARE"]
+    return value === "true" || value === "1"
+  })()
 
   export async function init() {
     if (disabled) return

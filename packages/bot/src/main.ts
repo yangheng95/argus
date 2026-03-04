@@ -66,7 +66,15 @@ if (activeKey) {
   console.log(`[Bot] DashScope runtime: ${keyType}, baseURL: ${baseURL}, source: ${from}`)
 }
 
-const bot = new BotCore()
+const botServerUrl = process.env.OPENCORVUS_BOT_SERVER_URL?.trim()
+if (botServerUrl) {
+  console.log(`[Bot] Attach existing OpenCorvus server: ${botServerUrl}`)
+}
+const bot = new BotCore({
+  baseUrl: botServerUrl,
+  sharedMode: process.env.OPENCORVUS_SHARED_SESSION_MODE === "1",
+  sharedFile: process.env.OPENCORVUS_SHARED_SESSION_FILE,
+})
 
 // --- STT Pipeline Setup ---
 const sttPipeline = new STTPipeline({

@@ -402,7 +402,7 @@ export namespace Provider {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://opencorvus.ai/",
             "X-Title": "opencorvus",
           },
         },
@@ -413,7 +413,7 @@ export namespace Provider {
         autoload: false,
         options: {
           headers: {
-            "http-referer": "https://opencode.ai/",
+            "http-referer": "https://opencorvus.ai/",
             "x-title": "opencorvus",
           },
         },
@@ -499,7 +499,7 @@ export namespace Provider {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://opencorvus.ai/",
             "X-Title": "opencorvus",
           },
         },
@@ -623,7 +623,7 @@ export namespace Provider {
         autoload: false,
         options: {
           headers: {
-            "HTTP-Referer": "https://opencode.ai/",
+            "HTTP-Referer": "https://opencorvus.ai/",
             "X-Title": "opencorvus",
           },
         },

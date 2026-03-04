@@ -8,6 +8,8 @@ import { Overlay } from "../opencorvus/perception/overlay"
 import { Provider } from "../provider/provider"
 import { Log } from "../util/log"
 import { createHash } from "crypto"
+import { GuiState } from "./gui-state"
+import { DesktopState } from "./desktop-state"
 
 import VISION_PROMPT from "./prompt/vision-analyze.txt"
 
@@ -100,16 +102,56 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
       always: ["*"],
       metadata: { action: "vision_analyze" },
     })
+    GuiState.activate()
+    DesktopState.markTask(GuiState.get().taskEpoch)
+    await WindowManager.rebindForTask(GuiState.get().taskEpoch)
 
     const timer = log.time("vision analysis")
 
     try {
+      const boundBeforeCapture = await WindowManager.getBinding()
+      if (boundBeforeCapture?.info.isMinimized) {
+        return {
+          title: "Vision analysis blocked: bound window is minimized",
+          output: `Bound window "${boundBeforeCapture.info.title}" is minimized. Restore and re-bind it, then run vision_analyze again.`,
+          metadata: {
+            width: 0,
+            height: 0,
+            screenshotHash: "",
+            elementsFound: 0,
+            runningSummary: "",
+            error: true,
+          },
+        }
+      }
       const capture = await Capture.take({ mode: "auto" })
+      if (boundBeforeCapture && capture.scope !== "window") {
+        return {
+          title: "Vision analysis blocked: bound window capture drifted",
+          output: `Bound window "${boundBeforeCapture.info.title}" could not be captured and capture drifted to ${capture.scope}. Re-bind with screen.bind_window and retry.`,
+          metadata: {
+            width: capture.width,
+            height: capture.height,
+            screenshotHash: "",
+            elementsFound: 0,
+            runningSummary: "",
+            error: true,
+          },
+        }
+      }
 
       // Add coordinate overlay
       const overlaid = await Overlay.add(capture.buffer)
       const base64 = overlaid.toString("base64")
       const hash = createHash("md5").update(capture.buffer).digest("hex")
+      const capturedWindow = capture.scope === "window" ? capture.window : null
+      DesktopState.recordCapture({
+        scope: capture.scope,
+        bounds: capture.windowBounds,
+        window: capturedWindow ? { windowId: capturedWindow.id, title: capturedWindow.title } : null,
+        monitor: capture.monitor ? { id: capture.monitor.id, name: capture.monitor.name } : null,
+        screenshotHash: hash,
+      })
 
       // Build user prompt with context
       const parts: string[] = []

@@ -4,7 +4,7 @@ description: ไคลเอนต์ JS ประเภทที่ปลอด
 ---
 
 import config from "../../../../config.mjs"
-export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
+export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/v2/gen/types.gen.ts`
 
 opencorvus JS/TS SDK จัดเตรียมไคลเอ็นต์ประเภทที่ปลอดภัยสำหรับการโต้ตอบกับเซิร์ฟเวอร์
 ใช้เพื่อสร้างการบูรณาการและควบคุม opencorvus โดยทางโปรแกรม
@@ -28,7 +28,7 @@ npm install @opencorvus-ai/sdk
 สร้างอินสแตนซ์ของ opencorvus:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const { client } = await createOpenCorvus()
 ```
@@ -52,7 +52,7 @@ const { client } = await createOpenCorvus()
 คุณสามารถส่งผ่านออบเจ็กต์การกำหนดค่าเพื่อปรับแต่งลักษณะการทำงานได้ อินสแตนซ์ยังคงรับ `opencorvus.json` ของคุณ แต่คุณสามารถแทนที่หรือเพิ่มการกำหนดค่าแบบอินไลน์ได้:
 
 ```javascript
-import { createOpenCorvus } from "@opencorvus-ai/sdk"
+import { createOpenCorvus } from "@opencorvus-ai/sdk/v2"
 
 const opencorvus = await createOpenCorvus({
   hostname: "127.0.0.1",
@@ -72,7 +72,7 @@ opencorvus.server.close()
 หากคุณมีอินสแตนซ์ opencorvus ที่ทำงานอยู่แล้ว คุณสามารถสร้างอินสแตนซ์ไคลเอ็นต์เพื่อเชื่อมต่อได้:
 
 ```javascript
-import { createOpenCorvusClient } from "@opencorvus-ai/sdk"
+import { createOpenCorvusClient } from "@opencorvus-ai/sdk/v2"
 
 const client = createOpenCorvusClient({
   baseUrl: "http://localhost:4096",
@@ -96,7 +96,7 @@ const client = createOpenCorvusClient({
 SDK มีคำจำกัดความ TypeScript สำหรับ API ประเภททั้งหมด นำเข้าโดยตรง:
 
 ```typescript
-import type { Session, Message, Part } from "@opencorvus-ai/sdk"
+import type { Session, Message, Part } from "@opencorvus-ai/sdk/v2"
 ```
 
 ทุกประเภทสร้างขึ้นจากข้อกำหนด OpenAPI ของเซิร์ฟเวอร์และมีอยู่ใน <a href={typesUrl}>ไฟล์ประเภท</a>

@@ -109,7 +109,7 @@ ACP 経由で OpenCorvus を使用するには、`opencorvus acp` コマンド�
       command = "opencorvus",
       args = { "acp" },
       env = {
-        OPENCODE_API_KEY = os.getenv("OPENCODE_API_KEY")
+        OPENCORVUS_API_KEY = os.getenv("OPENCORVUS_API_KEY")
       }
     }
   }
@@ -137,7 +137,7 @@ require("codecompanion").setup({
 
 この構成は、OpenCorvus をチャットの ACP エージェントとして使用するように CodeCompanion をセットアップします。
 
-環境変数 (`OPENCODE_API_KEY` など) を渡す必要がある場合、詳細については、CodeCompanion.nvim ドキュメントの「[アダプターの構成: 環境変数](https://codecompanion.olimorris.dev/getting-started#setting-an-api-key)」を参照してください。
+環境変数 (`OPENCORVUS_API_KEY` など) を渡す必要がある場合、詳細については、CodeCompanion.nvim ドキュメントの「[アダプターの構成: 環境変数](https://codecompanion.olimorris.dev/getting-started#setting-an-api-key)」を参照してください。
 
 ## サポート
 

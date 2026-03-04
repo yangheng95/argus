@@ -44,10 +44,10 @@ As fontes de configuração são carregadas nesta ordem (fontes posteriores subs
 
 1. **Configuração remota** (de `.well-known/opencorvus`) - padrões organizacionais
 2. **Configuração global** (`~/.config/opencorvus/opencorvus.json`) - preferências do usuário
-3. **Configuração personalizada** (`OPENCODE_CONFIG` var de ambiente) - substituições personalizadas
+3. **Configuração personalizada** (`OPENCORVUS_CONFIG` var de ambiente) - substituições personalizadas
 4. **Configuração do projeto** (`opencorvus.json` no projeto) - configurações específicas do projeto
 5. **Diretórios `.opencorvus`** - agentes, comandos, plugins
-6. **Configuração inline** (`OPENCODE_CONFIG_CONTENT` var de ambiente) - substituições em tempo de execução
+6. **Configuração inline** (`OPENCORVUS_CONFIG_CONTENT` var de ambiente) - substituições em tempo de execução
 
 Isso significa que as configurações do projeto podem substituir os padrões globais, e as configurações globais podem substituir os padrões organizacionais remotos.
 
@@ -117,10 +117,10 @@ Isso também é seguro para ser verificado no Git e usa o mesmo esquema que o gl
 
 ### Caminho personalizado
 
-Especifique um caminho de arquivo de configuração personalizado usando a variável de ambiente `OPENCODE_CONFIG`.
+Especifique um caminho de arquivo de configuração personalizado usando a variável de ambiente `OPENCORVUS_CONFIG`.
 
 ```bash
-export OPENCODE_CONFIG=/path/to/my/custom-config.json
+export OPENCORVUS_CONFIG=/path/to/my/custom-config.json
 opencorvus run "Hello world"
 ```
 
@@ -130,10 +130,10 @@ A configuração personalizada é carregada entre as configurações globais e d
 
 ### Diretório personalizado
 
-Especifique um diretório de configuração personalizado usando a variável de ambiente `OPENCODE_CONFIG_DIR`. Este diretório será pesquisado por agentes, comandos, modos e plugins, assim como o diretório padrão `.opencorvus`, e deve seguir a mesma estrutura.
+Especifique um diretório de configuração personalizado usando a variável de ambiente `OPENCORVUS_CONFIG_DIR`. Este diretório será pesquisado por agentes, comandos, modos e plugins, assim como o diretório padrão `.opencorvus`, e deve seguir a mesma estrutura.
 
 ```bash
-export OPENCODE_CONFIG_DIR=/path/to/my/config-directory
+export OPENCORVUS_CONFIG_DIR=/path/to/my/config-directory
 opencorvus run "Hello world"
 ```
 
@@ -635,7 +635,7 @@ Use `{env:VARIABLE_NAME}` para substituir variáveis de ambiente:
 ```json title="opencorvus.json"
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "{env:OPENCODE_MODEL}",
+  "model": "{env:OPENCORVUS_MODEL}",
   "provider": {
     "anthropic": {
       "models": {},

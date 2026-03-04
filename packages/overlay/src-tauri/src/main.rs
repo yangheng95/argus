@@ -10,6 +10,10 @@ use tauri::Manager;
 
 fn main() {
     let shared = manager::new_shared();
+    let sidecar = std::env::var("OPENCORVUS_OVERLAY_MODE")
+        .ok()
+        .map(|item| item == "sidecar")
+        .unwrap_or(false);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -27,18 +31,29 @@ fn main() {
             commands::manager_stop,
             commands::manager_clear_logs,
             commands::manager_save,
-            commands::manager_send
+            commands::manager_send,
+            commands::manager_open_mcp_config,
+            commands::manager_open_skill_dir,
+            commands::manager_add_mcp,
+            commands::manager_create_skill
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let state = app.state::<manager::Shared>();
             manager::init(state.inner(), &app.handle());
-            if let Err(error) = manager::start_bot(state.inner(), &app.handle()) {
-                manager::push_log(
-                    state.inner(),
-                    &app.handle(),
-                    format!("auto-start failed: {error}"),
-                );
+            if !sidecar {
+                if let Err(error) = manager::start_bot(state.inner(), &app.handle()) {
+                    manager::push_log(
+                        state.inner(),
+                        &app.handle(),
+                        format!("auto-start failed: {error}"),
+                    );
+                }
+                if let Err(error) = tray::setup(&app.handle()) {
+                    manager::push_log(state.inner(), &app.handle(), format!("tray setup failed: {error}"));
+                }
+                manager::show_console(&app.handle());
             }
+<<<<<<< HEAD
             if let Err(error) = tray::setup(&app.handle()) {
                 manager::push_log(
                     state.inner(),
@@ -60,6 +75,10 @@ fn main() {
             if forced || !bridge_mode {
                 manager::show_console(&app.handle());
             }
+=======
+            overlay::apply_overlay_window_style(app);
+            overlay::start_stdin_bridge(app);
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
             Ok(())
         })
         .run(tauri::generate_context!())

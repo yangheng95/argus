@@ -4,7 +4,7 @@ description: โต้ตอบกับเซิร์ฟเวอร์ openco
 ---
 
 import config from "../../../../config.mjs"
-export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
+export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/v2/gen/types.gen.ts`
 
 คำสั่ง `opencorvus serve` รันเซิร์ฟเวอร์ HTTP ที่ไม่มีหัวซึ่งเปิดเผยตำแหน่งข้อมูล OpenAPI ที่ไคลเอนต์ opencorvus สามารถใช้ได้
 
@@ -36,10 +36,10 @@ opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 
 ### การรับรองความถูกต้อง
 
-ตั้งค่า `OPENCODE_SERVER_PASSWORD` เพื่อปกป้องเซิร์ฟเวอร์ด้วย HTTP การตรวจสอบสิทธิ์ขั้นพื้นฐาน ชื่อผู้ใช้มีค่าเริ่มต้นเป็น `opencorvus` หรือตั้งค่า `OPENCODE_SERVER_USERNAME` เพื่อแทนที่ชื่อผู้ใช้ สิ่งนี้ใช้ได้กับทั้ง `opencorvus serve` และ `opencorvus web`
+ตั้งค่า `OPENCORVUS_SERVER_PASSWORD` เพื่อปกป้องเซิร์ฟเวอร์ด้วย HTTP การตรวจสอบสิทธิ์ขั้นพื้นฐาน ชื่อผู้ใช้มีค่าเริ่มต้นเป็น `opencorvus` หรือตั้งค่า `OPENCORVUS_SERVER_USERNAME` เพื่อแทนที่ชื่อผู้ใช้ สิ่งนี้ใช้ได้กับทั้ง `opencorvus serve` และ `opencorvus web`
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
+OPENCORVUS_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---

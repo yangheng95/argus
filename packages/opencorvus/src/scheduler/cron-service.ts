@@ -20,7 +20,11 @@ export namespace CronService {
 
   const POLL_INTERVAL_MS = 60 * 1000
   const LEASE_MS = 2 * 60 * 1000
+  const LEASE_RENEW_MS = 30 * 1000
   const MAX_BACKOFF_MS = 5 * 60 * 1000
+  const CONCURRENCY_ENV = "OPENCORVUS_CRON_CONCURRENCY"
+  const CONCURRENCY_DEFAULT = 4
+  const CONCURRENCY_MAX = 32
 
   const state = Instance.state(() => ({
     running: false,
@@ -65,19 +69,41 @@ export namespace CronService {
             AND ${CronJobTable.next_run} <= ${now}
             AND (${CronJobTable.lease_until} <= ${now} OR ${CronJobTable.lease_until} IS NULL)`,
         )
+        .orderBy(CronJobTable.next_run, CronJobTable.id)
         .all(),
     )
 
     if (due.length === 0) return
     log.info("found due cron jobs", { count: due.length, projectID })
 
-    for (const row of due) {
-      const claimed = claim(row.id, projectID, owner, now)
-      if (!claimed) continue
-      await execute(claimed, owner, now).catch(async (err) => {
-        await fail(claimed, owner, now, err)
-      })
+    const slots = Math.min(concurrency(), due.length)
+    let offset = 0
+    const pick = () => {
+      const row = due[offset]
+      offset += 1
+      return row
     }
+
+    await Promise.all(Array.from({ length: slots }, async () => {
+      while (true) {
+        const row = pick()
+        if (!row) return
+        const job = claim(row.id, projectID, owner, now)
+        if (!job) continue
+        await execute(job, owner, now).catch(async (err) => {
+          await fail(job, owner, err)
+        })
+      }
+    }))
+  }
+
+  function concurrency() {
+    const raw = process.env[CONCURRENCY_ENV]
+    if (!raw) return CONCURRENCY_DEFAULT
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return CONCURRENCY_DEFAULT
+    if (value < 1) return 1
+    return Math.min(Math.floor(value), CONCURRENCY_MAX)
   }
 
   function claim(id: string, projectID: string, owner: string, now: number) {
@@ -116,18 +142,34 @@ export namespace CronService {
   async function execute(job: typeof CronJobTable.$inferSelect, owner: string, now: number): Promise<void> {
     log.info("executing cron job", { jobId: job.id, name: job.name, prompt: job.prompt.slice(0, 100) })
 
+    const timer = setInterval(() => {
+      try {
+        renew(job.id, owner)
+      } catch (error) {
+        log.warn("cron lease renew failed", {
+          jobId: job.id,
+          name: job.name,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }, LEASE_RENEW_MS)
+    timer.unref()
+
     const sessionID = await SessionWake.wake({
       sessionID: job.session_id ?? undefined,
       prompt: job.prompt,
       agent: job.agent === "default" ? undefined : job.agent,
+    }).finally(() => {
+      clearInterval(timer)
     })
+    const committedAt = Date.now()
 
     if (job.one_shot) {
       Database.use((db) =>
         db
           .update(CronJobTable)
           .set({
-            last_run: now,
+            last_run: committedAt,
             enabled: false,
             failure_count: 0,
             last_error: null,
@@ -147,12 +189,12 @@ export namespace CronService {
     }
 
     const parsed = Cron.parse(job.expression)
-    const nextRun = Cron.nextRun(parsed, now)
+    const nextRun = Cron.nextRun(parsed, committedAt)
     Database.use((db) =>
       db
         .update(CronJobTable)
         .set({
-          last_run: now,
+          last_run: committedAt,
           next_run: nextRun,
           failure_count: 0,
           last_error: null,
@@ -170,14 +212,26 @@ export namespace CronService {
     })
   }
 
+  function renew(id: string, owner: string) {
+    Database.use((db) =>
+      db
+        .update(CronJobTable)
+        .set({
+          lease_until: Date.now() + LEASE_MS,
+        })
+        .where(and(eq(CronJobTable.id, id), eq(CronJobTable.lease_owner, owner)))
+        .run(),
+    )
+  }
+
   async function fail(
     job: typeof CronJobTable.$inferSelect,
     owner: string,
-    now: number,
     err: unknown,
   ): Promise<void> {
-    const step = Math.min(job.failure_count + 1, 8)
-    const wait = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** step)
+    const now = Date.now()
+    const step = job.failure_count + 1
+    const wait = Math.min(MAX_BACKOFF_MS, 1000 * 2 ** Math.min(step, 30))
     const nextRun = Math.max(job.next_run, now + wait)
     const msg = err instanceof Error ? err.message : String(err)
 

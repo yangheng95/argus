@@ -188,8 +188,8 @@ if [[ "$NO_UPLOAD" == "1" ]]; then
     SSL_CERT_FILE="$SSL_CERT_FILE" \
     MODELS_DEV_API_JSON="$MODELS_JSON" \
     OPENCORVUS_OVERLAY_BIN_DIR="$OVERLAY_STAGED" \
-    OPENCODE_VERSION="$VERSION" \
-    OPENCODE_CHANNEL="latest" \
+    OPENCORVUS_VERSION="$VERSION" \
+    OPENCORVUS_CHANNEL="latest" \
     bun run script/build.ts "${BUILD_ARGS[@]}"
 else
   # Build AND upload release assets to RELEASE_REPO
@@ -197,9 +197,9 @@ else
     SSL_CERT_FILE="$SSL_CERT_FILE" \
     MODELS_DEV_API_JSON="$MODELS_JSON" \
     OPENCORVUS_OVERLAY_BIN_DIR="$OVERLAY_STAGED" \
-    OPENCODE_RELEASE="1" \
-    OPENCODE_VERSION="$VERSION" \
-    OPENCODE_CHANNEL="latest" \
+    OPENCORVUS_RELEASE="1" \
+    OPENCORVUS_VERSION="$VERSION" \
+    OPENCORVUS_CHANNEL="latest" \
     GH_REPO="$RELEASE_REPO" \
     bun run script/build.ts "${BUILD_ARGS[@]}"
 fi

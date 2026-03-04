@@ -38,7 +38,7 @@ export default function TermsOfService() {
                 <strong>ANOMALY INNOVATIONS, INC.</strong> ("OpenCorvus," "we" and "us"). Your use of the Services in any
                 way means that you agree to all of these Terms, and these Terms will remain in effect while you use the
                 Services. These Terms include the provisions in this document as well as those in the Privacy Policy{" "}
-                <a href={language.route("/legal/privacy-policy")}>https://opencode.ai/legal/privacy-policy</a>.{" "}
+                <a href={language.route("/legal/privacy-policy")}>https://opencorvus.ai/legal/privacy-policy</a>.{" "}
                 <strong>
                   Your use of or participation in certain Services may also be subject to additional policies, rules
                   and/or conditions ("Additional Terms"), which are incorporated herein by reference, and you understand
@@ -68,7 +68,7 @@ export default function TermsOfService() {
                 RIGHT TO PARTICIPATE IN A CLASS ACTION LAWSUIT OR CLASS-WIDE ARBITRATION.
               </p>
 
-              <h2 id="what-is-opencode">What is OpenCorvus?</h2>
+              <h2 id="what-is-opencorvus">What is OpenCorvus?</h2>
               <p>
                 OpenCorvus is an AI-powered coding agent that helps you write, understand, and modify code using large
                 language models. Certain of these large language models are provided by third parties ("Third Party
@@ -81,7 +81,7 @@ export default function TermsOfService() {
               <p>
                 We are constantly trying to improve our Services, so these Terms may need to change along with our
                 Services. We reserve the right to change the Terms at any time, but if we do, we will place a notice on
-                our site located at opencode.ai, send you an email, and/or notify you by some other means.
+                our site located at opencorvus.ai, send you an email, and/or notify you by some other means.
               </p>
 
               <p>
@@ -99,7 +99,7 @@ export default function TermsOfService() {
               <p>
                 OpenCorvus takes the privacy of its users very seriously. For the current OpenCorvus Privacy Policy, please
                 click here{" "}
-                <a href="https://opencode.ai/legal/privacy-policy">https://opencode.ai/legal/privacy-policy</a>.
+                <a href="https://opencorvus.ai/legal/privacy-policy">https://opencorvus.ai/legal/privacy-policy</a>.
               </p>
 
               <h3>Children's Online Privacy Protection Act</h3>
@@ -243,7 +243,7 @@ export default function TermsOfService() {
                 any Third Party Model.
               </p>
 
-              <h2 id="will-opencode-ever-change-the-services">Will OpenCorvus ever change the Services?</h2>
+              <h2 id="will-opencorvus-ever-change-the-services">Will OpenCorvus ever change the Services?</h2>
               <p>
                 We're always trying to improve our Services, so they may change over time. We may suspend or discontinue
                 any part of the Services, or we may introduce new features or impose limits on certain features or
@@ -262,7 +262,7 @@ export default function TermsOfService() {
               <p>
                 Certain of our Services, including Zen, may be subject to payments now or in the future (the "Paid
                 Services"). Please see our Paid Services page{" "}
-                <a href={language.route("/zen")}>https://opencode.ai/zen</a> for a description of the current Paid
+                <a href={language.route("/zen")}>https://opencorvus.ai/zen</a> for a description of the current Paid
                 Services. Please note that any payment terms presented to you in the process of using or signing up for
                 a Paid Service are deemed part of these Terms.
               </p>
@@ -303,7 +303,7 @@ export default function TermsOfService() {
                 CONFIRMED BY US) THAT YOU HAVE TERMINATED THIS AUTHORIZATION OR WISH TO CHANGE YOUR PAYMENT METHOD. SUCH
                 NOTICE WILL NOT AFFECT CHARGES SUBMITTED BEFORE WE REASONABLY COULD ACT. TO TERMINATE YOUR AUTHORIZATION
                 OR CHANGE YOUR PAYMENT METHOD, GO TO ACCOUNT SETTINGS{" "}
-                <a href="https://opencode.ai/auth">https://opencode.ai/auth</a>.
+                <a href="https://opencorvus.ai/auth">https://opencorvus.ai/auth</a>.
               </p>
 
               <h3>Free Trials and Other Promotions</h3>
@@ -318,7 +318,7 @@ export default function TermsOfService() {
               <h2 id="what-if-i-want-to-stop">What if I want to stop using the Services?</h2>
               <p>
                 You're free to do that at any time; please refer to our Privacy Policy{" "}
-                <a href={language.route("/legal/privacy-policy")}>https://opencode.ai/legal/privacy-policy</a>, as well
+                <a href={language.route("/legal/privacy-policy")}>https://opencorvus.ai/legal/privacy-policy</a>, as well
                 as the licenses above, to understand how we treat information you provide to us after you have stopped
                 using our Services.
               </p>
@@ -350,7 +350,7 @@ export default function TermsOfService() {
                 procedures, costs, expenses, damages or liabilities arising out of use of, or in any way related to your
                 participation in, the Services. The OpenCorvus Parties make no representations or warranties regarding
                 suggestions or recommendations of services or products offered or purchased through or in connection
-                with the Services. THE SERVICES AND CONTENT ARE PROVIDED BY OPENCODE (AND ITS LICENSORS AND SUPPLIERS)
+                with the Services. THE SERVICES AND CONTENT ARE PROVIDED BY OPENCORVUS (AND ITS LICENSORS AND SUPPLIERS)
                 ON AN "AS-IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, WITHOUT
                 LIMITATION, IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT,
                 OR THAT USE OF THE SERVICES WILL BE UNINTERRUPTED OR ERROR-FREE. SOME STATES DO NOT ALLOW LIMITATIONS ON
@@ -361,12 +361,12 @@ export default function TermsOfService() {
               <p>
                 TO THE FULLEST EXTENT ALLOWED BY APPLICABLE LAW, UNDER NO CIRCUMSTANCES AND UNDER NO LEGAL THEORY
                 (INCLUDING, WITHOUT LIMITATION, TORT, CONTRACT, STRICT LIABILITY, OR OTHERWISE) SHALL ANY OF THE
-                OPENCODE PARTIES BE LIABLE TO YOU OR TO ANY OTHER PERSON FOR (A) ANY INDIRECT, SPECIAL, INCIDENTAL,
+                OPENCORVUS PARTIES BE LIABLE TO YOU OR TO ANY OTHER PERSON FOR (A) ANY INDIRECT, SPECIAL, INCIDENTAL,
                 PUNITIVE OR CONSEQUENTIAL DAMAGES OF ANY KIND, INCLUDING DAMAGES FOR LOST PROFITS, BUSINESS
                 INTERRUPTION, LOSS OF DATA, LOSS OF GOODWILL, WORK STOPPAGE, ACCURACY OF RESULTS, OR COMPUTER FAILURE OR
                 MALFUNCTION, (B) ANY SUBSTITUTE GOODS, SERVICES OR TECHNOLOGY, (C) ANY AMOUNT, IN THE AGGREGATE, IN
                 EXCESS OF THE GREATER OF (I) ONE-HUNDRED ($100) DOLLARS OR (II) THE AMOUNTS PAID AND/OR PAYABLE BY YOU
-                TO OPENCODE IN CONNECTION WITH THE SERVICES IN THE TWELVE (12) MONTH PERIOD PRECEDING THIS APPLICABLE
+                TO OPENCORVUS IN CONNECTION WITH THE SERVICES IN THE TWELVE (12) MONTH PERIOD PRECEDING THIS APPLICABLE
                 CLAIM OR (D) ANY MATTER BEYOND OUR REASONABLE CONTROL. SOME STATES DO NOT ALLOW THE EXCLUSION OR
                 LIMITATION OF INCIDENTAL OR CONSEQUENTIAL OR CERTAIN OTHER DAMAGES, SO THE ABOVE LIMITATION AND
                 EXCLUSIONS MAY NOT APPLY TO YOU.
@@ -439,11 +439,11 @@ export default function TermsOfService() {
 
               <h4>Waiver of Jury Trial</h4>
               <p>
-                YOU AND OPENCODE WAIVE ANY CONSTITUTIONAL AND STATUTORY RIGHTS TO GO TO COURT AND HAVE A TRIAL IN FRONT
+                YOU AND OPENCORVUS WAIVE ANY CONSTITUTIONAL AND STATUTORY RIGHTS TO GO TO COURT AND HAVE A TRIAL IN FRONT
                 OF A JUDGE OR JURY. You and OpenCorvus are instead choosing to have claims and disputes resolved by
                 arbitration. Arbitration procedures are typically more limited, more efficient, and less costly than
                 rules applicable in court and are subject to very limited review by a court. In any litigation between
-                you and OpenCorvus over whether to vacate or enforce an arbitration award, YOU AND OPENCODE WAIVE ALL
+                you and OpenCorvus over whether to vacate or enforce an arbitration award, YOU AND OPENCORVUS WAIVE ALL
                 RIGHTS TO A JURY TRIAL, and elect instead to have the dispute be resolved by a judge.
               </p>
 

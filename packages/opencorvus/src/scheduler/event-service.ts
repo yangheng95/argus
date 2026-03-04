@@ -44,6 +44,7 @@ export namespace EventService {
         .all(),
     )
 
+    const pending: Promise<void>[] = []
     for (const job of jobs) {
       if (!Wildcard.match(event.type, job.event_type)) continue
       if (!ok(event, job.match_json ?? {})) continue
@@ -51,10 +52,23 @@ export namespace EventService {
       if (state().running.has(job.id)) continue
 
       state().running.add(job.id)
-      await run(job, event.type, now).finally(() => {
-        state().running.delete(job.id)
-      })
+      pending.push(
+        run(job, event.type, now)
+          .catch((error) => {
+            log.error("event job execution failed", {
+              jobId: job.id,
+              name: job.name,
+              event: event.type,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+          .finally(() => {
+            state().running.delete(job.id)
+          }),
+      )
     }
+
+    await Promise.allSettled(pending)
   }
 
   function ready(job: typeof EventJobTable.$inferSelect, now: number) {

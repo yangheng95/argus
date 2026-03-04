@@ -360,7 +360,7 @@ Uruchom serwer OpenCorvus (bez interfejsu) w celu uzyskania dostępu do API. Pe�
 opencorvus serve
 ```
 
-Uruchamia to serwer HTTP, który zapewnia dostęp do API OpenCorvus bez interfejsu TUI. Ustaw `OPENCODE_SERVER_PASSWORD`, aby włączyć podstawowe uwierzytelnianie HTTP (domyślna nazwa użytkownika to `opencorvus`).
+Uruchamia to serwer HTTP, który zapewnia dostęp do API OpenCorvus bez interfejsu TUI. Ustaw `OPENCORVUS_SERVER_PASSWORD`, aby włączyć podstawowe uwierzytelnianie HTTP (domyślna nazwa użytkownika to `opencorvus`).
 
 #### Flagi
 
@@ -456,7 +456,7 @@ Uruchom serwer OpenCorvus z interfejsem internetowym.
 opencorvus web
 ```
 
-Uruchamia to serwer HTTP i udostępnia OpenCorvus przez interfejs przeglądarkowy. Ustaw `OPENCODE_SERVER_PASSWORD`, aby włączyć podstawowe uwierzytelnianie HTTP (domyślna nazwa użytkownika to `opencorvus`).
+Uruchamia to serwer HTTP i udostępnia OpenCorvus przez interfejs przeglądarkowy. Ustaw `OPENCORVUS_SERVER_PASSWORD`, aby włączyć podstawowe uwierzytelnianie HTTP (domyślna nazwa użytkownika to `opencorvus`).
 
 #### Flagi
 
@@ -555,30 +555,30 @@ OpenCorvus można skonfigurować za pomocą zmiennych środowiskowych.
 
 | Zmienna                               | Typ     | Opis                                                        |
 | ------------------------------------- | ------- | ----------------------------------------------------------- |
-| `OPENCODE_AUTO_SHARE`                 | boolean | Automatycznie udostępniaj sesje                             |
-| `OPENCODE_GIT_BASH_PATH`              | string  | Ścieżka do pliku wykonywalnego Git Bash w systemie Windows  |
-| `OPENCODE_CONFIG`                     | string  | Ścieżka do pliku konfiguracyjnego                           |
-| `OPENCODE_CONFIG_DIR`                 | string  | Ścieżka do katalogu konfiguracyjnego                        |
-| `OPENCODE_CONFIG_CONTENT`             | string  | Treść konfiguracji JSON (inline)                            |
-| `OPENCODE_DISABLE_AUTOUPDATE`         | boolean | Wyłącz automatyczne sprawdzanie aktualizacji                |
-| `OPENCODE_DISABLE_PRUNE`              | boolean | Wyłącz czyszczenie starych wyników (pruning)                |
-| `OPENCODE_DISABLE_TERMINAL_TITLE`     | boolean | Wyłącz automatyczne ustawianie tytułu terminala             |
-| `OPENCODE_PERMISSION`                 | string  | Konfiguracja uprawnień w JSON (inline)                      |
-| `OPENCODE_DISABLE_DEFAULT_PLUGINS`    | boolean | Wyłącz domyślne wtyczki                                     |
-| `OPENCODE_DISABLE_LSP_DOWNLOAD`       | boolean | Wyłącz automatyczne pobieranie serwerów LSP                 |
-| `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` | boolean | Włącz modele eksperymentalne                                |
-| `OPENCODE_DISABLE_AUTOCOMPACT`        | boolean | Wyłącz automatyczne kompaktowanie kontekstu                 |
-| `OPENCODE_DISABLE_CLAUDE_CODE`        | boolean | Wyłącz integrację z `.claude` (prompt + skills)             |
-| `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Wyłącz czytanie `~/.claude/CLAUDE.md`                       |
-| `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Wyłącz ładowanie `.claude/skills`                           |
-| `OPENCODE_DISABLE_MODELS_FETCH`       | boolean | Wyłącz pobieranie modeli ze źródeł zewnętrznych             |
-| `OPENCODE_FAKE_VCS`                   | string  | Fałszywy dostawca VCS do celów testowych                    |
-| `OPENCODE_DISABLE_FILETIME_CHECK`     | boolean | Wyłącz sprawdzanie czasu modyfikacji plików (optymalizacja) |
-| `OPENCODE_CLIENT`                     | string  | Identyfikator klienta (domyślnie `cli`)                     |
-| `OPENCODE_ENABLE_EXA`                 | boolean | Włącz narzędzie wyszukiwania internetowego Exa              |
-| `OPENCODE_SERVER_PASSWORD`            | string  | Włącz uwierzytelnianie podstawowe dla `serve`/`web`         |
-| `OPENCODE_SERVER_USERNAME`            | string  | Nazwa użytkownika do autoryzacji (domyślnie `opencorvus`)     |
-| `OPENCODE_MODELS_URL`                 | string  | Niestandardowy adres URL do pobierania konfiguracji modeli  |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | Automatycznie udostępniaj sesje                             |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Ścieżka do pliku wykonywalnego Git Bash w systemie Windows  |
+| `OPENCORVUS_CONFIG`                     | string  | Ścieżka do pliku konfiguracyjnego                           |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | Ścieżka do katalogu konfiguracyjnego                        |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | Treść konfiguracji JSON (inline)                            |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Wyłącz automatyczne sprawdzanie aktualizacji                |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Wyłącz czyszczenie starych wyników (pruning)                |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Wyłącz automatyczne ustawianie tytułu terminala             |
+| `OPENCORVUS_PERMISSION`                 | string  | Konfiguracja uprawnień w JSON (inline)                      |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Wyłącz domyślne wtyczki                                     |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Wyłącz automatyczne pobieranie serwerów LSP                 |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Włącz modele eksperymentalne                                |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Wyłącz automatyczne kompaktowanie kontekstu                 |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | Wyłącz integrację z `.claude` (prompt + skills)             |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Wyłącz czytanie `~/.claude/CLAUDE.md`                       |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Wyłącz ładowanie `.claude/skills`                           |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Wyłącz pobieranie modeli ze źródeł zewnętrznych             |
+| `OPENCORVUS_FAKE_VCS`                   | string  | Fałszywy dostawca VCS do celów testowych                    |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Wyłącz sprawdzanie czasu modyfikacji plików (optymalizacja) |
+| `OPENCORVUS_CLIENT`                     | string  | Identyfikator klienta (domyślnie `cli`)                     |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | Włącz narzędzie wyszukiwania internetowego Exa              |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | Włącz uwierzytelnianie podstawowe dla `serve`/`web`         |
+| `OPENCORVUS_SERVER_USERNAME`            | string  | Nazwa użytkownika do autoryzacji (domyślnie `opencorvus`)     |
+| `OPENCORVUS_MODELS_URL`                 | string  | Niestandardowy adres URL do pobierania konfiguracji modeli  |
 
 ---
 
@@ -588,16 +588,16 @@ Te zmienne włączają funkcje eksperymentalne, które mogą ulec zmianie lub zo
 
 | Zmienna                                         | Typ     | Opis                                         |
 | ----------------------------------------------- | ------- | -------------------------------------------- |
-| `OPENCODE_EXPERIMENTAL`                         | boolean | Włącz wszystkie funkcje eksperymentalne      |
-| `OPENCODE_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Włącz wykrywanie ikon                        |
-| `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Wyłącz kopiowanie przy zaznaczaniu w TUI     |
-| `OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | number  | Domyślny limit czasu dla narzędzia bash w ms |
-| `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | number  | Maksymalne tokeny wyjściowe dla LLM          |
-| `OPENCODE_EXPERIMENTAL_FILEWATCHER`             | boolean | Włącz obserwatora plików dla całego katalogu |
-| `OPENCODE_EXPERIMENTAL_OXFMT`                   | boolean | Włącz formater oxfmt                         |
-| `OPENCODE_EXPERIMENTAL_LSP_TOOL`                | boolean | Włącz eksperymentalne narzędzie LSP          |
-| `OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolean | Wyłącz obserwatora plików                    |
-| `OPENCODE_EXPERIMENTAL_EXA`                     | boolean | Włącz funkcje eksperymentalne Exa            |
-| `OPENCODE_EXPERIMENTAL_LSP_TY`                  | boolean | Włącz eksperymentalne sprawdzanie typów LSP  |
-| `OPENCODE_EXPERIMENTAL_MARKDOWN`                | boolean | Włącz funkcje eksperymentalne Markdown       |
-| `OPENCODE_EXPERIMENTAL_PLAN_MODE`               | boolean | Włącz tryb planowania                        |
+| `OPENCORVUS_EXPERIMENTAL`                         | boolean | Włącz wszystkie funkcje eksperymentalne      |
+| `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Włącz wykrywanie ikon                        |
+| `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Wyłącz kopiowanie przy zaznaczaniu w TUI     |
+| `OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | number  | Domyślny limit czasu dla narzędzia bash w ms |
+| `OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | number  | Maksymalne tokeny wyjściowe dla LLM          |
+| `OPENCORVUS_EXPERIMENTAL_FILEWATCHER`             | boolean | Włącz obserwatora plików dla całego katalogu |
+| `OPENCORVUS_EXPERIMENTAL_OXFMT`                   | boolean | Włącz formater oxfmt                         |
+| `OPENCORVUS_EXPERIMENTAL_LSP_TOOL`                | boolean | Włącz eksperymentalne narzędzie LSP          |
+| `OPENCORVUS_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolean | Wyłącz obserwatora plików                    |
+| `OPENCORVUS_EXPERIMENTAL_EXA`                     | boolean | Włącz funkcje eksperymentalne Exa            |
+| `OPENCORVUS_EXPERIMENTAL_LSP_TY`                  | boolean | Włącz eksperymentalne sprawdzanie typów LSP  |
+| `OPENCORVUS_EXPERIMENTAL_MARKDOWN`                | boolean | Włącz funkcje eksperymentalne Markdown       |
+| `OPENCORVUS_EXPERIMENTAL_PLAN_MODE`               | boolean | Włącz tryb planowania                        |

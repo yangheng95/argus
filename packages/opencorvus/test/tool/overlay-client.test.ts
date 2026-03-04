@@ -1,15 +1,16 @@
 import { describe, expect, it } from "bun:test"
 import { overlayDiagnostic, parseOverlayReply, resolveOverlayCoord } from "@/tool/overlay-client"
+import { overlayProtocol } from "@/tool/overlay-protocol"
 
 describe("overlay client parser", () => {
   it("parses confirm reply payload", () => {
-    const line = JSON.stringify({ type: "confirm-reply", id: "confirm_1", answer: "confirm" })
+    const line = JSON.stringify({ type: overlayProtocol.messages.confirmReply, id: "confirm_1", answer: "confirm" })
     const result = parseOverlayReply(line)
     expect(result).toEqual({ id: "confirm_1", answer: "confirm" })
   })
 
   it("ignores invalid payload", () => {
-    const line = JSON.stringify({ type: "hint", id: "confirm_1", answer: "confirm" })
+    const line = JSON.stringify({ type: overlayProtocol.messages.hint, id: "confirm_1", answer: "confirm" })
     const result = parseOverlayReply(line)
     expect(result).toBeUndefined()
   })

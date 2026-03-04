@@ -1,7 +1,11 @@
 const bridge = window.opencorvusBridge
 const invoke = bridge.invoke
+<<<<<<< HEAD
 const FIXED_SERVE_ARGS = ["serve"]
 const FIXED_RUN_ARGS = ["run", "--continue"]
+=======
+const cmd = bridge.commands
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
 
 const els = {
   statusBadge: document.getElementById("statusBadge"),
@@ -18,6 +22,7 @@ const els = {
   refreshBtn: document.getElementById("refreshBtn"),
   clearLogsBtn: document.getElementById("clearLogsBtn"),
   saveBtn: document.getElementById("saveBtn"),
+<<<<<<< HEAD
   commandInput: document.getElementById("commandInput"),
   serveArgsInput: document.getElementById("serveArgsInput"),
   runArgsInput: document.getElementById("runArgsInput"),
@@ -25,6 +30,14 @@ const els = {
   runFixedInput: document.getElementById("runFixedInput"),
   servePreviewInput: document.getElementById("servePreviewInput"),
   runPreviewInput: document.getElementById("runPreviewInput"),
+=======
+  openMcpBtn: document.getElementById("openMcpBtn"),
+  openSkillBtn: document.getElementById("openSkillBtn"),
+  addMcpBtn: document.getElementById("addMcpBtn"),
+  createSkillBtn: document.getElementById("createSkillBtn"),
+  serveCmdInput: document.getElementById("serveCmdInput"),
+  runCmdInput: document.getElementById("runCmdInput"),
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   cwdInput: document.getElementById("cwdInput"),
   envInput: document.getElementById("envInput"),
 }
@@ -37,6 +50,12 @@ const state = {
   runArgs: [...FIXED_RUN_ARGS],
   configLoaded: false,
   sending: false,
+  stream: null,
+}
+
+function setSending(next) {
+  state.sending = !!next
+  els.sendBtn.disabled = state.sending
 }
 
 function readLines(input) {
@@ -133,10 +152,14 @@ function readConfig() {
   }
 }
 
-function setStatus(running, pid) {
-  els.statusBadge.classList.toggle("running", !!running)
+function setStatus(snapshot) {
+  const running = !!snapshot?.running
+  const pid = snapshot?.pid ?? "-"
+  const channel = snapshot?.channel_running ? ` | Channel PID: ${snapshot.channel_pid ?? "-"}` : " | Channel: stopped"
+  const session = snapshot?.shared_session_id ? ` | Session: ${snapshot.shared_session_id}` : ""
+  els.statusBadge.classList.toggle("running", running)
   els.statusText.textContent = running ? "Running" : "Stopped"
-  els.pidText.textContent = `PID: ${pid ?? "-"}`
+  els.pidText.textContent = `Core PID: ${pid}${channel}${session}`
 }
 
 function setLogPath(value) {
@@ -145,12 +168,261 @@ function setLogPath(value) {
   els.logPathText.textContent = `Log file: ${text}`
 }
 
-function addMessage(role, text) {
+function scrollChat() {
+  els.chat.scrollTop = els.chat.scrollHeight
+}
+
+function makeMessage(role) {
   const box = document.createElement("div")
   box.className = `msg ${role}`
-  box.textContent = text
+  const body = document.createElement("div")
+  body.className = "msg-body"
+  box.appendChild(body)
   els.chat.appendChild(box)
-  els.chat.scrollTop = els.chat.scrollHeight
+  scrollChat()
+  return { box, body, role, markdown: role === "assistant", text: "" }
+}
+
+function escapeHtml(input) {
+  return String(input)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function safeUrl(input, image = false) {
+  if (typeof input !== "string") return null
+  const value = input.trim()
+  if (!value) return null
+  if (/^https?:\/\/\S+$/i.test(value)) return value
+  if (/^file:\/\/\S+$/i.test(value)) return value
+  if (image && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(value)) return value
+  return null
+}
+
+function renderInline(input) {
+  const stash = []
+  let text = escapeHtml(input)
+
+  text = text.replace(/`([^`\n]+)`/g, (_all, value) => {
+    const idx = stash.length
+    stash.push(`<code>${value}</code>`)
+    return `\u0000${idx}\u0000`
+  })
+
+  text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, url) => {
+    const safe = safeUrl(url, true)
+    if (!safe) return all
+    return `<img src="${safe}" alt="${alt || "image"}" loading="lazy" />`
+  })
+
+  text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (all, label, url) => {
+    const safe = safeUrl(url, false)
+    if (!safe) return all
+    return `<a href="${safe}" target="_blank" rel="noreferrer noopener">${label}</a>`
+  })
+
+  text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+  text = text.replace(/\*([^*\n]+)\*/g, "<em>$1</em>")
+
+  text = text.replace(/\u0000(\d+)\u0000/g, (_all, idx) => stash[Number(idx)] ?? "")
+  return text
+}
+
+function renderBlocks(input) {
+  const out = []
+  const lines = input.split(/\r?\n/)
+  let para = []
+  let list = null
+  let quote = []
+
+  function flushPara() {
+    if (para.length === 0) return
+    out.push(`<p>${renderInline(para.join("\n")).replace(/\n/g, "<br>")}</p>`)
+    para = []
+  }
+
+  function flushList() {
+    if (!list || list.items.length === 0) return
+    const tag = list.type === "ol" ? "ol" : "ul"
+    out.push(`<${tag}>${list.items.map((item) => `<li>${renderInline(item)}</li>`).join("")}</${tag}>`)
+    list = null
+  }
+
+  function flushQuote() {
+    if (quote.length === 0) return
+    out.push(`<blockquote>${renderInline(quote.join("\n")).replace(/\n/g, "<br>")}</blockquote>`)
+    quote = []
+  }
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      flushPara()
+      flushList()
+      flushQuote()
+      continue
+    }
+
+    const heading = line.match(/^(#{1,6})\s+(.*)$/)
+    if (heading) {
+      flushPara()
+      flushList()
+      flushQuote()
+      const depth = heading[1].length
+      out.push(`<h${depth}>${renderInline(heading[2])}</h${depth}>`)
+      continue
+    }
+
+    const block = line.match(/^>\s?(.*)$/)
+    if (block) {
+      flushPara()
+      flushList()
+      quote.push(block[1])
+      continue
+    }
+
+    const ul = line.match(/^[-*]\s+(.*)$/)
+    if (ul) {
+      flushPara()
+      flushQuote()
+      if (!list || list.type !== "ul") {
+        flushList()
+        list = { type: "ul", items: [] }
+      }
+      list.items.push(ul[1])
+      continue
+    }
+
+    const ol = line.match(/^\d+\.\s+(.*)$/)
+    if (ol) {
+      flushPara()
+      flushQuote()
+      if (!list || list.type !== "ol") {
+        flushList()
+        list = { type: "ol", items: [] }
+      }
+      list.items.push(ol[1])
+      continue
+    }
+
+    if (/^(-{3,}|_{3,}|\*{3,})$/.test(line.trim())) {
+      flushPara()
+      flushList()
+      flushQuote()
+      out.push("<hr>")
+      continue
+    }
+
+    para.push(line)
+  }
+
+  flushPara()
+  flushList()
+  flushQuote()
+  return out.join("")
+}
+
+function markdown(input) {
+  const text = typeof input === "string" ? input : ""
+  const out = []
+  const fence = /```([^\n`]*)\n([\s\S]*?)```/g
+  let last = 0
+  let match = fence.exec(text)
+
+  while (match) {
+    const plain = text.slice(last, match.index)
+    if (plain.trim()) out.push(renderBlocks(plain))
+    const lang = escapeHtml((match[1] || "").trim())
+    const code = escapeHtml((match[2] || "").replace(/\n$/, ""))
+    out.push(`<pre><code${lang ? ` data-lang="${lang}"` : ""}>${code}</code></pre>`)
+    last = fence.lastIndex
+    match = fence.exec(text)
+  }
+
+  const tail = text.slice(last)
+  if (tail.trim()) out.push(renderBlocks(tail))
+  if (out.length === 0) return "<p></p>"
+  return out.join("")
+}
+
+function renderMessage(entry, text, markdownEnabled = entry.role === "assistant") {
+  entry.text = text
+  entry.markdown = !!markdownEnabled
+  if (entry.markdown) {
+    entry.body.classList.add("markdown")
+    entry.body.innerHTML = markdown(text)
+  } else {
+    entry.body.classList.remove("markdown")
+    entry.body.textContent = text
+  }
+  scrollChat()
+}
+
+function addMessage(role, text, options = {}) {
+  const entry = makeMessage(role)
+  renderMessage(entry, text, !!options.markdown)
+  if (role === "system") {
+    setTimeout(() => {
+      entry.box.style.transition = "opacity 0.4s"
+      entry.box.style.opacity = "0"
+      setTimeout(() => entry.box.remove(), 400)
+    }, 4000)
+  }
+  return entry
+}
+
+function streamPrepare() {
+  if (state.stream) return state.stream
+  state.stream = {
+    entry: null,
+    text: "",
+    touched: false,
+  }
+  return state.stream
+}
+
+function streamEntry() {
+  const item = streamPrepare()
+  if (item.entry) return item.entry
+  item.entry = makeMessage("assistant")
+  renderMessage(item.entry, "", true)
+  return item.entry
+}
+
+function streamAppend(text) {
+  if (typeof text !== "string" || !text) return
+  const item = streamPrepare()
+  item.touched = true
+  item.text += text
+  renderMessage(streamEntry(), item.text, true)
+}
+
+function streamReplace(text) {
+  const item = streamPrepare()
+  item.touched = true
+  item.text = typeof text === "string" ? text : ""
+  renderMessage(streamEntry(), item.text, true)
+}
+
+function streamImage(url, alt) {
+  const safe = safeUrl(url, true)
+  if (!safe) return
+  const name = typeof alt === "string" && alt.trim() ? alt.trim() : "image"
+  const item = streamPrepare()
+  const prefix = item.text.trim() ? "\n\n" : ""
+  streamAppend(`${prefix}![${name}](${safe})`)
+}
+
+function streamDone(payload) {
+  const item = state.stream
+  if (!item) return
+  if (!item.touched && payload?.success) {
+    item.entry = makeMessage("assistant")
+    renderMessage(item.entry, "(empty response)", false)
+    item.touched = true
+  }
 }
 
 function renderLogs() {
@@ -192,7 +464,8 @@ function appendLog(item) {
 
 function applySnapshot(snapshot) {
   if (!snapshot) return
-  setStatus(snapshot.running, snapshot.pid)
+  setStatus(snapshot)
+  if (typeof snapshot.prompt_running === "boolean") setSending(snapshot.prompt_running)
   setLogPath(snapshot.log_path)
   if (Array.isArray(snapshot.logs)) {
     state.logs = snapshot.logs.map((item) => normalizeLog(item)).filter((item) => Boolean(item)).slice(-800)
@@ -202,39 +475,96 @@ function applySnapshot(snapshot) {
 }
 
 async function refreshState() {
-  const snapshot = await invoke("manager_get")
+  const snapshot = await invoke(cmd.managerGet)
   applySnapshot(snapshot)
 }
 
 async function startBot() {
-  const snapshot = await invoke("manager_start")
+  const snapshot = await invoke(cmd.managerStart)
   applySnapshot(snapshot)
 }
 
 async function stopBot() {
-  const snapshot = await invoke("manager_stop")
+  const snapshot = await invoke(cmd.managerStop)
   applySnapshot(snapshot)
 }
 
 async function clearLogs() {
-  const snapshot = await invoke("manager_clear_logs")
+  const snapshot = await invoke(cmd.managerClearLogs)
   applySnapshot(snapshot)
 }
 
 async function saveConfig() {
-  const snapshot = await invoke("manager_save", { config: readConfig() })
+  const snapshot = await invoke(cmd.managerSave, { config: readConfig() })
   state.configLoaded = false
   applySnapshot(snapshot)
   addMessage("system", "Configuration saved.")
 }
 
-async function sendPrompt(prompt) {
-  const result = await invoke("manager_send", { prompt })
-  if (result.success) {
-    addMessage("assistant", result.output || "(empty response)")
+async function openMcpConfig() {
+  const file = await invoke(cmd.managerOpenMcpConfig)
+  addMessage("system", `MCP config opened: ${file}`)
+}
+
+async function openSkillFolder() {
+  const dir = await invoke(cmd.managerOpenSkillDir)
+  addMessage("system", `Skills folder opened: ${dir}`)
+}
+
+async function addMcp() {
+  const name = window.prompt("MCP name (kebab-case)")
+  if (!name) return
+  const trimmed = name.trim()
+  if (!trimmed) return
+
+  const remote = window.confirm("Use remote MCP? OK=remote URL, Cancel=local command")
+  if (remote) {
+    const url = window.prompt("Remote MCP URL", "https://example.com/mcp")
+    if (!url) return
+    const file = await invoke(cmd.managerAddMcp, {
+      name: trimmed,
+      config: {
+        type: "remote",
+        url: url.trim(),
+      },
+    })
+    addMessage("system", `MCP "${trimmed}" added in ${file}`)
     return
   }
-  addMessage("system", `Command failed (code ${result.code}): ${result.output}`)
+
+  const line = window.prompt("Local MCP command", "npx -y @modelcontextprotocol/server-filesystem .")
+  if (!line) return
+  const command = readArgs(line)
+  if (command.length === 0) return
+  const file = await invoke(cmd.managerAddMcp, {
+    name: trimmed,
+    config: {
+      type: "local",
+      command,
+    },
+  })
+  addMessage("system", `MCP "${trimmed}" added in ${file}`)
+}
+
+async function createSkill() {
+  const name = window.prompt("Skill name (kebab-case)")
+  if (!name) return
+  const trimmed = name.trim()
+  if (!trimmed) return
+  const description = window.prompt("Skill description", "Describe when and why this skill should be used.")
+  if (description === null) return
+  const file = await invoke(cmd.managerCreateSkill, {
+    name: trimmed,
+    description: description.trim(),
+  })
+  addMessage("system", `Skill scaffold ready: ${file}`)
+}
+
+async function sendPrompt(prompt) {
+  state.stream = null
+  const result = await invoke(cmd.managerSend, { prompt })
+  if (result?.accepted) return
+  throw new Error("prompt not accepted")
 }
 
 function bindEvents() {
@@ -257,16 +587,12 @@ function bindEvents() {
     addMessage("user", prompt)
     els.promptInput.value = ""
 
-    state.sending = true
-    els.sendBtn.disabled = true
+    setSending(true)
     try {
       await sendPrompt(prompt)
-      await refreshState()
     } catch (error) {
       addMessage("system", `Send failed: ${error?.message || String(error)}`)
-    } finally {
-      state.sending = false
-      els.sendBtn.disabled = false
+      setSending(false)
     }
   })
 
@@ -318,6 +644,38 @@ function bindEvents() {
       addMessage("system", `Save config failed: ${error?.message || String(error)}`)
     }
   })
+
+  els.openMcpBtn.addEventListener("click", async () => {
+    try {
+      await openMcpConfig()
+    } catch (error) {
+      addMessage("system", `Open MCP config failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.openSkillBtn.addEventListener("click", async () => {
+    try {
+      await openSkillFolder()
+    } catch (error) {
+      addMessage("system", `Open skills folder failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.addMcpBtn.addEventListener("click", async () => {
+    try {
+      await addMcp()
+    } catch (error) {
+      addMessage("system", `Add MCP failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.createSkillBtn.addEventListener("click", async () => {
+    try {
+      await createSkill()
+    } catch (error) {
+      addMessage("system", `Create skill failed: ${error?.message || String(error)}`)
+    }
+  })
 }
 
 function bindTauriEvents() {
@@ -327,6 +685,58 @@ function bindTauriEvents() {
 
   bridge.listen(bridge.events.managerState, (payload) => {
     applySnapshot(payload)
+  })
+
+  bridge.listen(bridge.events.managerChat, (payload) => {
+    const kind = typeof payload?.kind === "string" ? payload.kind : ""
+    const text = typeof payload?.text === "string" ? payload.text : ""
+
+    if (kind === "mirror_user") {
+      if (text) addMessage("user", text)
+      return
+    }
+
+    if (kind === "mirror_assistant") {
+      if (state.sending) return
+      if (text) addMessage("assistant", text, { markdown: true })
+      return
+    }
+
+    if (kind === "mirror_system") {
+      if (text) addMessage("system", text)
+      return
+    }
+
+    if (kind === "start") {
+      streamPrepare()
+      return
+    }
+
+    if (kind === "delta") {
+      streamAppend(typeof payload?.text === "string" ? payload.text : "")
+      return
+    }
+
+    if (kind === "replace") {
+      streamReplace(typeof payload?.text === "string" ? payload.text : "")
+      return
+    }
+
+    if (kind === "image") {
+      streamImage(payload?.url, payload?.alt)
+      return
+    }
+
+    if (kind === "system") {
+      if (text) addMessage("system", text)
+      return
+    }
+
+    if (kind === "done") {
+      streamDone(payload)
+      setSending(false)
+      void refreshState()
+    }
   })
 }
 

@@ -39,9 +39,8 @@ const generate = async (output: string) =>
     ],
   })
 
-await Promise.all([generate("./src/gen"), generate("./src/v2/gen")])
+await generate("./src/v2/gen")
 
-await $`bun prettier --write src/gen`
 await $`bun prettier --write src/v2`
 await $`rm -rf dist`
 await $`bun tsc`

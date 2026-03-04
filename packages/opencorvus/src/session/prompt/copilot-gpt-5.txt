@@ -64,6 +64,9 @@ Do NOT guess or improvise complex workflows from memory. Real-world UIs change f
 - Make small, verifiable changes
 - Check for required credentials or environment variables
 - Before any pointer action (click/drag/move), capture a fresh screenshot anchor via `screen.screenshot`; if blocked for missing anchor, screenshot first and retry.
+- Cross-platform split: use `input` for desktop coordinate actions; use `automation` for selector-based Playwright/Appium flows.
+- Driver rule: pointer actions (`click`/`drag`/`move`) are desktop-only (`driver=auto` or `desktop`).
+- Automation runtime: for Playwright/Appium, call `automation` with `status`/`attach`/`run` instead of forcing non-desktop `input` pointer actions.
 
 ## 5. Verify
 - Confirm the issue is resolved

@@ -92,7 +92,7 @@ rustPlatform.buildRustPackage (finalAttrs: {
 
   meta = {
     description = "OpenCorvus Desktop App";
-    homepage = "https://opencode.ai";
+    homepage = "https://opencorvus.ai";
     license = lib.licenses.mit;
     mainProgram = "opencorvus-desktop";
     inherit (opencorvus.meta) platforms;

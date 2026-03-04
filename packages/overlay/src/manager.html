@@ -150,9 +150,115 @@
       border-radius: var(--radius-md);
       line-height: 1.45;
       font-size: 13px;
+      border: 1px solid transparent;
+    }
+
+    .msg-body {
       white-space: pre-wrap;
       word-break: break-word;
-      border: 1px solid transparent;
+    }
+
+    .msg-body.markdown {
+      white-space: normal;
+    }
+
+    .msg-body.markdown > :first-child {
+      margin-top: 0;
+    }
+
+    .msg-body.markdown > :last-child {
+      margin-bottom: 0;
+    }
+
+    .msg-body.markdown p,
+    .msg-body.markdown ul,
+    .msg-body.markdown ol,
+    .msg-body.markdown blockquote,
+    .msg-body.markdown pre,
+    .msg-body.markdown hr,
+    .msg-body.markdown h1,
+    .msg-body.markdown h2,
+    .msg-body.markdown h3,
+    .msg-body.markdown h4,
+    .msg-body.markdown h5,
+    .msg-body.markdown h6 {
+      margin: 0.5em 0;
+    }
+
+    .msg-body.markdown h1,
+    .msg-body.markdown h2,
+    .msg-body.markdown h3,
+    .msg-body.markdown h4,
+    .msg-body.markdown h5,
+    .msg-body.markdown h6 {
+      line-height: 1.25;
+      font-weight: 650;
+    }
+
+    .msg-body.markdown h1 {
+      font-size: 1.22em;
+    }
+
+    .msg-body.markdown h2 {
+      font-size: 1.16em;
+    }
+
+    .msg-body.markdown h3 {
+      font-size: 1.1em;
+    }
+
+    .msg-body.markdown ul,
+    .msg-body.markdown ol {
+      padding-left: 1.15em;
+    }
+
+    .msg-body.markdown li + li {
+      margin-top: 0.2em;
+    }
+
+    .msg-body.markdown blockquote {
+      border-left: 2px solid rgba(20, 50, 94, 0.2);
+      padding-left: 10px;
+      color: var(--text-muted);
+    }
+
+    .msg-body.markdown code {
+      font-family: var(--font-mono);
+      background: rgba(20, 50, 94, 0.09);
+      border-radius: 6px;
+      padding: 0.08em 0.35em;
+      font-size: 0.93em;
+    }
+
+    .msg-body.markdown pre {
+      background: rgba(var(--surface-dark-rgb), 0.55);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      overflow: auto;
+    }
+
+    .msg-body.markdown pre code {
+      background: transparent;
+      padding: 0;
+    }
+
+    .msg-body.markdown a {
+      color: var(--color-click);
+      text-decoration: none;
+    }
+
+    .msg-body.markdown a:hover {
+      text-decoration: underline;
+    }
+
+    .msg-body.markdown img {
+      display: block;
+      max-width: min(100%, 520px);
+      height: auto;
+      border-radius: var(--radius-sm);
+      margin: 8px 0;
+      border: 1px solid rgba(20, 50, 94, 0.16);
     }
 
     .msg.user {
@@ -346,6 +452,18 @@
       line-height: 1.45;
     }
 
+    .cfg-entry {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .cfg-entry button {
+      flex: 1;
+      min-width: 120px;
+    }
+
     .cfg details {
       border: 1px solid rgba(20, 50, 94, 0.12);
       border-radius: var(--radius-sm);
@@ -443,9 +561,26 @@
         <section class="card">
           <div class="card-head">Bot Config</div>
           <div class="cfg">
+<<<<<<< HEAD
             <p class="cfg-hint">Start and prompt share one command binary. Configure args below (one argument per line) so both flows stay aligned.</p>
             <label>Command
               <input id="commandInput" placeholder='opencorvus or C:\path\to\opencorvus.exe' />
+=======
+            <p class="cfg-hint">Keep it simple: use full command lines, advanced options only when needed.</p>
+            <div class="cfg-entry">
+              <button id="openMcpBtn" type="button">MCP Config</button>
+              <button id="openSkillBtn" type="button">Skills Folder</button>
+            </div>
+            <div class="cfg-entry">
+              <button id="addMcpBtn" type="button">Add MCP</button>
+              <button id="createSkillBtn" type="button">Create Skill</button>
+            </div>
+            <label>Start Command
+              <input id="serveCmdInput" placeholder='opencorvus serve --host "127.0.0.1"' />
+            </label>
+            <label>Prompt Command
+              <input id="runCmdInput" placeholder='opencorvus run --continue --model "openai/gpt-5"' />
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
             </label>
             <details>
               <summary>Binding Args</summary>
@@ -488,6 +623,7 @@
       </div>
     </div>
   </div>
+  <script src="protocol.js"></script>
   <script src="tauri-bridge.js"></script>
   <script src="manager.js"></script>
 </body>

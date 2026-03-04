@@ -1208,7 +1208,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       providerID: "opencorvus",
       api: {
         id: "opencorvus-test",
-        url: "https://api.opencode.ai",
+        url: "https://api.opencorvus.ai",
         npm: "@ai-sdk/openai-compatible",
       },
     }
@@ -1242,7 +1242,7 @@ describe("ProviderTransform.message - strip openai metadata when store=false", (
       providerID: "opencorvus",
       api: {
         id: "opencorvus-test",
-        url: "https://api.opencode.ai",
+        url: "https://api.opencorvus.ai",
         npm: "@ai-sdk/openai-compatible",
       },
     }

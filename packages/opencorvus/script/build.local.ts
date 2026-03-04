@@ -15,6 +15,10 @@ process.chdir(dir)
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 
+const protocol = path.resolve(dir, "..", "..", "scripts", "generate-overlay-protocol.ts")
+await $`${process.execPath} ${protocol}`
+console.log("Generated overlay protocol")
+
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
 const modelsData = process.env.MODELS_DEV_API_JSON
@@ -82,7 +86,7 @@ const embeddedEnv = (() => {
     env.OPENCORVUS_EMBEDDED_DASHSCOPE_TTL_HOURS = process.env.OPENCORVUS_EMBED_DASHSCOPE_TTL_HOURS?.trim() || "24"
     if (!env.OPENCORVUS_CONFIG_CONTENT && !process.env.OPENCORVUS_CONFIG_CONTENT) {
       env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
-        $schema: "https://opencode.ai/config.json",
+        $schema: "https://opencorvus.ai/config.json",
         model: "alibaba-cn/qwen3.5-plus",
       })
     }
@@ -91,7 +95,7 @@ const embeddedEnv = (() => {
   const model = process.env.OPENCORVUS_EMBED_MODEL?.trim()
   if (model) {
     env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify({
-      $schema: "https://opencode.ai/config.json",
+      $schema: "https://opencorvus.ai/config.json",
       model,
     })
   }

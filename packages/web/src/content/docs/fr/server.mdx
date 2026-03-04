@@ -4,7 +4,7 @@ description: Interagissez avec le serveur opencorvus via HTTP.
 ---
 
 import config from "../../../../config.mjs"
-export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/gen/types.gen.ts`
+export const typesUrl = `${config.github}/blob/dev/packages/sdk/js/src/v2/gen/types.gen.ts`
 
 La commande `opencorvus serve` exécute un serveur HTTP sans tête qui expose un point de terminaison OpenAPI qu'un client opencorvus peut utiliser.
 
@@ -36,10 +36,10 @@ opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 
 ### Authentification
 
-Définissez `OPENCODE_SERVER_PASSWORD` pour protéger le serveur avec l'authentification de base HTTP. Le nom d'utilisateur est par défaut `opencorvus`, ou définissez `OPENCODE_SERVER_USERNAME` pour le remplacer. Cela s’applique à la fois à `opencorvus serve` et à `opencorvus web`.
+Définissez `OPENCORVUS_SERVER_PASSWORD` pour protéger le serveur avec l'authentification de base HTTP. Le nom d'utilisateur est par défaut `opencorvus`, ou définissez `OPENCORVUS_SERVER_USERNAME` pour le remplacer. Cela s’applique à la fois à `opencorvus serve` et à `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
+OPENCORVUS_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---

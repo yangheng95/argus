@@ -17,6 +17,7 @@ async function waitUntil(check: () => boolean, timeout = 2000) {
 
 describe("scheduler.cron-service", () => {
   afterEach(async () => {
+    delete process.env.OPENCORVUS_CRON_CONCURRENCY
     mock.restore()
     await Instance.disposeAll()
   })
@@ -153,6 +154,202 @@ describe("scheduler.cron-service", () => {
 
         const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())
         expect((row?.last_run ?? 0) > 0).toBe(true)
+      },
+    })
+
+    expect(wake).toHaveBeenCalledTimes(1)
+  })
+
+  test("executes due cron jobs in parallel within one poll", async () => {
+    await using tmp = await tmpdir({ git: true })
+    let release = (_value: string) => {}
+    const gate = new Promise<string>((resolve) => {
+      release = resolve
+    })
+    const wake = spyOn(SessionWake, "wake").mockImplementation(async (input) => {
+      if (input.prompt === "slow") return gate
+      return "ses_fast"
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const slowID = "crn_parallel_slow_" + Math.random().toString(36).slice(2)
+        const fastID = "crn_parallel_fast_" + Math.random().toString(36).slice(2)
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values([
+              {
+                id: slowID,
+                project_id: Instance.project.id,
+                name: "parallel-slow",
+                expression: "1m",
+                prompt: "slow",
+                enabled: true,
+                one_shot: false,
+                next_run: now - 2000,
+              },
+              {
+                id: fastID,
+                project_id: Instance.project.id,
+                name: "parallel-fast",
+                expression: "1m",
+                prompt: "fast",
+                enabled: true,
+                one_shot: false,
+                next_run: now - 1000,
+              },
+            ])
+            .run(),
+        )
+
+        const run = CronService.runNow()
+        await waitUntil(() => wake.mock.calls.some((call) => call[0]?.prompt === "slow"))
+        await waitUntil(() => wake.mock.calls.some((call) => call[0]?.prompt === "fast"))
+        release("ses_slow")
+        await run
+
+        const slow = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, slowID)).get())
+        const fast = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, fastID)).get())
+        expect((slow?.last_run ?? 0) > 0).toBe(true)
+        expect((fast?.last_run ?? 0) > 0).toBe(true)
+      },
+    })
+
+    expect(wake).toHaveBeenCalledTimes(2)
+  })
+
+  test("respects OPENCORVUS_CRON_CONCURRENCY limit", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_CRON_CONCURRENCY = "1"
+    let running = 0
+    let peak = 0
+    const wake = spyOn(SessionWake, "wake").mockImplementation(async () => {
+      running += 1
+      peak = Math.max(peak, running)
+      await Bun.sleep(80)
+      running -= 1
+      return "ses_serial"
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const a = "crn_serial_a_" + Math.random().toString(36).slice(2)
+        const b = "crn_serial_b_" + Math.random().toString(36).slice(2)
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values([
+              {
+                id: a,
+                project_id: Instance.project.id,
+                name: "serial-a",
+                expression: "1m",
+                prompt: "a",
+                enabled: true,
+                one_shot: false,
+                next_run: now - 2000,
+              },
+              {
+                id: b,
+                project_id: Instance.project.id,
+                name: "serial-b",
+                expression: "1m",
+                prompt: "b",
+                enabled: true,
+                one_shot: false,
+                next_run: now - 1000,
+              },
+            ])
+            .run(),
+        )
+
+        await CronService.runNow()
+      },
+    })
+
+    expect(wake).toHaveBeenCalledTimes(2)
+    expect(peak).toBe(1)
+  })
+
+  test("interval next_run is computed from completion time", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const wake = spyOn(SessionWake, "wake").mockImplementation(async () => {
+      await Bun.sleep(120)
+      return "ses_mock"
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const id = "crn_interval_" + Math.random().toString(36).slice(2)
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id,
+              project_id: Instance.project.id,
+              name: "interval",
+              expression: "1m",
+              prompt: "hello",
+              enabled: true,
+              one_shot: false,
+              next_run: now - 1000,
+            })
+            .run(),
+        )
+
+        const startedAt = Date.now()
+        await CronService.runNow()
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())
+        expect((row?.last_run ?? 0) - startedAt).toBeGreaterThanOrEqual(80)
+        expect((row?.next_run ?? 0) - (row?.last_run ?? 0)).toBe(60 * 1000)
+      },
+    })
+
+    expect(wake).toHaveBeenCalledTimes(1)
+  })
+
+  test("failure backoff is capped at five minutes for repeated failures", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const wake = spyOn(SessionWake, "wake").mockImplementation(async () => {
+      throw new Error("wake failed")
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const id = "crn_fail_cap_" + Math.random().toString(36).slice(2)
+        const now = Date.now()
+        Database.use((db) =>
+          db
+            .insert(CronJobTable)
+            .values({
+              id,
+              project_id: Instance.project.id,
+              name: "fail-cap",
+              expression: "1m",
+              prompt: "boom",
+              enabled: true,
+              one_shot: false,
+              failure_count: 40,
+              next_run: now - 1000,
+            })
+            .run(),
+        )
+
+        const startedAt = Date.now()
+        await CronService.runNow()
+        const row = Database.use((db) => db.select().from(CronJobTable).where(eq(CronJobTable.id, id)).get())
+        const delay = (row?.next_run ?? 0) - startedAt
+        expect(row?.failure_count).toBe(41)
+        expect(delay).toBeGreaterThanOrEqual(295000)
+        expect(delay).toBeLessThanOrEqual(305000)
       },
     })
 

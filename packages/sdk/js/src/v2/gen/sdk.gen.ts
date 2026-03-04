@@ -191,6 +191,7 @@ import type {
   TuiSelectSessionErrors,
   TuiSelectSessionResponses,
   TuiShowToastResponses,
+  TuiStatusResponses,
   TuiSubmitPromptResponses,
   VcsGetResponses,
   WorktreeCreateErrors,
@@ -1522,11 +1523,12 @@ export class Experimental extends HeyApiClient {
   /**
    * Bind window
    *
-   * Bind to a desktop window by title substring. Activates GUI state and sets the window as the target for screenshots and input.
+   * Bind to a desktop window by window_id (preferred) or title substring. Activates GUI state and sets the window as the target for screenshots and input.
    */
   public bindWindow<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      window_id?: number | string
       title?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -1537,6 +1539,7 @@ export class Experimental extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
+            { in: "body", key: "window_id" },
             { in: "body", key: "title" },
           ],
         },
@@ -2136,7 +2139,7 @@ export class Session2 extends HeyApiClient {
   /**
    * Send message
    *
-   * Create and send a new message to a session, streaming the AI response.
+   * Create and send a new message to a session, waiting until assistant output is complete.
    */
   public prompt<ThrowOnError extends boolean = false>(
     parameters: {
@@ -3515,6 +3518,25 @@ export class Control extends HeyApiClient {
 
 export class Tui extends HeyApiClient {
   /**
+   * Get TUI status
+   *
+   * Get TUI runtime state, session execution status, and command aliases.
+   */
+  public status<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<TuiStatusResponses, unknown, ThrowOnError>({
+      url: "/tui/status",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
    * Append TUI prompt
    *
    * Append prompt to the TUI
@@ -3546,6 +3568,44 @@ export class Tui extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * Submit TUI prompt
+   *
+   * Submit the prompt
+   */
+  public submitPrompt<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<TuiSubmitPromptResponses, unknown, ThrowOnError>({
+      url: "/tui/submit-prompt",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Clear TUI prompt
+   *
+   * Clear the prompt
+   */
+  public clearPrompt<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<TuiClearPromptResponses, unknown, ThrowOnError>({
+      url: "/tui/clear-prompt",
+      ...options,
+      ...params,
     })
   }
 
@@ -3620,44 +3680,6 @@ export class Tui extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).post<TuiOpenModelsResponses, unknown, ThrowOnError>({
       url: "/tui/open-models",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Submit TUI prompt
-   *
-   * Submit the prompt
-   */
-  public submitPrompt<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiSubmitPromptResponses, unknown, ThrowOnError>({
-      url: "/tui/submit-prompt",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Clear TUI prompt
-   *
-   * Clear the prompt
-   */
-  public clearPrompt<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiClearPromptResponses, unknown, ThrowOnError>({
-      url: "/tui/clear-prompt",
       ...options,
       ...params,
     })

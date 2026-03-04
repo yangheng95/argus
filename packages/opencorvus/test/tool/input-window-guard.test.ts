@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import { AutomationRuntime } from "../../src/opencorvus/automation"
+import { PlaywrightDriver } from "../../src/opencorvus/automation/adapters/playwright"
 
 let binding: any = null
-let foreground = true
+const bindings: any[] = []
+let foreground: boolean | ((binding: any) => boolean) = true
+let foregroundCalls = 0
+let clickFailures = 0
 const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
 const hotkeys: string[][] = []
+<<<<<<< HEAD
 let focusMarks = 0
 
 mock.module("../../src/opencorvus/perception/window", () => ({
@@ -16,12 +22,29 @@ mock.module("../../src/opencorvus/perception/window", () => ({
     markFocusChange: () => {
       focusMarks += 1
     },
+=======
+const keys: string[] = []
+const pastes: string[] = []
+
+mock.module("../../src/opencorvus/perception/window", () => ({
+  WindowManager: {
+    getBinding: async () => bindings.shift() ?? binding,
+    ensureBoundForeground: async (current?: any) => {
+      foregroundCalls++
+      return typeof foreground === "function" ? foreground(current) : foreground
+    },
+    rebindForTask: async (_taskEpoch: number) => null,
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   },
 }))
 
 mock.module("../../src/opencorvus/gui/index", () => ({
   GUI: {
     click: async (x: number, y: number) => {
+      if (clickFailures > 0) {
+        clickFailures--
+        throw new Error("transient click failure")
+      }
       clicks.push({ x, y })
     },
     doubleClick: async (_x: number, _y: number) => {},
@@ -32,8 +55,17 @@ mock.module("../../src/opencorvus/gui/index", () => ({
     scroll: async (_direction: "up" | "down", _amount = 3) => {},
     moveTo: async (_x: number, _y: number) => {},
     drag: async (_startX: number, _startY: number, _endX: number, _endY: number) => {},
+<<<<<<< HEAD
     paste: async (_text: string) => {},
     pressKey: async (_key: string) => {},
+=======
+    paste: async (text: string) => {
+      pastes.push(text)
+    },
+    pressKey: async (key: string) => {
+      keys.push(key)
+    },
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     hotkey: async (...keys: string[]) => {
       hotkeys.push(keys)
     },
@@ -72,6 +104,36 @@ mock.module("../../src/tool/overlay-client", () => ({
 const { InputTool } = await import("../../src/tool/input")
 const { DesktopState } = await import("../../src/tool/desktop-state")
 
+class LocatorStub implements PlaywrightDriver.Locator {
+  count() {
+    return Promise.resolve(0)
+  }
+
+  first() {
+    return this
+  }
+
+  click() {
+    return Promise.resolve()
+  }
+
+  fill() {
+    return Promise.resolve()
+  }
+
+  isVisible() {
+    return Promise.resolve(true)
+  }
+
+  isEnabled() {
+    return Promise.resolve(true)
+  }
+
+  evaluate<T>(fn: (element: Element, arg?: unknown) => T | Promise<T>, arg?: unknown) {
+    return Promise.resolve(fn({} as Element, arg))
+  }
+}
+
 const ctx = {
   sessionID: "test",
   messageID: "",
@@ -83,19 +145,69 @@ const ctx = {
   ask: async () => {},
 }
 
+function anchorMonitor(bounds: {
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleX?: number
+  scaleY?: number
+  logicalX?: number
+  logicalY?: number
+  logicalWidth?: number
+  logicalHeight?: number
+}) {
+  DesktopState.recordCapture({
+    scope: "monitor",
+    bounds,
+    monitor: { id: 1, name: "Main" },
+    screenshotHash: "monitor-anchor",
+  })
+}
+
+function anchorWindow(windowId: number, title: string, bounds: {
+  x: number
+  y: number
+  width: number
+  height: number
+  scaleX?: number
+  scaleY?: number
+  logicalX?: number
+  logicalY?: number
+  logicalWidth?: number
+  logicalHeight?: number
+}) {
+  DesktopState.recordCapture({
+    scope: "window",
+    bounds,
+    window: { windowId, title },
+    screenshotHash: "window-anchor",
+  })
+}
+
 beforeEach(() => {
   binding = null
+  bindings.length = 0
   foreground = true
+  foregroundCalls = 0
+  clickFailures = 0
   clicks.length = 0
   middleClicks.length = 0
   hotkeys.length = 0
+<<<<<<< HEAD
   focusMarks = 0
+=======
+  keys.length = 0
+  pastes.length = 0
+  AutomationRuntime.clear()
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   delete process.env.OPENCORVUS_COORDINATE_SPACE
 })
 
 describe("tool.input bound window guard", () => {
   test("blocks pointer action when bound window cannot be foregrounded", async () => {
     binding = {
+      windowId: 7,
       info: { title: "Editor", appName: "Code" },
     }
     foreground = false
@@ -104,7 +216,7 @@ describe("tool.input bound window guard", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        DesktopState.setBounds({ x: 0, y: 0, width: 1000, height: 700 })
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
         const tool = await InputTool.init()
         const result = await tool.execute({ action: "click", x: 100, y: 120, button: "left" }, ctx)
         expect(result.metadata.blocked).toBe(true)
@@ -119,11 +231,160 @@ describe("tool.input bound window guard", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        DesktopState.setBounds({ x: 0, y: 0, width: 1000, height: 700 })
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
         const tool = await InputTool.init()
         const result = await tool.execute({ action: "click", x: 200, y: 240, button: "left" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(clicks).toEqual([{ x: 200, y: 240 }])
+      },
+    })
+  })
+
+  test("allows pointer action on monitor anchor even when bound window is not foreground", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 210, y: 260, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(clicks).toEqual([{ x: 210, y: 260 }])
+      },
+    })
+  })
+
+  test("allows key action on monitor anchor even when bound window is not foreground", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.bindMonitor(1, "Main")
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "enter" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(keys).toEqual(["enter"])
+      },
+    })
+  })
+
+  test("blocks pointer action when desktop anchor points to stale window binding", async () => {
+    binding = null
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 180, y: 220, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("stale_window_anchor")
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks pointer action when bound window geometry drifted from anchor", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code", x: 40, y: 30, width: 1000, height: 700 },
+    }
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 180, y: 220, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("window_geometry_drifted")
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("uses one binding snapshot for pointer anchor and foreground checks", async () => {
+    binding = null
+    bindings.push(
+      {
+        windowId: 7,
+        info: { title: "Editor", appName: "Code", x: 0, y: 0, width: 1000, height: 700 },
+      },
+      {
+        windowId: 9,
+        info: { title: "Terminal", appName: "Terminal", x: 0, y: 0, width: 1000, height: 700 },
+      },
+    )
+    foreground = (current) => current?.windowId === 7
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 200, y: 240, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(clicks).toEqual([{ x: 200, y: 240 }])
+      },
+    })
+  })
+
+  test("retries pointer action once after transient click failure", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code", x: 0, y: 0, width: 1000, height: 700 },
+    }
+    clickFailures = 1
+    foreground = true
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 260, y: 280, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(clicks).toEqual([{ x: 260, y: 280 }])
+        expect(foregroundCalls).toBe(3)
+      },
+    })
+  })
+
+  test("skips postcondition check when post=none", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code", x: 0, y: 0, width: 1000, height: 700 },
+    }
+    foreground = true
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorWindow(7, "Editor", { x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", x: 280, y: 300, button: "left", post: "none" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(clicks).toEqual([{ x: 280, y: 300 }])
+        expect(foregroundCalls).toBe(1)
       },
     })
   })
@@ -133,12 +394,125 @@ describe("tool.input bound window guard", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        DesktopState.setBounds({ x: 0, y: 0, width: 1000, height: 700 })
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
         const tool = await InputTool.init()
         const result = await tool.execute({ action: "click", x: 320, y: 360, button: "middle" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(middleClicks).toEqual([{ x: 320, y: 360 }])
         expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks pointer action when non-desktop driver is requested", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", x: 320, y: 360, button: "left", driver: "playwright" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("pointer_driver_unsupported")
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks non-recovery key when bound window cannot be foregrounded", async () => {
+    binding = {
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "enter" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("bound_window_not_foreground")
+        expect(hotkeys).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks key action when active window binding drifts from anchor", async () => {
+    binding = {
+      windowId: 9,
+      info: { title: "Terminal", appName: "Terminal" },
+    }
+    foreground = true
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.bindWindow(7, "Editor")
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "enter" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("window_binding_drifted")
+        expect(hotkeys).toHaveLength(0)
+      },
+    })
+  })
+
+  test("allows focus recovery key when bound window cannot be foregrounded", async () => {
+    binding = {
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "alt+tab" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(hotkeys).toEqual([["alt", "tab"]])
+      },
+    })
+  })
+
+  test("skips desktop foreground guard for playwright type action", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+    const page: PlaywrightDriver.Page = {
+      locator: () => new LocatorStub(),
+      getByRole: () => new LocatorStub(),
+      getByText: () => new LocatorStub(),
+      keyboard: {
+        press: async () => {},
+        type: async () => {},
+      },
+      mouse: {
+        wheel: async () => {},
+      },
+      screenshot: async () => new Uint8Array([1]),
+    }
+    AutomationRuntime.setPlaywright({ page })
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.bindWindow(7, "Editor")
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "type", text: "hello", driver: "playwright" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(pastes).toHaveLength(0)
       },
     })
   })
@@ -151,7 +525,7 @@ describe("tool.input bound window guard", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          DesktopState.setBounds({
+          anchorMonitor({
             x: 150,
             y: 75,
             width: 1200,
@@ -183,7 +557,7 @@ describe("tool.input bound window guard", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        DesktopState.setBounds({
+        anchorMonitor({
           x: 150,
           y: 75,
           width: 1200,

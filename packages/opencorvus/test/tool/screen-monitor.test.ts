@@ -4,14 +4,24 @@ import { tmpdir } from "../fixture/fixture"
 
 let unbound = 0
 let overlayCalls = 0
+<<<<<<< HEAD
 let clickMarkerCalls = 0
 const bindByIdCalls: number[] = []
 let monitorBinding: any = null
+=======
+let bindCalls = 0
+let monitorBinding: any = {
+  monitorId: 2,
+  match: "2",
+  info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
+}
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
     getBinding: async () => null,
     ensureBoundForeground: async () => true,
+    rebindForTask: async (_taskEpoch: number) => null,
     listWindows: async () => [
       {
         id: 7,
@@ -25,6 +35,7 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         isFocused: true,
       },
     ],
+<<<<<<< HEAD
     bind: async (_title: string) => ({
       windowId: 7,
       matchTitle: "editor",
@@ -45,6 +56,13 @@ mock.module("../../src/opencorvus/perception/window", () => ({
       return {
         windowId: 7,
         matchTitle: matchTitle ?? "editor",
+=======
+    bind: async (_title: string) => {
+      bindCalls += 1
+      return {
+        windowId: 7,
+        matchTitle: "editor",
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
         info: {
           id: 7,
           title: "Editor",
@@ -58,6 +76,7 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         },
       }
     },
+<<<<<<< HEAD
     bindByIdQuiet: async (windowId: number, matchTitle?: string) => {
       bindByIdCalls.push(windowId)
       return {
@@ -77,6 +96,8 @@ mock.module("../../src/opencorvus/perception/window", () => ({
       }
     },
     consumeFocusChange: () => false,
+=======
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     unbind: () => {
       unbound += 1
     },
@@ -170,8 +191,12 @@ const ctx = {
 beforeEach(() => {
   unbound = 0
   overlayCalls = 0
+<<<<<<< HEAD
   clickMarkerCalls = 0
   bindByIdCalls.length = 0
+=======
+  bindCalls = 0
+>>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   monitorBinding = {
     monitorId: 2,
     match: "2",
@@ -275,6 +300,20 @@ describe("tool.screen monitor flow", () => {
         const tool = await ScreenTool.init()
         await tool.execute({ action: "screenshot" }, ctx)
         expect(overlayCalls).toBe(0)
+      },
+    })
+  })
+
+  test("screenshot without active bindings does not auto-bind windows", async () => {
+    monitorBinding = null
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const result = await tool.execute({ action: "screenshot" }, ctx)
+        expect(result.metadata.scope).toBe("monitor")
+        expect(bindCalls).toBe(0)
       },
     })
   })

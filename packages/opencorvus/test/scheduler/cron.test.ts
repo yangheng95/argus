@@ -101,6 +101,14 @@ describe("Cron.parse — standard 5-field cron", () => {
     }
   })
 
+  test("accepts day-of-week 7 and normalizes it to Sunday (0)", () => {
+    const parsed = Cron.parse("0 9 * * 7")
+    expect(parsed.type).toBe("cron")
+    if (parsed.type === "cron") {
+      expect(parsed.fields.dow).toEqual([0])
+    }
+  })
+
   test("parses month field (1-12)", () => {
     const parsed = Cron.parse("0 0 1 6 *")
     expect(parsed.type).toBe("cron")
@@ -130,7 +138,7 @@ describe("Cron.parse — error cases", () => {
     expect(() => Cron.parse("* 24 * * *")).toThrow()
     expect(() => Cron.parse("* * 0 * *")).toThrow()
     expect(() => Cron.parse("* * * 13 *")).toThrow()
-    expect(() => Cron.parse("* * * * 7")).toThrow()
+    expect(() => Cron.parse("* * * * 8")).toThrow()
   })
 
   test("throws on invalid step (0)", () => {
@@ -220,6 +228,16 @@ describe("Cron.matches", () => {
     const noMatch = new Date("2024-06-15T10:00:00.000Z").getTime()
     expect(Cron.matches(parsed, match)).toBe(true)
     expect(Cron.matches(parsed, noMatch)).toBe(false)
+  })
+
+  test("uses OR semantics when both day-of-month and day-of-week are restricted", () => {
+    const parsed = Cron.parse("0 9 1 * 1")
+    const byDow = new Date("2024-07-08T09:00:00.000Z").getTime() // Monday, day=8
+    const byDom = new Date("2024-08-01T09:00:00.000Z").getTime() // day=1, Thursday
+    const none = new Date("2024-08-08T09:00:00.000Z").getTime() // day=8, Thursday
+    expect(Cron.matches(parsed, byDow)).toBe(true)
+    expect(Cron.matches(parsed, byDom)).toBe(true)
+    expect(Cron.matches(parsed, none)).toBe(false)
   })
 })
 

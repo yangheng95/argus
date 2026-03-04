@@ -44,10 +44,10 @@ OpenCorvus รองรับทั้งรูปแบบ **JSON** และ *
 
 1. **การกำหนดค่าระยะไกล** (จาก `.well-known/opencorvus`) - ค่าเริ่มต้นขององค์กร
 2. **การกำหนดค่าสากล** (`~/.config/opencorvus/opencorvus.json`) - การตั้งค่าของผู้ใช้
-3. **การกำหนดค่าแบบกำหนดเอง** (`OPENCODE_CONFIG` env var) - การแทนที่แบบกำหนดเอง
+3. **การกำหนดค่าแบบกำหนดเอง** (`OPENCORVUS_CONFIG` env var) - การแทนที่แบบกำหนดเอง
 4. **การกำหนดค่าโครงการ** (`opencorvus.json` ในโครงการ) - การตั้งค่าเฉพาะโครงการ
 5. **`.opencorvus` ไดเรกทอรี** - ตัวแทน คำสั่ง ปลั๊กอิน
-6. **การกำหนดค่าแบบอินไลน์** (`OPENCODE_CONFIG_CONTENT` env var) - การแทนที่รันไทม์
+6. **การกำหนดค่าแบบอินไลน์** (`OPENCORVUS_CONFIG_CONTENT` env var) - การแทนที่รันไทม์
 
 ซึ่งหมายความว่าการกำหนดค่าโปรเจ็กต์สามารถแทนที่ค่าเริ่มต้นส่วนกลางได้ และการกำหนดค่าส่วนกลางสามารถแทนที่ค่าเริ่มต้นขององค์กรระยะไกลได้
 
@@ -117,10 +117,10 @@ OpenCorvus รองรับทั้งรูปแบบ **JSON** และ *
 
 ### เส้นทางที่กำหนดเอง
 
-ระบุเส้นทางไฟล์กำหนดค่าที่กำหนดเองโดยใช้ตัวแปรสภาพแวดล้อม `OPENCODE_CONFIG`
+ระบุเส้นทางไฟล์กำหนดค่าที่กำหนดเองโดยใช้ตัวแปรสภาพแวดล้อม `OPENCORVUS_CONFIG`
 
 ```bash
-export OPENCODE_CONFIG=/path/to/my/custom-config.json
+export OPENCORVUS_CONFIG=/path/to/my/custom-config.json
 opencorvus run "Hello world"
 ```
 
@@ -130,13 +130,13 @@ opencorvus run "Hello world"
 
 ### ไดเรกทอรีที่กำหนดเอง
 
-ระบุไดเร็กทอรีการกำหนดค่าที่กำหนดเองโดยใช้ `OPENCODE_CONFIG_DIR`
+ระบุไดเร็กทอรีการกำหนดค่าที่กำหนดเองโดยใช้ `OPENCORVUS_CONFIG_DIR`
 ตัวแปรสภาพแวดล้อม ไดเร็กทอรีนี้จะถูกค้นหาตัวแทน, คำสั่ง,
 โหมดและปลั๊กอินเหมือนกับไดเร็กทอรี `.opencorvus` มาตรฐานและควร
 เป็นไปตามโครงสร้างเดียวกัน
 
 ```bash
-export OPENCODE_CONFIG_DIR=/path/to/my/config-directory
+export OPENCORVUS_CONFIG_DIR=/path/to/my/config-directory
 opencorvus run "Hello world"
 ```
 
@@ -639,7 +639,7 @@ OpenCorvus จะดาวน์โหลดการอัปเดตใหม
 ```json title="opencorvus.json"
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "{env:OPENCODE_MODEL}",
+  "model": "{env:OPENCORVUS_MODEL}",
   "provider": {
     "anthropic": {
       "models": {},

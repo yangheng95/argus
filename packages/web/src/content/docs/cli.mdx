@@ -360,7 +360,7 @@ Start a headless OpenCorvus server for API access. Check out the [server docs](/
 opencorvus serve
 ```
 
-This starts an HTTP server that provides API access to opencorvus functionality without the TUI interface. Set `OPENCODE_SERVER_PASSWORD` to enable HTTP basic auth (username defaults to `opencorvus`).
+This starts an HTTP server that provides API access to opencorvus functionality without the TUI interface. Set `OPENCORVUS_SERVER_PASSWORD` to enable HTTP basic auth (username defaults to `opencorvus`).
 
 #### Flags
 
@@ -456,7 +456,7 @@ Start a headless OpenCorvus server with a web interface.
 opencorvus web
 ```
 
-This starts an HTTP server and opens a web browser to access OpenCorvus through a web interface. Set `OPENCODE_SERVER_PASSWORD` to enable HTTP basic auth (username defaults to `opencorvus`).
+This starts an HTTP server and opens a web browser to access OpenCorvus through a web interface. Set `OPENCORVUS_SERVER_PASSWORD` to enable HTTP basic auth (username defaults to `opencorvus`).
 
 #### Flags
 
@@ -555,31 +555,31 @@ OpenCorvus can be configured using environment variables.
 
 | Variable                              | Type    | Description                                       |
 | ------------------------------------- | ------- | ------------------------------------------------- |
-| `OPENCODE_AUTO_SHARE`                 | boolean | Automatically share sessions                      |
-| `OPENCODE_GIT_BASH_PATH`              | string  | Path to Git Bash executable on Windows            |
-| `OPENCODE_CONFIG`                     | string  | Path to config file                               |
-| `OPENCODE_TUI_CONFIG`                 | string  | Path to TUI config file                           |
-| `OPENCODE_CONFIG_DIR`                 | string  | Path to config directory                          |
-| `OPENCODE_CONFIG_CONTENT`             | string  | Inline json config content                        |
-| `OPENCODE_DISABLE_AUTOUPDATE`         | boolean | Disable automatic update checks                   |
-| `OPENCODE_DISABLE_PRUNE`              | boolean | Disable pruning of old data                       |
-| `OPENCODE_DISABLE_TERMINAL_TITLE`     | boolean | Disable automatic terminal title updates          |
-| `OPENCODE_PERMISSION`                 | string  | Inlined json permissions config                   |
-| `OPENCODE_DISABLE_DEFAULT_PLUGINS`    | boolean | Disable default plugins                           |
-| `OPENCODE_DISABLE_LSP_DOWNLOAD`       | boolean | Disable automatic LSP server downloads            |
-| `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` | boolean | Enable experimental models                        |
-| `OPENCODE_DISABLE_AUTOCOMPACT`        | boolean | Disable automatic context compaction              |
-| `OPENCODE_DISABLE_CLAUDE_CODE`        | boolean | Disable reading from `.claude` (prompt + skills)  |
-| `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Disable reading `~/.claude/CLAUDE.md`             |
-| `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Disable loading `.claude/skills`                  |
-| `OPENCODE_DISABLE_MODELS_FETCH`       | boolean | Disable fetching models from remote sources       |
-| `OPENCODE_FAKE_VCS`                   | string  | Fake VCS provider for testing purposes            |
-| `OPENCODE_DISABLE_FILETIME_CHECK`     | boolean | Disable file time checking for optimization       |
-| `OPENCODE_CLIENT`                     | string  | Client identifier (defaults to `cli`)             |
-| `OPENCODE_ENABLE_EXA`                 | boolean | Enable Exa web search tools                       |
-| `OPENCODE_SERVER_PASSWORD`            | string  | Enable basic auth for `serve`/`web`               |
-| `OPENCODE_SERVER_USERNAME`            | string  | Override basic auth username (default `opencorvus`) |
-| `OPENCODE_MODELS_URL`                 | string  | Custom URL for fetching models configuration      |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | Automatically share sessions                      |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Path to Git Bash executable on Windows            |
+| `OPENCORVUS_CONFIG`                     | string  | Path to config file                               |
+| `OPENCORVUS_TUI_CONFIG`                 | string  | Path to TUI config file                           |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | Path to config directory                          |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | Inline json config content                        |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | Disable automatic update checks                   |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | Disable pruning of old data                       |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | Disable automatic terminal title updates          |
+| `OPENCORVUS_PERMISSION`                 | string  | Inlined json permissions config                   |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | Disable default plugins                           |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | Disable automatic LSP server downloads            |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | Enable experimental models                        |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | Disable automatic context compaction              |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | Disable reading from `.claude` (prompt + skills)  |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | Disable reading `~/.claude/CLAUDE.md`             |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | Disable loading `.claude/skills`                  |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | Disable fetching models from remote sources       |
+| `OPENCORVUS_FAKE_VCS`                   | string  | Fake VCS provider for testing purposes            |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | Disable file time checking for optimization       |
+| `OPENCORVUS_CLIENT`                     | string  | Client identifier (defaults to `cli`)             |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | Enable Exa web search tools                       |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | Enable basic auth for `serve`/`web`               |
+| `OPENCORVUS_SERVER_USERNAME`            | string  | Override basic auth username (default `opencorvus`) |
+| `OPENCORVUS_MODELS_URL`                 | string  | Custom URL for fetching models configuration      |
 
 ---
 
@@ -589,16 +589,16 @@ These environment variables enable experimental features that may change or be r
 
 | Variable                                        | Type    | Description                             |
 | ----------------------------------------------- | ------- | --------------------------------------- |
-| `OPENCODE_EXPERIMENTAL`                         | boolean | Enable all experimental features        |
-| `OPENCODE_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Enable icon discovery                   |
-| `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Disable copy on select in TUI           |
-| `OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | number  | Default timeout for bash commands in ms |
-| `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | number  | Max output tokens for LLM responses     |
-| `OPENCODE_EXPERIMENTAL_FILEWATCHER`             | boolean | Enable file watcher for entire dir      |
-| `OPENCODE_EXPERIMENTAL_OXFMT`                   | boolean | Enable oxfmt formatter                  |
-| `OPENCODE_EXPERIMENTAL_LSP_TOOL`                | boolean | Enable experimental LSP tool            |
-| `OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolean | Disable file watcher                    |
-| `OPENCODE_EXPERIMENTAL_EXA`                     | boolean | Enable experimental Exa features        |
-| `OPENCODE_EXPERIMENTAL_LSP_TY`                  | boolean | Enable experimental LSP type checking   |
-| `OPENCODE_EXPERIMENTAL_MARKDOWN`                | boolean | Enable experimental markdown features   |
-| `OPENCODE_EXPERIMENTAL_PLAN_MODE`               | boolean | Enable plan mode                        |
+| `OPENCORVUS_EXPERIMENTAL`                         | boolean | Enable all experimental features        |
+| `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | Enable icon discovery                   |
+| `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | Disable copy on select in TUI           |
+| `OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | number  | Default timeout for bash commands in ms |
+| `OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | number  | Max output tokens for LLM responses     |
+| `OPENCORVUS_EXPERIMENTAL_FILEWATCHER`             | boolean | Enable file watcher for entire dir      |
+| `OPENCORVUS_EXPERIMENTAL_OXFMT`                   | boolean | Enable oxfmt formatter                  |
+| `OPENCORVUS_EXPERIMENTAL_LSP_TOOL`                | boolean | Enable experimental LSP tool            |
+| `OPENCORVUS_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolean | Disable file watcher                    |
+| `OPENCORVUS_EXPERIMENTAL_EXA`                     | boolean | Enable experimental Exa features        |
+| `OPENCORVUS_EXPERIMENTAL_LSP_TY`                  | boolean | Enable experimental LSP type checking   |
+| `OPENCORVUS_EXPERIMENTAL_MARKDOWN`                | boolean | Enable experimental markdown features   |
+| `OPENCORVUS_EXPERIMENTAL_PLAN_MODE`               | boolean | Enable plan mode                        |

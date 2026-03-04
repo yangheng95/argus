@@ -1,5 +1,6 @@
 import path from "node:path"
-import { createOpencode, type Event, type OpencodeClient } from "@opencorvus-ai/sdk"
+import { createOpencode, createOpencodeClient, type Event, type OpencodeClient } from "@opencorvus-ai/sdk/v2"
+import { mkdir } from "node:fs/promises"
 import type { BotAdapter, IncomingMessage } from "./adapter"
 import type { STTPipeline } from "./stt/pipeline"
 import type { VisionPipeline } from "./vision"
@@ -31,26 +32,35 @@ type EventPermissionAsked = Extract<Event, { type: "permission.asked" }>
 type EventSessionIdle = Extract<Event, { type: "session.idle" }>
 type EventMessageUpdated = Extract<Event, { type: "message.updated" }>
 type EventMessagePartUpdated = Extract<Event, { type: "message.part.updated" }>
+const MIRROR_PREFIX = "[opencorvus-mirror]"
 
 export interface BotCoreOptions {
   port?: number
+  baseUrl?: string
+  sharedMode?: boolean
+  sharedFile?: string
 }
 
 export class BotCore {
   private session = new SessionCoordinator<SessionEntry, IncomingMessage>()
   private adapters: BotAdapter[] = []
   private client!: OpencodeClient
-  private server!: { url: string; close(): void }
+  private server?: { url: string; close(): void }
   /** Buffer assistant text per messageID until message.updated signals completion */
   private textBuffers = new Map<string, string>()
   /** Track user message IDs to skip their parts */
   private userMessageIds = new Set<string>()
+  /** Buffer text captured from message.part.updated before we know the message role */
+  private pendingPartTexts = new Map<string, string>()
   /** Set to false by stop() to terminate the reconnect loop */
   private running = false
   private stt?: STTPipeline
   private vision?: VisionPipeline
   /** Base URL of the OpenCorvus server */
   private serverUrl!: string
+  private sharedSessionId?: string
+  /** Prevent creating duplicate overlay mirror threads */
+  private overlayMirrorBound = false
 
   constructor(private options?: BotCoreOptions) {}
 
@@ -73,10 +83,17 @@ export class BotCore {
 
   async start(): Promise<void> {
     this.running = true
-    const opencorvus = await createOpencode({ port: this.options?.port ?? 0 })
-    this.client = opencorvus.client
-    this.server = opencorvus.server
-    this.serverUrl = opencorvus.server.url
+    const baseUrl = this.options?.baseUrl?.trim()
+    if (baseUrl) {
+      this.client = createOpencodeClient({ baseUrl })
+      this.server = undefined
+      this.serverUrl = baseUrl
+    } else {
+      const opencorvus = await createOpencode({ port: this.options?.port ?? 0 })
+      this.client = opencorvus.client
+      this.server = opencorvus.server
+      this.serverUrl = opencorvus.server.url
+    }
     console.log(`[BotCore] OpenCorvus server running at ${this.serverUrl}`)
 
     this.subscribeEvents()
@@ -84,6 +101,16 @@ export class BotCore {
     for (const adapter of this.adapters) {
       adapter.onMessage((msg) => this.handleMessage(msg))
       await adapter.start()
+    }
+
+    // Pre-load shared session ID so overlay-originated events can be mirrored to Slack
+    // even before the first Slack message arrives (which would otherwise populate sharedSessionId).
+    if (this.sharedMode() && !this.sharedSessionId) {
+      const fromFile = await this.readSharedSessionFile()
+      if (fromFile) {
+        this.sharedSessionId = fromFile
+        console.log(`[BotCore] Pre-loaded shared session: ${fromFile}`)
+      }
     }
 
     // Overlay is managed by OpenCorvus's overlay-client.ts (spawned on first tool use)
@@ -94,7 +121,7 @@ export class BotCore {
     for (const adapter of this.adapters) {
       await adapter.stop()
     }
-    this.server.close()
+    this.server?.close()
   }
 
   async handleMessage(msg: IncomingMessage): Promise<void> {
@@ -106,7 +133,13 @@ export class BotCore {
     let text = msg.text
     if (msg.audio) {
       if (!this.stt || !this.stt.isAvailable) {
-        await adapter.sendMessage(msg.channel, msg.thread, "Voice messages are not supported (no STT provider configured).")
+        const notice = "Voice messages are not supported (no STT provider configured)."
+        this.mirror("system", notice, {
+          platform: msg.platform,
+          channel: msg.channel,
+          thread: msg.thread,
+        })
+        await adapter.sendMessage(msg.channel, msg.thread, notice)
         if (!text) return
       } else {
         const result = await this.stt.transcribe(msg.audio)
@@ -115,7 +148,13 @@ export class BotCore {
           text = text ? `${prefix}\n\n${text}` : prefix
           console.log(`[BotCore] Transcribed voice (${result.provider}, ${result.durationMs}ms)`)
         } else {
-          await adapter.sendMessage(msg.channel, msg.thread, "Failed to transcribe voice message.")
+          const notice = "Failed to transcribe voice message."
+          this.mirror("system", notice, {
+            platform: msg.platform,
+            channel: msg.channel,
+            thread: msg.thread,
+          })
+          await adapter.sendMessage(msg.channel, msg.thread, notice)
           if (!text) return
         }
       }
@@ -126,39 +165,100 @@ export class BotCore {
     let session = this.session.get(threadKey)
 
     if (!session) {
-      const createResult = await this.client.session.create({
-        title: `${msg.platform} thread ${msg.thread}`,
-      })
-
-      if (createResult.error) {
-        console.error("[BotCore] session.create error:", JSON.stringify(createResult.error).slice(0, 500))
-        await adapter.sendMessage(msg.channel, msg.thread, "Failed to create session.")
-        return
+      const shared = this.sharedMode()
+      const sharedId = shared ? await this.ensureSharedSession(msg) : undefined
+      if (shared) {
+        if (!sharedId) {
+          const notice = "Failed to initialize shared session."
+          this.mirror("system", notice, {
+            platform: msg.platform,
+            channel: msg.channel,
+            thread: msg.thread,
+          })
+          await adapter.sendMessage(msg.channel, msg.thread, notice)
+          return
+        }
+        session = {
+          sessionId: sharedId,
+          adapter,
+          channel: msg.channel,
+          thread: msg.thread,
+        }
+        this.session.bind(threadKey, session)
+        console.log(`[BotCore] Bound ${threadKey} to shared session ${sharedId}`)
       }
+      if (!shared) {
+        const createResult = await this.client.session.create({
+          title: `${msg.platform} thread ${msg.thread}`,
+        })
 
-      session = {
-        sessionId: createResult.data.id,
-        adapter,
+        if (createResult.error) {
+          console.error("[BotCore] session.create error:", JSON.stringify(createResult.error).slice(0, 500))
+          const notice = "Failed to create session."
+          this.mirror("system", notice, {
+            platform: msg.platform,
+            channel: msg.channel,
+            thread: msg.thread,
+          })
+          await adapter.sendMessage(msg.channel, msg.thread, notice)
+          return
+        }
+
+        session = {
+          sessionId: createResult.data.id,
+          adapter,
+          channel: msg.channel,
+          thread: msg.thread,
+        }
+        this.session.bind(threadKey, session)
+        console.log(`[BotCore] Created session ${createResult.data.id} for ${threadKey}`)
+      }
+    }
+
+    if (!session) {
+      const notice = "Failed to initialize session."
+      this.mirror("system", notice, {
+        platform: msg.platform,
         channel: msg.channel,
         thread: msg.thread,
-      }
-      this.session.bind(threadKey, session)
-      console.log(`[BotCore] Created session ${createResult.data.id} for ${threadKey}`)
+      })
+      await adapter.sendMessage(msg.channel, msg.thread, notice)
+      return
     }
+    this.mirror("user", text, {
+      platform: msg.platform,
+      channel: msg.channel,
+      thread: msg.thread,
+      sessionId: session.sessionId,
+    })
 
     // If session is currently processing a task, queue this message and notify user
     if (this.session.processing(session.sessionId)) {
       const queue = this.session.enqueue(session.sessionId, { msg, text }, this.queueLimit())
       if (!queue.ok) {
+        const notice = `Current task is still running. Queue is full (${queue.limit}). Please retry later.`
+        this.mirror("system", notice, {
+          platform: msg.platform,
+          channel: msg.channel,
+          thread: msg.thread,
+          sessionId: session.sessionId,
+        })
         await adapter.sendMessage(
           msg.channel,
           msg.thread,
-          `Current task is still running. Queue is full (${queue.limit}). Please retry later.`,
+          notice,
         )
         console.warn(`[BotCore] Dropped message for ${session.sessionId}, queue limit reached: ${queue.limit}`)
         return
       }
-      await adapter.sendMessage(msg.channel, msg.thread, `Current task is still running. Your message is queued (#${queue.size}).`)
+      const notice = `Current task is still running. Your message is queued (#${queue.size}).`
+      this.mirror("system", notice, {
+        platform: msg.platform,
+        channel: msg.channel,
+        thread: msg.thread,
+        sessionId: session.sessionId,
+      })
+      await adapter.sendMessage(msg.channel, msg.thread, notice)
       console.log(`[BotCore] Queued message for ${session.sessionId}, queue size: ${queue.size}`)
       return
     }
@@ -177,7 +277,14 @@ export class BotCore {
     if (result.error) {
       this.session.stop(session.sessionId)
       console.error("[BotCore] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
-      await adapter.sendMessage(msg.channel, msg.thread, "Failed to send prompt.")
+      const notice = "Failed to send prompt."
+      this.mirror("system", notice, {
+        platform: msg.platform,
+        channel: msg.channel,
+        thread: msg.thread,
+        sessionId: session.sessionId,
+      })
+      await adapter.sendMessage(msg.channel, msg.thread, notice)
       return
     }
 
@@ -262,6 +369,87 @@ export class BotCore {
     return splitText(text, limit)
   }
 
+  private mirror(
+    kind: "user" | "assistant" | "system",
+    text: string,
+    info?: { sessionId?: string; platform?: string; channel?: string; thread?: string },
+  ) {
+    if (process.env.OPENCORVUS_MIRROR_STDOUT !== "1") return
+    const value = text.trim()
+    if (!value) return
+    console.log(
+      `${MIRROR_PREFIX}${JSON.stringify({
+        kind,
+        text: value,
+        ts: Date.now(),
+        session_id: info?.sessionId,
+        platform: info?.platform,
+        channel: info?.channel,
+        thread: info?.thread,
+      })}`,
+    )
+  }
+
+  private sharedMode() {
+    if (this.options?.sharedMode !== undefined) return this.options.sharedMode
+    return process.env.OPENCORVUS_SHARED_SESSION_MODE === "1"
+  }
+
+  private sharedFile() {
+    const fromOption = this.options?.sharedFile?.trim()
+    if (fromOption) return fromOption
+    const fromEnv = process.env.OPENCORVUS_SHARED_SESSION_FILE?.trim()
+    if (fromEnv) return fromEnv
+    return path.resolve(process.cwd(), ".opencorvus/shared-session.json")
+  }
+
+  private async readSharedSessionFile() {
+    const file = this.sharedFile()
+    const raw = (await Bun.file(file).json().catch(() => undefined)) as { session_id?: unknown } | undefined
+    if (!raw) return undefined
+    if (typeof raw.session_id !== "string") return undefined
+    const id = raw.session_id.trim()
+    if (!id) return undefined
+    return id
+  }
+
+  private async writeSharedSessionFile(sessionId: string) {
+    const file = this.sharedFile()
+    const dir = path.dirname(file)
+    await mkdir(dir, { recursive: true })
+    const payload = {
+      session_id: sessionId,
+      updated_at: Date.now(),
+    }
+    await Bun.write(file, JSON.stringify(payload, null, 2) + "\n")
+  }
+
+  private async ensureSharedSession(msg: IncomingMessage) {
+    if (!this.sharedMode()) return undefined
+    if (this.sharedSessionId) return this.sharedSessionId
+
+    const fromFile = await this.readSharedSessionFile()
+    if (fromFile) {
+      this.sharedSessionId = fromFile
+      return fromFile
+    }
+
+    const createResult = await this.client.session.create({
+      title: `${msg.platform} shared session`,
+    })
+    if (createResult.error) {
+      console.error("[BotCore] shared session.create error:", JSON.stringify(createResult.error).slice(0, 500))
+      return undefined
+    }
+
+    this.sharedSessionId = createResult.data.id
+    await this.writeSharedSessionFile(createResult.data.id).catch((err) => {
+      console.warn("[BotCore] shared session file write failed:", err)
+    })
+    console.log(`[BotCore] Created shared session ${createResult.data.id}`)
+    return createResult.data.id
+  }
+
   /**
    * Inject a prompt directly into a channel, bypassing inbound listener events.
    * Requires adapter.startThread(channel, text).
@@ -297,17 +485,47 @@ export class BotCore {
     return formatToolStatusMessage(tool, input, process.env)
   }
 
-  private findSession(sessionId: string): SessionEntry | undefined {
-    return this.session.findSession(sessionId)
+  private findSessions(sessionId: string) {
+    return this.session.findSessions(sessionId)
   }
 
+  /**
+   * In shared mode, when no Slack thread is bound to the shared session yet
+   * (e.g. overlay sends a prompt before any Slack message arrives), create a
+   * dedicated mirror thread in SLACK_CHANNEL_ID and bind it.  Called lazily on
+   * the first event that needs a Slack target.
+   */
+  private async bindOverlayMirrorIfNeeded(sessionId: string): Promise<SessionEntry[]> {
+    // Already bound — just look up what SessionCoordinator has
+    if (this.overlayMirrorBound) return this.findSessions(sessionId)
+
+    const channel = process.env.SLACK_CHANNEL_ID
+    if (!channel) return []
+
+    const adapter = this.adapters.find((a) => typeof a.startThread === "function")
+    if (!adapter?.startThread) return []
+
+    // Set flag before await to prevent concurrent calls from creating multiple threads
+    this.overlayMirrorBound = true
+    try {
+      const ts = await adapter.startThread(channel, "[Overlay Console] Session started")
+      const entry: SessionEntry = { sessionId, adapter, channel, thread: ts }
+      this.session.bind(`overlay-mirror:${sessionId}`, entry)
+      console.log(`[BotCore] Overlay mirror thread created: ${channel}:${ts} for session ${sessionId}`)
+      return [entry]
+    } catch (err) {
+      this.overlayMirrorBound = false
+      console.warn("[BotCore] Failed to create overlay mirror thread:", err)
+      return []
+    }
+  }
 
   /**
    * Upload screenshot attachment and optionally run vision analysis in parallel.
    * Prefer event payload attachments and fall back to fetching message parts if needed.
    */
   private async processScreenshot(
-    session: SessionEntry,
+    sessions: SessionEntry[],
     sessionId: string,
     messageId: string,
     partId: string,
@@ -349,12 +567,16 @@ export class BotCore {
         }
 
         // Run upload and vision analysis in parallel
-        const uploadPromise = session.adapter.uploadImage(
-          session.channel,
-          session.thread,
-          buffer,
-          att.filename ?? `screenshot.${ext}`,
-          title,
+        const uploadPromise = Promise.all(
+          sessions.map((session) =>
+            session.adapter.uploadImage(
+              session.channel,
+              session.thread,
+              buffer,
+              att.filename ?? `screenshot.${ext}`,
+              title,
+            ),
+          ),
         )
 
         const shouldVision = this.vision && !tooLarge && !lowDiff
@@ -386,25 +608,23 @@ export class BotCore {
         requestID: asked.id,
         reply,
       })
-      const session = this.findSession(asked.sessionID)
+      const sessions = this.findSessions(asked.sessionID)
       if (result.error) {
         console.error("[BotCore] permission.reply error:", JSON.stringify(result.error).slice(0, 500))
-        if (session) {
-          await session.adapter.sendMessage(
-            session.channel,
-            session.thread,
-            `Failed to reply permission request: ${asked.permission}`,
-          ).catch(() => {})
+        this.mirror("system", `Failed to reply permission request: ${asked.permission}`, { sessionId: asked.sessionID })
+        for (const session of sessions) {
+          await session.adapter
+            .sendMessage(session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
+            .catch(() => {})
         }
         return
       }
-      if (session) {
+      this.mirror("system", `Auto-replied permission (${reply}): ${asked.permission}`, { sessionId: asked.sessionID })
+      for (const session of sessions) {
         const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
-        await session.adapter.sendMessage(
-          session.channel,
-          session.thread,
-          `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
-        ).catch(() => {})
+        await session.adapter
+          .sendMessage(session.channel, session.thread, `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`)
+          .catch(() => {})
       }
       console.log(`[BotCore] Auto-replied permission ${asked.id} with ${reply}`)
       return
@@ -429,14 +649,35 @@ export class BotCore {
       const info = (event as EventMessageUpdated).properties.info
 
       if (info.role === "user") {
+        // Track on first event only; message.updated fires twice for the same user message
+        const isNew = !this.userMessageIds.has(info.id)
         this.userMessageIds.add(info.id)
+
+        // In shared mode, mirror the user's overlay prompt to Slack.
+        // message.part.updated arrives BEFORE this event and pre-captured the text in pendingPartTexts.
+        if (isNew && this.sharedMode() && info.sessionID === this.sharedSessionId) {
+          // Clean up any user text that leaked into textBuffers before role was known
+          this.textBuffers.delete(info.id)
+          const userText = this.pendingPartTexts.get(info.id)
+          this.pendingPartTexts.delete(info.id)
+          if (userText) {
+            let sessions = this.findSessions(info.sessionID)
+            if (sessions.length === 0) sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
+            for (const session of sessions) {
+              await session.adapter.sendMessage(session.channel, session.thread, `> ${userText.trim()}`).catch(() => {})
+            }
+          }
+        }
         return
       }
 
       // Flush buffered text when assistant message (one agentic step) completes
       if (info.role === "assistant" && info.time.completed) {
-        const session = this.findSession(info.sessionID)
-        if (!session) return
+        let sessions = this.findSessions(info.sessionID)
+        if (sessions.length === 0 && this.sharedMode() && info.sessionID === this.sharedSessionId) {
+          sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
+        }
+        if (sessions.length === 0) return
 
         const text = this.textBuffers.get(info.id)
         this.textBuffers.delete(info.id)
@@ -445,7 +686,10 @@ export class BotCore {
           const polished = this.polish(text)
           if (polished) {
             for (const part of this.split(polished, BOT_MESSAGE_LIMIT)) {
-              await session.adapter.sendMessage(session.channel, session.thread, part).catch(() => {})
+              this.mirror("assistant", part, { sessionId: info.sessionID })
+              for (const session of sessions) {
+                await session.adapter.sendMessage(session.channel, session.thread, part).catch(() => {})
+              }
             }
           }
           console.log(`[BotCore] Sent text for ${info.sessionID} (${polished.length} chars)`)
@@ -453,7 +697,10 @@ export class BotCore {
 
         if (info.error) {
           const errMsg = "error" in info.error ? (info.error as any).error : JSON.stringify(info.error)
-          await session.adapter.sendMessage(session.channel, session.thread, `Error: ${errMsg}`).catch(() => {})
+          this.mirror("system", `Error: ${errMsg}`, { sessionId: info.sessionID })
+          for (const session of sessions) {
+            await session.adapter.sendMessage(session.channel, session.thread, `Error: ${errMsg}`).catch(() => {})
+          }
         }
 
       }
@@ -462,11 +709,21 @@ export class BotCore {
     if (event.type === "message.part.updated") {
       const part = (event as EventMessagePartUpdated).properties.part
 
+      // In shared mode, pre-capture text parts before we know the message role.
+      // message.part.updated fires BEFORE message.updated(role=user), so we store
+      // the text here and consume it when message.updated confirms role=user.
+      if (this.sharedMode() && part.sessionID === this.sharedSessionId && part.type === "text" && part.text?.trim()) {
+        this.pendingPartTexts.set(part.messageID, part.text)
+      }
+
       // Skip parts belonging to user messages
       if (this.userMessageIds.has(part.messageID)) return
 
-      const session = this.findSession(part.sessionID)
-      if (!session) return
+      let sessions = this.findSessions(part.sessionID)
+      if (sessions.length === 0 && this.sharedMode() && part.sessionID === this.sharedSessionId) {
+        sessions = await this.bindOverlayMirrorIfNeeded(part.sessionID)
+      }
+      if (sessions.length === 0) return
 
       // Buffer text parts keyed by messageID (flushed on message.updated)
       if (part.type === "text") {
@@ -491,7 +748,7 @@ export class BotCore {
               const rawDiff = (metadata as Record<string, unknown>).diffPercent
               const diffPercent = typeof rawDiff === "number" ? rawDiff : undefined
               await this.processScreenshot(
-                session,
+                sessions,
                 part.sessionID,
                 part.messageID,
                 part.id,
@@ -505,14 +762,20 @@ export class BotCore {
           // Post brief status for important tools (bash, edit, write, skill)
           const statusMsg = this.formatToolStatus(toolName, toolInput)
           if (statusMsg) {
-            await session.adapter.sendMessage(session.channel, session.thread, statusMsg).catch(() => {})
+            this.mirror("assistant", statusMsg, { sessionId: part.sessionID })
+            for (const session of sessions) {
+              await session.adapter.sendMessage(session.channel, session.thread, statusMsg).catch(() => {})
+            }
           }
         }
 
         if (part.state?.status === "error") {
           const statusMsg = this.formatToolStatus(toolName, toolInput) ?? `\`${toolName}\``
           const err = String(part.state.error ?? "Unknown tool error")
-          await session.adapter.sendMessage(session.channel, session.thread, `${statusMsg} failed: ${err}`).catch(() => {})
+          this.mirror("system", `${statusMsg} failed: ${err}`, { sessionId: part.sessionID })
+          for (const session of sessions) {
+            await session.adapter.sendMessage(session.channel, session.thread, `${statusMsg} failed: ${err}`).catch(() => {})
+          }
         }
       }
     }

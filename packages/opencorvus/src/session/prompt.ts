@@ -269,6 +269,578 @@ export namespace SessionPrompt {
     return
   }
 
+  async function runSubtask(input: {
+    task: MessageV2.SubtaskPart
+    model: Provider.Model
+    lastUser: MessageV2.User
+    msgs: MessageV2.WithParts[]
+    session: Session.Info
+    sessionID: string
+    abort: AbortSignal
+  }) {
+    const taskTool = await TaskTool.init()
+    const taskModel = input.task.model
+      ? await Provider.getModel(input.task.model.providerID, input.task.model.modelID)
+      : input.model
+    const assistantMessage = (await Session.updateMessage({
+      id: Identifier.ascending("message"),
+      role: "assistant",
+      parentID: input.lastUser.id,
+      sessionID: input.sessionID,
+      mode: input.task.agent,
+      agent: input.task.agent,
+      variant: input.lastUser.variant,
+      path: {
+        cwd: Instance.directory,
+        root: Instance.worktree,
+      },
+      cost: 0,
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      modelID: taskModel.id,
+      providerID: taskModel.providerID,
+      time: {
+        created: Date.now(),
+      },
+    })) as MessageV2.Assistant
+    const part = (await Session.updatePart({
+      id: Identifier.ascending("part"),
+      messageID: assistantMessage.id,
+      sessionID: assistantMessage.sessionID,
+      type: "tool",
+      callID: ulid(),
+      tool: TaskTool.id,
+      state: {
+        status: "running",
+        input: {
+          prompt: input.task.prompt,
+          description: input.task.description,
+          subagent_type: input.task.agent,
+          command: input.task.command,
+        },
+        time: {
+          start: Date.now(),
+        },
+      },
+    })) as MessageV2.ToolPart
+    const args = {
+      prompt: input.task.prompt,
+      description: input.task.description,
+      subagent_type: input.task.agent,
+      command: input.task.command,
+    }
+    await Plugin.trigger(
+      "tool.execute.before",
+      {
+        tool: "task",
+        sessionID: input.sessionID,
+        callID: part.id,
+      },
+      { args },
+    )
+    let fail: Error | undefined
+    const taskAgent = await Agent.get(input.task.agent)
+    const ctx: Tool.Context = {
+      agent: input.task.agent,
+      messageID: assistantMessage.id,
+      sessionID: input.sessionID,
+      abort: input.abort,
+      callID: part.callID,
+      extra: { bypassAgentCheck: true },
+      messages: input.msgs,
+      async metadata(next) {
+        await Session.updatePart({
+          ...part,
+          type: "tool",
+          state: {
+            ...part.state,
+            ...next,
+          },
+        } satisfies MessageV2.ToolPart)
+      },
+      async ask(req) {
+        await PermissionNext.ask({
+          ...req,
+          sessionID: input.sessionID,
+          ruleset: PermissionNext.merge(taskAgent.permission, input.session.permission ?? []),
+        })
+      },
+    }
+    const result = await taskTool.execute(args, ctx).catch((error) => {
+      fail = error
+      log.error("subtask execution failed", {
+        error,
+        agent: input.task.agent,
+        description: input.task.description,
+      })
+      return undefined
+    })
+    const attachments = result?.attachments?.map((attachment) => ({
+      ...attachment,
+      id: Identifier.ascending("part"),
+      sessionID: input.sessionID,
+      messageID: assistantMessage.id,
+    }))
+    await Plugin.trigger(
+      "tool.execute.after",
+      {
+        tool: "task",
+        sessionID: input.sessionID,
+        callID: part.id,
+        args,
+      },
+      result,
+    )
+    assistantMessage.finish = "tool-calls"
+    assistantMessage.time.completed = Date.now()
+    await Session.updateMessage(assistantMessage)
+    if (result && part.state.status === "running") {
+      await Session.updatePart({
+        ...part,
+        state: {
+          status: "completed",
+          input: part.state.input,
+          title: result.title,
+          metadata: result.metadata,
+          output: result.output,
+          attachments,
+          time: {
+            ...part.state.time,
+            end: Date.now(),
+          },
+        },
+      } satisfies MessageV2.ToolPart)
+    }
+    if (!result) {
+      await Session.updatePart({
+        ...part,
+        state: {
+          status: "error",
+          error: fail ? `Tool execution failed: ${fail.message}` : "Tool execution failed",
+          time: {
+            start: part.state.status === "running" ? part.state.time.start : Date.now(),
+            end: Date.now(),
+          },
+          metadata: part.metadata,
+          input: part.state.input,
+        },
+      } satisfies MessageV2.ToolPart)
+    }
+
+    if (input.task.command) {
+      // Add synthetic user message to prevent certain reasoning models from erroring
+      // If we create assistant messages w/ out user ones following mid loop thinking signatures
+      // will be missing and it can cause errors for models like gemini for example
+      const summaryUserMsg: MessageV2.User = {
+        id: Identifier.ascending("message"),
+        sessionID: input.sessionID,
+        role: "user",
+        time: {
+          created: Date.now(),
+        },
+        agent: input.lastUser.agent,
+        model: input.lastUser.model,
+      }
+      await Session.updateMessage(summaryUserMsg)
+      await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: summaryUserMsg.id,
+        sessionID: input.sessionID,
+        type: "text",
+        text: "Summarize the task tool output above and continue with your task.",
+        synthetic: true,
+      } satisfies MessageV2.TextPart)
+    }
+  }
+
+  function collectLoopState(msgs: MessageV2.WithParts[]) {
+    let lastUser: MessageV2.User | undefined
+    let lastAssistant: MessageV2.Assistant | undefined
+    let lastFinished: MessageV2.Assistant | undefined
+    const tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const msg = msgs[i]
+      if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
+      if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
+      if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
+        lastFinished = msg.info as MessageV2.Assistant
+      if (lastUser && lastFinished) break
+      if (!lastFinished) {
+        tasks.push(...msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask"))
+      }
+    }
+    if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
+    return { lastUser, lastAssistant, lastFinished, tasks }
+  }
+
+  function shouldEnterStandby(input: { lastUser: MessageV2.User; lastAssistant: MessageV2.Assistant | undefined }) {
+    return !!(
+      input.lastAssistant?.finish &&
+      !["tool-calls", "unknown"].includes(input.lastAssistant.finish) &&
+      input.lastUser.id < input.lastAssistant.id
+    )
+  }
+
+  async function injectGoalContinuation(input: {
+    sessionID: string
+    lastUser: MessageV2.User
+    continuationParts: string[]
+  }) {
+    const sentinelText = `<goal-sentinel>\n${input.continuationParts.join("\n")}\n\nContinue working toward the above goals. Do not stop until all blocking goals are achieved.\n</goal-sentinel>`
+    const continueMsg = await Session.updateMessage({
+      id: Identifier.ascending("message"),
+      role: "user",
+      sessionID: input.sessionID,
+      time: { created: Date.now() },
+      agent: input.lastUser.agent,
+      model: input.lastUser.model,
+    })
+    await Session.updatePart({
+      id: Identifier.ascending("part"),
+      messageID: continueMsg.id,
+      sessionID: input.sessionID,
+      type: "text",
+      synthetic: true,
+      text: sentinelText,
+      time: { start: Date.now(), end: Date.now() },
+    })
+    log.info("goal gate: injected continuation message", { sessionID: input.sessionID })
+  }
+
+  async function evaluateBlockingGoals(input: {
+    sessionID: string
+    msgs: MessageV2.WithParts[]
+    lastUser: MessageV2.User
+  }) {
+    const goals = Goal.listActive(input.sessionID).filter((g) => g.priority === "blocking")
+    if (goals.length === 0) return false
+
+    log.info("goal gate: evaluating blocking goals", {
+      sessionID: input.sessionID,
+      count: goals.length,
+      goals: goals.map((g) => g.id),
+    })
+
+    let shouldContinue = false
+    const continuationParts: string[] = []
+    for (const goal of goals) {
+      const { action, result } = await Goal.evaluate(goal, input.msgs, input.lastUser.model.providerID)
+      const entry: Goal.EvaluationEntry = {
+        attempt: goal.currentAttempts + 1,
+        timestamp: Date.now(),
+        action,
+        confidence: result.confidence,
+        reasoning: result.reasoning,
+        nextStep: result.nextStep,
+      }
+      const progressLog = [...goal.progressLog, entry]
+      if (action === "achieved") {
+        Goal.update(goal.id, {
+          status: "achieved",
+          currentAttempts: goal.currentAttempts + 1,
+          progressLog,
+        })
+        log.info("goal gate: goal achieved", { goalID: goal.id })
+        continue
+      }
+      if (action === "deadlock") {
+        Goal.update(goal.id, {
+          status: "failed",
+          currentAttempts: goal.currentAttempts + 1,
+          progressLog,
+        })
+        Bus.publish(Goal.Event.Deadlock, {
+          goal: {
+            id: goal.id,
+            sessionID: input.sessionID,
+            description: goal.description,
+            attempts: goal.currentAttempts + 1,
+          },
+        })
+        log.warn("goal gate: deadlock detected", {
+          goalID: goal.id,
+          attempts: goal.currentAttempts + 1,
+        })
+        continue
+      }
+      shouldContinue = true
+      Goal.update(goal.id, {
+        currentAttempts: goal.currentAttempts + 1,
+        progressLog,
+      })
+      continuationParts.push(
+        `Goal "${goal.description}" [${goal.id}] not yet achieved (confidence: ${result.confidence.toFixed(2)}).` +
+          (result.nextStep ? ` Next step: ${result.nextStep}` : ""),
+      )
+      log.info("goal gate: goal not achieved, forcing continuation", {
+        goalID: goal.id,
+        confidence: result.confidence,
+        nextStep: result.nextStep,
+      })
+    }
+
+    if (!shouldContinue) return false
+    await injectGoalContinuation({
+      sessionID: input.sessionID,
+      lastUser: input.lastUser,
+      continuationParts,
+    })
+    return true
+  }
+
+  async function enterStandby(input: { sessionID: string; abort: AbortSignal; afterID: string }) {
+    SessionCompaction.prune({ sessionID: input.sessionID })
+    log.info("entering standby", { sessionID: input.sessionID })
+    SessionStatus.set(input.sessionID, { type: "idle" })
+    await waitForUserMessage(input.sessionID, input.abort, input.afterID)
+  }
+
+  async function processTurn(input: {
+    step: number
+    sessionID: string
+    session: Session.Info
+    msgs: MessageV2.WithParts[]
+    lastUser: MessageV2.User
+    lastFinished: MessageV2.Assistant | undefined
+    model: Provider.Model
+    abort: AbortSignal
+  }) {
+    let structured: unknown | undefined
+    const agent = await Agent.get(input.lastUser.agent)
+    const maxSteps = agent.steps ?? Infinity
+    const isLastStep = input.step >= maxSteps
+    const processor = SessionProcessor.create({
+      assistantMessage: (await Session.updateMessage({
+        id: Identifier.ascending("message"),
+        parentID: input.lastUser.id,
+        role: "assistant",
+        mode: agent.name,
+        agent: agent.name,
+        variant: input.lastUser.variant,
+        path: {
+          cwd: Instance.directory,
+          root: Instance.worktree,
+        },
+        cost: 0,
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+        modelID: input.model.id,
+        providerID: input.model.providerID,
+        time: {
+          created: Date.now(),
+        },
+        sessionID: input.sessionID,
+      })) as MessageV2.Assistant,
+      sessionID: input.sessionID,
+      model: input.model,
+      abort: input.abort,
+    })
+    using _ = defer(() => InstructionPrompt.clear(processor.message.id))
+
+    const lastUserMsg = input.msgs.findLast((m) => m.info.role === "user")
+    const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+    const tools = await resolveTools({
+      agent,
+      session: input.session,
+      model: input.model,
+      tools: input.lastUser.tools,
+      processor,
+      bypassAgentCheck,
+      messages: input.msgs,
+    })
+    if (input.lastUser.format?.type === "json_schema") {
+      tools["StructuredOutput"] = createStructuredOutputTool({
+        schema: input.lastUser.format.schema,
+        onSuccess(output) {
+          structured = output
+        },
+      })
+    }
+
+    if (input.step === 1) {
+      SessionSummary.summarize({
+        sessionID: input.sessionID,
+        messageID: input.lastUser.id,
+      })
+    }
+
+    if (input.step > 1 && input.lastFinished) {
+      for (const msg of input.msgs) {
+        if (msg.info.role !== "user" || msg.info.id <= input.lastFinished.id) continue
+        for (const part of msg.parts) {
+          if (part.type !== "text" || !textForBoth(part)) continue
+          if (!part.text.trim()) continue
+          part.text = [
+            "<system-reminder>",
+            "The user sent the following message:",
+            part.text,
+            "",
+            "Please address this message and continue with your tasks.",
+            "</system-reminder>",
+          ].join("\n")
+        }
+      }
+    }
+
+    await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: input.msgs })
+
+    if (GuiState.get().isGuiSession) {
+      GuiState.setStep(input.step)
+      const actionSummary = GuiState.buildActionSummary()
+      const repetitionAlert = GuiState.checkRepetition()
+      if (actionSummary || repetitionAlert) {
+        const match = input.msgs.findLast((m) => m.info.role === "user")
+        if (match) {
+          const guiContext = [actionSummary, repetitionAlert].filter(Boolean).join("\n\n")
+          match.parts.push({
+            id: Identifier.ascending("part"),
+            messageID: match.info.id,
+            sessionID: match.info.sessionID,
+            type: "text",
+            text: guiContext,
+            synthetic: true,
+          } as MessageV2.TextPart)
+        }
+      }
+    }
+
+    const system = [...(await SystemPrompt.environment(input.model)), ...(await InstructionPrompt.system())]
+    const format = input.lastUser.format ?? { type: "text" }
+    if (format.type === "json_schema") {
+      system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
+    }
+
+    const memoryInstruction = await MemoryInjection.systemPromptSection()
+    if (memoryInstruction) system.push(memoryInstruction)
+    const scratchpadSection = Scratchpad.systemPromptSection(input.sessionID)
+    if (scratchpadSection) system.push(scratchpadSection)
+    const taskPlanSection = TaskPlan.toMarkdown(input.sessionID)
+    if (taskPlanSection) system.push(taskPlanSection)
+    const goalSection = Goal.toMarkdown(input.sessionID)
+    if (goalSection) system.push(goalSection)
+
+    const modelMessages = [
+      ...MessageV2.toModelMessages(input.msgs, input.model),
+      ...(isLastStep
+        ? [
+            {
+              role: "assistant" as const,
+              content: MAX_STEPS,
+            },
+          ]
+        : []),
+    ]
+
+    {
+      const systemChars = system.reduce((sum, s) => sum + s.length, 0)
+      const systemTokensEst = Math.round(systemChars / 4)
+      const toolCount = Object.keys(tools).length
+      let userMsgCount = 0
+      let assistantMsgCount = 0
+      let totalContentChars = 0
+      let imageCount = 0
+      let toolCallCount = 0
+
+      for (const msg of modelMessages) {
+        if (msg.role === "user") userMsgCount++
+        if (msg.role === "assistant") assistantMsgCount++
+
+        if (typeof msg.content === "string") {
+          totalContentChars += msg.content.length
+        } else if (Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
+            if ("type" in part && part.type === "image") imageCount++
+            if ("type" in part && part.type === "tool-result") toolCallCount++
+          }
+        }
+      }
+
+      const contentTokensEst = Math.round(totalContentChars / 4)
+      const imageTokensEst = imageCount * 1600
+      log.info("context-diagnostics", {
+        step: input.step,
+        systemPromptParts: system.length,
+        systemChars,
+        systemTokensEst,
+        toolCount,
+        toolNames: Object.keys(tools).join(","),
+        messageCount: modelMessages.length,
+        userMsgCount,
+        assistantMsgCount,
+        totalContentChars,
+        contentTokensEst,
+        imageCount,
+        imageTokensEst,
+        toolCallCount,
+        totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
+      })
+
+      const guiS = GuiState.get()
+      if (guiS.isGuiSession) {
+        log.info("gui-context-diagnostics", {
+          step: input.step,
+          isGuiSession: true,
+          actionCount: guiS.actions.length,
+          screenshotCount: guiS.screenshots.size,
+          descriptionsStored: Array.from(guiS.screenshots.values()).filter((s) => s.description).length,
+          lastScreenshotHash: guiS.lastScreenshotHash?.substring(0, 8) ?? "none",
+          consecutiveNoChange: guiS.repetition.consecutiveNoChange,
+          recentClickCoords: guiS.repetition.recentClickCoords.length,
+          currentStep: guiS.currentStep,
+        })
+      }
+    }
+
+    const result = await processor.process({
+      user: input.lastUser,
+      agent,
+      abort: input.abort,
+      sessionID: input.sessionID,
+      system,
+      messages: modelMessages,
+      tools,
+      model: input.model,
+      toolChoice: format.type === "json_schema" ? "required" : undefined,
+    })
+
+    if (structured !== undefined) {
+      processor.message.structured = structured
+      processor.message.finish = processor.message.finish ?? "stop"
+      await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
+
+    const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
+    if (modelFinished && !processor.message.error && format.type === "json_schema") {
+      processor.message.error = new MessageV2.StructuredOutputError({
+        message: "Model did not produce structured output",
+        retries: 0,
+      }).toObject()
+      await Session.updateMessage(processor.message)
+      return "stop" as const
+    }
+
+    if (result === "stop") return "stop" as const
+    if (result === "compact") {
+      await SessionCompaction.create({
+        sessionID: input.sessionID,
+        agent: input.lastUser.agent,
+        model: input.lastUser.model,
+        auto: true,
+      })
+    }
+    return "continue" as const
+  }
+
   export const LoopInput = z.object({
     sessionID: Identifier.schema("session"),
     resume_existing: z.boolean().optional(),
@@ -292,639 +864,104 @@ export namespace SessionPrompt {
     // callbacks at each task completion so prompt() callers get their results.
     void (async () => {
       try {
-        let structuredOutput: unknown | undefined
+        let step = 0
+        const session = await Session.get(sessionID)
+        while (true) {
+          SessionStatus.set(sessionID, { type: "busy" })
+          log.info("loop", { step, sessionID })
+          if (abort.aborted) break
+          const msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+          const { lastUser, lastAssistant, lastFinished, tasks } = collectLoopState(msgs)
+          if (shouldEnterStandby({ lastUser, lastAssistant })) {
+            // Task complete — deliver result to waiting prompt() callers
+            if (!lastAssistant) break
+            const lastResult = msgs.find((m) => m.info.id === lastAssistant.id)
+            if (lastResult) flushCallbacks(sessionID, lastResult)
 
-    let step = 0
-    const session = await Session.get(sessionID)
-    while (true) {
-      SessionStatus.set(sessionID, { type: "busy" })
-      log.info("loop", { step, sessionID })
-      if (abort.aborted) break
-      let msgs = await MessageV2.filterCompacted(MessageV2.stream(sessionID))
+            const didInject = await evaluateBlockingGoals({ sessionID, msgs, lastUser })
+            if (didInject) continue
 
-      let lastUser: MessageV2.User | undefined
-      let lastAssistant: MessageV2.Assistant | undefined
-      let lastFinished: MessageV2.Assistant | undefined
-      let tasks: (MessageV2.CompactionPart | MessageV2.SubtaskPart)[] = []
-      for (let i = msgs.length - 1; i >= 0; i--) {
-        const msg = msgs[i]
-        if (!lastUser && msg.info.role === "user") lastUser = msg.info as MessageV2.User
-        if (!lastAssistant && msg.info.role === "assistant") lastAssistant = msg.info as MessageV2.Assistant
-        if (!lastFinished && msg.info.role === "assistant" && msg.info.finish)
-          lastFinished = msg.info as MessageV2.Assistant
-        if (lastUser && lastFinished) break
-        const task = msg.parts.filter((part) => part.type === "compaction" || part.type === "subtask")
-        if (task && !lastFinished) {
-          tasks.push(...task)
-        }
-      }
-
-      if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
-      if (
-        lastAssistant?.finish &&
-        !["tool-calls", "unknown"].includes(lastAssistant.finish) &&
-        lastUser.id < lastAssistant.id
-      ) {
-        // Task complete — deliver result to waiting prompt() callers
-        const lastResult = msgs.find((m) => m.info.id === lastAssistant!.id)
-        if (lastResult) flushCallbacks(sessionID, lastResult)
-
-        // ── Goal Gate ──────────────────────────────────────────
-        // Check active blocking goals before entering standby.
-        // If goals remain, force the agent to continue working.
-        const activeBlockingGoals = Goal.listActive(sessionID).filter((g) => g.priority === "blocking")
-        if (activeBlockingGoals.length > 0) {
-          log.info("goal gate: evaluating blocking goals", {
-            sessionID,
-            count: activeBlockingGoals.length,
-            goals: activeBlockingGoals.map((g) => g.id),
-          })
-
-          let shouldContinue = false
-          const continuationParts: string[] = []
-
-          for (const goal of activeBlockingGoals) {
-            const { action, result } = await Goal.evaluate(goal, msgs, lastUser!.model.providerID)
-
-            // Record evaluation in progress log
-            const entry: Goal.EvaluationEntry = {
-              attempt: goal.currentAttempts + 1,
-              timestamp: Date.now(),
-              action,
-              confidence: result.confidence,
-              reasoning: result.reasoning,
-              nextStep: result.nextStep,
-            }
-            const updatedLog = [...goal.progressLog, entry]
-
-            if (action === "achieved") {
-              Goal.update(goal.id, {
-                status: "achieved",
-                currentAttempts: goal.currentAttempts + 1,
-                progressLog: updatedLog,
-              })
-              log.info("goal gate: goal achieved", { goalID: goal.id })
-            } else if (action === "deadlock") {
-              Goal.update(goal.id, {
-                status: "failed",
-                currentAttempts: goal.currentAttempts + 1,
-                progressLog: updatedLog,
-              })
-              Bus.publish(Goal.Event.Deadlock, {
-                goal: {
-                  id: goal.id,
-                  sessionID,
-                  description: goal.description,
-                  attempts: goal.currentAttempts + 1,
-                },
-              })
-              log.warn("goal gate: deadlock detected", {
-                goalID: goal.id,
-                attempts: goal.currentAttempts + 1,
-              })
-            } else {
-              // continue — goal not yet achieved
-              shouldContinue = true
-              Goal.update(goal.id, {
-                currentAttempts: goal.currentAttempts + 1,
-                progressLog: updatedLog,
-              })
-              continuationParts.push(
-                `Goal "${goal.description}" [${goal.id}] not yet achieved (confidence: ${result.confidence.toFixed(2)}).` +
-                (result.nextStep ? ` Next step: ${result.nextStep}` : ""),
-              )
-              log.info("goal gate: goal not achieved, forcing continuation", {
-                goalID: goal.id,
-                confidence: result.confidence,
-                nextStep: result.nextStep,
-              })
-            }
-          }
-
-          // If any goals need continuation, inject a synthetic message and loop back
-          if (shouldContinue) {
-            const sentinelText = `<goal-sentinel>\n${continuationParts.join("\n")}\n\nContinue working toward the above goals. Do not stop until all blocking goals are achieved.\n</goal-sentinel>`
-            const continueMsg = await Session.updateMessage({
-              id: Identifier.ascending("message"),
-              role: "user",
+            await enterStandby({
               sessionID,
-              time: { created: Date.now() },
-              agent: lastUser!.agent,
-              model: lastUser!.model,
+              abort,
+              afterID: lastAssistant.id,
             })
-            await Session.updatePart({
-              id: Identifier.ascending("part"),
-              messageID: continueMsg.id,
-              sessionID,
-              type: "text",
-              synthetic: true,
-              text: sentinelText,
-              time: { start: Date.now(), end: Date.now() },
-            })
-            log.info("goal gate: injected continuation message", { sessionID })
+            if (abort.aborted) break
+
+            GuiState.markNewTask()
+            step = 0
             continue
           }
-          // else: all achieved or deadlocked — fall through to normal standby
-        }
-        // ── End Goal Gate ──────────────────────────────────────
 
-        SessionCompaction.prune({ sessionID })
-        log.info("entering standby", { sessionID })
-        SessionStatus.set(sessionID, { type: "idle" })
-
-        // Block until a new user message arrives or session is cancelled
-        await waitForUserMessage(sessionID, abort, lastAssistant!.id)
-        if (abort.aborted) break
-
-        GuiState.markNewTask()
-        step = 0
-        structuredOutput = undefined
-        continue
-      }
-
-      step++
-      if (step === 1)
-        ensureTitle({
-          session,
-          modelID: lastUser.model.modelID,
-          providerID: lastUser.model.providerID,
-          history: msgs,
-        })
-
-      const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
-        if (Provider.ModelNotFoundError.isInstance(e)) {
-          const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
-          Bus.publish(Session.Event.Error, {
-            sessionID,
-            error: new NamedError.Unknown({
-              message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
-            }).toObject(),
-          })
-        }
-        throw e
-      })
-      const task = tasks.pop()
-
-      // pending subtask
-      // TODO: centralize "invoke tool" logic
-      if (task?.type === "subtask") {
-        const taskTool = await TaskTool.init()
-        const taskModel = task.model ? await Provider.getModel(task.model.providerID, task.model.modelID) : model
-        const assistantMessage = (await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          role: "assistant",
-          parentID: lastUser.id,
-          sessionID,
-          mode: task.agent,
-          agent: task.agent,
-          variant: lastUser.variant,
-          path: {
-            cwd: Instance.directory,
-            root: Instance.worktree,
-          },
-          cost: 0,
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
-          modelID: taskModel.id,
-          providerID: taskModel.providerID,
-          time: {
-            created: Date.now(),
-          },
-        })) as MessageV2.Assistant
-        let part = (await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: assistantMessage.id,
-          sessionID: assistantMessage.sessionID,
-          type: "tool",
-          callID: ulid(),
-          tool: TaskTool.id,
-          state: {
-            status: "running",
-            input: {
-              prompt: task.prompt,
-              description: task.description,
-              subagent_type: task.agent,
-              command: task.command,
-            },
-            time: {
-              start: Date.now(),
-            },
-          },
-        })) as MessageV2.ToolPart
-        const taskArgs = {
-          prompt: task.prompt,
-          description: task.description,
-          subagent_type: task.agent,
-          command: task.command,
-        }
-        await Plugin.trigger(
-          "tool.execute.before",
-          {
-            tool: "task",
-            sessionID,
-            callID: part.id,
-          },
-          { args: taskArgs },
-        )
-        let executionError: Error | undefined
-        const taskAgent = await Agent.get(task.agent)
-        const taskCtx: Tool.Context = {
-          agent: task.agent,
-          messageID: assistantMessage.id,
-          sessionID: sessionID,
-          abort,
-          callID: part.callID,
-          extra: { bypassAgentCheck: true },
-          messages: msgs,
-          async metadata(input) {
-            await Session.updatePart({
-              ...part,
-              type: "tool",
-              state: {
-                ...part.state,
-                ...input,
-              },
-            } satisfies MessageV2.ToolPart)
-          },
-          async ask(req) {
-            await PermissionNext.ask({
-              ...req,
-              sessionID: sessionID,
-              ruleset: PermissionNext.merge(taskAgent.permission, session.permission ?? []),
+          step++
+          if (step === 1)
+            ensureTitle({
+              session,
+              modelID: lastUser.model.modelID,
+              providerID: lastUser.model.providerID,
+              history: msgs,
             })
-          },
-        }
-        const result = await taskTool.execute(taskArgs, taskCtx).catch((error) => {
-          executionError = error
-          log.error("subtask execution failed", { error, agent: task.agent, description: task.description })
-          return undefined
-        })
-        const attachments = result?.attachments?.map((attachment) => ({
-          ...attachment,
-          id: Identifier.ascending("part"),
-          sessionID,
-          messageID: assistantMessage.id,
-        }))
-        await Plugin.trigger(
-          "tool.execute.after",
-          {
-            tool: "task",
-            sessionID,
-            callID: part.id,
-            args: taskArgs,
-          },
-          result,
-        )
-        assistantMessage.finish = "tool-calls"
-        assistantMessage.time.completed = Date.now()
-        await Session.updateMessage(assistantMessage)
-        if (result && part.state.status === "running") {
-          await Session.updatePart({
-            ...part,
-            state: {
-              status: "completed",
-              input: part.state.input,
-              title: result.title,
-              metadata: result.metadata,
-              output: result.output,
-              attachments,
-              time: {
-                ...part.state.time,
-                end: Date.now(),
-              },
-            },
-          } satisfies MessageV2.ToolPart)
-        }
-        if (!result) {
-          await Session.updatePart({
-            ...part,
-            state: {
-              status: "error",
-              error: executionError ? `Tool execution failed: ${executionError.message}` : "Tool execution failed",
-              time: {
-                start: part.state.status === "running" ? part.state.time.start : Date.now(),
-                end: Date.now(),
-              },
-              metadata: part.metadata,
-              input: part.state.input,
-            },
-          } satisfies MessageV2.ToolPart)
-        }
 
-        if (task.command) {
-          // Add synthetic user message to prevent certain reasoning models from erroring
-          // If we create assistant messages w/ out user ones following mid loop thinking signatures
-          // will be missing and it can cause errors for models like gemini for example
-          const summaryUserMsg: MessageV2.User = {
-            id: Identifier.ascending("message"),
-            sessionID,
-            role: "user",
-            time: {
-              created: Date.now(),
-            },
-            agent: lastUser.agent,
-            model: lastUser.model,
-          }
-          await Session.updateMessage(summaryUserMsg)
-          await Session.updatePart({
-            id: Identifier.ascending("part"),
-            messageID: summaryUserMsg.id,
-            sessionID,
-            type: "text",
-            text: "Summarize the task tool output above and continue with your task.",
-            synthetic: true,
-          } satisfies MessageV2.TextPart)
-        }
-
-        continue
-      }
-
-      // pending compaction
-      if (task?.type === "compaction") {
-        const result = await SessionCompaction.process({
-          messages: msgs,
-          parentID: lastUser.id,
-          abort,
-          sessionID,
-          auto: task.auto,
-        })
-        if (result === "stop") break
-        continue
-      }
-
-      // context overflow, needs compaction
-      if (
-        lastFinished &&
-        lastFinished.summary !== true &&
-        (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }))
-      ) {
-        await SessionCompaction.create({
-          sessionID,
-          agent: lastUser.agent,
-          model: lastUser.model,
-          auto: true,
-        })
-        continue
-      }
-
-      // normal processing
-      const agent = await Agent.get(lastUser.agent)
-      const maxSteps = agent.steps ?? Infinity
-      const isLastStep = step >= maxSteps
-
-      const processor = SessionProcessor.create({
-        assistantMessage: (await Session.updateMessage({
-          id: Identifier.ascending("message"),
-          parentID: lastUser.id,
-          role: "assistant",
-          mode: agent.name,
-          agent: agent.name,
-          variant: lastUser.variant,
-          path: {
-            cwd: Instance.directory,
-            root: Instance.worktree,
-          },
-          cost: 0,
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
-          },
-          modelID: model.id,
-          providerID: model.providerID,
-          time: {
-            created: Date.now(),
-          },
-          sessionID,
-        })) as MessageV2.Assistant,
-        sessionID: sessionID,
-        model,
-        abort,
-      })
-      using _ = defer(() => InstructionPrompt.clear(processor.message.id))
-
-      // Check if user explicitly invoked an agent via @ in this turn
-      const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-      const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
-
-      const tools = await resolveTools({
-        agent,
-        session,
-        model,
-        tools: lastUser.tools,
-        processor,
-        bypassAgentCheck,
-        messages: msgs,
-      })
-
-      // Inject StructuredOutput tool if JSON schema mode enabled
-      if (lastUser.format?.type === "json_schema") {
-        tools["StructuredOutput"] = createStructuredOutputTool({
-          schema: lastUser.format.schema,
-          onSuccess(output) {
-            structuredOutput = output
-          },
-        })
-      }
-
-      if (step === 1) {
-        SessionSummary.summarize({
-          sessionID: sessionID,
-          messageID: lastUser.id,
-        })
-      }
-
-      // Ephemerally wrap queued user messages with a reminder to stay on track
-      if (step > 1 && lastFinished) {
-        for (const msg of msgs) {
-          if (msg.info.role !== "user" || msg.info.id <= lastFinished.id) continue
-          for (const part of msg.parts) {
-            if (part.type !== "text" || !textForBoth(part)) continue
-            if (!part.text.trim()) continue
-            part.text = [
-              "<system-reminder>",
-              "The user sent the following message:",
-              part.text,
-              "",
-              "Please address this message and continue with your tasks.",
-              "</system-reminder>",
-            ].join("\n")
-          }
-        }
-      }
-
-      await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
-
-      // Inject GUI action history and repetition alerts for GUI sessions
-      if (GuiState.get().isGuiSession) {
-        GuiState.setStep(step)
-        const actionSummary = GuiState.buildActionSummary()
-        const repetitionAlert = GuiState.checkRepetition()
-
-        if (actionSummary || repetitionAlert) {
-          const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-          if (lastUserMsg) {
-            const guiContext = [actionSummary, repetitionAlert].filter(Boolean).join("\n\n")
-            lastUserMsg.parts.push({
-              id: Identifier.ascending("part"),
-              messageID: lastUserMsg.info.id,
-              sessionID: lastUserMsg.info.sessionID,
-              type: "text",
-              text: guiContext,
-              synthetic: true,
-            } as MessageV2.TextPart)
-          }
-        }
-      }
-
-      // Build system prompt, adding structured output instruction if needed
-      const system = [...(await SystemPrompt.environment(model)), ...(await InstructionPrompt.system())]
-      const format = lastUser.format ?? { type: "text" }
-      if (format.type === "json_schema") {
-        system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
-      }
-
-      // Add memory recall instruction (OpenClaw pattern: tool-call, not auto-injection)
-      const memoryInstruction = await MemoryInjection.systemPromptSection()
-      if (memoryInstruction) system.push(memoryInstruction)
-
-      // Add scratchpad and task plan to system prompt (Phase 3)
-      const scratchpadSection = Scratchpad.systemPromptSection(sessionID)
-      if (scratchpadSection) system.push(scratchpadSection)
-      const taskPlanSection = TaskPlan.toMarkdown(sessionID)
-      if (taskPlanSection) system.push(taskPlanSection)
-      const goalSection = Goal.toMarkdown(sessionID)
-      if (goalSection) system.push(goalSection)
-
-      const modelMessages = [
-        ...MessageV2.toModelMessages(msgs, model),
-        ...(isLastStep
-          ? [
-              {
-                role: "assistant" as const,
-                content: MAX_STEPS,
-              },
-            ]
-          : []),
-      ]
-
-      // Context diagnostics logging
-      {
-        const systemChars = system.reduce((sum, s) => sum + s.length, 0)
-        const systemTokensEst = Math.round(systemChars / 4)
-        const toolCount = Object.keys(tools).length
-
-        let userMsgCount = 0
-        let assistantMsgCount = 0
-        let totalContentChars = 0
-        let imageCount = 0
-        let toolCallCount = 0
-
-        for (const msg of modelMessages) {
-          if (msg.role === "user") userMsgCount++
-          else if (msg.role === "assistant") assistantMsgCount++
-
-          if (typeof msg.content === "string") {
-            totalContentChars += msg.content.length
-          } else if (Array.isArray(msg.content)) {
-            for (const part of msg.content) {
-              if ("text" in part && typeof part.text === "string") totalContentChars += part.text.length
-              if ("type" in part && part.type === "image") imageCount++
-              if ("type" in part && part.type === "tool-result") toolCallCount++
+          const model = await Provider.getModel(lastUser.model.providerID, lastUser.model.modelID).catch((e) => {
+            if (Provider.ModelNotFoundError.isInstance(e)) {
+              const hint = e.data.suggestions?.length ? ` Did you mean: ${e.data.suggestions.join(", ")}?` : ""
+              Bus.publish(Session.Event.Error, {
+                sessionID,
+                error: new NamedError.Unknown({
+                  message: `Model not found: ${e.data.providerID}/${e.data.modelID}.${hint}`,
+                }).toObject(),
+              })
             }
-          }
-        }
-
-        const contentTokensEst = Math.round(totalContentChars / 4)
-        const imageTokensEst = imageCount * 1600 // ~1600 tokens per screenshot
-
-        log.info("context-diagnostics", {
-          step,
-          systemPromptParts: system.length,
-          systemChars,
-          systemTokensEst,
-          toolCount,
-          toolNames: Object.keys(tools).join(","),
-          messageCount: modelMessages.length,
-          userMsgCount,
-          assistantMsgCount,
-          totalContentChars,
-          contentTokensEst,
-          imageCount,
-          imageTokensEst,
-          toolCallCount,
-          totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
-        })
-
-        // GUI-specific diagnostics
-        const guiS = GuiState.get()
-        if (guiS.isGuiSession) {
-          log.info("gui-context-diagnostics", {
-            step,
-            isGuiSession: true,
-            actionCount: guiS.actions.length,
-            screenshotCount: guiS.screenshots.size,
-            descriptionsStored: Array.from(guiS.screenshots.values()).filter(s => s.description).length,
-            lastScreenshotHash: guiS.lastScreenshotHash?.substring(0, 8) ?? "none",
-            consecutiveNoChange: guiS.repetition.consecutiveNoChange,
-            recentClickCoords: guiS.repetition.recentClickCoords.length,
-            currentStep: guiS.currentStep,
+            throw e
           })
+          const task = tasks.pop()
+
+          if (task?.type === "subtask") {
+            await runSubtask({ task, model, lastUser, msgs, session, sessionID, abort })
+            continue
+          }
+
+          // pending compaction
+          if (task?.type === "compaction") {
+            const result = await SessionCompaction.process({
+              messages: msgs,
+              parentID: lastUser.id,
+              abort,
+              sessionID,
+              auto: task.auto,
+            })
+            if (result === "stop") break
+            continue
+          }
+
+          // context overflow, needs compaction
+          if (
+            lastFinished &&
+            lastFinished.summary !== true &&
+            (await SessionCompaction.isOverflow({ tokens: lastFinished.tokens, model }))
+          ) {
+            await SessionCompaction.create({
+              sessionID,
+              agent: lastUser.agent,
+              model: lastUser.model,
+              auto: true,
+            })
+            continue
+          }
+
+          const turn = await processTurn({
+            step,
+            sessionID,
+            session,
+            msgs,
+            lastUser,
+            lastFinished,
+            model,
+            abort,
+          })
+          if (turn === "stop") break
+          continue
         }
-      }
-
-      const result = await processor.process({
-        user: lastUser,
-        agent,
-        abort,
-        sessionID,
-        system,
-        messages: modelMessages,
-        tools,
-        model,
-        toolChoice: format.type === "json_schema" ? "required" : undefined,
-      })
-
-      // If structured output was captured, save it and exit immediately
-      // This takes priority because the StructuredOutput tool was called successfully
-      if (structuredOutput !== undefined) {
-        processor.message.structured = structuredOutput
-        processor.message.finish = processor.message.finish ?? "stop"
-        await Session.updateMessage(processor.message)
-        break
-      }
-
-      // Check if model finished (finish reason is not "tool-calls" or "unknown")
-      const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
-
-      if (modelFinished && !processor.message.error) {
-        if (format.type === "json_schema") {
-          // Model stopped without calling StructuredOutput tool
-          processor.message.error = new MessageV2.StructuredOutputError({
-            message: "Model did not produce structured output",
-            retries: 0,
-          }).toObject()
-          await Session.updateMessage(processor.message)
-          break
-        }
-      }
-
-      if (result === "stop") break
-      if (result === "compact") {
-        await SessionCompaction.create({
-          sessionID,
-          agent: lastUser.agent,
-          model: lastUser.model,
-          auto: true,
-        })
-      }
-      continue
-    }
         // Loop exited (abort or fatal break) — flush remaining callbacks
         SessionCompaction.prune({ sessionID })
         for await (const item of MessageV2.stream(sessionID)) {
@@ -967,7 +1004,10 @@ export namespace SessionPrompt {
    */
   function waitForUserMessage(sessionID: string, abort: AbortSignal, afterID: string): Promise<void> {
     return new Promise<void>((resolve) => {
-      if (abort.aborted) { resolve(); return }
+      if (abort.aborted) {
+        resolve()
+        return
+      }
 
       let settled = false
       const settle = () => {
@@ -993,7 +1033,10 @@ export namespace SessionPrompt {
       void (async () => {
         for await (const item of MessageV2.stream(sessionID)) {
           if (item.info.id <= afterID) break
-          if (item.info.role === "user") { settle(); return }
+          if (item.info.role === "user") {
+            settle()
+            return
+          }
         }
       })()
     })
@@ -2035,14 +2078,10 @@ export namespace SessionPrompt {
     if (!Session.isDefaultTitle(input.session.title)) return
 
     // Find first user message that is not only control text.
-    const firstRealUserIdx = input.history.findIndex(
-      (m) => m.info.role === "user" && !messageControlOnly(m.parts),
-    )
+    const firstRealUserIdx = input.history.findIndex((m) => m.info.role === "user" && !messageControlOnly(m.parts))
     if (firstRealUserIdx === -1) return
 
-    const isFirst =
-      input.history.filter((m) => m.info.role === "user" && !messageControlOnly(m.parts))
-        .length === 1
+    const isFirst = input.history.filter((m) => m.info.role === "user" && !messageControlOnly(m.parts)).length === 1
     if (!isFirst) return
 
     // Gather all messages up to and including the first real user message for context
@@ -2097,4 +2136,3 @@ export namespace SessionPrompt {
     }
   }
 }
-
