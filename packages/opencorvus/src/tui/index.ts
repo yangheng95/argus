@@ -234,11 +234,16 @@ export namespace Tui {
         // Production: use PowerShell Start-Process to open TUI in a new visible console window.
         // cmd.exe "start" has quoting issues with paths containing spaces.
         const psArgs = args.map((a) => `"${a}"`).join(",")
+        const psCmd = `Start-Process -FilePath '${bin}' -ArgumentList ${psArgs} -WorkingDirectory '${cwd}'`
+        console.log(`[Tui.spawn] PowerShell command: ${psCmd}`)
         proc = nodeSpawn(
           "powershell.exe",
-          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `Start-Process -FilePath '${bin}' -ArgumentList ${psArgs} -WorkingDirectory '${cwd}'`],
-          { stdio: "ignore", detached: true },
+          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd],
+          { stdio: "pipe", detached: true },
         )
+        proc.stdout?.on("data", (d: Buffer) => console.log(`[Tui.spawn:ps:stdout] ${d.toString().trim()}`))
+        proc.stderr?.on("data", (d: Buffer) => console.error(`[Tui.spawn:ps:stderr] ${d.toString().trim()}`))
+        proc.on("exit", (code: number | null) => console.log(`[Tui.spawn:ps:exit] code=${code}`))
         proc.unref()
       }
     } else {
