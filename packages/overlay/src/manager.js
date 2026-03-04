@@ -674,7 +674,6 @@ function bindTauriEvents() {
     const text = typeof payload?.text === "string" ? payload.text : ""
 
     if (kind === "mirror_user") {
-      addMessage("system", "[RECV] 用户消息: " + text.slice(0, 60))
       if (text) addMessage("user", text)
       return
     }
