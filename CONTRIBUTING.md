@@ -102,7 +102,7 @@ To start the OpenCorvus headless API server:
 bun dev serve
 ```
 
-This starts the headless server on port 4096 by default. You can specify a different port:
+This starts the headless server on port 7878 by default. You can specify a different port:
 
 ```bash
 bun dev serve --port 8080
@@ -123,7 +123,7 @@ your debugger via that URL. Other methods can result in breakpoints being mapped
 To debug the server:
 
 ```bash
-bun run --inspect=ws://localhost:6499/ --cwd packages/opencorvus ./src/index.ts serve --port 4096
+bun run --inspect=ws://localhost:6499/ --cwd packages/opencorvus ./src/index.ts serve --port 7878
 ```
 
 Other tips and tricks:
