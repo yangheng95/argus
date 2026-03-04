@@ -2,12 +2,9 @@ import path from "path"
 import fs from "fs/promises"
 import { createHash } from "crypto"
 import { Global } from "../global"
-import { Log } from "../util/log"
 
 const SCREENSHOT_DIR = path.join(Global.Path.data, "screenshots")
 const SCHEME = "opencorvus://screenshot/"
-
-const log = Log.create({ service: "screenshot-store" })
 
 export namespace ScreenshotStore {
   export function isFileUrl(url: string): boolean {
@@ -22,25 +19,14 @@ export namespace ScreenshotStore {
     const hash = createHash("sha256").update(buffer).digest("hex").slice(0, 16)
     const ext = mime === "image/jpeg" ? "jpg" : "png"
     const dir = path.join(SCREENSHOT_DIR, sessionID)
-    process.stderr.write(`[SS] save: dir=${dir} session=${sessionID}\n`)
-    try {
-      await fs.mkdir(dir, { recursive: true })
-      const filename = `${hash}.${ext}`
-      const filepath = path.join(dir, filename)
-      await fs.writeFile(filepath, buffer)
-      const url = `${SCHEME}${sessionID}/${filename}`
-      process.stderr.write(`[SS] saved: ${url}\n`)
-      return url
-    } catch (e: any) {
-      process.stderr.write(`[SS] ERROR: ${e.message}\n`)
-      throw e
-    }
-    return url
+    await fs.mkdir(dir, { recursive: true })
+    const filename = `${hash}.${ext}`
+    await fs.writeFile(path.join(dir, filename), buffer)
+    return `${SCHEME}${sessionID}/${filename}`
   }
 
   export async function resolve(url: string): Promise<{ mime: string; buffer: Buffer }> {
     if (!isFileUrl(url)) {
-      // data: URL fallback
       const match = url.match(/^data:([^;]+);base64,(.+)$/)
       if (!match) throw new Error("Invalid screenshot URL")
       return { mime: match[1], buffer: Buffer.from(match[2], "base64") }
