@@ -914,6 +914,10 @@ pub fn show_console(app: &AppHandle) {
 }
 
 pub fn snapshot(shared: &Shared) -> ManagerSnapshot {
+    // Read shared session BEFORE locking to avoid deadlock:
+    // read_shared_session -> shared_session_path -> work_dir -> shared.lock() would deadlock
+    // if snapshot() already holds the lock.
+    let shared_session_id = read_shared_session(shared);
     let state = shared.lock().unwrap();
     ManagerSnapshot {
         running: state.core.is_some(),
@@ -921,7 +925,7 @@ pub fn snapshot(shared: &Shared) -> ManagerSnapshot {
         pid: state.core.as_ref().map(|child| child.id()),
         channel_running: state.channel.is_some(),
         channel_pid: state.channel.as_ref().map(|child| child.id()),
-        shared_session_id: read_shared_session(shared),
+        shared_session_id,
         server_url: state.config.server_url.clone(),
         config: state.config.clone(),
         logs: state.logs.iter().cloned().collect(),
