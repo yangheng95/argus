@@ -120,16 +120,9 @@ impl Default for ManagerConfig {
             .unwrap_or_else(|| "opencorvus".into());
 
         Self {
-<<<<<<< HEAD
-            command: "opencorvus".into(),
-=======
             command,
-            serve_args: vec![
-                "serve".into(),
-                "--hostname=127.0.0.1".into(),
-                "--port=4096".into(),
-            ],
-            run_args: vec!["run".into()],
+            serve_args: DEFAULT_SERVE_ARGS.iter().map(|s| (*s).to_string()).collect(),
+            run_args: DEFAULT_RUN_ARGS.iter().map(|s| (*s).to_string()).collect(),
             bot_command: "bun".into(),
             bot_args: vec![
                 "run".into(),
@@ -139,11 +132,8 @@ impl Default for ManagerConfig {
                 "packages/bot/src/main.ts".into(),
             ],
             server_url: "http://127.0.0.1:4096".into(),
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
             cwd: String::new(),
             env: vec![],
-            serve_args: DEFAULT_SERVE_ARGS.iter().map(|s| (*s).to_string()).collect(),
-            run_args: DEFAULT_RUN_ARGS.iter().map(|s| (*s).to_string()).collect(),
         }
     }
 }
