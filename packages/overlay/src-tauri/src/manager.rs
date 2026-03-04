@@ -1315,7 +1315,9 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         state.config.clone()
     };
 
-<<<<<<< HEAD
+    clear_stale_pid(shared, app, CHANNEL_PID_FILE, "channel bot");
+    clear_stale_pid(shared, app, CORE_PID_FILE, "OpenCorvus");
+
     if auto_port_enabled() {
         let host = serve_host(&config.serve_args);
         if let Some(current) = serve_port(&config.serve_args) {
@@ -1345,12 +1347,6 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
         config.serve_args.clone()
     };
     let mut cmd = build_command(&config, &args);
-=======
-    clear_stale_pid(shared, app, CHANNEL_PID_FILE, "channel bot");
-    clear_stale_pid(shared, app, CORE_PID_FILE, "OpenCorvus");
-
-    let mut cmd = build_command(&config, &config.serve_args);
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
