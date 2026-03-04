@@ -140,7 +140,8 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
         command: {
             let item = config.command.trim();
             if item.is_empty() {
-                "opencorvus".into()
+                // Empty command in config: use sibling binary detection same as Default.
+                ManagerConfig::default().command
             } else {
                 item.into()
             }
