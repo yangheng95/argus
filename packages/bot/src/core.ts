@@ -642,7 +642,30 @@ export class BotCore {
       const info = (event as EventMessageUpdated).properties.info
 
       if (info.role === "user") {
+        // Track on first event only; message.updated fires twice for the same user message
+        const isNew = !this.userMessageIds.has(info.id)
         this.userMessageIds.add(info.id)
+
+        // In shared mode, mirror the user's overlay prompt to Slack.
+        // message.part.updated for the user text arrives BEFORE this event, so the text
+        // may have been buffered under the user messageID — clean that up and fetch via API.
+        if (isNew && this.sharedMode() && info.sessionID === this.sharedSessionId) {
+          this.textBuffers.delete(info.id)
+          let sessions = this.findSessions(info.sessionID)
+          if (sessions.length === 0) sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
+          if (sessions.length > 0) {
+            const msgResult = await this.client.session.message({ sessionID: info.sessionID, messageID: info.id })
+            if (!msgResult.error) {
+              const data = msgResult.data as { parts?: Array<{ type?: string; text?: string }> }
+              const text = (data.parts ?? []).filter((p) => p.type === "text").map((p) => p.text ?? "").join("").trim()
+              if (text) {
+                for (const session of sessions) {
+                  await session.adapter.sendMessage(session.channel, session.thread, `> ${text}`).catch(() => {})
+                }
+              }
+            }
+          }
+        }
         return
       }
 

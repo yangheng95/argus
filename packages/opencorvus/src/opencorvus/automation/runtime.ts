@@ -1,6 +1,6 @@
 import { AppiumDriver } from "./adapters/appium"
 import { PlaywrightDriver } from "./adapters/playwright"
-import { DriverInput } from "./driver"
+import type { DriverInput } from "./driver"
 
 type Context = {
   playwright?: PlaywrightDriver.Opt

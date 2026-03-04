@@ -2,9 +2,9 @@ import {
   Automation,
   AutomationRuntime,
   DesktopDriver,
-  DriverKind,
   selectDriver,
 } from "../opencorvus/automation"
+import type { DriverKind } from "../opencorvus/automation"
 import { WindowManager } from "../opencorvus/perception/window"
 
 async function recover() {
@@ -44,7 +44,7 @@ export async function runInputAction(input: {
       },
     }),
   }))
-  const act = input.act ?? { kind: "custom", name: input.id } satisfies Automation.Action
+  const act = input.act ?? ({ kind: "custom", name: input.id } satisfies Automation.Action)
   if (selected.kind !== "desktop" && !input.act) {
     throw new Error(`input action ${input.id} requires explicit act for driver=${selected.kind}`)
   }

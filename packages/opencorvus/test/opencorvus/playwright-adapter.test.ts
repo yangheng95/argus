@@ -135,8 +135,9 @@ describe("playwright automation adapter", () => {
     expect(shot?.id.startsWith("pw:ok:")).toBe(true)
   })
 
-  test("supports hotkey and scroll actions without located node", async () => {
+  test("supports hotkey, type, and scroll actions without located node", async () => {
     const keys: string[] = []
+    const typed: string[] = []
     const wheel: number[] = []
     const page: PlaywrightDriver.Page = {
       locator: () => new LocatorStub({
@@ -167,6 +168,9 @@ describe("playwright automation adapter", () => {
         press: async (key) => {
           keys.push(key)
         },
+        type: async (text) => {
+          typed.push(text)
+        },
       },
       mouse: {
         wheel: async (_x, y) => {
@@ -186,6 +190,15 @@ describe("playwright automation adapter", () => {
     expect(hotkey.ok).toBe(true)
     expect(keys).toEqual(["ctrl+l"])
 
+    const type = await driver.act({
+      step: { id: "t", act: { kind: "type", text: "hello" } },
+      act: { kind: "type", text: "hello" },
+      node: null,
+      abort,
+    })
+    expect(type.ok).toBe(true)
+    expect(typed).toEqual(["hello"])
+
     const scroll = await driver.act({
       step: { id: "s", act: { kind: "scroll", direction: "down", amount: 2 } },
       act: { kind: "scroll", direction: "down", amount: 2 },
@@ -196,4 +209,3 @@ describe("playwright automation adapter", () => {
     expect(wheel).toEqual([240])
   })
 })
-

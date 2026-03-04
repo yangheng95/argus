@@ -268,18 +268,6 @@ export namespace AppiumDriver {
             detail: `unsupported custom action: ${action.name}`,
           } satisfies Automation.Probe
         }
-        if (!element) {
-          return {
-            ok: false,
-            kind: "not_found",
-            detail: "action requires located node",
-          } satisfies Automation.Probe
-        }
-        if (action.kind === "click") {
-          return element.click()
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
-        }
         if (action.kind === "type") {
           if (!element) {
             return client.keys(action.text)
@@ -289,6 +277,18 @@ export namespace AppiumDriver {
           const clear = element.clear ? element.clear() : Promise.resolve()
           return clear
             .then(() => element.setValue(action.text))
+            .then(() => ({ ok: true } satisfies Automation.Probe))
+            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+        }
+        if (!element) {
+          return {
+            ok: false,
+            kind: "not_found",
+            detail: "action requires located node",
+          } satisfies Automation.Probe
+        }
+        if (action.kind === "click") {
+          return element.click()
             .then(() => ({ ok: true } satisfies Automation.Probe))
             .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
         }

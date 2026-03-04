@@ -142,5 +142,27 @@ describe("appium automation adapter", () => {
     expect(result.ok).toBe(true)
     expect(used).toEqual([["PageDown"]])
   })
-})
 
+  test("types through client.keys when no element is located", async () => {
+    const used: Array<string | string[]> = []
+    const client: AppiumDriver.Client = {
+      $$: async () => [],
+      keys: async (value) => {
+        used.push(value)
+      },
+      pause: async () => {},
+      execute: async () => true,
+      takeScreenshot: async () => "",
+    }
+    const driver = AppiumDriver.create({ client })
+    const abort = new AbortController().signal
+    const result = await driver.act({
+      step: { id: "type", act: { kind: "type", text: "hello" } },
+      act: { kind: "type", text: "hello" },
+      node: null,
+      abort,
+    })
+    expect(result.ok).toBe(true)
+    expect(used).toEqual(["hello"])
+  })
+})

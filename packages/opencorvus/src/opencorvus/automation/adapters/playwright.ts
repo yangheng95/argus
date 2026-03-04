@@ -221,22 +221,6 @@ export namespace PlaywrightDriver {
           await wait(action.ms, ctx.abort)
           return { ok: true } satisfies Automation.Probe
         }
-        if (!locator) {
-          return {
-            ok: false,
-            kind: "not_found",
-            detail: "action requires located node",
-          } satisfies Automation.Probe
-        }
-        if (action.kind === "click") {
-          const button = action.button === "double" ? "left" : action.button
-          const run = action.button === "double" && locator.dblclick
-            ? locator.dblclick({ button: "left" })
-            : locator.click({ button, clickCount: action.button === "double" ? 2 : undefined })
-          return run
-            .then(() => ({ ok: true } satisfies Automation.Probe))
-            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
-        }
         if (action.kind === "type") {
           if (!locator) {
             if (!page.keyboard.type) {
@@ -251,6 +235,22 @@ export namespace PlaywrightDriver {
               .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
           }
           return locator.fill(action.text)
+            .then(() => ({ ok: true } satisfies Automation.Probe))
+            .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
+        }
+        if (!locator) {
+          return {
+            ok: false,
+            kind: "not_found",
+            detail: "action requires located node",
+          } satisfies Automation.Probe
+        }
+        if (action.kind === "click") {
+          const button = action.button === "double" ? "left" : action.button
+          const run = action.button === "double" && locator.dblclick
+            ? locator.dblclick({ button: "left" })
+            : locator.click({ button, clickCount: action.button === "double" ? 2 : undefined })
+          return run
             .then(() => ({ ok: true } satisfies Automation.Probe))
             .catch((error) => ({ ok: false, kind: "not_interactable", detail: detail(error) } satisfies Automation.Probe))
         }
