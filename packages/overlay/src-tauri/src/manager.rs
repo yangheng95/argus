@@ -270,6 +270,8 @@ fn clear_pid(app: &AppHandle, name: &str) {
 
 #[cfg(target_os = "windows")]
 fn kill_pid(pid: u32) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let status = Command::new("taskkill")
         .arg("/PID")
         .arg(pid.to_string())
@@ -277,6 +279,7 @@ fn kill_pid(pid: u32) -> Result<(), String> {
         .arg("/F")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
         .status()
         .map_err(|error| error.to_string())?;
     if status.success() {
