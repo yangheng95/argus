@@ -229,7 +229,7 @@ process.exit(exitCode)
 
 function createOpenCorvus() {
   const host = "127.0.0.1"
-  const port = 4096
+  const port = 7878
   const url = `http://${host}:${port}`
   const proc = spawn(`opencorvus`, [`serve`, `--hostname=${host}`, `--port=${port}`])
   const client = createOpenCorvusClient({ baseUrl: url })
