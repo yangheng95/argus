@@ -9,7 +9,6 @@ export interface AnchorTarget {
   name?: string
 }
 
-<<<<<<< HEAD
 export interface LastClickInfo {
   /** Physical pixel X within the captured image (same coordinate space as screenshot) */
   imageX: number
@@ -21,21 +20,12 @@ export interface LastClickInfo {
   time: number
 }
 
-const desktopState = Instance.state((): {
-  bounds: Coordinates.WindowBounds | null
-  target: AnchorTarget | null
-  lastClick: LastClickInfo | null
-} => ({
-  bounds: null,
-  target: null,
-  lastClick: null,
-}))
-=======
 export type AnchorPhase = "idle" | "window_bound" | "monitor_bound" | "window_anchored" | "monitor_anchored"
 
 interface State {
   bounds: Coordinates.WindowBounds | null
   target: AnchorTarget | null
+  lastClick: LastClickInfo | null
   phase: AnchorPhase
   taskEpoch: number
   anchorHash: string | null
@@ -56,13 +46,13 @@ const desktopState = Instance.state(
   (): State => ({
     bounds: null,
     target: null,
+    lastClick: null,
     phase: "idle",
     taskEpoch: 0,
     anchorHash: null,
     updatedAt: Date.now(),
   }),
 )
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
 
 export namespace DesktopState {
   export function getBounds() { return desktopState().bounds }
