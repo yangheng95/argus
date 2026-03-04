@@ -16,6 +16,9 @@ mock.module("../../src/opencorvus/perception/window", () => ({
     getBinding: async () => null,
     ensureBoundForeground: async () => true,
     rebindForTask: async (_taskEpoch: number) => null,
+    findWindow: async (_title: string) => null,
+    findWindowById: async (_id: number) => null,
+    isBound: () => false,
     listWindows: async () => [
       {
         id: 7,
@@ -36,6 +39,24 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         matchTitle: "editor",
         info: {
           id: 7,
+          title: "Editor",
+          appName: "Code",
+          x: 2100,
+          y: 120,
+          width: 1200,
+          height: 800,
+          isMinimized: false,
+          isFocused: true,
+        },
+      }
+    },
+    bindById: async (windowId: number, matchTitle?: string) => {
+      bindCalls += 1
+      return {
+        windowId,
+        matchTitle: matchTitle ?? "Editor",
+        info: {
+          id: windowId,
           title: "Editor",
           appName: "Code",
           x: 2100,
