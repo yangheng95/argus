@@ -17,17 +17,14 @@ use crate::events;
 const CONFIG_FILE: &str = "opencorvus-manager.json";
 const LOG_FILE: &str = "opencorvus-manager-log.jsonl";
 const MAX_LOGS: usize = 800;
-<<<<<<< HEAD
 const DEFAULT_SERVE_ARGS: &[&str] = &["serve"];
 const DEFAULT_RUN_ARGS: &[&str] = &["run", "--continue"];
 const AUTO_PORT_ENV: &str = "OPENCORVUS_OVERLAY_AUTO_PORT";
-=======
 const CONFIG_SCHEMA: &str = "https://opencorvus.ai/config.json";
 const SHARED_SESSION_FILE: &str = "shared-session.json";
 const MIRROR_PREFIX: &str = "[opencorvus-mirror]";
 const CORE_PID_FILE: &str = "opencorvus-core.pid";
 const CHANNEL_PID_FILE: &str = "opencorvus-channel.pid";
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {
