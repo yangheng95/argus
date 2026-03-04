@@ -12,17 +12,7 @@ let clickFailures = 0
 const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
 const hotkeys: string[][] = []
-<<<<<<< HEAD
 let focusMarks = 0
-
-mock.module("../../src/opencorvus/perception/window", () => ({
-  WindowManager: {
-    getBinding: async () => binding,
-    ensureBoundForeground: async () => foreground,
-    markFocusChange: () => {
-      focusMarks += 1
-    },
-=======
 const keys: string[] = []
 const pastes: string[] = []
 
@@ -34,7 +24,9 @@ mock.module("../../src/opencorvus/perception/window", () => ({
       return typeof foreground === "function" ? foreground(current) : foreground
     },
     rebindForTask: async (_taskEpoch: number) => null,
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
+    markFocusChange: () => {
+      focusMarks += 1
+    },
   },
 }))
 
