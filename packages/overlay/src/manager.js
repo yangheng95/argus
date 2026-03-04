@@ -24,10 +24,9 @@ const els = {
   openSkillBtn: document.getElementById("openSkillBtn"),
   addMcpBtn: document.getElementById("addMcpBtn"),
   createSkillBtn: document.getElementById("createSkillBtn"),
-  serveCmdInput: document.getElementById("serveCmdInput"),
-  runCmdInput: document.getElementById("runCmdInput"),
   cwdInput: document.getElementById("cwdInput"),
-  envInput: document.getElementById("envInput"),
+  addEnvBtn: document.getElementById("addEnvBtn"),
+  envGroups: document.getElementById("envGroups"),
 }
 
 const state = {
@@ -39,7 +38,105 @@ const state = {
   inputHistory: [],
   historyIndex: -1,
   pendingInput: "",
+  config: null,
+  envRows: [],
 }
+
+const defaults = Object.freeze({
+  command: "opencorvus",
+  serve_args: ["serve", "--hostname=127.0.0.1", "--port=4096"],
+  run_args: ["run"],
+  bot_command: "bun",
+  bot_args: ["run", "--no-env-file", "--env-file", ".env", "packages/bot/src/main.ts"],
+  server_url: "http://127.0.0.1:4096",
+})
+
+const envGroups = [
+  {
+    title: "Core Runtime",
+    rows: [
+      { key: "OPENCORVUS_CONFIG_CONTENT", use: "Inject runtime config JSON directly." },
+      { key: "OPENCORVUS_PROJECT_DIR", use: "Override project root used by helper tooling." },
+      {
+        key: "OPENCORVUS_BOT_PERMISSION_PROFILE",
+        use: "Set permission preset: restricted/standard/permissive/passthrough.",
+      },
+      { key: "OPENCORVUS_BOT_PERMISSION_ASK_REPLY", use: "Set default confirmation behavior: once/always/reject." },
+      { key: "OPENCORVUS_BOT_SESSION_QUEUE_LIMIT", use: "Limit queued requests per channel session." },
+      { key: "OPENCORVUS_BOT_DEBUG_TOOL_INPUT", use: "Show tool input details in status logs when set to 1." },
+      { key: "OPENCORVUS_VISION_MODEL", use: "Default vision model for screenshot analysis." },
+      { key: "OPENCORVUS_MONITOR_DIFF_THRESHOLD", use: "UI change threshold for monitor notifications (percent)." },
+    ],
+  },
+  {
+    title: "Speech & Vision",
+    rows: [
+      { key: "STT_PROVIDERS", use: "Comma-separated STT provider priority list." },
+      { key: "STT_LANGUAGE", use: "Default speech recognition language code." },
+      { key: "STT_LOCAL_COMMAND", use: "Local speech-to-text CLI command." },
+      { key: "STT_GROQ_MODEL", use: "Groq STT model id." },
+      { key: "STT_OPENAI_MODEL", use: "OpenAI Whisper model id." },
+      { key: "STT_DEEPGRAM_MODEL", use: "Deepgram STT model id." },
+      { key: "STT_GOOGLE_MODEL", use: "Google STT model id." },
+      { key: "STT_GROQ_BASE_URL", use: "Groq STT endpoint override." },
+      { key: "STT_OPENAI_BASE_URL", use: "OpenAI STT endpoint override." },
+      { key: "STT_DEEPGRAM_BASE_URL", use: "Deepgram STT endpoint override." },
+      { key: "STT_GOOGLE_BASE_URL", use: "Google STT endpoint override." },
+    ],
+  },
+  {
+    title: "Provider Keys",
+    rows: [
+      { key: "CODING_DASHSCOPE_API_KEY", use: "Alibaba coding endpoint API key." },
+      { key: "DASHSCOPE_API_KEY", use: "Alibaba standard endpoint API key." },
+      { key: "OPENAI_API_KEY", use: "OpenAI API key." },
+      { key: "ANTHROPIC_API_KEY", use: "Anthropic API key." },
+      { key: "GOOGLE_API_KEY", use: "Google API key for Gemini/STT." },
+      { key: "GOOGLE_GENERATIVE_AI_API_KEY", use: "Google Generative AI API key." },
+      { key: "GROQ_API_KEY", use: "Groq API key." },
+      { key: "DEEPGRAM_API_KEY", use: "Deepgram API key." },
+      { key: "DEEPSEEK_API_KEY", use: "DeepSeek API key." },
+      { key: "OPENROUTER_API_KEY", use: "OpenRouter API key." },
+    ],
+  },
+  {
+    title: "Channel Integrations",
+    rows: [
+      { key: "SLACK_BOT_TOKEN", use: "Slack bot token (xoxb)." },
+      { key: "SLACK_APP_TOKEN", use: "Slack app-level token (xapp)." },
+      { key: "SLACK_SIGNING_SECRET", use: "Slack request signature secret." },
+      { key: "SLACK_CHANNEL_ID", use: "Default Slack channel id for test injection." },
+      { key: "TELEGRAM_BOT_TOKEN", use: "Telegram bot token." },
+      { key: "FEISHU_APP_ID", use: "Feishu app id." },
+      { key: "FEISHU_APP_SECRET", use: "Feishu app secret." },
+      { key: "FEISHU_VERIFICATION_TOKEN", use: "Feishu webhook verification token." },
+    ],
+  },
+  {
+    title: "Runtime & Debug",
+    rows: [
+      { key: "HTTP_PROXY", use: "HTTP proxy for outbound requests." },
+      { key: "HTTPS_PROXY", use: "HTTPS proxy for outbound requests." },
+      { key: "SSL_CERT_FILE", use: "Custom CA bundle path." },
+      { key: "OPENCORVUS_COORDINATE_SPACE", use: "Pointer coordinate mode (physical/logical/auto)." },
+      { key: "OPENCORVUS_OVERLAY_BIN", use: "Override overlay executable path." },
+      { key: "OPENCORVUS_OVERLAY_DISABLED", use: "Set to 1 to disable overlay sidecar." },
+      { key: "OPENCORVUS_OVERLAY_SINGLETON_MODE", use: "Overlay process policy: reuse or kill-old-start-new." },
+    ],
+  },
+]
+
+const envHints = new Map(
+  envGroups.flatMap((group) =>
+    group.rows.map((item) => [
+      item.key,
+      {
+        group: group.title,
+        use: item.use,
+      },
+    ]),
+  ),
+)
 
 // ── Input history helpers ──────────────────────────────────────────────────
 
@@ -93,13 +190,6 @@ function clearChat() {
   els.chat.innerHTML = '<div class="chat-empty">No messages yet — send an instruction below</div>'
 }
 
-function readLines(input) {
-  return input
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-}
-
 function readArgs(input) {
   const text = (input || "").trim()
   if (!text) return []
@@ -127,7 +217,7 @@ function readArgs(input) {
       continue
     }
 
-    if (char === "\"" || char === "'") {
+    if (char === '"' || char === "'") {
       quote = char
       continue
     }
@@ -147,60 +237,187 @@ function readArgs(input) {
   return out
 }
 
-function quoteArg(input) {
-  if (!input) return "\"\""
-  if (!/[\s"'\\]/.test(input)) return input
-  return `"${input.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`
+function cleanList(input) {
+  if (!Array.isArray(input)) return []
+  return input.map((item) => String(item ?? "").trim()).filter((item) => item.length > 0)
 }
 
-function argsToText(list) {
-  if (!Array.isArray(list)) return ""
-  return list.map((item) => quoteArg(String(item))).join(" ")
+function configValue(config) {
+  const input = typeof config === "object" && config ? config : {}
+  const serve = cleanList(input.serve_args)
+  const run = cleanList(input.run_args)
+  const botArgs = cleanList(input.bot_args)
+  return {
+    command: typeof input.command === "string" && input.command.trim() ? input.command.trim() : defaults.command,
+    serve_args: serve.length > 0 ? serve : [...defaults.serve_args],
+    run_args: run.length > 0 ? run : [...defaults.run_args],
+    bot_command:
+      typeof input.bot_command === "string" && input.bot_command.trim()
+        ? input.bot_command.trim()
+        : defaults.bot_command,
+    bot_args: botArgs.length > 0 ? botArgs : [...defaults.bot_args],
+    server_url:
+      typeof input.server_url === "string" && input.server_url.trim() ? input.server_url.trim() : defaults.server_url,
+    cwd: typeof input.cwd === "string" ? input.cwd : "",
+    env: Array.isArray(input.env) ? input.env : [],
+  }
 }
 
-function commandToText(command, list) {
-  return argsToText([command || "opencorvus", ...(Array.isArray(list) ? list : [])])
-}
+function buildEnvRows(list) {
+  const map = new Map()
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      const key = String(item?.key ?? "").trim()
+      if (!key) continue
+      map.set(key, String(item?.value ?? ""))
+    }
+  }
 
-function envToText(env) {
-  if (!Array.isArray(env)) return ""
-  return env.map((item) => `${item.key ?? ""}=${item.value ?? ""}`).join("\n")
-}
+  const out = envGroups.flatMap((group) =>
+    group.rows.map((item) => ({
+      key: item.key,
+      value: map.get(item.key) ?? "",
+      use: item.use,
+      group: group.title,
+      custom: false,
+    })),
+  )
 
-function textToEnv(input) {
-  return readLines(input)
-    .map((line) => {
-      const idx = line.indexOf("=")
-      if (idx < 1) return null
-      return {
-        key: line.slice(0, idx).trim(),
-        value: line.slice(idx + 1).trim(),
-      }
+  for (const [key, value] of map) {
+    if (envHints.has(key)) continue
+    out.push({
+      key,
+      value,
+      use: "Custom runtime variable.",
+      group: "Custom",
+      custom: true,
     })
-    .filter((item) => item && item.key)
+  }
+
+  return out
+}
+
+function readEnvRows() {
+  return state.envRows
+    .map((item) => ({
+      key: String(item.key ?? "").trim(),
+      value: String(item.value ?? ""),
+    }))
+    .filter((item) => item.key.length > 0)
+}
+
+function renderEnvGroups() {
+  if (!els.envGroups) return
+  els.envGroups.innerHTML = ""
+
+  const names = [...envGroups.map((group) => group.title), "Custom"]
+  for (const name of names) {
+    const rows = state.envRows.filter((item) => item.group === name)
+    if (rows.length === 0 && name !== "Custom") continue
+    if (rows.length === 0 && name === "Custom") continue
+
+    const group = document.createElement("section")
+    group.className = "env-group"
+
+    const title = document.createElement("div")
+    title.className = "env-group-title"
+    title.textContent = name
+    group.appendChild(title)
+
+    const wrap = document.createElement("div")
+    wrap.className = "env-table-wrap"
+    const table = document.createElement("table")
+    table.className = "env-table"
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Variable</th>
+          <th>Value</th>
+          <th>Usage</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `
+
+    const body = table.querySelector("tbody")
+    for (const item of rows) {
+      const row = document.createElement("tr")
+
+      const keyCell = document.createElement("td")
+      if (item.custom) {
+        const keyInput = document.createElement("input")
+        keyInput.className = "env-value"
+        keyInput.placeholder = "ENV_NAME"
+        keyInput.value = item.key
+        keyInput.addEventListener("input", (event) => {
+          item.key = event.target.value
+        })
+        keyCell.appendChild(keyInput)
+      } else {
+        const key = document.createElement("code")
+        key.className = "env-key"
+        key.textContent = item.key
+        keyCell.appendChild(key)
+      }
+
+      const valueCell = document.createElement("td")
+      const valueInput = document.createElement("input")
+      valueInput.className = "env-value"
+      valueInput.placeholder = "(empty)"
+      valueInput.value = item.value
+      valueInput.addEventListener("input", (event) => {
+        item.value = event.target.value
+      })
+      valueCell.appendChild(valueInput)
+
+      const useCell = document.createElement("td")
+      const use = document.createElement("div")
+      use.className = "env-use"
+      use.textContent = item.use
+      useCell.appendChild(use)
+
+      row.appendChild(keyCell)
+      row.appendChild(valueCell)
+      row.appendChild(useCell)
+      body.appendChild(row)
+    }
+
+    wrap.appendChild(table)
+    group.appendChild(wrap)
+    els.envGroups.appendChild(group)
+  }
+}
+
+function addCustomEnv() {
+  state.envRows.push({
+    key: "",
+    value: "",
+    use: "Custom runtime variable.",
+    group: "Custom",
+    custom: true,
+  })
+  renderEnvGroups()
 }
 
 function fillConfig(config) {
-  if (!config) return
-  const command = config.command ?? "opencorvus"
-  els.serveCmdInput.value = commandToText(command, config.serve_args)
-  els.runCmdInput.value = commandToText(command, config.run_args)
-  els.cwdInput.value = config.cwd ?? ""
-  els.envInput.value = envToText(config.env)
+  state.config = configValue(config)
+  els.cwdInput.value = state.config.cwd
+  state.envRows = buildEnvRows(state.config.env)
+  renderEnvGroups()
   state.configLoaded = true
 }
 
 function readConfig() {
-  const serve = readArgs(els.serveCmdInput.value)
-  const run = readArgs(els.runCmdInput.value)
-  const command = (serve[0] || run[0] || "opencorvus").trim() || "opencorvus"
-
+  const base = configValue(state.config)
   return {
-    command,
+    command: base.command,
+    serve_args: base.serve_args,
+    run_args: base.run_args,
+    bot_command: base.bot_command,
+    bot_args: base.bot_args,
+    server_url: base.server_url,
     cwd: els.cwdInput.value.trim(),
-    serve_args: serve.length > 0 ? serve.slice(1) : [],
-    run_args: run.length === 0 ? [] : run[0] === command ? run.slice(1) : run,
-    env: textToEnv(els.envInput.value),
+    env: readEnvRows(),
   }
 }
 
@@ -251,7 +468,9 @@ function makeMessage(role) {
     e.stopPropagation()
     copyText(body.textContent ?? "")
     copyBtn.textContent = "✓"
-    setTimeout(() => { copyBtn.textContent = "⎘" }, 1200)
+    setTimeout(() => {
+      copyBtn.textContent = "⎘"
+    }, 1200)
   })
   box.appendChild(copyBtn)
 
@@ -554,7 +773,10 @@ function applySnapshot(snapshot) {
   if (typeof snapshot.prompt_running === "boolean") setSending(snapshot.prompt_running)
   setLogPath(snapshot.log_path)
   if (Array.isArray(snapshot.logs)) {
-    state.logs = snapshot.logs.map((item) => normalizeLog(item)).filter((item) => Boolean(item)).slice(-800)
+    state.logs = snapshot.logs
+      .map((item) => normalizeLog(item))
+      .filter((item) => Boolean(item))
+      .slice(-800)
     renderLogs()
   }
   if (!state.configLoaded) fillConfig(snapshot.config)
@@ -758,6 +980,10 @@ function bindEvents() {
     } catch (error) {
       addMessage("system", `Save config failed: ${error?.message || String(error)}`)
     }
+  })
+
+  els.addEnvBtn?.addEventListener("click", () => {
+    addCustomEnv()
   })
 
   els.openMcpBtn.addEventListener("click", async () => {
