@@ -47,17 +47,12 @@ mock.module("../../src/opencorvus/gui/index", () => ({
     scroll: async (_direction: "up" | "down", _amount = 3) => {},
     moveTo: async (_x: number, _y: number) => {},
     drag: async (_startX: number, _startY: number, _endX: number, _endY: number) => {},
-<<<<<<< HEAD
-    paste: async (_text: string) => {},
-    pressKey: async (_key: string) => {},
-=======
     paste: async (text: string) => {
       pastes.push(text)
     },
     pressKey: async (key: string) => {
       keys.push(key)
     },
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     hotkey: async (...keys: string[]) => {
       hotkeys.push(keys)
     },
