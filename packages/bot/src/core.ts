@@ -482,6 +482,36 @@ export class BotCore {
     return this.session.findSessions(sessionId)
   }
 
+  /**
+   * In shared mode, when no Slack thread is bound to the shared session yet
+   * (e.g. overlay sends a prompt before any Slack message arrives), create a
+   * dedicated mirror thread in SLACK_CHANNEL_ID and bind it.  Called lazily on
+   * the first event that needs a Slack target.
+   */
+  private async bindOverlayMirrorIfNeeded(sessionId: string): Promise<SessionEntry[]> {
+    // Already bound — just look up what SessionCoordinator has
+    if (this.overlayMirrorBound) return this.findSessions(sessionId)
+
+    const channel = process.env.SLACK_CHANNEL_ID
+    if (!channel) return []
+
+    const adapter = this.adapters.find((a) => typeof a.startThread === "function")
+    if (!adapter?.startThread) return []
+
+    // Set flag before await to prevent concurrent calls from creating multiple threads
+    this.overlayMirrorBound = true
+    try {
+      const ts = await adapter.startThread(channel, "[Overlay Console] Session started")
+      const entry: SessionEntry = { sessionId, adapter, channel, thread: ts }
+      this.session.bind(`overlay-mirror:${sessionId}`, entry)
+      console.log(`[BotCore] Overlay mirror thread created: ${channel}:${ts} for session ${sessionId}`)
+      return [entry]
+    } catch (err) {
+      this.overlayMirrorBound = false
+      console.warn("[BotCore] Failed to create overlay mirror thread:", err)
+      return []
+    }
+  }
 
   /**
    * Upload screenshot attachment and optionally run vision analysis in parallel.
