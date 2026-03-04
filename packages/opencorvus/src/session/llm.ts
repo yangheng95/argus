@@ -191,7 +191,7 @@ export namespace LLM {
           ...failed.toolCall,
           input: JSON.stringify({
             tool: failed.toolCall.toolName,
-            error: failed.error.message,
+            error: failed.error?.message ?? "unknown error",
           }),
           toolName: "invalid",
         }
