@@ -98,7 +98,7 @@ function renderCommandPreview() {
   if (els.serveFixedInput) els.serveFixedInput.value = serveArgs.join(" ")
   if (els.runFixedInput) els.runFixedInput.value = `${runArgs.join(" ")} "<prompt>"`
   if (els.servePreviewInput) els.servePreviewInput.value = cmdLine(command, serveArgs)
-  if (els.runPreviewInput) els.runPreviewInput.value = `${cmd(command, runArgs)} "<prompt>"`
+  if (els.runPreviewInput) els.runPreviewInput.value = `${cmdLine(command, runArgs)} "<prompt>"`
 }
 
 function textToEnv(input) {
