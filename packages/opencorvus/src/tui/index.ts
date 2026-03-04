@@ -202,6 +202,8 @@ export namespace Tui {
     if (opts.continue) args.push("--continue")
     if (opts.fork) args.push("--fork")
 
+    console.log(`[Tui.spawn] bin=${bin} cwd=${cwd} devMode=${devMode} port=${port} platform=${process.platform} execPath=${process.execPath}`)
+
     let proc: ChildProcess
     if (process.platform === "win32") {
       if (devMode) {
