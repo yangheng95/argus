@@ -84,7 +84,7 @@ function quote(input) {
   return `"${input.replace(/\\/g, "\\\\").replace(/"/g, "\\\"")}"`
 }
 
-function cmd(command, args) {
+function cmdLine(command, args) {
   return [command, ...args].map((item) => quote(String(item))).join(" ")
 }
 
