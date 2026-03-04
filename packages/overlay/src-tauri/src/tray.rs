@@ -28,24 +28,19 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     let menu =
         Menu::with_items(app, &[&open, &mcp, &skill, &start, &stop, &quit]).map_err(|error| error.to_string())?;
 
-<<<<<<< HEAD
-    let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))
-        .or_else(|_| Image::from_bytes(include_bytes!("../icons/icon.ico")))
-        .unwrap_or_else(|_| {
-            // Fallback: 16x16 solid teal RGBA pixel data
-            let mut rgba = vec![0u8; 16 * 16 * 4];
-            for pixel in rgba.chunks_exact_mut(4) {
-                pixel.copy_from_slice(&[0x00, 0xA0, 0xA0, 0xFF]);
-            }
-            Image::new_owned(rgba, 16, 16)
-        });
-=======
     let icon = match Image::from_bytes(include_bytes!("../icons/tray.ico")) {
         Ok(icon) => icon,
-        Err(tray_error) => Image::from_bytes(include_bytes!("../icons/icon.ico"))
-            .map_err(|icon_error| format!("load tray icon failed: tray.ico={tray_error}; icon.ico={icon_error}"))?,
+        Err(_tray_error) => Image::from_bytes(include_bytes!("../icons/icon.png"))
+            .or_else(|_| Image::from_bytes(include_bytes!("../icons/icon.ico")))
+            .unwrap_or_else(|_| {
+                // Fallback: 16x16 solid teal RGBA pixel data
+                let mut rgba = vec![0u8; 16 * 16 * 4];
+                for pixel in rgba.chunks_exact_mut(4) {
+                    pixel.copy_from_slice(&[0x00, 0xA0, 0xA0, 0xFF]);
+                }
+                Image::new_owned(rgba, 16, 16)
+            }),
     };
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
 
     let _tray = TrayIconBuilder::new()
         .icon(icon)
