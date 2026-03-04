@@ -101,6 +101,16 @@ export class BotCore {
       await adapter.start()
     }
 
+    // Pre-load shared session ID so overlay-originated events can be mirrored to Slack
+    // even before the first Slack message arrives (which would otherwise populate sharedSessionId).
+    if (this.sharedMode() && !this.sharedSessionId) {
+      const fromFile = await this.readSharedSessionFile()
+      if (fromFile) {
+        this.sharedSessionId = fromFile
+        console.log(`[BotCore] Pre-loaded shared session: ${fromFile}`)
+      }
+    }
+
     // Overlay is managed by OpenCorvus's overlay-client.ts (spawned on first tool use)
   }
 
