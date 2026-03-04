@@ -54,7 +54,7 @@ export namespace ShareNext {
     Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
       const part = { ...evt.properties.part }
       // Resolve file-backed screenshot URLs to data URLs before sharing
-      if (part.type === "tool" && part.state?.attachments) {
+      if (part.type === "tool" && part.state?.status === "completed" && part.state.attachments) {
         const { ScreenshotStore } = await import("@/session/screenshot-store")
         const resolved = []
         for (const att of part.state.attachments) {
@@ -69,7 +69,7 @@ export namespace ShareNext {
             resolved.push(att)
           }
         }
-        part.state = { ...part.state, attachments: resolved }
+        ;(part as any).state = { ...part.state, attachments: resolved }
       }
       await sync(part.sessionID, [
         {
