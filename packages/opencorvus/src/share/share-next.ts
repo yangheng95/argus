@@ -52,10 +52,29 @@ export namespace ShareNext {
       }
     })
     Bus.subscribe(MessageV2.Event.PartUpdated, async (evt) => {
-      await sync(evt.properties.part.sessionID, [
+      const part = { ...evt.properties.part }
+      // Resolve file-backed screenshot URLs to data URLs before sharing
+      if (part.type === "tool" && part.state?.attachments) {
+        const { ScreenshotStore } = await import("@/session/screenshot-store")
+        const resolved = []
+        for (const att of part.state.attachments) {
+          if (ScreenshotStore.isFileUrl(att.url)) {
+            try {
+              const { mime, data } = await ScreenshotStore.resolveBase64(att.url)
+              resolved.push({ ...att, url: `data:${mime};base64,${data}` })
+            } catch {
+              resolved.push(att)
+            }
+          } else {
+            resolved.push(att)
+          }
+        }
+        part.state = { ...part.state, attachments: resolved }
+      }
+      await sync(part.sessionID, [
         {
           type: "part",
-          data: evt.properties.part,
+          data: part,
         },
       ])
     })
