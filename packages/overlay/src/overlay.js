@@ -170,7 +170,7 @@ function showEvent(action, label, status) {
   const detail = detailFor(label, status)
 
   render({ action, status, detail, count }, merged)
-  scheduleHide(status)
+  scheduleHide()
 
   last = {
     action,
