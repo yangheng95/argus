@@ -124,6 +124,27 @@ describe("tool.input bound window guard", () => {
     })
   })
 
+  test("allows pointer action on monitor anchor even when bound window is not foreground", async () => {
+    binding = {
+      windowId: 7,
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        DesktopState.setBounds({ x: 0, y: 0, width: 1000, height: 700 })
+        DesktopState.setTarget({ scope: "monitor", monitorId: 1, name: "Main" })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 210, y: 260, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(clicks).toEqual([{ x: 210, y: 260 }])
+      },
+    })
+  })
+
   test("blocks pointer action when desktop anchor points to stale window binding", async () => {
     binding = null
     await using tmp = await tmpdir()

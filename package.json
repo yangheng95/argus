@@ -8,11 +8,12 @@
   "scripts": {
     "dev": "bun run scripts/run-overlay.ts",
     "generate:overlay-protocol": "bun run scripts/generate-overlay-protocol.ts",
+    "check:overlay-protocol": "bun run scripts/generate-overlay-protocol.ts --check",
     "dev:bot": "bun run --cwd packages/bot --no-env-file --env-file .env src/main.ts",
     "compress:screenshot": "bun run scripts/compress-screenshot.ts",
     "patch:follow-redirects": "bun run scripts/patch-follow-redirects.ts",
     "postinstall": "bun run patch:follow-redirects",
-    "typecheck": "bunx turbo run typecheck",
+    "typecheck": "bun run check:overlay-protocol && bunx turbo run typecheck",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"
   },

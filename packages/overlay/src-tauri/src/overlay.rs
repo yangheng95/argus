@@ -81,45 +81,80 @@ struct DiagnosticPayload {
 }
 
 #[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+struct HintInput {
+    x: i32,
+    y: i32,
+    action: String,
+    label: String,
+    status: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ConfirmInput {
+    id: String,
+    x: i32,
+    y: i32,
+    title: String,
+    message: String,
+    confirm: Option<String>,
+    cancel: Option<String>,
+    timeout_ms: Option<u64>,
+}
+
+#[derive(Deserialize)]
+struct WindowHighlightInput {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    label: Option<String>,
+    duration_ms: Option<u64>,
+}
+
+#[derive(Deserialize)]
+struct DiagnosticInput {
+    event: String,
+    ts: Option<u64>,
+    available: Option<bool>,
+    reason: Option<String>,
+    path: Option<String>,
+    failures: Option<u32>,
+    consecutive_failures: Option<u32>,
+    next_retry_at: Option<u64>,
+    circuit_open_until: Option<u64>,
+    detail: Option<serde_json::Value>,
+}
+
 enum InboundEvent {
-    Hint {
-        x: i32,
-        y: i32,
-        action: String,
-        label: String,
-        status: Option<String>,
-    },
-    Confirm {
-        id: String,
-        x: i32,
-        y: i32,
-        title: String,
-        message: String,
-        confirm: Option<String>,
-        cancel: Option<String>,
-        timeout_ms: Option<u64>,
-    },
-    WindowHighlight {
-        x: i32,
-        y: i32,
-        width: u32,
-        height: u32,
-        label: Option<String>,
-        duration_ms: Option<u64>,
-    },
-    Diagnostic {
-        event: String,
-        ts: Option<u64>,
-        available: Option<bool>,
-        reason: Option<String>,
-        path: Option<String>,
-        failures: Option<u32>,
-        consecutive_failures: Option<u32>,
-        next_retry_at: Option<u64>,
-        circuit_open_until: Option<u64>,
-        detail: Option<serde_json::Value>,
-    },
+    Hint(HintInput),
+    Confirm(ConfirmInput),
+    WindowHighlight(WindowHighlightInput),
+    Diagnostic(DiagnosticInput),
+}
+
+fn parse_inbound(line: &str) -> Result<InboundEvent, String> {
+    let raw = serde_json::from_str::<serde_json::Value>(line)
+        .map_err(|error| format!("invalid json: {error}"))?;
+    let kind = raw
+        .get("type")
+        .and_then(|item| item.as_str())
+        .ok_or_else(|| "missing string field `type`".to_string())?;
+
+    match kind {
+        item if item == events::MSG_HINT => serde_json::from_value::<HintInput>(raw)
+            .map(InboundEvent::Hint)
+            .map_err(|error| format!("invalid {} payload: {error}", events::MSG_HINT)),
+        item if item == events::MSG_CONFIRM => serde_json::from_value::<ConfirmInput>(raw)
+            .map(InboundEvent::Confirm)
+            .map_err(|error| format!("invalid {} payload: {error}", events::MSG_CONFIRM)),
+        item if item == events::MSG_WINDOW_HIGHLIGHT => serde_json::from_value::<WindowHighlightInput>(raw)
+            .map(InboundEvent::WindowHighlight)
+            .map_err(|error| format!("invalid {} payload: {error}", events::MSG_WINDOW_HIGHLIGHT)),
+        item if item == events::MSG_DIAGNOSTIC => serde_json::from_value::<DiagnosticInput>(raw)
+            .map(InboundEvent::Diagnostic)
+            .map_err(|error| format!("invalid {} payload: {error}", events::MSG_DIAGNOSTIC)),
+        item => Err(format!("unsupported type: {item}")),
+    }
 }
 
 pub fn position_window(window: WebviewWindow, x: i32, y: i32) {
@@ -165,21 +200,15 @@ pub fn start_stdin_bridge(app: &tauri::App) {
         for line in BufReader::new(stdin.lock()).lines() {
             match line {
                 Ok(l) if !l.trim().is_empty() => {
-                    match serde_json::from_str::<InboundEvent>(&l) {
+                    match parse_inbound(&l) {
                         Ok(event) => match event {
-                            InboundEvent::Hint {
-                                x,
-                                y,
-                                action,
-                                label,
-                                status,
-                            } => {
+                            InboundEvent::Hint(item) => {
                                 // All coordinates are logical (DPI-aware) from OpenCorvus.
                                 // Position overlay so focus ring center aligns with target.
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_OVERLAY) {
                                     let (width, height) = window_size(&window, OVERLAY_WIDTH, OVERLAY_HEIGHT);
-                                    let win_x = x as f64 - width / 2.0;
-                                    let win_y = y as f64 - height * FOCUS_Y_RATIO;
+                                    let win_x = item.x as f64 - width / 2.0;
+                                    let win_y = item.y as f64 - height * FOCUS_Y_RATIO;
                                     log_result(
                                         "stdin_bridge.hint.set_position",
                                         window.set_position(tauri::LogicalPosition::new(win_x, win_y)),
@@ -191,32 +220,23 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                     handle.emit(
                                     events::EVT_SHOW_OVERLAY,
                                     ShowPayload {
-                                        x,
-                                        y,
-                                        action,
-                                        label,
-                                        status,
+                                        x: item.x,
+                                        y: item.y,
+                                        action: item.action,
+                                        label: item.label,
+                                        status: item.status,
                                     },
                                 ),
                                 );
                             }
-                            InboundEvent::Confirm {
-                                id,
-                                x,
-                                y,
-                                title,
-                                message,
-                                confirm,
-                                cancel,
-                                timeout_ms,
-                            } => {
+                            InboundEvent::Confirm(item) => {
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_CONFIRM) {
                                     let (width, height) = window_size(&window, CONFIRM_WIDTH, CONFIRM_HEIGHT);
                                     log_result(
                                         "stdin_bridge.confirm.set_position",
                                         window.set_position(tauri::LogicalPosition::new(
-                                            x as f64 - width / 2.0,
-                                            y as f64 - height / 2.0,
+                                            item.x as f64 - width / 2.0,
+                                            item.y as f64 - height / 2.0,
                                         )),
                                     );
                                     log_result("stdin_bridge.confirm.show", window.show());
@@ -227,36 +247,29 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                     handle.emit(
                                     events::EVT_SHOW_CONFIRM,
                                     ConfirmPayload {
-                                        id,
-                                        x,
-                                        y,
-                                        title,
-                                        message,
-                                        confirm: confirm.unwrap_or("Confirm".into()),
-                                        cancel: cancel.unwrap_or("Cancel".into()),
-                                        timeout_ms,
+                                        id: item.id,
+                                        x: item.x,
+                                        y: item.y,
+                                        title: item.title,
+                                        message: item.message,
+                                        confirm: item.confirm.unwrap_or("Confirm".into()),
+                                        cancel: item.cancel.unwrap_or("Cancel".into()),
+                                        timeout_ms: item.timeout_ms,
                                     },
                                 ),
                                 );
                             }
-                            InboundEvent::WindowHighlight {
-                                x,
-                                y,
-                                width,
-                                height,
-                                label,
-                                duration_ms,
-                            } => {
+                            InboundEvent::WindowHighlight(item) => {
                                 // Coordinates are logical (DPI-aware) — use LogicalSize/LogicalPosition
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_HIGHLIGHT) {
                                     const HIGHLIGHT_MIN_SIZE: u32 = 40;
                                     const HIGHLIGHT_MAX_SIZE: u32 = 10000;
-                                    let w = (width.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
-                                    let h = (height.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
+                                    let w = (item.width.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
+                                    let h = (item.height.max(HIGHLIGHT_MIN_SIZE).min(HIGHLIGHT_MAX_SIZE)) as f64;
                                     log_result("stdin_bridge.window_highlight.set_size", window.set_size(tauri::LogicalSize::new(w, h)));
                                     log_result(
                                         "stdin_bridge.window_highlight.set_position",
-                                        window.set_position(tauri::LogicalPosition::new(x as f64, y as f64)),
+                                        window.set_position(tauri::LogicalPosition::new(item.x as f64, item.y as f64)),
                                     );
                                     log_result("stdin_bridge.window_highlight.show", window.show());
                                     log_result(
@@ -264,34 +277,26 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                         handle.emit_to(
                                             events::WINDOW_HIGHLIGHT,
                                             events::EVT_SHOW_WINDOW_HIGHLIGHT,
-                                            WindowHighlightPayload { label, duration_ms },
+                                            WindowHighlightPayload {
+                                                label: item.label,
+                                                duration_ms: item.duration_ms,
+                                            },
                                         ),
                                     );
                                 }
                             }
-                            InboundEvent::Diagnostic {
-                                event,
-                                ts,
-                                available,
-                                reason,
-                                path,
-                                failures,
-                                consecutive_failures,
-                                next_retry_at,
-                                circuit_open_until,
-                                detail,
-                            } => {
+                            InboundEvent::Diagnostic(item) => {
                                 let payload = DiagnosticPayload {
-                                    event: event.clone(),
-                                    ts,
-                                    available,
-                                    reason,
-                                    path,
-                                    failures,
-                                    consecutive_failures,
-                                    next_retry_at,
-                                    circuit_open_until,
-                                    detail,
+                                    event: item.event,
+                                    ts: item.ts,
+                                    available: item.available,
+                                    reason: item.reason,
+                                    path: item.path,
+                                    failures: item.failures,
+                                    consecutive_failures: item.consecutive_failures,
+                                    next_retry_at: item.next_retry_at,
+                                    circuit_open_until: item.circuit_open_until,
+                                    detail: item.detail,
                                 };
                                 log_result(
                                     "stdin_bridge.diagnostic.emit",

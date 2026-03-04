@@ -15,6 +15,10 @@ process.chdir(dir)
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 
+const protocol = path.resolve(dir, "..", "..", "scripts", "generate-overlay-protocol.ts")
+await $`${process.execPath} ${protocol}`
+console.log("Generated overlay protocol")
+
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
 const modelsData = process.env.MODELS_DEV_API_JSON

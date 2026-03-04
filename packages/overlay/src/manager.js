@@ -520,9 +520,9 @@ async function addMcp() {
     return
   }
 
-  const cmd = window.prompt("Local MCP command", "npx -y @modelcontextprotocol/server-filesystem .")
-  if (!cmd) return
-  const command = readArgs(cmd)
+  const line = window.prompt("Local MCP command", "npx -y @modelcontextprotocol/server-filesystem .")
+  if (!line) return
+  const command = readArgs(line)
   if (command.length === 0) return
   const file = await invoke(cmd.managerAddMcp, {
     name: trimmed,

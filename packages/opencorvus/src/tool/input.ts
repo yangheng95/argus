@@ -195,6 +195,8 @@ export const InputTool = Tool.define("input", {
     ) => {
       const binding = await WindowManager.getBinding()
       const target = DesktopState.getTarget()
+      const pointer = action === "click" || action === "drag" || action === "move"
+      if (pointer && target?.scope === "monitor") return null
       if (!binding) {
         if (target?.scope !== "window") return null
         showOverlay(undefined, undefined, action, "blocked: stale window binding", "error")

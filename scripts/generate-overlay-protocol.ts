@@ -1,10 +1,15 @@
 import path from "path"
 
 type Dict = Record<string, string>
+type Out = {
+  file: string
+  text: string
+}
 
 const root = process.cwd()
 const src = path.join(root, "packages", "overlay", "protocol", "schema.json")
 const schema = await Bun.file(src).json()
+const check = process.argv.includes("--check")
 
 function table(input: unknown, name: string) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -93,8 +98,38 @@ ${rust(messages, "MSG")}
 ${rust(commands, "CMD")}
 `
 
-await Bun.write(path.join(root, "packages", "opencorvus", "src", "tool", "overlay-protocol.ts"), ts)
-await Bun.write(path.join(root, "packages", "overlay", "src", "protocol.js"), js)
-await Bun.write(path.join(root, "packages", "overlay", "src-tauri", "src", "events.rs"), rs)
+const out: Out[] = [
+  {
+    file: path.join(root, "packages", "opencorvus", "src", "tool", "overlay-protocol.ts"),
+    text: ts,
+  },
+  {
+    file: path.join(root, "packages", "overlay", "src", "protocol.js"),
+    text: js,
+  },
+  {
+    file: path.join(root, "packages", "overlay", "src-tauri", "src", "events.rs"),
+    text: rs,
+  },
+]
 
+if (check) {
+  const stale: string[] = []
+  for (const item of out) {
+    const file = Bun.file(item.file)
+    const text = (await file.exists()) ? await file.text() : ""
+    if (text === item.text) continue
+    stale.push(item.file)
+  }
+  if (stale.length === 0) {
+    console.log("overlay protocol is up to date")
+    process.exit(0)
+  }
+  console.error("overlay protocol is stale:")
+  for (const file of stale) console.error(` - ${file}`)
+  console.error("run: bun run scripts/generate-overlay-protocol.ts")
+  process.exit(1)
+}
+
+for (const item of out) await Bun.write(item.file, item.text)
 console.log("overlay protocol generated")

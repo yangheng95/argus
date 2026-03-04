@@ -4,21 +4,28 @@ import path from "path"
 const ext = process.platform === "win32" ? ".exe" : ""
 const root = process.cwd()
 const manifest = path.join(root, "packages", "overlay", "src-tauri", "Cargo.toml")
+const protocol = path.join(root, "scripts", "generate-overlay-protocol.ts")
 const bins = [
   path.join(root, "packages", "overlay", "src-tauri", "target", "release", `opencorvus-overlay${ext}`),
   path.join(root, "packages", "overlay", "src-tauri", "target", "debug", `opencorvus-overlay${ext}`),
 ]
 
-async function run(cmd: string[]) {
+async function code(cmd: string[]) {
   const p = Bun.spawn(cmd, {
     stdin: "inherit",
     stdout: "inherit",
     stderr: "inherit",
     env: process.env,
   })
-  const code = await p.exited
-  process.exit(code ?? 1)
+  return (await p.exited) ?? 1
 }
+
+async function run(cmd: string[]) {
+  process.exit(await code(cmd))
+}
+
+const gen = await code([process.execPath, protocol])
+if (gen !== 0) process.exit(gen)
 
 const bin = bins.find((item) => existsSync(item))
 if (bin) {
