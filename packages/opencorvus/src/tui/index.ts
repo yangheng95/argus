@@ -231,19 +231,29 @@ export namespace Tui {
         })
         proc.unref()
       } else {
-        // Production: use PowerShell Start-Process to open TUI in a new visible console window.
-        // cmd.exe "start" has quoting issues with paths containing spaces.
-        const psArgs = args.map((a) => `"${a}"`).join(",")
-        const psCmd = `Start-Process -FilePath '${bin}' -ArgumentList ${psArgs} -WorkingDirectory '${cwd}'`
-        console.log(`[Tui.spawn] PowerShell command: ${psCmd}`)
-        proc = nodeSpawn(
-          "powershell.exe",
-          ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psCmd],
-          { stdio: "pipe", detached: true },
+        // Production: launch TUI in a new visible console window using cmd.exe start.
+        // Redirect stderr to a temp log file for debugging.
+        const logFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.log`)
+        const batFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
+        const quotedArgs = args.map((a) => `"${a}"`).join(" ")
+        fs.writeFileSync(
+          batFile,
+          [
+            `@title OpenCorvus TUI`,
+            `@echo Starting TUI: "${bin}" ${quotedArgs}`,
+            `@echo Log: ${logFile}`,
+            `@"${bin}" ${quotedArgs} 2>"${logFile}"`,
+            `@echo Exit code: %ERRORLEVEL% >> "${logFile}"`,
+            `@if %ERRORLEVEL% neq 0 pause`,
+          ].join("\r\n"),
         )
-        proc.stdout?.on("data", (d: Buffer) => console.log(`[Tui.spawn:ps:stdout] ${d.toString().trim()}`))
-        proc.stderr?.on("data", (d: Buffer) => console.error(`[Tui.spawn:ps:stderr] ${d.toString().trim()}`))
-        proc.on("exit", (code: number | null) => console.log(`[Tui.spawn:ps:exit] code=${code}`))
+        console.log(`[Tui.spawn] bat=${batFile} log=${logFile}`)
+        proc = nodeSpawn("cmd.exe", ["/c", "start", "OpenCorvus TUI", "cmd.exe", "/k", batFile], {
+          stdio: "ignore",
+          detached: true,
+          windowsHide: false,
+        })
+        proc.on("exit", (code: number | null) => console.log(`[Tui.spawn:cmd:exit] code=${code}`))
         proc.unref()
       }
     } else {
