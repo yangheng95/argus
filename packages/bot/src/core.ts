@@ -687,7 +687,10 @@ export class BotCore {
       // Skip parts belonging to user messages
       if (this.userMessageIds.has(part.messageID)) return
 
-      const sessions = this.findSessions(part.sessionID)
+      let sessions = this.findSessions(part.sessionID)
+      if (sessions.length === 0 && this.sharedMode() && part.sessionID === this.sharedSessionId) {
+        sessions = await this.bindOverlayMirrorIfNeeded(part.sessionID)
+      }
       if (sessions.length === 0) return
 
       // Buffer text parts keyed by messageID (flushed on message.updated)
