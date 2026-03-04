@@ -41,12 +41,16 @@ const state = {
   configLoaded: false,
   sending: false,
   stream: null,
+  mirrorQueue: [],
+  mirror: null,
   inputHistory: [],
   historyIndex: -1,
   pendingInput: "",
   config: null,
   envRows: [],
 }
+
+const STREAM_CHAR_DELAY = 10
 
 const defaults = Object.freeze({
   command: "opencorvus",
@@ -193,6 +197,8 @@ function setSending(next) {
 }
 
 function clearChat() {
+  streamReset()
+  mirrorReset()
   els.chat.innerHTML = '<div class="chat-empty">No messages yet - send an instruction below</div>'
 }
 
@@ -706,6 +712,10 @@ function streamPrepare() {
     entry: null,
     text: "",
     touched: false,
+    queue: [],
+    timer: null,
+    done: null,
+    closed: false,
   }
   return state.stream
 }
@@ -715,23 +725,80 @@ function streamEntry() {
   if (item.entry) return item.entry
   item.entry = makeMessage("assistant")
   item.entry.body.classList.add("stream-cursor")
-  renderMessage(item.entry, "", true)
+  renderMessage(item.entry, "", false)
   return item.entry
+}
+
+function textParts(text) {
+  if (typeof text !== "string" || !text) return []
+  return Array.from(text)
+}
+
+function streamSchedule() {
+  const item = state.stream
+  if (!item || item.timer || item.closed) return
+  item.timer = setTimeout(streamTick, STREAM_CHAR_DELAY)
+}
+
+function streamTick() {
+  const item = state.stream
+  if (!item || item.closed) return
+  if (item.queue.length === 0) {
+    item.timer = null
+    if (item.done) streamFinalize(item, item.done)
+    return
+  }
+  const next = item.queue.shift()
+  if (typeof next === "string") {
+    item.touched = true
+    item.text += next
+    renderMessage(streamEntry(), item.text, false)
+  }
+  item.timer = setTimeout(streamTick, STREAM_CHAR_DELAY)
+}
+
+function streamFinalize(item, payload) {
+  if (item.closed) return
+  item.closed = true
+  if (item.timer) {
+    clearTimeout(item.timer)
+    item.timer = null
+  }
+  if (item.entry) {
+    item.entry.body.classList.remove("stream-cursor")
+    if (item.touched) renderMessage(item.entry, item.text, true)
+  }
+  if (!item.touched && payload?.success) {
+    item.entry = makeMessage("assistant")
+    renderMessage(item.entry, "(empty response)", false)
+    item.touched = true
+  }
+}
+
+function streamReset() {
+  const item = state.stream
+  if (!item) return
+  if (item.timer) clearTimeout(item.timer)
+  state.stream = null
 }
 
 function streamAppend(text) {
   if (typeof text !== "string" || !text) return
   const item = streamPrepare()
-  item.touched = true
-  item.text += text
-  renderMessage(streamEntry(), item.text, true)
+  if (item.closed) return
+  item.queue.push(...textParts(text))
+  streamSchedule()
 }
 
 function streamReplace(text) {
   const item = streamPrepare()
-  item.touched = true
-  item.text = typeof text === "string" ? text : ""
-  renderMessage(streamEntry(), item.text, true)
+  if (item.closed) return
+  item.touched = false
+  item.text = ""
+  item.done = null
+  item.queue = textParts(typeof text === "string" ? text : "")
+  renderMessage(streamEntry(), "", false)
+  streamSchedule()
 }
 
 function streamImage(url, alt) {
@@ -746,13 +813,59 @@ function streamImage(url, alt) {
 function streamDone(payload) {
   const item = state.stream
   if (!item) return
-  // Remove streaming cursor
-  if (item.entry) item.entry.body.classList.remove("stream-cursor")
-  if (!item.touched && payload?.success) {
-    item.entry = makeMessage("assistant")
-    renderMessage(item.entry, "(empty response)", false)
-    item.touched = true
+  if (item.closed) return
+  item.done = payload ?? {}
+  if (!item.timer && item.queue.length === 0) streamFinalize(item, item.done)
+}
+
+function mirrorStart() {
+  if (state.mirror || state.mirrorQueue.length === 0) return
+  const text = state.mirrorQueue.shift()
+  if (typeof text !== "string" || !text) {
+    mirrorStart()
+    return
   }
+  const entry = makeMessage("assistant")
+  entry.body.classList.add("stream-cursor")
+  renderMessage(entry, "", false)
+  state.mirror = {
+    entry,
+    text: "",
+    queue: textParts(text),
+    timer: null,
+  }
+  state.mirror.timer = setTimeout(mirrorTick, STREAM_CHAR_DELAY)
+}
+
+function mirrorTick() {
+  const item = state.mirror
+  if (!item) return
+  if (item.queue.length === 0) {
+    item.timer = null
+    item.entry.body.classList.remove("stream-cursor")
+    renderMessage(item.entry, item.text, true)
+    state.mirror = null
+    mirrorStart()
+    return
+  }
+  const next = item.queue.shift()
+  if (typeof next === "string") {
+    item.text += next
+    renderMessage(item.entry, item.text, false)
+  }
+  item.timer = setTimeout(mirrorTick, STREAM_CHAR_DELAY)
+}
+
+function mirrorAppend(text) {
+  if (typeof text !== "string" || !text) return
+  state.mirrorQueue.push(text)
+  mirrorStart()
+}
+
+function mirrorReset() {
+  if (state.mirror?.timer) clearTimeout(state.mirror.timer)
+  state.mirror = null
+  state.mirrorQueue = []
 }
 
 function renderLogs() {
@@ -894,7 +1007,7 @@ async function createSkill() {
 }
 
 async function sendPrompt(prompt) {
-  state.stream = null
+  streamReset()
   const result = await invoke(cmd.managerSend, { prompt })
   if (result?.accepted) return
   throw new Error("prompt not accepted")
@@ -1093,7 +1206,7 @@ function bindTauriEvents() {
 
     if (kind === "mirror_assistant") {
       if (state.sending) return
-      if (text) addMessage("assistant", text, { markdown: true })
+      if (text) mirrorAppend(text)
       return
     }
 
