@@ -336,8 +336,8 @@ opencorvus agent [command]
 opencorvus agent create
 opencorvus agent list
 opencorvus attach [url]
-opencorvus attach http://10.20.30.40:4096
-opencorvus attach http://localhost:4096
+opencorvus attach http://10.20.30.40:7878
+opencorvus attach http://localhost:7878
 opencorvus auth [command]
 opencorvus auth list
 opencorvus auth login
@@ -370,7 +370,7 @@ opencorvus run [message..]
 opencorvus run Explain the use of context in Go
 opencorvus serve
 opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
-opencorvus serve --hostname 0.0.0.0 --port 4096
+opencorvus serve --hostname 0.0.0.0 --port 7878
 opencorvus serve [--port <number>] [--hostname <string>] [--cors <origin>]
 opencorvus session [command]
 opencorvus session list
@@ -385,8 +385,8 @@ opencorvus web --cors https://example.com
 opencorvus web --hostname 0.0.0.0
 opencorvus web --mdns
 opencorvus web --mdns --mdns-domain myproject.local
-opencorvus web --port 4096
-opencorvus web --port 4096 --hostname 0.0.0.0
+opencorvus web --port 7878
+opencorvus web --port 7878 --hostname 0.0.0.0
 opencorvus.server.close()
 ```
 
@@ -809,11 +809,11 @@ agents/
 build/
 commands/
 dist/
-http://<wsl-ip>:4096
+http://<wsl-ip>:7878
 http://127.0.0.1:8080/callback
 http://localhost:<port>
-http://localhost:4096
-http://localhost:4096/doc
+http://localhost:7878
+http://localhost:7878/doc
 https://app.example.com
 https://AZURE_COGNITIVE_SERVICES_RESOURCE_NAME.cognitiveservices.azure.com/
 https://opencorvus.ai/zen/v1/chat/completions
