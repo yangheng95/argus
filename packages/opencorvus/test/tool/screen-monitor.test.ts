@@ -4,11 +4,18 @@ import { tmpdir } from "../fixture/fixture"
 
 let unbound = 0
 let overlayCalls = 0
+let bindCalls = 0
+let monitorBinding: any = {
+  monitorId: 2,
+  match: "2",
+  info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
+}
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
     getBinding: async () => null,
     ensureBoundForeground: async () => true,
+    rebindForTask: async (_taskEpoch: number) => null,
     listWindows: async () => [
       {
         id: 7,
@@ -22,21 +29,24 @@ mock.module("../../src/opencorvus/perception/window", () => ({
         isFocused: true,
       },
     ],
-    bind: async (_title: string) => ({
-      windowId: 7,
-      matchTitle: "editor",
-      info: {
-        id: 7,
-        title: "Editor",
-        appName: "Code",
-        x: 2100,
-        y: 120,
-        width: 1200,
-        height: 800,
-        isMinimized: false,
-        isFocused: true,
-      },
-    }),
+    bind: async (_title: string) => {
+      bindCalls += 1
+      return {
+        windowId: 7,
+        matchTitle: "editor",
+        info: {
+          id: 7,
+          title: "Editor",
+          appName: "Code",
+          x: 2100,
+          y: 120,
+          width: 1200,
+          height: 800,
+          isMinimized: false,
+          isFocused: true,
+        },
+      }
+    },
     unbind: () => {
       unbound += 1
     },
@@ -45,11 +55,7 @@ mock.module("../../src/opencorvus/perception/window", () => ({
 
 mock.module("../../src/opencorvus/perception/monitor", () => ({
   MonitorManager: {
-    getBinding: async () => ({
-      monitorId: 2,
-      match: "2",
-      info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
-    }),
+    getBinding: async () => monitorBinding,
     bind: async (_query: string | number) => ({
       monitorId: 2,
       match: "2",
@@ -130,6 +136,12 @@ const ctx = {
 beforeEach(() => {
   unbound = 0
   overlayCalls = 0
+  bindCalls = 0
+  monitorBinding = {
+    monitorId: 2,
+    match: "2",
+    info: { id: 2, name: "Right", x: 1920, y: 0, width: 1920, height: 1080, isPrimary: false, scaleFactor: 1 },
+  }
   delete process.env.OPENCORVUS_SCREEN_DEBUG_COORDINATE_OVERLAY
 })
 
@@ -187,6 +199,20 @@ describe("tool.screen monitor flow", () => {
         const result = await tool.execute({ action: "screenshot" }, ctx)
         expect(overlayCalls).toBe(1)
         expect(result.output).toContain("Debug mode: coordinate ticks are visible on the image")
+      },
+    })
+  })
+
+  test("screenshot without active bindings does not auto-bind windows", async () => {
+    monitorBinding = null
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const result = await tool.execute({ action: "screenshot" }, ctx)
+        expect(result.metadata.scope).toBe("monitor")
+        expect(bindCalls).toBe(0)
       },
     })
   })

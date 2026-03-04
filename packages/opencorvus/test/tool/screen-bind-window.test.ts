@@ -4,6 +4,7 @@ import { tmpdir } from "../fixture/fixture"
 
 const bindsById: number[] = []
 const bindsByTitle: string[] = []
+let monitorUnbinds = 0
 let windows = [
   { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
 ]
@@ -15,6 +16,7 @@ mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
     getBinding: async () => null,
     ensureBoundForeground: async () => true,
+    rebindForTask: async (_taskEpoch: number) => null,
     listWindows: async () => windows,
     findWindow: async (title: string) => {
       const query = title.trim().toLowerCase()
@@ -55,6 +57,9 @@ mock.module("../../src/opencorvus/perception/monitor", () => ({
       match: "1",
       info: { id: 1, name: "Main", x: 0, y: 0, width: 2560, height: 1440, isPrimary: true, scaleFactor: 1 },
     }),
+    unbind: () => {
+      monitorUnbinds += 1
+    },
   },
 }))
 
@@ -78,6 +83,7 @@ const ctx = {
 beforeEach(() => {
   bindsById.length = 0
   bindsByTitle.length = 0
+  monitorUnbinds = 0
   windows = [
     { id: 7, title: "Editor", appName: "Code", x: 120, y: 80, width: 1400, height: 900, isMinimized: false, isFocused: true },
   ]
@@ -87,19 +93,36 @@ beforeEach(() => {
 })
 
 describe("tool.screen bind_window", () => {
-  test("falls back to focused window on single monitor when title is missing", async () => {
+  test("keeps strict matching by default on single monitor", async () => {
     await using tmp = await tmpdir()
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
         const tool = await ScreenTool.init()
-        const result = await tool.execute({ action: "bind_window", title: "Missing Window" }, ctx)
+        await expect(tool.execute({ action: "bind_window", title: "Missing Window" }, ctx)).rejects.toThrow(
+          'No window found matching "Missing Window"',
+        )
+        expect(bindsById).toHaveLength(0)
+        expect(monitorUnbinds).toBe(0)
+      },
+    })
+  })
+
+  test("falls back to focused window on single monitor when explicitly enabled", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await ScreenTool.init()
+        const result = await tool.execute({ action: "bind_window", title: "Missing Window", allow_single_monitor_fallback: true }, ctx)
         expect(result.metadata.title).toBe("Editor")
         expect(result.metadata.singleMonitorFallback).toBe(true)
+        expect(result.metadata.allowSingleMonitorFallback).toBe(true)
         expect(result.metadata.requestedTitle).toBe("Missing Window")
         expect(result.metadata.selectionMode).toBe("single_monitor_fallback")
         expect(bindsById).toEqual([7])
         expect(bindsByTitle).toEqual([])
+        expect(monitorUnbinds).toBe(1)
       },
     })
   })

@@ -80,7 +80,7 @@ Actions:
 - list_monitors: List all monitors with position, size, and scale. Use this as fallback when target windows cannot be found.
 - bind_monitor: Bind to a monitor by id or name (e.g. 1, "DELL", "primary"). Screenshots then focus this monitor.
 - list_windows: List all visible windows with their positions and sizes. It also returns ranked window_id candidates for model-driven target selection.
-- bind_window: Bind to a specific window by window_id (preferred from list_windows) or by title substring fallback. After binding, screenshots capture only that window and coordinates become window-relative.
+- bind_window: Bind to a specific window by window_id (preferred from list_windows) or by title substring. Optional allow_single_monitor_fallback=true enables single-monitor fallback when no match is found. After binding, screenshots capture only that window and coordinates become window-relative.
 
 IMPORTANT workflow:
 1. Single-monitor default: start with screenshot and interact directly.
@@ -103,6 +103,10 @@ const BindWindowAction = z.object({
   action: z.literal("bind_window"),
   window_id: z.coerce.number().int().optional().describe("Exact window id from list_windows. Preferred for deterministic binding."),
   title: z.string().optional().describe("Fallback window title/app substring when window_id is unavailable."),
+  allow_single_monitor_fallback: z
+    .boolean()
+    .optional()
+    .describe("If true, allows single-monitor fallback to the best visible window when window_id/title matching fails."),
 })
 
 const ListWindowsAction = z.object({
@@ -147,14 +151,19 @@ export const ScreenTool = Tool.define("screen", {
       const v = params.window_id as any
       if (typeof v === "string" && /^\d+$/.test(v.trim())) (params as any).window_id = Number(v)
     }
+    if ("allow_single_monitor_fallback" in params) {
+      const v = params.allow_single_monitor_fallback as any
+      if (v === "true") (params as any).allow_single_monitor_fallback = true
+      else if (v === "false") (params as any).allow_single_monitor_fallback = false
+    }
 
     switch (params.action) {
       case "screenshot": {
         GuiState.activate()
-        let autoBound = false
+        DesktopState.markTask(GuiState.get().taskEpoch)
+        await WindowManager.rebindForTask(GuiState.get().taskEpoch)
         let foregroundFailed = false
         let currentBinding = await WindowManager.getBinding()
-        const monitorBinding = await MonitorManager.getBinding()
         if (currentBinding) {
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
@@ -167,18 +176,6 @@ export const ScreenTool = Tool.define("screen", {
             foregroundFailed = true
           }
         }
-        if (!currentBinding && !monitorBinding) {
-          try {
-            const windows = await WindowManager.listWindows()
-            const focused = pickWindow(windows)
-            if (focused) {
-              await WindowManager.bind(focused.title)
-              autoBound = true
-              currentBinding = await WindowManager.getBinding()
-            }
-          } catch {}
-        }
-
         let result = await Capture.take({ mode: "auto" })
 
         if (params.wait_for_change && result.rawBuffer) {
@@ -231,27 +228,16 @@ export const ScreenTool = Tool.define("screen", {
             }
           }
         }
-
-        DesktopState.setBounds(result.windowBounds)
-        if (result.scope === "window") {
-          const binding = await WindowManager.getBinding()
-          DesktopState.setTarget(binding ? { scope: "window", windowId: binding.windowId, title: binding.info.title } : null)
-        } else if (result.monitor) {
-          DesktopState.setTarget({
-            scope: "monitor",
-            monitorId: result.monitor.id,
-            name: result.monitor.name,
-          })
-        } else {
-          DesktopState.setTarget(null)
-        }
-        Capture.cleanup().catch(() => {})
-
-        if (autoBound) {
-          WindowManager.unbind()
-        }
-
         const hash = createHash("md5").update(result.buffer).digest("hex")
+        const capturedBinding = result.scope === "window" ? await WindowManager.getBinding() : null
+        DesktopState.recordCapture({
+          scope: result.scope,
+          bounds: result.windowBounds,
+          window: capturedBinding ? { windowId: capturedBinding.windowId, title: capturedBinding.info.title } : null,
+          monitor: result.monitor ? { id: result.monitor.id, name: result.monitor.name } : null,
+          screenshotHash: hash,
+        })
+        Capture.cleanup().catch(() => {})
         const isDuplicate = hash === GuiState.get().lastScreenshotHash
 
         GuiState.recordScreenshot(hash, result.width, result.height, isDuplicate)
@@ -263,7 +249,6 @@ export const ScreenTool = Tool.define("screen", {
           bufferBytes: result.buffer.length,
           hash: hash.substring(0, 8),
           isDuplicate,
-          autoBound,
           scope: result.scope,
           monitorId: result.monitor?.id ?? null,
           windowBounds: result.windowBounds
@@ -375,7 +360,7 @@ export const ScreenTool = Tool.define("screen", {
         }
 
         const foregroundNote = foregroundFailed
-          ? ` Note: The bound window was not in the foreground, but the screenshot was captured from it anyway. If input actions miss the target, use input.key("alt+tab") to bring the window to front first.`
+          ? " Note: The bound window was not in the foreground, but the screenshot was captured from it anyway. If input actions miss the target, re-run screen.bind_window for this window and take a fresh screenshot before retrying."
           : ""
         return {
           title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [window not focused]" : ""}`,
@@ -407,13 +392,14 @@ export const ScreenTool = Tool.define("screen", {
       case "bind_window": {
         GuiState.activate()
         const query = params.title?.trim() ?? ""
+        const allowSingleMonitorFallback = params.allow_single_monitor_fallback === true
         const requestedWindowId = params.window_id
         const [windows, monitors] = await Promise.all([WindowManager.listWindows(true), MonitorManager.listMonitors()])
         const pickedById = typeof requestedWindowId === "number"
           ? windows.find((w) => w.id === requestedWindowId) ?? null
           : null
         const match = pickedById ?? (query ? await WindowManager.findWindow(query) : null)
-        const fallback = !match && query && monitors.length === 1
+        const fallback = allowSingleMonitorFallback && !match && query && monitors.length === 1
           ? pickWindow(windows)
           : null
         const picked = match ?? fallback
@@ -431,6 +417,7 @@ export const ScreenTool = Tool.define("screen", {
         }
         const mode = pickedById ? "window_id" : fallback ? "single_monitor_fallback" : "title"
         const binding = await WindowManager.bindById(picked.id, query || undefined)
+        MonitorManager.unbind()
         const idFallbackNote = typeof requestedWindowId === "number" && !pickedById && query
           ? ` Requested window_id ${requestedWindowId} did not match any window, so title matching selected "${binding.info.title}".`
           : ""
@@ -445,12 +432,7 @@ export const ScreenTool = Tool.define("screen", {
           label: binding.info.title,
           durationMs: 1600,
         })
-        DesktopState.setBounds(null)
-        DesktopState.setTarget({
-          scope: "window",
-          windowId: binding.windowId,
-          title: binding.info.title,
-        })
+        DesktopState.bindWindow(binding.windowId, binding.info.title)
         GuiState.recordAction({
           time: Date.now(),
           tool: "screen",
@@ -475,6 +457,7 @@ export const ScreenTool = Tool.define("screen", {
             selectionMode: mode,
             idFallback: typeof requestedWindowId === "number" && !pickedById,
             singleMonitorFallback: !!fallback,
+            allowSingleMonitorFallback,
             monitorCount: monitors.length,
           },
         }
@@ -484,12 +467,7 @@ export const ScreenTool = Tool.define("screen", {
         GuiState.activate()
         const binding = await MonitorManager.bind(params.monitor)
         WindowManager.unbind()
-        DesktopState.setBounds(null)
-        DesktopState.setTarget({
-          scope: "monitor",
-          monitorId: binding.monitorId,
-          name: binding.info.name,
-        })
+        DesktopState.bindMonitor(binding.monitorId, binding.info.name)
         GuiState.recordAction({
           time: Date.now(),
           tool: "screen",

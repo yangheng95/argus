@@ -8,6 +8,8 @@ import { Overlay } from "../opencorvus/perception/overlay"
 import { Provider } from "../provider/provider"
 import { Log } from "../util/log"
 import { createHash } from "crypto"
+import { GuiState } from "./gui-state"
+import { DesktopState } from "./desktop-state"
 
 import VISION_PROMPT from "./prompt/vision-analyze.txt"
 
@@ -100,6 +102,9 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
       always: ["*"],
       metadata: { action: "vision_analyze" },
     })
+    GuiState.activate()
+    DesktopState.markTask(GuiState.get().taskEpoch)
+    await WindowManager.rebindForTask(GuiState.get().taskEpoch)
 
     const timer = log.time("vision analysis")
 
@@ -110,6 +115,14 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
       const overlaid = await Overlay.add(capture.buffer)
       const base64 = overlaid.toString("base64")
       const hash = createHash("md5").update(capture.buffer).digest("hex")
+      const capturedBinding = capture.scope === "window" ? await WindowManager.getBinding() : null
+      DesktopState.recordCapture({
+        scope: capture.scope,
+        bounds: capture.windowBounds,
+        window: capturedBinding ? { windowId: capturedBinding.windowId, title: capturedBinding.info.title } : null,
+        monitor: capture.monitor ? { id: capture.monitor.id, name: capture.monitor.name } : null,
+        screenshotHash: hash,
+      })
 
       // Build user prompt with context
       const parts: string[] = []

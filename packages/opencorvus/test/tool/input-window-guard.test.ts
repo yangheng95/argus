@@ -6,11 +6,13 @@ let binding: any = null
 let foreground = true
 const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
+const hotkeys: string[][] = []
 
 mock.module("../../src/opencorvus/perception/window", () => ({
   WindowManager: {
     getBinding: async () => binding,
     ensureBoundForeground: async () => foreground,
+    rebindForTask: async (_taskEpoch: number) => null,
   },
 }))
 
@@ -29,7 +31,9 @@ mock.module("../../src/opencorvus/gui/index", () => ({
     drag: async (_startX: number, _startY: number, _endX: number, _endY: number) => {},
     paste: async (_text: string) => {},
     pressKey: async (_key: string) => {},
-    hotkey: async (..._keys: string[]) => {},
+    hotkey: async (...keys: string[]) => {
+      hotkeys.push(keys)
+    },
   },
 }))
 
@@ -81,6 +85,7 @@ beforeEach(() => {
   foreground = true
   clicks.length = 0
   middleClicks.length = 0
+  hotkeys.length = 0
   delete process.env.OPENCORVUS_COORDINATE_SPACE
 })
 
@@ -130,6 +135,43 @@ describe("tool.input bound window guard", () => {
         expect(result.metadata.blocked).toBeUndefined()
         expect(middleClicks).toEqual([{ x: 320, y: 360 }])
         expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks non-recovery key when bound window cannot be foregrounded", async () => {
+    binding = {
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "enter" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("bound_window_not_foreground")
+        expect(hotkeys).toHaveLength(0)
+      },
+    })
+  })
+
+  test("allows focus recovery key when bound window cannot be foregrounded", async () => {
+    binding = {
+      info: { title: "Editor", appName: "Code" },
+    }
+    foreground = false
+
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "key", key: "alt+tab" }, ctx)
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(hotkeys).toEqual([["alt", "tab"]])
       },
     })
   })

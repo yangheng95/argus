@@ -3,6 +3,7 @@ import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { errors } from "../error"
 import { WindowManager } from "../../opencorvus/perception/window"
+import { MonitorManager } from "../../opencorvus/perception/monitor"
 import { GuiState } from "../../tool/gui-state"
 import { DesktopState } from "../../tool/desktop-state"
 
@@ -88,7 +89,13 @@ export function ExperimentalDesktopWindowRoutes() {
           typeof body.window_id === "number"
             ? await WindowManager.bindById(body.window_id, body.title)
             : await WindowManager.bind(body.title!.trim())
+        MonitorManager.unbind()
         DesktopState.setBounds(null)
+        DesktopState.setTarget({
+          scope: "window",
+          windowId: binding.windowId,
+          title: binding.info.title,
+        })
         const refreshed = await WindowManager.getBinding()
         return c.json({
           windowId: binding.windowId,

@@ -102,7 +102,7 @@ impl Default for ManagerConfig {
         Self {
             command,
             serve_args: vec!["serve".into()],
-            run_args: vec!["run".into(), "--continue".into()],
+            run_args: vec!["run".into()],
             cwd: String::new(),
             env: vec![],
         }
