@@ -19,6 +19,9 @@ export type TuiOptions = {
 }
 
 function resolveCommand() {
+  if (process.env.OPENCORVUS_BIN_PATH) {
+    return process.env.OPENCORVUS_BIN_PATH
+  }
   try {
     execSync("opencorvus --version", { stdio: "ignore", timeout: 3000 })
     return "opencorvus"
