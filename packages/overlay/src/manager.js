@@ -19,7 +19,10 @@ const els = {
   refreshBtn: document.getElementById("refreshBtn"),
   clearLogsBtn: document.getElementById("clearLogsBtn"),
   saveBtn: document.getElementById("saveBtn"),
-<<<<<<< HEAD
+  openMcpBtn: document.getElementById("openMcpBtn"),
+  openSkillBtn: document.getElementById("openSkillBtn"),
+  addMcpBtn: document.getElementById("addMcpBtn"),
+  createSkillBtn: document.getElementById("createSkillBtn"),
   commandInput: document.getElementById("commandInput"),
   serveArgsInput: document.getElementById("serveArgsInput"),
   runArgsInput: document.getElementById("runArgsInput"),
@@ -27,14 +30,6 @@ const els = {
   runFixedInput: document.getElementById("runFixedInput"),
   servePreviewInput: document.getElementById("servePreviewInput"),
   runPreviewInput: document.getElementById("runPreviewInput"),
-=======
-  openMcpBtn: document.getElementById("openMcpBtn"),
-  openSkillBtn: document.getElementById("openSkillBtn"),
-  addMcpBtn: document.getElementById("addMcpBtn"),
-  createSkillBtn: document.getElementById("createSkillBtn"),
-  serveCmdInput: document.getElementById("serveCmdInput"),
-  runCmdInput: document.getElementById("runCmdInput"),
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   cwdInput: document.getElementById("cwdInput"),
   envInput: document.getElementById("envInput"),
 }
