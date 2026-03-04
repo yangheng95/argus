@@ -202,56 +202,37 @@ export namespace Tui {
     if (opts.continue) args.push("--continue")
     if (opts.fork) args.push("--fork")
 
-    console.log(`[Tui.spawn] bin=${bin} cwd=${cwd} devMode=${devMode} port=${port} platform=${process.platform} execPath=${process.execPath}`)
-
     let proc: ChildProcess
     if (process.platform === "win32") {
+      // Windows: launch TUI in a new visible console window via a .bat file.
+      // PowerShell Start-Process is unreliable when called from a compiled Bun binary,
+      // so we use `cmd /c start ... cmd /k <bat>` which works consistently.
+      const batFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
+      const quotedArgs = args.map((a) => `"${a}"`).join(" ")
       if (devMode) {
-        // Dev mode on Windows: write a launcher .bat that `start`s the TUI .bat in a new console.
-        // nodeSpawn's detached mode doesn't reliably create a visible console with proper TTY,
-        // but `cmd /c start ... cmd /k tui.bat` does — verified by manual testing.
         const pkgRoot = packageRoot()
         const entryScript = path.join(pkgRoot, "src", "index.ts")
-        const tuiBat = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
-        fs.writeFileSync(
-          tuiBat,
-          [
-            `@title OpenCorvus TUI`,
-            `@cd /d "${pkgRoot}"`,
-            `@bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${args.map((a) => `"${a}"`).join(" ")}`,
-          ].join("\r\n"),
-        )
-        // Launcher bat: `start` opens a new visible console window, then exits.
-        const launcherBat = path.join(os.tmpdir(), `opencorvus-tui-launcher-${port}.bat`)
-        fs.writeFileSync(launcherBat, `@start "OpenCorvus TUI" cmd /k "${tuiBat}"\r\n`)
-        proc = nodeSpawn("cmd.exe", ["/c", launcherBat], {
-          stdio: "ignore",
-          detached: true,
-          windowsHide: true,
-        })
-        proc.unref()
-      } else {
-        // Production: launch TUI in a new visible console window using cmd.exe start.
-        // Redirect stderr to a temp log file for debugging.
-        const logFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.log`)
-        const batFile = path.join(os.tmpdir(), `opencorvus-tui-${port}.bat`)
-        const quotedArgs = args.map((a) => `"${a}"`).join(" ")
         fs.writeFileSync(
           batFile,
           [
             `@title OpenCorvus TUI`,
-            `@echo Starting TUI: "${bin}" ${quotedArgs}`,
-            `@echo Log: ${logFile}`,
-            `@"${bin}" ${quotedArgs} 2>"${logFile}"`,
-            `@echo Exit code: %ERRORLEVEL% >> "${logFile}"`,
-            `@if %ERRORLEVEL% neq 0 pause`,
+            `@cd /d "${pkgRoot}"`,
+            `@bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${quotedArgs}`,
           ].join("\r\n"),
         )
-        console.log(`[Tui.spawn] bat=${batFile} log=${logFile}`)
-        proc = nodeSpawn("cmd.exe", ["/c", "start", "OpenCorvus TUI", "cmd.exe", "/k", batFile], {
-          stdio: "ignore",
-          detached: true,
-          windowsHide: false,
+      } else {
+        fs.writeFileSync(
+          batFile,
+          [
+            `@title OpenCorvus TUI`,
+            `@"${bin}" ${quotedArgs}`,
+          ].join("\r\n"),
+        )
+      }
+      proc = nodeSpawn("cmd.exe", ["/c", "start", "OpenCorvus TUI", "cmd.exe", "/k", batFile], {
+        stdio: "ignore",
+        detached: true,
+        windowsHide: false,
         })
         proc.on("exit", (code: number | null) => console.log(`[Tui.spawn:cmd:exit] code=${code}`))
         proc.unref()
