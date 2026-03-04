@@ -5,12 +5,12 @@ use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
 use crate::events;
 use crate::manager;
 
-// Overlay window logical dimensions (must match tauri.conf.json)
+// Fallback logical dimensions used when runtime window size is unavailable.
 const OVERLAY_WIDTH: f64 = 420.0;
 const OVERLAY_HEIGHT: f64 = 180.0;
 // Focus ring center ratio in index.html (#focus top: var(--focus-y))
 const FOCUS_Y_RATIO: f64 = 0.74;
-// Confirm dialog logical dimensions (must match confirm.html card + padding)
+// Fallback logical dimensions used when runtime window size is unavailable.
 const CONFIRM_WIDTH: f64 = 460.0;
 const CONFIRM_HEIGHT: f64 = 220.0;
 
@@ -18,6 +18,25 @@ fn log_result<T, E: std::fmt::Display>(context: &str, result: Result<T, E>) {
     if let Err(error) = result {
         eprintln!("[overlay] {context} failed: {error}");
     }
+}
+
+fn window_size(window: &WebviewWindow, fallback_width: f64, fallback_height: f64) -> (f64, f64) {
+    let scale = match window.scale_factor() {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[overlay] window_size.scale_factor failed: {error}");
+            return (fallback_width, fallback_height);
+        }
+    };
+    let size = match window.inner_size() {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[overlay] window_size.inner_size failed: {error}");
+            return (fallback_width, fallback_height);
+        }
+    };
+    let logical = size.to_logical::<f64>(scale);
+    (logical.width, logical.height)
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -158,8 +177,9 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 // All coordinates are logical (DPI-aware) from OpenCorvus.
                                 // Position overlay so focus ring center aligns with target.
                                 if let Some(window) = handle.get_webview_window(events::WINDOW_OVERLAY) {
-                                    let win_x = x as f64 - OVERLAY_WIDTH / 2.0;
-                                    let win_y = y as f64 - OVERLAY_HEIGHT * FOCUS_Y_RATIO;
+                                    let (width, height) = window_size(&window, OVERLAY_WIDTH, OVERLAY_HEIGHT);
+                                    let win_x = x as f64 - width / 2.0;
+                                    let win_y = y as f64 - height * FOCUS_Y_RATIO;
                                     log_result(
                                         "stdin_bridge.hint.set_position",
                                         window.set_position(tauri::LogicalPosition::new(win_x, win_y)),
@@ -191,11 +211,12 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                 timeout_ms,
                             } => {
                                 if let Some(window) = handle.get_webview_window("confirm") {
+                                    let (width, height) = window_size(&window, CONFIRM_WIDTH, CONFIRM_HEIGHT);
                                     log_result(
                                         "stdin_bridge.confirm.set_position",
                                         window.set_position(tauri::LogicalPosition::new(
-                                            x as f64 - CONFIRM_WIDTH / 2.0,
-                                            y as f64 - CONFIRM_HEIGHT / 2.0,
+                                            x as f64 - width / 2.0,
+                                            y as f64 - height / 2.0,
                                         )),
                                     );
                                     log_result("stdin_bridge.confirm.show", window.show());
