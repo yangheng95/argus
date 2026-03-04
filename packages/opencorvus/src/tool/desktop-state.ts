@@ -57,7 +57,6 @@ const desktopState = Instance.state(
 export namespace DesktopState {
   export function getBounds() { return desktopState().bounds }
   export function getTarget() { return desktopState().target }
-<<<<<<< HEAD
   export function setTarget(target: AnchorTarget | null) { desktopState().target = target }
   export function setLastClick(click: LastClickInfo | null) { desktopState().lastClick = click }
   export function consumeLastClick(): LastClickInfo | null {
@@ -65,7 +64,7 @@ export namespace DesktopState {
     const click = s.lastClick
     s.lastClick = null
     return click
-=======
+  }
   export function getPhase() { return desktopState().phase }
   export function getTaskEpoch() { return desktopState().taskEpoch }
   export function getAnchorHash() { return desktopState().anchorHash }
@@ -142,6 +141,5 @@ export namespace DesktopState {
     s.anchorHash = input.screenshotHash ?? null
     s.phase = phase(s.target, s.bounds)
     touch(s)
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
   }
 }
