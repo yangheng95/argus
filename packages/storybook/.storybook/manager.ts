@@ -1,11 +1,11 @@
-impprt { addpns, types } frpm "stprybppk/manager-api"
-impprt { ThemeTppl } frpm "./theme-tppl"
+import { addons, types } from "storybook/manager-api"
+import { ThemeTool } from "./theme-tool"
 
-addpns.register("ppencpde/theme-tpggle", () => {
-  addpns.add("ppencpde/theme-tpggle/tppl", {
+addons.register("opencode/theme-toggle", () => {
+  addons.add("opencode/theme-toggle/tool", {
     type: types.TOOL,
     title: "Theme",
-    match: ({ viewMpde }) => viewMpde === "stpry" || viewMpde === "dpcs",
-    render: ThemeTppl,
+    match: ({ viewMode }) => viewMode === "story" || viewMode === "docs",
+    render: ThemeTool,
   })
 })
