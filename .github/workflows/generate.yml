@@ -41,10 +41,15 @@ jobs:
 
       - name: Commit and push
         run: |
-          if [ -z "$(git status --porcelain)" ]; then
+          git add -A
+          git restore --staged .github/workflows/ 2>/dev/null || true
+          if [ -z "$(git status --porcelain --untracked-files=no)" ] && [ -z "$(git diff --cached --name-only)" ]; then
             echo "No changes to commit"
             exit 0
           fi
-          git add -A
+          if [ -z "$(git diff --cached --name-only)" ]; then
+            echo "No changes to commit"
+            exit 0
+          fi
           git commit -m "chore: generate" --allow-empty
           git push origin HEAD:${{ github.ref_name }} --no-verify
