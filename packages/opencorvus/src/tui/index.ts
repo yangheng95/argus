@@ -204,6 +204,7 @@ export namespace Tui {
         const entryScript = `${pkgRoot}/src/index.ts`
         const tuiArgs = args.map((a) => `"${a}"`).join(" ")
         const cmdLine = `bun --preload @opentui/solid/preload --conditions=browser "${entryScript}" ${tuiArgs}`
+        console.log(`[TUI spawn] pkgRoot=${pkgRoot} cmdLine=${cmdLine}`)
         proc = nodeSpawn(
           "cmd.exe",
           ["/c", "start", "OPENCORVUS_TUI", "cmd", "/c", `cd /d "${pkgRoot}" && ${cmdLine}`],

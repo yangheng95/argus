@@ -109,4 +109,39 @@ Use this skill.
       process.env.OPENCORVUS_TEST_HOME = home
     }
   })
+
+  test("execute loads builtin bot skill with bundled files", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    const home = process.env.OPENCORVUS_TEST_HOME
+    process.env.OPENCORVUS_TEST_HOME = tmp.path
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const tool = await SkillTool.init()
+          const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+          const ctx: Tool.Context = {
+            ...baseCtx,
+            ask: async (req) => {
+              requests.push(req)
+            },
+          }
+
+          const result = await tool.execute({ name: "opencorvus-bot-config-wizard" }, ctx)
+          const ref = path.join(result.metadata.dir, "references", "channel-matrix.md")
+
+          expect(requests.length).toBe(1)
+          expect(requests[0].permission).toBe("skill")
+          expect(requests[0].patterns).toContain("opencorvus-bot-config-wizard")
+          expect(result.metadata.dir).toContain(path.join("builtin-skills", "opencorvus-bot-config-wizard"))
+          expect(result.output).toContain(`<file>${path.resolve(ref)}</file>`)
+          expect(await Bun.file(ref).text()).toContain("# OpenCorvus Bot Channel Matrix")
+        },
+      })
+    } finally {
+      process.env.OPENCORVUS_TEST_HOME = home
+    }
+  })
 })
