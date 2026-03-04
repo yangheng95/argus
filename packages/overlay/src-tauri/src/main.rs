@@ -53,15 +53,6 @@ fn main() {
                 }
                 manager::show_console(&app.handle());
             }
-<<<<<<< HEAD
-            if let Err(error) = tray::setup(&app.handle()) {
-                manager::push_log(
-                    state.inner(),
-                    &app.handle(),
-                    format!("tray setup failed: {error}"),
-                );
-                manager::show_console(&app.handle());
-            }
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
             let forced = std::env::var("OPENCORVUS_OVERLAY_SHOW_CONSOLE")
@@ -75,10 +66,6 @@ fn main() {
             if forced || !bridge_mode {
                 manager::show_console(&app.handle());
             }
-=======
-            overlay::apply_overlay_window_style(app);
-            overlay::start_stdin_bridge(app);
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
             Ok(())
         })
         .run(tauri::generate_context!())
