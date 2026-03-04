@@ -172,12 +172,8 @@ export const ScreenTool = Tool.define("screen", {
         await WindowManager.rebindForTask(GuiState.get().taskEpoch)
         let foregroundFailed = false
         let currentBinding = await WindowManager.getBinding()
-<<<<<<< HEAD
         const monitorBinding = await MonitorManager.getBinding()
         const hadFocusChange = WindowManager.consumeFocusChange()
-
-        if (currentBinding && !hadFocusChange) {
-=======
         const target = DesktopState.getTarget()
         const staleBindingBlock = (binding: Awaited<ReturnType<typeof WindowManager.getBinding>>) => {
           if (binding || target?.scope !== "window") return null
@@ -239,9 +235,11 @@ export const ScreenTool = Tool.define("screen", {
           }
           return null
         }
-        const staleBeforeCapture = staleBindingBlock(currentBinding)
-        if (staleBeforeCapture) return staleBeforeCapture
-        if (currentBinding) {
+        if (!hadFocusChange) {
+          const staleBeforeCapture = staleBindingBlock(currentBinding)
+          if (staleBeforeCapture) return staleBeforeCapture
+        }
+        if (currentBinding && !hadFocusChange) {
           if (currentBinding.info.isMinimized) {
             return {
               title: "Screenshot blocked: bound window is minimized",
@@ -255,7 +253,6 @@ export const ScreenTool = Tool.define("screen", {
               },
             }
           }
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
           const focused = await WindowManager.ensureBoundForeground()
           if (!focused) {
             log.warn("bound window not foreground, will try window capture anyway", {
