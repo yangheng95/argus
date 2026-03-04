@@ -1,6 +1,6 @@
 <p align="center">
   <a href="https://github.com/yangheng95/opencorvus">
-    <img src="packages/console/app/src/asset/brand/mascot-ar-icon.png" width="160" alt="OpenCorvus mascot">
+    <img src="assets/readme-head-gemini.png" width="160" alt="OpenCorvus head image">
   </a>
 </p>
 

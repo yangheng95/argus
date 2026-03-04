@@ -177,12 +177,14 @@ export namespace Tui {
 
     let proc: ChildProcess
     if (process.platform === "win32") {
-      // On Windows, spawn TUI in a new visible console window
-      proc = nodeSpawn("cmd", ["/c", "start", "OPENCORVUS_TUI", bin, ...args], {
-        stdio: "ignore",
-        cwd,
-        detached: true,
-      })
+      // On Windows, use PowerShell Start-Process to open TUI in a new visible console window.
+      // cmd.exe "start" has quoting issues with paths containing spaces.
+      const psArgs = args.map((a) => `"${a}"`).join(",")
+      proc = nodeSpawn(
+        "powershell.exe",
+        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", `Start-Process -FilePath '${bin}' -ArgumentList ${psArgs} -WorkingDirectory '${cwd}'`],
+        { stdio: "ignore", detached: true },
+      )
       proc.unref()
     } else {
       proc = nodeSpawn(bin, args, {

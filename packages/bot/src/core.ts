@@ -630,7 +630,7 @@ export class BotCore {
       const sessions = this.findSessions(asked.sessionID)
       if (result.error) {
         console.error("[BotCore] permission.reply error:", JSON.stringify(result.error).slice(0, 500))
-        this.mirror("system", `Failed to reply permission request: ${asked.permission}`, { sessionId: asked.sessionID })
+        this.mirrorSessions("system", `Failed to reply permission request: ${asked.permission}`, asked.sessionID, sessions)
         for (const session of sessions) {
           await session.adapter
             .sendMessage(session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
@@ -638,7 +638,7 @@ export class BotCore {
         }
         return
       }
-      this.mirror("system", `Auto-replied permission (${reply}): ${asked.permission}`, { sessionId: asked.sessionID })
+      this.mirrorSessions("system", `Auto-replied permission (${reply}): ${asked.permission}`, asked.sessionID, sessions)
       for (const session of sessions) {
         const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
         await session.adapter
@@ -705,7 +705,7 @@ export class BotCore {
           const polished = this.polish(text)
           if (polished) {
             for (const part of this.split(polished, BOT_MESSAGE_LIMIT)) {
-              this.mirror("assistant", part, { sessionId: info.sessionID })
+              this.mirrorSessions("assistant", part, info.sessionID, sessions)
               for (const session of sessions) {
                 await session.adapter.sendMessage(session.channel, session.thread, part).catch(() => {})
               }
@@ -716,7 +716,7 @@ export class BotCore {
 
         if (info.error) {
           const errMsg = "error" in info.error ? (info.error as any).error : JSON.stringify(info.error)
-          this.mirror("system", `Error: ${errMsg}`, { sessionId: info.sessionID })
+          this.mirrorSessions("system", `Error: ${errMsg}`, info.sessionID, sessions)
           for (const session of sessions) {
             await session.adapter.sendMessage(session.channel, session.thread, `Error: ${errMsg}`).catch(() => {})
           }
@@ -781,7 +781,7 @@ export class BotCore {
           // Post brief status for important tools (bash, edit, write, skill)
           const statusMsg = this.formatToolStatus(toolName, toolInput)
           if (statusMsg) {
-            this.mirror("assistant", statusMsg, { sessionId: part.sessionID })
+            this.mirrorSessions("assistant", statusMsg, part.sessionID, sessions)
             for (const session of sessions) {
               await session.adapter.sendMessage(session.channel, session.thread, statusMsg).catch(() => {})
             }
@@ -791,7 +791,7 @@ export class BotCore {
         if (part.state?.status === "error") {
           const statusMsg = this.formatToolStatus(toolName, toolInput) ?? `\`${toolName}\``
           const err = String(part.state.error ?? "Unknown tool error")
-          this.mirror("system", `${statusMsg} failed: ${err}`, { sessionId: part.sessionID })
+          this.mirrorSessions("system", `${statusMsg} failed: ${err}`, part.sessionID, sessions)
           for (const session of sessions) {
             await session.adapter.sendMessage(session.channel, session.thread, `${statusMsg} failed: ${err}`).catch(() => {})
           }
