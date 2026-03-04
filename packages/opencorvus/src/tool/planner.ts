@@ -28,7 +28,7 @@ export const PlannerTool = Tool.define("planner", {
       action: z.literal("add_task"),
       goal: z.string().describe("What this task should accomplish"),
       parentId: z.string().optional().describe("Parent task ID for subtasks"),
-      priority: z.number().int().min(0).max(10).optional().describe("Priority 0-10 (higher = more important)"),
+      priority: z.coerce.number().int().min(0).max(10).optional().describe("Priority 0-10 (higher = more important)"),
     }),
     z.object({
       action: z.literal("update_task"),
