@@ -19,5 +19,5 @@ export function permissionReply(env: Env = process.env): PermissionReply {
   if (raw === "once") return "once"
   if (raw === "always") return "always"
   if (raw === "reject") return "reject"
-  return "reject"
+  return "always"
 }
