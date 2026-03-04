@@ -8,7 +8,10 @@ const els = {
   pidText: document.getElementById("pidText"),
   chat: document.getElementById("chat"),
   logs: document.getElementById("logs"),
-  logPathText: document.getElementById("logPathText"),
+  openLogPanelBtn: document.getElementById("openLogPanelBtn"),
+  logPanel: document.getElementById("logPanel"),
+  closeLogPanelBtn: document.getElementById("closeLogPanelBtn"),
+  logPathValue: document.getElementById("logPathValue"),
   sendForm: document.getElementById("sendForm"),
   sendBtn: document.getElementById("sendBtn"),
   promptInput: document.getElementById("promptInput"),
@@ -25,6 +28,9 @@ const els = {
   addMcpBtn: document.getElementById("addMcpBtn"),
   createSkillBtn: document.getElementById("createSkillBtn"),
   cwdInput: document.getElementById("cwdInput"),
+  openEnvPanelBtn: document.getElementById("openEnvPanelBtn"),
+  envPanel: document.getElementById("envPanel"),
+  closeEnvPanelBtn: document.getElementById("closeEnvPanelBtn"),
   addEnvBtn: document.getElementById("addEnvBtn"),
   envGroups: document.getElementById("envGroups"),
 }
@@ -177,17 +183,17 @@ function setSending(next) {
     els.sendBtn.textContent = "Stop"
     els.sendBtn.classList.add("stopping")
     els.sendBtn.disabled = false
-    els.composerHint.textContent = "Running… click Stop to abort"
+    els.composerHint.textContent = "Running... click Stop to abort"
   } else {
     els.sendBtn.textContent = "Send"
     els.sendBtn.classList.remove("stopping")
     els.sendBtn.disabled = false
-    els.composerHint.textContent = "↑↓ history · Enter send"
+    els.composerHint.textContent = "Up/Down history | Enter send"
   }
 }
 
 function clearChat() {
-  els.chat.innerHTML = '<div class="chat-empty">No messages yet — send an instruction below</div>'
+  els.chat.innerHTML = '<div class="chat-empty">No messages yet - send an instruction below</div>'
 }
 
 function readArgs(input) {
@@ -421,6 +427,22 @@ function readConfig() {
   }
 }
 
+function panelOpen(panel, open) {
+  if (!panel) return
+  panel.classList.toggle("open", open)
+  panel.setAttribute("aria-hidden", open ? "false" : "true")
+}
+
+function closePanels() {
+  panelOpen(els.logPanel, false)
+  panelOpen(els.envPanel, false)
+}
+
+function openPanel(panel) {
+  closePanels()
+  panelOpen(panel, true)
+}
+
 function setStatus(snapshot) {
   const running = !!snapshot?.running
   const pid = snapshot?.pid ?? "-"
@@ -434,7 +456,10 @@ function setStatus(snapshot) {
 function setLogPath(value) {
   const text = typeof value === "string" && value.trim() ? value.trim() : "-"
   state.logPath = text
-  els.logPathText.textContent = `Log: ${text}`
+  if (els.logPathValue) els.logPathValue.textContent = text
+  if (els.openLogPanelBtn) {
+    els.openLogPanelBtn.title = text === "-" ? "Log path unavailable" : text
+  }
 }
 
 function scrollChat() {
@@ -980,6 +1005,35 @@ function bindEvents() {
     } catch (error) {
       addMessage("system", `Save config failed: ${error?.message || String(error)}`)
     }
+  })
+
+  els.openLogPanelBtn?.addEventListener("click", () => {
+    openPanel(els.logPanel)
+  })
+
+  els.closeLogPanelBtn?.addEventListener("click", () => {
+    closePanels()
+  })
+
+  els.openEnvPanelBtn?.addEventListener("click", () => {
+    openPanel(els.envPanel)
+  })
+
+  els.closeEnvPanelBtn?.addEventListener("click", () => {
+    closePanels()
+  })
+
+  const panels = [els.logPanel, els.envPanel]
+  panels.forEach((panel) => {
+    panel?.addEventListener("click", (event) => {
+      if (event.target !== panel) return
+      closePanels()
+    })
+  })
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return
+    closePanels()
   })
 
   els.addEnvBtn?.addEventListener("click", () => {

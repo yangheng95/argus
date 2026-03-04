@@ -7,6 +7,7 @@ mod overlay;
 mod tray;
 
 use tauri::Manager;
+use tauri::RunEvent;
 
 fn main() {
     let shared = manager::new_shared();
@@ -53,6 +54,39 @@ fn main() {
             overlay::start_stdin_bridge(app);
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .unwrap();
+        .build(tauri::generate_context!())
+        .unwrap()
+        .run(move |app, event| {
+            let stop_once = || {
+                let state = app.state::<manager::Shared>();
+                let snapshot = manager::snapshot(state.inner());
+                if !snapshot.running && !snapshot.channel_running {
+                    return;
+                }
+                if let Err(error) = manager::stop_bot(state.inner(), app) {
+                    manager::push_log(
+                        state.inner(),
+                        app,
+                        format!("shutdown stop failed: {error}"),
+                    );
+                }
+            };
+
+            match event {
+                RunEvent::WindowEvent { label, event, .. } => {
+                    if sidecar || label != events::WINDOW_CONSOLE {
+                        return;
+                    }
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        stop_once();
+                        app.exit(0);
+                    }
+                }
+                RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+                    stop_once();
+                }
+                _ => {}
+            }
+        });
 }

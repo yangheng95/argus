@@ -315,20 +315,29 @@ fn save_config(app: &AppHandle, config: &ManagerConfig) -> Result<(), String> {
     fs::write(path, data).map_err(|error| error.to_string())
 }
 
+fn resolve_work_dir(cwd: &str) -> PathBuf {
+    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let item = cwd.trim();
+    if item.is_empty() {
+        return root;
+    }
+    let path = PathBuf::from(item);
+    if path.is_absolute() {
+        return path;
+    }
+    root.join(path)
+}
+
+fn config_work_dir(config: &ManagerConfig) -> PathBuf {
+    resolve_work_dir(&config.cwd)
+}
+
 fn work_dir(shared: &Shared) -> PathBuf {
     let cwd = {
         let state = shared.lock().unwrap();
         state.config.cwd.trim().to_string()
     };
-    let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    if cwd.is_empty() {
-        return root;
-    }
-    let path = PathBuf::from(cwd);
-    if path.is_absolute() {
-        return path;
-    }
-    root.join(path)
+    resolve_work_dir(&cwd)
 }
 
 fn shared_session_path(shared: &Shared) -> PathBuf {
@@ -443,9 +452,7 @@ fn build_command(config: &ManagerConfig, args: &[String]) -> Command {
 fn build_process(command: &str, args: &[String], cwd: &str, env: &[EnvItem]) -> Command {
     let mut cmd = Command::new(command);
     cmd.args(args);
-    if !cwd.is_empty() {
-        cmd.current_dir(cwd);
-    }
+    cmd.current_dir(resolve_work_dir(cwd));
     for item in env {
         cmd.env(&item.key, &item.value);
     }
@@ -607,6 +614,41 @@ fn ensure_attach(args: Vec<String>, url: &str) -> Vec<String> {
     out
 }
 
+fn ensure_dir(args: Vec<String>, dir: &str) -> Vec<String> {
+    if dir.trim().is_empty() {
+        return args;
+    }
+    let mut out = Vec::with_capacity(args.len() + 2);
+    let mut seen = false;
+    let mut i = 0usize;
+    while i < args.len() {
+        let item = &args[i];
+        if item == "--dir" {
+            out.push("--dir".into());
+            out.push(dir.into());
+            seen = true;
+            i += 1;
+            if i < args.len() {
+                i += 1;
+            }
+            continue;
+        }
+        if item.starts_with("--dir=") {
+            out.push(format!("--dir={dir}"));
+            seen = true;
+            i += 1;
+            continue;
+        }
+        out.push(item.clone());
+        i += 1;
+    }
+    if !seen {
+        out.push("--dir".into());
+        out.push(dir.into());
+    }
+    out
+}
+
 fn ensure_session(args: Vec<String>, session_id: &str) -> Vec<String> {
     if session_id.trim().is_empty() {
         return args;
@@ -745,16 +787,22 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         state.config.clone()
     };
     let shared_session = read_shared_session(shared);
+    let dir = config_work_dir(&config).to_string_lossy().to_string();
 
     push_log(shared, app, format!("prompt> {prompt}"));
 
     let mut args = if config.run_args.first().map(|item| item.as_str()) == Some("run") {
         let formatted = ensure_json_format(config.run_args.clone());
         let attached = ensure_attach(formatted, &config.server_url);
-        if let Some(item) = shared_session.as_ref() {
-            ensure_session(attached, item)
-        } else {
+        let directed = if config.cwd.trim().is_empty() {
             attached
+        } else {
+            ensure_dir(attached, &dir)
+        };
+        if let Some(item) = shared_session.as_ref() {
+            ensure_session(directed, item)
+        } else {
+            directed
         }
     } else {
         config.run_args.clone()
@@ -1096,6 +1144,17 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
         "OPENCORVUS_SHARED_SESSION_FILE",
         shared_session_path(shared).to_string_lossy().to_string(),
     );
+    if !config.cwd.trim().is_empty()
+        && !config
+            .env
+            .iter()
+            .any(|item| item.key.trim() == "OPENCORVUS_PROJECT_DIR")
+    {
+        cmd.env(
+            "OPENCORVUS_PROJECT_DIR",
+            config_work_dir(config).to_string_lossy().to_string(),
+        );
+    }
 
     let mut child = cmd
         .spawn()
