@@ -148,6 +148,12 @@ export namespace TaskQueueService {
             )
             AND NOT EXISTS (
               SELECT 1
+              FROM a2a_task_queue running
+              WHERE running.session_id = ${TaskQueueTable.session_id}
+                AND running.status = 'running'
+            )
+            AND NOT EXISTS (
+              SELECT 1
               FROM a2a_task_queue better
               WHERE better.session_id = ${TaskQueueTable.session_id}
                 AND better.status IN ('queued', 'retrying')

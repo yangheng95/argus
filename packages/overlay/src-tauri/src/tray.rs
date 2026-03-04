@@ -28,8 +28,11 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     let menu =
         Menu::with_items(app, &[&open, &mcp, &skill, &start, &stop, &quit]).map_err(|error| error.to_string())?;
 
-    let icon = Image::from_bytes(include_bytes!("../icons/tray.ico"))
-        .map_err(|error| error.to_string())?;
+    let icon = match Image::from_bytes(include_bytes!("../icons/tray.ico")) {
+        Ok(icon) => icon,
+        Err(tray_error) => Image::from_bytes(include_bytes!("../icons/icon.ico"))
+            .map_err(|icon_error| format!("load tray icon failed: tray.ico={tray_error}; icon.ico={icon_error}"))?,
+    };
 
     let _tray = TrayIconBuilder::new()
         .icon(icon)

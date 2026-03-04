@@ -35,7 +35,7 @@ Aqui estamos usando um componente CI/CD criado pela comunidade para opencorvus �
      - component: $CI_SERVER_FQDN/nagyv/gitlab-opencorvus/opencorvus@2
        inputs:
          config_dir: ${CI_PROJECT_DIR}/opencorvus-config
-         auth_json: $OPENCODE_AUTH_JSON # O nome da variável para seu JSON de autenticação do OpenCorvus
+         auth_json: $OPENCORVUS_AUTH_JSON # O nome da variável para seu JSON de autenticação do OpenCorvus
          command: optional-custom-command
          message: "Seu prompt aqui"
    ```

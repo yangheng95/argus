@@ -42,10 +42,10 @@ OpenCorvus は、**JSON** と **JSONC** (コメント付きの JSON) 形式の�
 
 1. **リモート設定** (`.well-known/opencorvus` から) - 組織のデフォルト
 2. **グローバル設定** (`~/.config/opencorvus/opencorvus.json`) - ユーザー設定
-3. **カスタム設定** (`OPENCODE_CONFIG` 環境変数) - カスタムオーバーライド
+3. **カスタム設定** (`OPENCORVUS_CONFIG` 環境変数) - カスタムオーバーライド
 4. **プロジェクト設定** (プロジェクト内の `opencorvus.json`) - プロジェクト固有の設定
 5. **`.opencorvus` ディレクトリ** - エージェント、コマンド、プラグイン
-6. **インライン設定** (`OPENCODE_CONFIG_CONTENT` 環境変数) - ランタイムオーバーライド
+6. **インライン設定** (`OPENCORVUS_CONFIG_CONTENT` 環境変数) - ランタイムオーバーライド
 
 つまり、プロジェクト設定はグローバルのデフォルトをオーバーライドでき、グローバル設定はリモート組織のデフォルトをオーバーライドできます。
 
@@ -115,10 +115,10 @@ OpenCorvus が起動すると、現在のディレクトリで設定ファイル
 
 ### カスタムパス
 
-`OPENCODE_CONFIG` 環境変数を使用してカスタム設定ファイルのパスを指定します。
+`OPENCORVUS_CONFIG` 環境変数を使用してカスタム設定ファイルのパスを指定します。
 
 ```bash
-export OPENCODE_CONFIG=/path/to/my/custom-config.json
+export OPENCORVUS_CONFIG=/path/to/my/custom-config.json
 opencorvus run "Hello world"
 ```
 
@@ -128,13 +128,13 @@ opencorvus run "Hello world"
 
 ### カスタムディレクトリ
 
-`OPENCODE_CONFIG_DIR` を使用してカスタム設定ディレクトリを指定します。
+`OPENCORVUS_CONFIG_DIR` を使用してカスタム設定ディレクトリを指定します。
 環境変数。このディレクトリでは、エージェント、コマンド、
 モードとプラグインは標準の `.opencorvus` ディレクトリと同様であり、次のようにする必要があります。
 同じ構造に従います。
 
 ```bash
-export OPENCODE_CONFIG_DIR=/path/to/my/config-directory
+export OPENCORVUS_CONFIG_DIR=/path/to/my/config-directory
 opencorvus run "Hello world"
 ```
 
@@ -634,7 +634,7 @@ OpenCorvus は起動時に新しいアップデートを自動的にダウンロ
 ```json title="opencorvus.json"
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "{env:OPENCODE_MODEL}",
+  "model": "{env:OPENCORVUS_MODEL}",
   "provider": {
     "anthropic": {
       "models": {},

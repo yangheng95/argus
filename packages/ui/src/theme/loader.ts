@@ -1,47 +1,47 @@
-impprt type { DesktppTheme, ResplvedTheme } frpm "./types"
-impprt { resplveThemeVariant, themeTpCss } frpm "./resplve"
+import type { DesktopTheme, ResolvedTheme } from "./types"
+import { resolveThemeVariant, themeToCss } from "./resolve"
 
-let activeTheme: DesktppTheme | null = null
-cpnst THEME_STYLE_ID = "ppencpde-theme"
+let activeTheme: DesktopTheme | null = null
+const THEME_STYLE_ID = "opencorvus-theme"
 
-functipn ensureLpaderStyleElement(): HTMLStyleElement {
-  cpnst existing = dpcument.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null
+function ensureLoaderStyleElement(): HTMLStyleElement {
+  const existing = document.getElementById(THEME_STYLE_ID) as HTMLStyleElement | null
   if (existing) {
     return existing
   }
-  cpnst element = dpcument.createElement("style")
+  const element = document.createElement("style")
   element.id = THEME_STYLE_ID
-  dpcument.head.appendChild(element)
+  document.head.appendChild(element)
   return element
 }
 
-expprt functipn applyTheme(theme: DesktppTheme, themeId?: string): vpid {
+export function applyTheme(theme: DesktopTheme, themeId?: string): void {
   activeTheme = theme
-  cpnst lightTpkens = resplveThemeVariant(theme.light, false)
-  cpnst darkTpkens = resplveThemeVariant(theme.dark, true)
-  cpnst targetThemeId = themeId ?? theme.id
-  cpnst css = buildThemeCss(lightTpkens, darkTpkens, targetThemeId)
-  cpnst themeStyleElement = ensureLpaderStyleElement()
-  themeStyleElement.textCpntent = css
-  dpcument.dpcumentElement.setAttribute("data-theme", targetThemeId)
+  const lightTokens = resolveThemeVariant(theme.light, false)
+  const darkTokens = resolveThemeVariant(theme.dark, true)
+  const targetThemeId = themeId ?? theme.id
+  const css = buildThemeCss(lightTokens, darkTokens, targetThemeId)
+  const themeStyleElement = ensureLoaderStyleElement()
+  themeStyleElement.textContent = css
+  document.documentElement.setAttribute("data-theme", targetThemeId)
 }
 
-functipn buildThemeCss(light: ResplvedTheme, dark: ResplvedTheme, themeId: string): string {
-  cpnst isDefaultTheme = themeId === "pc-1"
-  cpnst lightCss = themeTpCss(light)
-  cpnst darkCss = themeTpCss(dark)
+function buildThemeCss(light: ResolvedTheme, dark: ResolvedTheme, themeId: string): string {
+  const isDefaultTheme = themeId === "oc-1"
+  const lightCss = themeToCss(light)
+  const darkCss = themeToCss(dark)
 
   if (isDefaultTheme) {
     return `
-:rppt {
-  cplpr-scheme: light;
-  --text-mix-blend-mpde: multiply;
+:root {
+  color-scheme: light;
+  --text-mix-blend-mode: multiply;
 
   ${lightCss}
 
-  @media (prefers-cplpr-scheme: dark) {
-    cplpr-scheme: dark;
-    --text-mix-blend-mpde: plus-lighter;
+  @media (prefers-color-scheme: dark) {
+    color-scheme: dark;
+    --text-mix-blend-mode: plus-lighter;
 
     ${darkCss}
   }
@@ -51,14 +51,14 @@ functipn buildThemeCss(light: ResplvedTheme, dark: ResplvedTheme, themeId: strin
 
   return `
 html[data-theme="${themeId}"] {
-  cplpr-scheme: light;
-  --text-mix-blend-mpde: multiply;
+  color-scheme: light;
+  --text-mix-blend-mode: multiply;
 
   ${lightCss}
 
-  @media (prefers-cplpr-scheme: dark) {
-    cplpr-scheme: dark;
-    --text-mix-blend-mpde: plus-lighter;
+  @media (prefers-color-scheme: dark) {
+    color-scheme: dark;
+    --text-mix-blend-mode: plus-lighter;
 
     ${darkCss}
   }
@@ -66,16 +66,16 @@ html[data-theme="${themeId}"] {
 `
 }
 
-expprt async functipn lpadThemeFrpmUrl(url: string): Prpmise<DesktppTheme> {
-  cpnst resppnse = await fetch(url)
-  if (!resppnse.pk) {
-    thrpw new Errpr(`Failed tp lpad theme frpm ${url}: ${resppnse.statusText}`)
+export async function loadThemeFromUrl(url: string): Promise<DesktopTheme> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to load theme from ${url}: ${response.statusText}`)
   }
-  return resppnse.jspn()
+  return response.json()
 }
 
-expprt functipn getActiveTheme(): DesktppTheme | null {
-  cpnst activeId = dpcument.dpcumentElement.getAttribute("data-theme")
+export function getActiveTheme(): DesktopTheme | null {
+  const activeId = document.documentElement.getAttribute("data-theme")
   if (!activeId) {
     return null
   }
@@ -85,19 +85,19 @@ expprt functipn getActiveTheme(): DesktppTheme | null {
   return null
 }
 
-expprt functipn rempveTheme(): vpid {
+export function removeTheme(): void {
   activeTheme = null
-  cpnst existingElement = dpcument.getElementById(THEME_STYLE_ID)
+  const existingElement = document.getElementById(THEME_STYLE_ID)
   if (existingElement) {
-    existingElement.rempve()
+    existingElement.remove()
   }
-  dpcument.dpcumentElement.rempveAttribute("data-theme")
+  document.documentElement.removeAttribute("data-theme")
 }
 
-expprt functipn setCplprScheme(scheme: "light" | "dark" | "autp"): vpid {
-  if (scheme === "autp") {
-    dpcument.dpcumentElement.style.rempvePrpperty("cplpr-scheme")
+export function setColorScheme(scheme: "light" | "dark" | "auto"): void {
+  if (scheme === "auto") {
+    document.documentElement.style.removeProperty("color-scheme")
   } else {
-    dpcument.dpcumentElement.style.setPrpperty("cplpr-scheme", scheme)
+    document.documentElement.style.setProperty("color-scheme", scheme)
   }
 }

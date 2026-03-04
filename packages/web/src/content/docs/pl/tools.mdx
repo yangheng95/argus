@@ -173,7 +173,7 @@ To narzędzie wyświetla zawartość katalogu. Akceptuje wzorce glob do filtrowa
 Interakcja ze skonfigurowanymi serwerami LSP w celu uzyskania funkcji analizy kodu, takich jak definicje, referencje, podpowiedzi (hover) i hierarchia wywołań.
 
 :::note
-To narzędzie jest dostępne tylko wtedy, gdy `OPENCODE_EXPERIMENTAL_LSP_TOOL=true` (lub `OPENCODE_EXPERIMENTAL=true`).
+To narzędzie jest dostępne tylko wtedy, gdy `OPENCORVUS_EXPERIMENTAL_LSP_TOOL=true` (lub `OPENCORVUS_EXPERIMENTAL=true`).
 :::
 
 ```json title="opencorvus.json" {4}
@@ -291,12 +291,12 @@ Umożliwia LLM pobieranie i odczytywanie stron internetowych. Przydatne do wyszu
 Wyszukaj informacje w Internecie.
 
 :::note
-To narzędzie jest dostępne tylko w przypadku korzystania z dostawcy OpenCorvus lub gdy zmienna środowiskowa `OPENCODE_ENABLE_EXA` jest ustawiona na dowolną wartość prawdziwą (np. `true` lub `1`).
+To narzędzie jest dostępne tylko w przypadku korzystania z dostawcy OpenCorvus lub gdy zmienna środowiskowa `OPENCORVUS_ENABLE_EXA` jest ustawiona na dowolną wartość prawdziwą (np. `true` lub `1`).
 
 Aby włączyć przy uruchamianiu OpenCorvus:
 
 ```bash
-OPENCODE_ENABLE_EXA=1 opencorvus
+OPENCORVUS_ENABLE_EXA=1 opencorvus
 ```
 
 :::

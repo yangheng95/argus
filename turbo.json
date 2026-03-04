@@ -1,7 +1,7 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalEnv": ["CI", "OPENCORVUS_DISABLE_SHARE", "OPENCODE_DISABLE_SHARE"],
-  "globalPassThroughEnv": ["CI", "OPENCORVUS_DISABLE_SHARE", "OPENCODE_DISABLE_SHARE"],
+  "globalEnv": ["CI", "OPENCORVUS_DISABLE_SHARE"],
+  "globalPassThroughEnv": ["CI", "OPENCORVUS_DISABLE_SHARE"],
   "tasks": {
     "typecheck": {},
     "build": {

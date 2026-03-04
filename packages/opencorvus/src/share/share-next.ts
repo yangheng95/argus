@@ -17,7 +17,7 @@ export namespace ShareNext {
   }
 
   const disabled = (() => {
-    const value = process.env["OPENCORVUS_DISABLE_SHARE"] ?? process.env["OPENCODE_DISABLE_SHARE"]
+    const value = process.env["OPENCORVUS_DISABLE_SHARE"]
     return value === "true" || value === "1"
   })()
 

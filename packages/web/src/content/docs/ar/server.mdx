@@ -36,10 +36,10 @@ opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 
 ### المصادقة
 
-عيّن `OPENCODE_SERVER_PASSWORD` لحماية الخادم باستخدام مصادقة HTTP الأساسية. اسم المستخدم افتراضيا هو `opencorvus`، أو عيّن `OPENCODE_SERVER_USERNAME` لتغييره. ينطبق ذلك على كل من `opencorvus serve` و `opencorvus web`.
+عيّن `OPENCORVUS_SERVER_PASSWORD` لحماية الخادم باستخدام مصادقة HTTP الأساسية. اسم المستخدم افتراضيا هو `opencorvus`، أو عيّن `OPENCORVUS_SERVER_USERNAME` لتغييره. ينطبق ذلك على كل من `opencorvus serve` و `opencorvus web`.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
+OPENCORVUS_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---

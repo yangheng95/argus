@@ -299,10 +299,12 @@ describe("scheduler.task-queue-service", () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "2"
     const seen: string[] = []
-    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(async (input: Parameters<typeof SessionPrompt.prompt>[0]) => {
-      seen.push(input.sessionID)
-      return result()
-    })
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(
+      (async (input: Parameters<typeof SessionPrompt.prompt>[0]) => {
+        seen.push(input.sessionID)
+        return result()
+      }) as never,
+    )
 
     await Instance.provide({
       directory: tmp.path,
@@ -425,6 +427,102 @@ describe("scheduler.task-queue-service", () => {
     })
 
     expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("with concurrency=1 skips blocked session and executes another eligible session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY = "1"
+    const seen: string[] = []
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation((async (input: Parameters<typeof SessionPrompt.prompt>[0]) => {
+      seen.push(input.sessionID)
+      return result()
+    }) as never)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const blocked = await Session.create({})
+        const ready = await Session.create({})
+        const now = Date.now()
+        const blockedRunning = "task_blocked_running_" + Math.random().toString(36).slice(2)
+        const blockedQueued = "task_blocked_queued_" + Math.random().toString(36).slice(2)
+        const readyQueued = "task_ready_queued_" + Math.random().toString(36).slice(2)
+        Database.use((db) =>
+          db
+            .insert(TaskQueueTable)
+            .values([
+              {
+                id: blockedRunning,
+                session_id: blocked.id,
+                prompt: "running",
+                priority: "high",
+                status: "running",
+                source: "test",
+                retry_count: 0,
+                max_retries: 3,
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "running" }],
+                  },
+                },
+                time_created: now - 2000,
+                time_updated: now,
+                time_started: now - 2000,
+              },
+              {
+                id: blockedQueued,
+                session_id: blocked.id,
+                prompt: "blocked-queued",
+                priority: "high",
+                status: "queued",
+                source: "test",
+                retry_count: 0,
+                max_retries: 3,
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "blocked-queued" }],
+                  },
+                },
+                time_created: now - 1000,
+                time_updated: now - 1000,
+              },
+              {
+                id: readyQueued,
+                session_id: ready.id,
+                prompt: "ready-queued",
+                priority: "normal",
+                status: "queued",
+                source: "test",
+                retry_count: 0,
+                max_retries: 3,
+                metadata: {
+                  kind: "session_prompt",
+                  input: {
+                    parts: [{ type: "text", text: "ready-queued" }],
+                  },
+                },
+                time_created: now,
+                time_updated: now,
+              },
+            ])
+            .run(),
+        )
+
+        await TaskQueueService.runNow()
+
+        const blockedRow = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, blockedQueued)).get())
+        const readyRow = Database.use((db) =>
+          db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, readyQueued)).get())
+        expect(blockedRow?.status).toBe("queued")
+        expect(readyRow?.status).toBe("completed")
+        expect(seen).toEqual([ready.id])
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
   })
 
   test("recovery uses time_updated heartbeat for running tasks", async () => {

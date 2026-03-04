@@ -19,23 +19,23 @@ if (!semver.satisfies(process.versions.bun, expectedBunVersionRange)) {
 }
 
 const env = {
-  OPENCODE_CHANNEL: process.env["OPENCODE_CHANNEL"],
-  OPENCODE_BUMP: process.env["OPENCODE_BUMP"],
-  OPENCODE_VERSION: process.env["OPENCODE_VERSION"],
-  OPENCODE_RELEASE: process.env["OPENCODE_RELEASE"],
+  CHANNEL: process.env["OPENCORVUS_CHANNEL"],
+  BUMP: process.env["OPENCORVUS_BUMP"],
+  VERSION: process.env["OPENCORVUS_VERSION"],
+  RELEASE: process.env["OPENCORVUS_RELEASE"],
 }
 
 const channel = await (async () => {
-  if (env.OPENCODE_CHANNEL) return env.OPENCODE_CHANNEL
-  if (env.OPENCODE_BUMP) return "latest"
-  if (env.OPENCODE_VERSION && !env.OPENCODE_VERSION.startsWith("0.0.0-")) return "latest"
+  if (env.CHANNEL) return env.CHANNEL
+  if (env.BUMP) return "latest"
+  if (env.VERSION && !env.VERSION.startsWith("0.0.0-")) return "latest"
   return await $`git branch --show-current`.text().then((x) => x.trim())
 })()
 
 const preview = channel !== "latest"
 
 const version = await (async () => {
-  if (env.OPENCODE_VERSION) return env.OPENCODE_VERSION
+  if (env.VERSION) return env.VERSION
   if (preview) return `0.0.0-${channel}-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`
 
   const latestVersion = await fetch("https://registry.npmjs.org/opencorvus-ai/latest")
@@ -52,7 +52,7 @@ const version = await (async () => {
     })
 
   const [major, minor, patch] = latestVersion.split(".").map((x) => Number(x) || 0)
-  const bump = env.OPENCODE_BUMP?.toLowerCase()
+  const bump = env.BUMP?.toLowerCase()
   if (bump === "major") return `${major + 1}.0.0`
   if (bump === "minor") return `${major}.${minor + 1}.0`
   return `${major}.${minor}.${patch + 1}`
@@ -79,11 +79,11 @@ export const Script = {
     return preview
   },
   get release() {
-    return !!env.OPENCODE_RELEASE
+    return !!env.RELEASE
   },
   get team() {
     return team
   },
 }
 
-console.log("opencode script", JSON.stringify(Script, null, 2))
+console.log("opencorvus script", JSON.stringify(Script, null, 2))

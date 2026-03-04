@@ -44,10 +44,10 @@ description: استخدام ملف إعدادات OpenCorvus بصيغة JSON.
 
 1. **الإعدادات البعيدة** (من `.well-known/opencorvus`) - الإعدادات الافتراضية على مستوى المؤسسة
 2. **الإعدادات العامة** (`~/.config/opencorvus/opencorvus.json`) - تفضيلات المستخدم
-3. **إعدادات مخصصة** (`OPENCODE_CONFIG` env var) - تجاوزات مخصصة
+3. **إعدادات مخصصة** (`OPENCORVUS_CONFIG` env var) - تجاوزات مخصصة
 4. **إعدادات المشروع** (`opencorvus.json` داخل المشروع) - إعدادات خاصة بالمشروع
 5. **أدلة `.opencorvus`** - الوكلاء، الأوامر، الإضافات
-6. **إعدادات ضمنية** (`OPENCODE_CONFIG_CONTENT` env var) - تجاوزات وقت التشغيل
+6. **إعدادات ضمنية** (`OPENCORVUS_CONFIG_CONTENT` env var) - تجاوزات وقت التشغيل
 
 هذا يعني أن إعدادات المشروع يمكنها تجاوز الإعدادات العامة، وأن الإعدادات العامة يمكنها تجاوز الإعدادات الافتراضية البعيدة على مستوى المؤسسة.
 
@@ -117,10 +117,10 @@ description: استخدام ملف إعدادات OpenCorvus بصيغة JSON.
 
 ### مسار مخصص
 
-حدّد مسار ملف إعدادات مخصصًا باستخدام متغير البيئة `OPENCODE_CONFIG`.
+حدّد مسار ملف إعدادات مخصصًا باستخدام متغير البيئة `OPENCORVUS_CONFIG`.
 
 ```bash
-export OPENCODE_CONFIG=/path/to/my/custom-config.json
+export OPENCORVUS_CONFIG=/path/to/my/custom-config.json
 opencorvus run "Hello world"
 ```
 
@@ -130,12 +130,12 @@ opencorvus run "Hello world"
 
 ### دليل مخصص
 
-حدّد دليل إعدادات مخصصًا باستخدام متغير البيئة `OPENCODE_CONFIG_DIR`.
+حدّد دليل إعدادات مخصصًا باستخدام متغير البيئة `OPENCORVUS_CONFIG_DIR`.
 سيتم البحث داخل هذا الدليل عن الوكلاء والأوامر والأوضاع والإضافات تمامًا مثل
 الدليل القياسي `.opencorvus`، ويجب أن يتبع نفس البنية.
 
 ```bash
-export OPENCODE_CONFIG_DIR=/path/to/my/config-directory
+export OPENCORVUS_CONFIG_DIR=/path/to/my/config-directory
 opencorvus run "Hello world"
 ```
 
@@ -638,7 +638,7 @@ opencorvus run "Hello world"
 ```json title="opencorvus.json"
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "{env:OPENCODE_MODEL}",
+  "model": "{env:OPENCORVUS_MODEL}",
   "provider": {
     "anthropic": {
       "models": {},

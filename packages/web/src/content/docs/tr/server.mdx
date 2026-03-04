@@ -36,10 +36,10 @@ opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 
 ### Kimlik Doğrulama
 
-Sunucuyu HTTP temel kimlik doğrulama (basic auth) ile korumak için `OPENCODE_SERVER_PASSWORD` ayarlayın. Kullanıcı adı varsayılan olarak `opencorvus` değeridir; değiştirmek isterseniz `OPENCODE_SERVER_USERNAME` ayarlayabilirsiniz. Bu ayar hem `opencorvus serve` hem de `opencorvus web` için geçerlidir.
+Sunucuyu HTTP temel kimlik doğrulama (basic auth) ile korumak için `OPENCORVUS_SERVER_PASSWORD` ayarlayın. Kullanıcı adı varsayılan olarak `opencorvus` değeridir; değiştirmek isterseniz `OPENCORVUS_SERVER_USERNAME` ayarlayabilirsiniz. Bu ayar hem `opencorvus serve` hem de `opencorvus web` için geçerlidir.
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
+OPENCORVUS_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---

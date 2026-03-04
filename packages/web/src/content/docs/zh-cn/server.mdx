@@ -36,10 +36,10 @@ opencorvus serve --cors http://localhost:5173 --cors https://app.example.com
 
 ### 认证
 
-设置 `OPENCODE_SERVER_PASSWORD` 以使用 HTTP 基本认证保护服务器。用户名默认为 `opencorvus`，也可以设置 `OPENCODE_SERVER_USERNAME` 来覆盖它。这适用于 `opencorvus serve` 和 `opencorvus web`。
+设置 `OPENCORVUS_SERVER_PASSWORD` 以使用 HTTP 基本认证保护服务器。用户名默认为 `opencorvus`，也可以设置 `OPENCORVUS_SERVER_USERNAME` 来覆盖它。这适用于 `opencorvus serve` 和 `opencorvus web`。
 
 ```bash
-OPENCODE_SERVER_PASSWORD=your-password opencorvus serve
+OPENCORVUS_SERVER_PASSWORD=your-password opencorvus serve
 ```
 
 ---

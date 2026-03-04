@@ -674,6 +674,7 @@ function bindTauriEvents() {
     const text = typeof payload?.text === "string" ? payload.text : ""
 
     if (kind === "mirror_user") {
+      appendLog("[debug] mirror_user JS received: " + text.slice(0, 40))
       if (text) addMessage("user", text)
       return
     }

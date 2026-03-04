@@ -360,7 +360,7 @@ opencorvus run --attach http://localhost:4096 "Explain async/await in JavaScript
 opencorvus serve
 ```
 
-此命令启动一个 HTTP 服务器，提供对 OpenCorvus 功能的 API 访问，无需 TUI 界面。设置 `OPENCODE_SERVER_PASSWORD` 可启用 HTTP 基本认证（用户名默认为 `opencorvus`）。
+此命令启动一个 HTTP 服务器，提供对 OpenCorvus 功能的 API 访问，无需 TUI 界面。设置 `OPENCORVUS_SERVER_PASSWORD` 可启用 HTTP 基本认证（用户名默认为 `opencorvus`）。
 
 #### 标志
 
@@ -456,7 +456,7 @@ opencorvus import https://opncd.ai/s/abc123
 opencorvus web
 ```
 
-此命令启动一个 HTTP 服务器并打开浏览器，通过 Web 界面访问 OpenCorvus。设置 `OPENCODE_SERVER_PASSWORD` 可启用 HTTP 基本认证（用户名默认为 `opencorvus`）。
+此命令启动一个 HTTP 服务器并打开浏览器，通过 Web 界面访问 OpenCorvus。设置 `OPENCORVUS_SERVER_PASSWORD` 可启用 HTTP 基本认证（用户名默认为 `opencorvus`）。
 
 #### 标志
 
@@ -555,30 +555,30 @@ OpenCorvus 可以通过环境变量进行配置。
 
 | 变量                                  | 类型    | 描述                                    |
 | ------------------------------------- | ------- | --------------------------------------- |
-| `OPENCODE_AUTO_SHARE`                 | boolean | 自动分享会话                            |
-| `OPENCODE_GIT_BASH_PATH`              | string  | Windows 上 Git Bash 可执行文件的路径    |
-| `OPENCODE_CONFIG`                     | string  | 配置文件路径                            |
-| `OPENCODE_CONFIG_DIR`                 | string  | 配置目录路径                            |
-| `OPENCODE_CONFIG_CONTENT`             | string  | 内联 JSON 配置内容                      |
-| `OPENCODE_DISABLE_AUTOUPDATE`         | boolean | 禁用自动更新检查                        |
-| `OPENCODE_DISABLE_PRUNE`              | boolean | 禁用旧数据清理                          |
-| `OPENCODE_DISABLE_TERMINAL_TITLE`     | boolean | 禁用自动终端标题更新                    |
-| `OPENCODE_PERMISSION`                 | string  | 内联 JSON 权限配置                      |
-| `OPENCODE_DISABLE_DEFAULT_PLUGINS`    | boolean | 禁用默认插件                            |
-| `OPENCODE_DISABLE_LSP_DOWNLOAD`       | boolean | 禁用 LSP 服务器自动下载                 |
-| `OPENCODE_ENABLE_EXPERIMENTAL_MODELS` | boolean | 启用实验性模型                          |
-| `OPENCODE_DISABLE_AUTOCOMPACT`        | boolean | 禁用自动上下文压缩                      |
-| `OPENCODE_DISABLE_CLAUDE_CODE`        | boolean | 禁用读取 `.claude`（提示词 + 技能）     |
-| `OPENCODE_DISABLE_CLAUDE_CODE_PROMPT` | boolean | 禁用读取 `~/.claude/CLAUDE.md`          |
-| `OPENCODE_DISABLE_CLAUDE_CODE_SKILLS` | boolean | 禁用加载 `.claude/skills`               |
-| `OPENCODE_DISABLE_MODELS_FETCH`       | boolean | 禁用从远程源获取模型                    |
-| `OPENCODE_FAKE_VCS`                   | string  | 用于测试目的的模拟 VCS 提供商           |
-| `OPENCODE_DISABLE_FILETIME_CHECK`     | boolean | 禁用文件时间检查优化                    |
-| `OPENCODE_CLIENT`                     | string  | 客户端标识符（默认为 `cli`）            |
-| `OPENCODE_ENABLE_EXA`                 | boolean | 启用 Exa 网络搜索工具                   |
-| `OPENCODE_SERVER_PASSWORD`            | string  | 为 `serve`/`web` 启用基本认证           |
-| `OPENCODE_SERVER_USERNAME`            | string  | 覆盖基本认证用户名（默认为 `opencorvus`） |
-| `OPENCODE_MODELS_URL`                 | string  | 自定义模型配置获取 URL                  |
+| `OPENCORVUS_AUTO_SHARE`                 | boolean | 自动分享会话                            |
+| `OPENCORVUS_GIT_BASH_PATH`              | string  | Windows 上 Git Bash 可执行文件的路径    |
+| `OPENCORVUS_CONFIG`                     | string  | 配置文件路径                            |
+| `OPENCORVUS_CONFIG_DIR`                 | string  | 配置目录路径                            |
+| `OPENCORVUS_CONFIG_CONTENT`             | string  | 内联 JSON 配置内容                      |
+| `OPENCORVUS_DISABLE_AUTOUPDATE`         | boolean | 禁用自动更新检查                        |
+| `OPENCORVUS_DISABLE_PRUNE`              | boolean | 禁用旧数据清理                          |
+| `OPENCORVUS_DISABLE_TERMINAL_TITLE`     | boolean | 禁用自动终端标题更新                    |
+| `OPENCORVUS_PERMISSION`                 | string  | 内联 JSON 权限配置                      |
+| `OPENCORVUS_DISABLE_DEFAULT_PLUGINS`    | boolean | 禁用默认插件                            |
+| `OPENCORVUS_DISABLE_LSP_DOWNLOAD`       | boolean | 禁用 LSP 服务器自动下载                 |
+| `OPENCORVUS_ENABLE_EXPERIMENTAL_MODELS` | boolean | 启用实验性模型                          |
+| `OPENCORVUS_DISABLE_AUTOCOMPACT`        | boolean | 禁用自动上下文压缩                      |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE`        | boolean | 禁用读取 `.claude`（提示词 + 技能）     |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_PROMPT` | boolean | 禁用读取 `~/.claude/CLAUDE.md`          |
+| `OPENCORVUS_DISABLE_CLAUDE_CODE_SKILLS` | boolean | 禁用加载 `.claude/skills`               |
+| `OPENCORVUS_DISABLE_MODELS_FETCH`       | boolean | 禁用从远程源获取模型                    |
+| `OPENCORVUS_FAKE_VCS`                   | string  | 用于测试目的的模拟 VCS 提供商           |
+| `OPENCORVUS_DISABLE_FILETIME_CHECK`     | boolean | 禁用文件时间检查优化                    |
+| `OPENCORVUS_CLIENT`                     | string  | 客户端标识符（默认为 `cli`）            |
+| `OPENCORVUS_ENABLE_EXA`                 | boolean | 启用 Exa 网络搜索工具                   |
+| `OPENCORVUS_SERVER_PASSWORD`            | string  | 为 `serve`/`web` 启用基本认证           |
+| `OPENCORVUS_SERVER_USERNAME`            | string  | 覆盖基本认证用户名（默认为 `opencorvus`） |
+| `OPENCORVUS_MODELS_URL`                 | string  | 自定义模型配置获取 URL                  |
 
 ---
 
@@ -588,16 +588,16 @@ OpenCorvus 可以通过环境变量进行配置。
 
 | 变量                                            | 类型    | 描述                            |
 | ----------------------------------------------- | ------- | ------------------------------- |
-| `OPENCODE_EXPERIMENTAL`                         | boolean | 启用所有实验性功能              |
-| `OPENCODE_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | 启用图标发现                    |
-| `OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | 禁用 TUI 中的选中即复制         |
-| `OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | number  | bash 命令的默认超时时间（毫秒） |
-| `OPENCODE_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | number  | LLM 响应的最大输出 Token 数     |
-| `OPENCODE_EXPERIMENTAL_FILEWATCHER`             | boolean | 启用整个目录的文件监听器        |
-| `OPENCODE_EXPERIMENTAL_OXFMT`                   | boolean | 启用 oxfmt 格式化器             |
-| `OPENCODE_EXPERIMENTAL_LSP_TOOL`                | boolean | 启用实验性 LSP 工具             |
-| `OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolean | 禁用文件监听器                  |
-| `OPENCODE_EXPERIMENTAL_EXA`                     | boolean | 启用实验性 Exa 功能             |
-| `OPENCODE_EXPERIMENTAL_LSP_TY`                  | boolean | 启用实验性 LSP 类型检查         |
-| `OPENCODE_EXPERIMENTAL_MARKDOWN`                | boolean | 启用实验性 Markdown 功能        |
-| `OPENCODE_EXPERIMENTAL_PLAN_MODE`               | boolean | 启用计划模式                    |
+| `OPENCORVUS_EXPERIMENTAL`                         | boolean | 启用所有实验性功能              |
+| `OPENCORVUS_EXPERIMENTAL_ICON_DISCOVERY`          | boolean | 启用图标发现                    |
+| `OPENCORVUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT`  | boolean | 禁用 TUI 中的选中即复制         |
+| `OPENCORVUS_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS` | number  | bash 命令的默认超时时间（毫秒） |
+| `OPENCORVUS_EXPERIMENTAL_OUTPUT_TOKEN_MAX`        | number  | LLM 响应的最大输出 Token 数     |
+| `OPENCORVUS_EXPERIMENTAL_FILEWATCHER`             | boolean | 启用整个目录的文件监听器        |
+| `OPENCORVUS_EXPERIMENTAL_OXFMT`                   | boolean | 启用 oxfmt 格式化器             |
+| `OPENCORVUS_EXPERIMENTAL_LSP_TOOL`                | boolean | 启用实验性 LSP 工具             |
+| `OPENCORVUS_EXPERIMENTAL_DISABLE_FILEWATCHER`     | boolean | 禁用文件监听器                  |
+| `OPENCORVUS_EXPERIMENTAL_EXA`                     | boolean | 启用实验性 Exa 功能             |
+| `OPENCORVUS_EXPERIMENTAL_LSP_TY`                  | boolean | 启用实验性 LSP 类型检查         |
+| `OPENCORVUS_EXPERIMENTAL_MARKDOWN`                | boolean | 启用实验性 Markdown 功能        |
+| `OPENCORVUS_EXPERIMENTAL_PLAN_MODE`               | boolean | 启用计划模式                    |

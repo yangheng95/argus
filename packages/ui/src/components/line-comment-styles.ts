@@ -1,223 +1,223 @@
-expprt cpnst lineCpmmentStyles = `
-[data-annptatipn-slpt] {
+export const lineCommentStyles = `
+[data-annotation-slot] {
   padding: 12px;
-  bpx-sizing: bprder-bpx;
+  box-sizing: border-box;
 }
 
-[data-cpmppnent="line-cpmment"] {
-  ppsitipn: absplute;
+[data-component="line-comment"] {
+  position: absolute;
   right: 24px;
-  z-index: var(--line-cpmment-z, 30);
+  z-index: var(--line-comment-z, 30);
 }
 
-[data-cpmppnent="line-cpmment"][data-inline] {
-  ppsitipn: relative;
-  right: autp;
+[data-component="line-comment"][data-inline] {
+  position: relative;
+  right: auto;
   display: flex;
   width: 100%;
   align-items: flex-start;
 }
 
-[data-cpmppnent="line-cpmment"][data-ppen] {
-  z-index: var(--line-cpmment-ppen-z, 100);
+[data-component="line-comment"][data-open] {
+  z-index: var(--line-comment-open-z, 100);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-buttpn"] {
+[data-component="line-comment"] [data-slot="line-comment-button"] {
   width: 20px;
   height: 20px;
-  bprder-radius: var(--radius-md);
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
-  justify-cpntent: center;
-  backgrpund: var(--icpn-interactive-base);
-  bpx-shadpw: var(--shadpw-xs);
-  curspr: default;
-  bprder: npne;
+  justify-content: center;
+  background: var(--icon-interactive-base);
+  box-shadow: var(--shadow-xs);
+  cursor: default;
+  border: none;
 }
 
-[data-cpmppnent="line-cpmment"][data-variant="add"] [data-slpt="line-cpmment-buttpn"] {
-  backgrpund: var(--syntax-diff-add);
+[data-component="line-comment"][data-variant="add"] [data-slot="line-comment-button"] {
+  background: var(--syntax-diff-add);
 }
 
-[data-cpmppnent="line-cpmment"] [data-cpmppnent="icpn"] {
-  cplpr: var(--white);
+[data-component="line-comment"] [data-component="icon"] {
+  color: var(--white);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-icpn"] {
+[data-component="line-comment"] [data-slot="line-comment-icon"] {
   width: 12px;
   height: 12px;
-  cplpr: var(--white);
+  color: var(--white);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-buttpn"]:fpcus {
-  putline: npne;
+[data-component="line-comment"] [data-slot="line-comment-button"]:focus {
+  outline: none;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-buttpn"]:fpcus-visible {
-  bpx-shadpw: var(--shadpw-xs-bprder-fpcus);
+[data-component="line-comment"] [data-slot="line-comment-button"]:focus-visible {
+  box-shadow: var(--shadow-xs-border-focus);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-ppppver"] {
-  ppsitipn: absplute;
-  tpp: calc(100% + 4px);
+[data-component="line-comment"] [data-slot="line-comment-popover"] {
+  position: absolute;
+  top: calc(100% + 4px);
   right: -8px;
-  z-index: var(--line-cpmment-ppppver-z, 40);
+  z-index: var(--line-comment-popover-z, 40);
   min-width: 200px;
-  max-width: npne;
-  bprder-radius: 8px;
-  backgrpund: var(--surface-raised-strpnger-npn-alpha);
-  bpx-shadpw: var(--shadpw-xxs-bprder);
+  max-width: none;
+  border-radius: 8px;
+  background: var(--surface-raised-stronger-non-alpha);
+  box-shadow: var(--shadow-xxs-border);
   padding: 12px;
 }
 
-[data-cpmppnent="line-cpmment"][data-inline] [data-slpt="line-cpmment-ppppver"] {
-  ppsitipn: relative;
-  tpp: autp;
-  right: autp;
+[data-component="line-comment"][data-inline] [data-slot="line-comment-popover"] {
+  position: relative;
+  top: auto;
+  right: auto;
   margin-left: 8px;
   flex: 0 1 600px;
   width: min(100%, 600px);
   max-width: min(100%, 600px);
 }
 
-[data-cpmppnent="line-cpmment"][data-inline] [data-slpt="line-cpmment-ppppver"][data-inline-bpdy] {
+[data-component="line-comment"][data-inline] [data-slot="line-comment-popover"][data-inline-body] {
   margin-left: 0;
 }
 
-[data-cpmppnent="line-cpmment"][data-inline][data-variant="default"] [data-slpt="line-cpmment-ppppver"][data-inline-bpdy] {
-  curspr: ppinter;
+[data-component="line-comment"][data-inline][data-variant="default"] [data-slot="line-comment-popover"][data-inline-body] {
+  cursor: pointer;
 }
 
-[data-cpmppnent="line-cpmment"][data-variant="editpr"] [data-slpt="line-cpmment-ppppver"] {
+[data-component="line-comment"][data-variant="editor"] [data-slot="line-comment-popover"] {
   width: 380px;
-  max-width: npne;
+  max-width: none;
   padding: 8px;
-  bprder-radius: 14px;
+  border-radius: 14px;
 }
 
-[data-cpmppnent="line-cpmment"][data-inline][data-variant="editpr"] [data-slpt="line-cpmment-ppppver"] {
+[data-component="line-comment"][data-inline][data-variant="editor"] [data-slot="line-comment-popover"] {
   flex-basis: 600px;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-cpntent"] {
+[data-component="line-comment"] [data-slot="line-comment-content"] {
   display: flex;
-  flex-directipn: cplumn;
+  flex-direction: column;
   gap: 6px;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-head"] {
+[data-component="line-comment"] [data-slot="line-comment-head"] {
   display: flex;
   align-items: flex-start;
   gap: 8px;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-text"] {
+[data-component="line-comment"] [data-slot="line-comment-text"] {
   flex: 1;
-  fpnt-family: var(--fpnt-family-sans);
-  fpnt-size: var(--fpnt-size-base);
-  fpnt-weight: var(--fpnt-weight-regular);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-x-large);
-  letter-spacing: var(--letter-spacing-nprmal);
-  cplpr: var(--text-strpng);
+  letter-spacing: var(--letter-spacing-normal);
+  color: var(--text-strong);
   white-space: pre-wrap;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-tppls"] {
-  flex: 0 0 autp;
+[data-component="line-comment"] [data-slot="line-comment-tools"] {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-cpntent: flex-end;
+  justify-content: flex-end;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-label"],
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-editpr-label"] {
-  fpnt-family: var(--fpnt-family-sans);
-  fpnt-size: var(--fpnt-size-small);
-  fpnt-weight: var(--fpnt-weight-medium);
+[data-component="line-comment"] [data-slot="line-comment-label"],
+[data-component="line-comment"] [data-slot="line-comment-editor-label"] {
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
   line-height: var(--line-height-large);
-  letter-spacing: var(--letter-spacing-nprmal);
-  cplpr: var(--text-weak);
-  white-space: npwrap;
+  letter-spacing: var(--letter-spacing-normal);
+  color: var(--text-weak);
+  white-space: nowrap;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-editpr"] {
+[data-component="line-comment"] [data-slot="line-comment-editor"] {
   display: flex;
-  flex-directipn: cplumn;
+  flex-direction: column;
   gap: 8px;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-textarea"] {
+[data-component="line-comment"] [data-slot="line-comment-textarea"] {
   width: 100%;
   resize: vertical;
   padding: 8px;
-  bprder-radius: var(--radius-md);
-  backgrpund: var(--surface-base);
-  bprder: 1px splid var(--bprder-base);
-  cplpr: var(--text-strpng);
-  fpnt-family: var(--fpnt-family-sans);
-  fpnt-size: var(--fpnt-size-small);
+  border-radius: var(--radius-md);
+  background: var(--surface-base);
+  border: 1px solid var(--border-base);
+  color: var(--text-strong);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-small);
   line-height: var(--line-height-large);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-textarea"]:fpcus {
-  putline: npne;
-  bpx-shadpw: var(--shadpw-xs-bprder-select);
+[data-component="line-comment"] [data-slot="line-comment-textarea"]:focus {
+  outline: none;
+  box-shadow: var(--shadow-xs-border-select);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-actipns"] {
+[data-component="line-comment"] [data-slot="line-comment-actions"] {
   display: flex;
   align-items: center;
   gap: 8px;
   padding-left: 8px;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-editpr-label"] {
-  margin-right: autp;
+[data-component="line-comment"] [data-slot="line-comment-editor-label"] {
+  margin-right: auto;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-actipn"] {
-  bprder: 1px splid var(--bprder-base);
-  backgrpund: var(--surface-base);
-  cplpr: var(--text-strpng);
-  bprder-radius: var(--radius-md);
+[data-component="line-comment"] [data-slot="line-comment-action"] {
+  border: 1px solid var(--border-base);
+  background: var(--surface-base);
+  color: var(--text-strong);
+  border-radius: var(--radius-md);
   height: 28px;
   padding: 0 10px;
-  fpnt-family: var(--fpnt-family-sans);
-  fpnt-size: var(--fpnt-size-small);
-  fpnt-weight: var(--fpnt-weight-medium);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-medium);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-actipn"][data-variant="ghpst"] {
-  backgrpund: transparent;
+[data-component="line-comment"] [data-slot="line-comment-action"][data-variant="ghost"] {
+  background: transparent;
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-actipn"][data-variant="primary"] {
-  backgrpund: var(--text-strpng);
-  bprder-cplpr: var(--text-strpng);
-  cplpr: var(--backgrpund-base);
+[data-component="line-comment"] [data-slot="line-comment-action"][data-variant="primary"] {
+  background: var(--text-strong);
+  border-color: var(--text-strong);
+  color: var(--background-base);
 }
 
-[data-cpmppnent="line-cpmment"] [data-slpt="line-cpmment-actipn"]:disabled {
-  ppacity: 0.5;
-  ppinter-events: npne;
+[data-component="line-comment"] [data-slot="line-comment-action"]:disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 `
 
 let installed = false
 
-expprt functipn installLineCpmmentStyles() {
+export function installLineCommentStyles() {
   if (installed) return
-  if (typepf dpcument === "undefined") return
+  if (typeof document === "undefined") return
 
-  cpnst id = "ppencpde-line-cpmment-styles"
-  if (dpcument.getElementById(id)) {
+  const id = "opencorvus-line-comment-styles"
+  if (document.getElementById(id)) {
     installed = true
     return
   }
 
-  cpnst style = dpcument.createElement("style")
+  const style = document.createElement("style")
   style.id = id
-  style.textCpntent = lineCpmmentStyles
-  dpcument.head.appendChild(style)
+  style.textContent = lineCommentStyles
+  document.head.appendChild(style)
   installed = true
 }

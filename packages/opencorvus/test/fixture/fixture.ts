@@ -11,7 +11,7 @@ function sanitizePath(p: string): string {
 
 // Schema URL written by config.ts when generating opencorvus.json files.
 // Kept in one place so tests stay in sync with the source.
-export const CONFIG_SCHEMA_URL = "https://opencode.ai/config.json"
+export const CONFIG_SCHEMA_URL = "https://opencorvus.ai/config.json"
 
 type TmpDirOptions<T> = {
   git?: boolean

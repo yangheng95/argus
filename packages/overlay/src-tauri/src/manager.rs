@@ -363,11 +363,11 @@ fn write_shared_session(shared: &Shared, session_id: &str) -> Result<(), String>
     fs::write(path, format!("{text}\n")).map_err(|error| error.to_string())
 }
 
-fn opencode_config_path(base: &Path) -> PathBuf {
+fn opencorvus_config_path(base: &Path) -> PathBuf {
     base.join(".opencorvus").join("opencorvus.json")
 }
 
-fn ensure_opencode_config(path: &Path) -> Result<(), String> {
+fn ensure_opencorvus_config(path: &Path) -> Result<(), String> {
     if path.exists() {
         return Ok(());
     }
@@ -1238,8 +1238,8 @@ pub fn save(shared: &Shared, app: &AppHandle, config: ManagerConfig) -> Result<M
 }
 
 pub fn open_mcp_config(shared: &Shared, app: &AppHandle) -> Result<String, String> {
-    let path = opencode_config_path(&work_dir(shared));
-    ensure_opencode_config(&path)?;
+    let path = opencorvus_config_path(&work_dir(shared));
+    ensure_opencorvus_config(&path)?;
     open_target(&path)?;
     let value = path.to_string_lossy().to_string();
     push_log(shared, app, format!("opened MCP config: {value}"));
@@ -1266,8 +1266,8 @@ pub fn add_mcp(
         return Err("invalid MCP name, use lowercase letters/numbers and single '-'".into());
     }
 
-    let path = opencode_config_path(&work_dir(shared));
-    ensure_opencode_config(&path)?;
+    let path = opencorvus_config_path(&work_dir(shared));
+    ensure_opencorvus_config(&path)?;
     let text = fs::read_to_string(&path).map_err(|error| error.to_string())?;
     let mut data: serde_json::Value = serde_json::from_str(&text).map_err(|error| error.to_string())?;
     let Some(root) = data.as_object_mut() else {

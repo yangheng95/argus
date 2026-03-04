@@ -244,7 +244,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "opencorvus.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://opencorvus.ai/config.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -367,7 +367,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "opencorvus.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://opencorvus.ai/config.json",
             enabled_providers: ["openai"],
             provider: {
               openai: {
@@ -495,7 +495,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "opencorvus.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://opencorvus.ai/config.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
@@ -595,7 +595,7 @@ describe("session.llm.stream", () => {
         await Bun.write(
           path.join(dir, "opencorvus.json"),
           JSON.stringify({
-            $schema: "https://opencode.ai/config.json",
+            $schema: "https://opencorvus.ai/config.json",
             enabled_providers: [providerID],
             provider: {
               [providerID]: {
