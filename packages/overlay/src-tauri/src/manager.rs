@@ -123,12 +123,10 @@ impl Default for ManagerConfig {
             bot_command: "bun".into(),
             bot_args: vec![
                 "run".into(),
-                "--cwd".into(),
-                "packages/bot".into(),
                 "--no-env-file".into(),
                 "--env-file".into(),
                 ".env".into(),
-                "src/main.ts".into(),
+                "packages/bot/src/main.ts".into(),
             ],
             server_url: "http://127.0.0.1:4096".into(),
             cwd: String::new(),
