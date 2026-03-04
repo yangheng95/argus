@@ -1,4 +1,17 @@
 {
   "$schema": "https://opencorvus.ai/config.json",
-  "model": "alibaba-cn/qwen3.5-plus"
+  "model": "alibaba-cn/qwen3.5-plus",
+  "permission": {
+    "input": "allow",
+    "bash": "allow",
+    "read": "allow",
+    "edit": "allow",
+    "write": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "webfetch": "allow",
+    "websearch": "allow",
+    "task": "allow"
+  }
 }
