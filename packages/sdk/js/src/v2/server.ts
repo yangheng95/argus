@@ -33,7 +33,7 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
   options = Object.assign(
     {
       hostname: "127.0.0.1",
-      port: 4096,
+      port: 7878,
       timeout: 5000,
     },
     options ?? {},
