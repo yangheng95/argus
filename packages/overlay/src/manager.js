@@ -12,6 +12,9 @@ const els = {
   sendForm: document.getElementById("sendForm"),
   sendBtn: document.getElementById("sendBtn"),
   promptInput: document.getElementById("promptInput"),
+  charCount: document.getElementById("charCount"),
+  composerHint: document.getElementById("composerHint"),
+  clearChatBtn: document.getElementById("clearChatBtn"),
   startBtn: document.getElementById("startBtn"),
   stopBtn: document.getElementById("stopBtn"),
   refreshBtn: document.getElementById("refreshBtn"),
@@ -33,11 +36,61 @@ const state = {
   configLoaded: false,
   sending: false,
   stream: null,
+  inputHistory: [],
+  historyIndex: -1,
+  pendingInput: "",
+}
+
+// ── Input history helpers ──────────────────────────────────────────────────
+
+function historyPush(text) {
+  if (!text.trim()) return
+  if (state.inputHistory[state.inputHistory.length - 1] === text) return
+  state.inputHistory.push(text)
+  if (state.inputHistory.length > 100) state.inputHistory.shift()
+  state.historyIndex = -1
+}
+
+function historyNavigate(dir) {
+  const hist = state.inputHistory
+  if (hist.length === 0) return
+  if (state.historyIndex === -1) state.pendingInput = els.promptInput.value
+  const next = state.historyIndex + dir
+  if (next < -1 || next >= hist.length) return
+  state.historyIndex = next
+  els.promptInput.value = next === -1 ? state.pendingInput : hist[hist.length - 1 - next]
+  resizeTextarea()
+  updateCharCount()
+}
+
+function resizeTextarea() {
+  const el = els.promptInput
+  el.style.height = "auto"
+  el.style.height = Math.min(el.scrollHeight, 160) + "px"
+}
+
+function updateCharCount() {
+  const len = els.promptInput.value.length
+  els.charCount.textContent = len > 0 ? len : ""
 }
 
 function setSending(next) {
   state.sending = !!next
-  els.sendBtn.disabled = state.sending
+  if (state.sending) {
+    els.sendBtn.textContent = "Stop"
+    els.sendBtn.classList.add("stopping")
+    els.sendBtn.disabled = false
+    els.composerHint.textContent = "Running… click Stop to abort"
+  } else {
+    els.sendBtn.textContent = "Send"
+    els.sendBtn.classList.remove("stopping")
+    els.sendBtn.disabled = false
+    els.composerHint.textContent = "↑↓ history · Enter send"
+  }
+}
+
+function clearChat() {
+  els.chat.innerHTML = '<div class="chat-empty">No messages yet — send an instruction below</div>'
 }
 
 function readLines(input) {
