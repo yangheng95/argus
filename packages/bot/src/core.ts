@@ -50,6 +50,8 @@ export class BotCore {
   private textBuffers = new Map<string, string>()
   /** Track user message IDs to skip their parts */
   private userMessageIds = new Set<string>()
+  /** Buffer text captured from message.part.updated before we know the message role */
+  private pendingPartTexts = new Map<string, string>()
   /** Set to false by stop() to terminate the reconnect loop */
   private running = false
   private stt?: STTPipeline
