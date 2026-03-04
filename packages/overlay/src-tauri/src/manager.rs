@@ -767,11 +767,9 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
 
     push_log(shared, app, format!("prompt> {prompt}"));
 
-<<<<<<< HEAD
     let mut args = if config.run_args.is_empty() {
         DEFAULT_RUN_ARGS.iter().map(|item| (*item).to_string()).collect::<Vec<_>>()
-=======
-    let mut args = if config.run_args.first().map(|item| item.as_str()) == Some("run") {
+    } else if config.run_args.first().map(|item| item.as_str()) == Some("run") {
         let formatted = ensure_json_format(config.run_args.clone());
         let attached = ensure_attach(formatted, &config.server_url);
         if let Some(item) = shared_session.as_ref() {
@@ -779,7 +777,6 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         } else {
             attached
         }
->>>>>>> 1a872437882bcb45d0d4411247cea877c578983d
     } else {
         config.run_args.clone()
     };
