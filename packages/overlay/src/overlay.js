@@ -31,12 +31,7 @@ const THROTTLE_ACTIONS = new Set(["move", "scroll"])
 
 const THROTTLE_MS = 100
 const MERGE_WINDOW_MS = 260
-const HIDE_MS = {
-  start: 1200,
-  running: 1100,
-  done: 700,
-  error: 1600,
-}
+const MAX_DISPLAY_MS = 5000
 
 const bridge = window.opencorvusBridge
 const popup = document.getElementById("popup")
