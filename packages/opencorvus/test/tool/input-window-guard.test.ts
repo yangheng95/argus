@@ -12,7 +12,6 @@ let clickFailures = 0
 const clicks: Array<{ x: number; y: number }> = []
 const middleClicks: Array<{ x: number; y: number }> = []
 const hotkeys: string[][] = []
-let focusMarks = 0
 const keys: string[] = []
 const pastes: string[] = []
 
@@ -24,9 +23,6 @@ mock.module("../../src/opencorvus/perception/window", () => ({
       return typeof foreground === "function" ? foreground(current) : foreground
     },
     rebindForTask: async (_taskEpoch: number) => null,
-    markFocusChange: () => {
-      focusMarks += 1
-    },
   },
 }))
 
@@ -181,7 +177,6 @@ beforeEach(() => {
   clicks.length = 0
   middleClicks.length = 0
   hotkeys.length = 0
-  focusMarks = 0
   keys.length = 0
   pastes.length = 0
   AutomationRuntime.clear()
@@ -581,33 +576,6 @@ describe("tool.input bound window guard", () => {
         )
         expect(result.metadata.unavailable).toBe(true)
         expect(result.metadata.unavailableReason).toBe("binary_missing")
-      },
-    })
-  })
-
-  test("does not mark focus change for in-window shortcut", async () => {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await InputTool.init()
-        const result = await tool.execute({ action: "key", key: "cmd+c" }, ctx)
-        expect(result.metadata.focusChanging).toBe(false)
-        expect(focusMarks).toBe(0)
-      },
-    })
-  })
-
-  test("marks focus change for app-switch shortcut", async () => {
-    await using tmp = await tmpdir()
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const tool = await InputTool.init()
-        const result = await tool.execute({ action: "key", key: "cmd+tab" }, ctx)
-        expect(result.metadata.focusChanging).toBe(true)
-        expect(focusMarks).toBe(1)
-        expect(hotkeys).toEqual([["cmd", "tab"]])
       },
     })
   })

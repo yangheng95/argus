@@ -9,23 +9,11 @@ export interface AnchorTarget {
   name?: string
 }
 
-export interface LastClickInfo {
-  /** Physical pixel X within the captured image (same coordinate space as screenshot) */
-  imageX: number
-  /** Physical pixel Y within the captured image */
-  imageY: number
-  /** Action label (e.g. "click", "double_click") */
-  action: string
-  /** Timestamp of the click */
-  time: number
-}
-
 export type AnchorPhase = "idle" | "window_bound" | "monitor_bound" | "window_anchored" | "monitor_anchored"
 
 interface State {
   bounds: Coordinates.WindowBounds | null
   target: AnchorTarget | null
-  lastClick: LastClickInfo | null
   phase: AnchorPhase
   taskEpoch: number
   anchorHash: string | null
@@ -46,7 +34,6 @@ const desktopState = Instance.state(
   (): State => ({
     bounds: null,
     target: null,
-    lastClick: null,
     phase: "idle",
     taskEpoch: 0,
     anchorHash: null,
@@ -57,14 +44,6 @@ const desktopState = Instance.state(
 export namespace DesktopState {
   export function getBounds() { return desktopState().bounds }
   export function getTarget() { return desktopState().target }
-  export function setTarget(target: AnchorTarget | null) { desktopState().target = target }
-  export function setLastClick(click: LastClickInfo | null) { desktopState().lastClick = click }
-  export function consumeLastClick(): LastClickInfo | null {
-    const s = desktopState()
-    const click = s.lastClick
-    s.lastClick = null
-    return click
-  }
   export function getPhase() { return desktopState().phase }
   export function getTaskEpoch() { return desktopState().taskEpoch }
   export function getAnchorHash() { return desktopState().anchorHash }

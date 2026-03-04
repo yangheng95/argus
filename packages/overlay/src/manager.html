@@ -312,13 +312,6 @@
       box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.1);
     }
 
-    input[readonly] {
-      background: rgba(20, 50, 94, 0.12);
-      color: var(--text-muted);
-      border-style: dashed;
-      cursor: default;
-    }
-
     .send {
       min-width: 100px;
       border: none;
@@ -561,7 +554,7 @@
         <section class="card">
           <div class="card-head">Bot Config</div>
           <div class="cfg">
-            <p class="cfg-hint">Start and prompt share one command binary. Configure args below (one argument per line) so both flows stay aligned.</p>
+            <p class="cfg-hint">Keep it simple: use full command lines, advanced options only when needed.</p>
             <div class="cfg-entry">
               <button id="openMcpBtn" type="button">MCP Config</button>
               <button id="openSkillBtn" type="button">Skills Folder</button>
@@ -570,33 +563,12 @@
               <button id="addMcpBtn" type="button">Add MCP</button>
               <button id="createSkillBtn" type="button">Create Skill</button>
             </div>
-            <label>Command
-              <input id="commandInput" placeholder='opencorvus or C:\path\to\opencorvus.exe' />
+            <label>Start Command
+              <input id="serveCmdInput" placeholder='opencorvus serve --host "127.0.0.1"' />
             </label>
-            <details>
-              <summary>Binding Args</summary>
-              <label>Start Args (one per line)
-                <textarea id="serveArgsInput" rows="3" placeholder="serve"></textarea>
-              </label>
-              <label>Prompt Args (one per line)
-                <textarea id="runArgsInput" rows="4" placeholder="run&#10;--continue"></textarea>
-              </label>
-            </details>
-            <details>
-              <summary>Command Preview</summary>
-              <label>Start Args (joined)
-                <input id="serveFixedInput" readonly />
-              </label>
-              <label>Prompt Args (joined)
-                <input id="runFixedInput" readonly />
-              </label>
-              <label>Effective Start Command
-                <input id="servePreviewInput" readonly />
-              </label>
-              <label>Effective Prompt Command
-                <input id="runPreviewInput" readonly />
-              </label>
-            </details>
+            <label>Prompt Command
+              <input id="runCmdInput" placeholder='opencorvus run --continue --model "openai/gpt-5"' />
+            </label>
             <details>
               <summary>Advanced (optional)</summary>
               <label>Working Directory

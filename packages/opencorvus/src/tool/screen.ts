@@ -7,7 +7,7 @@ import { WindowManager } from "../opencorvus/perception/window"
 import { ScreenDiff } from "../opencorvus/perception/diff"
 import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
-import { addCoordinateOverlay, addClickMarker } from "../opencorvus/perception/overlay"
+import { addCoordinateOverlay } from "../opencorvus/perception/overlay"
 import { Log } from "../util/log"
 import { showWindowHighlight } from "./overlay-client"
 
@@ -92,19 +92,11 @@ IMPORTANT workflow:
 
 IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn - only your text description persists.
 
-Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=0 to disable coordinate ticks on returned images. By default, screenshots include visible coordinate overlays.`
-
-const WaitForChange = z.preprocess((input) => {
-  if (typeof input !== "string") return input
-  const value = input.trim().toLowerCase()
-  if (value === "true" || value === "1") return true
-  if (value === "false" || value === "0") return false
-  return input
-}, z.boolean())
+Debug option: set ${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1 to render coordinate ticks on returned images. By default, returned screenshots do not include visual coordinate overlays.`
 
 const ScreenshotAction = z.object({
   action: z.literal("screenshot"),
-  wait_for_change: WaitForChange.optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
+  wait_for_change: z.boolean().optional().describe("If true, wait until the screen content changes before capturing. Use when waiting for page loads, dialogs, or animations."),
 })
 
 const BindWindowAction = z.object({
@@ -172,8 +164,6 @@ export const ScreenTool = Tool.define("screen", {
         await WindowManager.rebindForTask(GuiState.get().taskEpoch)
         let foregroundFailed = false
         let currentBinding = await WindowManager.getBinding()
-        const monitorBinding = await MonitorManager.getBinding()
-        const hadFocusChange = WindowManager.consumeFocusChange()
         const target = DesktopState.getTarget()
         const staleBindingBlock = (binding: Awaited<ReturnType<typeof WindowManager.getBinding>>) => {
           if (binding || target?.scope !== "window") return null
@@ -235,11 +225,9 @@ export const ScreenTool = Tool.define("screen", {
           }
           return null
         }
-        if (!hadFocusChange) {
-          const staleBeforeCapture = staleBindingBlock(currentBinding)
-          if (staleBeforeCapture) return staleBeforeCapture
-        }
-        if (currentBinding && !hadFocusChange) {
+        const staleBeforeCapture = staleBindingBlock(currentBinding)
+        if (staleBeforeCapture) return staleBeforeCapture
+        if (currentBinding) {
           if (currentBinding.info.isMinimized) {
             return {
               title: "Screenshot blocked: bound window is minimized",
@@ -259,19 +247,11 @@ export const ScreenTool = Tool.define("screen", {
               title: currentBinding.info.title,
               appName: currentBinding.info.appName,
             })
+            // Don't unbind — node-screenshots can capture any window regardless of focus.
+            // Only set foregroundFailed for informational warning.
             foregroundFailed = true
           }
-        } else if (currentBinding && hadFocusChange) {
-          // Focus-changing key was pressed — suspend explicit binding
-          // so auto-bind picks the newly focused window.
-          log.info("focus change detected, suspending binding for this screenshot", {
-            previousTitle: currentBinding.info.title,
-          })
-          WindowManager.unbind()
-          currentBinding = null
         }
-
-
         let result = await Capture.take({ mode: "auto" })
         const driftBeforeWait = driftBlock(currentBinding, result)
         if (driftBeforeWait) return driftBeforeWait
@@ -363,12 +343,21 @@ export const ScreenTool = Tool.define("screen", {
           consecutiveNoChange: GuiState.get().repetition.consecutiveNoChange,
         })
 
-        // Compact coordinate info — keep essential data only
+        const hasScaleCompensation = !!result.windowBounds && (
+          Math.abs((result.windowBounds.scaleX ?? 1) - 1) > 0.01 ||
+          Math.abs((result.windowBounds.scaleY ?? 1) - 1) > 0.01
+        )
+        const scaleInfo = hasScaleCompensation
+          ? ` DPI scale compensation active (${(result.windowBounds?.scaleX ?? 1).toFixed(2)}x, ${(result.windowBounds?.scaleY ?? 1).toFixed(2)}x).`
+          : ""
         const coordInfo = result.scope === "window" && result.windowBounds
-          ? `Window ${result.windowBounds.width}x${result.windowBounds.height}.`
+          ? `Coordinates are relative to the bound window (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
           : result.windowBounds
-            ? `Monitor ${result.windowBounds.width}x${result.windowBounds.height}.`
-            : ""
+            ? `Coordinates are relative to monitor "${result.monitor?.name ?? result.monitor?.id ?? "unknown"}" (${result.windowBounds.width}x${result.windowBounds.height} at screen position ${result.windowBounds.x},${result.windowBounds.y}).${scaleInfo}`
+            : "Coordinates are screen-absolute."
+
+        const platformName = process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : "Windows"
+        const shortcutHint = process.platform === "darwin" ? "Use Cmd for shortcuts (Cmd+C, Cmd+V, etc.)." : "Use Ctrl for shortcuts (Ctrl+C, Ctrl+V, etc.)."
 
         if (isDuplicate) {
           GuiState.recordAction({
@@ -381,7 +370,7 @@ export const ScreenTool = Tool.define("screen", {
           })
           return {
             title: `Screenshot unchanged (${result.width}x${result.height})`,
-            output: `Unchanged ${result.width}x${result.height}. ${coordInfo} Use wait_for_change=true or try a different action.`,
+            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze - use the previous screenshot as reference. If you are waiting for something to load, prefer screen.screenshot with wait_for_change=true, then retry.`,
             metadata: {
               width: result.width,
               height: result.height,
@@ -408,48 +397,26 @@ export const ScreenTool = Tool.define("screen", {
         const encoded = SCREEN_COMPRESSION_ENABLED
           ? await image(result.buffer)
           : { mime: "image/png", buffer: result.buffer, compressed: false }
-        // Always apply coordinate grid overlay — the LLM prompt instructs models to
-        // reference grid labels for precise coordinate picking. The debug env var can
-        // be set to "0" to explicitly disable it.
-        const overlayDisabled = process.env[SCREEN_DEBUG_COORDINATE_OVERLAY_ENV]?.trim().toLowerCase() === "0"
-        let attachment = overlayDisabled ? encoded.buffer : await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
-        const debugOverlay = !overlayDisabled
-
-        // Draw click marker if there was a recent click action
-        const lastClick = DesktopState.consumeLastClick()
-        let clickMarkerInfo = ""
-        if (lastClick && (Date.now() - lastClick.time) < 10_000) {
-          try {
-            attachment = await addClickMarker(attachment, lastClick.imageX, lastClick.imageY, `${lastClick.action}(${lastClick.imageX},${lastClick.imageY})`)
-            clickMarkerInfo = ` A green crosshair marker shows your previous ${lastClick.action} at (${lastClick.imageX},${lastClick.imageY}).`
-            log.info("click-marker-applied", { x: lastClick.imageX, y: lastClick.imageY, action: lastClick.action })
-          } catch (e) {
-            log.warn("click-marker-failed", { error: e instanceof Error ? e.message : String(e) })
-          }
-        }
-
-        // Compress if overlays inflated the image beyond attachment limit
-        if (attachment.length > MAX_ATTACHMENT_BYTES) {
-          try {
-            const sharp = await import("sharp").then((x) => x.default)
-            const compressed = await sharp(attachment).jpeg({ quality: 92, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer()
-            log.info("post-overlay-compress", { before: attachment.length, after: compressed.length })
-            attachment = compressed
-          } catch (e) {
-            log.warn("post-overlay-compress-failed", { error: e instanceof Error ? e.message : String(e) })
-          }
-        }
-
+        const debugOverlay = debugCoordinateOverlay()
+        const attachment = debugOverlay ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer) : encoded.buffer
         const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
         const base64 = attachment.toString("base64")
-        const overlayInfo = clickMarkerInfo
+        const overlayInfo = debugOverlay
+          ? ` Debug mode: coordinate ticks are visible on the image (${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1).`
+          : " Shared image has no visible coordinate overlay."
 
         const rep = GuiState.get().repetition
         if (rep.consecutiveNoChange >= 6) {
           return {
             title: `Screenshot captured (${result.width}x${result.height}) - STUCK`,
-            output: `${result.width}x${result.height}. ${coordInfo}${overlayInfo}\n` +
-              `STUCK(${rep.consecutiveNoChange}x). Try: Esc, Tab/Enter, list_windows, or different approach.`,
+            output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}\n\n` +
+              `${overlayInfo}\n\n` +
+              `*** STUCK: ${rep.consecutiveNoChange} previous actions had no effect. ***\n` +
+              `You MUST try a fundamentally different approach.\n` +
+              `1. Press Esc to dismiss hidden overlays\n` +
+              `2. Use keyboard (Tab, Enter) instead of clicking\n` +
+              `3. If multiple windows are competing, use list_windows to find dialogs\n` +
+              `4. Try a completely different UI path`,
             metadata: {
               width: result.width,
               height: result.height,
@@ -478,10 +445,9 @@ export const ScreenTool = Tool.define("screen", {
         const foregroundNote = foregroundFailed
           ? " Note: The bound window was not in the foreground, but the screenshot was captured from it anyway. If input actions miss the target, re-run screen.bind_window for this window and take a fresh screenshot before retrying."
           : ""
-        const focusChangeNote = hadFocusChange ? " [focus changed]" : ""
         return {
-          title: `Screenshot (${result.width}x${result.height})${foregroundNote}`,
-          output: `${result.width}x${result.height}. ${coordInfo}${overlayInfo}${foregroundNote}${focusChangeNote}`,
+          title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [window not focused]" : ""}`,
+          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${foregroundNote}`,
           metadata: {
             width: result.width,
             height: result.height,

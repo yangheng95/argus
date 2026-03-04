@@ -33,20 +33,6 @@ function focusKey(key: string) {
   return parts.some((part) => part === "alt" || part === "cmd" || part === "command" || part === "meta" || part === "super" || part === "win" || part === "windows")
 }
 
-const FOCUS_CHANGING_KEYS = new Set([
-  "win",
-  "super",
-  "meta",
-  "cmd",
-  "alt+f4",
-  "cmd+q",
-])
-
-function isFocusChangingKey(key: string): boolean {
-  if (FOCUS_CHANGING_KEYS.has(key.trim().toLowerCase())) return true
-  return focusKey(key)
-}
-
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, wait, and request desktop confirmation.
 
 Actions:
@@ -260,14 +246,6 @@ export const InputTool = Tool.define("input", {
           })
         }
         showOverlay(screen.x, screen.y, action, "done", "done")
-        // Record click position in image coordinates so the next screenshot
-        // can draw a marker showing the LLM where it actually clicked.
-        DesktopState.setLastClick({
-          imageX: params.x,
-          imageY: params.y,
-          action: params.button === "double" ? "double_click" : params.button === "right" ? "right_click" : "click",
-          time: Date.now(),
-        })
         const coordDetail = anchored
           ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y}${screen.clamped ? " [CLAMPED]" : ""})`
           : ""
@@ -336,7 +314,6 @@ export const InputTool = Tool.define("input", {
       }
 
       case "key": {
-        const focusChanging = isFocusChangingKey(params.key)
         let selected: ReturnType<typeof resolveInputDriver>
         try {
           selected = resolveInputDriver(params.driver)
@@ -344,7 +321,7 @@ export const InputTool = Tool.define("input", {
           return InputGuard.driverUnavailable("key", params.driver, error)
         }
         if (selected === "desktop") {
-          const windowBlocked = await InputGuard.ensureBoundWindowForeground("key", focusChanging)
+          const windowBlocked = await InputGuard.ensureBoundWindowForeground("key", focusKey(params.key))
           if (windowBlocked) return windowBlocked
         }
         showOverlay(undefined, undefined, "key", params.key)
@@ -375,10 +352,6 @@ export const InputTool = Tool.define("input", {
           })
         }
         showOverlay(undefined, undefined, "key", `done ${params.key}`, "done")
-        if (focusChanging) {
-          WindowManager.markFocusChange()
-          GuiState.recordFocusChange()
-        }
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -390,7 +363,7 @@ export const InputTool = Tool.define("input", {
         return {
           title: `Pressed ${params.key}`,
           output: `Pressed key: ${params.key}`,
-          metadata: { key: params.key, focusChanging },
+          metadata: { key: params.key },
         }
       }
 

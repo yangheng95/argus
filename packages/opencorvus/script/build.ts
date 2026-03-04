@@ -316,14 +316,7 @@ const targets = single
     })
   : allTargets
 
-// On Windows, stale directory handles may prevent rm from succeeding.
-// Try multiple strategies: nothrow rm, then Windows rmdir, then just proceed.
 await $`rm -rf dist`.nothrow()
-if (process.platform === "win32") {
-  try {
-    await $`cmd /c "if exist dist rmdir /s /q dist"`
-  } catch {}
-}
 
 const binaries: Record<string, string> = {}
 if (!skipInstall) {

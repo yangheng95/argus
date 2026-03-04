@@ -1,4 +1,4 @@
-#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
 mod events;
@@ -16,10 +16,6 @@ fn main() {
         .unwrap_or(false);
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // Another instance tried to launch — bring existing console to front
-            manager::show_console(app);
-        }))
         .manage(shared)
         .invoke_handler(tauri::generate_handler![
             commands::position_window,
@@ -55,17 +51,6 @@ fn main() {
             }
             overlay::apply_overlay_window_style(app);
             overlay::start_stdin_bridge(app);
-            let forced = std::env::var("OPENCORVUS_OVERLAY_SHOW_CONSOLE")
-                .ok()
-                .as_deref()
-                == Some("1");
-            let bridge_mode = std::env::var("OPENCORVUS_OVERLAY_STDIN_EXIT")
-                .ok()
-                .as_deref()
-                == Some("1");
-            if forced || !bridge_mode {
-                manager::show_console(&app.handle());
-            }
             Ok(())
         })
         .run(tauri::generate_context!())
