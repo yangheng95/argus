@@ -9,6 +9,7 @@ import { Filesystem } from "../../util/filesystem"
 import { Process } from "../../util/process"
 import { EOL } from "os"
 import path from "path"
+import * as prompts from "@clack/prompts"
 
 function pagerCmd(): string[] {
   const lessOptions = ["-R", "-S"]
@@ -45,25 +46,96 @@ export const SessionCommand = cmd({
 })
 
 export const SessionDeleteCommand = cmd({
-  command: "delete <sessionID>",
-  describe: "delete a session",
-  builder: (yargs: Argv) => {
-    return yargs.positional("sessionID", {
-      describe: "session ID to delete",
-      type: "string",
-      demandOption: true,
-    })
-  },
+  command: "delete [sessionID]",
+  aliases: ["rm", "remove"],
+  describe: "delete sessions",
+  builder: (yargs: Argv) =>
+    yargs
+      .positional("sessionID", {
+        describe: "session ID to delete",
+        type: "string",
+      })
+      .option("all", {
+        type: "boolean",
+        describe: "delete all filtered root sessions",
+        default: false,
+      })
+      .option("search", {
+        type: "string",
+        describe: "filter root sessions by title or id",
+      })
+      .option("yes", {
+        alias: "y",
+        type: "boolean",
+        describe: "skip confirmation prompt",
+        default: false,
+      }),
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      try {
-        await Session.get(args.sessionID)
-      } catch {
-        UI.error(`Session not found: ${args.sessionID}`)
-        process.exit(1)
+      const all = [...Session.list({ limit: 10_000 })]
+      const roots = all.filter((x) => !x.parentID)
+      const term = args.search?.toLowerCase()
+      const filtered =
+        term === undefined
+          ? roots
+          : roots.filter((x) => x.title.toLowerCase().includes(term) || x.id.toLowerCase().includes(term))
+
+      if (!args.sessionID && filtered.length === 0) {
+        UI.println("No sessions found")
+        return
       }
-      await Session.remove(args.sessionID)
-      UI.println(UI.Style.TEXT_SUCCESS_BOLD + `Session ${args.sessionID} deleted` + UI.Style.TEXT_NORMAL)
+
+      let targets: Session.Info[] = []
+
+      if (args.sessionID) {
+        const session = all.find((x) => x.id === args.sessionID)
+        if (!session) {
+          UI.error(`Session not found: ${args.sessionID}`)
+          process.exitCode = 1
+          return
+        }
+        targets = [session]
+      }
+
+      if (!args.sessionID && args.all) {
+        targets = filtered
+      }
+
+      if (!args.sessionID && !args.all) {
+        const selected = await prompts.multiselect({
+          message: "Select sessions to delete",
+          options: filtered.map((session) => ({
+            label: session.title,
+            value: session.id,
+            hint: `${session.id} | ${Locale.todayTimeOrDateTime(session.time.updated)}`,
+          })),
+        })
+        if (prompts.isCancel(selected)) throw new UI.CancelledError()
+        const ids = new Set(selected)
+        targets = filtered.filter((x) => ids.has(x.id))
+      }
+
+      if (targets.length === 0) {
+        UI.println("No sessions selected")
+        return
+      }
+
+      if (!args.yes) {
+        const message = targets.length === 1 ? `Delete session "${targets[0]!.title}"?` : `Delete ${targets.length} sessions?`
+        const confirm = await prompts.confirm({
+          message,
+          initialValue: false,
+        })
+        if (prompts.isCancel(confirm) || !confirm) throw new UI.CancelledError()
+      }
+
+      const suffix = targets.length === 1 ? "" : "s"
+      const spinner = prompts.spinner()
+      spinner.start(`Deleting ${targets.length} session${suffix}...`)
+      for (const target of targets) {
+        await Session.remove(target.id)
+      }
+      spinner.stop(`Deleted ${targets.length} session${suffix}`)
     })
   },
 })

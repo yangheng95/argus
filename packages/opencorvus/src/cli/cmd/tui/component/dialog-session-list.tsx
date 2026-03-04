@@ -2,24 +2,23 @@ import { useDialog } from "@tui/ui/dialog"
 import { DialogSelect } from "@tui/ui/dialog-select"
 import { useRoute } from "@tui/context/route"
 import { useSync } from "@tui/context/sync"
-import { createMemo, createSignal, createResource, onMount } from "solid-js"
+import { createMemo, createResource, onMount } from "solid-js"
 import { Locale } from "@/util/locale"
 import { useKeybind } from "../context/keybind"
-import { useTheme } from "../context/theme"
 import { useSDK } from "../context/sdk"
 import { DialogSessionRename } from "./dialog-session-rename"
 import { createDebouncedSignal } from "../util/signal"
 import { Spinner } from "./spinner"
+import { useToast } from "../ui/toast"
 
 export function DialogSessionList() {
   const dialog = useDialog()
   const route = useRoute()
   const sync = useSync()
   const keybind = useKeybind()
-  const { theme } = useTheme()
   const sdk = useSDK()
+  const toast = useToast()
 
-  const [toDelete, setToDelete] = createSignal<string>()
   const [search, setSearch] = createDebouncedSignal("", 150)
 
   const [searchResults] = createResource(search, async (query) => {
@@ -43,12 +42,10 @@ export function DialogSessionList() {
         if (category === today) {
           category = "Today"
         }
-        const isDeleting = toDelete() === x.id
         const status = sync.data.session_status?.[x.id]
         const isWorking = status?.type === "busy"
         return {
-          title: isDeleting ? `Press ${keybind.print("session_delete")} again to confirm` : x.title,
-          bg: isDeleting ? theme.error : undefined,
+          title: x.title,
           value: x.id,
           category,
           footer: Locale.time(x.time.updated),
@@ -68,9 +65,6 @@ export function DialogSessionList() {
       skipFilter={true}
       current={currentSessionID()}
       onFilter={setSearch}
-      onMove={() => {
-        setToDelete(undefined)
-      }}
       onSelect={(option) => {
         route.navigate({
           type: "session",
@@ -83,14 +77,14 @@ export function DialogSessionList() {
           keybind: keybind.all.session_delete?.[0],
           title: "delete",
           onTrigger: async (option) => {
-            if (toDelete() === option.value) {
-              sdk.client.session.delete({
-                sessionID: option.value,
-              })
-              setToDelete(undefined)
+            const result = await sdk.client.session.delete({
+              sessionID: option.value,
+            })
+            if (result.error) {
+              toast.show({ message: "Failed to delete session", variant: "error" })
               return
             }
-            setToDelete(option.value)
+            toast.show({ message: "Session deleted", variant: "success" })
           },
         },
         {
