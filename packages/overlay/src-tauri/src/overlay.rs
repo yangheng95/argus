@@ -165,8 +165,8 @@ pub fn start_stdin_bridge(app: &tauri::App) {
         for line in BufReader::new(stdin.lock()).lines() {
             match line {
                 Ok(l) if !l.trim().is_empty() => {
-                    if let Ok(event) = serde_json::from_str::<InboundEvent>(&l) {
-                        match event {
+                    match serde_json::from_str::<InboundEvent>(&l) {
+                        Ok(event) => match event {
                             InboundEvent::Hint {
                                 x,
                                 y,
@@ -316,10 +316,17 @@ pub fn start_stdin_bridge(app: &tauri::App) {
                                     serde_json::to_value(payload).ok(),
                                 );
                             }
+                        },
+                        Err(error) => {
+                            eprintln!("[overlay] stdin_bridge.parse failed: {error}; line={l}");
                         }
                     }
                 }
-                _ => break,
+                Ok(_) => {}
+                Err(error) => {
+                    eprintln!("[overlay] stdin_bridge.read failed: {error}");
+                    break;
+                }
             }
         }
         if exit_on_eof {
