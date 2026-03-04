@@ -47,6 +47,8 @@ const profiles = {
     vision_analyze: "allow",
     skill: "allow",
     task: "allow",
+    tui: "allow",
+    automation: "allow",
     question: "deny",
     doom_loop: "deny",
     external_directory: "deny",
