@@ -22,13 +22,19 @@ export namespace ScreenshotStore {
     const hash = createHash("sha256").update(buffer).digest("hex").slice(0, 16)
     const ext = mime === "image/jpeg" ? "jpg" : "png"
     const dir = path.join(SCREENSHOT_DIR, sessionID)
-    log.info("save called", { dir, sessionID, mime, bufLen: buffer.length })
-    await fs.mkdir(dir, { recursive: true })
-    const filename = `${hash}.${ext}`
-    const filepath = path.join(dir, filename)
-    await fs.writeFile(filepath, buffer)
-    const url = `${SCHEME}${sessionID}/${filename}`
-    log.info("saved", { filepath, url })
+    process.stderr.write(`[SS] save: dir=${dir} session=${sessionID}\n`)
+    try {
+      await fs.mkdir(dir, { recursive: true })
+      const filename = `${hash}.${ext}`
+      const filepath = path.join(dir, filename)
+      await fs.writeFile(filepath, buffer)
+      const url = `${SCHEME}${sessionID}/${filename}`
+      process.stderr.write(`[SS] saved: ${url}\n`)
+      return url
+    } catch (e: any) {
+      process.stderr.write(`[SS] ERROR: ${e.message}\n`)
+      throw e
+    }
     return url
   }
 
