@@ -1,4 +1,5 @@
 export const BOT_PERMISSION_REPLY_ENV = "OPENCORVUS_BOT_PERMISSION_ASK_REPLY"
+export const PERMISSION_REPLY_ENV = "OPENCORVUS_PERMISSION_ASK_REPLY"
 export const BOT_QUEUE_LIMIT_ENV = "OPENCORVUS_BOT_SESSION_QUEUE_LIMIT"
 export const BOT_QUEUE_LIMIT_DEFAULT = 20
 
@@ -15,7 +16,7 @@ export function queueLimit(env: Env = process.env): number {
 }
 
 export function permissionReply(env: Env = process.env): PermissionReply {
-  const raw = env[BOT_PERMISSION_REPLY_ENV]?.trim().toLowerCase()
+  const raw = (env[BOT_PERMISSION_REPLY_ENV] ?? env[PERMISSION_REPLY_ENV])?.trim().toLowerCase()
   if (raw === "once") return "once"
   if (raw === "always") return "always"
   if (raw === "reject") return "reject"

@@ -12,6 +12,13 @@ describe("bot policy", () => {
     expect(permissionReply({})).toBe("always")
     expect(permissionReply({ OPENCORVUS_BOT_PERMISSION_ASK_REPLY: "always" })).toBe("always")
     expect(permissionReply({ OPENCORVUS_BOT_PERMISSION_ASK_REPLY: "once" })).toBe("once")
+    expect(permissionReply({ OPENCORVUS_PERMISSION_ASK_REPLY: "reject" })).toBe("reject")
+    expect(
+      permissionReply({
+        OPENCORVUS_PERMISSION_ASK_REPLY: "reject",
+        OPENCORVUS_BOT_PERMISSION_ASK_REPLY: "once",
+      }),
+    ).toBe("once")
     expect(permissionReply({ OPENCORVUS_BOT_PERMISSION_ASK_REPLY: "bad" })).toBe("always")
   })
 })

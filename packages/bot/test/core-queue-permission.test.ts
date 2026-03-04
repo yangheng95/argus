@@ -42,6 +42,7 @@ function incoming(text: string): IncomingMessage {
 beforeEach(() => {
   delete process.env.OPENCORVUS_BOT_SESSION_QUEUE_LIMIT
   delete process.env.OPENCORVUS_BOT_PERMISSION_ASK_REPLY
+  delete process.env.OPENCORVUS_PERMISSION_ASK_REPLY
 })
 
 describe("bot core queue guard", () => {

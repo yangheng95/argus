@@ -390,6 +390,25 @@ export class BotCore {
     )
   }
 
+  private mirrorSessions(kind: "user" | "assistant" | "system", text: string, sessionId: string, sessions: SessionEntry[]) {
+    if (sessions.length === 0) {
+      this.mirror(kind, text, { sessionId })
+      return
+    }
+    const seen = new Set<string>()
+    for (const item of sessions) {
+      const key = `${item.adapter.platform}:${item.channel}:${item.thread}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      this.mirror(kind, text, {
+        sessionId,
+        platform: item.adapter.platform,
+        channel: item.channel,
+        thread: item.thread,
+      })
+    }
+  }
+
   private sharedMode() {
     if (this.options?.sharedMode !== undefined) return this.options.sharedMode
     return process.env.OPENCORVUS_SHARED_SESSION_MODE === "1"

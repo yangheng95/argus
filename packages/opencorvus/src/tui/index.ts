@@ -164,7 +164,7 @@ export namespace Tui {
   export async function spawn(opts: SpawnOptions = {}): Promise<Handle> {
     const port = opts.port ?? (await allocatePort())
     const hostname = opts.hostname ?? "127.0.0.1"
-    const bin = opts.bin ?? "opencorvus"
+    const bin = opts.bin ?? process.env.OPENCORVUS_BIN_PATH ?? "opencorvus"
     const cwd = opts.directory ?? process.cwd()
 
     const args: string[] = ["--port", String(port), "--hostname", hostname]
@@ -175,10 +175,21 @@ export namespace Tui {
     if (opts.continue) args.push("--continue")
     if (opts.fork) args.push("--fork")
 
-    const proc = nodeSpawn(bin, args, {
-      stdio: "inherit",
-      cwd,
-    })
+    let proc: ChildProcess
+    if (process.platform === "win32") {
+      // On Windows, spawn TUI in a new visible console window
+      proc = nodeSpawn("cmd", ["/c", "start", "OPENCORVUS_TUI", bin, ...args], {
+        stdio: "ignore",
+        cwd,
+        detached: true,
+      })
+      proc.unref()
+    } else {
+      proc = nodeSpawn(bin, args, {
+        stdio: "inherit",
+        cwd,
+      })
+    }
 
     const url = `http://${hostname}:${port}`
     await waitForServer(url)
