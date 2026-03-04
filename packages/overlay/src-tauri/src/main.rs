@@ -27,7 +27,12 @@ fn main() {
         .unwrap_or(false);
     debug_write(&format!("sidecar={sidecar}"));
 
-    tauri::Builder::default()
+    std::panic::set_hook(Box::new(|info| {
+        debug_write(&format!("PANIC: {info}"));
+    }));
+
+    debug_write("before run");
+    let result = tauri::Builder::default()
         .manage(shared)
         .invoke_handler(tauri::generate_handler![
             commands::position_window,
@@ -70,6 +75,7 @@ fn main() {
             debug_write("setup() complete");
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .unwrap();
+        .run(tauri::generate_context!());
+    debug_write(&format!("run returned: {result:?}"));
+    result.unwrap();
 }
