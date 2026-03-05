@@ -956,6 +956,38 @@ export class BotCore {
       return
     }
 
+    // task.report: agent signals loop status via the task_report tool
+    if (event.type === "task.report") {
+      const report = (event as any).properties as TaskReportProperties
+      const job = this.jobs.get(report.sessionID)
+      if (!job) return
+
+      job.lastReport = report
+      job.lastActivityAt = Date.now()
+      // Touch pending watchdog so it doesn't time out during a long loop
+      this.touchPending(report.sessionID)
+
+      if (report.status === "progress") {
+        const msg = `[Turn ${job.turn}] ${report.summary}`
+        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
+      } else if (report.status === "need_input") {
+        const msg = `? ${report.question ?? report.summary}`
+        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
+      } else if (report.status === "done") {
+        const artifactsLine = report.artifacts?.length ? `\nFiles: ${report.artifacts.join(", ")}` : ""
+        const msg = `Done (${job.turn + 1} turns): ${report.summary}${artifactsLine}`
+        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
+      } else if (report.status === "failed") {
+        const msg = `Failed: ${report.error ?? report.summary}`
+        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        this.mirrorSessions("system", msg, report.sessionID, this.findSessions(report.sessionID))
+      }
+      return
+    }
+
     if (event.type === "permission.asked") {
       const asked = (event as EventPermissionAsked).properties as PermissionAsked
       this.touchPending(asked.sessionID)
