@@ -965,7 +965,7 @@ export class BotCore {
     }
 
     // task.report: agent signals loop status via the task_report tool
-    if (event.type === "task.report") {
+    if ((event as any).type === "task.report") {
       const report = (event as any).properties as TaskReportProperties
       const job = this.jobs.get(report.sessionID)
       if (!job) return
