@@ -333,6 +333,21 @@ export class BotCore {
     // Mark session as processing before sending prompt
     this.session.start(session.sessionId)
 
+    // Create a new job to track this task through the bot-aware loop
+    this.jobs.set(session.sessionId, {
+      jobID: Math.random().toString(36).slice(2),
+      sessionID: session.sessionId,
+      turn: 0,
+      status: "running",
+      lastReport: undefined,
+      startedAt: Date.now(),
+      lastActivityAt: Date.now(),
+      channel: session.channel,
+      thread: session.thread,
+      adapter: session.adapter,
+      platform: msg.platform,
+    })
+
     const result = await this.submitTask(session.sessionId, text, msg.platform)
     if (result !== "ok") {
       this.clearPending(session.sessionId)
