@@ -34,6 +34,7 @@
       managerClearLogs: "manager_clear_logs",
       managerRevealLogPath: "manager_reveal_log_path",
       managerSave: "manager_save",
+      managerApplyChannelEnv: "manager_apply_channel_env",
       managerSend: "manager_send",
       managerOpenMcpConfig: "manager_open_mcp_config",
       managerOpenSkillDir: "manager_open_skill_dir",

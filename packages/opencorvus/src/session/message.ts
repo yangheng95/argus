@@ -15,6 +15,7 @@ import type { Provider } from "@/provider/provider"
 import { GuiState } from "@/tool/gui-state"
 import { ScreenshotStore } from "./screenshot-store"
 import { textForModel } from "./part-visibility"
+import { traceSync } from "@/util/debug-trace"
 
 export namespace MessageV2 {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -547,6 +548,10 @@ export namespace MessageV2 {
               mediaType: attachment.mime,
               data: iife(() => {
                 if (ScreenshotStore.isFileUrl(attachment.url)) {
+                  traceSync("message.toModelMessages.resolveSync", {
+                    phase: "tool-output",
+                    url_len: attachment.url.length,
+                  })
                   const resolved = ScreenshotStore.resolveSync(attachment.url)
                   return resolved ? resolved.buffer.toString("base64") : ""
                 }
@@ -727,6 +732,10 @@ export namespace MessageV2 {
                 ...media.map((attachment) => {
                   let url = attachment.url
                   if (ScreenshotStore.isFileUrl(url)) {
+                    traceSync("message.toModelMessages.resolveSync", {
+                      phase: "media-inject",
+                      url_len: url.length,
+                    })
                     const resolved = ScreenshotStore.resolveSync(url)
                     if (resolved) url = `data:${resolved.mime};base64,${resolved.buffer.toString("base64")}`
                   }

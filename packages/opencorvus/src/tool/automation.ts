@@ -434,7 +434,7 @@ export const AutomationTool = Tool.define("automation", {
             abort: ctx.abort,
             stopOnFail: params.stopOnFail ?? true,
           })
-    const failed = flow.steps.filter((x) => !x.ok)
+    const failedSteps = flow.steps.filter((x) => !x.ok)
 
     return {
       title: flow.ok ? "Automation flow completed" : "Automation flow failed",
@@ -442,14 +442,14 @@ export const AutomationTool = Tool.define("automation", {
         ok: flow.ok,
         driver: selected.kind,
         total: flow.steps.length,
-        failed: failed.length,
+        failed: failedSteps.length,
         steps: flow.steps.map(compact),
       }),
       metadata: {
         ok: flow.ok,
         driver: selected.kind,
         total: flow.steps.length,
-        failed: failed.length,
+        failed: failedSteps.length,
       },
     }
   },

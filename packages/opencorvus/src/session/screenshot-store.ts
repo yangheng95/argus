@@ -2,6 +2,7 @@ import path from "path"
 import fs from "fs/promises"
 import { createHash } from "crypto"
 import { Global } from "../global"
+import { traceSync } from "../util/debug-trace"
 
 const SCREENSHOT_DIR = path.join(Global.Path.data, "screenshots")
 const SCHEME = "opencorvus://screenshot/"
@@ -48,11 +49,20 @@ export namespace ScreenshotStore {
     if (!isFileUrl(url)) return null
     const rel = url.slice(SCHEME.length)
     const filepath = path.join(SCREENSHOT_DIR, rel)
+    traceSync("screenshot.resolveSync.readFileSync", {
+      url_len: url.length,
+      rel_len: rel.length,
+      path_len: filepath.length,
+    })
     try {
       const buffer = require("fs").readFileSync(filepath)
       const mime = rel.endsWith(".jpg") ? "image/jpeg" : "image/png"
       return { mime, buffer }
     } catch {
+      traceSync("screenshot.resolveSync.error", {
+        rel_len: rel.length,
+        path_len: filepath.length,
+      })
       return null
     }
   }

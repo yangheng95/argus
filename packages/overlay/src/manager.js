@@ -22,6 +22,7 @@ const els = {
   stopBtn: document.getElementById("stopBtn"),
   refreshBtn: document.getElementById("refreshBtn"),
   clearLogsBtn: document.getElementById("clearLogsBtn"),
+  copyLogsBtn: document.getElementById("copyLogsBtn"),
   saveBtn: document.getElementById("saveBtn"),
   openMcpBtn: document.getElementById("openMcpBtn"),
   openSkillBtn: document.getElementById("openSkillBtn"),
@@ -48,6 +49,14 @@ const els = {
   sessionSearchInput: document.getElementById("sessionSearchInput"),
   sessionCountText: document.getElementById("sessionCountText"),
   sessionList: document.getElementById("sessionList"),
+  imageViewer: document.getElementById("imageViewer"),
+  imageViewerStage: document.getElementById("imageViewerStage"),
+  imageViewerImg: document.getElementById("imageViewerImg"),
+  imageViewerMeta: document.getElementById("imageViewerMeta"),
+  imageZoomOutBtn: document.getElementById("imageZoomOutBtn"),
+  imageZoomInBtn: document.getElementById("imageZoomInBtn"),
+  imageZoomResetBtn: document.getElementById("imageZoomResetBtn"),
+  imageCloseBtn: document.getElementById("imageCloseBtn"),
 }
 
 const state = {
@@ -79,6 +88,7 @@ const state = {
   activeTaskId: "",
   loopEventIds: new Set(),
   loopEventOrder: [],
+  image: null,
 }
 
 const STREAM_CHAR_DELAY = 10
@@ -88,6 +98,7 @@ const SENDING_PROBE_MS = 1500
 const LOGS_PANEL_KEY = "opencorvus.manager.logs.panel"
 const SESSION_CACHE_MS = 10_000
 const LOOP_EVENT_CACHE_MAX = 2048
+const IMAGE_ZOOM_STEP = 1.2
 
 const defaults = Object.freeze({
   command: "opencorvus",
@@ -131,6 +142,8 @@ const envGroups = [
       },
       { key: "OPENCORVUS_BOT_SESSION_QUEUE_LIMIT", use: "Limit queued requests per channel session." },
       { key: "OPENCORVUS_BOT_DEBUG_TOOL_INPUT", use: "Show tool input details in status logs when set to 1." },
+      { key: "OPENCORVUS_FS_SYNC_TRACE", use: "Trace key sync fs calls in core logs when set to 1." },
+      { key: "OPENCORVUS_BUS_DISPATCH_TRACE", use: "Trace bus dispatch source/order when set to 1." },
       { key: "OPENCORVUS_VISION_MODEL", use: "Default vision model for screenshot analysis." },
       { key: "OPENCORVUS_MONITOR_DIFF_THRESHOLD", use: "UI change threshold for monitor notifications (percent)." },
     ],
@@ -564,6 +577,26 @@ function readConfig() {
   }
 }
 
+function envPayload(input) {
+  if (Array.isArray(input)) {
+    return input.flatMap((item) => {
+      if (!item || typeof item !== "object") return []
+      const key = typeof item.key === "string" ? item.key.trim() : ""
+      if (!key) return []
+      const value =
+        typeof item.value === "string" ? item.value.trim() : item.value === undefined ? "" : String(item.value).trim()
+      return [{ key, value }]
+    })
+  }
+  if (!input || typeof input !== "object") return []
+  return Object.entries(input).flatMap(([key, value]) => {
+    const name = key.trim()
+    if (!name) return []
+    const text = typeof value === "string" ? value.trim() : value === undefined ? "" : String(value).trim()
+    return [{ key: name, value: text }]
+  })
+}
+
 function panelOpen(panel, open) {
   if (!panel) return
   panel.classList.toggle("open", open)
@@ -616,9 +649,94 @@ function scrollChat() {
 }
 
 function copyText(text) {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(text).catch(() => {})
+  if (!navigator.clipboard) return Promise.resolve(false)
+  return navigator.clipboard.writeText(text).then(
+    () => true,
+    () => false,
+  )
+}
+
+function imageOpen() {
+  return !!els.imageViewer && els.imageViewer.classList.contains("open")
+}
+
+function imageApply(scale) {
+  if (!state.image || !els.imageViewerImg) return
+  const fit = Math.max(state.image.fit, 0.05)
+  const min = Math.max(fit * 0.5, 0.05)
+  const max = Math.max(fit * 8, 1)
+  const next = Math.max(min, Math.min(max, scale))
+  state.image.scale = next
+  els.imageViewerImg.style.width = `${Math.round(state.image.w * next)}px`
+  if (els.imageViewerMeta) {
+    const pct = Math.round((next / fit) * 100)
+    els.imageViewerMeta.textContent = `${pct}%`
   }
+}
+
+function imageFit(reset = false) {
+  if (!state.image || !els.imageViewerImg || !els.imageViewerStage) return
+  const w = Math.max(1, els.imageViewerImg.naturalWidth || state.image.w || 1)
+  const h = Math.max(1, els.imageViewerImg.naturalHeight || state.image.h || 1)
+  const sw = Math.max(160, els.imageViewerStage.clientWidth - 28)
+  const sh = Math.max(120, els.imageViewerStage.clientHeight - 28)
+  const fit = Math.min(sw / w, sh / h, 1)
+  state.image.w = w
+  state.image.h = h
+  state.image.fit = fit
+  if (reset || !Number.isFinite(state.image.scale) || state.image.scale <= 0) {
+    state.image.scale = fit
+  }
+  if (state.image.scale < fit) state.image.scale = fit
+  imageApply(state.image.scale)
+}
+
+function imageScale(scale) {
+  if (!state.image) return
+  imageApply(scale)
+}
+
+function imageZoom(step) {
+  if (!state.image) return
+  imageScale(state.image.scale * step)
+}
+
+function closeImage() {
+  if (!imageOpen()) return false
+  panelOpen(els.imageViewer, false)
+  state.image = null
+  if (els.imageViewerImg) {
+    els.imageViewerImg.removeAttribute("src")
+    els.imageViewerImg.style.width = ""
+  }
+  if (els.imageViewerMeta) {
+    els.imageViewerMeta.textContent = "100%"
+  }
+  document.body.style.overflow = ""
+  return true
+}
+
+function openImage(src, alt) {
+  if (!els.imageViewer || !els.imageViewerImg) return
+  state.image = { w: 1, h: 1, fit: 1, scale: 1 }
+  panelOpen(els.imageViewer, true)
+  document.body.style.overflow = "hidden"
+  if (els.imageViewerMeta) els.imageViewerMeta.textContent = "Loading..."
+  els.imageViewerImg.alt = typeof alt === "string" && alt.trim() ? alt.trim() : "image"
+  els.imageViewerImg.src = src
+  const ready = () => {
+    if (!imageOpen()) return
+    imageFit(true)
+    if (els.imageViewerStage) {
+      els.imageViewerStage.scrollTop = 0
+      els.imageViewerStage.scrollLeft = 0
+    }
+  }
+  if (els.imageViewerImg.complete) {
+    ready()
+    return
+  }
+  els.imageViewerImg.addEventListener("load", ready, { once: true })
 }
 
 function makeMessage(role) {
@@ -693,7 +811,7 @@ function renderInline(input) {
   text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (all, alt, url) => {
     const safe = safeUrl(url, true)
     if (!safe) return all
-    return `<img src="${safe}" alt="${alt || "image"}" loading="lazy" />`
+    return `<img src="${safe}" alt="${alt || "image"}" loading="lazy" data-zoomable="1" />`
   })
 
   text = text.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (all, label, url) => {
@@ -1097,10 +1215,25 @@ function logLine(item) {
   return `${text.slice(0, 597)}...`
 }
 
+function logText() {
+  if (state.logs.length === 0) return "No runtime logs yet."
+  return state.logs.map((item) => logLine(item)).join("\n")
+}
+
 function renderLogs() {
-  els.logs.textContent =
-    state.logs.length === 0 ? "No runtime logs yet." : state.logs.map((item) => logLine(item)).join("\n")
+  els.logs.textContent = logText()
   els.logs.scrollTop = els.logs.scrollHeight
+}
+
+async function copyLogs() {
+  const btn = els.copyLogsBtn
+  const ok = await copyText(logText())
+  if (!btn) return
+  btn.textContent = ok ? "Copied" : "Failed"
+  setTimeout(() => {
+    if (!els.copyLogsBtn) return
+    els.copyLogsBtn.textContent = "Copy"
+  }, 1200)
 }
 
 function setLogsPanelOpen(next, persist = true) {
@@ -1262,6 +1395,29 @@ async function saveConfig() {
   state.configLoaded = false
   applySnapshot(snapshot)
   addMessage("system", "Configuration saved.")
+}
+
+async function applyChannelEnv(channel, env, options = {}) {
+  const name = typeof channel === "string" ? channel.trim() : ""
+  if (!name) {
+    throw new Error("channel is required")
+  }
+  const list = envPayload(env)
+  if (list.length === 0) {
+    throw new Error("env is empty")
+  }
+  const snapshot = await invoke(cmd.managerApplyChannelEnv, {
+    input: {
+      channel: name,
+      env: list,
+      restart: options.restart !== false,
+      replace: options.replace !== false,
+    },
+  })
+  state.configLoaded = false
+  applySnapshot(snapshot)
+  addMessage("system", `Channel env applied: ${name}`)
+  return snapshot
 }
 
 async function openMcpConfig() {
@@ -1724,6 +1880,10 @@ function bindEvents() {
     }
   })
 
+  els.copyLogsBtn?.addEventListener("click", () => {
+    void copyLogs()
+  })
+
   els.saveBtn.addEventListener("click", async () => {
     try {
       await saveConfig()
@@ -1793,10 +1953,88 @@ function bindEvents() {
     })
   })
 
+  els.chat.addEventListener("click", (event) => {
+    const target = event.target
+    if (!(target instanceof HTMLImageElement)) return
+    if (!target.dataset.zoomable) return
+    event.preventDefault()
+    event.stopPropagation()
+    const src = target.currentSrc || target.src
+    if (!src) return
+    openImage(src, target.alt)
+  })
+
+  els.imageViewer?.addEventListener("click", (event) => {
+    if (event.target !== els.imageViewer) return
+    closeImage()
+  })
+
+  els.imageCloseBtn?.addEventListener("click", () => {
+    closeImage()
+  })
+
+  els.imageZoomInBtn?.addEventListener("click", () => {
+    imageZoom(IMAGE_ZOOM_STEP)
+  })
+
+  els.imageZoomOutBtn?.addEventListener("click", () => {
+    imageZoom(1 / IMAGE_ZOOM_STEP)
+  })
+
+  els.imageZoomResetBtn?.addEventListener("click", () => {
+    if (!state.image) return
+    imageScale(state.image.fit)
+  })
+
+  els.imageViewerImg?.addEventListener("dblclick", (event) => {
+    event.preventDefault()
+    if (!state.image) return
+    const fit = state.image.fit
+    const nearFit = Math.abs(state.image.scale - fit) < fit * 0.08
+    if (nearFit) {
+      imageScale(Math.max(1, fit * 2))
+      return
+    }
+    imageScale(fit)
+  })
+
+  els.imageViewerStage?.addEventListener(
+    "wheel",
+    (event) => {
+      if (!imageOpen()) return
+      event.preventDefault()
+      imageZoom(event.deltaY < 0 ? IMAGE_ZOOM_STEP : 1 / IMAGE_ZOOM_STEP)
+    },
+    { passive: false },
+  )
+
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return
-    closePanels()
-    setLogsPanelOpen(false)
+    if (event.key === "Escape") {
+      if (closeImage()) return
+      closePanels()
+      setLogsPanelOpen(false)
+      return
+    }
+    if (!imageOpen()) return
+    if (event.key === "+" || event.key === "=" || event.code === "NumpadAdd") {
+      event.preventDefault()
+      imageZoom(IMAGE_ZOOM_STEP)
+      return
+    }
+    if (event.key === "-" || event.key === "_" || event.code === "NumpadSubtract") {
+      event.preventDefault()
+      imageZoom(1 / IMAGE_ZOOM_STEP)
+      return
+    }
+    if (event.key === "0") {
+      event.preventDefault()
+      if (state.image) imageScale(state.image.fit)
+    }
+  })
+
+  window.addEventListener("resize", () => {
+    if (!imageOpen()) return
+    imageFit(false)
   })
 
   els.addEnvBtn?.addEventListener("click", () => {
@@ -1916,5 +2154,13 @@ async function boot() {
   addMessage("system", "OpenCorvus manager is ready.")
   await refreshState()
 }
+
+window.opencorvusManagerApi = Object.freeze({
+  refreshState,
+  startBot,
+  stopBot,
+  saveConfig,
+  applyChannelEnv,
+})
 
 void boot()

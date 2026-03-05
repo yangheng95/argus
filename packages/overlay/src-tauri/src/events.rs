@@ -29,6 +29,7 @@ pub const CMD_MANAGER_STOP: &str = "manager_stop";
 pub const CMD_MANAGER_CLEAR_LOGS: &str = "manager_clear_logs";
 pub const CMD_MANAGER_REVEAL_LOG_PATH: &str = "manager_reveal_log_path";
 pub const CMD_MANAGER_SAVE: &str = "manager_save";
+pub const CMD_MANAGER_APPLY_CHANNEL_ENV: &str = "manager_apply_channel_env";
 pub const CMD_MANAGER_SEND: &str = "manager_send";
 pub const CMD_MANAGER_OPEN_MCP_CONFIG: &str = "manager_open_mcp_config";
 pub const CMD_MANAGER_OPEN_SKILL_DIR: &str = "manager_open_skill_dir";

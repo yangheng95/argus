@@ -6,6 +6,7 @@ import { dirname, isAbsolute, join, parse, relative, resolve, normalize } from "
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { Glob } from "./glob"
+import { traceSync } from "./debug-trace"
 
 export namespace Filesystem {
   export async function exists(p: string): Promise<boolean> {
@@ -23,6 +24,9 @@ export namespace Filesystem {
   }
 
   export function stat(p: string): ReturnType<typeof statSync> | undefined {
+    traceSync("filesystem.statSync", {
+      path_len: p.length,
+    })
     return statSync(p, { throwIfNoEntry: false }) ?? undefined
   }
 
@@ -107,6 +111,9 @@ export namespace Filesystem {
    */
   export function normalizePath(p: string): string {
     if (process.platform !== "win32") return p
+    traceSync("filesystem.realpathSync.native", {
+      path_len: p.length,
+    })
     try {
       return realpathSync.native(p)
     } catch {

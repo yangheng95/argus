@@ -31,11 +31,124 @@ const ENV_LLM_BASE_URL: &str = "OPENCORVUS_BASE_URL";
 const ENV_LLM_API_KEY: &str = "OPENCORVUS_API_KEY";
 const SESSION_API_TIMEOUT_CONNECT_MS: u64 = 350;
 const SESSION_API_TIMEOUT_READ_MS: u64 = 15_000;
+const CHANNEL_SLACK_ENV: &[&str] = &[
+    "SLACK_BOT_TOKEN",
+    "SLACK_APP_TOKEN",
+    "SLACK_SIGNING_SECRET",
+    "SLACK_CHANNEL_ID",
+    "OPENCLAW_SLACK_BOT_TOKEN",
+    "OPENCLAW_SLACK_APP_TOKEN",
+    "OPENCLAW_SLACK_SIGNING_SECRET",
+];
+const CHANNEL_TELEGRAM_ENV: &[&str] = &["TELEGRAM_BOT_TOKEN", "OPENCLAW_TELEGRAM_BOT_TOKEN"];
+const CHANNEL_DISCORD_ENV: &[&str] = &["DISCORD_BOT_TOKEN"];
+const CHANNEL_FEISHU_ENV: &[&str] = &[
+    "FEISHU_APP_ID",
+    "FEISHU_APP_SECRET",
+    "FEISHU_VERIFICATION_TOKEN",
+    "FEISHU_WEBHOOK_HOST",
+    "FEISHU_WEBHOOK_PORT",
+    "FEISHU_WEBHOOK_PATH",
+    "OPENCLAW_FEISHU_APP_ID",
+    "OPENCLAW_FEISHU_APP_SECRET",
+];
+const CHANNEL_WHATSAPP_ENV: &[&str] = &[
+    "WHATSAPP_ACCESS_TOKEN",
+    "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_VERIFY_TOKEN",
+    "WHATSAPP_WEBHOOK_HOST",
+    "WHATSAPP_WEBHOOK_PORT",
+    "WHATSAPP_WEBHOOK_PATH",
+    "OPENCLAW_WHATSAPP_ACCESS_TOKEN",
+    "OPENCLAW_WHATSAPP_PHONE_NUMBER_ID",
+];
+const CHANNEL_GOOGLECHAT_ENV: &[&str] = &[
+    "GOOGLECHAT_SERVICE_ACCOUNT_JSON",
+    "GOOGLECHAT_WEBHOOK_HOST",
+    "GOOGLECHAT_WEBHOOK_PORT",
+    "GOOGLECHAT_WEBHOOK_PATH",
+    "OPENCLAW_GOOGLECHAT_SERVICE_ACCOUNT_JSON",
+];
+const CHANNEL_MSTEAMS_ENV: &[&str] = &[
+    "MSTEAMS_APP_ID",
+    "MSTEAMS_APP_SECRET",
+    "MSTEAMS_WEBHOOK_HOST",
+    "MSTEAMS_WEBHOOK_PORT",
+    "MSTEAMS_WEBHOOK_PATH",
+    "OPENCLAW_MSTEAMS_APP_ID",
+    "OPENCLAW_MSTEAMS_APP_SECRET",
+];
+const CHANNEL_LINE_ENV: &[&str] = &[
+    "LINE_CHANNEL_ACCESS_TOKEN",
+    "LINE_CHANNEL_SECRET",
+    "LINE_WEBHOOK_HOST",
+    "LINE_WEBHOOK_PORT",
+    "LINE_WEBHOOK_PATH",
+    "OPENCLAW_LINE_CHANNEL_ACCESS_TOKEN",
+];
+const CHANNEL_MATRIX_ENV: &[&str] = &[
+    "MATRIX_HOMESERVER_URL",
+    "MATRIX_ACCESS_TOKEN",
+    "MATRIX_SINCE_TOKEN",
+    "OPENCLAW_MATRIX_HOMESERVER_URL",
+    "OPENCLAW_MATRIX_ACCESS_TOKEN",
+];
+const CHANNEL_MATTERMOST_ENV: &[&str] = &[
+    "MATTERMOST_SERVER_URL",
+    "MATTERMOST_BOT_TOKEN",
+    "MATTERMOST_WEBHOOK_HOST",
+    "MATTERMOST_WEBHOOK_PORT",
+    "MATTERMOST_WEBHOOK_PATH",
+    "OPENCLAW_MATTERMOST_SERVER_URL",
+    "OPENCLAW_MATTERMOST_BOT_TOKEN",
+];
+const CHANNEL_SIGNAL_ENV: &[&str] = &[
+    "SIGNAL_SERVICE_URL",
+    "SIGNAL_ACCOUNT",
+    "OPENCLAW_SIGNAL_SERVICE_URL",
+    "OPENCLAW_SIGNAL_ACCOUNT",
+];
+const CHANNEL_WECOM_ENV: &[&str] = &[
+    "WECOM_CORP_ID",
+    "WECOM_SECRET",
+    "WECOM_AGENT_ID",
+    "WECOM_WEBHOOK_HOST",
+    "WECOM_WEBHOOK_PORT",
+    "WECOM_WEBHOOK_PATH",
+    "OPENCLAW_WECOM_CORP_ID",
+    "OPENCLAW_WECOM_SECRET",
+    "OPENCLAW_WECOM_AGENT_ID",
+];
+const CHANNEL_DINGTALK_ENV: &[&str] = &[
+    "DINGTALK_APP_KEY",
+    "DINGTALK_APP_SECRET",
+    "DINGTALK_DEFAULT_WEBHOOK",
+    "DINGTALK_WEBHOOK_HOST",
+    "DINGTALK_WEBHOOK_PORT",
+    "DINGTALK_WEBHOOK_PATH",
+    "OPENCLAW_DINGTALK_APP_KEY",
+    "OPENCLAW_DINGTALK_APP_SECRET",
+];
+
+fn yes() -> bool {
+    true
+}
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {
     pub key: String,
     pub value: String,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub struct ChannelEnvApply {
+    pub channel: String,
+    pub env: Vec<EnvItem>,
+    #[serde(default = "yes")]
+    pub restart: bool,
+    #[serde(default = "yes")]
+    pub replace: bool,
 }
 
 #[derive(Deserialize)]
@@ -466,6 +579,67 @@ fn abs_cwd_args(args: Vec<String>, base: &Path) -> Vec<String> {
     out
 }
 
+fn norm_env(env: Vec<EnvItem>) -> Vec<EnvItem> {
+    env.into_iter()
+        .map(|item| EnvItem {
+            key: item.key.trim().into(),
+            value: item.value.trim().into(),
+        })
+        .filter(|item| !item.key.is_empty())
+        .collect()
+}
+
+fn channel_name(input: &str) -> Option<&'static str> {
+    let key = input.trim().to_ascii_lowercase();
+    match key.as_str() {
+        "slack" => Some("slack"),
+        "telegram" => Some("telegram"),
+        "discord" => Some("discord"),
+        "feishu" | "lark" => Some("feishu"),
+        "whatsapp" => Some("whatsapp"),
+        "googlechat" | "google-chat" => Some("googlechat"),
+        "msteams" | "ms-teams" | "teams" => Some("msteams"),
+        "line" => Some("line"),
+        "matrix" => Some("matrix"),
+        "mattermost" => Some("mattermost"),
+        "signal" => Some("signal"),
+        "wecom" | "wechat-work" => Some("wecom"),
+        "dingtalk" => Some("dingtalk"),
+        _ => None,
+    }
+}
+
+fn channel_env(channel: &str) -> Option<&'static [&'static str]> {
+    match channel {
+        "slack" => Some(CHANNEL_SLACK_ENV),
+        "telegram" => Some(CHANNEL_TELEGRAM_ENV),
+        "discord" => Some(CHANNEL_DISCORD_ENV),
+        "feishu" => Some(CHANNEL_FEISHU_ENV),
+        "whatsapp" => Some(CHANNEL_WHATSAPP_ENV),
+        "googlechat" => Some(CHANNEL_GOOGLECHAT_ENV),
+        "msteams" => Some(CHANNEL_MSTEAMS_ENV),
+        "line" => Some(CHANNEL_LINE_ENV),
+        "matrix" => Some(CHANNEL_MATRIX_ENV),
+        "mattermost" => Some(CHANNEL_MATTERMOST_ENV),
+        "signal" => Some(CHANNEL_SIGNAL_ENV),
+        "wecom" => Some(CHANNEL_WECOM_ENV),
+        "dingtalk" => Some(CHANNEL_DINGTALK_ENV),
+        _ => None,
+    }
+}
+
+fn merge_env(mut base: Vec<EnvItem>, incoming: Vec<EnvItem>, keys: &[&str], replace: bool) -> Vec<EnvItem> {
+    base = norm_env(base);
+    if replace {
+        base.retain(|item| !keys.iter().any(|key| *key == item.key));
+    }
+    for item in norm_env(incoming) {
+        base.retain(|cur| cur.key != item.key);
+        base.push(item);
+    }
+    base
+}
+
 fn norm_config(config: ManagerConfig) -> ManagerConfig {
     let defaults = ManagerConfig::default();
     let bot_command = config.bot_command.trim().to_string();
@@ -504,15 +678,7 @@ fn norm_config(config: ManagerConfig) -> ManagerConfig {
             }
         },
         cwd,
-        env: config
-            .env
-            .into_iter()
-            .map(|item| EnvItem {
-                key: item.key.trim().into(),
-                value: item.value.trim().into(),
-            })
-            .filter(|item| !item.key.is_empty())
-            .collect(),
+        env: norm_env(config.env),
     }
 }
 
@@ -2458,6 +2624,53 @@ pub fn save(
     Ok(snapshot(shared))
 }
 
+pub fn apply_channel_env(
+    shared: &Shared,
+    app: &AppHandle,
+    input: ChannelEnvApply,
+) -> Result<ManagerSnapshot, String> {
+    let Some(channel) = channel_name(&input.channel) else {
+        return Err("unsupported channel, use slack/telegram/discord/feishu/whatsapp/googlechat/msteams/line/matrix/mattermost/signal/wecom/dingtalk".into());
+    };
+    let Some(keys) = channel_env(channel) else {
+        return Err(format!("unsupported channel: {channel}"));
+    };
+
+    let incoming = norm_env(input.env);
+    if incoming.is_empty() {
+        return Err("env is empty".into());
+    }
+
+    let mut config = {
+        let state = shared.lock().unwrap();
+        state.config.clone()
+    };
+    config.env = merge_env(config.env, incoming, keys, input.replace);
+
+    let mut shot = save(shared, app, config)?;
+    push_log(
+        shared,
+        app,
+        format!(
+            "channel env applied: {channel} (restart={}, replace={})",
+            input.restart, input.replace
+        ),
+    );
+
+    if input.restart && (shot.running || shot.channel_running) {
+        push_log(
+            shared,
+            app,
+            format!("restarting OpenCorvus to apply `{channel}` channel env"),
+        );
+        stop_bot(shared, app)?;
+        start_bot(shared, app)?;
+        shot = snapshot(shared);
+    }
+
+    Ok(shot)
+}
+
 pub fn reveal_log_path(shared: &Shared, app: &AppHandle) -> Result<String, String> {
     let path = {
         let state = shared.lock().unwrap();
@@ -2717,13 +2930,21 @@ pub fn list_sessions(shared: &Shared, app: &AppHandle) -> Result<Vec<SessionList
         state.config.clone()
     };
 
-    if let Ok(list) = list_sessions_via_api(&config) {
+    let list_api = list_sessions_via_api(&config);
+    if let Ok(list) = list_api {
         push_log(
             shared,
             app,
             format!("loaded {} sessions from server API", list.len()),
         );
         return Ok(list);
+    }
+    if let Err(error) = list_api {
+        push_log(
+            shared,
+            app,
+            format!("session list API unavailable, fallback to CLI: {error}"),
+        );
     }
 
     let mut cmd = build_command(
@@ -2800,7 +3021,8 @@ pub fn delete_session(
         state.config.clone()
     };
 
-    if delete_session_via_api(&config, &id).is_ok() {
+    let delete_api = delete_session_via_api(&config, &id);
+    if delete_api.is_ok() {
         if read_shared_session(shared).as_deref() == Some(id.as_str()) {
             match clear_shared_session(shared) {
                 Ok(true) => push_log(shared, app, "shared session cleared after deletion"),
@@ -2815,6 +3037,13 @@ pub fn delete_session(
         push_log(shared, app, format!("session deleted from server API: {id}"));
         emit_state(shared, app);
         return Ok(snapshot(shared));
+    }
+    if let Err(error) = delete_api {
+        push_log(
+            shared,
+            app,
+            format!("session delete API unavailable, fallback to CLI: {error}"),
+        );
     }
 
     let mut cmd = build_command(
@@ -2894,12 +3123,20 @@ pub fn export_session_html(
     let fallback = dir.join(format!("session-{}-trace.html", safe_file_name(&id)));
     let fallback_text = fallback.to_string_lossy().to_string();
 
-    if let Ok(file) = export_session_html_via_api(&config, &id, &fallback_text) {
+    let export_api = export_session_html_via_api(&config, &id, &fallback_text);
+    if let Ok(file) = export_api {
         let path = PathBuf::from(file.trim());
         open_target(&path)?;
         let value = path.to_string_lossy().to_string();
         push_log(shared, app, format!("session HTML exported via server API: {value}"));
         return Ok(value);
+    }
+    if let Err(error) = export_api {
+        push_log(
+            shared,
+            app,
+            format!("session export API unavailable, fallback to CLI: {error}"),
+        );
     }
 
     let mut cmd = build_command(
@@ -3028,6 +3265,62 @@ mod tests {
         let task = next_task_run(&mut state);
         state.active_task = Some(task.clone());
         task
+    }
+
+    #[test]
+    fn channel_alias_works() {
+        assert_eq!(channel_name("slack"), Some("slack"));
+        assert_eq!(channel_name("lark"), Some("feishu"));
+        assert_eq!(channel_name("ms-teams"), Some("msteams"));
+        assert!(channel_env("slack").is_some());
+        assert!(channel_env("unknown").is_none());
+    }
+
+    #[test]
+    fn merge_env_replaces_channel_keys() {
+        let base = vec![
+            EnvItem {
+                key: "SLACK_BOT_TOKEN".into(),
+                value: "old".into(),
+            },
+            EnvItem {
+                key: "SLACK_APP_TOKEN".into(),
+                value: "old-app".into(),
+            },
+            EnvItem {
+                key: "OPENCORVUS_BOT_PERMISSION_PROFILE".into(),
+                value: "standard".into(),
+            },
+        ];
+        let next = vec![
+            EnvItem {
+                key: "SLACK_BOT_TOKEN".into(),
+                value: "new".into(),
+            },
+            EnvItem {
+                key: "SLACK_CHANNEL_ID".into(),
+                value: "C123".into(),
+            },
+        ];
+        let out = merge_env(base, next, CHANNEL_SLACK_ENV, true);
+        assert_eq!(
+            out.iter()
+                .find(|item| item.key == "SLACK_BOT_TOKEN")
+                .map(|item| item.value.as_str()),
+            Some("new")
+        );
+        assert_eq!(
+            out.iter()
+                .find(|item| item.key == "SLACK_CHANNEL_ID")
+                .map(|item| item.value.as_str()),
+            Some("C123")
+        );
+        assert_eq!(
+            out.iter()
+                .find(|item| item.key == "OPENCORVUS_BOT_PERMISSION_PROFILE")
+                .map(|item| item.value.as_str()),
+            Some("standard")
+        );
     }
 
     #[test]

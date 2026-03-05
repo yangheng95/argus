@@ -3,10 +3,12 @@ import { Log } from "../util/log"
 import { Instance } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
+import { isBusTraceEnabled, traceBus } from "../util/debug-trace"
 
 export namespace Bus {
   const log = Log.create({ service: "bus" })
   type Subscription = (event: any) => void
+  const source = new WeakMap<Subscription, string>()
 
   export const InstanceDisposed = BusEvent.define(
     "server.instance.disposed",
@@ -50,9 +52,20 @@ export namespace Bus {
       type: def.type,
     })
     const pending = []
+    let index = 0
     for (const key of [def.type, "*"]) {
       const match = state().subscriptions.get(key)
       for (const sub of match ?? []) {
+        if (isBusTraceEnabled()) {
+          index += 1
+          traceBus({
+            phase: "before-dispatch",
+            type: def.type,
+            key,
+            index,
+            source: source.get(sub),
+          })
+        }
         pending.push(sub(payload))
       }
     }
@@ -88,6 +101,20 @@ export namespace Bus {
 
   function raw(type: string, callback: (event: any) => void) {
     log.info("subscribing", { type })
+    if (isBusTraceEnabled()) {
+      const stack = new Error().stack
+        ?.split("\n")
+        .slice(2, 6)
+        .map((x) => x.trim())
+        .join(" | ")
+      source.set(callback, stack ?? "unknown")
+      traceBus({
+        phase: "subscribe",
+        type,
+        callback: callback.name || "anonymous",
+        source: stack,
+      })
+    }
     const subscriptions = state().subscriptions
     let match = subscriptions.get(type) ?? []
     if (match.includes(callback)) return () => {}

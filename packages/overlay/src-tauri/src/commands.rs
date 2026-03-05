@@ -1,7 +1,7 @@
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::manager::{
-    self, ManagerConfig, ManagerSnapshot, McpQuickConfig, SendAck, SessionListItem, Shared,
+    self, ChannelEnvApply, ManagerConfig, ManagerSnapshot, McpQuickConfig, SendAck, SessionListItem, Shared,
 };
 use crate::overlay;
 
@@ -60,6 +60,15 @@ pub fn manager_save(
     config: ManagerConfig,
 ) -> Result<ManagerSnapshot, String> {
     manager::save(state.inner(), &app, config)
+}
+
+#[tauri::command]
+pub fn manager_apply_channel_env(
+    state: State<'_, Shared>,
+    app: AppHandle,
+    input: ChannelEnvApply,
+) -> Result<ManagerSnapshot, String> {
+    manager::apply_channel_env(state.inner(), &app, input)
 }
 
 #[tauri::command]

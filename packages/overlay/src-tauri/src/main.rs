@@ -29,6 +29,7 @@ fn main() {
             commands::manager_clear_logs,
             commands::manager_reveal_log_path,
             commands::manager_save,
+            commands::manager_apply_channel_env,
             commands::manager_send,
             commands::manager_open_mcp_config,
             commands::manager_open_skill_dir,

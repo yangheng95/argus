@@ -8,8 +8,53 @@ function asError(e: unknown): Error {
 
 export namespace Mouse {
   const log = Log.create({ service: "opencorvus-mouse" })
+  const LEFT_DOWN = 0x0002
+  const LEFT_UP = 0x0004
+  const RIGHT_DOWN = 0x0008
+  const RIGHT_UP = 0x0010
+  const MIDDLE_DOWN = 0x0020
+  const MIDDLE_UP = 0x0040
+  const WHEEL = 0x0800
+  const WHEEL_DELTA = 120
+
+  let user32:
+    | ReturnType<
+        typeof import("bun:ffi")["dlopen"]
+      >
+    | undefined
+
+  async function win32() {
+    if (process.platform !== "win32") return undefined
+    if (user32) return user32
+    const ffi = await import("bun:ffi")
+    user32 = ffi.dlopen("user32.dll", {
+      SetCursorPos: { args: ["i32", "i32"], returns: "i32" },
+      mouse_event: { args: ["u32", "u32", "u32", "u32", "u32"], returns: "void" },
+    })
+    return user32
+  }
+
+  async function winMove(x: number, y: number) {
+    const api = await win32()
+    if (!api) return false
+    const ok = api.symbols.SetCursorPos(x, y)
+    if (ok === 0) throw new Error(`SetCursorPos failed (${x},${y})`)
+    return true
+  }
+
+  async function winMouse(flags: number, data = 0) {
+    const api = await win32()
+    if (!api) return false
+    api.symbols.mouse_event(flags, 0, 0, data, 0)
+    return true
+  }
+
+  function sleep(ms: number) {
+    return new Promise((done) => setTimeout(done, ms))
+  }
 
   async function moveToPosition(x: number, y: number): Promise<void> {
+    if (await winMove(x, y)) return
     const { mouse, Point } = await import("@nut-tree-fork/nut-js")
     // Use setPosition for instant move — more reliable than straightTo+move path animation
     await mouse.setPosition(new Point(x, y))
@@ -17,6 +62,11 @@ export namespace Mouse {
 
   export async function click(x: number, y: number): Promise<void> {
     try {
+      if (await winMove(x, y)) {
+        await winMouse(LEFT_DOWN | LEFT_UP)
+        log.info("clicked", { x, y, backend: "win32" })
+        return
+      }
       const { mouse } = await import("@nut-tree-fork/nut-js")
       await moveToPosition(x, y)
       await mouse.leftClick()
@@ -30,6 +80,13 @@ export namespace Mouse {
 
   export async function doubleClick(x: number, y: number): Promise<void> {
     try {
+      if (await winMove(x, y)) {
+        await winMouse(LEFT_DOWN | LEFT_UP)
+        await sleep(40)
+        await winMouse(LEFT_DOWN | LEFT_UP)
+        log.info("double clicked", { x, y, backend: "win32" })
+        return
+      }
       const { mouse, Button } = await import("@nut-tree-fork/nut-js")
       await moveToPosition(x, y)
       await mouse.doubleClick(Button.LEFT)
@@ -50,6 +107,11 @@ export namespace Mouse {
 
   export async function rightClick(x: number, y: number): Promise<void> {
     try {
+      if (await winMove(x, y)) {
+        await winMouse(RIGHT_DOWN | RIGHT_UP)
+        log.info("right clicked", { x, y, backend: "win32" })
+        return
+      }
       const { mouse } = await import("@nut-tree-fork/nut-js")
       await moveToPosition(x, y)
       await mouse.rightClick()
@@ -70,6 +132,11 @@ export namespace Mouse {
 
   export async function middleClick(x: number, y: number): Promise<void> {
     try {
+      if (await winMove(x, y)) {
+        await winMouse(MIDDLE_DOWN | MIDDLE_UP)
+        log.info("middle clicked", { x, y, backend: "win32" })
+        return
+      }
       const { mouse, Button } = await import("@nut-tree-fork/nut-js")
       await moveToPosition(x, y)
       await mouse.click(Button.MIDDLE)
@@ -90,6 +157,11 @@ export namespace Mouse {
 
   export async function scroll(direction: "up" | "down", amount: number = 3): Promise<void> {
     try {
+      const delta = direction === "up" ? WHEEL_DELTA * amount : -WHEEL_DELTA * amount
+      if (await winMouse(WHEEL, delta)) {
+        log.info("scrolled", { direction, amount, backend: "win32" })
+        return
+      }
       const { mouse } = await import("@nut-tree-fork/nut-js")
       if (direction === "up") {
         await mouse.scrollUp(amount)
@@ -124,6 +196,19 @@ export namespace Mouse {
 
   export async function drag(startX: number, startY: number, endX: number, endY: number): Promise<void> {
     try {
+      if (await winMove(startX, startY)) {
+        await winMouse(LEFT_DOWN)
+        const steps = 18
+        for (let i = 1; i <= steps; i++) {
+          const x = Math.round(startX + ((endX - startX) * i) / steps)
+          const y = Math.round(startY + ((endY - startY) * i) / steps)
+          await winMove(x, y)
+          await sleep(6)
+        }
+        await winMouse(LEFT_UP)
+        log.info("dragged", { startX, startY, endX, endY, backend: "win32" })
+        return
+      }
       const { mouse, straightTo, Point } = await import("@nut-tree-fork/nut-js")
       await moveToPosition(startX, startY)
       await mouse.drag(straightTo(new Point(endX, endY)))

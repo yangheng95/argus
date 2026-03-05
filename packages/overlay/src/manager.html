@@ -381,6 +381,56 @@
         margin: 6px 0;
         border: 1px solid rgba(20, 50, 94, 0.14);
       }
+      .msg-body.markdown img[data-zoomable] {
+        cursor: zoom-in;
+      }
+
+      .image-viewer {
+        position: fixed;
+        inset: 0;
+        z-index: 120;
+        display: none;
+        grid-template-rows: auto 1fr;
+        background: rgba(var(--surface-dark-rgb), 0.82);
+      }
+
+      .image-viewer.open {
+        display: grid;
+      }
+
+      .image-viewer-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+        color: rgba(255, 255, 255, 0.88);
+      }
+
+      .image-viewer-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      .image-viewer-stage {
+        min-height: 0;
+        overflow: auto;
+        display: grid;
+        place-items: center;
+        padding: 18px;
+      }
+
+      .image-viewer-stage img {
+        max-width: none;
+        max-height: none;
+        width: auto;
+        height: auto;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(255, 255, 255, 0.24);
+        box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+        background: rgba(0, 0, 0, 0.2);
+      }
 
       /* message roles */
       .msg.user {
@@ -1184,49 +1234,21 @@
             <div class="card-head">Bot Config</div>
             <div class="cfg">
               <section class="cfg-group">
-                <div class="cfg-group-head">Workspace</div>
-                <label
-                  >Working Directory
-                  <input id="cwdInput" placeholder="(optional)" />
-                </label>
-                <p class="cfg-hint">Set project root for manager-side helper tooling and relative paths.</p>
-              </section>
-              <section class="cfg-group">
-                <div class="cfg-group-head">LLM Endpoint</div>
-                <div class="llm-grid">
-                  <div class="llm-scope">
-                    <div class="llm-scope-title">TUI</div>
-                    <label
-                      >API URL
-                      <input id="tuiLlmBaseUrlInput" placeholder="https://api.example.com/v1" />
-                    </label>
-                    <label
-                      >API Key
-                      <div class="secret-field">
-                        <input id="tuiLlmApiKeyInput" type="password" placeholder="(empty)" autocomplete="off" />
-                        <button id="toggleTuiLlmApiKeyBtn" class="secret-toggle" type="button">Show</button>
-                      </div>
-                    </label>
+                <div class="cfg-group-head">Sessions</div>
+                <div class="session-inline">
+                  <div class="session-inline-meta">
+                    <span class="session-inline-label">Active Session</span>
+                    <code class="session-inline-id empty" id="activeSessionId">No session loaded</code>
                   </div>
-                  <div class="llm-scope">
-                    <div class="llm-scope-title">Bot</div>
-                    <label
-                      >API URL
-                      <input id="botLlmBaseUrlInput" placeholder="https://api.example.com/v1" />
-                    </label>
-                    <label
-                      >API Key
-                      <div class="secret-field">
-                        <input id="botLlmApiKeyInput" type="password" placeholder="(empty)" autocomplete="off" />
-                        <button id="toggleBotLlmApiKeyBtn" class="secret-toggle" type="button">Show</button>
-                      </div>
-                    </label>
+                  <div class="cfg-entry">
+                    <button id="openSessionPanelBtn" type="button">Browse DB Sessions</button>
+                    <button id="exportSessionBtn" type="button">Export Active HTML</button>
                   </div>
                 </div>
-                <p class="cfg-hint">Keys are masked. TUI and bot use independent API URL/key settings.</p>
+                <p class="cfg-hint">Load, export, or delete sessions directly from the list view.</p>
               </section>
               <section class="cfg-group">
-                <div class="cfg-group-head">Tools</div>
+                <div class="cfg-group-head">MCP & Skills</div>
                 <div class="cfg-entry">
                   <button id="openMcpBtn" type="button">MCP Config</button>
                   <button id="openSkillBtn" type="button">Skills Folder</button>
@@ -1240,18 +1262,55 @@
                 </div>
               </section>
               <section class="cfg-group">
-                <div class="cfg-group-head">Sessions</div>
-                <div class="session-inline">
-                  <div class="session-inline-meta">
-                    <span class="session-inline-label">Active Session</span>
-                    <code class="session-inline-id empty" id="activeSessionId">No session loaded</code>
+                <div class="cfg-group-head">LLM Endpoint</div>
+                <details>
+                  <summary>TUI / Bot LLM Config</summary>
+                  <div class="llm-grid">
+                    <div class="llm-scope">
+                      <div class="llm-scope-title">TUI</div>
+                      <label
+                        >API URL
+                        <input id="tuiLlmBaseUrlInput" placeholder="https://api.example.com/v1" />
+                      </label>
+                      <label
+                        >API Key
+                        <div class="secret-field">
+                          <input id="tuiLlmApiKeyInput" type="password" placeholder="(empty)" autocomplete="off" />
+                          <button id="toggleTuiLlmApiKeyBtn" class="secret-toggle" type="button">Show</button>
+                        </div>
+                      </label>
+                    </div>
+                    <div class="llm-scope">
+                      <div class="llm-scope-title">Bot</div>
+                      <label
+                        >API URL
+                        <input id="botLlmBaseUrlInput" placeholder="https://api.example.com/v1" />
+                      </label>
+                      <label
+                        >API Key
+                        <div class="secret-field">
+                          <input id="botLlmApiKeyInput" type="password" placeholder="(empty)" autocomplete="off" />
+                          <button id="toggleBotLlmApiKeyBtn" class="secret-toggle" type="button">Show</button>
+                        </div>
+                      </label>
+                    </div>
                   </div>
-                  <div class="cfg-entry">
-                    <button id="openSessionPanelBtn" type="button">Browse DB Sessions</button>
-                    <button id="exportSessionBtn" type="button">Export Active HTML</button>
-                  </div>
-                </div>
-                <p class="cfg-hint">Load, export, or delete sessions directly from the list view.</p>
+                  <p class="cfg-hint">
+                    TUI applies to console run path, Bot applies to channel bot process only. Configure
+                    <code>OPENCORVUS_TUI_LLM_BASE_URL</code>/<code>OPENCORVUS_TUI_LLM_API_KEY</code> and
+                    <code>OPENCORVUS_BOT_LLM_BASE_URL</code>/<code>OPENCORVUS_BOT_LLM_API_KEY</code>. Runtime maps
+                    each scope to <code>OPENCORVUS_BASE_URL</code>/<code>OPENCORVUS_API_KEY</code>, compatible with
+                    OpenAI-compatible provider APIs.
+                  </p>
+                </details>
+              </section>
+              <section class="cfg-group">
+                <div class="cfg-group-head">Workspace</div>
+                <label
+                  >Working Directory
+                  <input id="cwdInput" placeholder="(optional)" />
+                </label>
+                <p class="cfg-hint">Set project root for manager-side helper tooling and relative paths.</p>
               </section>
               <div class="save-wrap">
                 <button
@@ -1275,6 +1334,7 @@
           <div class="panel-head-actions">
             <button id="refreshBtn" type="button" title="Refresh state">Refresh</button>
             <button id="clearLogsBtn" type="button" title="Clear logs">Clear</button>
+            <button id="copyLogsBtn" type="button" title="Copy logs">Copy</button>
             <button id="openLogPathBtn" type="button">Log File</button>
             <button id="closeLogPanelBtn" type="button">Close</button>
           </div>
@@ -1320,6 +1380,20 @@
           </div>
         </div>
       </section>
+    </div>
+    <div class="image-viewer" id="imageViewer" aria-hidden="true">
+      <div class="image-viewer-head">
+        <span id="imageViewerMeta">100%</span>
+        <div class="image-viewer-actions">
+          <button id="imageZoomOutBtn" type="button" title="Zoom out">-</button>
+          <button id="imageZoomInBtn" type="button" title="Zoom in">+</button>
+          <button id="imageZoomResetBtn" type="button" title="Fit to view">Fit</button>
+          <button id="imageCloseBtn" type="button" title="Close">Close</button>
+        </div>
+      </div>
+      <div class="image-viewer-stage" id="imageViewerStage">
+        <img id="imageViewerImg" alt="Screenshot preview" />
+      </div>
     </div>
     <script src="protocol.js"></script>
     <script src="tauri-bridge.js"></script>

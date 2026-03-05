@@ -5,6 +5,7 @@ import { fileURLToPath } from "url"
 import { Log } from "../util/log"
 import { Global } from "../global"
 import { overlayProtocol } from "./overlay-protocol"
+import { traceSync } from "../util/debug-trace"
 
 declare const OPENCORVUS_EMBEDDED_OVERLAY_B64: string | undefined
 declare const OPENCORVUS_EMBEDDED_OVERLAY_HASH: string | undefined
@@ -95,6 +96,7 @@ const RETRY_MAX_MS = Math.max(RETRY_BASE_MS, envInt("OPENCORVUS_OVERLAY_RETRY_MA
 const CIRCUIT_WINDOW_MS = envInt("OPENCORVUS_OVERLAY_CIRCUIT_WINDOW_MS", 30_000)
 const CIRCUIT_THRESHOLD = envInt("OPENCORVUS_OVERLAY_CIRCUIT_THRESHOLD", 6)
 const CIRCUIT_COOLDOWN_MS = envInt("OPENCORVUS_OVERLAY_CIRCUIT_COOLDOWN_MS", 30_000)
+const BINARY_CHECK_INTERVAL_MS = envInt("OPENCORVUS_OVERLAY_BINARY_CHECK_INTERVAL_MS", 1500)
 
 type OverlayStatus = "start" | "running" | "done" | "error"
 type ConfirmAnswer = "confirm" | "cancel" | "timeout"
@@ -141,6 +143,7 @@ let seq = 0
 let last = { x: 240, y: 160 }
 let lastWarn = { key: "", time: 0 }
 let binaryMtime = 0
+let binaryCheckedAt = 0
 let failures = 0
 let consecutiveFailures = 0
 let nextRetryAt = 0
@@ -169,6 +172,9 @@ function binaryStem() {
 }
 
 function binaryMtimeMs() {
+  traceSync("overlay.binary.statSync", {
+    path_len: BINARY_PATH.length,
+  })
   try {
     return statSync(BINARY_PATH).mtimeMs
   } catch {
@@ -181,6 +187,7 @@ function stopOverlay(reason: string, detail?: Record<string, unknown>) {
   if (!current) return
   proc = null
   binaryMtime = 0
+  binaryCheckedAt = 0
   settleAll("unavailable")
   log.info("overlay-restart", {
     reason,
@@ -309,6 +316,7 @@ function clearCurrent(target: ReturnType<typeof Bun.spawn>) {
   if (proc !== target) return false
   proc = null
   binaryMtime = 0
+  binaryCheckedAt = 0
   settleAll("unavailable")
   return true
 }
@@ -380,20 +388,27 @@ function ensureProcess() {
     markUnavailable("disabled", { env: "OPENCORVUS_OVERLAY_DISABLED=1" })
     return null
   }
+  if (proc) {
+    const now = Date.now()
+    if (binaryMtime <= 0 || now - binaryCheckedAt < BINARY_CHECK_INTERVAL_MS) {
+      return proc
+    }
+    binaryCheckedAt = now
+    const nextMtime = binaryMtimeMs()
+    if (nextMtime <= 0 || nextMtime === binaryMtime) {
+      return proc
+    }
+    stopOverlay("binary_changed", {
+      previousMtime: binaryMtime,
+      nextMtime,
+    })
+  }
+  traceSync("overlay.binary.existsSync", {
+    path_len: BINARY_PATH.length,
+  })
   if (!existsSync(BINARY_PATH)) {
     markUnavailable("binary_missing")
     return null
-  }
-  if (proc) {
-    const nextMtime = binaryMtimeMs()
-    if (nextMtime > 0 && nextMtime !== binaryMtime) {
-      stopOverlay("binary_changed", {
-        previousMtime: binaryMtime,
-        nextMtime,
-      })
-    } else {
-      return proc
-    }
   }
 
   const now = Date.now()
@@ -424,6 +439,7 @@ function ensureProcess() {
     })
     proc = spawned
     binaryMtime = binaryMtimeMs()
+    binaryCheckedAt = Date.now()
     markAvailable({ pid: spawned.pid })
     void watchOutput(spawned)
     spawned.exited
