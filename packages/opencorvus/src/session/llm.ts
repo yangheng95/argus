@@ -22,6 +22,8 @@ import { SystemPrompt } from "./system"
 import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { Auth } from "@/auth"
+import { LLMTrace } from "./llm-trace"
+import { ulid } from "ulid"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -148,6 +150,32 @@ export namespace LLM {
       isCodex || provider.id.includes("github-copilot") ? undefined : ProviderTransform.maxOutputTokens(input.model)
 
     const tools = await resolveTools(input)
+    const providerOptions = ProviderTransform.providerOptions(input.model, params.options)
+    const requestHeaders = {
+      ...(input.model.providerID.startsWith("opencorvus")
+        ? {
+            "x-opencorvus-project": Instance.project.id,
+            "x-opencorvus-session": input.sessionID,
+            "x-opencorvus-request": input.user.id,
+            "x-opencorvus-client": Flag.OPENCORVUS_CLIENT,
+          }
+        : input.model.providerID !== "anthropic"
+          ? {
+              "User-Agent": `opencorvus/${Installation.VERSION}`,
+            }
+          : undefined),
+      ...input.model.headers,
+      ...headers,
+    }
+    const requestMessages = [
+      ...system.map(
+        (x): ModelMessage => ({
+          role: "system",
+          content: x,
+        }),
+      ),
+      ...input.messages,
+    ]
 
     // LiteLLM and some Anthropic proxies require the tools parameter to be present
     // when message history contains tool calls, even if no tools are being used.
@@ -169,11 +197,49 @@ export namespace LLM {
       })
     }
 
+    const trace = LLMTrace.begin({
+      callID: ulid(),
+      sessionID: input.sessionID,
+      userMessageID: input.user.id,
+      model: {
+        providerID: input.model.providerID,
+        modelID: input.model.id,
+      },
+      agent: {
+        name: input.agent.name,
+        mode: input.agent.mode,
+      },
+      small: input.small ?? false,
+      request: {
+        system,
+        messages: requestMessages,
+        tools: Object.keys(tools),
+        toolChoice: input.toolChoice ?? null,
+        maxRetries: input.retries ?? 0,
+        maxOutputTokens: maxOutputTokens ?? null,
+        temperature: params.temperature ?? null,
+        topP: params.topP ?? null,
+        topK: params.topK ?? null,
+        headers: requestHeaders,
+        providerOptions,
+      },
+    })
+
     return streamText({
-      onError(error) {
+      onError(event) {
         l.error("stream error", {
-          error,
+          error: event.error,
         })
+        trace.error(event.error)
+      },
+      onStepFinish(step) {
+        trace.step(step)
+      },
+      onAbort(event) {
+        trace.abort(event)
+      },
+      onFinish(event) {
+        trace.finish(event)
       },
       async experimental_repairToolCall(failed) {
         const lower = failed.toolCall.toolName.toLowerCase()
@@ -199,38 +265,15 @@ export namespace LLM {
       temperature: params.temperature,
       topP: params.topP,
       topK: params.topK,
-      providerOptions: ProviderTransform.providerOptions(input.model, params.options),
+      providerOptions,
       activeTools: Object.keys(tools).filter((x) => x !== "invalid"),
       tools,
       toolChoice: input.toolChoice,
       maxOutputTokens,
       abortSignal: input.abort,
-      headers: {
-        ...(input.model.providerID.startsWith("opencorvus")
-          ? {
-              "x-opencorvus-project": Instance.project.id,
-              "x-opencorvus-session": input.sessionID,
-              "x-opencorvus-request": input.user.id,
-              "x-opencorvus-client": Flag.OPENCORVUS_CLIENT,
-            }
-          : input.model.providerID !== "anthropic"
-            ? {
-                "User-Agent": `opencorvus/${Installation.VERSION}`,
-              }
-            : undefined),
-        ...input.model.headers,
-        ...headers,
-      },
+      headers: requestHeaders,
       maxRetries: input.retries ?? 0,
-      messages: [
-        ...system.map(
-          (x): ModelMessage => ({
-            role: "system",
-            content: x,
-          }),
-        ),
-        ...input.messages,
-      ],
+      messages: requestMessages,
       model: wrapLanguageModel({
         model: language,
         middleware: [

@@ -99,7 +99,15 @@ describe("bot core submit mode", () => {
           },
           submitTask: async (input) => {
             submitCalls.push(input)
-            return {}
+            return {
+              data: {
+                accepted: true,
+                sessionID: input.sessionID,
+                waited: true,
+                completed: true,
+                message: null,
+              },
+            }
           },
         },
       },
@@ -204,6 +212,97 @@ describe("bot core submit mode", () => {
     expect(promptCalls[0]?.sessionID).toBe("session_1")
     expect(promptCalls[0]?.parts[0]?.text).toBe("fallback")
     expect(promptCalls[0]?.system.length).toBeGreaterThan(0)
+  })
+
+  test("releases processing when tui runtime task is accepted but not completed", async () => {
+    const sendCalls: Array<string> = []
+    const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
+    const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
+    const a: BotAdapter = {
+      platform: "slack",
+      start: async () => {},
+      stop: async () => {},
+      sendMessage: async (_channel, _thread, text) => {
+        sendCalls.push(text)
+      },
+      uploadImage: async () => {},
+      onMessage: () => {},
+    }
+    const core = new BotCore() as unknown as {
+      adapters: BotAdapter[]
+      session: SessionCoordinator<
+        { sessionId: string; adapter: BotAdapter; channel: string; thread: string },
+        IncomingMessage
+      >
+      client: {
+        tui: {
+          runtime: {
+            start(input: {
+              mode: "spawn"
+              query_directory: string
+              body_directory: string
+              sessionID: string
+              bin?: string
+            }): Promise<{ error?: unknown }>
+            submitTask(input: { sessionID: string; text: string; wait: boolean }): Promise<{ error?: unknown }>
+          }
+        }
+        session: {
+          promptAsync(input: {
+            sessionID: string
+            parts: Array<{ type: "text"; text: string }>
+            system: string
+          }): Promise<{ error?: unknown }>
+        }
+      }
+      handleMessage(msg: IncomingMessage): Promise<void>
+    }
+
+    core.adapters = [a]
+    core.session.bind("slack:C1:T1", {
+      sessionId: "session_1",
+      adapter: a,
+      channel: "C1",
+      thread: "T1",
+    })
+    core.client = {
+      tui: {
+        runtime: {
+          start: async () => {
+            return {}
+          },
+          submitTask: async (input) => {
+            submitCalls.push(input)
+            return {
+              data: {
+                accepted: true,
+                sessionID: input.sessionID,
+                waited: true,
+                completed: false,
+                message: null,
+              },
+            }
+          },
+        },
+      },
+      session: {
+        promptAsync: async (input) => {
+          promptCalls.push(input)
+          return {}
+        },
+      },
+    }
+
+    await core.handleMessage(incoming("first"))
+
+    expect(core.session.processing("session_1")).toBe(false)
+    expect(sendCalls.at(-1)).toContain("did not complete")
+    expect(promptCalls).toHaveLength(0)
+
+    await core.handleMessage(incoming("second"))
+
+    expect(submitCalls).toHaveLength(2)
+    expect(promptCalls).toHaveLength(0)
   })
 
   test("supports OPENCORVUS_BOT_TASK_MODE=session-async", async () => {

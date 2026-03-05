@@ -35,13 +35,19 @@ pub fn setup(app: &AppHandle) -> Result<(), String> {
     let menu = Menu::with_items(app, &[&open, &mcp, &skill, &start, &stop, &quit])
         .map_err(|error| error.to_string())?;
 
-    let icon = match Image::from_bytes(include_bytes!("../icons/icon.png")) {
+    let icon = match Image::from_bytes(include_bytes!("../icons/tray-rgba.png")) {
         Ok(icon) => icon,
-        Err(png_error) => match Image::from_bytes(include_bytes!("../icons/tray.ico")) {
+        Err(rgba_error) => match Image::from_bytes(include_bytes!("../icons/icon.png")) {
             Ok(icon) => icon,
-            Err(tray_error) => {
-                Image::from_bytes(include_bytes!("../icons/icon.ico"))
-                    .map_err(|icon_error| format!("load tray icon failed: icon.png={png_error}; tray.ico={tray_error}; icon.ico={icon_error}"))?
+            Err(png_error) => match Image::from_bytes(include_bytes!("../icons/tray.ico")) {
+                Ok(icon) => icon,
+                Err(tray_error) => Image::from_bytes(include_bytes!("../icons/icon.ico")).map_err(
+                    |icon_error| {
+                        format!(
+                            "load tray icon failed: tray-rgba.png={rgba_error}; icon.png={png_error}; tray.ico={tray_error}; icon.ico={icon_error}"
+                        )
+                    },
+                )?,
             }
         },
     };

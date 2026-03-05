@@ -10,6 +10,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::events;
+use base64::Engine as _;
+#[cfg(target_os = "windows")]
+use encoding_rs::GB18030;
 
 const CONFIG_FILE: &str = "opencorvus-manager.json";
 const LOG_FILE: &str = "opencorvus-manager-log.jsonl";
@@ -19,6 +22,7 @@ const SHARED_SESSION_FILE: &str = "shared-session.json";
 const MIRROR_PREFIX: &str = "[opencorvus-mirror]";
 const CORE_PID_FILE: &str = "opencorvus-core.pid";
 const CHANNEL_PID_FILE: &str = "opencorvus-channel.pid";
+const SCREENSHOT_SCHEME: &str = "opencorvus://screenshot/";
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {
@@ -230,6 +234,41 @@ fn serve_port(args: &[String]) -> Option<u16> {
         i += 1;
     }
     None
+}
+
+fn serve_host(args: &[String]) -> Option<String> {
+    let mut i = 0;
+    while i < args.len() {
+        let item = args[i].trim();
+        if let Some(value) = item.strip_prefix("--hostname=") {
+            let host = value.trim();
+            if !host.is_empty() {
+                return Some(host.to_string());
+            }
+        }
+        if let Some(value) = item.strip_prefix("--host=") {
+            let host = value.trim();
+            if !host.is_empty() {
+                return Some(host.to_string());
+            }
+        }
+        if (item == "--hostname" || item == "--host") && i + 1 < args.len() {
+            let host = args[i + 1].trim();
+            if !host.is_empty() {
+                return Some(host.to_string());
+            }
+            i += 2;
+            continue;
+        }
+        i += 1;
+    }
+    None
+}
+
+fn derive_server_url(args: &[String]) -> String {
+    let host = serve_host(args).unwrap_or_else(|| "127.0.0.1".into());
+    let port = serve_port(args).unwrap_or(7878);
+    format!("http://{host}:{port}")
 }
 
 fn with_port(args: Vec<String>, port: u16) -> Vec<String> {
@@ -686,6 +725,45 @@ fn open_target(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn reveal_target(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        if path.is_file() {
+            Command::new("explorer")
+                .arg(format!("/select,{}", path.to_string_lossy()))
+                .spawn()
+                .map_err(|error| error.to_string())?;
+        } else {
+            open_target(path)?;
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if path.is_file() {
+            Command::new("open")
+                .arg("-R")
+                .arg(path)
+                .spawn()
+                .map_err(|error| error.to_string())?;
+        } else {
+            open_target(path)?;
+        }
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        let target = if path.is_file() {
+            path.parent().unwrap_or(path)
+        } else {
+            path
+        };
+        Command::new("xdg-open")
+            .arg(target)
+            .spawn()
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn build_command(config: &ManagerConfig, args: &[String]) -> Command {
     build_process(&config.command, args, &config.cwd, &config.env)
 }
@@ -714,9 +792,11 @@ fn watch_pipe<R: Read + Send + 'static>(
     tag: &'static str,
 ) {
     std::thread::spawn(move || {
-        for line in BufReader::new(source).lines() {
-            match line {
-                Ok(text) if !text.trim().is_empty() => {
+        let mut reader = BufReader::new(source);
+        let mut raw = Vec::new();
+        loop {
+            match read_output_line(&mut reader, &mut raw) {
+                Ok(Some(text)) if !text.trim().is_empty() => {
                     if tag == "channel" {
                         if let Some(event) = parse_channel_mirror(&text) {
                             let _ = app.emit_to(
@@ -729,7 +809,8 @@ fn watch_pipe<R: Read + Send + 'static>(
                     }
                     push_log(&shared, &app, format!("[{tag}] {text}"));
                 }
-                Ok(_) => {}
+                Ok(Some(_)) => {}
+                Ok(None) => break,
                 Err(error) => {
                     push_log(
                         &shared,
@@ -741,6 +822,44 @@ fn watch_pipe<R: Read + Send + 'static>(
             }
         }
     });
+}
+
+fn trim_line_end(text: &str) -> &str {
+    text.trim_end_matches(|item| item == '\r' || item == '\n')
+}
+
+fn decode_output_bytes(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return text.to_string();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let (text, _, _) = GB18030.decode(bytes);
+        return text.into_owned();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        String::from_utf8_lossy(bytes).to_string()
+    }
+}
+
+fn decode_output_line(bytes: &[u8]) -> String {
+    trim_line_end(&decode_output_bytes(bytes)).to_string()
+}
+
+fn read_output_line<R: BufRead>(
+    reader: &mut R,
+    raw: &mut Vec<u8>,
+) -> std::io::Result<Option<String>> {
+    raw.clear();
+    let read = reader.read_until(b'\n', raw)?;
+    if read == 0 {
+        return Ok(None);
+    }
+    Ok(Some(decode_output_line(raw)))
 }
 
 fn emit_chat(
@@ -945,6 +1064,162 @@ fn ensure_session(args: Vec<String>, session_id: &str) -> Vec<String> {
     out
 }
 
+fn user_home_dir() -> PathBuf {
+    if let Ok(item) = std::env::var("OPENCORVUS_TEST_HOME") {
+        let val = item.trim();
+        if !val.is_empty() {
+            return PathBuf::from(val);
+        }
+    }
+    if let Ok(item) = std::env::var("USERPROFILE") {
+        let val = item.trim();
+        if !val.is_empty() {
+            return PathBuf::from(val);
+        }
+    }
+    if let Ok(item) = std::env::var("HOME") {
+        let val = item.trim();
+        if !val.is_empty() {
+            return PathBuf::from(val);
+        }
+    }
+    PathBuf::from(".")
+}
+
+fn opencorvus_data_dirs() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(item) = std::env::var("XDG_DATA_HOME") {
+        let val = item.trim();
+        if !val.is_empty() {
+            out.push(PathBuf::from(val).join("opencorvus"));
+        }
+    }
+    let home = user_home_dir();
+    out.push(home.join(".local").join("share").join("opencorvus"));
+    if cfg!(target_os = "windows") {
+        if let Ok(item) = std::env::var("LOCALAPPDATA") {
+            let val = item.trim();
+            if !val.is_empty() {
+                out.push(PathBuf::from(val).join("opencorvus"));
+            }
+        }
+        out.push(home.join("AppData").join("Local").join("opencorvus"));
+    }
+    out
+}
+
+fn screenshot_paths_from_url(url: &str) -> Option<Vec<PathBuf>> {
+    let rel = url.trim().strip_prefix(SCREENSHOT_SCHEME)?;
+    if rel.is_empty() {
+        return None;
+    }
+    let mut tail = PathBuf::new();
+    for part in rel.split('/') {
+        if part.is_empty() || part == "." || part == ".." {
+            return None;
+        }
+        tail.push(part);
+    }
+    Some(
+        opencorvus_data_dirs()
+            .into_iter()
+            .map(|base| base.join("screenshots").join(&tail))
+            .collect(),
+    )
+}
+
+fn screenshot_mime(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|item| item.to_str())
+        .map(|item| item.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("webp") => "image/webp",
+        Some("gif") => "image/gif",
+        _ => "image/png",
+    }
+}
+
+fn resolve_overlay_image_url(url: &str) -> String {
+    let trimmed = url.trim();
+    if !trimmed.starts_with(SCREENSHOT_SCHEME) {
+        return trimmed.to_string();
+    }
+    let Some(paths) = screenshot_paths_from_url(trimmed) else {
+        return trimmed.to_string();
+    };
+    for path in paths {
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        let mime = screenshot_mime(&path);
+        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+        return format!("data:{mime};base64,{data}");
+    }
+    trimmed.to_string()
+}
+
+fn has_continue_or_session(args: &[String]) -> bool {
+    let mut i = 0usize;
+    while i < args.len() {
+        let item = args[i].trim();
+        if item == "--continue" || item == "-c" || item.starts_with("--continue=") {
+            return true;
+        }
+        if item == "--session" || item == "-s" {
+            if i + 1 < args.len() {
+                let value = args[i + 1].trim();
+                if !value.is_empty() && !value.starts_with('-') {
+                    return true;
+                }
+            }
+            i += 2;
+            continue;
+        }
+        if let Some(value) = item.strip_prefix("--session=") {
+            if !value.trim().is_empty() {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
+fn strip_orphan_fork(args: Vec<String>) -> (Vec<String>, bool) {
+    if has_continue_or_session(&args) {
+        return (args, false);
+    }
+    let mut out = Vec::with_capacity(args.len());
+    let mut removed = false;
+    let mut i = 0usize;
+    while i < args.len() {
+        let item = args[i].trim();
+        if item == "--fork" {
+            removed = true;
+            if i + 1 < args.len() {
+                let next = args[i + 1].trim().to_ascii_lowercase();
+                if next == "true" || next == "false" {
+                    i += 2;
+                    continue;
+                }
+            }
+            i += 1;
+            continue;
+        }
+        if item.starts_with("--fork=") {
+            removed = true;
+            i += 1;
+            continue;
+        }
+        out.push(args[i].clone());
+        i += 1;
+    }
+    (out, removed)
+}
+
 fn emit_delta(app: &AppHandle, output: &mut String, text: &str) {
     if text.is_empty() {
         return;
@@ -1010,11 +1285,12 @@ fn process_json_line(
             .pointer("/part/filename")
             .and_then(|item| item.as_str())
             .unwrap_or("image");
+        let resolved = resolve_overlay_image_url(url);
         emit_chat(
             app,
             "image",
             None,
-            Some(url.into()),
+            Some(resolved),
             Some(alt.into()),
             None,
             None,
@@ -1043,11 +1319,12 @@ fn process_json_line(
                 .get("filename")
                 .and_then(|x| x.as_str())
                 .unwrap_or("image");
+            let resolved = resolve_overlay_image_url(url);
             emit_chat(
                 app,
                 "image",
                 None,
-                Some(url.into()),
+                Some(resolved),
                 Some(alt.into()),
                 None,
                 None,
@@ -1079,7 +1356,7 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
 
     push_log(shared, app, format!("prompt> {prompt}"));
 
-    let mut args = if config.run_args.first().map(|item| item.as_str()) == Some("run") {
+    let args = if config.run_args.first().map(|item| item.as_str()) == Some("run") {
         let formatted = ensure_json_format(config.run_args.clone());
         let attached = ensure_attach(formatted, &config.server_url);
         let directed = if config.cwd.trim().is_empty() {
@@ -1095,6 +1372,14 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
     } else {
         config.run_args.clone()
     };
+    let (mut args, orphan_fork_removed) = strip_orphan_fork(args);
+    if orphan_fork_removed {
+        push_log(
+            shared,
+            app,
+            "removed invalid `--fork` from run args (requires --continue or --session)",
+        );
+    }
     args.push(prompt);
 
     let mut cmd = build_command(&config, &args);
@@ -1124,16 +1409,19 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         let shared2 = shared.clone();
         stderr_task = Some(std::thread::spawn(move || {
             let mut text = String::new();
-            for line in BufReader::new(stderr).lines() {
-                match line {
-                    Ok(item) if !item.trim().is_empty() => {
+            let mut reader = BufReader::new(stderr);
+            let mut raw = Vec::new();
+            loop {
+                match read_output_line(&mut reader, &mut raw) {
+                    Ok(Some(item)) if !item.trim().is_empty() => {
                         push_log(&shared2, &app2, format!("[run:err] {item}"));
                         if !text.is_empty() {
                             text.push('\n');
                         }
                         text.push_str(item.trim_end());
                     }
-                    Ok(_) => {}
+                    Ok(Some(_)) => {}
+                    Ok(None) => break,
                     Err(error) => {
                         push_log(
                             &shared2,
@@ -1152,9 +1440,11 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
     let mut delta_seen = false;
     let mut captured_session: Option<String> = None;
     if let Some(stdout) = child.stdout.take() {
-        for line in BufReader::new(stdout).lines() {
-            match line {
-                Ok(item) if !item.trim().is_empty() => {
+        let mut reader = BufReader::new(stdout);
+        let mut raw = Vec::new();
+        loop {
+            match read_output_line(&mut reader, &mut raw) {
+                Ok(Some(item)) if !item.trim().is_empty() => {
                     if let Ok(value) = serde_json::from_str::<serde_json::Value>(&item) {
                         if captured_session.is_none() {
                             if let Some(session_id) =
@@ -1175,7 +1465,8 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
                     emit_delta(app, &mut out, &chunk);
                     delta_seen = true;
                 }
-                Ok(_) => {}
+                Ok(Some(_)) => {}
+                Ok(None) => break,
                 Err(error) => {
                     let line = format!("[run] stream read failed: {error}");
                     push_log(shared, app, line.clone());
@@ -1535,7 +1826,7 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
             if let Some(next) = free_port() {
                 if next != port {
                     config.serve_args = with_port(config.serve_args.clone(), next);
-                    config.server_url = format!("http://127.0.0.1:{next}");
+                    config.server_url = derive_server_url(&config.serve_args);
                     {
                         let mut state = shared.lock().unwrap();
                         state.config = config.clone();
@@ -1555,6 +1846,30 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
                 }
             }
         }
+    }
+
+    // Keep attach URL in sync with serve args to avoid port drift between
+    // core server and channel/run clients.
+    let expected_server_url = derive_server_url(&config.serve_args);
+    if config.server_url != expected_server_url {
+        let old = config.server_url.clone();
+        config.server_url = expected_server_url.clone();
+        {
+            let mut state = shared.lock().unwrap();
+            state.config = config.clone();
+        }
+        if let Err(error) = save_config(app, &config) {
+            push_log(
+                shared,
+                app,
+                format!("failed to save synced server_url: {error}"),
+            );
+        }
+        push_log(
+            shared,
+            app,
+            format!("synced server_url from `{old}` to `{expected_server_url}`"),
+        );
     }
 
     match clear_shared_session(shared) {
@@ -1683,6 +1998,35 @@ pub fn save(
     push_log(shared, app, "configuration saved");
     emit_state(shared, app);
     Ok(snapshot(shared))
+}
+
+pub fn reveal_log_path(shared: &Shared, app: &AppHandle) -> Result<String, String> {
+    let path = {
+        let state = shared.lock().unwrap();
+        let item = state.log_path.trim();
+        if item.is_empty() {
+            log_path(app)?
+        } else {
+            PathBuf::from(item)
+        }
+    };
+
+    let target = if path.exists() {
+        path.clone()
+    } else if let Some(parent) = path.parent() {
+        if parent.exists() {
+            parent.to_path_buf()
+        } else {
+            return Err(format!("log path does not exist: {}", path.to_string_lossy()));
+        }
+    } else {
+        return Err(format!("log path does not exist: {}", path.to_string_lossy()));
+    };
+
+    reveal_target(&target)?;
+    let value = path.to_string_lossy().to_string();
+    push_log(shared, app, format!("revealed log path: {value}"));
+    Ok(value)
 }
 
 pub fn open_mcp_config(shared: &Shared, app: &AppHandle) -> Result<String, String> {
@@ -1838,8 +2182,8 @@ pub fn list_sessions(shared: &Shared, app: &AppHandle) -> Result<Vec<SessionList
     let output = cmd
         .output()
         .map_err(|error| format!("failed to load sessions from database: {error}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = decode_output_bytes(&output.stdout).trim().to_string();
+    let stderr = decode_output_bytes(&output.stderr).trim().to_string();
     if !output.status.success() {
         let hint = if stderr.is_empty() {
             "unknown error".to_string()
@@ -1902,8 +2246,8 @@ pub fn delete_session(
     let output = cmd
         .output()
         .map_err(|error| format!("failed to delete session from database: {error}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = decode_output_bytes(&output.stdout).trim().to_string();
+    let stderr = decode_output_bytes(&output.stderr).trim().to_string();
     if !output.status.success() {
         let hint = if !stderr.is_empty() {
             stderr
@@ -1930,6 +2274,81 @@ pub fn delete_session(
     push_log(shared, app, format!("session deleted from database: {id}"));
     emit_state(shared, app);
     Ok(snapshot(shared))
+}
+
+fn safe_file_name(input: &str) -> String {
+    let id = input
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+        .collect::<String>();
+    if id.is_empty() {
+        "session".into()
+    } else {
+        id
+    }
+}
+
+pub fn export_session_html(
+    shared: &Shared,
+    app: &AppHandle,
+    session_id: String,
+) -> Result<String, String> {
+    let id = session_id.trim().to_string();
+    if id.is_empty() {
+        return Err("session id is empty".into());
+    }
+
+    let config = {
+        let state = shared.lock().unwrap();
+        state.config.clone()
+    };
+
+    let dir = work_dir(shared).join(".opencorvus").join("exports");
+    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    let fallback = dir.join(format!("session-{}-trace.html", safe_file_name(&id)));
+    let fallback_text = fallback.to_string_lossy().to_string();
+
+    let mut cmd = build_command(
+        &config,
+        &[
+            "export".into(),
+            id.clone(),
+            "--html".into(),
+            "--out".into(),
+            fallback_text.clone(),
+        ],
+    );
+    cmd.stdin(Stdio::null());
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+
+    let output = cmd
+        .output()
+        .map_err(|error| format!("failed to export session HTML: {error}"))?;
+    let stdout = decode_output_bytes(&output.stdout).trim().to_string();
+    let stderr = decode_output_bytes(&output.stderr).trim().to_string();
+    if !output.status.success() {
+        let hint = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            "unknown error".to_string()
+        };
+        return Err(format!("failed to run `export --html`: {hint}"));
+    }
+
+    let file = if !stdout.is_empty() {
+        stdout.lines().last().unwrap_or("").trim().to_string()
+    } else {
+        fallback_text
+    };
+
+    let path = PathBuf::from(file.trim());
+    open_target(&path)?;
+    let value = path.to_string_lossy().to_string();
+    push_log(shared, app, format!("session HTML exported: {value}"));
+    Ok(value)
 }
 
 pub fn send(shared: &Shared, app: &AppHandle, prompt: String) -> Result<SendAck, String> {

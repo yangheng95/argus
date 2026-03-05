@@ -11,9 +11,6 @@ const els = {
   runtimeCard: document.getElementById("runtimeCard"),
   toggleLogsBtn: document.getElementById("toggleLogsBtn"),
   openLogPanelBtn: document.getElementById("openLogPanelBtn"),
-  logPanel: document.getElementById("logPanel"),
-  closeLogPanelBtn: document.getElementById("closeLogPanelBtn"),
-  logPathValue: document.getElementById("logPathValue"),
   sendForm: document.getElementById("sendForm"),
   sendBtn: document.getElementById("sendBtn"),
   promptInput: document.getElementById("promptInput"),
@@ -31,12 +28,19 @@ const els = {
   createSkillBtn: document.getElementById("createSkillBtn"),
   cwdInput: document.getElementById("cwdInput"),
   openEnvPanelBtn: document.getElementById("openEnvPanelBtn"),
-  loadSessionBtn: document.getElementById("loadSessionBtn"),
-  deleteSessionBtn: document.getElementById("deleteSessionBtn"),
+  openSessionPanelBtn: document.getElementById("openSessionPanelBtn"),
+  exportSessionBtn: document.getElementById("exportSessionBtn"),
+  activeSessionId: document.getElementById("activeSessionId"),
   envPanel: document.getElementById("envPanel"),
   closeEnvPanelBtn: document.getElementById("closeEnvPanelBtn"),
   addEnvBtn: document.getElementById("addEnvBtn"),
   envGroups: document.getElementById("envGroups"),
+  sessionPanel: document.getElementById("sessionPanel"),
+  closeSessionPanelBtn: document.getElementById("closeSessionPanelBtn"),
+  refreshSessionListBtn: document.getElementById("refreshSessionListBtn"),
+  sessionSearchInput: document.getElementById("sessionSearchInput"),
+  sessionCountText: document.getElementById("sessionCountText"),
+  sessionList: document.getElementById("sessionList"),
 }
 
 const state = {
@@ -52,11 +56,23 @@ const state = {
   pendingInput: "",
   config: null,
   envRows: [],
-  logsCollapsed: false,
+  logsCollapsed: true,
+  sharedSessionId: "",
+  sessions: [],
+  sessionBusy: false,
+  sessionFilter: "",
+  pendingDeleteId: "",
+  sessionsUpdatedAt: 0,
+  sendingProbeTimer: null,
+  sendingProbeBusy: false,
 }
 
 const STREAM_CHAR_DELAY = 10
+const STREAM_SPLIT_MIN = 120
+const STREAM_SPLIT_SOFT_MAX = 320
+const SENDING_PROBE_MS = 1500
 const LOGS_COLLAPSE_KEY = "opencorvus.manager.logs.collapsed"
+const SESSION_CACHE_MS = 10_000
 
 const defaults = Object.freeze({
   command: "opencorvus",
@@ -198,14 +214,42 @@ function updateCharCount() {
   els.charCount.textContent = len > 0 ? len : ""
 }
 
+function stopSendingProbe() {
+  if (state.sendingProbeTimer) {
+    clearTimeout(state.sendingProbeTimer)
+    state.sendingProbeTimer = null
+  }
+  state.sendingProbeBusy = false
+}
+
+function scheduleSendingProbe(delay = SENDING_PROBE_MS) {
+  if (!state.sending) return
+  if (state.sendingProbeTimer) return
+  state.sendingProbeTimer = setTimeout(runSendingProbe, delay)
+}
+
+async function runSendingProbe() {
+  state.sendingProbeTimer = null
+  if (!state.sending || state.sendingProbeBusy) return
+  state.sendingProbeBusy = true
+  try {
+    const snapshot = await invoke(cmd.managerGet)
+    applySnapshot(snapshot)
+  } catch {}
+  state.sendingProbeBusy = false
+  if (state.sending) scheduleSendingProbe()
+}
+
 function setSending(next) {
   state.sending = !!next
   if (state.sending) {
+    scheduleSendingProbe()
     els.sendBtn.textContent = "Stop"
     els.sendBtn.classList.add("stopping")
     els.sendBtn.disabled = false
     els.composerHint.textContent = "Running... click Stop to abort"
   } else {
+    stopSendingProbe()
     els.sendBtn.textContent = "Send"
     els.sendBtn.classList.remove("stopping")
     els.sendBtn.disabled = false
@@ -457,8 +501,8 @@ function panelOpen(panel, open) {
 }
 
 function closePanels() {
-  panelOpen(els.logPanel, false)
   panelOpen(els.envPanel, false)
+  panelOpen(els.sessionPanel, false)
 }
 
 function openPanel(panel) {
@@ -476,12 +520,24 @@ function setStatus(snapshot) {
   els.pidText.textContent = `Core PID: ${pid}${channel}${session}`
 }
 
+function renderActiveSession() {
+  if (!els.activeSessionId) return
+  const id = state.sharedSessionId
+  if (!id) {
+    els.activeSessionId.textContent = "No session loaded"
+    els.activeSessionId.classList.add("empty")
+    return
+  }
+  els.activeSessionId.textContent = id
+  els.activeSessionId.classList.remove("empty")
+}
+
 function setLogPath(value) {
   const text = typeof value === "string" && value.trim() ? value.trim() : "-"
   state.logPath = text
-  if (els.logPathValue) els.logPathValue.textContent = text
   if (els.openLogPanelBtn) {
-    els.openLogPanelBtn.title = text === "-" ? "Log path unavailable" : text
+    els.openLogPanelBtn.disabled = text === "-"
+    els.openLogPanelBtn.title = text === "-" ? "Log file unavailable" : `Open folder and locate file\n${text}`
   }
 }
 
@@ -770,8 +826,34 @@ function streamTick() {
     item.touched = true
     item.text += next
     renderMessage(streamEntry(), item.text, false)
+    if (streamShouldSplit(item)) streamCut(item)
   }
   item.timer = setTimeout(streamTick, STREAM_CHAR_DELAY)
+}
+
+function streamInFence(text) {
+  const hit = text.match(/```/g)
+  return !!hit && hit.length % 2 === 1
+}
+
+function streamShouldSplit(item) {
+  if (!item || !item.entry) return false
+  const text = item.text
+  if (!text || streamInFence(text)) return false
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  if (trimmed.length >= STREAM_SPLIT_MIN && /\n\n$/.test(text)) return true
+  if (trimmed.length < STREAM_SPLIT_SOFT_MAX) return false
+  return /[\u3002\uff01\uff1f.!?]\s*$/.test(text)
+}
+
+function streamCut(item) {
+  if (!item || !item.entry) return
+  if (!item.text.trim()) return
+  item.entry.body.classList.remove("stream-cursor")
+  renderMessage(item.entry, item.text, true)
+  item.entry = null
+  item.text = ""
 }
 
 function streamFinalize(item, payload) {
@@ -823,8 +905,11 @@ function streamImage(url, alt) {
   if (!safe) return
   const name = typeof alt === "string" && alt.trim() ? alt.trim() : "image"
   const item = streamPrepare()
-  const prefix = item.text.trim() ? "\n\n" : ""
-  streamAppend(`${prefix}![${name}](${safe})`)
+  if (item.closed) return
+  if (item.text.trim()) streamCut(item)
+  const entry = makeMessage("assistant")
+  renderMessage(entry, `![${name}](${safe})`, true)
+  item.touched = true
 }
 
 function streamDone(payload) {
@@ -943,11 +1028,20 @@ function loadLogLayout() {
     return
   }
   const stored = window.localStorage.getItem(LOGS_COLLAPSE_KEY)
+  if (stored === "1") {
+    setLogsCollapsed(true, false)
+    return
+  }
+  if (stored === "0") {
+    setLogsCollapsed(false, false)
+    return
+  }
   if (stored === null) {
     setLogsCollapsed(true, false)
     return
   }
-  setLogsCollapsed(stored === "1", false)
+  // Legacy/invalid values fallback to collapsed by default.
+  setLogsCollapsed(true, false)
 }
 
 function normalizeLog(item) {
@@ -985,6 +1079,8 @@ function appendLog(item) {
 function applySnapshot(snapshot) {
   if (!snapshot) return
   setStatus(snapshot)
+  state.sharedSessionId = typeof snapshot.shared_session_id === "string" ? snapshot.shared_session_id.trim() : ""
+  renderActiveSession()
   if (typeof snapshot.prompt_running === "boolean") setSending(snapshot.prompt_running)
   setLogPath(snapshot.log_path)
   if (Array.isArray(snapshot.logs)) {
@@ -995,6 +1091,7 @@ function applySnapshot(snapshot) {
     renderLogs()
   }
   if (!state.configLoaded) fillConfig(snapshot.config)
+  if (els.sessionPanel?.classList.contains("open")) renderSessionList()
 }
 
 async function refreshState() {
@@ -1032,6 +1129,11 @@ async function openMcpConfig() {
 async function openSkillFolder() {
   const dir = await invoke(cmd.managerOpenSkillDir)
   addMessage("system", `Skills folder opened: ${dir}`)
+}
+
+async function revealLogPath() {
+  const file = await invoke(cmd.managerRevealLogPath)
+  addMessage("system", `Log file revealed: ${file}`)
 }
 
 async function addMcp() {
@@ -1083,71 +1185,259 @@ async function createSkill() {
   addMessage("system", `Skill scaffold ready: ${file}`)
 }
 
-function sessionLabel(item, index) {
+function sessionDate(stamp) {
+  const num = Number(stamp)
+  if (!Number.isFinite(num) || num <= 0) return "-"
+  return new Date(num).toLocaleString()
+}
+
+function cleanSession(item) {
   const id = String(item?.id ?? "").trim()
-  const titleRaw = String(item?.title ?? "")
+  if (!id) return
+  const title = String(item?.title ?? "")
     .replace(/\s+/g, " ")
     .trim()
-  const title = titleRaw || "(untitled)"
-  const stamp = Number(item?.updated ?? 0)
-  const updated = Number.isFinite(stamp) && stamp > 0 ? new Date(stamp).toLocaleString() : "-"
-  return `${index + 1}. ${id} | ${title} | ${updated}`
+  const updated = Number(item?.updated ?? 0)
+  const created = Number(item?.created ?? 0)
+  const project = typeof item?.projectId === "string" ? item.projectId.trim() : ""
+  const directory = typeof item?.directory === "string" ? item.directory.trim() : ""
+  return {
+    id,
+    title: title || "(untitled)",
+    updated: Number.isFinite(updated) ? updated : 0,
+    created: Number.isFinite(created) ? created : 0,
+    project,
+    directory,
+  }
 }
 
-function pickSessionId(list, action) {
-  const limit = Math.min(24, list.length)
-  const sample = list
-    .slice(0, limit)
-    .map((item, index) => sessionLabel(item, index))
-    .join("\n")
-  const input = window.prompt(`Select session index (1-${limit}) or input session id to ${action}:\n\n${sample}`, "1")
-  if (input === null) return ""
-  const raw = input.trim()
-  if (!raw) return ""
-
-  const idx = Number.parseInt(raw, 10)
-  if (!Number.isFinite(idx)) return raw
-  if (idx < 1 || idx > limit) return raw
-  return String(list[idx - 1]?.id ?? "").trim()
+function setSessionBusy(next) {
+  state.sessionBusy = !!next
+  if (els.refreshSessionListBtn) els.refreshSessionListBtn.disabled = state.sessionBusy
 }
 
-async function loadSession() {
-  const list = await invoke(cmd.managerListSessions)
-  if (!Array.isArray(list) || list.length === 0) {
-    addMessage("system", "No sessions found in database.")
-    return
-  }
-
-  const sessionId = pickSessionId(list, "load")
-  if (!sessionId) {
-    addMessage("system", "Invalid session selection.")
-    return
-  }
-
-  const snapshot = await invoke(cmd.managerUseSession, { sessionId })
-  applySnapshot(snapshot)
-  addMessage("system", `Loaded session: ${sessionId}`)
+function sessionInfo(item) {
+  const stamp = item.updated > 0 ? `Updated: ${sessionDate(item.updated)}` : `Created: ${sessionDate(item.created)}`
+  const out = [stamp]
+  if (item.project) out.push(`Project: ${item.project}`)
+  if (item.directory) out.push(item.directory)
+  return out.join(" | ")
 }
 
-async function deleteSession() {
-  const list = await invoke(cmd.managerListSessions)
-  if (!Array.isArray(list) || list.length === 0) {
-    addMessage("system", "No sessions found in database.")
+function filteredSessions() {
+  const key = state.sessionFilter.trim().toLowerCase()
+  if (!key) return state.sessions
+  return state.sessions.filter((item) =>
+    `${item.id}\n${item.title}\n${item.project}\n${item.directory}`.toLowerCase().includes(key),
+  )
+}
+
+function renderSessionCount(visible) {
+  if (!els.sessionCountText) return
+  if (state.sessionBusy) {
+    els.sessionCountText.textContent = "Loading sessions..."
+    return
+  }
+  if (!state.sessionFilter.trim()) {
+    els.sessionCountText.textContent = `${state.sessions.length} sessions`
+    return
+  }
+  els.sessionCountText.textContent = `${visible.length} / ${state.sessions.length} sessions`
+}
+
+function renderSessionList() {
+  if (!els.sessionList) return
+  const list = filteredSessions()
+  renderSessionCount(list)
+  els.sessionList.innerHTML = ""
+
+  if (state.sessionBusy && state.sessions.length === 0) {
+    const empty = document.createElement("div")
+    empty.className = "session-empty"
+    empty.textContent = "Loading DB sessions..."
+    els.sessionList.appendChild(empty)
     return
   }
 
-  const sessionId = pickSessionId(list, "delete")
-  if (!sessionId) {
-    addMessage("system", "Invalid session selection.")
+  if (list.length === 0) {
+    const empty = document.createElement("div")
+    empty.className = "session-empty"
+    empty.textContent = state.sessions.length === 0 ? "No sessions found in database." : "No sessions match your filter."
+    els.sessionList.appendChild(empty)
     return
   }
 
-  const approved = window.confirm(`Delete session ${sessionId} from database?\n\nThis action cannot be undone.`)
-  if (!approved) return
+  for (const item of list) {
+    const row = document.createElement("article")
+    row.className = "session-row"
+    if (item.id === state.sharedSessionId) row.classList.add("active")
 
-  const snapshot = await invoke(cmd.managerDeleteSession, { sessionId })
-  applySnapshot(snapshot)
-  addMessage("system", `Deleted session: ${sessionId}`)
+    const main = document.createElement("div")
+    main.className = "session-main"
+
+    const title = document.createElement("div")
+    title.className = "session-title"
+    title.textContent = item.title
+    main.appendChild(title)
+
+    const id = document.createElement("code")
+    id.className = "session-id"
+    id.textContent = item.id
+    main.appendChild(id)
+
+    const meta = document.createElement("div")
+    meta.className = "session-meta"
+    meta.textContent = sessionInfo(item)
+    main.appendChild(meta)
+
+    const actions = document.createElement("div")
+    actions.className = "session-actions"
+
+    if (state.pendingDeleteId === item.id) {
+      const approve = document.createElement("button")
+      approve.className = "btn-danger"
+      approve.textContent = "Confirm"
+      approve.disabled = state.sessionBusy
+      approve.addEventListener("click", async () => {
+        try {
+          await deleteSessionById(item.id)
+        } catch (error) {
+          addMessage("system", `Delete session failed: ${error?.message || String(error)}`)
+        }
+      })
+      actions.appendChild(approve)
+
+      const cancel = document.createElement("button")
+      cancel.textContent = "Cancel"
+      cancel.disabled = state.sessionBusy
+      cancel.addEventListener("click", () => {
+        state.pendingDeleteId = ""
+        renderSessionList()
+      })
+      actions.appendChild(cancel)
+    } else {
+      const load = document.createElement("button")
+      load.textContent = "Load"
+      load.disabled = state.sessionBusy
+      load.addEventListener("click", async () => {
+        try {
+          await loadSessionById(item.id)
+        } catch (error) {
+          addMessage("system", `Load session failed: ${error?.message || String(error)}`)
+        }
+      })
+      actions.appendChild(load)
+
+      const exp = document.createElement("button")
+      exp.textContent = "Export"
+      exp.disabled = state.sessionBusy
+      exp.addEventListener("click", async () => {
+        try {
+          await exportSessionById(item.id)
+        } catch (error) {
+          addMessage("system", `Export HTML failed: ${error?.message || String(error)}`)
+        }
+      })
+      actions.appendChild(exp)
+
+      const del = document.createElement("button")
+      del.className = "btn-danger"
+      del.textContent = "Delete"
+      del.disabled = state.sessionBusy
+      del.addEventListener("click", () => {
+        state.pendingDeleteId = item.id
+        renderSessionList()
+      })
+      actions.appendChild(del)
+    }
+
+    row.appendChild(main)
+    row.appendChild(actions)
+    els.sessionList.appendChild(row)
+  }
+}
+
+async function refreshSessions(announce = false) {
+  setSessionBusy(true)
+  renderSessionList()
+  try {
+    const list = await invoke(cmd.managerListSessions)
+    state.sessions = (Array.isArray(list) ? list : [])
+      .map((item) => cleanSession(item))
+      .filter((item) => Boolean(item))
+      .sort((a, b) => {
+        const x = (b.updated > 0 ? b.updated : b.created) - (a.updated > 0 ? a.updated : a.created)
+        if (x !== 0) return x
+        return a.id.localeCompare(b.id)
+      })
+    state.sessionsUpdatedAt = Date.now()
+    state.pendingDeleteId = ""
+    if (announce) addMessage("system", `DB sessions refreshed (${state.sessions.length}).`)
+  } finally {
+    setSessionBusy(false)
+    renderSessionList()
+  }
+}
+
+async function loadSessionById(sessionId) {
+  setSessionBusy(true)
+  renderSessionList()
+  try {
+    const snapshot = await invoke(cmd.managerUseSession, { sessionId })
+    applySnapshot(snapshot)
+    addMessage("system", `Loaded session: ${sessionId}`)
+  } finally {
+    setSessionBusy(false)
+    renderSessionList()
+  }
+}
+
+async function deleteSessionById(sessionId) {
+  setSessionBusy(true)
+  renderSessionList()
+  try {
+    const snapshot = await invoke(cmd.managerDeleteSession, { sessionId })
+    applySnapshot(snapshot)
+    state.sessions = state.sessions.filter((item) => item.id !== sessionId)
+    state.sessionsUpdatedAt = Date.now()
+    state.pendingDeleteId = ""
+    addMessage("system", `Deleted session: ${sessionId}`)
+  } finally {
+    setSessionBusy(false)
+    renderSessionList()
+  }
+}
+
+async function exportSessionById(sessionId) {
+  setSessionBusy(true)
+  renderSessionList()
+  try {
+    const file = await invoke(cmd.managerExportSessionHtml, { sessionId })
+    addMessage("system", `Exported HTML log: ${file}`)
+  } finally {
+    setSessionBusy(false)
+    renderSessionList()
+  }
+}
+
+function openSessionPanel(force = false) {
+  openPanel(els.sessionPanel)
+  renderSessionList()
+  const stale = Date.now() - state.sessionsUpdatedAt > SESSION_CACHE_MS
+  if (!force && state.sessions.length > 0 && !stale) return
+  void refreshSessions().catch((error) => {
+    addMessage("system", `Load sessions failed: ${error?.message || String(error)}`)
+  })
+}
+
+async function exportSessionHtml() {
+  const sessionId = state.sharedSessionId
+  if (sessionId) {
+    await exportSessionById(sessionId)
+    return
+  }
+  openSessionPanel()
+  addMessage("system", "No active session. Select one from DB Sessions and click Export.")
 }
 
 async function sendPrompt(prompt) {
@@ -1268,12 +1558,12 @@ function bindEvents() {
     setLogsCollapsed(!state.logsCollapsed)
   })
 
-  els.openLogPanelBtn?.addEventListener("click", () => {
-    openPanel(els.logPanel)
-  })
-
-  els.closeLogPanelBtn?.addEventListener("click", () => {
-    closePanels()
+  els.openLogPanelBtn?.addEventListener("click", async () => {
+    try {
+      await revealLogPath()
+    } catch (error) {
+      addMessage("system", `Open log path failed: ${error?.message || String(error)}`)
+    }
   })
 
   els.openEnvPanelBtn?.addEventListener("click", () => {
@@ -1284,7 +1574,28 @@ function bindEvents() {
     closePanels()
   })
 
-  const panels = [els.logPanel, els.envPanel]
+  els.openSessionPanelBtn?.addEventListener("click", () => {
+    openSessionPanel()
+  })
+
+  els.closeSessionPanelBtn?.addEventListener("click", () => {
+    closePanels()
+  })
+
+  els.refreshSessionListBtn?.addEventListener("click", async () => {
+    try {
+      await refreshSessions(true)
+    } catch (error) {
+      addMessage("system", `Refresh sessions failed: ${error?.message || String(error)}`)
+    }
+  })
+
+  els.sessionSearchInput?.addEventListener("input", (event) => {
+    state.sessionFilter = String(event.target?.value ?? "")
+    renderSessionList()
+  })
+
+  const panels = [els.envPanel, els.sessionPanel]
   panels.forEach((panel) => {
     panel?.addEventListener("click", (event) => {
       if (event.target !== panel) return
@@ -1333,19 +1644,11 @@ function bindEvents() {
     }
   })
 
-  els.loadSessionBtn?.addEventListener("click", async () => {
+  els.exportSessionBtn?.addEventListener("click", async () => {
     try {
-      await loadSession()
+      await exportSessionHtml()
     } catch (error) {
-      addMessage("system", `Load session failed: ${error?.message || String(error)}`)
-    }
-  })
-
-  els.deleteSessionBtn?.addEventListener("click", async () => {
-    try {
-      await deleteSession()
-    } catch (error) {
-      addMessage("system", `Delete session failed: ${error?.message || String(error)}`)
+      addMessage("system", `Export HTML failed: ${error?.message || String(error)}`)
     }
   })
 }
@@ -1416,6 +1719,8 @@ async function boot() {
   loadLogLayout()
   bindEvents()
   bindTauriEvents()
+  renderActiveSession()
+  renderSessionList()
   addMessage("system", "OpenCorvus manager is ready.")
   await refreshState()
 }

@@ -269,9 +269,12 @@ export class BotCore {
     this.session.start(session.sessionId)
 
     const result = await this.submitTask(session.sessionId, text, msg.platform)
-    if (!result) {
+    if (result !== "ok") {
       this.session.stop(session.sessionId)
-      const notice = "Failed to send prompt."
+      const notice =
+        result === "pending"
+          ? "Task did not complete (runtime stopped or timed out). Session queue has been released; send the next instruction."
+          : "Failed to send prompt."
       this.mirror("system", notice, {
         platform: msg.platform,
         channel: msg.channel,
@@ -296,8 +299,20 @@ export class BotCore {
         wait: true,
       })
       if (!result.error) {
-        console.log(`[BotCore] Task completed via tui.runtime.submitTask for session ${sessionID}`)
-        return true
+        const data = result.data as
+          | {
+              completed?: boolean
+              waited?: boolean
+            }
+          | undefined
+        if (data?.completed) {
+          console.log(`[BotCore] Task completed via tui.runtime.submitTask for session ${sessionID}`)
+          return "ok" as const
+        }
+        console.warn(
+          `[BotCore] tui.runtime.submitTask did not reach completion for session ${sessionID} (waited=${data?.waited ? "true" : "false"})`,
+        )
+        return "pending" as const
       }
       console.error("[BotCore] tui.runtime.submitTask error:", JSON.stringify(result.error).slice(0, 500))
     }
@@ -310,10 +325,10 @@ export class BotCore {
     })
     if (result.error) {
       console.error("[BotCore] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
-      return false
+      return "failed" as const
     }
     console.log(`[BotCore] Prompt sent via session.promptAsync for session ${sessionID}`)
-    return true
+    return "ok" as const
   }
 
   private async startRuntime(sessionID: string) {

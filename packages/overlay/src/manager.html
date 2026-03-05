@@ -240,9 +240,9 @@
       .msg {
         position: relative;
         max-width: 88%;
-        padding: 9px 13px;
+        padding: 8px 12px;
         border-radius: var(--radius-md);
-        line-height: 1.5;
+        line-height: 1.45;
         font-size: 13px;
         border: 1px solid transparent;
         animation: msg-in 200ms var(--ease) both;
@@ -286,13 +286,13 @@
       .msg-meta {
         font-size: 10px;
         color: var(--text-muted);
-        margin-top: 3px;
-        opacity: 0;
+        margin-top: 2px;
+        opacity: 0.72;
         transition: opacity 150ms;
       }
 
       .msg:hover .msg-meta {
-        opacity: 0.7;
+        opacity: 0.9;
       }
 
       /* markdown */
@@ -388,6 +388,8 @@
         background: linear-gradient(135deg, rgba(var(--brand-from-rgb), 0.88), rgba(var(--brand-to-rgb), 0.72));
         border-color: rgba(var(--brand-from-rgb), 0.3);
         color: #fff;
+        padding-top: 7px;
+        padding-bottom: 6px;
         border-bottom-right-radius: 4px;
       }
 
@@ -396,6 +398,8 @@
       }
       .msg.user .msg-meta {
         color: rgba(255, 255, 255, 0.7);
+        opacity: 0.86;
+        text-align: right;
       }
       .msg.user .msg-copy {
         background: rgba(255, 255, 255, 0.25);
@@ -624,6 +628,23 @@
         align-content: start;
       }
 
+      .cfg-group {
+        border: 1px solid rgba(20, 50, 94, 0.1);
+        border-radius: var(--radius-sm);
+        background: rgba(20, 50, 94, 0.025);
+        padding: 10px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .cfg-group-head {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
       .cfg label {
         display: grid;
         gap: 4px;
@@ -755,6 +776,41 @@
         min-width: 100px;
       }
 
+      .session-inline {
+        display: grid;
+        gap: 6px;
+      }
+
+      .session-inline-meta {
+        display: grid;
+        gap: 4px;
+      }
+
+      .session-inline-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .session-inline-id {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-secondary);
+        background: rgba(var(--surface-dark-rgb), 0.42);
+        border: 1px solid rgba(20, 50, 94, 0.14);
+        border-radius: var(--radius-sm);
+        padding: 6px 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .session-inline-id.empty {
+        color: var(--text-muted);
+      }
+
       .cfg details {
         border: 1px solid rgba(20, 50, 94, 0.1);
         border-radius: var(--radius-sm);
@@ -832,6 +888,12 @@
         text-transform: uppercase;
       }
 
+      .panel-head-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
       .panel-body {
         min-height: 0;
         flex: 1;
@@ -845,16 +907,103 @@
         align-content: start;
       }
 
-      .log-path-box {
-        font-family: var(--font-mono);
-        font-size: 12px;
-        color: var(--text-secondary);
-        padding: 10px 12px;
-        border: 1px solid rgba(20, 50, 94, 0.14);
+      .panel-body-session {
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .session-tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .session-tools input {
+        flex: 1;
+        min-width: 220px;
+        font-family: var(--font-ui);
+      }
+
+      .session-count {
+        font-size: 11px;
+        color: var(--text-muted);
+      }
+
+      .session-list {
+        min-height: 160px;
+        display: grid;
+        gap: 8px;
+        align-content: start;
+      }
+
+      .session-empty {
+        border: 1px dashed rgba(20, 50, 94, 0.2);
         border-radius: var(--radius-sm);
-        background: rgba(var(--surface-dark-rgb), 0.42);
-        white-space: pre-wrap;
-        word-break: break-all;
+        padding: 12px;
+        font-size: 12px;
+        color: var(--text-muted);
+        background: rgba(20, 50, 94, 0.03);
+      }
+
+      .session-row {
+        border: 1px solid rgba(20, 50, 94, 0.12);
+        border-radius: var(--radius-sm);
+        background: rgba(20, 50, 94, 0.03);
+        padding: 10px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .session-row.active {
+        border-color: rgba(var(--brand-from-rgb), 0.45);
+        background: rgba(var(--brand-from-rgb), 0.08);
+      }
+
+      .session-main {
+        min-width: 0;
+        display: grid;
+        gap: 5px;
+      }
+
+      .session-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .session-id {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .session-meta {
+        font-size: 11px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .session-actions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .session-actions button {
+        min-width: 84px;
       }
 
       /* Scrollbars */
@@ -875,6 +1024,20 @@
       @media (max-width: 1100px) {
         .content {
           grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 860px) {
+        .session-row {
+          grid-template-columns: 1fr;
+        }
+
+        .session-actions {
+          justify-content: flex-start;
+        }
+
+        .session-actions button {
+          flex: 1;
         }
       }
     </style>
@@ -929,26 +1092,50 @@
           <section class="card">
             <div class="card-head">Bot Config</div>
             <div class="cfg">
-              <div class="cfg-entry">
-                <button id="openMcpBtn" type="button">MCP Config</button>
-                <button id="openSkillBtn" type="button">Skills Folder</button>
-              </div>
-              <div class="cfg-entry">
-                <button id="addMcpBtn" type="button">+ Add MCP</button>
-                <button id="createSkillBtn" type="button">+ Create Skill</button>
-              </div>
-              <label
-                >Working Directory
-                <input id="cwdInput" placeholder="(optional)" />
-              </label>
-              <p class="cfg-hint">Open the environment panel to edit runtime variables and usage notes.</p>
-              <div class="cfg-entry">
-                <button id="openEnvPanelBtn" type="button">Environment Variables</button>
-                <button id="loadSessionBtn" type="button">Load DB Session</button>
-                <button class="btn-danger" id="deleteSessionBtn" type="button">Delete DB Session</button>
-              </div>
+              <section class="cfg-group">
+                <div class="cfg-group-head">Workspace</div>
+                <label
+                  >Working Directory
+                  <input id="cwdInput" placeholder="(optional)" />
+                </label>
+                <p class="cfg-hint">Set project root for manager-side helper tooling and relative paths.</p>
+              </section>
+              <section class="cfg-group">
+                <div class="cfg-group-head">Tools</div>
+                <div class="cfg-entry">
+                  <button id="openMcpBtn" type="button">MCP Config</button>
+                  <button id="openSkillBtn" type="button">Skills Folder</button>
+                </div>
+                <div class="cfg-entry">
+                  <button id="addMcpBtn" type="button">+ Add MCP</button>
+                  <button id="createSkillBtn" type="button">+ Create Skill</button>
+                </div>
+                <div class="cfg-entry">
+                  <button id="openEnvPanelBtn" type="button">Environment Variables</button>
+                </div>
+              </section>
+              <section class="cfg-group">
+                <div class="cfg-group-head">Sessions</div>
+                <div class="session-inline">
+                  <div class="session-inline-meta">
+                    <span class="session-inline-label">Active Session</span>
+                    <code class="session-inline-id empty" id="activeSessionId">No session loaded</code>
+                  </div>
+                  <div class="cfg-entry">
+                    <button id="openSessionPanelBtn" type="button">Browse DB Sessions</button>
+                    <button id="exportSessionBtn" type="button">Export Active HTML</button>
+                  </div>
+                </div>
+                <p class="cfg-hint">Load, export, or delete sessions directly from the list view.</p>
+              </section>
               <div class="save-wrap">
-                <button id="saveBtn" type="button">Save Config</button>
+                <button
+                  id="saveBtn"
+                  type="button"
+                  title="Save current settings to local manager config; they persist after restart"
+                >
+                  Save Config
+                </button>
               </div>
             </div>
           </section>
@@ -966,24 +1153,12 @@
             <div class="toolbar">
               <button id="refreshBtn" type="button" title="Refresh state">Refresh</button>
               <button id="clearLogsBtn" type="button" title="Clear logs">Clear</button>
-              <button id="openLogPanelBtn" type="button">Log Path</button>
+              <button id="openLogPanelBtn" type="button">Log File</button>
             </div>
             <pre class="log-body" id="logs"></pre>
           </div>
         </section>
       </div>
-    </div>
-    <div class="panel-backdrop" id="logPanel" aria-hidden="true">
-      <section class="panel" role="dialog" aria-modal="true" aria-labelledby="logPanelTitle">
-        <div class="panel-head">
-          <strong id="logPanelTitle">Log Path</strong>
-          <button id="closeLogPanelBtn" type="button">Close</button>
-        </div>
-        <div class="panel-body">
-          <p class="cfg-hint">Current OpenCorvus log file path.</p>
-          <div class="log-path-box" id="logPathValue">-</div>
-        </div>
-      </section>
     </div>
     <div class="panel-backdrop" id="envPanel" aria-hidden="true">
       <section class="panel panel-wide" role="dialog" aria-modal="true" aria-labelledby="envPanelTitle">
@@ -999,6 +1174,26 @@
             <button id="addEnvBtn" type="button">+ Add Custom Env</button>
           </div>
           <div class="env-groups" id="envGroups"></div>
+        </div>
+      </section>
+    </div>
+    <div class="panel-backdrop" id="sessionPanel" aria-hidden="true">
+      <section class="panel panel-wide" role="dialog" aria-modal="true" aria-labelledby="sessionPanelTitle">
+        <div class="panel-head">
+          <strong id="sessionPanelTitle">Database Sessions</strong>
+          <div class="panel-head-actions">
+            <button id="refreshSessionListBtn" type="button">Refresh</button>
+            <button id="closeSessionPanelBtn" type="button">Close</button>
+          </div>
+        </div>
+        <div class="panel-body panel-body-session">
+          <div class="session-tools">
+            <input id="sessionSearchInput" type="search" placeholder="Search by id, title, project, directory..." />
+            <span class="session-count" id="sessionCountText">No sessions loaded</span>
+          </div>
+          <div class="session-list" id="sessionList">
+            <div class="session-empty">Open this panel to list DB sessions.</div>
+          </div>
         </div>
       </section>
     </div>

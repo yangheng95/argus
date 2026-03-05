@@ -49,6 +49,11 @@ pub fn manager_clear_logs(state: State<'_, Shared>, app: AppHandle) -> ManagerSn
 }
 
 #[tauri::command]
+pub fn manager_reveal_log_path(state: State<'_, Shared>, app: AppHandle) -> Result<String, String> {
+    manager::reveal_log_path(state.inner(), &app)
+}
+
+#[tauri::command]
 pub fn manager_save(
     state: State<'_, Shared>,
     app: AppHandle,
@@ -97,27 +102,48 @@ pub fn manager_create_skill(
 }
 
 #[tauri::command]
-pub fn manager_list_sessions(
+pub async fn manager_list_sessions(
     state: State<'_, Shared>,
     app: AppHandle,
 ) -> Result<Vec<SessionListItem>, String> {
-    manager::list_sessions(state.inner(), &app)
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager::list_sessions(&shared, &app))
+        .await
+        .map_err(|error| format!("manager_list_sessions task failed: {error}"))?
 }
 
 #[tauri::command]
-pub fn manager_use_session(
+pub async fn manager_use_session(
     state: State<'_, Shared>,
     app: AppHandle,
     session_id: String,
 ) -> Result<ManagerSnapshot, String> {
-    manager::use_session(state.inner(), &app, session_id)
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager::use_session(&shared, &app, session_id))
+        .await
+        .map_err(|error| format!("manager_use_session task failed: {error}"))?
 }
 
 #[tauri::command]
-pub fn manager_delete_session(
+pub async fn manager_delete_session(
     state: State<'_, Shared>,
     app: AppHandle,
     session_id: String,
 ) -> Result<ManagerSnapshot, String> {
-    manager::delete_session(state.inner(), &app, session_id)
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager::delete_session(&shared, &app, session_id))
+        .await
+        .map_err(|error| format!("manager_delete_session task failed: {error}"))?
+}
+
+#[tauri::command]
+pub async fn manager_export_session_html(
+    state: State<'_, Shared>,
+    app: AppHandle,
+    session_id: String,
+) -> Result<String, String> {
+    let shared = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || manager::export_session_html(&shared, &app, session_id))
+        .await
+        .map_err(|error| format!("manager_export_session_html task failed: {error}"))?
 }

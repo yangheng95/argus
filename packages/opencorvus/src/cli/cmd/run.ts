@@ -541,6 +541,7 @@ export const RunCommand = cmd({
             error = error ? error + EOL + err : err
             if (emit("error", { error: props.error })) continue
             UI.error(err)
+            break
           }
 
           if (
@@ -597,10 +598,7 @@ export const RunCommand = cmd({
       }
       await share(sdk, sessionID)
 
-      loop().catch((e) => {
-        console.error(e)
-        process.exit(1)
-      })
+      const loopTask = loop()
 
       if (args.command) {
         await sdk.session.command({
@@ -621,6 +619,9 @@ export const RunCommand = cmd({
           parts: [...files, { type: "text", text: message }],
         })
       }
+
+      await loopTask
+      if (error) process.exitCode = 1
     }
 
     if (args.attach) {

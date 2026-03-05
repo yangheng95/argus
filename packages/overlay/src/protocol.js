@@ -32,6 +32,7 @@
       managerStart: "manager_start",
       managerStop: "manager_stop",
       managerClearLogs: "manager_clear_logs",
+      managerRevealLogPath: "manager_reveal_log_path",
       managerSave: "manager_save",
       managerSend: "manager_send",
       managerOpenMcpConfig: "manager_open_mcp_config",
@@ -41,6 +42,7 @@
       managerListSessions: "manager_list_sessions",
       managerUseSession: "manager_use_session",
       managerDeleteSession: "manager_delete_session",
+      managerExportSessionHtml: "manager_export_session_html",
     }),
   })
   window.opencorvusOverlayProtocol = protocol

@@ -27,6 +27,7 @@ fn main() {
             commands::manager_start,
             commands::manager_stop,
             commands::manager_clear_logs,
+            commands::manager_reveal_log_path,
             commands::manager_save,
             commands::manager_send,
             commands::manager_open_mcp_config,
@@ -35,7 +36,8 @@ fn main() {
             commands::manager_create_skill,
             commands::manager_list_sessions,
             commands::manager_use_session,
-            commands::manager_delete_session
+            commands::manager_delete_session,
+            commands::manager_export_session_html
         ])
         .setup(move |app| {
             let state = app.state::<manager::Shared>();
