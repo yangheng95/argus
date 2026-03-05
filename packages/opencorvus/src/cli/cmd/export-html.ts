@@ -22,13 +22,12 @@ export async function buildSessionTraceHtml(input: {
       input.messages.map(async (message, index) => {
         const parts = await Promise.all(message.parts.map((part) => renderPart(part)))
         const created =
-          message.info.role === "user" ? message.info.time.created : (message.info.time.completed ?? message.info.time.created)
-        const header = [
-          `#${index + 1}`,
-          message.info.role.toUpperCase(),
-          formatDate(created),
-          message.info.id,
-        ].join(" | ")
+          message.info.role === "user"
+            ? message.info.time.created
+            : (message.info.time.completed ?? message.info.time.created)
+        const header = [`#${index + 1}`, message.info.role.toUpperCase(), formatDate(created), message.info.id].join(
+          " | ",
+        )
         const info =
           message.info.role === "user"
             ? [
@@ -216,10 +215,14 @@ async function renderPart(part: MessageV2.Part) {
         base.push(`<pre>${json(part.state.input)}</pre>`)
       }
       if (part.state.status === "error") {
-        base.push(`<pre>${json({ input: part.state.input, error: part.state.error, metadata: part.state.metadata })}</pre>`)
+        base.push(
+          `<pre>${json({ input: part.state.input, error: part.state.error, metadata: part.state.metadata })}</pre>`,
+        )
       }
       if (part.state.status === "completed") {
-        base.push(`<pre>${json({ input: part.state.input, output: part.state.output, metadata: part.state.metadata })}</pre>`)
+        base.push(
+          `<pre>${json({ input: part.state.input, output: part.state.output, metadata: part.state.metadata })}</pre>`,
+        )
         const files = await Promise.all((part.state.attachments ?? []).map((item) => renderAttachment(item)))
         if (files.length > 0) {
           base.push(`<div class="attachment-list">${files.join("")}</div>`)

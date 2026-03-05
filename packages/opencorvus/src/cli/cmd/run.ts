@@ -616,32 +616,35 @@ export const RunCommand = cmd({
       const probe =
         stallMs <= 0
           ? undefined
-          : setInterval(() => {
-              if (eventAbort.signal.aborted) return
-              const age = Date.now() - last
-              if (age < stallMs) return
-              const timeout = Math.floor(stallMs / 1000)
-              const elapsed = Math.floor(age / 1000)
-              const message = `Event stream stalled for ${elapsed}s (timeout ${timeout}s)`
-              if (!error?.includes(message)) {
-                error = error ? error + EOL + message : message
-              }
-              if (
-                !emit("error", {
-                  error: {
-                    name: "event_stream_stalled",
-                    data: {
-                      message,
-                      timeout,
-                      elapsed,
+          : setInterval(
+              () => {
+                if (eventAbort.signal.aborted) return
+                const age = Date.now() - last
+                if (age < stallMs) return
+                const timeout = Math.floor(stallMs / 1000)
+                const elapsed = Math.floor(age / 1000)
+                const message = `Event stream stalled for ${elapsed}s (timeout ${timeout}s)`
+                if (!error?.includes(message)) {
+                  error = error ? error + EOL + message : message
+                }
+                if (
+                  !emit("error", {
+                    error: {
+                      name: "event_stream_stalled",
+                      data: {
+                        message,
+                        timeout,
+                        elapsed,
+                      },
                     },
-                  },
-                })
-              ) {
-                UI.error(message)
-              }
-              eventAbort.abort(message)
-            }, Math.min(5000, Math.max(1000, Math.floor(stallMs / 6))))
+                  })
+                ) {
+                  UI.error(message)
+                }
+                eventAbort.abort(message)
+              },
+              Math.min(5000, Math.max(1000, Math.floor(stallMs / 6))),
+            )
 
       const loopTask = loop()
       let sendError: unknown

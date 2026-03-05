@@ -286,10 +286,9 @@ export const AutomationTool = Tool.define("automation", {
       const ok = attached.playwright || attached.playwrightLauncher || attached.appium
       return {
         title: ok ? "Automation runtime attached" : "Automation runtime attach skipped",
-        output:
-          ok
-            ? JSON.stringify(attached)
-            : `No runtime found on globalThis. Expected keys: playwright=${attached.globals.playwright}, launcher=${attached.globals.playwrightLauncher}, appium=${attached.globals.appium}.`,
+        output: ok
+          ? JSON.stringify(attached)
+          : `No runtime found on globalThis. Expected keys: playwright=${attached.globals.playwright}, launcher=${attached.globals.playwrightLauncher}, appium=${attached.globals.appium}.`,
         metadata: attached,
       }
     }

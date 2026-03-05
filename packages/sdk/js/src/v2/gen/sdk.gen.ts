@@ -129,6 +129,8 @@ import type {
   SessionDeleteMessageResponses,
   SessionDeleteResponses,
   SessionDiffResponses,
+  SessionExportHtmlErrors,
+  SessionExportHtmlResponses,
   SessionForkResponses,
   SessionGetErrors,
   SessionGetResponses,
@@ -190,6 +192,8 @@ import type {
   TuiRuntimeStopResponses,
   TuiRuntimeSubmitTaskErrors,
   TuiRuntimeSubmitTaskResponses,
+  TuiRuntimeTaskStatusErrors,
+  TuiRuntimeTaskStatusResponses,
   TuiSelectSessionErrors,
   TuiSelectSessionResponses,
   TuiShowToastResponses,
@@ -2066,6 +2070,43 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
+   * Export session HTML
+   *
+   * Export a session as HTML trace report and return generated file path.
+   */
+  public exportHtml<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      out?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "out" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionExportHtmlResponses, SessionExportHtmlErrors, ThrowOnError>({
+      url: "/session/{sessionID}/export-html",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Summarize session
    *
    * Generate a concise summary of the session using AI compaction to preserve key information.
@@ -3487,6 +3528,45 @@ export class Runtime extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<TuiRuntimeProxyResponses, TuiRuntimeProxyErrors, ThrowOnError>({
       url: "/tui/runtime/proxy",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get runtime task status
+   *
+   * Resolve queued task status by taskID for watchdogs and recovery.
+   */
+  public taskStatus<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      taskID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "taskID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      TuiRuntimeTaskStatusResponses,
+      TuiRuntimeTaskStatusErrors,
+      ThrowOnError
+    >({
+      url: "/tui/runtime/task-status",
       ...options,
       ...params,
       headers: {

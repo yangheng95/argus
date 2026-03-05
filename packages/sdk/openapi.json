@@ -3419,6 +3419,89 @@
         ]
       }
     },
+    "/session/{sessionID}/export-html": {
+      "post": {
+        "operationId": "session.exportHtml",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string",
+              "pattern": "^ses.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Export session HTML",
+        "description": "Export a session as HTML trace report and return generated file path.",
+        "responses": {
+          "200": {
+            "description": "Exported HTML file path",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["file"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "out": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.session.exportHtml({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/session/{sessionID}/summarize": {
       "post": {
         "operationId": "session.summarize",
@@ -6587,6 +6670,16 @@
                     "sessionID": {
                       "type": "string"
                     },
+                    "taskID": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
                     "waited": {
                       "type": "boolean"
                     },
@@ -6602,7 +6695,7 @@
                       ]
                     }
                   },
-                  "required": ["accepted", "sessionID", "waited", "completed", "message"]
+                  "required": ["accepted", "sessionID", "taskID", "waited", "completed", "message"]
                 }
               }
             }
@@ -6712,6 +6805,130 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.proxy({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/tui/runtime/task-status": {
+      "post": {
+        "operationId": "tui.runtime.taskStatus",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get runtime task status",
+        "description": "Resolve queued task status by taskID for watchdogs and recovery.",
+        "responses": {
+          "200": {
+            "description": "Task status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "found": {
+                      "type": "boolean"
+                    },
+                    "taskID": {
+                      "type": "string"
+                    },
+                    "sessionID": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "terminal": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "updatedAt": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "completedAt": {
+                      "anyOf": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "found",
+                    "taskID",
+                    "sessionID",
+                    "status",
+                    "terminal",
+                    "error",
+                    "updatedAt",
+                    "completedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "taskID": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": ["taskID"]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.tui.runtime.taskStatus({\n  ...\n})"
           }
         ]
       }
@@ -9937,6 +10154,47 @@
         },
         "required": ["type", "properties"]
       },
+      "Event.task.report": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.report"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["progress", "need_input", "done", "failed"]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "question": {
+                "type": "string"
+              },
+              "next_plan": {
+                "type": "string"
+              },
+              "artifacts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": ["sessionID", "status", "summary"]
+          }
+        },
+        "required": ["type", "properties"]
+      },
       "Event.mcp.tools.changed": {
         "type": "object",
         "properties": {
@@ -10560,6 +10818,9 @@
           },
           {
             "$ref": "#/components/schemas/Event.tui.session.select"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.report"
           },
           {
             "$ref": "#/components/schemas/Event.mcp.tools.changed"

@@ -29,9 +29,9 @@ In bot/Slack mode you MUST call this tool at the end of every turn. Pick the rig
 - **done**: Task fully complete. Summarize the result and list modified files in artifacts.
 - **failed**: Unrecoverable error. Explain what went wrong in error.`,
   parameters: z.object({
-    status: z.enum(["progress", "need_input", "done", "failed"]).describe(
-      "progress=more turns needed | need_input=waiting for user | done=complete | failed=error",
-    ),
+    status: z
+      .enum(["progress", "need_input", "done", "failed"])
+      .describe("progress=more turns needed | need_input=waiting for user | done=complete | failed=error"),
     summary: z.string().describe("What happened this turn, or the final result"),
     question: z.string().optional().describe("Question for the user (required when status=need_input)"),
     next_plan: z.string().optional().describe("What to do in the next turn (when status=progress)"),

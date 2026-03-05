@@ -227,7 +227,11 @@ async function launcher(globalKey?: string) {
     state.playwrightLauncher = globalLauncher
     return globalLauncher
   }
-  const mods = await Promise.all([loadModule("playwright"), loadModule("playwright-core"), loadModule("@playwright/test")])
+  const mods = await Promise.all([
+    loadModule("playwright"),
+    loadModule("playwright-core"),
+    loadModule("@playwright/test"),
+  ])
   const found = mods
     .map((mod) => {
       if (!mod || typeof mod !== "object") return null
@@ -449,12 +453,20 @@ export namespace AutomationRuntime {
         detail: "Playwright runtime is not attached.",
       }
     }
-    const closeContext = session.managed && session.context?.close
-      ? session.context.close().then(() => true).catch(() => false)
-      : Promise.resolve(false)
-    const closeBrowser = session.managed && session.browser?.close
-      ? session.browser.close().then(() => true).catch(() => false)
-      : Promise.resolve(false)
+    const closeContext =
+      session.managed && session.context?.close
+        ? session.context
+            .close()
+            .then(() => true)
+            .catch(() => false)
+        : Promise.resolve(false)
+    const closeBrowser =
+      session.managed && session.browser?.close
+        ? session.browser
+            .close()
+            .then(() => true)
+            .catch(() => false)
+        : Promise.resolve(false)
     const closed = await Promise.all([closeContext, closeBrowser])
     delete state.playwright
     delete state.playwrightSession
@@ -547,7 +559,10 @@ export namespace AutomationRuntime {
     session.context = context
     const pages = pagesFromContext(context)
     session.pages = pages.length > 0 ? pages : [...session.pages, created]
-    session.active = Math.max(0, session.pages.findIndex((item) => item === created))
+    session.active = Math.max(
+      0,
+      session.pages.findIndex((item) => item === created),
+    )
     state.playwright = { page: created }
     if (input.url) {
       const opened = await goto(created, {
@@ -625,7 +640,10 @@ export namespace AutomationRuntime {
         detail: "Active tab does not support close().",
       }
     }
-    const closed = await page.close().then(() => true).catch((error) => error)
+    const closed = await page
+      .close()
+      .then(() => true)
+      .catch((error) => error)
     if (closed !== true) {
       return {
         ok: false,

@@ -812,6 +812,19 @@ export type EventTuiSessionSelect = {
   }
 }
 
+export type EventTaskReport = {
+  type: "task.report"
+  properties: {
+    sessionID: string
+    status: "progress" | "need_input" | "done" | "failed"
+    summary: string
+    question?: string
+    next_plan?: string
+    artifacts?: Array<string>
+    error?: string
+  }
+}
+
 export type EventMcpToolsChanged = {
   type: "mcp.tools.changed"
   properties: {
@@ -1030,6 +1043,7 @@ export type Event =
   | EventTuiCommandExecute
   | EventTuiToastShow
   | EventTuiSessionSelect
+  | EventTaskReport
   | EventMcpToolsChanged
   | EventMcpBrowserOpenFailed
   | EventCommandExecuted
@@ -3586,6 +3600,43 @@ export type SessionDiffResponses = {
 
 export type SessionDiffResponse = SessionDiffResponses[keyof SessionDiffResponses]
 
+export type SessionExportHtmlData = {
+  body?: {
+    out?: string
+  }
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/export-html"
+}
+
+export type SessionExportHtmlErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionExportHtmlError = SessionExportHtmlErrors[keyof SessionExportHtmlErrors]
+
+export type SessionExportHtmlResponses = {
+  /**
+   * Exported HTML file path
+   */
+  200: {
+    file: string
+  }
+}
+
+export type SessionExportHtmlResponse = SessionExportHtmlResponses[keyof SessionExportHtmlResponses]
+
 export type SessionSummarizeData = {
   body?: {
     providerID: string
@@ -5005,6 +5056,7 @@ export type TuiRuntimeSubmitTaskResponses = {
   200: {
     accepted: true
     sessionID: string
+    taskID: string | null
     waited: boolean
     completed: boolean
     message: unknown | null
@@ -5040,6 +5092,44 @@ export type TuiRuntimeProxyResponses = {
    */
   200: unknown
 }
+
+export type TuiRuntimeTaskStatusData = {
+  body?: {
+    taskID: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/tui/runtime/task-status"
+}
+
+export type TuiRuntimeTaskStatusErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type TuiRuntimeTaskStatusError = TuiRuntimeTaskStatusErrors[keyof TuiRuntimeTaskStatusErrors]
+
+export type TuiRuntimeTaskStatusResponses = {
+  /**
+   * Task status
+   */
+  200: {
+    found: boolean
+    taskID: string
+    sessionID: string | null
+    status: string
+    terminal: boolean
+    error: string | null
+    updatedAt: number | null
+    completedAt: number | null
+  }
+}
+
+export type TuiRuntimeTaskStatusResponse = TuiRuntimeTaskStatusResponses[keyof TuiRuntimeTaskStatusResponses]
 
 export type TuiAppendPromptData = {
   body?: {

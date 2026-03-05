@@ -387,7 +387,8 @@ export class BotCore {
             }
           | undefined
         if (data?.accepted) {
-          const taskId = typeof data.taskID === "string" && data.taskID.trim() ? data.taskID.trim() : this.taskId(sessionID)
+          const taskId =
+            typeof data.taskID === "string" && data.taskID.trim() ? data.taskID.trim() : this.taskId(sessionID)
           this.markPending(sessionID, taskId)
           console.log(
             `[BotCore] Task accepted via tui.runtime.submitTask for session ${sessionID} (task=${taskId}, waited=${data?.waited ? "true" : "false"})`,
@@ -762,9 +763,12 @@ export class BotCore {
       signal: AbortSignal.timeout(4_000),
     }).catch(() => null)
     if (!res?.ok) return null
-    const body = (await res
-      .json()
-      .catch(() => null)) as { found?: boolean; status?: string; terminal?: boolean; error?: string | null } | null
+    const body = (await res.json().catch(() => null)) as {
+      found?: boolean
+      status?: string
+      terminal?: boolean
+      error?: string | null
+    } | null
     if (!body || body.found !== true) return null
     return {
       status: typeof body.status === "string" ? body.status : "",

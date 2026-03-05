@@ -17,11 +17,7 @@ export namespace Mouse {
   const WHEEL = 0x0800
   const WHEEL_DELTA = 120
 
-  let user32:
-    | ReturnType<
-        typeof import("bun:ffi")["dlopen"]
-      >
-    | undefined
+  let user32: ReturnType<(typeof import("bun:ffi"))["dlopen"]> | undefined
 
   async function win32() {
     if (process.platform !== "win32") return undefined

@@ -1578,7 +1578,8 @@ function renderSessionList() {
   if (list.length === 0) {
     const empty = document.createElement("div")
     empty.className = "session-empty"
-    empty.textContent = state.sessions.length === 0 ? "No sessions found in database." : "No sessions match your filter."
+    empty.textContent =
+      state.sessions.length === 0 ? "No sessions found in database." : "No sessions match your filter."
     els.sessionList.appendChild(empty)
     return
   }
