@@ -8,8 +8,12 @@ import { SessionRevert } from "../../session/revert"
 import { SessionSummary } from "@/session/summary"
 import { Agent } from "../../agent/agent"
 import { Snapshot } from "@/snapshot"
+import { LLMTrace } from "@/session/llm-trace"
+import { Filesystem } from "../../util/filesystem"
+import { buildSessionTraceHtml } from "../../cli/cmd/export-html"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
+import path from "path"
 
 export const SessionManagementShareRoutes = lazy(() =>
   new Hono()
@@ -112,6 +116,62 @@ export const SessionManagementShareRoutes = lazy(() =>
         await Session.unshare(sessionID)
         const session = await Session.get(sessionID)
         return c.json(session)
+      },
+    )
+    .post(
+      "/:sessionID/export-html",
+      describeRoute({
+        summary: "Export session HTML",
+        description: "Export a session as HTML trace report and return generated file path.",
+        operationId: "session.exportHtml",
+        responses: {
+          200: {
+            description: "Exported HTML file path",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    file: z.string(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          sessionID: Session.get.schema,
+        }),
+      ),
+      validator(
+        "json",
+        z
+          .object({
+            out: z.string().optional(),
+          })
+          .optional(),
+      ),
+      async (c) => {
+        const sessionID = c.req.valid("param").sessionID
+        const body = c.req.valid("json") ?? {}
+        const session = await Session.get(sessionID)
+        const messages = await Session.messages({ sessionID })
+        const calls = await LLMTrace.read(sessionID)
+        const report = await buildSessionTraceHtml({
+          session: {
+            id: session.id,
+            title: session.title,
+            time: session.time,
+          },
+          messages,
+          calls,
+        })
+        const out = path.resolve(process.cwd(), String(body.out ?? `opencorvus-trace-${sessionID}.html`))
+        await Filesystem.write(out, report)
+        return c.json({ file: out })
       },
     )
     .post(

@@ -17,6 +17,30 @@ import {
 } from "./bot-policy"
 import { SessionCoordinator } from "./session-coordinator"
 
+interface TaskReportProperties {
+  sessionID: string
+  status: "progress" | "need_input" | "done" | "failed"
+  summary: string
+  question?: string
+  next_plan?: string
+  artifacts?: string[]
+  error?: string
+}
+
+interface Job {
+  jobID: string
+  sessionID: string
+  turn: number
+  status: "running" | "waiting_user"
+  lastReport?: TaskReportProperties
+  startedAt: number
+  lastActivityAt: number
+  channel: string
+  thread: string
+  adapter: BotAdapter
+  platform: string
+}
+
 interface SessionEntry {
   sessionId: string
   adapter: BotAdapter
