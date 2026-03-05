@@ -139,6 +139,7 @@ export namespace ToolRegistry {
       VisionAnalyzeTool,
       TuiTool,
       AutomationTool,
+      TaskReportTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,
