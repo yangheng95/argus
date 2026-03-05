@@ -85,8 +85,97 @@ class ElementStub implements AppiumDriver.Element {
   }
 }
 
+function launcher() {
+  const locator = new LocatorStub()
+  const fronts: string[] = []
+  let contextClosed = false
+  let browserClosed = false
+  let seq = 0
+
+  type Page = PlaywrightDriver.Page & {
+    goto: (url: string) => Promise<void>
+    close: () => Promise<void>
+    url: () => string
+    title: () => Promise<string>
+    context: () => Context
+    id: string
+  }
+  type Context = {
+    newPage: () => Promise<Page>
+    pages: () => Page[]
+    close: () => Promise<void>
+  }
+
+  const pages = [] as Page[]
+
+  let context: Context
+  const page = () => {
+    seq += 1
+    const id = `tab-${seq}`
+    let current = "about:blank"
+    const next: Page = {
+      id,
+      locator: () => locator,
+      getByRole: () => locator,
+      getByText: () => locator,
+      keyboard: { press: async () => {} },
+      mouse: { wheel: async () => {} },
+      screenshot: async () => new Uint8Array([1]),
+      bringToFront: async () => {
+        fronts.push(id)
+      },
+      goto: async (url) => {
+        current = url
+      },
+      close: async () => {
+        const index = pages.findIndex((item) => item.id === id)
+        if (index >= 0) pages.splice(index, 1)
+      },
+      url: () => current,
+      title: async () => current,
+      context: () => context,
+    }
+    return next
+  }
+
+  context = {
+    newPage: async () => {
+      const next = page()
+      pages.push(next)
+      return next
+    },
+    pages: () => [...pages],
+    close: async () => {
+      contextClosed = true
+    },
+  }
+
+  const browser = {
+    newContext: async () => context,
+    close: async () => {
+      browserClosed = true
+    },
+  }
+
+  return {
+    launcher: {
+      chromium: {
+        launch: async () => browser,
+      },
+    },
+    fronts,
+    closed: () => ({
+      contextClosed,
+      browserClosed,
+    }),
+  }
+}
+
 afterEach(() => {
   AutomationRuntime.clear()
+  AutomationRuntime.setPlaywrightLauncher()
+  Reflect.deleteProperty(globalThis as object, "__opencorvus_playwright_page")
+  Reflect.deleteProperty(globalThis as object, "__opencorvus_playwright_launcher")
 })
 
 describe("tool.automation", () => {
@@ -233,5 +322,53 @@ describe("tool.automation", () => {
     const payload = JSON.parse(result.output) as { ok: boolean; failed: number }
     expect(payload.ok).toBe(false)
     expect(payload.failed).toBe(1)
+  })
+
+  test("manages playwright lifecycle actions with tabs", async () => {
+    const mocked = launcher()
+    Reflect.set(globalThis as object, "__opencorvus_playwright_launcher", mocked.launcher)
+
+    const tool = await AutomationTool.init()
+    const started = await tool.execute(
+      {
+        action: "start",
+        playwright_launcher_global: "__opencorvus_playwright_launcher",
+        url: "https://example.com",
+      },
+      ctx,
+    )
+    expect(started.metadata.ok).toBe(true)
+    expect(started.metadata.total).toBe(1)
+    expect(started.metadata.tabs[0].url).toBe("https://example.com")
+
+    const opened = await tool.execute({ action: "open", url: "https://example.com/docs" }, ctx)
+    expect(opened.metadata.ok).toBe(true)
+    expect(opened.metadata.tabs[0].url).toBe("https://example.com/docs")
+
+    const created = await tool.execute({ action: "new_tab", url: "https://example.com/new" }, ctx)
+    expect(created.metadata.ok).toBe(true)
+    expect(created.metadata.total).toBe(2)
+    expect(created.metadata.active).toBe(1)
+
+    const listed = await tool.execute({ action: "list_tabs" }, ctx)
+    expect(listed.metadata.ok).toBe(true)
+    expect(listed.metadata.tabs[1].url).toBe("https://example.com/new")
+
+    const switched = await tool.execute({ action: "switch_tab", index: 0 }, ctx)
+    expect(switched.metadata.ok).toBe(true)
+    expect(switched.metadata.active).toBe(0)
+    expect(mocked.fronts).toContain("tab-1")
+
+    const closed = await tool.execute({ action: "close_tab", index: 1 }, ctx)
+    expect(closed.metadata.ok).toBe(true)
+    expect(closed.metadata.total).toBe(1)
+
+    const stopped = await tool.execute({ action: "stop" }, ctx)
+    expect(stopped.metadata.ok).toBe(true)
+    expect(stopped.metadata.contextClosed).toBe(true)
+    expect(stopped.metadata.browserClosed).toBe(true)
+
+    const finalStatus = await tool.execute({ action: "status" }, ctx)
+    expect(finalStatus.metadata.playwright).toBe(false)
   })
 })

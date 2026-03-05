@@ -41,5 +41,34 @@
     "managerUseSession": "manager_use_session",
     "managerDeleteSession": "manager_delete_session",
     "managerExportSessionHtml": "manager_export_session_html"
+  },
+  "loop": {
+    "version": "1.0",
+    "sendAck": {
+      "accepted": "accepted",
+      "loopId": "loop_id",
+      "turnId": "turn_id",
+      "taskId": "task_id"
+    },
+    "eventKinds": {
+      "taskStatus": "task.status",
+      "outputDelta": "output.delta",
+      "outputReplace": "output.replace",
+      "outputImage": "output.image",
+      "systemMessage": "system.message"
+    },
+    "taskStates": {
+      "created": "created",
+      "accepted": "accepted",
+      "running": "running",
+      "waitingPermission": "waiting_permission",
+      "waitingInput": "waiting_input",
+      "paused": "paused",
+      "completed": "completed",
+      "failed": "failed",
+      "cancelled": "cancelled",
+      "timedOut": "timed_out",
+      "stalled": "stalled"
+    }
   }
 }

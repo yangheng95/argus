@@ -4,12 +4,19 @@ import { Automation, AutomationRuntime, selectDriver } from "../opencorvus/autom
 
 const DESCRIPTION = `Run selector-based GUI automation flows with retry and recovery.
 
-Use this tool for Playwright (web) or Appium (mobile) sessions that are already attached in the current process.
+Use this tool for Playwright (web) or Appium (mobile) sessions, either attached from globalThis or started as managed runtime.
 
 Actions:
 - status: Show whether Playwright/Appium runtime context is attached.
 - attach: Attach Playwright/Appium runtime from globalThis references.
 - clear: Clear attached runtime context.
+- start: Start managed Playwright browser runtime and create an initial tab.
+- stop: Stop managed Playwright browser runtime.
+- open: Navigate the current Playwright tab to a URL.
+- new_tab: Create a new Playwright tab and optionally open a URL.
+- switch_tab: Switch the active Playwright tab by index.
+- list_tabs: List current Playwright tabs and active index.
+- close_tab: Close a Playwright tab by index (defaults to active tab).
 - run: Execute one step or a flow of steps with locate/pre/act/post checks.
 
 Driver:
@@ -114,6 +121,7 @@ const Step = z.object({
 })
 
 const Driver = z.enum(["auto", "playwright", "appium"]).optional()
+const WaitUntil = z.enum(["load", "domcontentloaded", "networkidle"]).optional()
 
 const Run = z
   .object({
@@ -138,12 +146,55 @@ const Params = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("attach"),
     playwright_global: z.string().min(1).optional().describe("globalThis key that stores a Playwright page"),
+    playwright_launcher_global: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("globalThis key that stores a Playwright launcher (module with chromium.launch)"),
     appium_global: z.string().min(1).optional().describe("globalThis key that stores an Appium/WebDriver client"),
     appium_app_id: z.string().min(1).optional().describe("Optional app id for activate-app recovery"),
   }),
   z.object({
     action: z.literal("clear"),
     kind: z.enum(["playwright", "appium", "all"]).default("all").optional(),
+  }),
+  z.object({
+    action: z.literal("start"),
+    headless: z.boolean().optional().describe("Launch Playwright Chromium in headless mode (default: true)"),
+    url: z.string().min(1).optional().describe("Optional initial URL to open after startup"),
+    wait_until: WaitUntil.describe("Navigation wait strategy: load, domcontentloaded, or networkidle"),
+    timeoutMs: z.number().int().min(1).max(120000).optional().describe("Optional navigation timeout in ms"),
+    playwright_launcher_global: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Optional launcher global key override used for start"),
+  }),
+  z.object({
+    action: z.literal("stop"),
+  }),
+  z.object({
+    action: z.literal("open"),
+    url: z.string().min(1).describe("URL to open in the active Playwright tab"),
+    wait_until: WaitUntil.describe("Navigation wait strategy: load, domcontentloaded, or networkidle"),
+    timeoutMs: z.number().int().min(1).max(120000).optional().describe("Optional navigation timeout in ms"),
+  }),
+  z.object({
+    action: z.literal("new_tab"),
+    url: z.string().min(1).optional().describe("Optional URL to open in the new tab"),
+    wait_until: WaitUntil.describe("Navigation wait strategy: load, domcontentloaded, or networkidle"),
+    timeoutMs: z.number().int().min(1).max(120000).optional().describe("Optional navigation timeout in ms"),
+  }),
+  z.object({
+    action: z.literal("switch_tab"),
+    index: z.number().int().min(0).describe("Tab index to activate"),
+  }),
+  z.object({
+    action: z.literal("list_tabs"),
+  }),
+  z.object({
+    action: z.literal("close_tab"),
+    index: z.number().int().min(0).optional().describe("Optional tab index to close (defaults to active tab)"),
   }),
   Run,
 ])
@@ -202,6 +253,10 @@ function normalize(step: z.infer<typeof Step>, post: z.infer<typeof CheckTemplat
   }
 }
 
+function failed(result: { detail?: string; reason?: string }) {
+  return result.detail ?? result.reason ?? "Unknown error"
+}
+
 export const AutomationTool = Tool.define("automation", {
   description: DESCRIPTION,
   parameters: Params,
@@ -224,16 +279,17 @@ export const AutomationTool = Tool.define("automation", {
     if (params.action === "attach") {
       const attached = AutomationRuntime.attach({
         playwrightGlobal: params.playwright_global,
+        playwrightLauncherGlobal: params.playwright_launcher_global,
         appiumGlobal: params.appium_global,
         appiumAppId: params.appium_app_id,
       })
+      const ok = attached.playwright || attached.playwrightLauncher || attached.appium
       return {
-        title:
-          attached.playwright || attached.appium ? "Automation runtime attached" : "Automation runtime attach skipped",
+        title: ok ? "Automation runtime attached" : "Automation runtime attach skipped",
         output:
-          attached.playwright || attached.appium
+          ok
             ? JSON.stringify(attached)
-            : `No runtime found on globalThis. Expected keys: playwright=${attached.globals.playwright}, appium=${attached.globals.appium}.`,
+            : `No runtime found on globalThis. Expected keys: playwright=${attached.globals.playwright}, launcher=${attached.globals.playwrightLauncher}, appium=${attached.globals.appium}.`,
         metadata: attached,
       }
     }
@@ -246,6 +302,96 @@ export const AutomationTool = Tool.define("automation", {
         title: "Automation runtime cleared",
         output: JSON.stringify(runtime),
         metadata: runtime,
+      }
+    }
+    if (params.action === "start") {
+      const result = await AutomationRuntime.startPlaywright({
+        headless: params.headless,
+        url: params.url,
+        timeoutMs: params.timeoutMs,
+        waitUntil: params.wait_until,
+        playwrightLauncherGlobal: params.playwright_launcher_global,
+      })
+      const started = "started" in result ? result.started : undefined
+      return {
+        title: !result.ok
+          ? "Playwright runtime start failed"
+          : started === false
+            ? "Playwright runtime already started"
+            : "Playwright runtime started",
+        output: result.ok ? JSON.stringify(result) : failed(result),
+        metadata: result,
+      }
+    }
+    if (params.action === "stop") {
+      const result = await AutomationRuntime.stopPlaywright()
+      return {
+        title: result.ok ? "Playwright runtime stopped" : "Playwright runtime stop skipped",
+        output: result.ok ? JSON.stringify(result) : failed(result),
+        metadata: result,
+      }
+    }
+    if (params.action === "open") {
+      const result = await AutomationRuntime.openPlaywright({
+        url: params.url,
+        timeoutMs: params.timeoutMs,
+        waitUntil: params.wait_until,
+      })
+      return {
+        title: result.ok ? "Playwright tab opened URL" : "Playwright open failed",
+        output: result.ok ? JSON.stringify(result) : failed(result),
+        metadata: result,
+      }
+    }
+    if (params.action === "new_tab") {
+      const result = await AutomationRuntime.newPlaywrightTab({
+        url: params.url,
+        timeoutMs: params.timeoutMs,
+        waitUntil: params.wait_until,
+      })
+      return {
+        title: result.ok ? "Playwright tab created" : "Playwright new tab failed",
+        output: result.ok ? JSON.stringify(result) : failed(result),
+        metadata: result,
+      }
+    }
+    if (params.action === "switch_tab") {
+      const result = await AutomationRuntime.switchPlaywrightTab({
+        index: params.index,
+      })
+      return {
+        title: result.ok ? "Playwright tab switched" : "Playwright switch tab failed",
+        output: result.ok ? JSON.stringify(result) : failed(result),
+        metadata: result,
+      }
+    }
+    if (params.action === "list_tabs") {
+      const result = await AutomationRuntime.listPlaywrightTabs()
+      return {
+        title: result.ok ? "Playwright tabs" : "Playwright runtime unavailable",
+        output: result.ok ? JSON.stringify(result) : failed(result),
+        metadata: result,
+      }
+    }
+    if (params.action === "close_tab") {
+      const result = await AutomationRuntime.closePlaywrightTab({
+        index: params.index,
+      })
+      return {
+        title: result.ok ? "Playwright tab closed" : "Playwright close tab failed",
+        output: result.ok ? JSON.stringify(result) : failed(result),
+        metadata: result,
+      }
+    }
+
+    if (params.action !== "run") {
+      return {
+        title: "Automation action unsupported",
+        output: `Unsupported action: ${String((params as { action?: string }).action ?? "")}`,
+        metadata: {
+          ok: false,
+          reason: "unsupported_action",
+        },
       }
     }
 
@@ -275,7 +421,7 @@ export const AutomationTool = Tool.define("automation", {
       retryMax: params.retryMax ?? 2,
       backoffMs: params.backoffMs ?? [120, 320, 640],
     })
-    const steps = (params.step ? [params.step] : (params.steps ?? [])).map((step) =>
+    const steps = (params.step ? [params.step] : (params.steps ?? [])).map((step: z.infer<typeof Step>) =>
       normalize(step, params.post_template),
     )
     const flow =

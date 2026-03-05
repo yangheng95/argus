@@ -34,9 +34,15 @@ type PermissionAsked = {
 }
 type EventPermissionAsked = Extract<Event, { type: "permission.asked" }>
 type EventSessionIdle = Extract<Event, { type: "session.idle" }>
+type EventSessionError = Extract<Event, { type: "session.error" }>
+type EventSessionStatus = Extract<Event, { type: "session.status" }>
 type EventMessageUpdated = Extract<Event, { type: "message.updated" }>
 type EventMessagePartUpdated = Extract<Event, { type: "message.part.updated" }>
 const MIRROR_PREFIX = "[opencorvus-mirror]"
+type PendingTask = {
+  taskId: string
+  touch: number
+}
 
 export interface BotCoreOptions {
   port?: number
@@ -66,6 +72,8 @@ export class BotCore {
   private runtimeSession?: string
   /** Prevent creating duplicate overlay mirror threads */
   private overlayMirrorBound = false
+  private pending = new Map<string, PendingTask>()
+  private pendingWatch: ReturnType<typeof setInterval> | null = null
 
   constructor(private options?: BotCoreOptions) {}
 
@@ -102,10 +110,23 @@ export class BotCore {
     console.log(`[BotCore] OpenCorvus server running at ${this.serverUrl}`)
 
     this.subscribeEvents()
+    this.startPendingWatch()
 
-    for (const adapter of this.adapters) {
-      adapter.onMessage((msg) => this.handleMessage(msg))
-      await adapter.start()
+    const started = await Promise.allSettled(
+      this.adapters.map(async (adapter) => {
+        adapter.onMessage((msg) => this.handleMessage(msg))
+        await adapter.start()
+        return adapter
+      }),
+    )
+    this.adapters = started.flatMap((item) => (item.status === "fulfilled" ? [item.value] : []))
+    started
+      .filter((item) => item.status === "rejected")
+      .forEach((item) => {
+        console.error("[BotCore] adapter start failed:", item.reason)
+      })
+    if (this.adapters.length === 0) {
+      console.warn("[BotCore] No chat adapter started successfully.")
     }
 
     // Pre-load shared session ID so overlay-originated events can be mirrored to Slack
@@ -124,6 +145,8 @@ export class BotCore {
   async stop(): Promise<void> {
     this.running = false
     this.runtimeSession = undefined
+    this.stopPendingWatch()
+    this.pending.clear()
     for (const adapter of this.adapters) {
       await adapter.stop()
     }
@@ -270,11 +293,9 @@ export class BotCore {
 
     const result = await this.submitTask(session.sessionId, text, msg.platform)
     if (result !== "ok") {
+      this.clearPending(session.sessionId)
       this.session.stop(session.sessionId)
-      const notice =
-        result === "pending"
-          ? "Task did not complete (runtime stopped or timed out). Session queue has been released; send the next instruction."
-          : "Failed to send prompt."
+      const notice = "Failed to send prompt."
       this.mirror("system", notice, {
         platform: msg.platform,
         channel: msg.channel,
@@ -296,23 +317,28 @@ export class BotCore {
       const result = await this.client.tui.runtime.submitTask({
         sessionID,
         text,
-        wait: true,
+        wait: false,
       })
       if (!result.error) {
         const data = result.data as
           | {
+              accepted?: boolean
+              taskID?: string | null
               completed?: boolean
               waited?: boolean
             }
           | undefined
-        if (data?.completed) {
-          console.log(`[BotCore] Task completed via tui.runtime.submitTask for session ${sessionID}`)
+        if (data?.accepted) {
+          const taskId = typeof data.taskID === "string" && data.taskID.trim() ? data.taskID.trim() : this.taskId(sessionID)
+          this.markPending(sessionID, taskId)
+          console.log(
+            `[BotCore] Task accepted via tui.runtime.submitTask for session ${sessionID} (task=${taskId}, waited=${data?.waited ? "true" : "false"})`,
+          )
           return "ok" as const
         }
         console.warn(
-          `[BotCore] tui.runtime.submitTask did not reach completion for session ${sessionID} (waited=${data?.waited ? "true" : "false"})`,
+          `[BotCore] tui.runtime.submitTask did not accept task for session ${sessionID} (waited=${data?.waited ? "true" : "false"})`,
         )
-        return "pending" as const
       }
       console.error("[BotCore] tui.runtime.submitTask error:", JSON.stringify(result.error).slice(0, 500))
     }
@@ -327,6 +353,7 @@ export class BotCore {
       console.error("[BotCore] session.promptAsync error:", JSON.stringify(result.error).slice(0, 500))
       return "failed" as const
     }
+    this.markPending(sessionID, this.taskId(sessionID))
     console.log(`[BotCore] Prompt sent via session.promptAsync for session ${sessionID}`)
     return "ok" as const
   }
@@ -566,6 +593,118 @@ export class BotCore {
     })
   }
 
+  private taskId(sessionId: string) {
+    return `task_${sessionId.slice(-6)}_${Date.now().toString(36)}`
+  }
+
+  private pendingTimeout() {
+    const raw = Number(process.env.OPENCORVUS_BOT_TASK_TIMEOUT_MS)
+    if (!Number.isFinite(raw) || raw <= 0) return 10 * 60 * 1000
+    if (raw < 1_000) return 1_000
+    return Math.floor(raw)
+  }
+
+  private pendingSweepMs() {
+    const raw = Number(process.env.OPENCORVUS_BOT_TASK_SWEEP_MS)
+    if (!Number.isFinite(raw) || raw <= 0) return 5_000
+    if (raw < 1_000) return 1_000
+    return Math.floor(raw)
+  }
+
+  private startPendingWatch() {
+    if (this.pendingWatch) return
+    this.pendingWatch = setInterval(() => {
+      this.expirePending().catch((err) => console.error("[BotCore] pending watchdog error:", err))
+    }, this.pendingSweepMs())
+    this.pendingWatch.unref?.()
+  }
+
+  private stopPendingWatch() {
+    if (!this.pendingWatch) return
+    clearInterval(this.pendingWatch)
+    this.pendingWatch = null
+  }
+
+  private markPending(sessionId: string, taskId: string) {
+    this.pending.set(sessionId, {
+      taskId,
+      touch: Date.now(),
+    })
+  }
+
+  private touchPending(sessionId: string) {
+    const item = this.pending.get(sessionId)
+    if (!item) return
+    item.touch = Date.now()
+  }
+
+  private clearPending(sessionId: string) {
+    this.pending.delete(sessionId)
+  }
+
+  private releaseSession(sessionId: string) {
+    this.clearPending(sessionId)
+    this.session.stop(sessionId)
+    const next = this.session.dequeue(sessionId)
+    if (!next.item) return
+    this.handleMessage(next.item.msg).catch((err) => console.error("[BotCore] dequeue handleMessage error:", err))
+  }
+
+  private async pendingStatus(taskId: string) {
+    const res = await fetch(`${this.serverUrl}/tui/runtime/task-status`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ taskID: taskId }),
+      signal: AbortSignal.timeout(4_000),
+    }).catch(() => null)
+    if (!res?.ok) return null
+    const body = (await res
+      .json()
+      .catch(() => null)) as { found?: boolean; status?: string; terminal?: boolean; error?: string | null } | null
+    if (!body || body.found !== true) return null
+    return {
+      status: typeof body.status === "string" ? body.status : "",
+      terminal: body.terminal === true,
+      error: typeof body.error === "string" && body.error.trim() ? body.error.trim() : null,
+    }
+  }
+
+  private async expirePending() {
+    if (!this.running) return
+    if (this.pending.size === 0) return
+    const now = Date.now()
+    const timeout = this.pendingTimeout()
+    for (const [sessionId, item] of Array.from(this.pending.entries())) {
+      const status = await this.pendingStatus(item.taskId)
+      if (status && !status.terminal) {
+        this.touchPending(sessionId)
+        continue
+      }
+      if (status?.terminal) {
+        this.releaseSession(sessionId)
+        if (status.status !== "failed") continue
+        const sessions = this.findSessions(sessionId)
+        if (sessions.length === 0) continue
+        const msg = status.error ? `Task failed (${item.taskId}): ${status.error}` : `Task failed (${item.taskId}).`
+        this.mirrorSessions("system", msg, sessionId, sessions)
+        for (const session of sessions) {
+          await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
+        }
+        continue
+      }
+      if (now - item.touch < timeout) continue
+      this.releaseSession(sessionId)
+      const sessions = this.findSessions(sessionId)
+      if (sessions.length === 0) continue
+      const sec = Math.floor(timeout / 1000)
+      const msg = `Task timed out after ${sec}s (${item.taskId}). Queue released.`
+      this.mirrorSessions("system", msg, sessionId, sessions)
+      for (const session of sessions) {
+        await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
+      }
+    }
+  }
+
   private queueLimit() {
     return queueLimitRule(process.env)
   }
@@ -705,8 +844,25 @@ export class BotCore {
   }
 
   private async handleEvent(event: Event): Promise<void> {
+    if (event.type === "session.status") {
+      const info = (event as EventSessionStatus).properties
+      if (!info.sessionID) return
+      if (info.status.type !== "idle") {
+        this.touchPending(info.sessionID)
+        return
+      }
+      const pending = this.pending.get(info.sessionID)
+      if (!pending) return
+      const status = await this.pendingStatus(pending.taskId)
+      if (status?.terminal) {
+        this.releaseSession(info.sessionID)
+      }
+      return
+    }
+
     if (event.type === "permission.asked") {
       const asked = (event as EventPermissionAsked).properties as PermissionAsked
+      this.touchPending(asked.sessionID)
       const reply = this.permissionReply()
       const result = await this.client.permission.reply({
         requestID: asked.id,
@@ -752,12 +908,32 @@ export class BotCore {
     if (event.type === "session.idle") {
       const sessionId = (event as EventSessionIdle).properties.sessionID
       if (sessionId) {
-        this.session.stop(sessionId)
-        const next = this.session.dequeue(sessionId)
-        if (next.item) {
-          console.log(`[BotCore] Dequeuing next message for ${sessionId}, remaining: ${next.remaining}`)
-          this.handleMessage(next.item.msg).catch((err) => console.error("[BotCore] dequeue handleMessage error:", err))
-        }
+        this.releaseSession(sessionId)
+      }
+      return
+    }
+
+    if (event.type === "session.error") {
+      const props = (event as EventSessionError).properties
+      const sessionId = props.sessionID
+      if (!sessionId) return
+      this.releaseSession(sessionId)
+      const sessions = this.findSessions(sessionId)
+      if (sessions.length === 0) return
+      const msg = (() => {
+        const error = props.error
+        if (!error) return "Session failed."
+        const data = "data" in error ? error.data : undefined
+        const detail =
+          data && typeof data === "object" && "message" in data && typeof data.message === "string"
+            ? data.message
+            : undefined
+        if (detail) return `Session failed: ${detail}`
+        return `Session failed: ${String(error.name ?? "unknown_error")}`
+      })()
+      this.mirrorSessions("system", msg, sessionId, sessions)
+      for (const session of sessions) {
+        await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
       }
       return
     }
@@ -765,6 +941,7 @@ export class BotCore {
     // Track user message IDs so we can skip their parts
     if (event.type === "message.updated") {
       const info = (event as EventMessageUpdated).properties.info
+      this.touchPending(info.sessionID)
 
       if (info.role === "user") {
         // Track on first event only; message.updated fires twice for the same user message
@@ -825,6 +1002,7 @@ export class BotCore {
 
     if (event.type === "message.part.updated") {
       const part = (event as EventMessagePartUpdated).properties.part
+      this.touchPending(part.sessionID)
 
       // In shared mode, pre-capture text parts before we know the message role.
       // message.part.updated fires BEFORE message.updated(role=user), so we store

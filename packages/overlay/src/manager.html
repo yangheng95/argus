@@ -124,7 +124,7 @@
       .main {
         min-height: 0;
         display: grid;
-        grid-template-rows: minmax(0, 1fr) auto;
+        grid-template-rows: minmax(0, 1fr);
         gap: 8px;
       }
 
@@ -676,6 +676,43 @@
         box-shadow: 0 0 0 3px rgba(var(--brand-from-rgb), 0.09);
       }
 
+      .llm-grid {
+        display: grid;
+        gap: 8px;
+      }
+
+      .llm-scope {
+        display: grid;
+        gap: 6px;
+        border: 1px solid rgba(20, 50, 94, 0.12);
+        border-radius: var(--radius-sm);
+        background: rgba(20, 50, 94, 0.02);
+        padding: 8px;
+      }
+
+      .llm-scope-title {
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .secret-field {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .secret-field input {
+        flex: 1;
+      }
+
+      .secret-toggle {
+        flex: none;
+        min-width: 58px;
+      }
+
       .env-tools {
         display: flex;
         justify-content: flex-end;
@@ -836,7 +873,11 @@
 
       .save-wrap {
         display: flex;
-        justify-content: flex-end;
+      }
+
+      .save-wrap #saveBtn {
+        width: 100%;
+        flex: 1;
       }
 
       .panel-backdrop {
@@ -913,9 +954,45 @@
         align-content: start;
       }
 
-      .session-tools {
+      .log-panel {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        width: min(820px, calc(100vw - 32px));
+        height: min(420px, calc(100vh - 120px));
+        z-index: 70;
+        display: none;
+      }
+
+      .log-panel.open {
+        display: block;
+      }
+
+      .log-panel .panel {
+        width: 100%;
+        height: 100%;
+        max-height: none;
+      }
+
+      .panel-body-log {
+        padding: 0;
         display: flex;
-        flex-wrap: wrap;
+        min-height: 0;
+      }
+
+      .log-panel .log-body {
+        height: 100%;
+      }
+
+      #toggleLogPanelBtn.active {
+        border-color: rgba(var(--brand-from-rgb), 0.38);
+        color: var(--text-primary);
+        background: rgba(var(--brand-from-rgb), 0.12);
+      }
+
+      .session-tools {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
         gap: 8px;
         align-items: center;
       }
@@ -963,6 +1040,11 @@
         background: rgba(var(--brand-from-rgb), 0.08);
       }
 
+      .session-row.busy {
+        border-color: rgba(var(--brand-to-rgb), 0.5);
+        background: rgba(var(--brand-to-rgb), 0.09);
+      }
+
       .session-main {
         min-width: 0;
         display: grid;
@@ -1006,6 +1088,10 @@
         min-width: 84px;
       }
 
+      .session-actions button:disabled {
+        opacity: 0.65;
+      }
+
       /* Scrollbars */
       ::-webkit-scrollbar {
         width: 4px;
@@ -1028,6 +1114,10 @@
       }
 
       @media (max-width: 860px) {
+        .session-tools {
+          grid-template-columns: 1fr;
+        }
+
         .session-row {
           grid-template-columns: 1fr;
         }
@@ -1054,6 +1144,7 @@
             <span class="status-dot"></span>
             <span id="statusText">Stopped</span>
           </div>
+          <button id="toggleLogPanelBtn" type="button" title="Show runtime logs">Logs</button>
           <button class="btn-primary" id="startBtn" type="button">Start</button>
           <button class="btn-danger" id="stopBtn" type="button">Stop</button>
         </div>
@@ -1101,6 +1192,40 @@
                 <p class="cfg-hint">Set project root for manager-side helper tooling and relative paths.</p>
               </section>
               <section class="cfg-group">
+                <div class="cfg-group-head">LLM Endpoint</div>
+                <div class="llm-grid">
+                  <div class="llm-scope">
+                    <div class="llm-scope-title">TUI</div>
+                    <label
+                      >API URL
+                      <input id="tuiLlmBaseUrlInput" placeholder="https://api.example.com/v1" />
+                    </label>
+                    <label
+                      >API Key
+                      <div class="secret-field">
+                        <input id="tuiLlmApiKeyInput" type="password" placeholder="(empty)" autocomplete="off" />
+                        <button id="toggleTuiLlmApiKeyBtn" class="secret-toggle" type="button">Show</button>
+                      </div>
+                    </label>
+                  </div>
+                  <div class="llm-scope">
+                    <div class="llm-scope-title">Bot</div>
+                    <label
+                      >API URL
+                      <input id="botLlmBaseUrlInput" placeholder="https://api.example.com/v1" />
+                    </label>
+                    <label
+                      >API Key
+                      <div class="secret-field">
+                        <input id="botLlmApiKeyInput" type="password" placeholder="(empty)" autocomplete="off" />
+                        <button id="toggleBotLlmApiKeyBtn" class="secret-toggle" type="button">Show</button>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                <p class="cfg-hint">Keys are masked. TUI and bot use independent API URL/key settings.</p>
+              </section>
+              <section class="cfg-group">
                 <div class="cfg-group-head">Tools</div>
                 <div class="cfg-entry">
                   <button id="openMcpBtn" type="button">MCP Config</button>
@@ -1141,24 +1266,23 @@
           </section>
         </div>
 
-        <!-- Runtime -->
-        <section class="card runtime" id="runtimeCard">
-          <div class="card-head">
-            Runtime Logs (All)
-            <div class="card-actions">
-              <button class="icon-btn" id="toggleLogsBtn" type="button" title="Expand logs">Expand</button>
-            </div>
-          </div>
-          <div class="runtime-body" id="runtimeBody">
-            <div class="toolbar">
-              <button id="refreshBtn" type="button" title="Refresh state">Refresh</button>
-              <button id="clearLogsBtn" type="button" title="Clear logs">Clear</button>
-              <button id="openLogPanelBtn" type="button">Log File</button>
-            </div>
-            <pre class="log-body" id="logs"></pre>
-          </div>
-        </section>
       </div>
+    </div>
+    <div class="log-panel" id="logPanel" aria-hidden="true">
+      <section class="panel panel-wide" role="region" aria-labelledby="logPanelTitle">
+        <div class="panel-head">
+          <strong id="logPanelTitle">Runtime Logs (All)</strong>
+          <div class="panel-head-actions">
+            <button id="refreshBtn" type="button" title="Refresh state">Refresh</button>
+            <button id="clearLogsBtn" type="button" title="Clear logs">Clear</button>
+            <button id="openLogPathBtn" type="button">Log File</button>
+            <button id="closeLogPanelBtn" type="button">Close</button>
+          </div>
+        </div>
+        <div class="panel-body panel-body-log">
+          <pre class="log-body" id="logs"></pre>
+        </div>
+      </section>
     </div>
     <div class="panel-backdrop" id="envPanel" aria-hidden="true">
       <section class="panel panel-wide" role="dialog" aria-modal="true" aria-labelledby="envPanelTitle">

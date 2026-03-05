@@ -23,6 +23,7 @@ export const TuiRuntimeTaskRoutes = lazy(() =>
                   z.object({
                     accepted: z.literal(true),
                     sessionID: z.string(),
+                    taskID: z.string().nullable(),
                     waited: z.boolean(),
                     completed: z.boolean(),
                     message: z.any().nullable(),
@@ -83,6 +84,46 @@ export const TuiRuntimeTaskRoutes = lazy(() =>
       async (c) => {
         const body = c.req.valid("json")
         return c.json(await TuiRuntime.proxy(body))
+      },
+    )
+    .post(
+      "/runtime/task-status",
+      describeRoute({
+        summary: "Get runtime task status",
+        description: "Resolve queued task status by taskID for watchdogs and recovery.",
+        operationId: "tui.runtime.taskStatus",
+        responses: {
+          200: {
+            description: "Task status",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    found: z.boolean(),
+                    taskID: z.string(),
+                    sessionID: z.string().nullable(),
+                    status: z.string(),
+                    terminal: z.boolean(),
+                    error: z.string().nullable(),
+                    updatedAt: z.number().nullable(),
+                    completedAt: z.number().nullable(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          taskID: z.string().min(1),
+        }),
+      ),
+      async (c) => {
+        const body = c.req.valid("json")
+        return c.json(TuiRuntime.taskStatus(body))
       },
     ),
 )

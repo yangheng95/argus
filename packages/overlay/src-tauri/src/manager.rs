@@ -23,6 +23,12 @@ const MIRROR_PREFIX: &str = "[opencorvus-mirror]";
 const CORE_PID_FILE: &str = "opencorvus-core.pid";
 const CHANNEL_PID_FILE: &str = "opencorvus-channel.pid";
 const SCREENSHOT_SCHEME: &str = "opencorvus://screenshot/";
+const ENV_TUI_LLM_BASE_URL: &str = "OPENCORVUS_TUI_LLM_BASE_URL";
+const ENV_TUI_LLM_API_KEY: &str = "OPENCORVUS_TUI_LLM_API_KEY";
+const ENV_BOT_LLM_BASE_URL: &str = "OPENCORVUS_BOT_LLM_BASE_URL";
+const ENV_BOT_LLM_API_KEY: &str = "OPENCORVUS_BOT_LLM_API_KEY";
+const ENV_LLM_BASE_URL: &str = "OPENCORVUS_BASE_URL";
+const ENV_LLM_API_KEY: &str = "OPENCORVUS_API_KEY";
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {
@@ -62,6 +68,11 @@ pub struct ManagerSnapshot {
     pub config: ManagerConfig,
     pub logs: Vec<LogEntry>,
     pub log_path: String,
+    pub loop_id: String,
+    pub event_seq: u64,
+    pub active_task_id: Option<String>,
+    pub active_turn_id: Option<String>,
+    pub last_chat_event: Option<ChatEvent>,
 }
 
 #[derive(Serialize)]
@@ -74,6 +85,9 @@ pub struct SendResult {
 #[derive(Serialize)]
 pub struct SendAck {
     pub accepted: bool,
+    pub loop_id: String,
+    pub turn_id: String,
+    pub task_id: String,
 }
 
 #[derive(Serialize, Clone)]
@@ -84,6 +98,24 @@ pub struct ChatEvent {
     pub alt: Option<String>,
     pub success: Option<bool>,
     pub code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub loop_event: Option<LoopEvent>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct LoopEvent {
+    pub v: String,
+    pub seq: u64,
+    pub event_id: String,
+    pub loop_id: String,
+    pub turn_id: String,
+    pub task_id: String,
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    pub terminal: bool,
+    pub ts: u64,
+    pub source: String,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -113,6 +145,16 @@ pub struct ManagerState {
     core: Option<Child>,
     channel: Option<Child>,
     prompt_running: bool,
+    loop_id: String,
+    event_seq: u64,
+    active_task: Option<TaskRun>,
+    last_chat_event: Option<ChatEvent>,
+}
+
+#[derive(Clone)]
+struct TaskRun {
+    turn_id: String,
+    task_id: String,
 }
 
 pub type Shared = Arc<Mutex<ManagerState>>;
@@ -190,6 +232,7 @@ impl Default for ManagerConfig {
 
 impl ManagerState {
     fn new() -> Self {
+        let seed = stamp();
         Self {
             config: ManagerConfig::default(),
             logs: VecDeque::new(),
@@ -197,6 +240,10 @@ impl ManagerState {
             core: None,
             channel: None,
             prompt_running: false,
+            loop_id: format!("loop_{seed:x}"),
+            event_seq: 0,
+            active_task: None,
+            last_chat_event: None,
         }
     }
 }
@@ -765,7 +812,42 @@ fn reveal_target(path: &Path) -> Result<(), String> {
 }
 
 fn build_command(config: &ManagerConfig, args: &[String]) -> Command {
-    build_process(&config.command, args, &config.cwd, &config.env)
+    let mut cmd = build_process(&config.command, args, &config.cwd, &config.env);
+    apply_llm_env(&mut cmd, &config.env, false);
+    cmd
+}
+
+fn env_pick(env: &[EnvItem], key: &str) -> Option<String> {
+    env.iter().rev().find_map(|item| {
+        if item.key.trim() != key {
+            return None;
+        }
+        let value = item.value.trim();
+        if value.is_empty() {
+            return None;
+        }
+        Some(value.to_string())
+    })
+}
+
+fn apply_llm_env(cmd: &mut Command, env: &[EnvItem], bot: bool) {
+    let base = if bot {
+        ENV_BOT_LLM_BASE_URL
+    } else {
+        ENV_TUI_LLM_BASE_URL
+    };
+    let key = if bot {
+        ENV_BOT_LLM_API_KEY
+    } else {
+        ENV_TUI_LLM_API_KEY
+    };
+
+    if let Some(value) = env_pick(env, base) {
+        cmd.env(ENV_LLM_BASE_URL, value);
+    }
+    if let Some(value) = env_pick(env, key) {
+        cmd.env(ENV_LLM_API_KEY, value);
+    }
 }
 
 fn build_process(command: &str, args: &[String], cwd: &str, env: &[EnvItem]) -> Command {
@@ -799,6 +881,7 @@ fn watch_pipe<R: Read + Send + 'static>(
                 Ok(Some(text)) if !text.trim().is_empty() => {
                     if tag == "channel" {
                         if let Some(event) = parse_channel_mirror(&text) {
+                            shared.lock().unwrap().last_chat_event = Some(event.clone());
                             let _ = app.emit_to(
                                 events::WINDOW_CONSOLE,
                                 events::EVT_MANAGER_CHAT,
@@ -837,8 +920,22 @@ fn decode_output_bytes(bytes: &[u8]) -> String {
     }
     #[cfg(target_os = "windows")]
     {
-        let (text, _, _) = GB18030.decode(bytes);
-        return text.into_owned();
+        let utf8 = String::from_utf8_lossy(bytes).to_string();
+        let utf8_bad = utf8.chars().filter(|item| *item == '\u{FFFD}').count();
+        if utf8_bad == 0 {
+            return utf8;
+        }
+        let (gb, _, _) = GB18030.decode(bytes);
+        let gb = gb.into_owned();
+        let gb_bad = gb.chars().filter(|item| *item == '\u{FFFD}').count();
+        let utf8_len = utf8.chars().count().max(1);
+        if utf8_bad * 100 <= utf8_len * 2 {
+            return utf8;
+        }
+        if gb_bad < utf8_bad {
+            return gb;
+        }
+        return utf8;
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -862,7 +959,75 @@ fn read_output_line<R: BufRead>(
     Ok(Some(decode_output_line(raw)))
 }
 
+fn next_task_run(state: &mut ManagerState) -> TaskRun {
+    let ts = stamp();
+    let idx = state.event_seq.saturating_add(1);
+    TaskRun {
+        turn_id: format!("turn_{ts:x}_{idx:x}"),
+        task_id: format!("task_{ts:x}_{idx:x}"),
+    }
+}
+
+fn next_loop_event(
+    shared: &Shared,
+    task: Option<&TaskRun>,
+    kind: &str,
+    status: Option<&str>,
+    terminal: bool,
+    source: &str,
+) -> Option<LoopEvent> {
+    let mut state = shared.lock().unwrap();
+    let ctx = task.cloned().or_else(|| state.active_task.clone())?;
+    state.event_seq = state.event_seq.saturating_add(1);
+    let seq = state.event_seq;
+    let loop_id = state.loop_id.clone();
+    Some(LoopEvent {
+        v: "1.0".into(),
+        seq,
+        event_id: format!("evt_{seq:x}"),
+        loop_id,
+        turn_id: ctx.turn_id,
+        task_id: ctx.task_id,
+        kind: kind.into(),
+        status: status.map(|item| item.into()),
+        terminal,
+        ts: stamp(),
+        source: source.into(),
+    })
+}
+
+fn emit_chat_ex(
+    shared: Option<&Shared>,
+    app: &AppHandle,
+    kind: &str,
+    text: Option<String>,
+    url: Option<String>,
+    alt: Option<String>,
+    success: Option<bool>,
+    code: Option<i32>,
+    loop_event: Option<LoopEvent>,
+) {
+    let event = ChatEvent {
+        kind: kind.into(),
+        text,
+        url,
+        alt,
+        success,
+        code,
+        loop_event,
+    };
+    if let Some(shared) = shared {
+        shared.lock().unwrap().last_chat_event = Some(event.clone());
+    }
+    let _ = app.emit_to(
+        events::WINDOW_CONSOLE,
+        events::EVT_MANAGER_CHAT,
+        event,
+    );
+}
+
 fn emit_chat(
+    shared: Option<&Shared>,
     app: &AppHandle,
     kind: &str,
     text: Option<String>,
@@ -871,18 +1036,94 @@ fn emit_chat(
     success: Option<bool>,
     code: Option<i32>,
 ) {
-    let _ = app.emit_to(
-        events::WINDOW_CONSOLE,
-        events::EVT_MANAGER_CHAT,
-        ChatEvent {
-            kind: kind.into(),
-            text,
-            url,
-            alt,
-            success,
-            code,
-        },
+    emit_chat_ex(shared, app, kind, text, url, alt, success, code, None);
+}
+
+fn emit_loop_chat(
+    shared: &Shared,
+    app: &AppHandle,
+    task: Option<&TaskRun>,
+    loop_kind: &str,
+    status: Option<&str>,
+    terminal: bool,
+    source: &str,
+    kind: &str,
+    text: Option<String>,
+    url: Option<String>,
+    alt: Option<String>,
+    success: Option<bool>,
+    code: Option<i32>,
+) {
+    let loop_event = next_loop_event(shared, task, loop_kind, status, terminal, source);
+    emit_chat_ex(
+        Some(shared),
+        app,
+        kind,
+        text,
+        url,
+        alt,
+        success,
+        code,
+        loop_event,
     );
+}
+
+fn probe_cancelled_task(state: &mut ManagerState, core_done: bool) -> Option<TaskRun> {
+    if !core_done || !state.prompt_running {
+        return None;
+    }
+    if state.active_task.is_none() {
+        state.prompt_running = false;
+        return None;
+    }
+    state.active_task.clone()
+}
+
+fn close_active_task(shared: &Shared, task: &TaskRun) -> bool {
+    let mut state = shared.lock().unwrap();
+    let active = state
+        .active_task
+        .as_ref()
+        .map(|item| item.task_id.as_str())
+        == Some(task.task_id.as_str());
+    if !active {
+        return false;
+    }
+    state.prompt_running = false;
+    state.active_task = None;
+    true
+}
+
+fn emit_task_terminal(
+    shared: &Shared,
+    app: &AppHandle,
+    task: &TaskRun,
+    status: &str,
+    source: &str,
+    text: Option<String>,
+    success: Option<bool>,
+    code: Option<i32>,
+) -> bool {
+    if !close_active_task(shared, task) {
+        return false;
+    }
+    emit_loop_chat(
+        shared,
+        app,
+        Some(task),
+        "task.status",
+        Some(status),
+        true,
+        source,
+        "done",
+        text,
+        None,
+        None,
+        success,
+        code,
+    );
+    emit_state(shared, app);
+    true
 }
 
 fn parse_channel_mirror(line: &str) -> Option<ChatEvent> {
@@ -924,6 +1165,7 @@ fn parse_channel_mirror(line: &str) -> Option<ChatEvent> {
         alt: None,
         success: None,
         code: None,
+        loop_event: None,
     })
 }
 
@@ -1220,22 +1462,64 @@ fn strip_orphan_fork(args: Vec<String>) -> (Vec<String>, bool) {
     (out, removed)
 }
 
-fn emit_delta(app: &AppHandle, output: &mut String, text: &str) {
+fn emit_delta(
+    shared: &Shared,
+    app: &AppHandle,
+    task: Option<&TaskRun>,
+    output: &mut String,
+    text: &str,
+) {
     if text.is_empty() {
         return;
     }
     output.push_str(text);
-    emit_chat(app, "delta", Some(text.into()), None, None, None, None);
+    emit_loop_chat(
+        shared,
+        app,
+        task,
+        "output.delta",
+        None,
+        false,
+        "run",
+        "delta",
+        Some(text.into()),
+        None,
+        None,
+        None,
+        None,
+    );
 }
 
-fn emit_replace(app: &AppHandle, output: &mut String, text: &str) {
+fn emit_replace(
+    shared: &Shared,
+    app: &AppHandle,
+    task: Option<&TaskRun>,
+    output: &mut String,
+    text: &str,
+) {
     output.clear();
     output.push_str(text);
-    emit_chat(app, "replace", Some(text.into()), None, None, None, None);
+    emit_loop_chat(
+        shared,
+        app,
+        task,
+        "output.replace",
+        None,
+        false,
+        "run",
+        "replace",
+        Some(text.into()),
+        None,
+        None,
+        None,
+        None,
+    );
 }
 
 fn process_json_line(
+    shared: &Shared,
     app: &AppHandle,
+    task: Option<&TaskRun>,
     value: &serde_json::Value,
     output: &mut String,
     delta_seen: &mut bool,
@@ -1257,7 +1541,7 @@ fn process_json_line(
             return true;
         };
         *delta_seen = true;
-        emit_delta(app, output, delta);
+        emit_delta(shared, app, task, output, delta);
         return true;
     }
 
@@ -1266,7 +1550,7 @@ fn process_json_line(
             return true;
         };
         if !*delta_seen {
-            emit_replace(app, output, text);
+            emit_replace(shared, app, task, output, text);
         }
         return true;
     }
@@ -1286,8 +1570,14 @@ fn process_json_line(
             .and_then(|item| item.as_str())
             .unwrap_or("image");
         let resolved = resolve_overlay_image_url(url);
-        emit_chat(
+        emit_loop_chat(
+            shared,
             app,
+            task,
+            "output.image",
+            None,
+            false,
+            "run",
             "image",
             None,
             Some(resolved),
@@ -1320,8 +1610,14 @@ fn process_json_line(
                 .and_then(|x| x.as_str())
                 .unwrap_or("image");
             let resolved = resolve_overlay_image_url(url);
-            emit_chat(
+            emit_loop_chat(
+                shared,
                 app,
+                task,
+                "output.image",
+                None,
+                false,
+                "run",
                 "image",
                 None,
                 Some(resolved),
@@ -1339,14 +1635,28 @@ fn process_json_line(
             .and_then(|item| item.as_str())
             .or_else(|| value.pointer("/error/name").and_then(|item| item.as_str()))
             .unwrap_or("Unknown error");
-        emit_chat(app, "system", Some(text.into()), None, None, None, None);
+        emit_loop_chat(
+            shared,
+            app,
+            task,
+            "system.message",
+            None,
+            false,
+            "run",
+            "system",
+            Some(text.into()),
+            None,
+            None,
+            None,
+            None,
+        );
         return true;
     }
 
     false
 }
 
-fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
+fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String, task: TaskRun) -> SendResult {
     let config = {
         let state = shared.lock().unwrap();
         state.config.clone()
@@ -1386,15 +1696,52 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
 
-    emit_chat(app, "start", None, None, None, None, None);
+    emit_loop_chat(
+        shared,
+        app,
+        Some(&task),
+        "task.status",
+        Some("running"),
+        false,
+        "manager",
+        "start",
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
 
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(error) => {
             let message = format!("failed to run prompt command: {error}");
             push_log(shared, app, message.clone());
-            emit_chat(app, "system", Some(message.clone()), None, None, None, None);
-            emit_chat(app, "done", None, None, None, Some(false), Some(-1));
+            emit_loop_chat(
+                shared,
+                app,
+                Some(&task),
+                "system.message",
+                None,
+                false,
+                "manager",
+                "system",
+                Some(message.clone()),
+                None,
+                None,
+                None,
+                None,
+            );
+            emit_task_terminal(
+                shared,
+                app,
+                &task,
+                "failed",
+                "manager",
+                None,
+                Some(false),
+                Some(-1),
+            );
             return SendResult {
                 success: false,
                 code: -1,
@@ -1456,13 +1803,13 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
                                 }
                             }
                         }
-                        if process_json_line(app, &value, &mut out, &mut delta_seen) {
+                        if process_json_line(shared, app, Some(&task), &value, &mut out, &mut delta_seen) {
                             continue;
                         }
                     }
                     push_log(shared, app, format!("[run] {item}"));
                     let chunk = format!("{item}\n");
-                    emit_delta(app, &mut out, &chunk);
+                    emit_delta(shared, app, Some(&task), &mut out, &chunk);
                     delta_seen = true;
                 }
                 Ok(Some(_)) => {}
@@ -1470,7 +1817,21 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
                 Err(error) => {
                     let line = format!("[run] stream read failed: {error}");
                     push_log(shared, app, line.clone());
-                    emit_chat(app, "system", Some(line), None, None, None, None);
+                    emit_loop_chat(
+                        shared,
+                        app,
+                        Some(&task),
+                        "system.message",
+                        None,
+                        false,
+                        "run",
+                        "system",
+                        Some(line),
+                        None,
+                        None,
+                        None,
+                        None,
+                    );
                     break;
                 }
             }
@@ -1486,8 +1847,31 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         Err(error) => {
             let message = format!("failed to wait prompt command: {error}");
             push_log(shared, app, message.clone());
-            emit_chat(app, "system", Some(message.clone()), None, None, None, None);
-            emit_chat(app, "done", None, None, None, Some(false), Some(-1));
+            emit_loop_chat(
+                shared,
+                app,
+                Some(&task),
+                "system.message",
+                None,
+                false,
+                "manager",
+                "system",
+                Some(message.clone()),
+                None,
+                None,
+                None,
+                None,
+            );
+            emit_task_terminal(
+                shared,
+                app,
+                &task,
+                "failed",
+                "manager",
+                None,
+                Some(false),
+                Some(-1),
+            );
             return SendResult {
                 success: false,
                 code: -1,
@@ -1509,8 +1893,14 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
     };
 
     if !success {
-        emit_chat(
+        emit_loop_chat(
+            shared,
             app,
+            Some(&task),
+            "system.message",
+            None,
+            false,
+            "run",
             "system",
             Some(format!("Command failed (code {code}): {text}")),
             None,
@@ -1533,7 +1923,16 @@ fn run_prompt(shared: &Shared, app: &AppHandle, prompt: String) -> SendResult {
         }
     }
 
-    emit_chat(app, "done", None, None, None, Some(success), Some(code));
+    emit_task_terminal(
+        shared,
+        app,
+        &task,
+        if success { "completed" } else { "failed" },
+        "manager",
+        None,
+        Some(success),
+        Some(code),
+    );
     SendResult {
         success,
         code,
@@ -1569,6 +1968,11 @@ pub fn snapshot(shared: &Shared) -> ManagerSnapshot {
         config: state.config.clone(),
         logs: state.logs.iter().cloned().collect(),
         log_path: state.log_path.clone(),
+        loop_id: state.loop_id.clone(),
+        event_seq: state.event_seq,
+        active_task_id: state.active_task.as_ref().map(|item| item.task_id.clone()),
+        active_turn_id: state.active_task.as_ref().map(|item| item.turn_id.clone()),
+        last_chat_event: state.last_chat_event.clone(),
     }
 }
 
@@ -1646,7 +2050,7 @@ pub fn push_log_json(
 }
 
 pub fn probe(shared: &Shared, app: &AppHandle) {
-    let (notes, core_exited, channel_exited) = {
+    let (notes, core_exited, channel_exited, cancelled) = {
         let mut state = shared.lock().unwrap();
         let mut lines = Vec::<String>::new();
         let mut core_done = false;
@@ -1689,7 +2093,8 @@ pub fn probe(shared: &Shared, app: &AppHandle) {
                 }
             }
         }
-        (lines, core_done, channel_done)
+        let cancelled = probe_cancelled_task(&mut state, core_done);
+        (lines, core_done, channel_done, cancelled)
     };
 
     if notes.is_empty() {
@@ -1703,6 +2108,20 @@ pub fn probe(shared: &Shared, app: &AppHandle) {
     }
     for line in notes {
         push_log(shared, app, line);
+    }
+    if let Some(task) = cancelled.as_ref() {
+        if emit_task_terminal(
+            shared,
+            app,
+            task,
+            "stalled",
+            "manager",
+            Some("Task stopped because OpenCorvus core process exited".into()),
+            Some(false),
+            Some(-3),
+        ) {
+            push_log(shared, app, format!("active task stopped after process exit: {}", task.task_id));
+        }
     }
     emit_state(shared, app);
 }
@@ -1738,6 +2157,7 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
     let args = abs_cwd_args(config.bot_args.clone(), &config_work_dir(config));
     let bot_cwd = if has_cwd_arg(&args) { "" } else { &config.cwd };
     let mut cmd = build_process(&config.bot_command, &args, bot_cwd, &config.env);
+    apply_llm_env(&mut cmd, &config.env, true);
     let bot_cwd_log = resolve_work_dir(bot_cwd).to_string_lossy().to_string();
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
@@ -1941,6 +2361,10 @@ pub fn start_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
 }
 
 pub fn stop_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
+    let cancelled = {
+        let state = shared.lock().unwrap();
+        state.active_task.clone()
+    };
     let mut channel = {
         let mut state = shared.lock().unwrap();
         state.channel.take()
@@ -1967,6 +2391,17 @@ pub fn stop_bot(shared: &Shared, app: &AppHandle) -> Result<(), String> {
     }
     clear_pid(app, CHANNEL_PID_FILE);
     clear_pid(app, CORE_PID_FILE);
+
+    if let Some(task) = cancelled.as_ref() {
+        if emit_task_terminal(shared, app, task, "cancelled", "manager", None, Some(false), Some(-2)) {
+            push_log(shared, app, format!("active task cancelled: {}", task.task_id));
+        }
+    }
+    {
+        let mut state = shared.lock().unwrap();
+        state.prompt_running = false;
+        state.active_task = None;
+    }
 
     emit_state(shared, app);
     Ok(())
@@ -2238,7 +2673,10 @@ pub fn delete_session(
         state.config.clone()
     };
 
-    let mut cmd = build_command(&config, &["session".into(), "delete".into(), id.clone()]);
+    let mut cmd = build_command(
+        &config,
+        &["session".into(), "delete".into(), id.clone(), "--yes".into()],
+    );
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -2357,20 +2795,39 @@ pub fn send(shared: &Shared, app: &AppHandle, prompt: String) -> Result<SendAck,
         return Err("prompt is empty".into());
     }
 
-    {
+    let (task, loop_id) = {
         let mut state = shared.lock().unwrap();
         if state.prompt_running {
             return Err("a prompt is already running".into());
         }
         state.prompt_running = true;
-    }
+        let task = next_task_run(&mut state);
+        state.active_task = Some(task.clone());
+        (task, state.loop_id.clone())
+    };
 
     emit_state(shared, app);
+    emit_loop_chat(
+        shared,
+        app,
+        Some(&task),
+        "task.status",
+        Some("accepted"),
+        false,
+        "manager",
+        "task",
+        None,
+        None,
+        None,
+        None,
+        None,
+    );
 
     let shared2 = shared.clone();
     let app2 = app.clone();
+    let task2 = task.clone();
     std::thread::spawn(move || {
-        let result = run_prompt(&shared2, &app2, prompt);
+        let result = run_prompt(&shared2, &app2, prompt, task2.clone());
         if !result.success {
             push_log(
                 &shared2,
@@ -2381,9 +2838,72 @@ pub fn send(shared: &Shared, app: &AppHandle, prompt: String) -> Result<SendAck,
         {
             let mut state = shared2.lock().unwrap();
             state.prompt_running = false;
+            if state
+                .active_task
+                .as_ref()
+                .map(|item| item.task_id.as_str())
+                == Some(task2.task_id.as_str())
+            {
+                state.active_task = None;
+            }
         }
         emit_state(&shared2, &app2);
     });
 
-    Ok(SendAck { accepted: true })
+    Ok(SendAck {
+        accepted: true,
+        loop_id,
+        turn_id: task.turn_id,
+        task_id: task.task_id,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn seed_task(shared: &Shared) -> TaskRun {
+        let mut state = shared.lock().unwrap();
+        state.prompt_running = true;
+        let task = next_task_run(&mut state);
+        state.active_task = Some(task.clone());
+        task
+    }
+
+    #[test]
+    fn close_active_task_is_idempotent() {
+        let shared = new_shared();
+        let task = seed_task(&shared);
+        assert!(close_active_task(&shared, &task));
+        assert!(!close_active_task(&shared, &task));
+    }
+
+    #[test]
+    fn probe_first_then_run_prompt_late_close() {
+        let shared = new_shared();
+        let task = seed_task(&shared);
+        {
+            let mut state = shared.lock().unwrap();
+            let claimed = probe_cancelled_task(&mut state, true)
+                .as_ref()
+                .map(|item| item.task_id.clone());
+            assert_eq!(claimed.as_deref(), Some(task.task_id.as_str()));
+            assert!(state.prompt_running);
+        }
+        assert!(close_active_task(&shared, &task));
+        assert!(!close_active_task(&shared, &task));
+    }
+
+    #[test]
+    fn run_prompt_first_then_probe_skips_cancel() {
+        let shared = new_shared();
+        let task = seed_task(&shared);
+        assert!(close_active_task(&shared, &task));
+        {
+            let mut state = shared.lock().unwrap();
+            assert!(probe_cancelled_task(&mut state, true).is_none());
+            assert!(!state.prompt_running);
+            assert!(state.active_task.is_none());
+        }
+    }
 }

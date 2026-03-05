@@ -72,7 +72,7 @@ export const SessionDeleteCommand = cmd({
       }),
   handler: async (args) => {
     await bootstrap(process.cwd(), async () => {
-      const all = [...Session.list({ limit: 10_000 })]
+      const all = args.sessionID ? [] : [...Session.list({ limit: 10_000 })]
       const roots = all.filter((x) => !x.parentID)
       const term = args.search?.toLowerCase()
       const filtered =
@@ -88,7 +88,7 @@ export const SessionDeleteCommand = cmd({
       let targets: Session.Info[] = []
 
       if (args.sessionID) {
-        const session = all.find((x) => x.id === args.sessionID)
+        const session = await Session.get(args.sessionID).catch(() => null)
         if (!session) {
           UI.error(`Session not found: ${args.sessionID}`)
           process.exitCode = 1

@@ -401,6 +401,14 @@ export const RunCommand = cmd({
     }
 
     async function execute(sdk: OpencodeClient) {
+      const eventAbort = new AbortController()
+      const stallMs = (() => {
+        const raw = Number(process.env.OPENCORVUS_RUN_STALL_TIMEOUT_MS ?? "")
+        if (!Number.isFinite(raw)) return 300_000
+        if (raw <= 0) return 0
+        return Math.floor(raw)
+      })()
+
       function tool(part: ToolPart) {
         try {
           if (part.tool === "bash") return bash(props<typeof BashTool>(part))
@@ -430,15 +438,22 @@ export const RunCommand = cmd({
         return false
       }
 
-      const events = await sdk.event.subscribe()
       let error: string | undefined
+      let last = Date.now()
 
       async function loop() {
+        const events = await sdk.event.subscribe(
+          {},
+          {
+            signal: eventAbort.signal,
+          },
+        )
         const toggles = new Map<string, boolean>()
         // Track reasoning part IDs so their deltas are not emitted as text_delta.
         const reasoningPartIDs = new Set<string>()
 
         for await (const event of events.stream) {
+          last = Date.now()
           if (
             event.type === "message.updated" &&
             event.properties.info.role === "assistant" &&
@@ -598,29 +613,77 @@ export const RunCommand = cmd({
       }
       await share(sdk, sessionID)
 
+      const probe =
+        stallMs <= 0
+          ? undefined
+          : setInterval(() => {
+              if (eventAbort.signal.aborted) return
+              const age = Date.now() - last
+              if (age < stallMs) return
+              const timeout = Math.floor(stallMs / 1000)
+              const elapsed = Math.floor(age / 1000)
+              const message = `Event stream stalled for ${elapsed}s (timeout ${timeout}s)`
+              if (!error?.includes(message)) {
+                error = error ? error + EOL + message : message
+              }
+              if (
+                !emit("error", {
+                  error: {
+                    name: "event_stream_stalled",
+                    data: {
+                      message,
+                      timeout,
+                      elapsed,
+                    },
+                  },
+                })
+              ) {
+                UI.error(message)
+              }
+              eventAbort.abort(message)
+            }, Math.min(5000, Math.max(1000, Math.floor(stallMs / 6))))
+
       const loopTask = loop()
+      let sendError: unknown
 
       if (args.command) {
-        await sdk.session.command({
-          sessionID,
-          agent,
-          model: args.model,
-          command: args.command,
-          arguments: message,
-          variant: args.variant,
-        })
+        try {
+          await sdk.session.command({
+            sessionID,
+            agent,
+            model: args.model,
+            command: args.command,
+            arguments: message,
+            variant: args.variant,
+          })
+        } catch (cause) {
+          sendError = cause
+        }
       } else {
         const model = args.model ? Provider.parseModel(args.model) : undefined
-        await sdk.session.prompt({
-          sessionID,
-          agent,
-          model,
-          variant: args.variant,
-          parts: [...files, { type: "text", text: message }],
-        })
+        try {
+          await sdk.session.prompt({
+            sessionID,
+            agent,
+            model,
+            variant: args.variant,
+            parts: [...files, { type: "text", text: message }],
+          })
+        } catch (cause) {
+          sendError = cause
+        }
       }
 
-      await loopTask
+      if (sendError) eventAbort.abort("prompt request failed")
+      try {
+        await loopTask
+      } catch (cause) {
+        if (!eventAbort.signal.aborted) throw cause
+      } finally {
+        if (probe) clearInterval(probe)
+        eventAbort.abort()
+      }
+      if (sendError) throw sendError
       if (error) process.exitCode = 1
     }
 

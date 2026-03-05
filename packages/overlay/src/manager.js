@@ -6,11 +6,12 @@ const els = {
   statusBadge: document.getElementById("statusBadge"),
   statusText: document.getElementById("statusText"),
   pidText: document.getElementById("pidText"),
+  toggleLogPanelBtn: document.getElementById("toggleLogPanelBtn"),
   chat: document.getElementById("chat"),
   logs: document.getElementById("logs"),
-  runtimeCard: document.getElementById("runtimeCard"),
-  toggleLogsBtn: document.getElementById("toggleLogsBtn"),
-  openLogPanelBtn: document.getElementById("openLogPanelBtn"),
+  logPanel: document.getElementById("logPanel"),
+  closeLogPanelBtn: document.getElementById("closeLogPanelBtn"),
+  openLogPathBtn: document.getElementById("openLogPathBtn"),
   sendForm: document.getElementById("sendForm"),
   sendBtn: document.getElementById("sendBtn"),
   promptInput: document.getElementById("promptInput"),
@@ -27,6 +28,12 @@ const els = {
   addMcpBtn: document.getElementById("addMcpBtn"),
   createSkillBtn: document.getElementById("createSkillBtn"),
   cwdInput: document.getElementById("cwdInput"),
+  tuiLlmBaseUrlInput: document.getElementById("tuiLlmBaseUrlInput"),
+  tuiLlmApiKeyInput: document.getElementById("tuiLlmApiKeyInput"),
+  toggleTuiLlmApiKeyBtn: document.getElementById("toggleTuiLlmApiKeyBtn"),
+  botLlmBaseUrlInput: document.getElementById("botLlmBaseUrlInput"),
+  botLlmApiKeyInput: document.getElementById("botLlmApiKeyInput"),
+  toggleBotLlmApiKeyBtn: document.getElementById("toggleBotLlmApiKeyBtn"),
   openEnvPanelBtn: document.getElementById("openEnvPanelBtn"),
   openSessionPanelBtn: document.getElementById("openSessionPanelBtn"),
   exportSessionBtn: document.getElementById("exportSessionBtn"),
@@ -56,23 +63,31 @@ const state = {
   pendingInput: "",
   config: null,
   envRows: [],
-  logsCollapsed: true,
+  logsPanelOpen: false,
   sharedSessionId: "",
   sessions: [],
   sessionBusy: false,
+  sessionAction: "",
+  sessionActionId: "",
   sessionFilter: "",
   pendingDeleteId: "",
   sessionsUpdatedAt: 0,
   sendingProbeTimer: null,
   sendingProbeBusy: false,
+  loopId: "",
+  lastLoopSeq: 0,
+  activeTaskId: "",
+  loopEventIds: new Set(),
+  loopEventOrder: [],
 }
 
 const STREAM_CHAR_DELAY = 10
 const STREAM_SPLIT_MIN = 120
 const STREAM_SPLIT_SOFT_MAX = 320
 const SENDING_PROBE_MS = 1500
-const LOGS_COLLAPSE_KEY = "opencorvus.manager.logs.collapsed"
+const LOGS_PANEL_KEY = "opencorvus.manager.logs.panel"
 const SESSION_CACHE_MS = 10_000
+const LOOP_EVENT_CACHE_MAX = 2048
 
 const defaults = Object.freeze({
   command: "opencorvus",
@@ -82,6 +97,15 @@ const defaults = Object.freeze({
   bot_args: ["run", "--cwd", "packages/bot", "--no-env-file", "--env-file", ".env", "src/main.ts"],
   server_url: "http://127.0.0.1:7878",
 })
+
+const llmEnv = Object.freeze({
+  tuiBaseUrl: "OPENCORVUS_TUI_LLM_BASE_URL",
+  tuiApiKey: "OPENCORVUS_TUI_LLM_API_KEY",
+  botBaseUrl: "OPENCORVUS_BOT_LLM_BASE_URL",
+  botApiKey: "OPENCORVUS_BOT_LLM_API_KEY",
+})
+
+const llmEnvSet = new Set(Object.values(llmEnv))
 
 const envGroups = [
   {
@@ -336,12 +360,56 @@ function configValue(config) {
   }
 }
 
+function readLlmEnv(list) {
+  const map = new Map()
+  if (Array.isArray(list)) {
+    for (const item of list) {
+      const key = String(item?.key ?? "").trim()
+      if (!key) continue
+      map.set(key, String(item?.value ?? ""))
+    }
+  }
+
+  return {
+    tuiBaseUrl: map.get(llmEnv.tuiBaseUrl) ?? "",
+    tuiApiKey: map.get(llmEnv.tuiApiKey) ?? "",
+    botBaseUrl: map.get(llmEnv.botBaseUrl) ?? "",
+    botApiKey: map.get(llmEnv.botApiKey) ?? "",
+  }
+}
+
+function fillLlmEnv(list) {
+  const value = readLlmEnv(list)
+  if (els.tuiLlmBaseUrlInput) els.tuiLlmBaseUrlInput.value = value.tuiBaseUrl
+  if (els.tuiLlmApiKeyInput) els.tuiLlmApiKeyInput.value = value.tuiApiKey
+  if (els.botLlmBaseUrlInput) els.botLlmBaseUrlInput.value = value.botBaseUrl
+  if (els.botLlmApiKeyInput) els.botLlmApiKeyInput.value = value.botApiKey
+}
+
+function readLlmRows() {
+  const out = [
+    { key: llmEnv.tuiBaseUrl, value: String(els.tuiLlmBaseUrlInput?.value ?? "").trim() },
+    { key: llmEnv.tuiApiKey, value: String(els.tuiLlmApiKeyInput?.value ?? "").trim() },
+    { key: llmEnv.botBaseUrl, value: String(els.botLlmBaseUrlInput?.value ?? "").trim() },
+    { key: llmEnv.botApiKey, value: String(els.botLlmApiKeyInput?.value ?? "").trim() },
+  ]
+  return out.filter((item) => item.value.length > 0)
+}
+
+function toggleSecret(input, btn) {
+  if (!input || !btn) return
+  const hide = input.type !== "password"
+  input.type = hide ? "password" : "text"
+  btn.textContent = hide ? "Show" : "Hide"
+}
+
 function buildEnvRows(list) {
   const map = new Map()
   if (Array.isArray(list)) {
     for (const item of list) {
       const key = String(item?.key ?? "").trim()
       if (!key) continue
+      if (llmEnvSet.has(key)) continue
       map.set(key, String(item?.value ?? ""))
     }
   }
@@ -371,12 +439,13 @@ function buildEnvRows(list) {
 }
 
 function readEnvRows() {
-  return state.envRows
+  const list = state.envRows
     .map((item) => ({
       key: String(item.key ?? "").trim(),
       value: String(item.value ?? ""),
     }))
     .filter((item) => item.key.length > 0)
+  return [...list, ...readLlmRows()]
 }
 
 function renderEnvGroups() {
@@ -475,6 +544,7 @@ function addCustomEnv() {
 function fillConfig(config) {
   state.config = configValue(config)
   els.cwdInput.value = state.config.cwd
+  fillLlmEnv(state.config.env)
   state.envRows = buildEnvRows(state.config.env)
   renderEnvGroups()
   state.configLoaded = true
@@ -535,9 +605,9 @@ function renderActiveSession() {
 function setLogPath(value) {
   const text = typeof value === "string" && value.trim() ? value.trim() : "-"
   state.logPath = text
-  if (els.openLogPanelBtn) {
-    els.openLogPanelBtn.disabled = text === "-"
-    els.openLogPanelBtn.title = text === "-" ? "Log file unavailable" : `Open folder and locate file\n${text}`
+  if (els.openLogPathBtn) {
+    els.openLogPathBtn.disabled = text === "-"
+    els.openLogPathBtn.title = text === "-" ? "Log file unavailable" : `Open folder and locate file\n${text}`
   }
 }
 
@@ -604,6 +674,8 @@ function safeUrl(input, image = false) {
   if (!value) return null
   if (/^https?:\/\/\S+$/i.test(value)) return value
   if (/^file:\/\/\S+$/i.test(value)) return value
+  if (/^blob:[^\s]+$/i.test(value)) return value
+  if (image && /^opencorvus:\/\/screenshot\/[^\s]+$/i.test(value)) return value
   if (image && /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i.test(value)) return value
   return null
 }
@@ -920,6 +992,28 @@ function streamDone(payload) {
   if (!item.timer && item.queue.length === 0) streamFinalize(item, item.done)
 }
 
+function mirrorSplit(text) {
+  if (typeof text !== "string") return []
+  const base = text.trim()
+  if (!base) return []
+  const limit = 480
+  const out = []
+  for (const block of base.split(/\n{2,}/)) {
+    let chunk = block.trim()
+    if (!chunk) continue
+    while (chunk.length > limit) {
+      let cut = chunk.slice(0, limit).lastIndexOf("\n")
+      if (cut < 120) cut = chunk.slice(0, limit).lastIndexOf(" ")
+      if (cut < 120) cut = limit
+      const part = chunk.slice(0, cut).trim()
+      if (part) out.push(part)
+      chunk = chunk.slice(cut).trimStart()
+    }
+    if (chunk) out.push(chunk)
+  }
+  return out
+}
+
 function mirrorStart() {
   if (state.mirror || state.mirrorQueue.length === 0) return
   const text = state.mirrorQueue.shift()
@@ -959,8 +1053,9 @@ function mirrorTick() {
 }
 
 function mirrorAppend(text) {
-  if (typeof text !== "string" || !text) return
-  state.mirrorQueue.push(text)
+  const list = mirrorSplit(text)
+  if (list.length === 0) return
+  state.mirrorQueue.push(...list)
   mirrorStart()
 }
 
@@ -1008,40 +1103,34 @@ function renderLogs() {
   els.logs.scrollTop = els.logs.scrollHeight
 }
 
-function setLogsCollapsed(next, persist = true) {
-  state.logsCollapsed = !!next
-  if (els.runtimeCard) {
-    els.runtimeCard.classList.toggle("collapsed", state.logsCollapsed)
-  }
-  if (els.toggleLogsBtn) {
-    els.toggleLogsBtn.textContent = state.logsCollapsed ? "Expand" : "Collapse"
-    els.toggleLogsBtn.title = state.logsCollapsed ? "Expand logs" : "Collapse logs"
+function setLogsPanelOpen(next, persist = true) {
+  state.logsPanelOpen = !!next
+  panelOpen(els.logPanel, state.logsPanelOpen)
+  if (els.toggleLogPanelBtn) {
+    els.toggleLogPanelBtn.classList.toggle("active", state.logsPanelOpen)
+    els.toggleLogPanelBtn.textContent = state.logsPanelOpen ? "Logs Open" : "Logs"
+    els.toggleLogPanelBtn.title = state.logsPanelOpen ? "Hide runtime logs" : "Show runtime logs"
   }
   if (!persist) return
   if (!window.localStorage) return
-  window.localStorage.setItem(LOGS_COLLAPSE_KEY, state.logsCollapsed ? "1" : "0")
+  window.localStorage.setItem(LOGS_PANEL_KEY, state.logsPanelOpen ? "1" : "0")
 }
 
 function loadLogLayout() {
   if (!window.localStorage) {
-    setLogsCollapsed(true, false)
+    setLogsPanelOpen(false, false)
     return
   }
-  const stored = window.localStorage.getItem(LOGS_COLLAPSE_KEY)
+  const stored = window.localStorage.getItem(LOGS_PANEL_KEY)
   if (stored === "1") {
-    setLogsCollapsed(true, false)
+    setLogsPanelOpen(true, false)
     return
   }
   if (stored === "0") {
-    setLogsCollapsed(false, false)
+    setLogsPanelOpen(false, false)
     return
   }
-  if (stored === null) {
-    setLogsCollapsed(true, false)
-    return
-  }
-  // Legacy/invalid values fallback to collapsed by default.
-  setLogsCollapsed(true, false)
+  setLogsPanelOpen(false, false)
 }
 
 function normalizeLog(item) {
@@ -1076,10 +1165,34 @@ function appendLog(item) {
   renderLogs()
 }
 
+function resetLoop(loopId = "") {
+  state.loopId = loopId
+  state.lastLoopSeq = 0
+  state.loopEventIds.clear()
+  state.loopEventOrder = []
+}
+
+function rememberLoopEvent(eventId) {
+  if (!eventId) return true
+  if (state.loopEventIds.has(eventId)) return false
+  state.loopEventIds.add(eventId)
+  state.loopEventOrder.push(eventId)
+  if (state.loopEventOrder.length <= LOOP_EVENT_CACHE_MAX) return true
+  const drop = state.loopEventOrder.shift()
+  if (drop) state.loopEventIds.delete(drop)
+  return true
+}
+
 function applySnapshot(snapshot) {
   if (!snapshot) return
   setStatus(snapshot)
   state.sharedSessionId = typeof snapshot.shared_session_id === "string" ? snapshot.shared_session_id.trim() : ""
+  const loopId = typeof snapshot.loop_id === "string" ? snapshot.loop_id.trim() : ""
+  if (loopId && loopId !== state.loopId) {
+    resetLoop(loopId)
+  }
+  state.activeTaskId = typeof snapshot.active_task_id === "string" ? snapshot.active_task_id.trim() : ""
+  applyLoopEvent(snapshot?.last_chat_event?.loop_event)
   renderActiveSession()
   if (typeof snapshot.prompt_running === "boolean") setSending(snapshot.prompt_running)
   setLogPath(snapshot.log_path)
@@ -1092,6 +1205,36 @@ function applySnapshot(snapshot) {
   }
   if (!state.configLoaded) fillConfig(snapshot.config)
   if (els.sessionPanel?.classList.contains("open")) renderSessionList()
+}
+
+function applyLoopEvent(raw) {
+  if (!raw || typeof raw !== "object") return false
+  const loopId = typeof raw.loop_id === "string" ? raw.loop_id.trim() : ""
+  if (loopId) {
+    if (state.loopId !== loopId) resetLoop(loopId)
+  }
+  const eventId = typeof raw.event_id === "string" ? raw.event_id.trim() : ""
+  if (!rememberLoopEvent(eventId)) return false
+  const seq = Number(raw.seq)
+  if (Number.isFinite(seq) && seq > 0) {
+    if (seq <= state.lastLoopSeq) return false
+    state.lastLoopSeq = seq
+  }
+  const taskId = typeof raw.task_id === "string" ? raw.task_id.trim() : ""
+  if (taskId) state.activeTaskId = taskId
+  const kind = typeof raw.kind === "string" ? raw.kind.trim() : ""
+  if (kind !== "task.status") return true
+  const terminal = raw.terminal === true
+  const status = typeof raw.status === "string" ? raw.status.trim() : ""
+  if (terminal) {
+    state.activeTaskId = ""
+    setSending(false)
+    return true
+  }
+  if (status === "accepted" || status === "running" || status === "waiting_permission" || status === "waiting_input") {
+    setSending(true)
+  }
+  return true
 }
 
 async function refreshState() {
@@ -1216,6 +1359,11 @@ function setSessionBusy(next) {
   if (els.refreshSessionListBtn) els.refreshSessionListBtn.disabled = state.sessionBusy
 }
 
+function setSessionAction(kind, id = "") {
+  state.sessionAction = kind
+  state.sessionActionId = id
+}
+
 function sessionInfo(item) {
   const stamp = item.updated > 0 ? `Updated: ${sessionDate(item.updated)}` : `Created: ${sessionDate(item.created)}`
   const out = [stamp]
@@ -1236,6 +1384,18 @@ function renderSessionCount(visible) {
   if (!els.sessionCountText) return
   if (state.sessionBusy) {
     els.sessionCountText.textContent = "Loading sessions..."
+    return
+  }
+  if (state.sessionAction === "delete" && state.sessionActionId) {
+    els.sessionCountText.textContent = `Deleting ${state.sessionActionId.slice(0, 16)}...`
+    return
+  }
+  if (state.sessionAction === "load" && state.sessionActionId) {
+    els.sessionCountText.textContent = `Loading ${state.sessionActionId.slice(0, 16)}...`
+    return
+  }
+  if (state.sessionAction === "export" && state.sessionActionId) {
+    els.sessionCountText.textContent = `Exporting ${state.sessionActionId.slice(0, 16)}...`
     return
   }
   if (!state.sessionFilter.trim()) {
@@ -1271,6 +1431,7 @@ function renderSessionList() {
     const row = document.createElement("article")
     row.className = "session-row"
     if (item.id === state.sharedSessionId) row.classList.add("active")
+    if (state.sessionActionId === item.id) row.classList.add("busy")
 
     const main = document.createElement("div")
     main.className = "session-main"
@@ -1292,13 +1453,16 @@ function renderSessionList() {
 
     const actions = document.createElement("div")
     actions.className = "session-actions"
+    const actionBusy = !!state.sessionAction && state.sessionActionId === item.id
+    const disabled = state.sessionBusy || !!state.sessionAction
 
     if (state.pendingDeleteId === item.id) {
       const approve = document.createElement("button")
       approve.className = "btn-danger"
-      approve.textContent = "Confirm"
-      approve.disabled = state.sessionBusy
+      approve.textContent = actionBusy ? "Deleting..." : "Confirm"
+      approve.disabled = disabled
       approve.addEventListener("click", async () => {
+        if (state.sessionAction) return
         try {
           await deleteSessionById(item.id)
         } catch (error) {
@@ -1309,17 +1473,19 @@ function renderSessionList() {
 
       const cancel = document.createElement("button")
       cancel.textContent = "Cancel"
-      cancel.disabled = state.sessionBusy
+      cancel.disabled = disabled
       cancel.addEventListener("click", () => {
+        if (state.sessionAction) return
         state.pendingDeleteId = ""
         renderSessionList()
       })
       actions.appendChild(cancel)
     } else {
       const load = document.createElement("button")
-      load.textContent = "Load"
-      load.disabled = state.sessionBusy
+      load.textContent = actionBusy && state.sessionAction === "load" ? "Loading..." : "Load"
+      load.disabled = disabled
       load.addEventListener("click", async () => {
+        if (state.sessionAction) return
         try {
           await loadSessionById(item.id)
         } catch (error) {
@@ -1329,9 +1495,10 @@ function renderSessionList() {
       actions.appendChild(load)
 
       const exp = document.createElement("button")
-      exp.textContent = "Export"
-      exp.disabled = state.sessionBusy
+      exp.textContent = actionBusy && state.sessionAction === "export" ? "Exporting..." : "Export"
+      exp.disabled = disabled
       exp.addEventListener("click", async () => {
+        if (state.sessionAction) return
         try {
           await exportSessionById(item.id)
         } catch (error) {
@@ -1343,8 +1510,9 @@ function renderSessionList() {
       const del = document.createElement("button")
       del.className = "btn-danger"
       del.textContent = "Delete"
-      del.disabled = state.sessionBusy
+      del.disabled = disabled
       del.addEventListener("click", () => {
+        if (state.sessionAction) return
         state.pendingDeleteId = item.id
         renderSessionList()
       })
@@ -1380,42 +1548,46 @@ async function refreshSessions(announce = false) {
 }
 
 async function loadSessionById(sessionId) {
-  setSessionBusy(true)
+  setSessionAction("load", sessionId)
   renderSessionList()
   try {
     const snapshot = await invoke(cmd.managerUseSession, { sessionId })
     applySnapshot(snapshot)
     addMessage("system", `Loaded session: ${sessionId}`)
   } finally {
-    setSessionBusy(false)
+    setSessionAction("", "")
     renderSessionList()
   }
 }
 
 async function deleteSessionById(sessionId) {
-  setSessionBusy(true)
+  setSessionAction("delete", sessionId)
+  const prev = state.sessions
+  state.sessions = state.sessions.filter((item) => item.id !== sessionId)
   renderSessionList()
   try {
     const snapshot = await invoke(cmd.managerDeleteSession, { sessionId })
     applySnapshot(snapshot)
-    state.sessions = state.sessions.filter((item) => item.id !== sessionId)
     state.sessionsUpdatedAt = Date.now()
     state.pendingDeleteId = ""
     addMessage("system", `Deleted session: ${sessionId}`)
+  } catch (error) {
+    state.sessions = prev
+    throw error
   } finally {
-    setSessionBusy(false)
+    setSessionAction("", "")
     renderSessionList()
   }
 }
 
 async function exportSessionById(sessionId) {
-  setSessionBusy(true)
+  setSessionAction("export", sessionId)
   renderSessionList()
   try {
     const file = await invoke(cmd.managerExportSessionHtml, { sessionId })
     addMessage("system", `Exported HTML log: ${file}`)
   } finally {
-    setSessionBusy(false)
+    setSessionAction("", "")
     renderSessionList()
   }
 }
@@ -1443,7 +1615,13 @@ async function exportSessionHtml() {
 async function sendPrompt(prompt) {
   streamReset()
   const result = await invoke(cmd.managerSend, { prompt })
-  if (result?.accepted) return
+  if (result?.accepted) {
+    const loopId = typeof result.loop_id === "string" ? result.loop_id.trim() : ""
+    if (loopId && loopId !== state.loopId) resetLoop(loopId)
+    const taskId = typeof result.task_id === "string" ? result.task_id.trim() : ""
+    if (taskId) state.activeTaskId = taskId
+    return
+  }
   throw new Error("prompt not accepted")
 }
 
@@ -1554,16 +1732,28 @@ function bindEvents() {
     }
   })
 
-  els.toggleLogsBtn?.addEventListener("click", () => {
-    setLogsCollapsed(!state.logsCollapsed)
+  els.toggleLogPanelBtn?.addEventListener("click", () => {
+    setLogsPanelOpen(!state.logsPanelOpen)
   })
 
-  els.openLogPanelBtn?.addEventListener("click", async () => {
+  els.closeLogPanelBtn?.addEventListener("click", () => {
+    setLogsPanelOpen(false)
+  })
+
+  els.openLogPathBtn?.addEventListener("click", async () => {
     try {
       await revealLogPath()
     } catch (error) {
       addMessage("system", `Open log path failed: ${error?.message || String(error)}`)
     }
+  })
+
+  els.toggleTuiLlmApiKeyBtn?.addEventListener("click", () => {
+    toggleSecret(els.tuiLlmApiKeyInput, els.toggleTuiLlmApiKeyBtn)
+  })
+
+  els.toggleBotLlmApiKeyBtn?.addEventListener("click", () => {
+    toggleSecret(els.botLlmApiKeyInput, els.toggleBotLlmApiKeyBtn)
   })
 
   els.openEnvPanelBtn?.addEventListener("click", () => {
@@ -1606,6 +1796,7 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key !== "Escape") return
     closePanels()
+    setLogsPanelOpen(false)
   })
 
   els.addEnvBtn?.addEventListener("click", () => {
@@ -1665,6 +1856,7 @@ function bindTauriEvents() {
   bridge.listen(bridge.events.managerChat, (payload) => {
     const kind = typeof payload?.kind === "string" ? payload.kind : ""
     const text = typeof payload?.text === "string" ? payload.text : ""
+    applyLoopEvent(payload?.loop_event)
 
     if (kind === "mirror_user") {
       if (text) addMessage("user", text)

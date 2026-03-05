@@ -2,8 +2,12 @@ import { Session } from "@/session"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
+import { TaskQueueTable } from "@/scheduler/task-queue.sql"
 import { Instance } from "@/project/instance"
 import { Tui } from "@/tui"
+import { Bus } from "@/bus"
+import { Database, eq } from "@/storage/db"
+import { NamedError } from "@opencorvus-ai/util/error"
 
 type Mode = "none" | "spawned" | "connected"
 
@@ -11,7 +15,42 @@ const state = Instance.state(() => ({
   handle: null as Tui.Handle | null,
   mode: "none" as Mode,
   sessionID: null as string | null,
+  stopping: false,
 }))
+
+function watchExit(handle: Tui.Handle, sessionID: string | null) {
+  const fail = (message: string) => {
+    if (!sessionID) return
+    Bus.publish(Session.Event.Error, {
+      sessionID,
+      error: new NamedError.Unknown({ message }).toObject(),
+    })
+  }
+
+  void handle
+    .waitForExit()
+    .then((code) => {
+      const s = state()
+      if (s.handle !== handle) return
+      const stopping = s.stopping
+      s.handle = null
+      s.mode = "none"
+      s.stopping = false
+      if (stopping) return
+      fail(`TUI runtime exited unexpectedly (code ${code ?? "unknown"})`)
+    })
+    .catch((error) => {
+      const s = state()
+      if (s.handle !== handle) return
+      const stopping = s.stopping
+      s.handle = null
+      s.mode = "none"
+      s.stopping = false
+      if (stopping) return
+      const detail = error instanceof Error ? error.message : String(error)
+      fail(`TUI runtime exit watcher failed: ${detail}`)
+    })
+}
 
 export namespace TuiRuntime {
   export const Status = {
@@ -39,8 +78,10 @@ export namespace TuiRuntime {
   }) {
     const s = state()
     if (s.handle && !s.handle.closed) {
+      s.stopping = true
       await s.handle.close().catch(() => {})
     }
+    s.stopping = false
 
     if (input.mode === "connect") {
       if (!input.url) throw new Error("url is required when mode=connect")
@@ -67,6 +108,7 @@ export namespace TuiRuntime {
     })
     s.mode = "spawned"
     s.sessionID = input.sessionID ?? null
+    watchExit(s.handle, s.sessionID)
     return {
       mode: s.mode,
       url: s.handle.url,
@@ -86,11 +128,13 @@ export namespace TuiRuntime {
   export async function stop() {
     const s = state()
     if (s.handle && !s.handle.closed) {
+      s.stopping = true
       await s.handle.close().catch(() => {})
     }
     s.handle = null
     s.mode = "none"
     s.sessionID = null
+    s.stopping = false
     return true
   }
 
@@ -149,7 +193,7 @@ export namespace TuiRuntime {
 
     const wait = input.wait ?? true
     if (!wait) {
-      TaskQueueService.enqueuePrompt({
+      const taskID = TaskQueueService.enqueuePrompt({
         sessionID,
         prompt,
         source: "tui.runtime.submit-task",
@@ -157,6 +201,7 @@ export namespace TuiRuntime {
       return {
         accepted: true as const,
         sessionID,
+        taskID,
         waited: false,
         completed: false,
         message: null,
@@ -174,6 +219,7 @@ export namespace TuiRuntime {
       return {
         accepted: true as const,
         sessionID,
+        taskID: null,
         waited: true,
         completed: true,
         message: result.message,
@@ -186,9 +232,54 @@ export namespace TuiRuntime {
     return {
       accepted: true as const,
       sessionID,
+      taskID: null,
       waited: true,
       completed: status.type === "idle" && !!latest,
       message: latest,
+    }
+  }
+
+  export function taskStatus(input: { taskID: string }) {
+    const taskID = input.taskID.trim()
+    if (!taskID) {
+      throw new Error("taskID is required")
+    }
+    const item = Database.use((db) =>
+      db
+        .select({
+          id: TaskQueueTable.id,
+          sessionID: TaskQueueTable.session_id,
+          status: TaskQueueTable.status,
+          error: TaskQueueTable.error_message,
+          updatedAt: TaskQueueTable.time_updated,
+          completedAt: TaskQueueTable.time_completed,
+        })
+        .from(TaskQueueTable)
+        .where(eq(TaskQueueTable.id, taskID))
+        .get(),
+    )
+    if (!item) {
+      return {
+        found: false as const,
+        taskID,
+        sessionID: null,
+        status: "unknown",
+        terminal: true,
+        error: "task not found",
+        updatedAt: null,
+        completedAt: null,
+      }
+    }
+    const terminal = item.status === "completed" || item.status === "failed"
+    return {
+      found: true as const,
+      taskID: item.id,
+      sessionID: item.sessionID,
+      status: item.status,
+      terminal,
+      error: item.error ?? null,
+      updatedAt: item.updatedAt,
+      completedAt: item.completedAt,
     }
   }
 }

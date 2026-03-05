@@ -41,7 +41,7 @@ When interacting with the desktop:
 - **Anchor pointer actions**: Before any click/drag/move, ensure you have a fresh screenshot anchor from `screen.screenshot`. If pointer action is blocked, take a screenshot and retry.
 - **Cross-platform split**: use `input` for desktop coordinate actions; use `automation` for selector-based Playwright/Appium flows.
 - **Driver rule**: pointer actions (`click`/`drag`/`move`) are desktop-only (`driver=auto` or `desktop`).
-- **Automation runtime**: for Playwright/Appium, call `automation` with `status`/`attach`/`run` instead of forcing non-desktop `input` pointer actions.
+- **Automation runtime**: for Playwright/Appium, use `automation` lifecycle actions (`status`, `start`, `attach`, `open`, `new_tab`, `switch_tab`, `list_tabs`, `close_tab`, `stop`) plus `run` instead of forcing non-desktop `input` pointer actions.
 - **Screenshot after acting**: Verify every action with a follow-up screenshot.
 - **Click before typing**: Position the cursor by clicking the target input field before typing text.
 - **Prefer wait_for_change**: If expecting UI changes (app opening, page loading), use `screen.screenshot` with `wait_for_change=true`; only use short `input.wait(10)` if needed.
