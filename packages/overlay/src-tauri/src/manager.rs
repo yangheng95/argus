@@ -6,7 +6,7 @@ use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::events;
@@ -29,6 +29,8 @@ const ENV_BOT_LLM_BASE_URL: &str = "OPENCORVUS_BOT_LLM_BASE_URL";
 const ENV_BOT_LLM_API_KEY: &str = "OPENCORVUS_BOT_LLM_API_KEY";
 const ENV_LLM_BASE_URL: &str = "OPENCORVUS_BASE_URL";
 const ENV_LLM_API_KEY: &str = "OPENCORVUS_API_KEY";
+const SESSION_API_TIMEOUT_CONNECT_MS: u64 = 350;
+const SESSION_API_TIMEOUT_READ_MS: u64 = 15_000;
 
 #[derive(Deserialize, Serialize, Clone, Default)]
 pub struct EnvItem {

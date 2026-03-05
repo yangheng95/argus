@@ -96,6 +96,8 @@ export class BotCore {
   private runtimeSession?: string
   /** Prevent creating duplicate overlay mirror threads */
   private overlayMirrorBound = false
+  /** Active bot-aware coding jobs keyed by sessionID */
+  private jobs = new Map<string, Job>()
   private pending = new Map<string, PendingTask>()
   private pendingWatch: ReturnType<typeof setInterval> | null = null
 
