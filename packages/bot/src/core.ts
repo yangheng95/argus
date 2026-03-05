@@ -702,6 +702,44 @@ export class BotCore {
 
   private releaseSession(sessionId: string) {
     this.clearPending(sessionId)
+    const job = this.jobs.get(sessionId)
+
+    // If there is a pending task_report driving the loop, handle it before releasing
+    if (job?.lastReport) {
+      const report = job.lastReport
+      job.lastReport = undefined
+
+      if (report.status === "progress") {
+        // Continue loop: keep processing flag set, send continuation prompt
+        job.turn++
+        job.lastActivityAt = Date.now()
+        const continuationText = report.next_plan
+          ? `Continue. Next step: ${report.next_plan}`
+          : "Continue with the task."
+        this.client.session
+          .promptAsync({
+            sessionID: sessionId,
+            parts: [{ type: "text", text: continuationText }],
+            system: this.buildSystemPrompt(job.platform),
+          })
+          .catch((err) => console.error("[BotCore] loop continuation error:", err))
+        return
+      }
+
+      if (report.status === "need_input") {
+        // Stop processing so the next user message is treated as an answer
+        job.status = "waiting_user"
+        this.session.stop(sessionId)
+        return
+      }
+
+      // done or failed: fall through to normal release
+      this.jobs.delete(sessionId)
+    } else if (job) {
+      // Agent ended without calling task_report — clean up job
+      this.jobs.delete(sessionId)
+    }
+
     this.session.stop(sessionId)
     const next = this.session.dequeue(sessionId)
     if (!next.item) return

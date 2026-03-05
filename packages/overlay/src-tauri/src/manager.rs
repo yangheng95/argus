@@ -2616,11 +2616,115 @@ pub fn create_skill(
     Ok(value)
 }
 
+fn session_api_base(config: &ManagerConfig) -> Option<String> {
+    let base = config.server_url.trim().trim_end_matches('/').trim();
+    if base.is_empty() {
+        return None;
+    }
+    if !base.starts_with("http://") && !base.starts_with("https://") {
+        return None;
+    }
+    Some(base.to_string())
+}
+
+fn session_api_agent() -> ureq::Agent {
+    ureq::AgentBuilder::new()
+        .timeout_connect(Duration::from_millis(SESSION_API_TIMEOUT_CONNECT_MS))
+        .timeout_read(Duration::from_millis(SESSION_API_TIMEOUT_READ_MS))
+        .timeout_write(Duration::from_millis(SESSION_API_TIMEOUT_READ_MS))
+        .build()
+}
+
+fn session_api_error(error: ureq::Error) -> String {
+    match error {
+        ureq::Error::Status(code, resp) => {
+            let body = resp.into_string().unwrap_or_default();
+            let text = body.trim();
+            if text.is_empty() {
+                return format!("http {code}");
+            }
+            format!("http {code}: {text}")
+        }
+        ureq::Error::Transport(error) => error.to_string(),
+    }
+}
+
+fn list_sessions_via_api(config: &ManagerConfig) -> Result<Vec<SessionListItem>, String> {
+    let Some(base) = session_api_base(config) else {
+        return Err("server_url is empty".into());
+    };
+    let url = format!("{base}/session?roots=true&limit=120");
+    let response = session_api_agent()
+        .get(&url)
+        .call()
+        .map_err(session_api_error)?;
+    let list = response
+        .into_json::<Vec<SessionApiItem>>()
+        .map_err(|error| format!("parse session API response failed: {error}"))?;
+    Ok(list
+        .into_iter()
+        .map(|item| SessionListItem {
+            id: item.id,
+            title: item.title,
+            updated: item.time.updated,
+            created: item.time.created,
+            project_id: item.project_id,
+            directory: item.directory,
+        })
+        .collect())
+}
+
+fn delete_session_via_api(config: &ManagerConfig, session_id: &str) -> Result<(), String> {
+    let Some(base) = session_api_base(config) else {
+        return Err("server_url is empty".into());
+    };
+    let url = format!("{base}/session/{session_id}");
+    let response = session_api_agent()
+        .delete(&url)
+        .call()
+        .map_err(session_api_error)?;
+    let ok = response
+        .into_json::<bool>()
+        .map_err(|error| format!("parse session delete API response failed: {error}"))?;
+    if ok {
+        return Ok(());
+    }
+    Err("session delete API returned false".into())
+}
+
+fn export_session_html_via_api(
+    config: &ManagerConfig,
+    session_id: &str,
+    out: &str,
+) -> Result<String, String> {
+    let Some(base) = session_api_base(config) else {
+        return Err("server_url is empty".into());
+    };
+    let url = format!("{base}/session/{session_id}/export-html");
+    let response = session_api_agent()
+        .post(&url)
+        .send_json(serde_json::json!({ "out": out }))
+        .map_err(session_api_error)?;
+    let result = response
+        .into_json::<SessionExportApiResult>()
+        .map_err(|error| format!("parse session export API response failed: {error}"))?;
+    Ok(result.file)
+}
+
 pub fn list_sessions(shared: &Shared, app: &AppHandle) -> Result<Vec<SessionListItem>, String> {
     let config = {
         let state = shared.lock().unwrap();
         state.config.clone()
     };
+
+    if let Ok(list) = list_sessions_via_api(&config) {
+        push_log(
+            shared,
+            app,
+            format!("loaded {} sessions from server API", list.len()),
+        );
+        return Ok(list);
+    }
 
     let mut cmd = build_command(
         &config,
@@ -2661,7 +2765,7 @@ pub fn list_sessions(shared: &Shared, app: &AppHandle) -> Result<Vec<SessionList
     push_log(
         shared,
         app,
-        format!("loaded {} sessions from database", list.len()),
+        format!("loaded {} sessions from database (CLI fallback)", list.len()),
     );
     Ok(list)
 }
@@ -2695,6 +2799,23 @@ pub fn delete_session(
         let state = shared.lock().unwrap();
         state.config.clone()
     };
+
+    if delete_session_via_api(&config, &id).is_ok() {
+        if read_shared_session(shared).as_deref() == Some(id.as_str()) {
+            match clear_shared_session(shared) {
+                Ok(true) => push_log(shared, app, "shared session cleared after deletion"),
+                Ok(false) => {}
+                Err(error) => push_log(
+                    shared,
+                    app,
+                    format!("failed to clear shared session after deletion: {error}"),
+                ),
+            }
+        }
+        push_log(shared, app, format!("session deleted from server API: {id}"));
+        emit_state(shared, app);
+        return Ok(snapshot(shared));
+    }
 
     let mut cmd = build_command(
         &config,
@@ -2732,7 +2853,11 @@ pub fn delete_session(
         }
     }
 
-    push_log(shared, app, format!("session deleted from database: {id}"));
+    push_log(
+        shared,
+        app,
+        format!("session deleted from database (CLI fallback): {id}"),
+    );
     emit_state(shared, app);
     Ok(snapshot(shared))
 }
@@ -2768,6 +2893,14 @@ pub fn export_session_html(
     fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
     let fallback = dir.join(format!("session-{}-trace.html", safe_file_name(&id)));
     let fallback_text = fallback.to_string_lossy().to_string();
+
+    if let Ok(file) = export_session_html_via_api(&config, &id, &fallback_text) {
+        let path = PathBuf::from(file.trim());
+        open_target(&path)?;
+        let value = path.to_string_lossy().to_string();
+        push_log(shared, app, format!("session HTML exported via server API: {value}"));
+        return Ok(value);
+    }
 
     let mut cmd = build_command(
         &config,
@@ -2808,7 +2941,11 @@ pub fn export_session_html(
     let path = PathBuf::from(file.trim());
     open_target(&path)?;
     let value = path.to_string_lossy().to_string();
-    push_log(shared, app, format!("session HTML exported: {value}"));
+    push_log(
+        shared,
+        app,
+        format!("session HTML exported via CLI fallback: {value}"),
+    );
     Ok(value)
 }
 
