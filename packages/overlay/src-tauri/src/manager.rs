@@ -140,6 +140,27 @@ pub struct SessionListItem {
     pub directory: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct SessionApiTime {
+    updated: u64,
+    created: u64,
+}
+
+#[derive(Deserialize)]
+struct SessionApiItem {
+    id: String,
+    title: String,
+    time: SessionApiTime,
+    #[serde(rename = "projectID")]
+    project_id: Option<String>,
+    directory: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SessionExportApiResult {
+    file: String,
+}
+
 pub struct ManagerState {
     config: ManagerConfig,
     logs: VecDeque<LogEntry>,

@@ -287,6 +287,22 @@ export class BotCore {
       sessionId: session.sessionId,
     })
 
+    // If there is an active job waiting for user input, treat this message as the answer
+    const activeJob = this.jobs.get(session.sessionId)
+    if (activeJob?.status === "waiting_user") {
+      activeJob.status = "running"
+      activeJob.turn++
+      activeJob.lastActivityAt = Date.now()
+      activeJob.lastReport = undefined
+      this.session.start(session.sessionId)
+      await this.client.session.promptAsync({
+        sessionID: session.sessionId,
+        parts: [{ type: "text", text }],
+        system: this.buildSystemPrompt(msg.platform),
+      })
+      return
+    }
+
     // If session is currently processing a task, queue this message and notify user
     if (this.session.processing(session.sessionId)) {
       const queue = this.session.enqueue(session.sessionId, { msg, text }, this.queueLimit())
