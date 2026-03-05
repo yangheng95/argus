@@ -1,4 +1,4 @@
-export const BOT_DEBUG_TOOL_INPUT_ENV = "OPENCORVUS_BOT_DEBUG_TOOL_INPUT"
+const BOT_DEBUG_TOOL_INPUT_ENV = "OPENCORVUS_BOT_DEBUG_TOOL_INPUT"
 export const BOT_MESSAGE_LIMIT = 3900
 
 type Env = Record<string, string | undefined>

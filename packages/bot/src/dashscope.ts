@@ -2,12 +2,11 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 
-export const DASHSCOPE_CODING_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
-export const DASHSCOPE_MAINLAND_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+const DASHSCOPE_CODING_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
+const DASHSCOPE_MAINLAND_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 function dashscopeBaseURL(key: string | undefined) {
-  if (key?.startsWith("sk-sp-")) return DASHSCOPE_CODING_BASE_URL
-  if (key?.startsWith("sk-")) return DASHSCOPE_MAINLAND_BASE_URL
+  if (key?.startsWith("sk-") && !key?.startsWith("sk-sp-")) return DASHSCOPE_MAINLAND_BASE_URL
   return DASHSCOPE_CODING_BASE_URL
 }
 

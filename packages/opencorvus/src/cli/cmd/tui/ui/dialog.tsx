@@ -7,7 +7,7 @@ import { useToast } from "./toast"
 import { Flag } from "@/flag/flag"
 import { Selection } from "@tui/util/selection"
 
-export function Dialog(
+function Dialog(
   props: ParentProps<{
     size?: "medium" | "large"
     onClose: () => void
