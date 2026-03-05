@@ -352,6 +352,7 @@ export class BotCore {
     if (result !== "ok") {
       this.clearPending(session.sessionId)
       this.session.stop(session.sessionId)
+      this.jobs.delete(session.sessionId)
       const notice = "Failed to send prompt."
       this.mirror("system", notice, {
         platform: msg.platform,
