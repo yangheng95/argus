@@ -36,6 +36,7 @@ import { GoalTool } from "./goal"
 import { VisionAnalyzeTool } from "./vision-analyze"
 import { TuiTool } from "./tui"
 import { AutomationTool } from "./automation"
+import { TaskReportTool } from "./task-report"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
