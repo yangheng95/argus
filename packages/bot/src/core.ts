@@ -511,6 +511,14 @@ export class BotCore {
       "",
       "## Memory",
       "Search memory at the start of each task to recall relevant past context.",
+      "",
+      "## Task Loop Protocol (MANDATORY in bot/Slack mode)",
+      "You are running inside a bot-driven coding loop. At the end of EVERY turn you MUST call the `task_report` tool:",
+      "- `task_report(status='progress', summary='...', next_plan='...')` — made progress, need more turns",
+      "- `task_report(status='need_input', summary='...', question='...')` — cannot proceed without user answer",
+      "- `task_report(status='done', summary='...', artifacts=[...])` — task fully complete",
+      "- `task_report(status='failed', summary='...', error='...')` — unrecoverable error",
+      "Never end a turn without calling task_report. It is the bot's signal to continue or wait.",
     ].join("\n")
   }
 
