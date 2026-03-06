@@ -1,0 +1,137 @@
+{
+  "config": {
+    "rounds": 3,
+    "markersPerRound": 1,
+    "repeatsPerRound": 1,
+    "seed": 20260305,
+    "targetStyle": "big",
+    "minGap": 220,
+    "outputDir": ".opencorvus/bench/gui-targetid/20260305172245987",
+    "saveImages": false,
+    "bindWindowQuery": null,
+    "bindFocused": true,
+    "binding": {
+      "windowId": 461338,
+      "title": "● .env - argus-opencode - Visual Studio Code",
+      "appName": "Visual Studio Code",
+      "width": 2560,
+      "height": 1392
+    }
+  },
+  "model": {
+    "providerID": "alibaba-cn",
+    "modelID": "qwen3.5-plus",
+    "api": "qwen3.5-plus"
+  },
+  "capture": {
+    "windowRate": 100,
+    "monitorRate": 0,
+    "windowRounds": 3,
+    "monitorRounds": 0
+  },
+  "quality": {
+    "totalExpected": 3,
+    "roundsSkipped": 0,
+    "skippedSamples": [],
+    "parseFailureRateRaw": 0,
+    "parseFailureRateSnap": 0,
+    "idExactRate": 66.6667,
+    "rawMissingOrExtraRounds": 0,
+    "snapMissingOrExtraRounds": 0
+  },
+  "raw_coordinate": {
+    "matchedRate": 100,
+    "hitAt5px": 0,
+    "hitAt10px": 0,
+    "hitAt20px": 0,
+    "hitAt40px": 33.3333,
+    "maePx": 717.2108,
+    "p95Px": 1069.4391,
+    "p99Px": 1069.4391,
+    "stddevPx": 483.1808,
+    "maeLogical": 478.1405,
+    "p95Logical": 712.9594,
+    "repeatDriftMaePx": 0,
+    "repeatDriftP95Px": 0
+  },
+  "target_id_snap": {
+    "matchedRate": 100,
+    "hitAt5px": 66.6667,
+    "hitAt10px": 66.6667,
+    "hitAt20px": 66.6667,
+    "hitAt40px": 66.6667,
+    "maePx": 134.0415,
+    "p95Px": 402.1244,
+    "p99Px": 402.1244,
+    "stddevPx": 189.5632,
+    "maeLogical": 89.361,
+    "p95Logical": 268.0829,
+    "repeatDriftMaePx": 0,
+    "repeatDriftP95Px": 0
+  },
+  "parseQuality": {
+    "rawFailures": 0,
+    "rawSamples": [],
+    "snapFailures": 0,
+    "snapSamples": []
+  },
+  "idQuality": {
+    "rawRoundsWithMissingOrExtraIDs": 0,
+    "rawSamples": [],
+    "snapRoundsWithMissingOrExtraIDs": 0,
+    "snapSamples": []
+  },
+  "samples": [
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T1",
+      "truth_target_id": "cv_051",
+      "truth_x": 208,
+      "truth_y": 2026,
+      "pred_target_id": "cv_051",
+      "pred_x": 52,
+      "pred_y": 968,
+      "raw_error_px": 1069.4391053257777,
+      "raw_error_logical": 712.9594035505186,
+      "snap_error_px": 0,
+      "snap_error_logical": 0,
+      "raw_confidence": 0.95,
+      "snap_confidence": 0.95
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T1",
+      "truth_target_id": "cv_077",
+      "truth_x": 2720,
+      "truth_y": 1886,
+      "pred_target_id": "cv_071",
+      "pred_x": 2736,
+      "pred_y": 1856,
+      "raw_error_px": 34,
+      "raw_error_logical": 22.666666666666668,
+      "snap_error_px": 402.1243588742169,
+      "snap_error_logical": 268.0829059161446,
+      "raw_confidence": 0.95,
+      "snap_confidence": 0.95
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T1",
+      "truth_target_id": "cv_076",
+      "truth_x": 2227,
+      "truth_y": 170,
+      "pred_target_id": "cv_076",
+      "pred_x": 1180,
+      "pred_y": 120,
+      "raw_error_px": 1048.1932073811583,
+      "raw_error_logical": 698.7954715874389,
+      "snap_error_px": 0,
+      "snap_error_logical": 0,
+      "raw_confidence": 0.95,
+      "snap_confidence": 0.95
+    }
+  ]
+}

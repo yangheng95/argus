@@ -1,0 +1,650 @@
+{
+  "config": {
+    "rounds": 10,
+    "markersPerRound": 5,
+    "repeatsPerRound": 2,
+    "targetStyle": "click",
+    "seed": 20260305,
+    "margin": 180,
+    "minGap": 240,
+    "totalExpected": 100,
+    "outputDir": ".opencorvus/bench/gui-coordinate-real/20260305161848751",
+    "saveImages": false
+  },
+  "model": {
+    "providerID": "alibaba-cn",
+    "modelID": "qwen3.5-plus",
+    "api": "qwen3.5-plus"
+  },
+  "correctness": {
+    "matchedRate": 85,
+    "missingRate": 15,
+    "parseFailureRate": 15,
+    "hitAt5px": 0,
+    "hitAt10px": 0,
+    "hitAt20px": 0,
+    "hitAt40px": 0,
+    "maePx": 1095.7736,
+    "p95Px": 2666.3618,
+    "p99Px": 2884.2893,
+    "stddevPx": 765.8596
+  },
+  "stability": {
+    "groupsWithRepeat": 40,
+    "repeatDriftMaePx": 230.3381,
+    "repeatDriftP95Px": 1340
+  },
+  "idQuality": {
+    "roundsWithMissingOrExtraIDs": 3,
+    "samples": [
+      {
+        "round": 3,
+        "repeat": 1,
+        "missing": [
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5"
+        ],
+        "extra": []
+      },
+      {
+        "round": 3,
+        "repeat": 2,
+        "missing": [
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5"
+        ],
+        "extra": []
+      },
+      {
+        "round": 5,
+        "repeat": 1,
+        "missing": [
+          "t1",
+          "t2",
+          "t3",
+          "t4",
+          "t5"
+        ],
+        "extra": []
+      }
+    ]
+  },
+  "parseQuality": {
+    "failures": 3,
+    "samples": [
+      {
+        "round": 3,
+        "repeat": 1,
+        "message": "AI_NoObjectGeneratedError: No object generated: response did not match schema."
+      },
+      {
+        "round": 3,
+        "repeat": 2,
+        "message": "AI_NoObjectGeneratedError: No object generated: response did not match schema."
+      },
+      {
+        "round": 5,
+        "repeat": 1,
+        "message": "AI_NoObjectGeneratedError: No object generated: could not parse the response."
+      }
+    ]
+  },
+  "samples": [
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 759,
+      "truthY": 585,
+      "predX": 142,
+      "predY": 142,
+      "error": 759.5643488210858,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 1060,
+      "truthY": 1136,
+      "predX": 272,
+      "predY": 522,
+      "error": 998.969469002932,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 314,
+      "truthY": 1693,
+      "predX": 82,
+      "predY": 782,
+      "error": 940.0771244956447,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 472,
+      "truthY": 310,
+      "predX": 192,
+      "predY": 252,
+      "error": 285.9440504714165,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 3028,
+      "truthY": 476,
+      "predX": 792,
+      "predY": 222,
+      "error": 2250.3804122858874,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 759,
+      "truthY": 585,
+      "predX": 122,
+      "predY": 144,
+      "error": 774.7580267412529,
+      "confidence": null
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 1060,
+      "truthY": 1136,
+      "predX": 275,
+      "predY": 521,
+      "error": 997.221138965676,
+      "confidence": null
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 314,
+      "truthY": 1693,
+      "predX": 81,
+      "predY": 784,
+      "error": 938.3869138047482,
+      "confidence": null
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 472,
+      "truthY": 310,
+      "predX": 196,
+      "predY": 252,
+      "error": 282.02836736753983,
+      "confidence": null
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 3028,
+      "truthY": 476,
+      "predX": 792,
+      "predY": 217,
+      "error": 2250.9502437859437,
+      "confidence": null
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 994,
+      "truthY": 583,
+      "predX": 200,
+      "predY": 840,
+      "error": 834.5567685903698,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 778,
+      "truthY": 1830,
+      "predX": 260,
+      "predY": 260,
+      "error": 1653.2465030962564,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 2826,
+      "truthY": 647,
+      "predX": 200,
+      "predY": 1840,
+      "error": 2884.289340548205,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 2279,
+      "truthY": 1367,
+      "predX": 2200,
+      "predY": 1240,
+      "error": 149.56603892595405,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 2309,
+      "truthY": 982,
+      "predX": 740,
+      "predY": 280,
+      "error": 1718.884812894686,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 994,
+      "truthY": 583,
+      "predX": 200,
+      "predY": 840,
+      "error": 834.5567685903698,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 778,
+      "truthY": 1830,
+      "predX": 200,
+      "predY": 1840,
+      "error": 578.0864987179687,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 2826,
+      "truthY": 647,
+      "predX": 260,
+      "predY": 260,
+      "error": 2595.019267751205,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 2279,
+      "truthY": 1367,
+      "predX": 2200,
+      "predY": 1400,
+      "error": 85.61541917201598,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 2309,
+      "truthY": 982,
+      "predX": 2600,
+      "predY": 640,
+      "error": 449.0489950996439,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 743,
+      "truthY": 1813,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 2439,
+      "truthY": 1327,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 3232,
+      "truthY": 1188,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 3030,
+      "truthY": 788,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 211,
+      "truthY": 1521,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 743,
+      "truthY": 1813,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 2439,
+      "truthY": 1327,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 3232,
+      "truthY": 1188,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 3030,
+      "truthY": 788,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 211,
+      "truthY": 1521,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 3373,
+      "truthY": 1020,
+      "predX": 3190,
+      "predY": 1000,
+      "error": 184.08965207202712,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 213,
+      "truthY": 250,
+      "predX": 2690,
+      "predY": 100,
+      "error": 2481.537628165247,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 3531,
+      "truthY": 1880,
+      "predX": 3190,
+      "predY": 1900,
+      "error": 341.586006739152,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 1111,
+      "truthY": 1096,
+      "predX": 2690,
+      "predY": 1900,
+      "error": 1771.9077289746213,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 2470,
+      "truthY": 198,
+      "predX": 2690,
+      "predY": 1000,
+      "error": 831.6273203785455,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 3373,
+      "truthY": 1020,
+      "predX": 3190,
+      "predY": 1000,
+      "error": 184.08965207202712,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 213,
+      "truthY": 250,
+      "predX": 10,
+      "predY": 1000,
+      "error": 776.9871298805406,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 3531,
+      "truthY": 1880,
+      "predX": 3190,
+      "predY": 1900,
+      "error": 341.586006739152,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 1111,
+      "truthY": 1096,
+      "predX": 10,
+      "predY": 1900,
+      "error": 1363.311043012562,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 2470,
+      "truthY": 198,
+      "predX": 10,
+      "predY": 100,
+      "error": 2461.951258656434,
+      "confidence": 0.99
+    },
+    {
+      "round": 5,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 3469,
+      "truthY": 1174,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 5,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 3214,
+      "truthY": 1203,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 5,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 209,
+      "truthY": 774,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 5,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 962,
+      "truthY": 418,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 5,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 1014,
+      "truthY": 1738,
+      "predX": -1,
+      "predY": -1,
+      "error": null,
+      "confidence": null
+    },
+    {
+      "round": 5,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 3469,
+      "truthY": 1174,
+      "predX": 3150,
+      "predY": 1240,
+      "error": 325.75604368913866,
+      "confidence": 0.99
+    },
+    {
+      "round": 5,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 3214,
+      "truthY": 1203,
+      "predX": 2550,
+      "predY": 1540,
+      "error": 744.6240662240242,
+      "confidence": 0.99
+    },
+    {
+      "round": 5,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 209,
+      "truthY": 774,
+      "predX": 1050,
+      "predY": 1820,
+      "error": 1342.161316682909,
+      "confidence": 0.99
+    },
+    {
+      "round": 5,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 962,
+      "truthY": 418,
+      "predX": 50,
+      "predY": 350,
+      "error": 914.5315740858814,
+      "confidence": 0.99
+    },
+    {
+      "round": 5,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 1014,
+      "truthY": 1738,
+      "predX": 250,
+      "predY": 180,
+      "error": 1735.2406173208371,
+      "confidence": 0.99
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "width": 1770,
+  "height": 1140,
+  "scope": "window",
+  "screenshotHash": "dedcb43245d5153c5c95710dd6814974",
+  "candidateCount": 80,
+  "candidateOverlay": false,
+  "candidateOverlayLimit": 24,
+  "binding": {
+    "windowId": 2364030,
+    "title": "OpenCorvus Console",
+    "appName": "opencorvus-overlay",
+    "width": 1180,
+    "height": 760
+  }
+}

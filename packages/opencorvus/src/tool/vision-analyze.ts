@@ -2,6 +2,7 @@ import z from "zod"
 import { generateObject } from "ai"
 import { Tool } from "./tool"
 import { Capture } from "../opencorvus/perception/capture"
+import { CVCandidate } from "../opencorvus/perception/cv-candidate"
 import { MonitorManager } from "../opencorvus/perception/monitor"
 import { WindowManager } from "../opencorvus/perception/window"
 import { Overlay } from "../opencorvus/perception/overlay"
@@ -10,10 +11,24 @@ import { Log } from "../util/log"
 import { createHash } from "crypto"
 import { GuiState } from "./gui-state"
 import { DesktopState } from "./desktop-state"
+import { applyVisionCandidates, visionCandidatePrompt } from "./vision-candidate"
 
 import VISION_PROMPT from "./prompt/vision-analyze.txt"
 
 const log = Log.create({ service: "vision-analyze" })
+const envInt = (key: string, fallback: number) => {
+  const raw = Number(process.env[key] ?? "")
+  if (!Number.isFinite(raw) || raw <= 0) return fallback
+  return Math.floor(raw)
+}
+const envBool = (key: string, fallback: boolean) => {
+  const raw = (process.env[key] ?? "").trim().toLowerCase()
+  if (!raw) return fallback
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on"
+}
+const cvPromptLimit = envInt("OPENCORVUS_VISION_CANDIDATE_PROMPT_LIMIT", 40)
+const cvOverlayLimit = envInt("OPENCORVUS_VISION_CANDIDATE_OVERLAY_LIMIT", 24)
+const cvOverlay = envBool("OPENCORVUS_VISION_CANDIDATE_OVERLAY", false)
 
 const DESCRIPTION = `Analyze the current screen WITHOUT putting the screenshot image into the conversation context.
 
@@ -39,50 +54,156 @@ const VisionAnalyzeParams = z.object({
 
 // ── Structured output schema ──────────────────────────────────
 
-const UIElement = z.object({
-  description: z.string().describe("Human-readable description of the element"),
-  type: z
-    .enum(["button", "input", "link", "menu", "tab", "text", "icon", "checkbox", "dropdown", "other"])
-    .describe("Type of UI element"),
-  coordinates: z.object({
-    x: z.number().int().describe("X coordinate (center of element)"),
-    y: z.number().int().describe("Y coordinate (center of element)"),
-  }),
-  state: z
-    .enum(["enabled", "disabled", "focused", "selected", "checked", "unchecked"])
-    .optional()
-    .describe("Current state of the element"),
-})
+function normalizeElementType(value: string) {
+  const key = value.trim().toLowerCase()
+  if (key === "button" || key === "input" || key === "link" || key === "menu" || key === "tab") return key
+  if (key === "checkbox" || key === "dropdown") return key
+  if (key === "icon" || key === "icon_button") return "icon"
+  if (key === "label" || key === "status_group") return "text"
+  return "other"
+}
 
-const SuggestedAction = z.object({
-  type: z.enum(["click", "type", "key", "scroll", "double_click", "right_click", "drag", "wait"]),
-  target: z.string().describe("Description of the target element"),
-  coordinates: z
-    .object({
+const Point = z
+  .union([
+    z.object({
       x: z.number().int(),
       y: z.number().int(),
+    }),
+    z.tuple([z.number().int(), z.number().int()]),
+  ])
+  .transform((value) => {
+    if (Array.isArray(value)) {
+      return {
+        x: value[0],
+        y: value[1],
+      }
+    }
+    return value
+  })
+
+const UIElement = z.object({
+  id: z
+    .string()
+    .optional()
+    .describe("Stable element id for tool calls, e.g. send_button, input_search, menu_file"),
+  description: z.string().optional().describe("Human-readable description of the element"),
+  type: z.string().transform(normalizeElementType).describe("Type of UI element"),
+  candidate_id: z.string().optional().describe("Optional OpenCV candidate id (e.g. cv_001) if matched"),
+  coordinates: Point.describe("Element center in pixels"),
+  bbox: z
+    .object({
+      x: z.number().int().describe("Top-left X coordinate"),
+      y: z.number().int().describe("Top-left Y coordinate"),
+      width: z.number().int().min(1).describe("Element width"),
+      height: z.number().int().min(1).describe("Element height"),
     })
-    .optional(),
+    .optional()
+    .describe("Element bounding box in image pixel space"),
+  confidence: z.number().min(0).max(1).optional().describe("Confidence score for this element detection (0-1)"),
+  state: z.string().optional().describe("Current state of the element"),
+})
+
+const SuggestedActionObject = z.object({
+  type: z.enum(["click", "type", "key", "scroll", "double_click", "right_click", "drag", "wait"]),
+  target: z.string().describe("Description of the target element"),
+  coordinates: Point.optional(),
   text: z.string().optional().describe("Text to type (for 'type' actions)"),
   key: z.string().optional().describe("Key or key combination (for 'key' actions)"),
   reason: z.string().describe("Why this action is suggested"),
 })
 
-const AnalysisResult = z.object({
-  description: z.string().describe("Description of what's visible on screen"),
-  elements: z.array(UIElement).describe("Interactive UI elements with coordinates"),
-  suggestedAction: SuggestedAction.optional().describe("Suggested next action based on context"),
-  runningSummary: z.string().describe("Persistent summary tracking screen state across analyses"),
-  errors: z.array(z.string()).optional().describe("Any error messages or warnings visible on screen"),
-})
+const SuggestedAction = z
+  .union([
+    SuggestedActionObject,
+    z.object({
+      action: z.enum(["click", "type", "key", "scroll", "double_click", "right_click", "drag", "wait"]),
+      target_id: z.string().optional(),
+      reason: z.string().optional(),
+    }),
+    z.string(),
+  ])
+  .transform((value) => {
+    if (typeof value === "string") return null
+    if ("type" in value) return value
+    return {
+      type: value.action,
+      target: value.target_id ?? "unknown",
+      coordinates: undefined,
+      text: undefined,
+      key: undefined,
+      reason: value.reason ?? "",
+    }
+  })
+
+const AnalysisResult = z
+  .union([
+    z.object({
+      description: z.string().describe("Description of what's visible on screen"),
+      elements: z.array(UIElement).describe("Interactive UI elements with coordinates"),
+      suggestedAction: SuggestedAction.optional().describe("Suggested next action based on context"),
+      runningSummary: z.string().describe("Persistent summary tracking screen state across analyses"),
+      errors: z.array(z.string()).optional().describe("Any error messages or warnings visible on screen"),
+    }),
+    z.object({
+      description: z.string(),
+      interactive_elements: z.array(UIElement),
+      suggested_action: SuggestedAction.optional(),
+      running_summary: z.string(),
+      errors: z.array(z.string()).optional(),
+    }),
+  ])
+  .transform((item) => {
+    if ("elements" in item) return item
+    return {
+      description: item.description,
+      elements: item.interactive_elements,
+      suggestedAction: item.suggested_action,
+      runningSummary: item.running_summary,
+      errors: item.errors,
+    }
+  })
 
 interface VisionMetadata {
   width: number
   height: number
   screenshotHash: string
   elementsFound: number
+  targetsRegistered: number
+  cvCandidatesDetected: number
+  cvCandidatesUsed: number
+  cvCandidateSource: string
+  targets?: Array<{ id: string; x: number; y: number; confidence: number | null }>
+  coordinateOverlaySource: string
   runningSummary: string
   error?: boolean
+}
+
+function normalizeID(value: string | undefined, index: number) {
+  const base = value
+    ?.trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+  if (base) return base
+  return `el_${index + 1}`
+}
+
+function normalizeElements(input: z.infer<typeof UIElement>[]) {
+  const seen = new Set<string>()
+  return input.map((item, index) => {
+    const raw = normalizeID(item.id, index)
+    const suffix = seen.has(raw) ? `_${index + 1}` : ""
+    const id = `${raw}${suffix}`
+    seen.add(id)
+    return {
+      ...item,
+      id,
+      description: item.description?.trim() ?? id,
+      candidate_id: item.candidate_id?.trim().toLowerCase() ?? null,
+      confidence: item.confidence ?? null,
+      bbox: item.bbox ?? null,
+    }
+  })
 }
 
 export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionMetadata>("vision_analyze", {
@@ -100,6 +221,8 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
     await WindowManager.rebindForTask(GuiState.get().taskEpoch)
 
     const timer = log.time("vision analysis")
+    let cvDetected = 0
+    let cvSource = "none"
 
     try {
       const boundBeforeCapture = await WindowManager.getBinding()
@@ -112,6 +235,11 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
             height: 0,
             screenshotHash: "",
             elementsFound: 0,
+            targetsRegistered: 0,
+            cvCandidatesDetected: 0,
+            cvCandidatesUsed: 0,
+            cvCandidateSource: "none",
+            coordinateOverlaySource: "none",
             runningSummary: "",
             error: true,
           },
@@ -127,14 +255,28 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
             height: capture.height,
             screenshotHash: "",
             elementsFound: 0,
+            targetsRegistered: 0,
+            cvCandidatesDetected: 0,
+            cvCandidatesUsed: 0,
+            cvCandidateSource: "none",
+            coordinateOverlaySource: "none",
             runningSummary: "",
             error: true,
           },
         }
       }
 
-      // Add coordinate overlay
-      const overlaid = await Overlay.add(capture.buffer)
+      const cvCandidates = await CVCandidate.detect(capture.buffer, { max: 80 })
+      cvDetected = cvCandidates.length
+      cvSource = cvCandidates.length > 0 ? "tool.cv_candidate.python-opencv" : "none"
+      const cvPrompt = visionCandidatePrompt(cvCandidates, cvPromptLimit)
+
+      // Add coordinate overlay + optional candidate overlay
+      const overlaidGrid = await Overlay.add(capture.buffer)
+      const overlaid =
+        cvOverlay && cvCandidates.length > 0
+          ? await Overlay.addCandidates(overlaidGrid, cvCandidates, { limit: cvOverlayLimit }).catch(() => overlaidGrid)
+          : overlaidGrid
       const base64 = overlaid.toString("base64")
       const hash = createHash("md5").update(capture.buffer).digest("hex")
       const capturedWindow = capture.scope === "window" ? capture.window : null
@@ -163,6 +305,9 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
           `## Monitor Info\nName: ${monitorBinding.info.name}\nSize: ${monitorBinding.info.width}x${monitorBinding.info.height}`,
         )
       }
+      if (cvPrompt) {
+        parts.push(cvPrompt)
+      }
       parts.push("Analyze the screenshot above and provide the structured analysis.")
 
       // Use default model for vision
@@ -187,10 +332,27 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
       })
 
       const analysis = result.object
+      const normalized = normalizeElements(analysis.elements)
+      const snapped = applyVisionCandidates(normalized, cvCandidates)
+      const elements = snapped.items
+      const targets = GuiState.recordVisionTargets(
+        hash,
+        elements.map((item) => ({
+          id: item.id,
+          description: item.description,
+          type: item.type,
+          x: item.coordinates.x,
+          y: item.coordinates.y,
+          confidence: item.confidence,
+          bbox: item.bbox,
+        })),
+      )
 
       log.info("vision analysis complete", {
         hash: hash.slice(0, 8),
-        elements: analysis.elements.length,
+        elements: elements.length,
+        cvCandidates: cvCandidates.length,
+        cvCandidatesUsed: snapped.used.length,
         hasSuggestion: !!analysis.suggestedAction,
       })
 
@@ -201,10 +363,13 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
         lines.push(`Errors: ${analysis.errors.join("; ")}`)
       }
 
-      if (analysis.elements.length > 0) {
-        for (const el of analysis.elements) {
+      if (elements.length > 0) {
+        for (const el of elements) {
           const state = el.state ? `[${el.state}]` : ""
-          lines.push(`${el.type}(${el.coordinates.x},${el.coordinates.y})${state} ${el.description}`)
+          const candidate = el.candidate_id ? ` candidate=${el.candidate_id}` : ""
+          lines.push(
+            `${el.id} ${el.type}(${el.coordinates.x},${el.coordinates.y})${state}${candidate} conf=${el.confidence === null ? "n/a" : el.confidence.toFixed(2)} ${el.description}`,
+          )
         }
       }
 
@@ -216,6 +381,21 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
       }
 
       lines.push(analysis.runningSummary)
+      if (cvCandidates.length > 0) {
+        lines.push(
+          `OpenCV candidates detected: ${cvCandidates.length}, used: ${snapped.used.length}. Candidate snapping is tool-driven (nearest/explicit with gate), not only LLM-selected candidate_id.`,
+        )
+      }
+      lines.push(
+        `Use input.click with target_id for precision, e.g. {"action":"click","target_id":"<element_id>","screenshot_hash":"${hash}"}.`,
+      )
+      lines.push("Coordinate grid overlay is rendered by tool.vision_analyze (not by the LLM).")
+      if (cvOverlay && cvCandidates.length > 0) {
+        lines.push("Candidate box overlay is rendered by tool.cv_candidate + tool.vision_analyze (not by the LLM).")
+      }
+      if (!cvOverlay && cvCandidates.length > 0) {
+        lines.push("Candidate boxes are not rendered on image by default to reduce visual clutter for the vision model.")
+      }
 
       const coordInfo = binding
         ? `Coordinates are relative to bound window "${binding.info.title}" (${binding.info.width}x${binding.info.height}).`
@@ -230,7 +410,21 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
           width: capture.width,
           height: capture.height,
           screenshotHash: hash,
-          elementsFound: analysis.elements.length,
+          elementsFound: elements.length,
+          targetsRegistered: targets.length,
+          cvCandidatesDetected: cvDetected,
+          cvCandidatesUsed: snapped.used.length,
+          cvCandidateSource: cvSource,
+          targets: targets.map((item) => ({
+            id: item.id,
+            x: item.x,
+            y: item.y,
+            confidence: item.confidence,
+          })),
+          coordinateOverlaySource:
+            cvOverlay && cvCandidates.length > 0
+              ? "tool.vision_analyze.Overlay.add+Overlay.addCandidates"
+              : "tool.vision_analyze.Overlay.add",
           runningSummary: analysis.runningSummary,
         },
         // NO attachments — image stays out of the conversation
@@ -245,6 +439,11 @@ export const VisionAnalyzeTool = Tool.define<typeof VisionAnalyzeParams, VisionM
           height: 0,
           screenshotHash: "",
           elementsFound: 0,
+          targetsRegistered: 0,
+          cvCandidatesDetected: cvDetected,
+          cvCandidatesUsed: 0,
+          cvCandidateSource: cvSource,
+          coordinateOverlaySource: "none",
           runningSummary: "",
           error: true,
         },

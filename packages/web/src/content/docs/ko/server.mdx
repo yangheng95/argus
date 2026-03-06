@@ -260,7 +260,7 @@ opencorvus 서버는 다음과 같은 API를 노출합니다.
 | `POST` | `/tui/execute-command`  | 명령어 실행(`{ command }`)                | `boolean`      |
 | `POST` | `/tui/show-toast`       | 쇼 토스트(`{ title?, message, variant }`) | `boolean`      |
 | `GET`  | `/tui/control/next`     | 다음 컨트롤 요청 시 기다리고              | 제어 요청 개체 |
-| `POST` | `/tui/control/response` | 통제 요청(`{ body }`) 대응                | `boolean`      |
+| `POST` | `/tui/control/response` | 통제 요청(`{ id, body } or { id, error }`) 대응                | `boolean`      |
 
 ---
 

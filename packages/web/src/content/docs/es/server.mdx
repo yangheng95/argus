@@ -260,7 +260,7 @@ El servidor opencorvus expone las siguientes API.
 | `POST` | `/tui/execute-command`  | Ejecutar un comando (`{ command }`)               | `boolean`                      |
 | `POST` | `/tui/show-toast`       | Mostrar brindis (`{ title?, message, variant }`)  | `boolean`                      |
 | `GET`  | `/tui/control/next`     | Espere la próxima solicitud de control            | Objeto de solicitud de control |
-| `POST` | `/tui/control/response` | Responder a una solicitud de control (`{ body }`) | `boolean`                      |
+| `POST` | `/tui/control/response` | Responder a una solicitud de control (`{ id, body } or { id, error }`) | `boolean`                      |
 
 ---
 

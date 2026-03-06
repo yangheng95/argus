@@ -260,7 +260,7 @@ opencorvus-serveren viser følgende APIer.
 | `POST` | `/tui/execute-command`  | Utfør en kommando (`{ command }`)           | `boolean`                  |
 | `POST` | `/tui/show-toast`       | Vis toast (`{ title?, message, variant }`)  | `boolean`                  |
 | `GET`  | `/tui/control/next`     | Vent på neste kontrollforespørsel           | Kontrollforespørselsobjekt |
-| `POST` | `/tui/control/response` | Svar på en kontrollforespørsel (`{ body }`) | `boolean`                  |
+| `POST` | `/tui/control/response` | Svar på en kontrollforespørsel (`{ id, body } or { id, error }`) | `boolean`                  |
 
 ---
 

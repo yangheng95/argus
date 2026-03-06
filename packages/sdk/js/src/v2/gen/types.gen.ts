@@ -5400,6 +5400,7 @@ export type TuiControlNextResponses = {
    * Next TUI request
    */
   200: {
+    id: string
     path: string
     body: unknown
   }
@@ -5408,7 +5409,11 @@ export type TuiControlNextResponses = {
 export type TuiControlNextResponse = TuiControlNextResponses[keyof TuiControlNextResponses]
 
 export type TuiControlResponseData = {
-  body?: unknown
+  body?: {
+    id: string
+    body?: unknown
+    error?: string
+  }
   path?: never
   query?: {
     directory?: string

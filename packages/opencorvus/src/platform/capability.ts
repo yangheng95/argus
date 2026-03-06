@@ -248,6 +248,9 @@ export namespace Capability {
   }
 
   function inputHint() {
+    if (process.platform === "win32") {
+      return "Ensure Bun FFI can access user32.dll. Install @nut-tree-fork packages for fallback input paths."
+    }
     if (process.platform === "darwin") {
       return "Grant Accessibility permission to OpenCorvus/Terminal and restart the app."
     }
@@ -264,6 +267,19 @@ export namespace Capability {
   }
 
   function input() {
+    if (process.platform === "win32") {
+      try {
+        const ffi = require("bun:ffi")
+        const lib = ffi.dlopen("user32.dll", {
+          SetCursorPos: { args: ["i32", "i32"], returns: "i32" },
+          keybd_event: { args: ["u8", "u8", "u32", "u32"], returns: "void" },
+        })
+        lib.close()
+        return line("desktop_input", "Desktop input backend", "ok", "win32 user32.dll FFI")
+      } catch (err) {
+        return line("desktop_input", "Desktop input backend", "fail", text(err), inputHint())
+      }
+    }
     try {
       const nut = require.resolve("@nut-tree-fork/nut-js")
       const lib = require.resolve("@nut-tree-fork/libnut", { paths: [path.dirname(nut)] })

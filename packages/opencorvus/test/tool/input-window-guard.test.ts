@@ -87,6 +87,7 @@ mock.module("../../src/tool/overlay-client", () => ({
 
 const { InputTool } = await import("../../src/tool/input")
 const { DesktopState } = await import("../../src/tool/desktop-state")
+const { GuiState } = await import("../../src/tool/gui-state")
 
 class LocatorStub implements PlaywrightDriver.Locator {
   count() {
@@ -220,6 +221,251 @@ describe("tool.input bound window guard", () => {
         const result = await tool.execute({ action: "click", x: 200, y: 240, button: "left" }, ctx)
         expect(result.metadata.blocked).toBeUndefined()
         expect(clicks).toEqual([{ x: 200, y: 240 }])
+      },
+    })
+  })
+
+  test("resolves click coordinates from target_id", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        GuiState.activate()
+        GuiState.recordScreenshot("monitor-anchor", 1000, 700, false)
+        GuiState.recordVisionTargets("monitor-anchor", [
+          {
+            id: "send_button",
+            description: "Send button",
+            type: "button",
+            x: 420,
+            y: 380,
+            confidence: 0.97,
+            bbox: { x: 390, y: 360, width: 60, height: 40 },
+          },
+        ])
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", target_id: "send_button", screenshot_hash: "monitor-anchor", button: "left" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(result.metadata.source).toBe("target_id")
+        expect(result.metadata.targetID).toBe("send_button")
+        expect(clicks).toEqual([{ x: 420, y: 380 }])
+      },
+    })
+  })
+
+  test("blocks click when target_id does not exist", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        GuiState.activate()
+        GuiState.recordScreenshot("monitor-anchor", 1000, 700, false)
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", target_id: "missing_target", screenshot_hash: "monitor-anchor", button: "left" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("target_id_not_found")
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("blocks click when screenshot hash is stale", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        GuiState.activate()
+        GuiState.recordScreenshot("old-hash", 1000, 700, false)
+        GuiState.recordVisionTargets("old-hash", [
+          {
+            id: "send_button",
+            description: "Send button",
+            type: "button",
+            x: 420,
+            y: 380,
+            confidence: 0.92,
+            bbox: { x: 390, y: 360, width: 60, height: 40 },
+          },
+        ])
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", target_id: "send_button", screenshot_hash: "old-hash", button: "left" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("stale_screenshot_hash")
+        expect(clicks).toHaveLength(0)
+      },
+    })
+  })
+
+  test("uses alternate target candidate after failed verification", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        GuiState.activate()
+        GuiState.recordScreenshot("monitor-anchor", 1000, 700, false)
+        GuiState.recordVisionTargets("monitor-anchor", [
+          {
+            id: "send_button",
+            description: "Send button",
+            type: "button",
+            x: 420,
+            y: 380,
+            confidence: 0.96,
+            bbox: { x: 390, y: 360, width: 60, height: 40 },
+          },
+        ])
+        GuiState.startVerification({
+          action: "click",
+          expectation: "must_change",
+          coords: { x: 420, y: 380 },
+        })
+        GuiState.resolveVerification({
+          changed: false,
+          marker: false,
+          screenshotHash: "verify-fail",
+        })
+        const tool = await InputTool.init()
+        const result = await tool.execute(
+          { action: "click", target_id: "send_button", screenshot_hash: "monitor-anchor", button: "left" },
+          ctx,
+        )
+        expect(result.metadata.blocked).toBeUndefined()
+        expect(result.metadata.source).toBe("target_id")
+        expect(result.metadata.targetCandidateIndex).toBeGreaterThan(0)
+        expect(clicks).toHaveLength(1)
+        expect(clicks[0]).not.toEqual({ x: 420, y: 380 })
+      },
+    })
+  })
+
+  test("verification marks click miss with distance metrics", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GuiState.activate()
+        GuiState.startVerification({
+          action: "click",
+          expectation: "must_change",
+          coords: { x: 420, y: 380 },
+          target: {
+            id: "send_button",
+            center: { x: 420, y: 380 },
+            bbox: { x: 390, y: 360, width: 60, height: 40 },
+          },
+        })
+        const resolved = GuiState.resolveVerification({
+          changed: false,
+          marker: true,
+          markerPoint: { x: 480, y: 430 },
+          screenshotHash: "verify-miss",
+        })
+        expect(resolved?.status).toBe("fail")
+        expect(resolved?.hit).toBe(false)
+        expect(resolved?.distanceToBBox).toBeGreaterThan(0)
+        expect(resolved?.distanceToCenter).toBeGreaterThan(0)
+      },
+    })
+  })
+
+  test("verification keeps hit click as uncertain when screen does not change", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        GuiState.activate()
+        GuiState.startVerification({
+          action: "click",
+          expectation: "must_change",
+          coords: { x: 420, y: 380 },
+          target: {
+            id: "send_button",
+            center: { x: 420, y: 380 },
+            bbox: { x: 390, y: 360, width: 60, height: 40 },
+          },
+        })
+        const resolved = GuiState.resolveVerification({
+          changed: false,
+          marker: true,
+          markerPoint: { x: 420, y: 380 },
+          screenshotHash: "verify-hit",
+        })
+        expect(resolved?.status).toBe("uncertain")
+        expect(resolved?.hit).toBe(true)
+        expect(resolved?.distanceToBBox).toBe(0)
+      },
+    })
+  })
+
+  test("stores pending click marker after click for next screenshot verification", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        await tool.execute({ action: "click", x: 220, y: 260, button: "left" }, ctx)
+        const marker = GuiState.peekClickMarker()
+        expect(marker?.x).toBe(220)
+        expect(marker?.y).toBe(260)
+        expect(marker?.screenX).toBe(220)
+        expect(marker?.screenY).toBe(260)
+      },
+    })
+  })
+
+  test("blocks new input action until previous action is verified by screenshot", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        const tool = await InputTool.init()
+        const first = await tool.execute({ action: "click", x: 240, y: 280, button: "left" }, ctx)
+        const verification = first.metadata.verification as { state?: string } | undefined
+        expect(verification?.state).toBe("pending")
+        const second = await tool.execute({ action: "key", key: "enter" }, ctx)
+        expect(second.metadata.blocked).toBe(true)
+        expect(second.metadata.reason).toBe("verification_pending")
+      },
+    })
+  })
+
+  test("blocks repeating same click coordinates after failed verification", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        anchorMonitor({ x: 0, y: 0, width: 1000, height: 700 })
+        GuiState.activate()
+        GuiState.startVerification({
+          action: "click",
+          expectation: "must_change",
+          coords: { x: 300, y: 320 },
+        })
+        GuiState.resolveVerification({
+          changed: false,
+          marker: false,
+          screenshotHash: "verify-fail",
+        })
+        const tool = await InputTool.init()
+        const result = await tool.execute({ action: "click", x: 300, y: 320, button: "left" }, ctx)
+        expect(result.metadata.blocked).toBe(true)
+        expect(result.metadata.reason).toBe("verification_recovery_required")
       },
     })
   })

@@ -1,0 +1,487 @@
+{
+  "config": {
+    "rounds": 4,
+    "markersPerRound": 5,
+    "repeatsPerRound": 2,
+    "targetStyle": "click",
+    "seed": 20260305,
+    "margin": 180,
+    "minGap": 240,
+    "totalExpected": 40,
+    "outputDir": ".opencorvus/bench/gui-coordinate-real/20260305161718181",
+    "saveImages": true
+  },
+  "model": {
+    "providerID": "alibaba-cn",
+    "modelID": "qwen3.5-plus",
+    "api": "qwen3.5-plus"
+  },
+  "correctness": {
+    "matchedRate": 100,
+    "missingRate": 0,
+    "parseFailureRate": 0,
+    "hitAt5px": 0,
+    "hitAt10px": 0,
+    "hitAt20px": 0,
+    "hitAt40px": 0,
+    "maePx": 1243.3217,
+    "p95Px": 2595.0193,
+    "p99Px": 3141.8415,
+    "stddevPx": 800.8156
+  },
+  "stability": {
+    "groupsWithRepeat": 20,
+    "repeatDriftMaePx": 229.6499,
+    "repeatDriftP95Px": 970.6287
+  },
+  "idQuality": {
+    "roundsWithMissingOrExtraIDs": 0,
+    "samples": []
+  },
+  "parseQuality": {
+    "failures": 0,
+    "samples": []
+  },
+  "samples": [
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 759,
+      "truthY": 585,
+      "predX": 123,
+      "predY": 142,
+      "error": 775.0774154882853,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 1060,
+      "truthY": 1136,
+      "predX": 275,
+      "predY": 523,
+      "error": 995.9889557620606,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 314,
+      "truthY": 1693,
+      "predX": 81,
+      "predY": 781,
+      "error": 941.2932592980787,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 472,
+      "truthY": 310,
+      "predX": 197,
+      "predY": 250,
+      "error": 281.4693589007514,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 3028,
+      "truthY": 476,
+      "predX": 792,
+      "predY": 219,
+      "error": 2250.7209955923013,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 759,
+      "truthY": 585,
+      "predX": 123,
+      "predY": 141,
+      "error": 775.649405337231,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 1060,
+      "truthY": 1136,
+      "predX": 275,
+      "predY": 523,
+      "error": 995.9889557620606,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 314,
+      "truthY": 1693,
+      "predX": 81,
+      "predY": 781,
+      "error": 941.2932592980787,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 472,
+      "truthY": 310,
+      "predX": 196,
+      "predY": 251,
+      "error": 282.23571708768543,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 3028,
+      "truthY": 476,
+      "predX": 792,
+      "predY": 211,
+      "error": 2251.648507205332,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 994,
+      "truthY": 583,
+      "predX": 200,
+      "predY": 840,
+      "error": 834.5567685903698,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 778,
+      "truthY": 1830,
+      "predX": 200,
+      "predY": 1680,
+      "error": 597.146548177246,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 2826,
+      "truthY": 647,
+      "predX": 260,
+      "predY": 260,
+      "error": 2595.019267751205,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 2279,
+      "truthY": 1367,
+      "predX": 740,
+      "predY": 280,
+      "error": 1884.1682515104642,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 2309,
+      "truthY": 982,
+      "predX": 600,
+      "predY": 460,
+      "error": 1786.9429201851972,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 994,
+      "truthY": 583,
+      "predX": 200,
+      "predY": 840,
+      "error": 834.5567685903698,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 778,
+      "truthY": 1830,
+      "predX": 200,
+      "predY": 1680,
+      "error": 597.146548177246,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 2826,
+      "truthY": 647,
+      "predX": 260,
+      "predY": 260,
+      "error": 2595.019267751205,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 2279,
+      "truthY": 1367,
+      "predX": 740,
+      "predY": 260,
+      "error": 1895.7768856065316,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 2309,
+      "truthY": 982,
+      "predX": 600,
+      "predY": 440,
+      "error": 1792.8873361145702,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 743,
+      "truthY": 1813,
+      "predX": 840,
+      "predY": 540,
+      "error": 1276.6902521755228,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 2439,
+      "truthY": 1327,
+      "predX": 2520,
+      "predY": 1080,
+      "error": 259.9423012901132,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 3232,
+      "truthY": 1188,
+      "predX": 120,
+      "predY": 1620,
+      "error": 3141.841498229979,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 3030,
+      "truthY": 788,
+      "predX": 3360,
+      "predY": 1350,
+      "error": 651.7238679072602,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 211,
+      "truthY": 1521,
+      "predX": 1920,
+      "predY": 810,
+      "error": 1851.0002701242374,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 743,
+      "truthY": 1813,
+      "predX": 192,
+      "predY": 848,
+      "error": 1111.2272494859005,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 2439,
+      "truthY": 1327,
+      "predX": 636,
+      "predY": 612,
+      "error": 1939.596349759403,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 3232,
+      "truthY": 1188,
+      "predX": 792,
+      "predY": 360,
+      "error": 2576.661405772982,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 3030,
+      "truthY": 788,
+      "predX": 840,
+      "predY": 544,
+      "error": 2203.5507709149792,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 211,
+      "truthY": 1521,
+      "predX": 56,
+      "predY": 704,
+      "error": 831.5732078416187,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 3373,
+      "truthY": 1020,
+      "predX": 3140,
+      "predY": 1000,
+      "error": 233.8567937862828,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T2",
+      "truthX": 213,
+      "truthY": 250,
+      "predX": 640,
+      "predY": 100,
+      "error": 452.58037960123727,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T3",
+      "truthX": 3531,
+      "truthY": 1880,
+      "predX": 3140,
+      "predY": 1900,
+      "error": 391.51117480858704,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T4",
+      "truthX": 1111,
+      "truthY": 1096,
+      "predX": 280,
+      "predY": 500,
+      "error": 1022.6323875176261,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 1,
+      "id": "T5",
+      "truthX": 2470,
+      "truthY": 198,
+      "predX": 640,
+      "predY": 1000,
+      "error": 1998.0250248683074,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 3373,
+      "truthY": 1020,
+      "predX": 3149,
+      "predY": 1000,
+      "error": 224.89108474992955,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T2",
+      "truthX": 213,
+      "truthY": 250,
+      "predX": 649,
+      "predY": 100,
+      "error": 461.08133772687006,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T3",
+      "truthX": 3531,
+      "truthY": 1880,
+      "predX": 3149,
+      "predY": 1900,
+      "error": 382.5232019106815,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T4",
+      "truthX": 1111,
+      "truthY": 1096,
+      "predX": 289,
+      "predY": 1000,
+      "error": 827.5868534480232,
+      "confidence": 0.99
+    },
+    {
+      "round": 4,
+      "repeat": 2,
+      "id": "T5",
+      "truthX": 2470,
+      "truthY": 198,
+      "predX": 649,
+      "predY": 1000,
+      "error": 1989.7851642828177,
+      "confidence": 0.99
+    }
+  ]
+}

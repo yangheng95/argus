@@ -18,6 +18,18 @@ const state = Instance.state(() => ({
   stopping: false,
 }))
 
+function proxyPath(raw: string) {
+  if (!raw.startsWith("/tui/")) {
+    throw new Error("proxy path must start with /tui/")
+  }
+  const parsed = new URL(raw, "http://opencorvus.internal")
+  const normalized = parsed.pathname + parsed.search
+  if (!parsed.pathname.startsWith("/tui/")) {
+    throw new Error("proxy path must stay within /tui/")
+  }
+  return normalized
+}
+
 function watchExit(handle: Tui.Handle, sessionID: string | null) {
   const fail = (message: string) => {
     if (!sessionID) return
@@ -143,17 +155,15 @@ export namespace TuiRuntime {
     if (!s.handle || s.handle.closed) {
       throw new Error("TUI runtime is not running. Call /tui/runtime/start first.")
     }
-    if (!input.path.startsWith("/tui/")) {
-      throw new Error("proxy path must start with /tui/")
-    }
+    const path = proxyPath(input.path)
 
-    const res = await fetch(`${s.handle.url}${input.path}`, {
+    const res = await fetch(`${s.handle.url}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input.body ?? {}),
     })
     const text = await res.text()
-    if (!res.ok) throw new Error(`TUI proxy failed: ${res.status} ${input.path} ${text}`)
+    if (!res.ok) throw new Error(`TUI proxy failed: ${res.status} ${path} ${text}`)
 
     const type = res.headers.get("Content-Type") ?? ""
     if (type.includes("application/json")) {

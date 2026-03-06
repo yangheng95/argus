@@ -1,4 +1,5 @@
 import { Log } from "../../util/log"
+import { Keyboard } from "./keyboard"
 
 export namespace ClipboardInput {
   const log = Log.create({ service: "opencorvus-clipboard" })
@@ -17,21 +18,9 @@ export namespace ClipboardInput {
     try {
       await clipboardy.write(text)
 
-      // Use nut-js to press Ctrl+V / Cmd+V
-      const { keyboard, Key } = await import("@nut-tree-fork/nut-js")
-      const isMac = process.platform === "darwin"
-
-      if (isMac) {
-        await keyboard.pressKey(Key.LeftSuper)
-        await keyboard.pressKey(Key.V)
-        await keyboard.releaseKey(Key.V)
-        await keyboard.releaseKey(Key.LeftSuper)
-      } else {
-        await keyboard.pressKey(Key.LeftControl)
-        await keyboard.pressKey(Key.V)
-        await keyboard.releaseKey(Key.V)
-        await keyboard.releaseKey(Key.LeftControl)
-      }
+      // Reuse keyboard abstraction so win32 native fallback can handle missing nut-js Key exports.
+      if (process.platform === "darwin") await Keyboard.hotkey("cmd", "v")
+      if (process.platform !== "darwin") await Keyboard.hotkey("ctrl", "v")
 
       log.info("pasted text", { length: text.length })
     } catch (e) {

@@ -696,10 +696,11 @@ export namespace SessionPrompt {
       GuiState.setStep(input.step)
       const actionSummary = GuiState.buildActionSummary()
       const repetitionAlert = GuiState.checkRepetition()
-      if (actionSummary || repetitionAlert) {
+      const verificationAlert = GuiState.verificationAlert()
+      if (actionSummary || repetitionAlert || verificationAlert) {
         const match = input.msgs.findLast((m) => m.info.role === "user")
         if (match) {
-          const guiContext = [actionSummary, repetitionAlert].filter(Boolean).join("\n\n")
+          const guiContext = [actionSummary, repetitionAlert, verificationAlert].filter(Boolean).join("\n\n")
           match.parts.push({
             id: Identifier.ascending("part"),
             messageID: match.info.id,

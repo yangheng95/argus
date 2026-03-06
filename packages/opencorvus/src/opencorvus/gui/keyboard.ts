@@ -19,6 +19,8 @@ function platformSuperKey(): string {
 
 export namespace Keyboard {
   const log = Log.create({ service: "opencorvus-keyboard" })
+  const KEYEVENTF_KEYUP = 0x0002
+  let user32: ReturnType<(typeof import("bun:ffi"))["dlopen"]> | undefined
   const SUPER_KEYS = new Set([
     "win",
     "Win",
@@ -392,15 +394,217 @@ export namespace Keyboard {
     shuffle: "AudioRandom",
   }
 
-  function candidates(name: string, Key: Record<string, any>) {
+  async function win32() {
+    if (process.platform !== "win32") return undefined
+    if (user32) return user32
+    const ffi = await import("bun:ffi")
+    user32 = ffi.dlopen("user32.dll", {
+      keybd_event: { args: ["u8", "u8", "u32", "u32"], returns: "void" },
+    })
+    return user32
+  }
+
+  function resolveName(name: string) {
+    return KEY_MAP[name] ?? name
+  }
+
+  function functionNumber(name: string) {
+    if (!/^F\d{1,2}$/.test(name)) return
+    const value = Number(name.slice(1))
+    if (value < 1 || value > 24) return
+    return 0x6f + value
+  }
+
+  function winVK(name: string): number | undefined {
+    const key = resolveName(name)
+    const fn = functionNumber(key)
+    if (fn !== undefined) return fn
+    if (/^[A-Z]$/.test(key)) return key.charCodeAt(0)
+    if (/^[a-z]$/.test(key)) return key.toUpperCase().charCodeAt(0)
+    switch (key) {
+      case "Num0":
+        return 0x30
+      case "Num1":
+        return 0x31
+      case "Num2":
+        return 0x32
+      case "Num3":
+        return 0x33
+      case "Num4":
+        return 0x34
+      case "Num5":
+        return 0x35
+      case "Num6":
+        return 0x36
+      case "Num7":
+        return 0x37
+      case "Num8":
+        return 0x38
+      case "Num9":
+        return 0x39
+      case "Return":
+      case "Enter":
+        return 0x0d
+      case "Escape":
+        return 0x1b
+      case "Tab":
+        return 0x09
+      case "Space":
+        return 0x20
+      case "Backspace":
+        return 0x08
+      case "Delete":
+        return 0x2e
+      case "Insert":
+        return 0x2d
+      case "Up":
+        return 0x26
+      case "Down":
+        return 0x28
+      case "Left":
+        return 0x25
+      case "Right":
+        return 0x27
+      case "Home":
+        return 0x24
+      case "End":
+        return 0x23
+      case "PageUp":
+        return 0x21
+      case "PageDown":
+        return 0x22
+      case "CapsLock":
+        return 0x14
+      case "ScrollLock":
+        return 0x91
+      case "NumLock":
+        return 0x90
+      case "Print":
+        return 0x2c
+      case "Pause":
+        return 0x13
+      case "LeftControl":
+        return 0xa2
+      case "RightControl":
+        return 0xa3
+      case "LeftShift":
+        return 0xa0
+      case "RightShift":
+        return 0xa1
+      case "LeftAlt":
+        return 0xa4
+      case "RightAlt":
+        return 0xa5
+      case "LeftWin":
+      case "LeftSuper":
+      case "LeftMeta":
+      case "LeftCmd":
+        return 0x5b
+      case "RightWin":
+      case "RightSuper":
+      case "RightMeta":
+      case "RightCmd":
+        return 0x5c
+      case "Menu":
+        return 0x5d
+      case "Minus":
+        return 0xbd
+      case "Equal":
+        return 0xbb
+      case "LeftBracket":
+        return 0xdb
+      case "RightBracket":
+        return 0xdd
+      case "Backslash":
+        return 0xdc
+      case "Semicolon":
+        return 0xba
+      case "Quote":
+        return 0xde
+      case "Comma":
+        return 0xbc
+      case "Period":
+        return 0xbe
+      case "Slash":
+        return 0xbf
+      case "Grave":
+        return 0xc0
+      case "NumPad0":
+        return 0x60
+      case "NumPad1":
+        return 0x61
+      case "NumPad2":
+        return 0x62
+      case "NumPad3":
+        return 0x63
+      case "NumPad4":
+        return 0x64
+      case "NumPad5":
+        return 0x65
+      case "NumPad6":
+        return 0x66
+      case "NumPad7":
+        return 0x67
+      case "NumPad8":
+        return 0x68
+      case "NumPad9":
+        return 0x69
+      case "Multiply":
+        return 0x6a
+      case "Add":
+        return 0x6b
+      case "Subtract":
+        return 0x6d
+      case "Decimal":
+        return 0x6e
+      case "Divide":
+        return 0x6f
+      case "NumPadEqual":
+        return 0xbb
+      default:
+        return undefined
+    }
+  }
+
+  async function winTap(name: string) {
+    const vk = winVK(name)
+    if (vk === undefined) return false
+    const api = await win32()
+    if (!api) return false
+    const event = api.symbols.keybd_event as unknown as (vk: number, scan: number, flags: number, extra: number) => void
+    event(vk, 0, 0, 0)
+    event(vk, 0, KEYEVENTF_KEYUP, 0)
+    return true
+  }
+
+  async function winChord(names: string[]) {
+    const vks = names.map((name) => winVK(name))
+    if (vks.some((vk) => vk === undefined)) return false
+    const api = await win32()
+    if (!api) return false
+    const event = api.symbols.keybd_event as unknown as (vk: number, scan: number, flags: number, extra: number) => void
+    const list = vks as number[]
+    for (const vk of list) {
+      event(vk, 0, 0, 0)
+    }
+    for (const vk of [...list].reverse()) {
+      event(vk, 0, KEYEVENTF_KEYUP, 0)
+    }
+    return true
+  }
+
+  function candidates(name: string, keyMap: Record<string, unknown> | undefined) {
+    if (!keyMap) return []
     const primary = KEY_MAP[name] ?? name
     const list = [primary]
     if (SUPER_KEYS.has(name) || SUPER_KEYS.has(primary)) {
       list.push("LeftSuper", "LeftWin", "LeftMeta")
     }
     return Array.from(new Set(list))
-      .map((k) => Key[k])
-      .filter((k) => k !== undefined)
+      .flatMap((key) => {
+        const value = keyMap[key]
+        return value === undefined ? [] : [value]
+      })
   }
 
   function toError(input: unknown, fallback: string): Error {
@@ -410,28 +614,34 @@ export namespace Keyboard {
 
   export async function pressKey(keyName: string): Promise<void> {
     try {
-      const { keyboard, Key } = await import("@nut-tree-fork/nut-js")
       if (process.platform === "win32" && SUPER_KEYS.has(keyName)) {
-        try {
-          await keyboard.pressKey(Key.LeftControl)
-          await keyboard.pressKey(Key.Escape)
-          await keyboard.releaseKey(Key.Escape)
-          await keyboard.releaseKey(Key.LeftControl)
-          log.info("pressed key", { keyName, resolved: "Ctrl+Esc(fallback)" })
+        const winFallback = await winChord(["ctrl", "esc"])
+        if (winFallback) {
+          log.info("pressed key", { keyName, resolved: "Ctrl+Esc", backend: "win32" })
           return
-        } catch {}
+        }
       }
-      const keys = candidates(keyName, Key as any)
+      if (process.platform === "win32") {
+        const tapped = await winTap(keyName)
+        if (tapped) {
+          log.info("pressed key", { keyName, resolved: resolveName(keyName), backend: "win32" })
+          return
+        }
+      }
+      const mod = await import("@nut-tree-fork/nut-js")
+      const keyMap =
+        "Key" in mod && mod.Key && typeof mod.Key === "object" ? (mod.Key as Record<string, unknown>) : undefined
+      const keys = candidates(keyName, keyMap)
       if (keys.length === 0) {
         log.warn("unknown key, attempting type", { keyName })
-        await keyboard.type(keyName)
+        await mod.keyboard.type(keyName)
         return
       }
       let last: unknown
       for (const key of keys) {
         try {
-          await keyboard.pressKey(key)
-          await keyboard.releaseKey(key)
+          await mod.keyboard.pressKey(key as never)
+          await mod.keyboard.releaseKey(key as never)
           log.info("pressed key", { keyName, resolved: key })
           return
         } catch (e) {
@@ -471,28 +681,43 @@ export namespace Keyboard {
 
   export async function hotkey(...keys: string[]): Promise<void> {
     try {
-      const { keyboard, Key } = await import("@nut-tree-fork/nut-js")
-      const resolved = keys.map((k) => candidates(k, Key as any))
+      if (process.platform === "win32") {
+        const winFallback = await winChord(keys)
+        if (winFallback) {
+          log.info("hotkey", { keys, resolved: keys.map((key) => resolveName(key)), backend: "win32" })
+          return
+        }
+      }
+      const mod = await import("@nut-tree-fork/nut-js")
+      const keyMap =
+        "Key" in mod && mod.Key && typeof mod.Key === "object" ? (mod.Key as Record<string, unknown>) : undefined
+      const resolved = keys.map((key) => candidates(key, keyMap))
       const missing = resolved.findIndex((x) => x.length === 0)
       if (missing >= 0) throw new Error(`Unknown key: ${keys[missing]}`)
-      const plans = resolved.reduce(
-        (acc, cur) => acc.flatMap((prefix) => cur.map((key) => [...prefix, key])),
-        [[] as any[]],
-      )
+      let plans: unknown[][] = [[]]
+      for (const list of resolved) {
+        const next: unknown[][] = []
+        for (const prefix of plans) {
+          for (const key of list) {
+            next.push([...prefix, key])
+          }
+        }
+        plans = next
+      }
       let last: unknown
       for (const plan of plans) {
         try {
           for (const key of plan) {
-            await keyboard.pressKey(key)
+            await mod.keyboard.pressKey(key as never)
           }
           const reverse = [...plan].reverse()
           try {
             for (const key of reverse) {
-              await keyboard.releaseKey(key)
+              await mod.keyboard.releaseKey(key as never)
             }
           } catch (releaseErr) {
             for (const key of reverse) {
-              await keyboard.releaseKey(key).catch(() => {})
+              await mod.keyboard.releaseKey(key as never).catch(() => {})
             }
             throw releaseErr
           }
