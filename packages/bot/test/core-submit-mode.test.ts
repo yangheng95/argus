@@ -331,11 +331,11 @@ describe("bot core submit mode", () => {
   test("does not release on session.status idle when task is non-terminal", async () => {
     const a = adapter()
     const oldFetch = globalThis.fetch
-    globalThis.fetch = ((async () =>
+    globalThis.fetch = (async () =>
       new Response(JSON.stringify({ found: true, status: "running", terminal: false, error: null }), {
         status: 200,
         headers: { "content-type": "application/json" },
-      })) as unknown) as typeof fetch
+      })) as unknown as typeof fetch
 
     try {
       const core = new BotCore() as unknown as {
@@ -426,11 +426,11 @@ describe("bot core submit mode", () => {
   test("releases on session.status idle when task is terminal", async () => {
     const a = adapter()
     const oldFetch = globalThis.fetch
-    globalThis.fetch = ((async () =>
+    globalThis.fetch = (async () =>
       new Response(JSON.stringify({ found: true, status: "completed", terminal: true, error: null }), {
         status: 200,
         headers: { "content-type": "application/json" },
-      })) as unknown) as typeof fetch
+      })) as unknown as typeof fetch
 
     try {
       const core = new BotCore() as unknown as {
