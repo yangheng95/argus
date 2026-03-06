@@ -1,0 +1,103 @@
+{
+  "config": {
+    "rounds": 1,
+    "markersPerRound": 1,
+    "repeatsPerRound": 1,
+    "seed": 20260305,
+    "targetStyle": "big",
+    "minGap": 220,
+    "outputDir": ".opencorvus/bench/gui-targetid/20260305173648830",
+    "saveImages": true,
+    "bindWindowQuery": null,
+    "bindFocused": true,
+    "binding": {
+      "windowId": 461338,
+      "title": "● .env - argus-opencode - Visual Studio Code",
+      "appName": "Visual Studio Code",
+      "width": 2560,
+      "height": 1392
+    }
+  },
+  "model": {
+    "providerID": "alibaba-cn",
+    "modelID": "qwen3.5-plus",
+    "api": "qwen3.5-plus"
+  },
+  "capture": {
+    "windowRate": 100,
+    "monitorRate": 0,
+    "windowRounds": 1,
+    "monitorRounds": 0
+  },
+  "quality": {
+    "totalExpected": 1,
+    "roundsSkipped": 0,
+    "skippedSamples": [],
+    "parseFailureRateRaw": 0,
+    "parseFailureRateSnap": 0,
+    "idExactRate": 0,
+    "rawMissingOrExtraRounds": 0,
+    "snapMissingOrExtraRounds": 0
+  },
+  "raw_coordinate": {
+    "matchedRate": 100,
+    "hitAt5px": 0,
+    "hitAt10px": 0,
+    "hitAt20px": 0,
+    "hitAt40px": 0,
+    "maePx": 45.6508,
+    "p95Px": 45.6508,
+    "p99Px": 45.6508,
+    "stddevPx": 0,
+    "maeLogical": 30.4339,
+    "p95Logical": 30.4339,
+    "repeatDriftMaePx": 0,
+    "repeatDriftP95Px": 0
+  },
+  "target_id_snap": {
+    "matchedRate": 100,
+    "hitAt5px": 0,
+    "hitAt10px": 0,
+    "hitAt20px": 0,
+    "hitAt40px": 0,
+    "maePx": 101.3903,
+    "p95Px": 101.3903,
+    "p99Px": 101.3903,
+    "stddevPx": 0,
+    "maeLogical": 67.5936,
+    "p95Logical": 67.5936,
+    "repeatDriftMaePx": 0,
+    "repeatDriftP95Px": 0
+  },
+  "parseQuality": {
+    "rawFailures": 0,
+    "rawSamples": [],
+    "snapFailures": 0,
+    "snapSamples": []
+  },
+  "idQuality": {
+    "rawRoundsWithMissingOrExtraIDs": 0,
+    "rawSamples": [],
+    "snapRoundsWithMissingOrExtraIDs": 0,
+    "snapSamples": []
+  },
+  "samples": [
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T1",
+      "truth_target_id": "cv_051",
+      "truth_x": 2720,
+      "truth_y": 1834,
+      "pred_target_id": "cv_067",
+      "pred_x": 2760,
+      "pred_y": 1856,
+      "raw_error_px": 45.65084884205331,
+      "raw_error_logical": 30.43389922803554,
+      "snap_error_px": 101.39033484509261,
+      "snap_error_logical": 67.59355656339507,
+      "raw_confidence": 0.95,
+      "snap_confidence": 0.95
+    }
+  ]
+}

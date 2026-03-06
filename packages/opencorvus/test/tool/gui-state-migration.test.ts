@@ -136,6 +136,7 @@ mock.module("../../src/opencorvus/perception/capture", () => ({
 
 mock.module("../../src/opencorvus/perception/overlay", () => ({
   addCoordinateOverlay: async (buf: Buffer) => buf,
+  addClickMarker: async (buf: Buffer) => buf,
 }))
 
 mock.module("../../src/opencorvus/gui/index", () => ({

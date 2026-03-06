@@ -86,6 +86,7 @@ mock.module("../../src/opencorvus/perception/diff", () => ({
 
 mock.module("../../src/opencorvus/perception/overlay", () => ({
   addCoordinateOverlay: async (buf: Buffer) => buf,
+  addClickMarker: async (buf: Buffer) => buf,
 }))
 
 mock.module("../../src/tool/overlay-client", () => ({

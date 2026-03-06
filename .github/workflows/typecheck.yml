@@ -20,5 +20,12 @@ jobs:
       - name: Enforce SDK v2 imports
         run: bun run check:sdk-imports
 
+      - name: Verify generated SDK and OpenAPI
+        run: |
+          bun ./packages/sdk/js/script/build.ts
+          bun --cwd packages/opencorvus dev generate > /tmp/openapi.generated.json
+          diff -u /tmp/openapi.generated.json packages/sdk/openapi.json
+          git diff --exit-code -- packages/sdk/js/src/v2/gen packages/sdk/openapi.json
+
       - name: Run typecheck
         run: bunx turbo run typecheck

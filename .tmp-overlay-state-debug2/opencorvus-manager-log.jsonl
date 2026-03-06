@@ -1,0 +1,3 @@
+{"ts":1772727431,"level":"info","tag":"manager","message":"OpenCorvus manager ready","detail":null}
+{"ts":1772727431,"level":"info","tag":"manager","message":"OpenCorvus started (pid 58044) with: opencorvus serve --hostname=127.0.0.1 --port=7878","detail":null}
+{"ts":1772727431,"level":"info","tag":"manager","message":"channel bot started (pid 58772) cwd=D:\\myhexin-local\\argus-opencode with: bun run --cwd packages/bot --no-env-file --env-file .env src/main.ts","detail":null}

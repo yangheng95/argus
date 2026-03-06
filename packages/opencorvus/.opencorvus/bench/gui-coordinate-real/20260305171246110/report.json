@@ -1,0 +1,128 @@
+{
+  "config": {
+    "rounds": 3,
+    "markersPerRound": 1,
+    "repeatsPerRound": 2,
+    "targetStyle": "click",
+    "seed": 20260305,
+    "margin": 180,
+    "minGap": 240,
+    "totalExpected": 6,
+    "outputDir": ".opencorvus/bench/gui-coordinate-real/20260305171246110",
+    "saveImages": true,
+    "bindWindowQuery": null,
+    "bindFocused": true,
+    "binding": {
+      "windowId": 461338,
+      "title": "● .env - argus-opencode - Visual Studio Code",
+      "appName": "Visual Studio Code",
+      "width": 2560,
+      "height": 1392
+    }
+  },
+  "model": {
+    "providerID": "alibaba-cn",
+    "modelID": "qwen3.5-plus",
+    "api": "qwen3.5-plus"
+  },
+  "capture": {
+    "windowRate": 100,
+    "monitorRate": 0,
+    "windowRounds": 3,
+    "monitorRounds": 0
+  },
+  "correctness": {
+    "matchedRate": 100,
+    "missingRate": 0,
+    "parseFailureRate": 0,
+    "hitAt5px": 0,
+    "hitAt10px": 0,
+    "hitAt20px": 0,
+    "hitAt40px": 0,
+    "maePx": 726.0784,
+    "p95Px": 962.6053,
+    "p99Px": 962.6053,
+    "stddevPx": 245.8098
+  },
+  "stability": {
+    "groupsWithRepeat": 3,
+    "repeatDriftMaePx": 166.667,
+    "repeatDriftP95Px": 500.001
+  },
+  "idQuality": {
+    "roundsWithMissingOrExtraIDs": 0,
+    "samples": []
+  },
+  "parseQuality": {
+    "failures": 0,
+    "samples": []
+  },
+  "samples": [
+    {
+      "round": 1,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 759,
+      "truthY": 569,
+      "predX": 200,
+      "predY": 260,
+      "error": 638.7190305603865,
+      "confidence": 0.99
+    },
+    {
+      "round": 1,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 759,
+      "truthY": 569,
+      "predX": 200,
+      "predY": 260,
+      "error": 638.7190305603865,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 1060,
+      "truthY": 1097,
+      "predX": 288,
+      "predY": 522,
+      "error": 962.6053189132086,
+      "confidence": 0.99
+    },
+    {
+      "round": 2,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 1060,
+      "truthY": 1097,
+      "predX": 288,
+      "predY": 522,
+      "error": 962.6053189132086,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 1,
+      "id": "T1",
+      "truthX": 314,
+      "truthY": 1632,
+      "predX": 88,
+      "predY": 1776,
+      "error": 267.9776110050987,
+      "confidence": 0.99
+    },
+    {
+      "round": 3,
+      "repeat": 2,
+      "id": "T1",
+      "truthX": 314,
+      "truthY": 1632,
+      "predX": 86,
+      "predY": 776,
+      "error": 885.844230099175,
+      "confidence": 0.99
+    }
+  ]
+}

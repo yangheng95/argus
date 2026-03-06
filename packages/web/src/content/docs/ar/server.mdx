@@ -260,7 +260,7 @@ http://<hostname>:<port>/doc
 | `POST`  | `/tui/execute-command`  | تنفيذ أمر (`{ command }`)                  | `boolean`     |
 | `POST`  | `/tui/show-toast`       | عرض toast (`{ title?, message, variant }`) | `boolean`     |
 | `GET`   | `/tui/control/next`     | الانتظار لطلب التحكم التالي                | كائن طلب تحكم |
-| `POST`  | `/tui/control/response` | الاستجابة لطلب تحكم (`{ body }`)           | `boolean`     |
+| `POST`  | `/tui/control/response` | الاستجابة لطلب تحكم (`{ id, body } or { id, error }`)           | `boolean`     |
 
 ---
 

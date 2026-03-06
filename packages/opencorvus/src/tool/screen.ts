@@ -5,9 +5,10 @@ import { Capture } from "../opencorvus/perception/capture"
 import { MonitorManager } from "../opencorvus/perception/monitor"
 import { WindowManager } from "../opencorvus/perception/window"
 import { ScreenDiff } from "../opencorvus/perception/diff"
+import { Coordinates } from "../opencorvus/gui/coordinates"
 import { DesktopState } from "./desktop-state"
 import { GuiState } from "./gui-state"
-import { addCoordinateOverlay } from "../opencorvus/perception/overlay"
+import { addClickMarker, addCoordinateOverlay } from "../opencorvus/perception/overlay"
 import { Log } from "../util/log"
 import { showWindowHighlight } from "./overlay-client"
 import { ScreenshotStore } from "../session/screenshot-store"
@@ -26,6 +27,14 @@ function bool(input: string | undefined) {
 
 function debugCoordinateOverlay() {
   return bool(process.env[SCREEN_DEBUG_COORDINATE_OVERLAY_ENV])
+}
+
+function markerPoint(
+  marker: { x: number; y: number; screenX: number; screenY: number },
+  bounds: Coordinates.WindowBounds | null,
+) {
+  if (!bounds) return { x: marker.screenX, y: marker.screenY }
+  return Coordinates.toRelative(marker.screenX, marker.screenY, bounds)
 }
 
 async function image(buffer: Buffer): Promise<{ mime: string; buffer: Buffer; compressed: boolean }> {
@@ -109,7 +118,7 @@ IMPORTANT workflow:
 2. If target app/window is ambiguous, use list_windows, choose a window_id, then bind_window.
 3. Only if target window cannot be found, use list_monitors + bind_monitor to switch desktop/monitor.
 4. Take a screenshot of the bound target to see current content.
-5. Interact with the app via the input tool, using coordinates from the screenshot.
+5. For precise clicks, run vision_analyze and prefer input.click with target_id; fallback to raw coordinates only when needed.
 6. Take another screenshot to verify the result.
 
 IMPORTANT: After viewing each screenshot, you MUST describe what you see in your text response (visible windows, UI elements, text, key coordinates). Screenshots are automatically removed from context after the current turn - only your text description persists.
@@ -408,6 +417,8 @@ export const ScreenTool = Tool.define("screen", {
           process.platform === "darwin"
             ? "Use Cmd for shortcuts (Cmd+C, Cmd+V, etc.)."
             : "Use Ctrl for shortcuts (Ctrl+C, Ctrl+V, etc.)."
+        const marker = GuiState.peekClickMarker()
+        const verifyPending = GuiState.pendingVerification()
 
         if (isDuplicate) {
           GuiState.recordAction({
@@ -418,9 +429,99 @@ export const ScreenTool = Tool.define("screen", {
             screenshotHashAfter: hash,
             screenChanged: false,
           })
+          if (!marker && !verifyPending) {
+            return {
+              title: `Screenshot unchanged (${result.width}x${result.height})`,
+              output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze - use the previous screenshot as reference. If you are waiting for something to load, prefer screen.screenshot with wait_for_change=true, then retry.`,
+              metadata: {
+                width: result.width,
+                height: result.height,
+                windowBounds: result.windowBounds,
+                unchanged: true,
+                screenshotHash: hash,
+                scope: result.scope,
+                monitor: result.monitor,
+                scaleX: result.windowBounds?.scaleX ?? 1,
+                scaleY: result.windowBounds?.scaleY ?? 1,
+              },
+            }
+          }
+        }
+
+        if (!isDuplicate) {
+          GuiState.recordAction({
+            time: Date.now(),
+            tool: "screen",
+            action: "screenshot",
+            detail: `${result.width}x${result.height}`,
+            screenshotHashAfter: hash,
+            screenChanged: true,
+          })
+        }
+
+        const encoded = SCREEN_COMPRESSION_ENABLED
+          ? await image(result.buffer)
+          : { mime: "image/png", buffer: result.buffer, compressed: false }
+        const debugOverlay = debugCoordinateOverlay()
+        const withGrid = debugOverlay
+          ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
+          : encoded.buffer
+        const point = marker ? markerPoint(marker, result.windowBounds ?? null) : null
+        const clickOverlay = point
+          ? await addClickMarker(withGrid, point.x, point.y, marker?.label ?? undefined)
+              .then((buffer) => ({ buffer, applied: true }))
+              .catch(() => ({ buffer: withGrid, applied: false }))
+          : { buffer: withGrid, applied: false }
+        if (point && clickOverlay.applied) {
+          GuiState.consumeClickMarker()
+        }
+        const verification = verifyPending
+          ? GuiState.resolveVerification({
+              changed: !isDuplicate,
+              marker: clickOverlay.applied,
+              markerPoint: point ? { x: point.x, y: point.y } : null,
+              screenshotHash: hash,
+            })
+          : null
+        if (verification?.action === "click" && marker) {
+          GuiState.clearClickMarker()
+        }
+        const attachment = clickOverlay.buffer
+        const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
+        const screenshotUrl = await ScreenshotStore.save(ctx.sessionID, outputMime, attachment)
+        const overlayInfo = debugOverlay
+          ? ` Debug mode: coordinate ticks are visible on the image (${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1).`
+          : " Shared image has no visible coordinate overlay."
+        const clickInfo = point
+          ? clickOverlay.applied
+            ? ` Last click marker is visible at (${point.x}, ${point.y}).`
+            : " Last click marker could not be rendered."
+          : ""
+        const verifyInfo = verification
+          ? ` Verification for ${verification.action}: ${verification.status.toUpperCase()}. ${verification.detail ?? ""}`
+          : ""
+        const verificationMeta = {
+          verificationAction: verification?.action ?? null,
+          verificationStatus: verification?.status ?? null,
+          verificationDetail: verification?.detail ?? null,
+          verificationExpected: verification?.expectation ?? null,
+          verificationHit: verification?.hit ?? null,
+          verificationDistanceToCenter: verification?.distanceToCenter ?? null,
+          verificationDistanceToBBox: verification?.distanceToBBox ?? null,
+        }
+        const coordinateOverlaySource = debugOverlay ? "tool.screen.addCoordinateOverlay" : "none"
+        const clickMarkerSource = point ? "tool.screen.addClickMarker<-tool.input.setClickMarker" : null
+
+        if (isDuplicate) {
+          const unchangedReason = point
+            ? "an annotated image is attached for click verification."
+            : "a verification screenshot is attached for post-action evaluation."
+          const unchangedTag = point ? " [with click marker]" : verification ? " [verification]" : ""
           return {
-            title: `Screenshot unchanged (${result.width}x${result.height})`,
-            output: `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels). ${coordInfo} Platform: ${platformName}. ${shortcutHint} No need to re-analyze - use the previous screenshot as reference. If you are waiting for something to load, prefer screen.screenshot with wait_for_change=true, then retry.`,
+            title: `Screenshot unchanged (${result.width}x${result.height})${unchangedTag}`,
+            output:
+              `Screen has NOT changed since the last screenshot (${result.width}x${result.height} pixels), but ${unchangedReason} ` +
+              `${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${clickInfo}${verifyInfo}`,
             metadata: {
               width: result.width,
               height: result.height,
@@ -429,33 +530,28 @@ export const ScreenTool = Tool.define("screen", {
               screenshotHash: hash,
               scope: result.scope,
               monitor: result.monitor,
+              compressed: encoded.compressed,
+              attachmentBytes: attachment.length,
+              debugCoordinateOverlay: debugOverlay,
+              coordinateOverlaySource,
+              clickMarker: !!point,
+              clickMarkerApplied: clickOverlay.applied,
+              clickMarkerSource,
+              clickMarkerX: point?.x ?? null,
+              clickMarkerY: point?.y ?? null,
+              ...verificationMeta,
               scaleX: result.windowBounds?.scaleX ?? 1,
               scaleY: result.windowBounds?.scaleY ?? 1,
             },
+            attachments: [
+              {
+                type: "file" as const,
+                mime: outputMime,
+                url: screenshotUrl,
+              },
+            ],
           }
         }
-
-        GuiState.recordAction({
-          time: Date.now(),
-          tool: "screen",
-          action: "screenshot",
-          detail: `${result.width}x${result.height}`,
-          screenshotHashAfter: hash,
-          screenChanged: true,
-        })
-
-        const encoded = SCREEN_COMPRESSION_ENABLED
-          ? await image(result.buffer)
-          : { mime: "image/png", buffer: result.buffer, compressed: false }
-        const debugOverlay = debugCoordinateOverlay()
-        const attachment = debugOverlay
-          ? await addCoordinateOverlay(encoded.buffer).catch(() => encoded.buffer)
-          : encoded.buffer
-        const outputMime = attachment[0] === 0x89 && attachment[1] === 0x50 ? "image/png" : "image/jpeg"
-        const screenshotUrl = await ScreenshotStore.save(ctx.sessionID, outputMime, attachment)
-        const overlayInfo = debugOverlay
-          ? ` Debug mode: coordinate ticks are visible on the image (${SCREEN_DEBUG_COORDINATE_OVERLAY_ENV}=1).`
-          : " Shared image has no visible coordinate overlay."
 
         const rep = GuiState.get().repetition
         if (rep.consecutiveNoChange >= 6) {
@@ -469,7 +565,8 @@ export const ScreenTool = Tool.define("screen", {
               `1. Press Esc to dismiss hidden overlays\n` +
               `2. Use keyboard (Tab, Enter) instead of clicking\n` +
               `3. If multiple windows are competing, use list_windows to find dialogs\n` +
-              `4. Try a completely different UI path`,
+              `4. Try a completely different UI path` +
+              `${verifyInfo ? `\n${verifyInfo}` : ""}`,
             metadata: {
               width: result.width,
               height: result.height,
@@ -482,6 +579,13 @@ export const ScreenTool = Tool.define("screen", {
               compressed: encoded.compressed,
               attachmentBytes: attachment.length,
               debugCoordinateOverlay: debugOverlay,
+              coordinateOverlaySource,
+              clickMarker: !!point,
+              clickMarkerApplied: clickOverlay.applied,
+              clickMarkerSource,
+              clickMarkerX: point?.x ?? null,
+              clickMarkerY: point?.y ?? null,
+              ...verificationMeta,
               scaleX: result.windowBounds?.scaleX ?? 1,
               scaleY: result.windowBounds?.scaleY ?? 1,
             },
@@ -500,7 +604,7 @@ export const ScreenTool = Tool.define("screen", {
           : ""
         return {
           title: `Screenshot captured (${result.width}x${result.height})${foregroundFailed ? " [window not focused]" : ""}`,
-          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${foregroundNote}`,
+          output: `Screenshot captured: ${result.width}x${result.height} pixels. ${coordInfo} Platform: ${platformName}. ${shortcutHint}${overlayInfo}${clickInfo}${verifyInfo}${foregroundNote}`,
           metadata: {
             width: result.width,
             height: result.height,
@@ -512,6 +616,13 @@ export const ScreenTool = Tool.define("screen", {
             compressed: encoded.compressed,
             attachmentBytes: attachment.length,
             debugCoordinateOverlay: debugOverlay,
+            coordinateOverlaySource,
+            clickMarker: !!point,
+            clickMarkerApplied: clickOverlay.applied,
+            clickMarkerSource,
+            clickMarkerX: point?.x ?? null,
+            clickMarkerY: point?.y ?? null,
+            ...verificationMeta,
             scaleX: result.windowBounds?.scaleX ?? 1,
             scaleY: result.windowBounds?.scaleY ?? 1,
           },

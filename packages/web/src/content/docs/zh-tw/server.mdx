@@ -257,7 +257,7 @@ opencorvus 伺服器暴露以下 API。
 | `POST` | `/tui/execute-command`  | 執行指令（`{ command }`）                      | `boolean`    |
 | `POST` | `/tui/show-toast`       | 顯示提示訊息（`{ title?, message, variant }`） | `boolean`    |
 | `GET`  | `/tui/control/next`     | 等待下一個控制請求                             | 控制請求物件 |
-| `POST` | `/tui/control/response` | 回應控制請求（`{ body }`）                     | `boolean`    |
+| `POST` | `/tui/control/response` | 回應控制請求（`{ id, body } or { id, error }`）                     | `boolean`    |
 
 ---
 

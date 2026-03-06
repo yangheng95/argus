@@ -8,11 +8,12 @@ import { WindowManager } from "../opencorvus/perception/window"
 import { Log } from "../util/log"
 import { overlayDiagnostic, requestOverlayConfirm, showOverlay } from "./overlay-client"
 import { Capability } from "../platform/capability"
-import { resolveInputDriver, runInputAction } from "./input-action-engine"
 import { InputPostcondition } from "./input-postcondition"
-import { InputGuard } from "./input-guard"
+import { runInputPipeline } from "./input-pipeline"
+import { InputPreflight } from "./input-preflight"
 
 const log = Log.create({ service: "input" })
+type Target = Exclude<ReturnType<typeof GuiState.findVisionTarget>, null>
 
 function coordinateSpace(): Coordinates.CoordinateSpace {
   const value = process.env.OPENCORVUS_COORDINATE_SPACE?.toLowerCase()
@@ -42,31 +43,76 @@ function focusKey(key: string) {
   )
 }
 
-function capabilityBlock(action: string) {
-  const item = Capability.cachedItem("desktop_input")
-  if (!item || item.state !== "fail") return null
-  const hint = item.hint ? ` Hint: ${item.hint}` : ""
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
+function uniq(input: Array<{ x: number; y: number }>) {
+  const seen = new Set<string>()
+  return input.filter((item) => {
+    const id = `${item.x},${item.y}`
+    if (seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+function points(target: Target) {
+  const center = {
+    x: Math.round(target.x),
+    y: Math.round(target.y),
+  }
+  if (!target.bbox) return [center]
+  const minX = Math.round(target.bbox.x)
+  const minY = Math.round(target.bbox.y)
+  const maxX = Math.round(target.bbox.x + target.bbox.width - 1)
+  const maxY = Math.round(target.bbox.y + target.bbox.height - 1)
+  const insetX = Math.max(2, Math.round(target.bbox.width * 0.2))
+  const insetY = Math.max(2, Math.round(target.bbox.height * 0.2))
+  const left = clamp(minX + insetX, minX, maxX)
+  const right = clamp(maxX - insetX, minX, maxX)
+  const top = clamp(minY + insetY, minY, maxY)
+  const bottom = clamp(maxY - insetY, minY, maxY)
+  return uniq([
+    center,
+    { x: left, y: center.y },
+    { x: right, y: center.y },
+    { x: center.x, y: top },
+    { x: center.x, y: bottom },
+  ])
+}
+
+function recover() {
+  const last = GuiState.lastVerification()
+  if (!last) return null
+  if (last.action !== "click") return null
+  if (last.status === "pass") return null
+  if (!last.coords) return null
   return {
-    title: `Input action unavailable: ${action}`,
-    output: `Cannot run input.${action}: ${item.detail}.${hint}`,
-    metadata: {
-      blocked: true,
-      reason: "desktop_input_unavailable",
-      action,
-      capability: {
-        id: item.id,
-        state: item.state,
-        detail: item.detail,
-        hint: item.hint ?? null,
-      },
-    },
+    x: last.coords.x,
+    y: last.coords.y,
+  }
+}
+
+function choose(list: Array<{ x: number; y: number }>, avoid: { x: number; y: number } | null) {
+  if (!avoid) {
+    return {
+      index: 0,
+      point: list[0],
+    }
+  }
+  const found = list.findIndex((item) => Math.abs(item.x - avoid.x) > 8 || Math.abs(item.y - avoid.y) > 8)
+  const index = found >= 0 ? found : 0
+  return {
+    index,
+    point: list[index],
   }
 }
 
 const DESCRIPTION = `Interact with the desktop environment. Use this tool to click, type text, press keys, scroll, drag, move mouse, wait, and request desktop confirmation.
 
 Actions:
-- click: Click at (x, y) coordinates. Button: "left" (default), "right", "double", "middle".
+- click: Click by target_id (preferred) or by (x, y) coordinates. Button: "left" (default), "right", "double", "middle".
 - type: Type text by pasting from clipboard (more reliable than keystroke simulation).
 - key: Press a key or combination (e.g. "enter", "ctrl+c", "alt+f4", "win", "ctrl+shift+s").
 - scroll: Scroll up or down at the current mouse position.
@@ -95,6 +141,7 @@ IMPORTANT: All coordinate parameters (x, y, startX, startY, endX, endY) must be 
 Best practices:
 - Always take a screenshot BEFORE interacting to see current state.
 - After performing an action, take another screenshot to VERIFY the result.
+- Prefer target_id from vision_analyze over raw coordinates to reduce miss clicks.
 - Click on a text field BEFORE typing to ensure it has focus.
 - Avoid long waits; prefer 10ms wait + screenshot verification loop, or use screen.screenshot wait_for_change.`
 
@@ -119,17 +166,37 @@ const coord = z.preprocess((val) => {
 const DriverMode = z.enum(["auto", "desktop", "playwright", "appium"]).optional()
 const PostMode = z.enum(["none", "bound_window_foreground"]).optional()
 
-const ClickAction = z.object({
-  action: z.literal("click"),
-  x: coord.describe("X coordinate to click"),
-  y: coord.describe("Y coordinate to click"),
-  button: z
-    .enum(["left", "right", "double", "middle"])
-    .default("left")
-    .describe("Mouse button: left, right, double, or middle"),
-  driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
-  post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
-})
+const ClickAction = z
+  .object({
+    action: z.literal("click"),
+    x: coord.optional().describe("X coordinate to click (window-relative). Optional when target_id is provided"),
+    y: coord.optional().describe("Y coordinate to click (window-relative). Optional when target_id is provided"),
+    target_id: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Preferred click target from vision_analyze output, e.g. send_button"),
+    screenshot_hash: z
+      .string()
+      .min(1)
+      .optional()
+      .describe("Screenshot hash used to resolve target_id. Must match the latest anchor screenshot when provided."),
+    button: z
+      .enum(["left", "right", "double", "middle"])
+      .default("left")
+      .describe("Mouse button: left, right, double, or middle"),
+    driver: DriverMode.describe("Optional automation driver override: auto, desktop, playwright, or appium"),
+    post: PostMode.describe("Optional postcondition template. Default for interactive actions: bound_window_foreground"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.target_id) return
+    if (value.x !== undefined && value.y !== undefined) return
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `click requires either "target_id" or both "x" and "y"`,
+      path: ["x"],
+    })
+  })
 
 const TypeAction = z.object({
   action: z.literal("type"),
@@ -222,22 +289,107 @@ export const InputTool = Tool.define("input", {
       input: "none" | "bound_window_foreground" | undefined,
       opt: Parameters<typeof InputPostcondition.resolve>[1] = {},
     ) => InputPostcondition.resolve(input ?? "bound_window_foreground", opt)
+    const verify = (
+      action: string,
+      expectation: "must_change" | "may_change",
+      coords?: { x: number; y: number },
+      detail?: string,
+      target?: {
+        id?: string | null
+        center?: { x: number; y: number } | null
+        bbox?: { x: number; y: number; width: number; height: number } | null
+      },
+    ) => {
+      GuiState.startVerification({
+        action,
+        expectation,
+        coords,
+        detail,
+        target: target
+          ? {
+              id: target.id ?? null,
+              center: target.center ?? null,
+              bbox: target.bbox ?? null,
+            }
+          : null,
+      })
+      return {
+        state: "pending",
+        action,
+        expected: expectation,
+        next: "Take screen.screenshot to verify this action before the next input step.",
+      }
+    }
 
     switch (params.action) {
       case "click": {
-        const driverBlocked = InputGuard.pointerDriverBlock("click", params.driver)
-        if (driverBlocked) return driverBlocked
-        const backendBlocked = capabilityBlock("click")
-        if (backendBlocked) return backendBlocked
-        const anchored = InputGuard.requireBounds("click")
-        if ("title" in anchored) return anchored
-        const binding = await WindowManager.getBinding()
-        const anchorBlocked = InputGuard.ensureWindowAnchor("click", anchored, binding)
-        if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await InputGuard.ensureBoundWindowForeground("click", false, binding)
-        if (windowBlocked) return windowBlocked
-        const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
-        const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
+        const hash = params.screenshot_hash?.trim()
+        const anchorHash = DesktopState.getAnchorHash()
+        if (hash && anchorHash && hash !== anchorHash) {
+          return {
+            title: "Click blocked: stale screenshot hash",
+            output:
+              `Cannot run input.click with screenshot_hash=${hash} because the current anchor is ${anchorHash}. ` +
+              "Take a fresh screenshot (or vision_analyze), then retry with the latest hash.",
+            metadata: {
+              blocked: true,
+              reason: "stale_screenshot_hash",
+              screenshotHash: hash,
+              anchorHash,
+            },
+          }
+        }
+        const lookup = hash ?? anchorHash ?? GuiState.get().lastScreenshotHash ?? undefined
+        if (params.target_id && !lookup) {
+          return {
+            title: "Click blocked: missing screenshot anchor",
+            output:
+              `Cannot resolve target_id "${params.target_id}" without an active screenshot anchor. ` +
+              "Run screen.screenshot or vision_analyze first, then retry.",
+            metadata: {
+              blocked: true,
+              reason: "missing_screenshot_anchor",
+              targetID: params.target_id,
+            },
+          }
+        }
+        const target = params.target_id ? GuiState.findVisionTarget(params.target_id, lookup) : null
+        if (params.target_id && !target) {
+          const ids = GuiState.listVisionTargets(lookup).map((item) => item.id).slice(0, 20)
+          return {
+            title: "Click blocked: target_id not found",
+            output:
+              `Target "${params.target_id}" is not available for screenshot ${lookup ?? "unknown"}. ` +
+              `Known targets: ${ids.length > 0 ? ids.join(", ") : "none"}. Re-run vision_analyze and retry.`,
+            metadata: {
+              blocked: true,
+              reason: "target_id_not_found",
+              targetID: params.target_id,
+              screenshotHash: lookup ?? null,
+              knownTargetIDs: ids,
+            },
+          }
+        }
+        const variants = target ? points(target) : null
+        const pick = variants ? choose(variants, recover()) : null
+        const x = pick ? pick.point.x : params.x
+        const y = pick ? pick.point.y : params.y
+        if (x === undefined || y === undefined) {
+          return {
+            title: "Click blocked: missing coordinates",
+            output: `input.click requires target_id or both x and y.`,
+            metadata: {
+              blocked: true,
+              reason: "missing_click_coordinates",
+            },
+          }
+        }
+        const gate = await InputPreflight.pointer("click", params.driver, { x, y })
+        if (!gate.ok) return gate.block
+        const anchored = gate.value.anchored
+        const binding = gate.value.binding
+        const resolvedSpace = Coordinates.resolveSpace(x, y, anchored, space)
+        const screen = Coordinates.resolveDetailed(x, y, anchored, space)
         const action =
           params.button === "double"
             ? "double"
@@ -246,113 +398,153 @@ export const InputTool = Tool.define("input", {
               : params.button === "middle"
                 ? "middle"
                 : "click"
-        showOverlay(screen.x, screen.y, action, `${params.button ?? "left"} (${params.x},${params.y})`)
         log.info("click-resolve", {
-          windowRelative: `${params.x},${params.y}`,
+          windowRelative: `${x},${y}`,
           screenAbsolute: `${screen.x},${screen.y}`,
           bounds: anchored ? `${anchored.width}x${anchored.height}@${anchored.x},${anchored.y}` : "none",
           coordinateSpaceRequested: space,
           coordinateSpaceResolved: resolvedSpace,
           button: params.button ?? "left",
+          source: target ? "target_id" : "coordinates",
+          targetID: target?.id ?? null,
+          candidateIndex: pick ? pick.index : null,
+          candidateTotal: variants ? variants.length : null,
           clamped: screen.clamped,
         })
         if (screen.clamped) {
           log.warn("click-coordinate-clamped", {
-            requested: `${params.x},${params.y}`,
+            requested: `${x},${y}`,
             clampedTo: `${screen.x},${screen.y}`,
             bounds: `${anchored.width}x${anchored.height}`,
           })
         }
-        const clickResult = await runInputAction({
+        await runInputPipeline({
           id: `input.click.${params.button ?? "left"}`,
+          action: `click.${params.button ?? "left"}`,
           abort: ctx.abort,
-          driver: InputGuard.pointerDriver(params.driver),
+          driver: gate.value.driver,
           post: postcheck(params.post, {
             binding,
             target: DesktopState.getTarget(),
           }),
-          action: async () => {
+          run: async () => {
             if (params.button === "double") return GUI.doubleClick(screen.x, screen.y)
             if (params.button === "right") return GUI.rightClick(screen.x, screen.y)
             if (params.button === "middle") return GUI.middleClick(screen.x, screen.y)
             return GUI.click(screen.x, screen.y)
           },
-        })
-        if (clickResult.tries > 1) {
-          log.warn("input-action-retried", {
-            action: `click.${params.button ?? "left"}`,
-            tries: clickResult.tries,
+          start: {
             x: screen.x,
             y: screen.y,
-          })
-        }
-        showOverlay(screen.x, screen.y, action, "done", "done")
+            action,
+            label: target
+              ? `${params.button ?? "left"} ${target.id}${pick && variants ? ` #${pick.index + 1}/${variants.length}` : ""}`
+              : `${params.button ?? "left"} (${x},${y})`,
+          },
+          done: {
+            x: screen.x,
+            y: screen.y,
+            action,
+            label: "done",
+          },
+          retryMeta: {
+            x: screen.x,
+            y: screen.y,
+          },
+        })
         const coordDetail = anchored
-          ? ` (window-relative: ${params.x},${params.y} → screen: ${screen.x},${screen.y}${screen.clamped ? " [CLAMPED]" : ""})`
+          ? ` (window-relative: ${x},${y} → screen: ${screen.x},${screen.y}${screen.clamped ? " [CLAMPED]" : ""})`
           : ""
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
           action: "click",
-          coords: { x: params.x, y: params.y },
-          detail: params.button ?? "left",
+          coords: { x, y },
+          detail: target ? `${params.button ?? "left"} target=${target.id}` : (params.button ?? "left"),
           screenshotHashAfter: null,
           screenChanged: null,
         })
-        GuiState.updateRepetition(null, { x: params.x, y: params.y })
+        GuiState.updateRepetition(null, { x, y })
+        GuiState.setClickMarker({
+          x,
+          y,
+          screenX: screen.x,
+          screenY: screen.y,
+          label: `${params.button ?? "left"} click`,
+        })
+        const verification = verify(
+          "click",
+          "must_change",
+          { x, y },
+          `${params.button ?? "left"} click`,
+          target
+            ? {
+                id: target.id,
+                center: { x: target.x, y: target.y },
+                bbox: target.bbox,
+              }
+            : undefined,
+        )
+        const title = target ? `Clicked target "${target.id}"` : `Clicked (${x}, ${y})`
+        const output = target
+          ? `${params.button ?? "left"} click on target "${target.id}" at (${x}, ${y})${pick && variants ? ` [candidate ${pick.index + 1}/${variants.length}]` : ""}${coordDetail}`
+          : `${params.button ?? "left"} click at (${x}, ${y})${coordDetail}`
         return {
-          title: `Clicked (${params.x}, ${params.y})`,
-          output: `${params.button ?? "left"} click at (${params.x}, ${params.y})${coordDetail}`,
+          title,
+          output,
           metadata: {
-            x: params.x,
-            y: params.y,
+            x,
+            y,
             screenX: screen.x,
             screenY: screen.y,
             button: params.button,
+            source: target ? "target_id" : "coordinates",
+            targetID: target?.id ?? null,
+            targetDescription: target?.description ?? null,
+            targetConfidence: target?.confidence ?? null,
+            targetCandidateIndex: pick ? pick.index : null,
+            targetCandidateTotal: variants ? variants.length : null,
+            screenshotHash: lookup ?? null,
+            anchorHash,
+            markerProducer: "tool.input.setClickMarker",
             clamped: screen.clamped,
             clampedX: screen.clampedX,
             clampedY: screen.clampedY,
             coordinateSpaceRequested: space,
             coordinateSpace: resolvedSpace,
+            verification,
           },
         }
       }
 
       case "type": {
-        let selected: ReturnType<typeof resolveInputDriver>
-        try {
-          selected = resolveInputDriver(params.driver)
-        } catch (error) {
-          return InputGuard.driverUnavailable("type", params.driver, error)
-        }
-        if (selected === "desktop") {
-          const backendBlocked = capabilityBlock("type")
-          if (backendBlocked) return backendBlocked
-          const windowBlocked = await InputGuard.ensureBoundWindowForeground("type")
-          if (windowBlocked) return windowBlocked
-        }
-        showOverlay(undefined, undefined, "type", params.text.length > 20 ? params.text.slice(0, 20) : params.text)
-        const typeResult = await runInputAction({
+        const gate = await InputPreflight.interactive("type", params.driver)
+        if (!gate.ok) return gate.block
+        await runInputPipeline({
           id: "input.type",
+          action: "type",
           abort: ctx.abort,
           driver: params.driver,
           act: { kind: "type", text: params.text },
           post:
-            selected === "desktop"
+            gate.value.selected === "desktop"
               ? postcheck(params.post, {
                   target: DesktopState.getTarget(),
                 })
               : undefined,
-          action: () => GUI.paste(params.text),
-        })
-        if (typeResult.tries > 1) {
-          log.warn("input-action-retried", {
+          run: () => GUI.paste(params.text),
+          start: {
             action: "type",
-            tries: typeResult.tries,
+            label: params.text.length > 20 ? params.text.slice(0, 20) : params.text,
+          },
+          done: {
+            action: "type",
+            label: `done ${params.text.length} chars`,
+          },
+          retryMeta: {
             length: params.text.length,
-          })
-        }
-        showOverlay(undefined, undefined, "type", `done ${params.text.length} chars`, "done")
+          },
+        })
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -361,30 +553,21 @@ export const InputTool = Tool.define("input", {
           screenshotHashAfter: null,
           screenChanged: null,
         })
+        const verification = verify("type", "must_change", undefined, "typed text")
         return {
           title: "Typed text",
           output: `Typed ${params.text.length} characters via clipboard paste`,
-          metadata: { length: params.text.length },
+          metadata: { length: params.text.length, verification },
         }
       }
 
       case "key": {
-        let selected: ReturnType<typeof resolveInputDriver>
-        try {
-          selected = resolveInputDriver(params.driver)
-        } catch (error) {
-          return InputGuard.driverUnavailable("key", params.driver, error)
-        }
-        if (selected === "desktop") {
-          const backendBlocked = capabilityBlock("key")
-          if (backendBlocked) return backendBlocked
-          const windowBlocked = await InputGuard.ensureBoundWindowForeground("key", focusKey(params.key))
-          if (windowBlocked) return windowBlocked
-        }
-        showOverlay(undefined, undefined, "key", params.key)
+        const gate = await InputPreflight.interactive("key", params.driver, focusKey(params.key))
+        if (!gate.ok) return gate.block
         const parts = params.key.split("+").map((k) => k.trim())
-        const keyResult = await runInputAction({
+        await runInputPipeline({
           id: parts.length > 1 ? "input.key.hotkey" : "input.key.single",
+          action: parts.length > 1 ? "key.hotkey" : "key.single",
           abort: ctx.abort,
           driver: params.driver,
           act: {
@@ -392,24 +575,27 @@ export const InputTool = Tool.define("input", {
             keys: parts,
           },
           post:
-            selected === "desktop"
+            gate.value.selected === "desktop"
               ? postcheck(params.post, {
                   target: DesktopState.getTarget(),
                 })
               : undefined,
-          action: () => {
+          run: () => {
             if (parts.length > 1) return GUI.hotkey(...parts)
             return GUI.pressKey(parts[0])
           },
-        })
-        if (keyResult.tries > 1) {
-          log.warn("input-action-retried", {
-            action: parts.length > 1 ? "key.hotkey" : "key.single",
-            tries: keyResult.tries,
+          start: {
+            action: "key",
+            label: params.key,
+          },
+          done: {
+            action: "key",
+            label: `done ${params.key}`,
+          },
+          retryMeta: {
             key: params.key,
-          })
-        }
-        showOverlay(undefined, undefined, "key", `done ${params.key}`, "done")
+          },
+        })
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -418,29 +604,20 @@ export const InputTool = Tool.define("input", {
           screenshotHashAfter: null,
           screenChanged: null,
         })
+        const verification = verify("key", "may_change", undefined, params.key)
         return {
           title: `Pressed ${params.key}`,
           output: `Pressed key: ${params.key}`,
-          metadata: { key: params.key },
+          metadata: { key: params.key, verification },
         }
       }
 
       case "scroll": {
-        let selected: ReturnType<typeof resolveInputDriver>
-        try {
-          selected = resolveInputDriver(params.driver)
-        } catch (error) {
-          return InputGuard.driverUnavailable("scroll", params.driver, error)
-        }
-        if (selected === "desktop") {
-          const backendBlocked = capabilityBlock("scroll")
-          if (backendBlocked) return backendBlocked
-          const windowBlocked = await InputGuard.ensureBoundWindowForeground("scroll")
-          if (windowBlocked) return windowBlocked
-        }
-        showOverlay(undefined, undefined, "scroll", `${params.direction} ${params.amount}`)
-        const scrollResult = await runInputAction({
+        const gate = await InputPreflight.interactive("scroll", params.driver)
+        if (!gate.ok) return gate.block
+        await runInputPipeline({
           id: "input.scroll",
+          action: "scroll",
           abort: ctx.abort,
           driver: params.driver,
           act: {
@@ -449,22 +626,25 @@ export const InputTool = Tool.define("input", {
             amount: params.amount,
           },
           post:
-            selected === "desktop"
+            gate.value.selected === "desktop"
               ? postcheck(params.post, {
                   target: DesktopState.getTarget(),
                 })
               : undefined,
-          action: () => GUI.scroll(params.direction, params.amount),
-        })
-        if (scrollResult.tries > 1) {
-          log.warn("input-action-retried", {
+          run: () => GUI.scroll(params.direction, params.amount),
+          start: {
             action: "scroll",
-            tries: scrollResult.tries,
+            label: `${params.direction} ${params.amount}`,
+          },
+          done: {
+            action: "scroll",
+            label: `done ${params.direction}`,
+          },
+          retryMeta: {
             direction: params.direction,
             amount: params.amount,
-          })
-        }
-        showOverlay(undefined, undefined, "scroll", `done ${params.direction}`, "done")
+          },
+        })
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -473,50 +653,51 @@ export const InputTool = Tool.define("input", {
           screenshotHashAfter: null,
           screenChanged: null,
         })
+        const verification = verify("scroll", "must_change", undefined, `${params.direction} ${params.amount}`)
         return {
           title: `Scrolled ${params.direction}`,
           output: `Scrolled ${params.direction} by ${params.amount} steps`,
-          metadata: { direction: params.direction, amount: params.amount },
+          metadata: { direction: params.direction, amount: params.amount, verification },
         }
       }
 
       case "drag": {
-        const driverBlocked = InputGuard.pointerDriverBlock("drag", params.driver)
-        if (driverBlocked) return driverBlocked
-        const backendBlocked = capabilityBlock("drag")
-        if (backendBlocked) return backendBlocked
-        const anchored = InputGuard.requireBounds("drag")
-        if ("title" in anchored) return anchored
-        const binding = await WindowManager.getBinding()
-        const anchorBlocked = InputGuard.ensureWindowAnchor("drag", anchored, binding)
-        if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await InputGuard.ensureBoundWindowForeground("drag", false, binding)
-        if (windowBlocked) return windowBlocked
+        const gate = await InputPreflight.pointer("drag", params.driver, { x: params.startX, y: params.startY })
+        if (!gate.ok) return gate.block
+        const anchored = gate.value.anchored
+        const binding = gate.value.binding
         const resolvedSpace = Coordinates.resolveSpace(params.startX, params.startY, anchored, space)
         const start = Coordinates.resolveDetailed(params.startX, params.startY, anchored, space)
         const end = Coordinates.resolveDetailed(params.endX, params.endY, anchored, space)
-        showOverlay(start.x, start.y, "drag", `→(${params.endX},${params.endY})`)
-        const dragResult = await runInputAction({
+        await runInputPipeline({
           id: "input.drag",
+          action: "drag",
           abort: ctx.abort,
-          driver: InputGuard.pointerDriver(params.driver),
+          driver: gate.value.driver,
           post: postcheck(params.post, {
             binding,
             target: DesktopState.getTarget(),
           }),
-          action: () => GUI.drag(start.x, start.y, end.x, end.y),
-        })
-        if (dragResult.tries > 1) {
-          log.warn("input-action-retried", {
+          run: () => GUI.drag(start.x, start.y, end.x, end.y),
+          start: {
+            x: start.x,
+            y: start.y,
             action: "drag",
-            tries: dragResult.tries,
+            label: `→(${params.endX},${params.endY})`,
+          },
+          done: {
+            x: end.x,
+            y: end.y,
+            action: "drag",
+            label: "done",
+          },
+          retryMeta: {
             startX: start.x,
             startY: start.y,
             endX: end.x,
             endY: end.y,
-          })
-        }
-        showOverlay(end.x, end.y, "drag", "done", "done")
+          },
+        })
         const coordDetail = anchored
           ? ` (window-relative: ${params.startX},${params.startY}→${params.endX},${params.endY} | screen: ${start.x},${start.y}→${end.x},${end.y}${start.clamped || end.clamped ? " [CLAMPED]" : ""})`
           : ""
@@ -529,6 +710,7 @@ export const InputTool = Tool.define("input", {
           screenshotHashAfter: null,
           screenChanged: null,
         })
+        const verification = verify("drag", "must_change", { x: params.startX, y: params.startY }, "drag interaction")
         return {
           title: `Dragged (${params.startX},${params.startY}) → (${params.endX},${params.endY})`,
           output: `Dragged from (${params.startX},${params.startY}) to (${params.endX},${params.endY})${coordDetail}`,
@@ -545,44 +727,45 @@ export const InputTool = Tool.define("input", {
             clampedEnd: end.clamped,
             coordinateSpaceRequested: space,
             coordinateSpace: resolvedSpace,
+            verification,
           },
         }
       }
 
       case "move": {
-        const driverBlocked = InputGuard.pointerDriverBlock("move", params.driver)
-        if (driverBlocked) return driverBlocked
-        const backendBlocked = capabilityBlock("move")
-        if (backendBlocked) return backendBlocked
-        const anchored = InputGuard.requireBounds("move")
-        if ("title" in anchored) return anchored
-        const binding = await WindowManager.getBinding()
-        const anchorBlocked = InputGuard.ensureWindowAnchor("move", anchored, binding)
-        if (anchorBlocked) return anchorBlocked
-        const windowBlocked = await InputGuard.ensureBoundWindowForeground("move", false, binding)
-        if (windowBlocked) return windowBlocked
+        const gate = await InputPreflight.pointer("move", params.driver, { x: params.x, y: params.y })
+        if (!gate.ok) return gate.block
+        const anchored = gate.value.anchored
+        const binding = gate.value.binding
         const resolvedSpace = Coordinates.resolveSpace(params.x, params.y, anchored, space)
         const screen = Coordinates.resolveDetailed(params.x, params.y, anchored, space)
-        showOverlay(screen.x, screen.y, "move", `(${params.x},${params.y})`)
-        const moveResult = await runInputAction({
+        await runInputPipeline({
           id: "input.move",
+          action: "move",
           abort: ctx.abort,
-          driver: InputGuard.pointerDriver(params.driver),
+          driver: gate.value.driver,
           post: postcheck(params.post, {
             binding,
             target: DesktopState.getTarget(),
           }),
-          action: () => GUI.moveTo(screen.x, screen.y),
-        })
-        if (moveResult.tries > 1) {
-          log.warn("input-action-retried", {
-            action: "move",
-            tries: moveResult.tries,
+          run: () => GUI.moveTo(screen.x, screen.y),
+          start: {
             x: screen.x,
             y: screen.y,
-          })
-        }
-        showOverlay(screen.x, screen.y, "move", "done", "done")
+            action: "move",
+            label: `(${params.x},${params.y})`,
+          },
+          done: {
+            x: screen.x,
+            y: screen.y,
+            action: "move",
+            label: "done",
+          },
+          retryMeta: {
+            x: screen.x,
+            y: screen.y,
+          },
+        })
         GuiState.recordAction({
           time: Date.now(),
           tool: "input",
@@ -592,6 +775,7 @@ export const InputTool = Tool.define("input", {
           screenshotHashAfter: null,
           screenChanged: null,
         })
+        const verification = verify("move", "may_change", { x: params.x, y: params.y }, "mouse move")
         return {
           title: `Moved to (${params.x}, ${params.y})`,
           output: `Mouse moved to (${params.x}, ${params.y})${screen.clamped ? " [CLAMPED]" : ""}`,
@@ -605,6 +789,7 @@ export const InputTool = Tool.define("input", {
             clampedY: screen.clampedY,
             coordinateSpaceRequested: space,
             coordinateSpace: resolvedSpace,
+            verification,
           },
         }
       }

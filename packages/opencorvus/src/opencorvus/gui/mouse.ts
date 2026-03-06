@@ -33,15 +33,26 @@ export namespace Mouse {
   async function winMove(x: number, y: number) {
     const api = await win32()
     if (!api) return false
-    const ok = api.symbols.SetCursorPos(x, y)
-    if (ok === 0) throw new Error(`SetCursorPos failed (${x},${y})`)
+    const set = api.symbols.SetCursorPos as unknown as (x: number, y: number) => number
+    const ok = set(x, y)
+    if (ok === 0) {
+      log.warn("win32 SetCursorPos failed; falling back to nut-js", { x, y })
+      return false
+    }
     return true
   }
 
   async function winMouse(flags: number, data = 0) {
     const api = await win32()
     if (!api) return false
-    api.symbols.mouse_event(flags, 0, 0, data, 0)
+    const send = api.symbols.mouse_event as unknown as (
+      flags: number,
+      dx: number,
+      dy: number,
+      data: number,
+      extra: number,
+    ) => void
+    send(flags, 0, 0, data, 0)
     return true
   }
 

@@ -50,4 +50,21 @@ describe("tui.runtime.submitTask", () => {
       },
     })
   })
+
+  test("rejects proxy path traversal outside /tui namespace", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await TuiRuntime.start({
+          mode: "connect",
+          url: "http://127.0.0.1:65535",
+        })
+        await expect(TuiRuntime.proxy({ path: "/tui/../../auth", body: {} })).rejects.toThrow(
+          "proxy path must stay within /tui/",
+        )
+        await TuiRuntime.stop()
+      },
+    })
+  })
 })

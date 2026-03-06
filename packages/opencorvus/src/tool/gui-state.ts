@@ -20,9 +20,68 @@ export interface ScreenshotRecord {
   seenCount: number
 }
 
+export interface ClickMarker {
+  x: number
+  y: number
+  screenX: number
+  screenY: number
+  label: string | null
+  time: number
+  step: number
+}
+
+export type VerificationStatus = "pending" | "pass" | "fail" | "uncertain"
+export type VerificationExpectation = "must_change" | "may_change"
+
+export interface VerificationTarget {
+  id: string | null
+  center: { x: number; y: number } | null
+  bbox: { x: number; y: number; width: number; height: number } | null
+}
+
+export interface VerificationRecord {
+  action: string
+  status: VerificationStatus
+  expectation: VerificationExpectation
+  detail: string | null
+  coords: { x: number; y: number } | null
+  target: VerificationTarget | null
+  hit: boolean | null
+  distanceToCenter: number | null
+  distanceToBBox: number | null
+  screenshotHash: string | null
+  time: number
+  step: number
+}
+
+export interface VerificationGate {
+  reason: "verification_pending" | "verification_recovery_required"
+  action: string
+  status: VerificationStatus
+  detail: string | null
+  coords: { x: number; y: number } | null
+  step: number
+}
+
+export interface VisionTarget {
+  id: string
+  description: string
+  type: string
+  x: number
+  y: number
+  confidence: number | null
+  bbox: { x: number; y: number; width: number; height: number } | null
+  screenshotHash: string
+  step: number
+}
+
 interface GuiSessionState {
   actions: ActionRecord[]
   screenshots: Map<string, ScreenshotRecord>
+  visionTargets: Map<string, { hash: string; step: number; items: VisionTarget[] }>
+  clickMarker: ClickMarker | null
+  verificationPending: VerificationRecord | null
+  verificationLast: VerificationRecord | null
   currentStep: number
   taskEpoch: number
   lastScreenshotHash: string | null
@@ -37,11 +96,68 @@ interface GuiSessionState {
 const MAX_ACTIONS = 60
 const MAX_SCREENSHOTS = 30
 const MAX_CLICK_COORDS = 20
+const MAX_VISION_TARGET_GROUPS = 30
+
+function round(value: number) {
+  return Number(value.toFixed(2))
+}
+
+function dist(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return round(Math.hypot(a.x - b.x, a.y - b.y))
+}
+
+function toBoxDistance(point: { x: number; y: number }, box: { x: number; y: number; width: number; height: number }) {
+  const minX = box.x
+  const minY = box.y
+  const maxX = box.x + box.width - 1
+  const maxY = box.y + box.height - 1
+  const dx = point.x < minX ? minX - point.x : point.x > maxX ? point.x - maxX : 0
+  const dy = point.y < minY ? minY - point.y : point.y > maxY ? point.y - maxY : 0
+  return round(Math.hypot(dx, dy))
+}
+
+function hit(
+  target: VerificationTarget | null,
+  point: { x: number; y: number } | null | undefined,
+): { hit: boolean | null; distanceToCenter: number | null; distanceToBBox: number | null } {
+  if (!target || !point) {
+    return {
+      hit: null,
+      distanceToCenter: null,
+      distanceToBBox: null,
+    }
+  }
+  const distanceToCenter = target.center ? dist(point, target.center) : null
+  if (target.bbox) {
+    const distanceToBBox = toBoxDistance(point, target.bbox)
+    return {
+      hit: distanceToBBox <= 0,
+      distanceToCenter,
+      distanceToBBox,
+    }
+  }
+  if (distanceToCenter !== null) {
+    return {
+      hit: distanceToCenter <= 8,
+      distanceToCenter,
+      distanceToBBox: null,
+    }
+  }
+  return {
+    hit: null,
+    distanceToCenter: null,
+    distanceToBBox: null,
+  }
+}
 
 const guiState = Instance.state(
   (): GuiSessionState => ({
     actions: [],
     screenshots: new Map(),
+    visionTargets: new Map(),
+    clickMarker: null,
+    verificationPending: null,
+    verificationLast: null,
     currentStep: 0,
     taskEpoch: 0,
     lastScreenshotHash: null,
@@ -70,6 +186,10 @@ export namespace GuiState {
     if (!s.isGuiSession) return
     s.taskEpoch++
     s.currentStep = 0
+    s.clickMarker = null
+    s.verificationPending = null
+    s.verificationLast = null
+    s.visionTargets.clear()
   }
 
   export function activate(): void {
@@ -116,12 +236,72 @@ export namespace GuiState {
         const entries = Array.from(s.screenshots.entries())
         entries.sort((a, b) => a[1].step - b[1].step)
         while (s.screenshots.size > MAX_SCREENSHOTS) {
-          s.screenshots.delete(entries.shift()![0])
+          const removed = entries.shift()
+          if (!removed) break
+          s.screenshots.delete(removed[0])
+          s.visionTargets.delete(removed[0])
         }
       }
     }
 
     s.lastScreenshotHash = hash
+  }
+
+  export function recordVisionTargets(
+    hash: string,
+    targets: Array<Omit<VisionTarget, "screenshotHash" | "step">>,
+  ): VisionTarget[] {
+    const s = guiState()
+    if (!s.isGuiSession) return []
+    const items = targets.map((target) => ({
+      ...target,
+      screenshotHash: hash,
+      step: s.currentStep,
+    }))
+    s.visionTargets.set(hash, {
+      hash,
+      step: s.currentStep,
+      items,
+    })
+    if (s.visionTargets.size > MAX_VISION_TARGET_GROUPS) {
+      const list = Array.from(s.visionTargets.entries()).sort((a, b) => a[1].step - b[1].step)
+      while (s.visionTargets.size > MAX_VISION_TARGET_GROUPS) {
+        const removed = list.shift()
+        if (!removed) break
+        s.visionTargets.delete(removed[0])
+      }
+    }
+    return items
+  }
+
+  export function listVisionTargets(hash?: string): VisionTarget[] {
+    const s = guiState()
+    if (!s.isGuiSession) return []
+    const key = hash ?? s.lastScreenshotHash
+    if (key) {
+      const exact = s.visionTargets.get(key)
+      if (exact) return exact.items
+    }
+    const latest = Array.from(s.visionTargets.values()).sort((a, b) => b.step - a.step)[0]
+    if (!latest) return []
+    return latest.items
+  }
+
+  export function findVisionTarget(id: string, hash?: string): VisionTarget | null {
+    const s = guiState()
+    if (!s.isGuiSession) return null
+    const key = hash ?? s.lastScreenshotHash
+    if (key) {
+      const exact = s.visionTargets.get(key)
+      if (!exact) return null
+      return exact.items.find((item) => item.id === id) ?? null
+    }
+    const list = Array.from(s.visionTargets.values()).sort((a, b) => b.step - a.step)
+    for (const item of list) {
+      const found = item.items.find((target) => target.id === id)
+      if (found) return found
+    }
+    return null
   }
 
   export function captureDescription(hash: string, text: string): void {
@@ -138,6 +318,199 @@ export namespace GuiState {
 
   export function getDescription(hash: string): string | null {
     return guiState().screenshots.get(hash)?.description ?? null
+  }
+
+  export function setClickMarker(input: { x: number; y: number; screenX?: number; screenY?: number; label?: string }): void {
+    const s = guiState()
+    if (!s.isGuiSession) return
+    s.clickMarker = {
+      x: input.x,
+      y: input.y,
+      screenX: input.screenX ?? input.x,
+      screenY: input.screenY ?? input.y,
+      label: input.label ?? null,
+      time: Date.now(),
+      step: s.currentStep,
+    }
+  }
+
+  export function peekClickMarker(): ClickMarker | null {
+    return guiState().clickMarker
+  }
+
+  export function consumeClickMarker(): ClickMarker | null {
+    const s = guiState()
+    const marker = s.clickMarker
+    s.clickMarker = null
+    return marker
+  }
+
+  export function clearClickMarker(): void {
+    guiState().clickMarker = null
+  }
+
+  export function startVerification(input: {
+    action: string
+    expectation: VerificationExpectation
+    coords?: { x: number; y: number }
+    detail?: string
+    target?: VerificationTarget | null
+  }): void {
+    const s = guiState()
+    if (!s.isGuiSession) return
+    s.verificationPending = {
+      action: input.action,
+      status: "pending",
+      expectation: input.expectation,
+      detail: input.detail ?? null,
+      coords: input.coords ? { x: input.coords.x, y: input.coords.y } : null,
+      target: input.target ?? null,
+      hit: null,
+      distanceToCenter: null,
+      distanceToBBox: null,
+      screenshotHash: null,
+      time: Date.now(),
+      step: s.currentStep,
+    }
+  }
+
+  export function pendingVerification(): VerificationRecord | null {
+    return guiState().verificationPending
+  }
+
+  export function lastVerification(): VerificationRecord | null {
+    return guiState().verificationLast
+  }
+
+  export function resolveVerification(input: {
+    changed: boolean
+    marker: boolean
+    markerPoint?: { x: number; y: number } | null
+    screenshotHash: string
+  }): VerificationRecord | null {
+    const s = guiState()
+    const pending = s.verificationPending
+    if (!pending) return null
+
+    const computed = hit(pending.target, input.markerPoint ?? null)
+    const miss = computed.hit === false
+    const status =
+      pending.expectation === "must_change"
+        ? input.changed
+          ? miss
+            ? "fail"
+            : "pass"
+          : input.marker
+            ? miss
+              ? "fail"
+              : "uncertain"
+            : "fail"
+        : input.changed
+          ? miss
+            ? "fail"
+            : "pass"
+          : input.marker
+            ? miss
+              ? "fail"
+              : "uncertain"
+            : "uncertain"
+    const detail =
+      status === "pass"
+        ? computed.hit === true
+          ? "Observed expected screen progression and marker hit target."
+          : "Observed expected screen progression."
+        : status === "fail" && miss
+          ? [
+              "Marker missed the intended target.",
+              computed.distanceToBBox !== null ? `distance_to_bbox=${computed.distanceToBBox}px` : null,
+              computed.distanceToCenter !== null ? `distance_to_center=${computed.distanceToCenter}px` : null,
+            ]
+              .filter(Boolean)
+              .join(" ")
+        : status === "uncertain"
+          ? computed.hit === true
+            ? "Marker hit target, but no clear screen change detected."
+            : "No clear screen change detected; marker/visual evidence is inconclusive."
+          : "Screen did not change after action; previous strategy likely failed."
+    const resolved: VerificationRecord = {
+      ...pending,
+      status,
+      detail,
+      hit: computed.hit,
+      distanceToCenter: computed.distanceToCenter,
+      distanceToBBox: computed.distanceToBBox,
+      screenshotHash: input.screenshotHash,
+      time: Date.now(),
+      step: s.currentStep,
+    }
+    s.verificationPending = null
+    s.verificationLast = resolved
+    return resolved
+  }
+
+  export function clearVerification(): void {
+    const s = guiState()
+    s.verificationPending = null
+    s.verificationLast = null
+  }
+
+  export function verificationGate(action: string, coords?: { x: number; y: number }): VerificationGate | null {
+    const s = guiState()
+    if (!s.isGuiSession) return null
+
+    if (s.verificationPending) {
+      return {
+        reason: "verification_pending",
+        action: s.verificationPending.action,
+        status: s.verificationPending.status,
+        detail: s.verificationPending.detail,
+        coords: s.verificationPending.coords,
+        step: s.verificationPending.step,
+      }
+    }
+
+    const last = s.verificationLast
+    if (!last || last.status === "pass") return null
+    if (last.action !== action) return null
+    if (last.coords && coords) {
+      const near = Math.abs(last.coords.x - coords.x) <= 8 && Math.abs(last.coords.y - coords.y) <= 8
+      if (!near) return null
+    }
+    if (last.coords && !coords) return null
+
+    return {
+      reason: "verification_recovery_required",
+      action: last.action,
+      status: last.status,
+      detail: last.detail,
+      coords: last.coords,
+      step: last.step,
+    }
+  }
+
+  export function verificationAlert(): string | null {
+    const s = guiState()
+    if (!s.isGuiSession) return null
+
+    if (s.verificationPending) {
+      const pending = s.verificationPending
+      return [
+        "<gui-verification-alert>",
+        `VERIFY REQUIRED: Previous action "${pending.action}" at step ${pending.step} has not been verified.`,
+        "Take screen.screenshot before any further input action.",
+        "</gui-verification-alert>",
+      ].join("\n")
+    }
+
+    const last = s.verificationLast
+    if (!last || last.status === "pass") return null
+    return [
+      "<gui-verification-alert>",
+      `RECOVERY REQUIRED: Last "${last.action}" verification is ${last.status.toUpperCase()}.`,
+      last.detail ?? "Previous strategy did not verify cleanly.",
+      "Do NOT repeat the same action/coordinates. Choose a different recovery path.",
+      "</gui-verification-alert>",
+    ].join("\n")
   }
 
   export function updateRepetition(screenChanged: boolean | null, coords?: { x: number; y: number }): void {

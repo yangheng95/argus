@@ -255,7 +255,7 @@ OpenCorvus サーバーは次の API を公開します。
 | `POST`   | `/tui/execute-command`  | コマンドを実行する (`{ command }`)              | void                       |
 | `POST`   | `/tui/show-toast`       | トーストを表示 (`{ title?, message, variant }`) | void                       |
 | `GET`    | `/tui/control/next`     | 次の制御リクエストを待ちます                    | 制御リクエストオブジェクト |
-| `POST`   | `/tui/control/response` | 制御リクエストに応答する (`{ body }`)           | void                       |
+| `POST`   | `/tui/control/response` | 制御リクエストに応答する (`{ id, body } or { id, error }`)           | void                       |
 
 ---
 

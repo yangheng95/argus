@@ -258,7 +258,7 @@ opencorvus sunucusu aşağıdaki API'leri sunar.
 | `POST` | `/tui/execute-command`  | Bir komut çalıştır (`{ command }`)                      | `boolean`              |
 | `POST` | `/tui/show-toast`       | Toast bildirimi göster (`{ title?, message, variant }`) | `boolean`              |
 | `GET`  | `/tui/control/next`     | Bir sonraki kontrol isteğini bekle                      | Kontrol isteği nesnesi |
-| `POST` | `/tui/control/response` | Bir kontrol isteğine yanıt ver (`{ body }`)             | `boolean`              |
+| `POST` | `/tui/control/response` | Bir kontrol isteğine yanıt ver (`{ id, body } or { id, error }`)             | `boolean`              |
 
 ---
 

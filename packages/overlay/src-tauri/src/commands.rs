@@ -1,7 +1,8 @@
 use tauri::{AppHandle, State, WebviewWindow};
 
 use crate::manager::{
-    self, ChannelEnvApply, ManagerConfig, ManagerSnapshot, McpQuickConfig, SendAck, SessionListItem, Shared,
+    self, ChannelEnvApply, ManagerConfig, ManagerSnapshot, McpQuickConfig, SendAck,
+    SessionListItem, Shared,
 };
 use crate::overlay;
 
@@ -152,7 +153,9 @@ pub async fn manager_export_session_html(
     session_id: String,
 ) -> Result<String, String> {
     let shared = state.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || manager::export_session_html(&shared, &app, session_id))
-        .await
-        .map_err(|error| format!("manager_export_session_html task failed: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        manager::export_session_html(&shared, &app, session_id)
+    })
+    .await
+    .map_err(|error| format!("manager_export_session_html task failed: {error}"))?
 }

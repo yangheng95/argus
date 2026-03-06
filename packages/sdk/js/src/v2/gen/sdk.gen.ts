@@ -3606,7 +3606,9 @@ export class Control extends HeyApiClient {
   public response<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
+      id?: string
       body?: unknown
+      error?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3616,7 +3618,9 @@ export class Control extends HeyApiClient {
         {
           args: [
             { in: "query", key: "directory" },
-            { key: "body", map: "body" },
+            { in: "body", key: "id" },
+            { in: "body", key: "body" },
+            { in: "body", key: "error" },
           ],
         },
       ],

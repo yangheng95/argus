@@ -240,7 +240,71 @@ export async function addClickMarker(imageBuffer: Buffer, x: number, y: number, 
   return pipeline.png().toBuffer()
 }
 
+function escapeLabel(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;")
+}
+
+export async function addCandidateOverlay(
+  imageBuffer: Buffer,
+  candidates: Array<{
+    id: string
+    bbox: { x: number; y: number; width: number; height: number }
+    score?: number
+  }>,
+  opts?: { limit?: number },
+): Promise<Buffer> {
+  if (candidates.length === 0) return imageBuffer
+  const sharp = await import("sharp").then((m) => m.default)
+  const meta = await sharp(imageBuffer).metadata()
+  const width = meta.width!
+  const height = meta.height!
+  const maxDim = Math.max(width, height)
+  const isHighDpi = maxDim > 2500
+  const fontSize = isHighDpi ? 13 : 10
+  const charW = isHighDpi ? 8 : 6
+  const boxH = fontSize + 6
+  const stroke = isHighDpi ? 2 : 1.5
+  const cap = Math.max(1, opts?.limit ?? 60)
+  const items = candidates.slice(0, cap)
+  const svg: string[] = []
+
+  for (const item of items) {
+    const x = Math.max(0, Math.min(width - 1, Math.round(item.bbox.x)))
+    const y = Math.max(0, Math.min(height - 1, Math.round(item.bbox.y)))
+    const w = Math.max(1, Math.min(width - x, Math.round(item.bbox.width)))
+    const h = Math.max(1, Math.min(height - y, Math.round(item.bbox.height)))
+    const score = Number.isFinite(item.score) ? Math.max(0, Math.min(1, item.score!)) : 0
+    const hue = Math.round(180 - score * 120)
+    const strokeColor = `hsla(${hue}, 95%, 55%, 0.95)`
+    const fillColor = `hsla(${hue}, 95%, 50%, 0.06)`
+    const text = escapeLabel(item.id)
+    const labelW = text.length * charW + 8
+    const labelX = Math.max(0, Math.min(width - labelW - 1, x))
+    const labelY = y > boxH + 2 ? y - boxH - 2 : Math.min(height - boxH - 1, y + 2)
+    svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${stroke}" rx="2"/>`)
+    svg.push(`<rect x="${labelX}" y="${labelY}" width="${labelW}" height="${boxH}" fill="rgba(0,0,0,0.68)" stroke="${strokeColor}" stroke-width="${stroke}" rx="3"/>`)
+    svg.push(
+      `<text x="${labelX + 4}" y="${labelY + fontSize}" font-size="${fontSize}" fill="rgba(255,255,255,0.95)" font-family="monospace">${text}</text>`,
+    )
+  }
+
+  const input = Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${svg.join("")}</svg>`,
+  )
+  const pipeline = sharp(imageBuffer).composite([{ input, top: 0, left: 0 }])
+  if (meta.format === "jpeg" || meta.format === "jpg") {
+    return pipeline.jpeg({ quality: 95, mozjpeg: false, chromaSubsampling: "4:4:4" }).toBuffer()
+  }
+  return pipeline.png().toBuffer()
+}
+
 export const Overlay = {
   add: addCoordinateOverlay,
   addClickMarker,
+  addCandidates: addCandidateOverlay,
 }
