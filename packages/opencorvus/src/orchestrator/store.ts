@@ -152,6 +152,18 @@ export function findRuns(taskID: string) {
   )
 }
 
+export function listProjectTasks(projectID: string, limit = 50) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorTaskTable)
+      .where(eq(OrchestratorTaskTable.project_id, projectID))
+      .orderBy(desc(OrchestratorTaskTable.time_updated))
+      .limit(limit)
+      .all(),
+  )
+}
+
 export function listInteractions(taskID: string) {
   return Database.use((db) =>
     db

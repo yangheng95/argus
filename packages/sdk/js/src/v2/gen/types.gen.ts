@@ -4695,6 +4695,26 @@ export type TaskCreateData = {
       test?: Array<string>
       lint?: Array<string>
       verify_cmd?: Array<string>
+      artifact?: {
+        require_changed_files?: boolean
+        min_changed_files?: number
+        require_diff?: boolean
+        require_summary?: boolean
+        mode?: "soft" | "strict"
+      }
+      visual?: {
+        target: "web"
+        url: string
+        require_text?: Array<string>
+        require_title?: string
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      judge?: {
+        enabled?: boolean
+        prompt?: string
+        mode?: "soft" | "strict"
+      }
       timeout_ms?: number
     }
     goals?: Array<{

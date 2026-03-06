@@ -3,7 +3,11 @@ import { generateObject } from "ai"
 import { Identifier } from "@/id/id"
 import { Memory } from "@/memory"
 import { Provider } from "@/provider/provider"
+import { Snapshot } from "@/snapshot"
 import {
+  OrchestratorArtifactTable,
+  OrchestratorDeliveryTable,
+  OrchestratorEvaluationTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
   OrchestratorPlanVersionTable,
@@ -11,6 +15,7 @@ import {
   OrchestratorRunTable,
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
+import { EvaluationCheck } from "@/orchestrator/model"
 import { Database, eq } from "@/storage/db"
 import { WorkbenchBriefSnapshotTable, WorkbenchPreferenceTable, WorkbenchTaskNoteTable } from "./workbench.sql"
 
@@ -329,6 +334,46 @@ export namespace WorkbenchService {
       }),
     })
     const notes = taskNotes(task.id, 12)
+    const delivery = run
+      ? Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorDeliveryTable)
+            .where(eq(OrchestratorDeliveryTable.run_id, run.id))
+            .orderBy(OrchestratorDeliveryTable.time_created)
+            .all()
+            .at(-1),
+        )
+      : undefined
+    const evaluation = run
+      ? Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorEvaluationTable)
+            .where(eq(OrchestratorEvaluationTable.run_id, run.id))
+            .orderBy(OrchestratorEvaluationTable.time_created)
+            .all()
+            .at(-1),
+        )
+      : undefined
+    const artifacts = run
+      ? Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorArtifactTable)
+            .where(eq(OrchestratorArtifactTable.run_id, run.id))
+            .orderBy(OrchestratorArtifactTable.time_created)
+            .all(),
+        )
+      : []
+    const snapshots = Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorProgressSnapshotTable)
+        .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
+        .orderBy(OrchestratorProgressSnapshotTable.time_created)
+        .all(),
+    )
 
     return {
       task: {
@@ -403,6 +448,95 @@ export namespace WorkbenchService {
             },
           }
         : undefined,
+      delivery: delivery
+        ? {
+            id: delivery.id,
+            taskID: delivery.task_id,
+            runID: delivery.run_id,
+            status: "ready" as const,
+            summary: delivery.summary,
+            result: {
+              summary: String(delivery.result?.summary ?? delivery.summary),
+              changedFiles: Array.isArray(delivery.result?.changed_files)
+                ? delivery.result.changed_files.filter((item): item is string => typeof item === "string")
+                : [],
+              diffs: Array.isArray(delivery.result?.diffs)
+                ? delivery.result.diffs.flatMap((item) => {
+                    const parsed = Snapshot.FileDiff.safeParse(item)
+                    return parsed.success ? [parsed.data] : []
+                  })
+                : [],
+            },
+            time: {
+              created: delivery.time_created,
+              updated: delivery.time_updated,
+            },
+          }
+        : undefined,
+      evaluation: evaluation
+        ? {
+            id: evaluation.id,
+            taskID: evaluation.task_id,
+            runID: evaluation.run_id,
+            deliveryID: evaluation.delivery_id ?? undefined,
+            status: evaluation.status,
+            verdict: evaluation.verdict,
+            summary: evaluation.summary,
+            checks: Array.isArray(evaluation.checks)
+              ? evaluation.checks.flatMap((item) => {
+                  const parsed = EvaluationCheck.safeParse(item)
+                  return parsed.success ? [parsed.data] : []
+                })
+              : [],
+            time: {
+              created: evaluation.time_created,
+              updated: evaluation.time_updated,
+              completed: evaluation.time_completed ?? undefined,
+            },
+          }
+        : undefined,
+      interactions: interactions.map((item) => ({
+        id: item.id,
+        taskID: item.task_id,
+        runID: item.run_id,
+        sessionID: item.session_id ?? undefined,
+        externalID: item.external_id,
+        type: item.request_type,
+        status: item.status,
+        title: item.title,
+        body: item.body,
+        payload: item.payload ?? undefined,
+        response: item.response ?? undefined,
+        time: {
+          created: item.time_created,
+          updated: item.time_updated,
+          resolved: item.time_resolved ?? undefined,
+        },
+      })),
+      artifacts: artifacts.map((item) => ({
+        id: item.id,
+        taskID: item.task_id,
+        runID: item.run_id,
+        deliveryID: item.delivery_id ?? undefined,
+        kind: item.kind,
+        label: item.label,
+        payload: item.payload ?? undefined,
+        time: {
+          created: item.time_created,
+          updated: item.time_updated,
+        },
+      })),
+      snapshots: snapshots.map((item) => ({
+        id: item.id,
+        taskID: item.task_id,
+        status: item.status,
+        summary: item.summary,
+        payload: item.payload ?? undefined,
+        time: {
+          created: item.time_created,
+          updated: item.time_updated,
+        },
+      })),
       brief: {
         content: brief.content,
         updated_at: snapshot?.time_created ?? Date.now(),

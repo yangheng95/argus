@@ -10,6 +10,7 @@ import {
   Evaluation,
   Interaction,
   Progress,
+  ProjectBoard,
   RejectInteractionInput,
   ReplyInteractionInput,
   Run,
@@ -53,6 +54,26 @@ export const OrchestratorRoutes = lazy(() =>
           requestID: input.requestID ?? requestID,
         })
         return c.json({ task_id: taskID }, 202)
+      },
+    )
+    .get(
+      "/tasks",
+      describeRoute({
+        summary: "List project tasks",
+        operationId: "task.list",
+        responses: {
+          200: {
+            description: "Project task board",
+            content: {
+              "application/json": {
+                schema: resolver(ProjectBoard),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        return c.json(await OrchestratorService.getProjectBoard())
       },
     )
     .get(

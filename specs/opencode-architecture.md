@@ -1,271 +1,227 @@
 # OpenCorvus Headless Orchestration Architecture
 
-## Review Outcome
+## Intent
 
-The earlier draft was directionally correct but not complete enough to act as the V1 architecture baseline.
+This document defines the V1 architecture baseline for OpenCorvus as a headless coding orchestrator.
 
-The missing pieces were:
+It is intentionally narrower than earlier drafts.
 
-- no first-class `interaction` model for permission and question handoff
-- no first-class `delivery` or `artifact` model
-- no explicit task and run state machines
-- no failure, retry, timeout, or budget policy
-- no public orchestrator API contract
-- no clear source-of-truth mapping between orchestrator objects and opencode session state
+The goal is not to describe every future capability. The goal is to define the smallest architecture that:
 
-This revision adds those missing layers.
-
-Conclusion:
-
-- `opencorvus/opencode` remains the execution kernel
-- a new orchestrator protocol sits above it
-- operator context and board projection are first-class control-plane concerns
-- the architecture is now structurally complete enough for a V1 design baseline
-- implementation details and tuning will still evolve, but the object model and boundaries should now stay stable
-
-## Goal
-
-Build a headless coding orchestration system on top of the latest `sst/opencode` kernel.
-
-The product is not an IDE replacement and not a GUI automation tool. It is an async control plane that:
-
-- accepts coding tasks from API and chat channels
-- creates and updates plans
-- dispatches work to coding executors
-- evaluates results against explicit goals
-- loops until pass, escalation, or budget stop
+- matches the current working implementation
+- keeps the product pointed at API-first, chat-first orchestration
+- leaves room for later executor and evaluator expansion
 
 ## Product Statement
 
-`OpenCorvus = a headless coding orchestration service built on opencode, with async task intake, explicit planning, goal-based acceptance, executor routing, and channel delivery.`
+`OpenCorvus = a headless coding control plane built on opencode, with async task intake, versioned planning, goal-based evaluation, operator context, and lightweight channel/UI surfaces.`
 
-Primary modes:
+Primary mode:
 
-- API-first
-- chat-first
-- repo-centric
-- headless-by-default
-- human-on-demand
+- headless first
+- repo centric
+- async by default
+- human on demand
 
-## Why Use `sst/opencode` As The Kernel
+## V1 Scope
 
-The active upstream `sst/opencode` already provides the right low-level primitives:
+### V1 Core
 
-- headless server
-- JS SDK
-- session model
-- prompt and `prompt_async` APIs
-- agent and subagent runtime
-- worktree support
-- ACP server support
-- plugin and skill loading
+- async task intake
+- durable `task / plan_version / goal / run / interaction_request / delivery / evaluation`
+- `opencode` as the only executor
+- Slack as the first channel
+- operator context via `workbench`
+- assistant alignment via compiled `brief`
+- lightweight board projection for humans
+- deterministic evaluator core
 
-This makes it a good kernel for repository execution and session state.
+### V1 Optional
 
-It is not enough by itself because it does not yet provide:
+- soft artifact checks
+- soft web-only visual checks
+- soft judge fallback
 
-- durable task orchestration
-- operator context and long-lived task memory
-- explicit goal gating
-- project-level progress assessment
-- multi-executor routing
-- chat channel runtime
-- delivery and artifact normalization
-- web visual evaluation
+These may inform acceptance, but should not become a heavy operational dependency or require browser automation infrastructure to run every task.
 
-So the architecture should add these above the kernel instead of forking the kernel into a product monolith.
+### V2+
 
-Physical packaging should stay simple:
-
-- keep the new system in one directory
-- separate concerns by module boundaries, not by many workspace packages
+- multiple executors such as Codex or Claude Code
+- richer project-level portfolio views
+- explicit `workspace` resource orchestration
+- strong visual regression pipelines
+- Telegram and additional channel adapters
 
 ## Non-Goals
 
-- Rebuilding a full TUI or desktop client
-- Making GUI automation the main execution path
-- Embedding all orchestration logic into `packages/opencorvus/src/session/prompt.ts`
-- Binding product behavior to a single executor such as Codex or Claude Code
-- Using ACP as the internal system-of-record protocol
+- GUI-first task execution
+- desktop automation as the main product path
+- turning opencode session state into the product source of truth
+- making V1 depend on multiple executors
+- making board UI the only way to operate the system
 
-## Protocol Layers
+## Architectural Principles
 
-The architecture must separate three protocol layers plus the kernel.
+1. `task/run` is the product truth, not `session/message`
+2. operator context is first-class, not prompt glue
+3. channel and UI surfaces consume control-plane state; they do not own it
+4. deterministic checks win over model judgment
+5. V1 may use a larger `service.ts` style orchestrator module if behavior stays coherent
 
-### 1. Channel Protocol
-
-Used by API clients, Slack, Telegram, and OpenClaw-like gateways.
-
-Responsibilities:
-
-- submit a task
-- watch status
-- answer questions
-- reply to approvals
-- fetch summaries and artifacts
-
-### 2. Orchestrator Protocol
-
-The actual product protocol.
-
-Responsibilities:
-
-- own `task`, `plan_version`, `run`, `interaction_request`, `delivery`, `evaluation`
-- own retries, budgets, escalation, and progress
-- expose a stable API to channels
-- translate executor-specific behavior into normalized events
-
-### 3. Execution Protocol
-
-Implemented by executor adapters.
-
-Responsibilities:
-
-- submit work to a coding assistant
-- monitor execution
-- surface tool progress, blocking requests, and output
-- abort or resume execution
-
-### 4. Kernel Protocol
-
-Provided by opencode itself.
-
-Responsibilities:
-
-- session storage
-- message and part storage
-- tool execution
-- agent runtime
-- worktree lifecycle
-- SDK and API surface
-- ACP compatibility
-
-The main architectural rule is:
-
-- channels talk to the orchestrator
-- the orchestrator talks to executors
-- executors may use opencode kernel APIs
-- opencode session state is never the source of truth for product workflow
-
-## Layered Architecture
+## Layer Model
 
 ### 1. Kernel Layer
 
-Base: latest `sst/opencode`
+Backed by the latest active `sst/opencode` lineage.
 
 Responsibilities:
 
 - session storage
 - message and part storage
-- tool execution
-- agent runtime
-- worktree lifecycle
-- SDK and API surface
-- ACP compatibility
+- agent and tool execution
+- file and diff inspection
+- existing server and SDK surfaces
 
-Kernel stays as thin and upstream-compatible as possible.
+Rule:
 
-### 2. Orchestrator Layer
+- kernel state is executor state, not product workflow state
 
-Module inside `packages/opencorvus`
+### 2. Control Plane
+
+Lives in `packages/opencorvus/src/orchestrator`.
 
 Responsibilities:
 
-- task intake
+- task lifecycle
 - plan lifecycle
 - goal lifecycle
-- run scheduling
-- retry and escalation policy
-- executor selection
-- progress calculation
-- event normalization
-- durable delivery and evaluation records
+- run dispatch and retry/replan
+- interaction tracking
+- delivery and evaluation records
+- progress snapshots
+- normalized task event stream
 
-This is the real product core.
+This is the actual product core.
 
-### 3. Workbench Layer
+### 3. Operator Context
 
-Module inside `packages/opencorvus`
-
-Responsibilities:
-
-- store durable operator preferences
-- store short-term task notes
-- compile assistant briefs before each run
-- project normalized board views for humans and channels
-
-This layer is not just prompt decoration. It is the operator context that keeps API, Slack, and UI aligned.
-
-### 4. Executor Layer
-
-Module inside `packages/opencorvus`
+Lives in `packages/opencorvus/src/workbench`.
 
 Responsibilities:
 
-- adapt `opencode`
-- adapt `Codex`
-- adapt `Claude Code`
-- expose a single contract to the orchestrator
+- durable preferences
+- short-term task notes
+- brief compilation for assistants
+- board projection for humans
 
-This layer prevents the control plane from being coupled to one tool.
+This layer exists because the product is not only orchestrating code. It is also aligning agents with evolving operator intent across API, Slack, and board surfaces.
 
-### 5. Evaluation Layer
-
-Module inside `packages/opencorvus`
+### 4. Channel And UI
 
 Responsibilities:
 
-- build, test, and lint checks
-- repo policy checks
-- artifact inspection
-- web visual evaluation
-- LLM judge fallback only when deterministic checks are insufficient
+- Slack thread binding
+- operator replies
+- task summaries
+- board and dashboard surfaces
 
-### 6. Channel And UI Layer
+Rule:
 
-Module inside `packages/opencorvus`
+- channels and UI render orchestrator state
+- they do not directly reason over raw session internals
 
-Responsibilities:
+### 5. Future Executor Expansion
 
-- Slack and Telegram delivery
-- thread binding
-- user replies
-- approval and escalation prompts
-- artifact and status summaries
-- board and dashboard surfaces over the orchestrator API
+The architecture allows more executors later, but V1 only proves `opencode`.
 
-OpenClaw can later be used here as a gateway, but product state remains inside the orchestrator.
+Design rule:
 
-## Proposed Single-Directory Structure
+- keep the executor contract extensible
+- do not let future executor abstraction dominate V1 design
 
-```text
-packages/
-  opencorvus/
-    src/
-      kernel/        # kernel-facing wrappers and reused opencode logic
-      orchestrator/  # task/plan/run/evaluation control plane
-      workbench/     # preferences, notes, briefs, board projection
-      executor/      # opencode/codex/claude adapters
-      evaluator/     # acceptance and visual checks
-      channel/       # Slack/Telegram/OpenClaw gateway
-      app/           # composition root and public entrypoints
-    test/
-      orchestrator/
-      executor/
-      evaluator/
-      channel/
-  sdk/               # existing SDK
-specs/
-  opencode-architecture.md
-```
+## Runtime Design
 
-This keeps everything under one product directory while still enforcing clear ownership boundaries.
+This section is mandatory for V1. These are not implementation footnotes.
 
-## Source Of Truth And Ownership
+### Process Topology
 
-The system must be explicit about which layer owns which state.
+V1 supports a simple topology:
 
-### Orchestrator-Owned State
+- one `opencorvus serve` process
+- orchestrator and API in the same process
+- Slack gateway may run in the same binary as a separate command
+
+This is acceptable for V1.
+
+Later split is allowed:
+
+- API process
+- worker process
+- channel process
+
+But that is not required to validate the product.
+
+### Concurrency And Isolation
+
+V1 runtime rules:
+
+- one active run per task
+- each task is bound to one project directory
+- each run references one executor session
+- concurrent tasks may run in parallel as long as executor and repository state do not conflict
+
+Practical isolation strategy in V1:
+
+- rely on project directory scoping already present in the server
+- rely on session-level separation inside the executor
+- avoid introducing heavyweight `workspace` scheduling until there are multiple executors or explicit worktree pressure
+
+This means `workspace` is a future resource model, not a V1 core domain object.
+
+### Persistence
+
+V1 persistence is SQLite-backed and local to the opencorvus instance.
+
+Operational expectations:
+
+- SQLite with WAL
+- schema migration via repo migrations
+- orchestrator objects stored durably
+- brief snapshots and notes stored durably
+
+Retention in V1:
+
+- keep full task/run/evaluation state unless manually cleaned
+- allow later archival and retention policy work
+
+### API Authentication
+
+V1 API auth is simple and environment-driven.
+
+Minimum expectations:
+
+- support server password/basic auth
+- allow local loopback use without complex auth setup
+- keep same-origin proxying in console UI so browser clients do not need direct orchestrator credentials
+
+### Observability
+
+V1 minimum observability:
+
+- structured logs
+- normalized task event stream
+- progress snapshots
+- channel-visible summaries
+
+Nice-to-have but not V1 blockers:
+
+- metrics backend
+- distributed tracing
+- full audit export
+
+## Source Of Truth
+
+### Control-Plane Truth
 
 - `task`
 - `plan_version`
@@ -276,155 +232,69 @@ The system must be explicit about which layer owns which state.
 - `evaluation`
 - `progress_snapshot`
 - `channel_binding`
+
+### Operator Context Truth
+
 - `workbench_preference`
 - `workbench_task_note`
 - `workbench_brief_snapshot`
 
-### Executor-Owned State
+### Executor State
 
 - `session_id`
-- executor-native thread or job ids
-- raw streaming events
-- tool call details
-- temporary workspace handles
+- queue task ids
+- raw message and tool activity
 
-### Kernel-Owned State
+Rule:
 
-- opencode `session`
-- opencode `message`
-- opencode `message.part`
-- opencode permission and question requests
-- opencode file and diff state
+- control-plane truth may reference executor state
+- executor state must not replace control-plane truth
 
-### Ownership Rule
-
-- orchestrator state may reference executor state
-- executor state may mirror kernel state
-- kernel state may not replace orchestrator state
-
-Examples:
-
-- `run.executor_ref.session_id` points to an opencode session
-- `delivery.artifacts` may be assembled from opencode messages and diffs
-- `evaluation` references artifacts, not raw messages, as its evidence boundary
-
-## Core Domain Model
-
-The product must introduce its own durable objects instead of overloading `session`.
-
-### Project
-
-Purpose:
-
-- repository-level policy and defaults
-
-Fields:
-
-- `id`
-- `root`
-- `default_branch`
-- `executor_policy`
-- `evaluation_policy`
-- `progress_policy`
-
-### Workspace
-
-Purpose:
-
-- concrete execution location for a run
-
-Fields:
-
-- `id`
-- `project_id`
-- `kind`
-- `directory`
-- `branch`
-- `executor_ref`
-- `status`
-
-Kinds:
-
-- `worktree`
-- `container`
-- `remote`
+## V1 Domain Model
 
 ### Task
 
-Represents the user request.
+Represents the user request and orchestration boundary.
 
-Fields:
+Key fields:
 
 - `id`
 - `project_id`
+- `request_id`
 - `source`
-- `source_ref`
 - `title`
 - `request`
 - `priority`
 - `status`
 - `blocking_reason`
 - `active_plan_version_id`
-- `current_run_id`
+- `active_run_id`
 - `budget`
-- `created_at`
-- `updated_at`
-
-Statuses:
-
-- `queued`
-- `planning`
-- `running`
-- `blocked`
-- `evaluating`
-- `completed`
-- `failed`
-- `cancelled`
-
-Blocking reasons:
-
-- `user_input`
-- `permission`
-- `environment`
-- `budget`
-- `policy`
-- `manual_review`
 
 ### PlanVersion
 
-Represents one concrete strategy for completing the task.
+Represents the current execution strategy.
 
-Fields:
+Key fields:
 
 - `id`
 - `task_id`
 - `version`
 - `summary`
-- `steps`
-- `assumptions`
-- `risks`
-- `why_changed`
-- `created_by`
+- `prompt`
 - `status`
+- `metadata`
 
-Statuses:
+V1 note:
 
-- `draft`
-- `active`
-- `superseded`
-- `accepted`
-- `rejected`
-
-Invariants:
-
-- exactly one active plan version per task
-- a plan version becomes `accepted` only when the task completes
+- a richer planner structure can exist in metadata
+- `plan_version` remains the durable record
 
 ### Goal
 
 Represents what must be true for the task to count as done.
 
-Fields:
+Key fields:
 
 - `id`
 - `task_id`
@@ -432,287 +302,142 @@ Fields:
 - `description`
 - `criteria`
 - `priority`
-- `retry_budget`
-- `current_attempts`
 - `status`
 - `metadata.check_selector`
 
 Important rule:
 
-- `goal` expresses the desired outcome
-- evaluator checks express how that outcome is verified
-- `metadata.check_selector` links a goal to one or more evaluator checks without collapsing goals into checker kinds
-
-Priorities:
-
-- `blocking`
-- `non_blocking`
-
-Statuses:
-
-- `pending`
-- `running`
-- `passed`
-- `failed`
-- `skipped`
+- goals express desired outcomes
+- evaluator checks express verification methods
+- `check_selector` links the two without collapsing them into one concept
 
 ### Run
 
 Represents one executor attempt.
 
-Fields:
+Key fields:
 
 - `id`
 - `task_id`
 - `plan_version_id`
-- `workspace_id`
-- `executor_kind`
-- `executor_ref`
+- `session_id`
+- `executor`
 - `status`
 - `phase`
-- `failure_kind`
-- `summary`
-- `started_at`
-- `completed_at`
-- `timeout_at`
-
-Statuses:
-
-- `queued`
-- `accepted`
-- `running`
-- `blocked`
-- `completed`
-- `failed`
-- `aborted`
-
-Phases:
-
-- `plan`
-- `execute`
-- `evaluate`
-- `replan`
-
-Failure kinds:
-
-- `transient`
-- `environment`
-- `input`
-- `permission`
-- `evaluation`
-- `strategy`
-- `budget`
-- `unknown`
+- `retry_count`
+- `executor_ref`
 
 ### InteractionRequest
 
-Represents a blocking handoff that needs a human or higher-level policy decision.
+Represents a blocking request for human input or approval.
 
-Fields:
-
-- `id`
-- `task_id`
-- `run_id`
-- `kind`
-- `status`
-- `question`
-- `options`
-- `payload`
-- `deadline_at`
-- `created_at`
-- `resolved_at`
-
-Kinds:
+Kinds in V1:
 
 - `permission`
 - `question`
-- `approval`
-- `manual_review`
-
-Statuses:
-
-- `pending`
-- `answered`
-- `rejected`
-- `expired`
-
-### Artifact
-
-Represents one durable output produced during execution or evaluation.
-
-Fields:
-
-- `id`
-- `task_id`
-- `run_id`
-- `kind`
-- `uri`
-- `label`
-- `metadata`
-- `created_at`
-
-Kinds:
-
-- `patch`
-- `changed_file`
-- `log`
-- `report`
-- `image`
-- `diff`
-- `html_trace`
-- `link`
 
 ### Delivery
 
-Represents the normalized result returned by a run.
+Represents normalized executor output.
 
-Fields:
+Key fields:
 
 - `id`
 - `task_id`
 - `run_id`
 - `summary`
-- `status`
-- `artifact_ids`
-- `changed_files`
-- `executor_output`
-- `created_at`
-
-Statuses:
-
-- `ready`
-- `incomplete`
-- `failed`
+- `result.changed_files`
+- `result.diffs`
 
 ### Evaluation
 
-Represents the result of checking one or more goals.
+Represents the result of checking a delivery.
 
-Fields:
+Key fields:
 
 - `id`
 - `task_id`
 - `run_id`
-- `goal_id`
-- `checker`
+- `delivery_id`
 - `status`
+- `verdict`
 - `summary`
-- `evidence`
-- `created_at`
-
-Statuses:
-
-- `pass`
-- `fail`
-- `inconclusive`
+- `checks`
 
 ### ProgressSnapshot
 
-Represents the latest computed progress view for a task.
-
-Fields:
-
-- `task_id`
-- `status`
-- `active_plan_version`
-- `completed_steps`
-- `total_steps`
-- `blocking_goal_pass_rate`
-- `current_executor`
-- `retry_count`
-- `last_failure_reason`
-- `last_progress_at`
-
-### WorkbenchPreference
-
-Represents durable operator preferences.
-
-Fields:
-
-- `id`
-- `project_id`
-- `task_id`
-- `user_id`
-- `scope`
-- `key`
-- `value`
-- `source`
-- `confidence`
-
-### WorkbenchTaskNote
-
-Represents short-lived task memory captured from user messages or system decisions.
-
-Fields:
-
-- `id`
-- `task_id`
-- `run_id`
-- `kind`
-- `source`
-- `user_id`
-- `content`
-- `metadata`
-
-### TaskBrief
-
-Represents the compiled assistant-facing context for a task or run.
-
-Fields:
-
-- `task_id`
-- `run_id`
-- `content`
-- `preferences`
-- `notes`
-- `goals`
-
-Rule:
-
-- assistants consume the brief, not raw database state
-
-### TaskBoard
-
-Represents the projected control-plane view for human operators.
-
-Fields:
-
-- `task`
-- `plan`
-- `run`
-- `brief`
-- `lanes`
-
-Lane kinds in V1:
-
-- `run`
-- `goals`
-- `blockers`
-- `preferences`
-- `notes`
+Represents a durable progress checkpoint for task-level status.
 
 ### ChannelBinding
 
-Fields:
+Represents the mapping between a task and a Slack or future channel thread.
 
-- `task_id`
-- `platform`
-- `channel`
-- `thread`
-- `user_id`
-- `state`
+## Operator Context Model
+
+### WorkbenchPreference
+
+Durable operator preference.
+
+Examples:
+
+- `style=concise`
+- `lockfile_policy=avoid_changes`
+
+### WorkbenchTaskNote
+
+Short-lived task memory.
+
+Kinds in V1:
+
+- `user_request`
+- `operator_note`
+- `plan_hint`
+- `goal_update`
+
+### TaskBrief
+
+Compiled assistant-facing context.
+
+Contents typically include:
+
+- task request
+- plan summary
+- goals
+- preferences
+- recent notes
+- selected memory snippets
+
+Rule:
+
+- assistants consume the brief
+- they should not be handed raw database state by default
+
+### TaskBoard
+
+Projected human-facing control-plane view.
+
+V1 board includes:
+
+- task summary
+- plan summary
+- run summary
+- brief preview
+- lanes for:
+  - `run`
+  - `goals`
+  - `blockers`
+  - `preferences`
+  - `notes`
+
+The board is a projection, not a source of truth.
 
 ## State Machines
 
-The system must be explicit about valid transitions.
-
-### Task State Machine
+### Task
 
 Allowed transitions:
 
-- `queued -> planning`
-- `planning -> running`
-- `planning -> blocked`
+- `queued -> running`
 - `running -> blocked`
 - `running -> evaluating`
 - `evaluating -> running`
@@ -720,15 +445,13 @@ Allowed transitions:
 - `evaluating -> failed`
 - `blocked -> running`
 - `blocked -> failed`
-- `queued|planning|running|blocked|evaluating -> cancelled`
+- `queued|running|blocked|evaluating -> cancelled`
 
-Rules:
+V1 rule:
 
-- a task enters `blocked` only with a non-empty `blocking_reason`
-- a task enters `completed` only after all blocking goals pass
-- a task enters `failed` only after retry, budget, or policy rules reject further progress
+- `completed` requires blocking goals to pass
 
-### Run State Machine
+### Run
 
 Allowed transitions:
 
@@ -741,13 +464,7 @@ Allowed transitions:
 - `blocked -> failed`
 - `accepted|running|blocked -> aborted`
 
-Rules:
-
-- at most one active run per task
-- a run may be blocked by permission, question, or environment
-- a run may complete even when the task later fails evaluation
-
-### Interaction State Machine
+### InteractionRequest
 
 Allowed transitions:
 
@@ -755,16 +472,9 @@ Allowed transitions:
 - `pending -> rejected`
 - `pending -> expired`
 
-Rules:
+## Public API
 
-- each pending interaction must belong to one active run
-- resolving an interaction emits a normalized task event and may move the task out of `blocked`
-
-## Public Orchestrator API
-
-This is the API channels and external systems should use.
-
-### Task APIs
+### Core Task APIs
 
 - `POST /task`
 - `GET /task/:id`
@@ -781,7 +491,7 @@ This is the API channels and external systems should use.
 - `POST /interaction/:id/reply`
 - `POST /interaction/:id/reject`
 
-### Run And Delivery APIs
+### Run APIs
 
 - `GET /task/:id/runs`
 - `GET /run/:id`
@@ -793,539 +503,127 @@ This is the API channels and external systems should use.
 ### API Rules
 
 - `POST /task` returns immediately with `task_id`
+- `POST /task` should accept `request_id` for idempotent replay
 - `GET /task/:id/events` uses SSE
-- `POST /task` should accept a caller-provided `request_id` and return the existing task on replay
-- all mutable operations should converge on caller-provided request ids or dedupe keys
-- channels never call executor-specific APIs directly
+- board and browser clients should prefer same-origin proxying where possible
 
 ## Event Model
 
-Normalize all executor and evaluator events into one stream.
+V1 event model should stay useful before it becomes exhaustive.
 
-Minimum event kinds:
+Minimum required event families:
 
-- `task.created`
-- `task.status`
-- `task.blocked`
-- `task.escalated`
-- `plan.created`
-- `plan.activated`
-- `run.created`
-- `run.started`
-- `run.status`
-- `run.blocked`
-- `run.completed`
-- `run.failed`
-- `interaction.requested`
-- `interaction.resolved`
-- `delivery.ready`
-- `evaluation.completed`
-- `goal.passed`
-- `goal.failed`
-- `task.completed`
-- `task.failed`
+- task created/updated
+- plan created/activated
+- run created/updated
+- interaction requested/resolved
+- delivery ready
+- evaluation completed
+- goal passed/failed
 
-Each event should include at least:
+This event stream powers:
 
-- `event_id`
-- `task_id`
-- `run_id` when applicable
-- `type`
-- `timestamp`
-- `summary`
-- `payload`
+- Slack thread updates
+- board live refresh
+- audit and debugging
 
-This event stream becomes the source for:
-
-- chat updates
-- dashboards
-- audit logs
-- retry decisions
-- board refresh and live operator surfaces
+Refinement can happen in V1.1. Exhaustiveness is not required before the event model proves its usefulness.
 
 ## Executor Contract
 
-All executors should implement one interface.
+V1 proven contract:
 
-```ts
-export interface ExecutorAdapter {
-  kind: "opencode" | "codex" | "claude"
-  submit(input: {
-    taskId: string
-    runId: string
-    workspace: string
-    plan: string
-    constraints?: string[]
-  }): Promise<{
-    executorRef: Record<string, string>
-  }>
-  resume(input: {
-    runId: string
-    message: string
-  }): Promise<void>
-  status(runId: string): Promise<{
-    state: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary?: string
-    blockingReason?: "user_input" | "permission" | "environment"
-  }>
-  abort(runId: string): Promise<void>
-  events(runId: string): AsyncIterable<{
-    type: string
-    summary?: string
-    payload?: unknown
-  }>
-  delivery(runId: string): Promise<{
-    summary: string
-    artifacts: Array<{
-      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link"
-      value: string
-      metadata?: Record<string, unknown>
-    }>
-  }>
-  capabilities(): {
-    local_fs: boolean
-    remote: boolean
-    resume: boolean
-    screenshots: boolean
-    permission_callbacks: boolean
-    question_callbacks: boolean
-    streaming: boolean
-  }
-}
-```
+- `submit`
+- `resume`
+- `status`
+- `abort`
+- `delivery`
+- `events`
+- `capabilities`
 
-## First Executor: `opencode`
+Current proven executor:
 
-`opencode` should be the first and default executor.
+- `opencode`
 
-Reason:
+Future executors:
 
-- already in-repo
-- no external vendor dependency
-- full repository execution semantics
-- session and worktree support already exist
+- Codex
+- Claude Code
 
-How it should be used:
+They should remain future-facing design notes, not V1 centerpieces.
 
-- orchestrator creates a workspace
-- orchestrator creates or reuses an opencode session
-- orchestrator sends task content through server or SDK
-- orchestrator stores `session_id` and `taskID` as executor state
-- orchestrator polls or streams kernel events and maps them into normalized run events
+## Evaluation Model
 
-Important rule:
+### Deterministic Core
 
-Do not store orchestration truth in the opencode session alone.
-Session is executor state, not product state.
+- `build`
+- `test`
+- `lint`
+- `verify_cmd`
 
-## Mapping To Existing OpenCorvus Kernel
+### Optional Soft Checks
 
-The current kernel APIs already cover much of the executor surface.
-
-### Existing Kernel Inputs
-
-- `session.create`
-- `session.prompt`
-- `session.prompt_async`
-- `session.prompt_async_status`
-- `session.abort`
-- `question.reply`
-- `permission.reply`
-
-### Existing Kernel Observability
-
-- `global.event`
-- instance `/event`
-- `session.status`
-- `session.message`
-- `session.messages`
-- `session.diff`
-- `file.status`
-- `file.read`
-- `session.exportHtml`
-
-### Mapping Rules
-
-- orchestrator `task` maps to one or more executor runs, not directly to one session
-- orchestrator `run.executor_ref.session_id` maps to opencode `session.id`
-- orchestrator `interaction_request` may be created from opencode permission or question events
-- orchestrator `delivery` is assembled from opencode messages, parts, diffs, files, and trace artifacts
-- opencode `task.report` remains bot-loop specific and is not a required system protocol
-
-## Optional Executors: Codex And Claude Code
-
-These should be added as adapters later.
-
-### Codex
-
-Use for:
-
-- long-running remote coding jobs
-- parallel work units
-- non-local tasks
-
-### Claude Code
-
-Use for:
-
-- local or containerized repo execution
-- tasks requiring strong local tool use
-- repos already aligned with Claude workflows
-
-The orchestrator should choose executor by policy, not by hardcoded preference.
-
-## Planning Model
-
-Do not reuse opencode's current plan flow as the product planner.
-
-Upstream plan mode is interactive and file-centric:
-
-- good for human-approved planning
-- not enough for unattended orchestration
-
-Recommended planner design:
-
-- planner writes `plan_version`
-- planner may still emit a plan file into the workspace for executor context
-- orchestrator owns plan status and version transitions
-
-This means:
-
-- `plan file` is an execution artifact
-- `plan_version` is the system record
-
-## Goal And Evaluation Model
-
-This is the missing product-critical layer.
-
-A task completes only when all blocking goals pass.
-
-Evaluation order:
-
-1. deterministic checks
-2. web visual checks when configured
-3. artifact inspection
-4. LLM judge fallback
-
-LLM judge should never be the only source of truth when build or test evidence exists.
+- `artifact`
+- `visual` with `target = web`
+- `judge`
 
 Rules:
 
-- every blocking goal must point to at least one checker
-- every evaluation must produce evidence
-- evaluation may fail the task even when the executor run completed successfully
-
-## Delivery Model
-
-Execution output must be normalized before evaluation or channel delivery.
-
-Rules:
-
-- channels receive `delivery`, not raw executor messages
-- evaluators consume `delivery` and `artifact`
-- raw message streams remain available only for debugging and traceability
-
-Minimum delivery contents:
-
-- summary
-- changed files
-- diff artifacts
-- logs
-- screenshots when applicable
-- trace or report links
-
-## Failure, Retry, And Budget Policy
-
-Unattended execution requires explicit failure classification.
-
-### Failure Classes
-
-- `transient`: network hiccup, flaky subprocess, temporary upstream error
-- `environment`: missing dependency, missing secret, broken workspace
-- `input`: unclear requirement or missing user info
-- `permission`: denied or unresolved permission request
-- `evaluation`: code executed but did not meet acceptance criteria
-- `strategy`: plan itself is wrong and needs replan
-- `budget`: retries, time, or cost exhausted
-- `unknown`: uncategorized
-
-### Default Policy
-
-- retry transient failures within the same plan
-- block on input or permission failures
-- replan on strategy failures
-- mark failed on budget exhaustion
-- keep evaluation failures separate from execution failures
-
-### Budget Dimensions
-
-- max executor attempts per task
-- max evaluation attempts per task
-- max elapsed wall time
-- optional token or cost budget
-
-### Timeout Rules
-
-- each run gets a timeout
-- each interaction request gets a deadline
-- timed out runs emit `run.failed` with `failure_kind = budget` or `environment`
-
-## Web Visual Evaluation
-
-This product should not depend on desktop GUI checks for the main path.
-
-Instead, support web visual evaluation as:
-
-- target URL or route
-- viewport list
-- optional auth or bootstrap script
-- baseline screenshot or rules
-
-Outputs:
-
-- pass or fail
-- screenshot artifacts
-- diff summary
-- rule violations
-
-Implementation direction:
-
-- Playwright for capture
-- evaluator-owned visual checker
-- optional vision model for layout or readability analysis
-
-## Progress Assessment
-
-Progress should be computed by orchestrator state, not guessed from chat text.
-
-Minimum task-level metrics:
-
-- task status
-- active plan version
-- completed plan steps
-- blocking goals pass rate
-- current executor
-- retry count
-- last failure reason
-- time since last meaningful progress
-
-Minimum project-level metrics:
-
-- open task count
-- blocked task count
-- completed task count
-- executor failure rate
-- median task completion time
-
-This should be exposed as both API response and channel summary.
+- visual checks are only for web targets
+- soft checks should inform the operator without blocking flow by default
+- strict mode may promote them into blocking failure
+- LLM judgment is fallback, not primary truth
 
 ## Board UI
 
-The board is a control-plane surface, not a desktop overlay.
+The board is part of the control plane, but it is not the product center.
 
-Purpose:
+V1 expectations:
 
-- let operators inspect the current task state without reading raw session logs
-- let operators inspect the compiled brief and current plan
-- let operators send free-form updates that become preferences, goals, plan hints, or notes
+- a lightweight web surface
+- async refresh
+- SSE preferred, polling fallback
+- expandable cards and detail views
+- free-form operator input back into workbench state
 
-Rules:
+Desktop overlay may deep-link into the board later, but should not own board state.
 
-- board data is projected from orchestrator + workbench state
-- board refresh should prefer SSE and fall back to polling
-- desktop overlay may deep-link into the board, but should not own the board state model
+## Implementation Notes For V1
 
-## Channel Model
+- a larger orchestrator service module is acceptable if behavior stays coherent
+- avoid over-splitting into many services before runtime behavior is settled
+- prefer clarifying truth boundaries over maximizing object count
 
-Channels are adapters, not the source of truth.
+## Roadmap
 
-Responsibilities:
+### V1
 
-- create tasks
-- subscribe to task event stream
-- render summaries
-- collect replies to pending interaction requests
-- support approvals and cancellation
+- single executor (`opencode`)
+- durable task/run/evaluation state
+- Slack channel
+- workbench and brief
+- lightweight board
+- deterministic evaluator core
+- optional soft artifact/web/judge checks
 
-Rules:
+### V1.1
 
-- channel threads map to `task_id`
-- multiple channels may bind to the same task
-- channels do not inspect executor-native state directly
+- project-level aggregation
+- stronger event taxonomy
+- better board ergonomics
+- stronger evaluator evidence outputs
 
-## End-To-End Flows
+### V2
 
-### Flow A: Normal Completion
-
-1. user submits task
-2. orchestrator creates task
-3. planner produces `plan_version = 1`
-4. orchestrator provisions workspace
-5. orchestrator dispatches `run 1` to `opencode_executor`
-6. executor produces normalized delivery
-7. evaluator runs goals
-8. all blocking goals pass
-9. task marked completed
-10. channel layer sends completion summary
-
-### Flow B: Replan
-
-1. evaluator fails a blocking goal
-2. orchestrator classifies the failure as `evaluation` or `strategy`
-3. if retryable within same plan, create next run
-4. if strategy is invalid, create `plan_version = 2`
-5. dispatch again
-6. stop on pass, escalation, or budget exhaustion
-
-### Flow C: Need User Input
-
-1. executor or evaluator declares missing information
-2. orchestrator creates `interaction_request`
-3. task and run move to `blocked`
-4. channel layer asks a focused question
-5. user reply resolves the interaction
-6. orchestrator resumes the current run or replans
-
-### Flow D: Permission Denied
-
-1. executor emits a permission request
-2. orchestrator records `interaction_request(kind=permission)`
-3. approver rejects the request
-4. orchestrator classifies the run as `permission` failure
-5. task either replans or fails based on policy
-
-## Integration With Existing Kernel
-
-Prefer reuse:
-
-- `serve`
-- `sdk/js`
-- `session`
-- `tool/task`
-- `worktree`
-- `control-plane/workspace`
-- `ACP`
-
-Avoid deep product logic inside:
-
-- `session/prompt.ts`
-- `tool/plan.ts`
-- TUI-only flows
-
-Rule of thumb:
-
-- if it is executor behavior, keep it in `src/kernel` or `src/executor/opencode`
-- if it is product workflow, put it in `src/orchestrator`
-
-## Recommended Iterations
-
-### Iteration 0: Protocol Baseline
-
-- freeze the boundary that `opencorvus` is the execution kernel, not the orchestrator
-- document kernel-to-orchestrator mappings
-- define the canonical event dictionary
-
-### Iteration 1: Run Facade
-
-- add `task`, `run`, and `interaction_request`
-- wrap `session.prompt_async` behind orchestrator APIs
-- surface task and run status without exposing raw message internals
-
-### Iteration 2: Delivery Layer
-
-- add `artifact` and `delivery`
-- normalize session messages, diffs, files, and traces into durable outputs
-
-### Iteration 3: Evaluator
-
-- add deterministic build, test, lint, and verify checks
-- persist evaluation evidence
-- gate task completion on blocking goals
-
-### Iteration 4: Goal Retry Loop
-
-- classify failures
-- retry, replan, block, or fail by policy
-- add budget and timeout enforcement
-
-### Iteration 5: Planner
-
-- introduce durable `plan_version`
-- keep exactly one active plan per task
-- record why replans happened
-
-### Iteration 6: Multi-Executor
-
-- keep `opencode` as the first executor
-- add `codex` and `claude` adapters behind the same executor contract
-- add policy-driven routing
-
-### Iteration 7: Channels
-
-- add Slack first
-- then Telegram
-- optionally add OpenClaw as ingress or multiplexing layer
-
-## Architectural Risks
-
-### Risk 1
-
-Too much logic ends up in opencode prompt and session internals.
-
-Mitigation:
-
-- keep orchestration state outside executor session state
-
-### Risk 2
-
-Planning and execution stay coupled to interactive assumptions.
-
-Mitigation:
-
-- planner writes durable plan versions
-- task completion depends on goals, not on a chat turn ending
-
-### Risk 3
-
-Executor adapters leak tool-specific semantics into the control plane.
-
-Mitigation:
-
-- normalize around `task`, `run`, `interaction_request`, `delivery`, `evaluation`, and `artifact`
-
-### Risk 4
-
-Chat delivery becomes the product core.
-
-Mitigation:
-
-- make channels consumers of orchestrator events, not owners of task state
-
-### Risk 5
-
-Evaluation remains prompt-driven instead of evidence-driven.
-
-Mitigation:
-
-- store evaluation results and evidence as first-class records
-- let LLM judgment remain a fallback, not the primary verifier
-
-## Recommended First Implementation Decisions
-
-- Use latest `sst/opencode` as the only kernel baseline.
-- Keep the implementation under one directory: `packages/opencorvus`.
-- Separate modules inside that directory instead of creating many workspace packages.
-- Make `opencode` the default executor for MVP.
-- Treat plan files as artifacts, not the main planning record.
-- Treat goal evaluation as a first-class subsystem, not a prompt convention.
-- Treat `delivery` as the only channel-facing result object.
-- Treat permission and question handling as orchestrator `interaction_request` records.
+- more executors
+- explicit workspace/resource scheduling
+- stronger visual pipelines
+- more channel adapters
 
 ## Immediate Next Work
 
-1. Add idempotent task creation using caller-provided `request_id`.
-2. Regenerate OpenAPI and JS SDK from the current headless API surface.
-3. Complete executor contract parity by adding real `resume` and executor event streaming.
-4. Add evaluator layers for artifact checks, web visual checks, and judge fallback.
-5. Add project-level progress and board aggregation APIs.
-6. Reduce legacy CLI surface so headless entrypoints become the obvious default.
+1. strengthen runtime event taxonomy
+2. add project-level progress and aggregation APIs
+3. improve web visual evidence beyond simple page fetch checks
+4. reduce legacy CLI surface
+5. add a second executor only after the contract proves stable in practice

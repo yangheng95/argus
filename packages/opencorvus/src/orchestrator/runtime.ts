@@ -325,7 +325,17 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     )
   })
 
-  const result = await EvaluatorService.evaluate({ metadata: task.metadata ?? undefined }, delivery)
+  const result = await EvaluatorService.evaluate(
+    {
+      request: task.request,
+      metadata: task.metadata ?? undefined,
+    },
+    {
+      summary: delivery.summary,
+      diffs: delivery.diffs,
+      changedFiles: delivery.diffs.map((item) => item.file),
+    },
+  )
 
   Database.transaction((db) => {
     db.insert(OrchestratorEvaluationTable)

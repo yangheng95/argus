@@ -16,6 +16,7 @@ import { CronService } from "../scheduler/cron-service"
 import { EventService } from "../scheduler/event-service"
 import { TaskQueueService } from "../scheduler/task-queue-service"
 import { OrchestratorService } from "@/orchestrator/service"
+import { SlackMirror } from "@/channel/slack-mirror"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -32,6 +33,7 @@ export async function InstanceBootstrap() {
   EventService.init()
   TaskQueueService.init()
   OrchestratorService.init()
+  SlackMirror.init()
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {

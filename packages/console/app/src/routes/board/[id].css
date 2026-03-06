@@ -99,6 +99,16 @@
   gap: 0.75rem;
 }
 
+[data-page="board"] [data-slot="tasks-link"] {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--board-border);
+  background: hsla(0, 0%, 100%, 0.64);
+  color: var(--board-text-strong);
+}
+
 [data-page="board"] [data-slot="directory"] {
   max-width: 20rem;
   overflow: hidden;
@@ -482,6 +492,89 @@
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+[data-page="board"] [data-component="check-list"],
+[data-page="board"] [data-component="artifact-list"],
+[data-page="board"] [data-component="timeline"] {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+[data-page="board"] [data-component="check-list"] li,
+[data-page="board"] [data-component="artifact-list"] li,
+[data-page="board"] [data-component="interaction-item"],
+[data-page="board"] [data-component="timeline"] li {
+  padding: 0.85rem;
+  border-radius: 0.9rem;
+  background: hsla(0, 0%, 100%, 0.48);
+  border: 1px solid var(--board-border);
+}
+
+[data-page="board"] [data-component="check-list"] p {
+  margin: 0.45rem 0 0;
+}
+
+[data-page="board"] [data-component="pill-list"] {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+[data-page="board"] [data-component="pill-list"] li {
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: var(--board-surface-strong);
+  border: 1px solid var(--board-border);
+}
+
+[data-page="board"] [data-component="artifact-group"] + [data-component="artifact-group"] {
+  margin-top: 1rem;
+}
+
+[data-page="board"] [data-slot="interaction-top"],
+[data-page="board"] [data-component="timeline"] li > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+[data-page="board"] [data-component="interaction-item"] p {
+  margin: 0.5rem 0 0;
+}
+
+[data-page="board"] [data-component="interaction-actions"] {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+[data-page="board"] [data-component="interaction-actions"] button {
+  border: 1px solid var(--board-border-strong);
+  background: var(--board-surface-strong);
+  border-radius: 0.8rem;
+  padding: 0.65rem 0.8rem;
+  color: var(--board-text-strong);
+  cursor: pointer;
+}
+
+[data-page="board"] [data-component="interaction-actions"] textarea {
+  min-height: 6rem;
+  border: 1px solid var(--board-border-strong);
+  background: hsla(0, 0%, 100%, 0.6);
+  border-radius: 0.8rem;
+  padding: 0.75rem;
+  color: var(--board-text-strong);
+  resize: vertical;
 }
 
 [data-page="board"] [data-component="stack"] [data-component="toggle"]:first-child,

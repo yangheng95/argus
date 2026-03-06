@@ -5,7 +5,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "so
 import { createStore } from "solid-js/store"
 import { IconChevronRight, IconWorkspaceLogo } from "~/component/icon"
 import { useLanguage } from "~/context/language"
-import { TaskBoard, TaskMessageResult, queryTaskBoard } from "./common"
+import { SessionMessage, TaskBoard, TaskMessageResult, queryTaskBoard } from "./common"
 import type { TaskBoardInfo } from "./common"
 
 const laneCopy = {
@@ -70,6 +70,10 @@ export default function BoardPage() {
     error: "",
     notice: "",
     draft: "",
+    session: [] as Array<{ info: { id: string; role: string; sessionID: string }; parts: Array<{ id: string; type: string; text?: string; tool?: string; state?: { status?: string; output?: string; error?: string } }> }>,
+    sessionLoading: false,
+    replies: {} as Record<string, string>,
+    resolving: "",
     updatedAt: 0,
     open: {
       request: true,
@@ -78,6 +82,10 @@ export default function BoardPage() {
       brief: true,
       composer: true,
       metadata: false,
+      results: true,
+      interactions: true,
+      timeline: false,
+      session: false,
     },
   })
 
@@ -87,6 +95,11 @@ export default function BoardPage() {
     if (directory()) query.set("directory", directory()!)
     if (query.size === 0) return ""
     return `?${query.toString()}`
+  })
+  const tasksHref = createMemo(() => {
+    const query = new URLSearchParams()
+    if (directory()) query.set("directory", directory()!)
+    return `/tasks${query.size > 0 ? `?${query.toString()}` : ""}`
   })
 
   createEffect(() => {
@@ -212,6 +225,75 @@ export default function BoardPage() {
     setStore("sending", false)
   }
 
+  const resolveInteraction = async (input: {
+    id: string
+    type: "permission" | "question"
+    action: "once" | "always" | "reject" | "answer"
+  }) => {
+    if (!directory()) return
+    setStore("resolving", input.id)
+    setStore("error", "")
+    const response =
+      input.action === "reject"
+        ? await fetch("/interaction-reject", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              interaction_id: input.id,
+              directory: directory(),
+              message: store.replies[input.id],
+            }),
+          })
+        : await fetch("/interaction-reply", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify(
+              input.type === "permission"
+                ? {
+                    interaction_id: input.id,
+                    directory: directory(),
+                    reply: input.action,
+                  }
+                : {
+                    interaction_id: input.id,
+                    directory: directory(),
+                    answers: [[store.replies[input.id] || ""]],
+                  },
+            ),
+          })
+    if (!response.ok) {
+      setStore("error", `Interaction update failed (${response.status})`)
+      setStore("resolving", "")
+      return
+    }
+    setStore("notice", "Interaction updated")
+    setStore("replies", input.id, "")
+    setStore("resolving", "")
+    await refresh(true)
+  }
+
+  const loadSession = async () => {
+    if (!taskID()) return
+    if (store.sessionLoading || store.session.length > 0) return
+    setStore("sessionLoading", true)
+    const response = await fetch(`/task-session${search()}`)
+    const session = response.ok
+      ? await response.json().then((body) => SessionMessage.array().parse(body)).catch(() => undefined)
+      : undefined
+    if (session) {
+      setStore("session", session as never)
+      setStore("error", "")
+    }
+    if (!session) {
+      setStore("error", `Session load failed (${response.status})`)
+    }
+    setStore("sessionLoading", false)
+  }
+
   return (
     <main data-page="board">
       <Title>{store.board?.task.title ?? taskID() ?? "Board"} | OpenCorvus Board</Title>
@@ -227,6 +309,9 @@ export default function BoardPage() {
             </div>
           </div>
           <div data-slot="actions">
+            <A href={tasksHref()} data-slot="tasks-link">
+              Tasks
+            </A>
             <Show when={directory()}>
               <span data-slot="directory">{directory()}</span>
             </Show>
@@ -465,6 +550,207 @@ export default function BoardPage() {
                       <Show when={store.open.prompt}>
                         <pre data-slot="copy">{board().plan?.prompt}</pre>
                       </Show>
+                    </Show>
+
+                    <button data-component="toggle" onClick={() => setStore("open", "results", (value) => !value)}>
+                      <span>Results</span>
+                      <IconChevronRight />
+                    </button>
+                    <Show when={store.open.results}>
+                      <div data-slot="rich-copy">
+                        <strong>{board().delivery?.summary ?? "No delivery yet."}</strong>
+                        <Show when={board().evaluation}>
+                          <dl data-slot="detail-grid">
+                            <div>
+                              <dt>Verdict</dt>
+                              <dd>{board().evaluation?.verdict}</dd>
+                            </div>
+                            <div>
+                              <dt>Status</dt>
+                              <dd>{board().evaluation?.status}</dd>
+                            </div>
+                          </dl>
+                          <p>{board().evaluation?.summary}</p>
+                          <Show when={board().evaluation?.checks.length}>
+                            <ul data-component="check-list">
+                              <For each={board().evaluation?.checks}>
+                                {(check) => (
+                                  <li>
+                                    <strong>{check.name}</strong>
+                                    <span data-tone={tone(check.status)}>{check.status}</span>
+                                    <Show when={check.evidence}>
+                                      <p>{check.evidence}</p>
+                                    </Show>
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </Show>
+                        </Show>
+                        <Show when={board().delivery?.result.changedFiles.length}>
+                          <div data-component="artifact-group">
+                            <span data-slot="eyebrow">Changed files</span>
+                            <ul data-component="pill-list">
+                              <For each={board().delivery?.result.changedFiles}>
+                                {(file) => <li>{file}</li>}
+                              </For>
+                            </ul>
+                          </div>
+                        </Show>
+                        <Show when={board().delivery?.result.diffs.length}>
+                          <div data-component="artifact-group">
+                            <span data-slot="eyebrow">Diffs</span>
+                            <ul data-component="artifact-list">
+                              <For each={board().delivery?.result.diffs}>
+                                {(diff: any) => (
+                                  <li>
+                                    <strong>{diff.file ?? "file"}</strong>
+                                    <pre data-slot="copy">{String(diff.diff ?? diff.patch ?? JSON.stringify(diff, null, 2))}</pre>
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </div>
+                        </Show>
+                        <Show when={board().artifacts.length}>
+                          <div data-component="artifact-group">
+                            <span data-slot="eyebrow">Artifacts</span>
+                            <ul data-component="artifact-list">
+                              <For each={board().artifacts}>
+                                {(artifact) => (
+                                  <li>
+                                    <strong>{artifact.kind}</strong>
+                                    <span>{artifact.label}</span>
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </div>
+                        </Show>
+                      </div>
+                    </Show>
+
+                    <button data-component="toggle" onClick={() => setStore("open", "interactions", (value) => !value)}>
+                      <span>Interactions</span>
+                      <IconChevronRight />
+                    </button>
+                    <Show when={store.open.interactions}>
+                      <div data-slot="rich-copy">
+                        <Show
+                          when={board().interactions.length}
+                          fallback={<p>No interaction history for this task.</p>}
+                        >
+                          <For each={board().interactions}>
+                            {(interaction) => (
+                              <div data-component="interaction-item">
+                                <div data-slot="interaction-top">
+                                  <strong>{interaction.title}</strong>
+                                  <span data-tone={tone(interaction.status)}>{interaction.status}</span>
+                                </div>
+                                <p>{interaction.body}</p>
+                                <Show when={interaction.status === "pending"}>
+                                  <div data-component="interaction-actions">
+                                    <Show when={interaction.type === "permission"}>
+                                      <>
+                                        <button disabled={store.resolving === interaction.id} onClick={() => void resolveInteraction({ id: interaction.id, type: "permission", action: "once" })}>allow once</button>
+                                        <button disabled={store.resolving === interaction.id} onClick={() => void resolveInteraction({ id: interaction.id, type: "permission", action: "always" })}>allow always</button>
+                                        <button disabled={store.resolving === interaction.id} onClick={() => void resolveInteraction({ id: interaction.id, type: "permission", action: "reject" })}>reject</button>
+                                      </>
+                                    </Show>
+                                    <Show when={interaction.type === "question"}>
+                                      <>
+                                        <textarea
+                                          value={store.replies[interaction.id] ?? ""}
+                                          onInput={(event) => setStore("replies", interaction.id, event.currentTarget.value)}
+                                          placeholder="Reply to the question"
+                                        />
+                                        <button
+                                          disabled={store.resolving === interaction.id || !(store.replies[interaction.id] ?? "").trim()}
+                                          onClick={() => void resolveInteraction({ id: interaction.id, type: "question", action: "answer" })}
+                                        >
+                                          submit answer
+                                        </button>
+                                      </>
+                                    </Show>
+                                  </div>
+                                </Show>
+                              </div>
+                            )}
+                          </For>
+                        </Show>
+                      </div>
+                    </Show>
+
+                    <button data-component="toggle" onClick={() => setStore("open", "timeline", (value) => !value)}>
+                      <span>Timeline</span>
+                      <IconChevronRight />
+                    </button>
+                    <Show when={store.open.timeline}>
+                      <div data-slot="rich-copy">
+                        <Show when={board().snapshots.length} fallback={<p>No progress snapshots yet.</p>}>
+                          <ul data-component="timeline">
+                            <For each={board().snapshots}>
+                              {(snapshot) => (
+                                <li>
+                                  <div>
+                                    <strong>{snapshot.summary}</strong>
+                                    <span data-tone={tone(snapshot.status)}>{snapshot.status}</span>
+                                  </div>
+                                  <span>{date(snapshot.time.created)}</span>
+                                </li>
+                              )}
+                            </For>
+                          </ul>
+                        </Show>
+                      </div>
+                    </Show>
+
+                    <button
+                      data-component="toggle"
+                      onClick={() => {
+                        setStore("open", "session", (value) => !value)
+                        void loadSession()
+                      }}
+                    >
+                      <span>Raw session</span>
+                      <IconChevronRight />
+                    </button>
+                    <Show when={store.open.session}>
+                      <div data-slot="rich-copy">
+                        <Show when={!store.sessionLoading} fallback={<p>Loading session messages...</p>}>
+                          <Show when={store.session.length} fallback={<p>No session messages loaded.</p>}>
+                            <ul data-component="timeline">
+                              <For each={store.session}>
+                                {(message) => (
+                                  <li>
+                                    <div>
+                                      <strong>{message.info.role}</strong>
+                                      <span>{message.parts.length} parts</span>
+                                    </div>
+                                    <Show when={message.parts.length}>
+                                      <ul data-component="artifact-list">
+                                        <For each={message.parts}>
+                                          {(part) => (
+                                            <li>
+                                              <strong>{part.type}</strong>
+                                              <Show when={typeof (part as any).text === "string"}>
+                                                <p>{String((part as any).text).slice(0, 400)}</p>
+                                              </Show>
+                                              <Show when={typeof (part as any).tool === "string"}>
+                                                <p>{String((part as any).tool)}</p>
+                                              </Show>
+                                            </li>
+                                          )}
+                                        </For>
+                                      </ul>
+                                    </Show>
+                                  </li>
+                                )}
+                              </For>
+                            </ul>
+                          </Show>
+                        </Show>
+                      </div>
                     </Show>
                   </section>
 

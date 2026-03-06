@@ -3,6 +3,7 @@
 Date: `2026-03-07`
 
 This document is the implementation status companion to [plan.md](D:/myhexin-local/argus-opencode/specs/plan.md).
+It should be read together with the narrowed V1 baseline in [opencode-architecture.md](D:/myhexin-local/argus-opencode/specs/opencode-architecture.md).
 
 Its purpose is:
 
@@ -24,9 +25,17 @@ Implemented center of gravity:
 - Slack gateway
 - Slack unit tests
 - Slack live tests against real Slack APIs
+- project-level task aggregation API
 - console board UI with same-origin board proxies
+- task console UI with project-level task creation and task list
 - board workbench input and board projection view
 - SSE-first board refresh with polling fallback
+
+Architecture note:
+
+- V1 scope is now intentionally narrower than older drafts
+- `workbench` and `board` remain part of V1
+- explicit `workspace` orchestration, multi-executor operation, and strong visual pipelines are deferred
 
 Still present but no longer the product center:
 
@@ -85,12 +94,12 @@ Implemented:
 
 Current deviation:
 
-- the plan called for distinct `TaskService / PlannerService / RunService / DeliveryService / EvaluationService`
-- current code still centralizes most orchestration logic in `src/orchestrator/service.ts`
+- some logic is still centralized, but this is now acceptable for V1
+- the remaining concern is behavioral clarity, not formal service-count purity
 
 Assessment:
 
-Behavior is present, but module boundaries are not as clean as the plan intended.
+Behavior is present. The code is still somewhat centralized, but that is an acceptable V1 tradeoff.
 
 ### 4. Public API And Event Protocol
 
@@ -103,6 +112,7 @@ Implemented:
 - `GET /task/:id`
 - `GET /task/:id/progress`
 - `GET /task/:id/events`
+- `GET /tasks`
 - `GET /task/:id/runs`
 - `GET /run/:id`
 - `GET /run/:id/delivery`
@@ -131,7 +141,6 @@ Implemented event coverage:
 Current deviation:
 
 - event names are normalized from `orchestrator.*`, but not every granular event from the plan exists as a separate event type
-- there is still no explicit `POST /run/:id/abort`
 
 Assessment:
 
@@ -139,24 +148,26 @@ The API is already usable for headless orchestration, but the event taxonomy is 
 
 ### 5. `opencode` Executor
 
-Status: `done for V1`
+Status: `mostly done`
 
 Implemented:
 
 - `submit`
+- `resume`
 - `status`
 - `abort`
 - `delivery`
+- session-scoped executor `events`
 - `capabilities`
 
 Current deviation:
 
-- `resume` and `events` are not yet real executor adapter methods
-- streaming still relies on orchestrator polling plus bus events instead of executor-native streaming
+- streaming still relies on orchestrator polling plus mapped bus events instead of executor-native queue streaming
+- no second executor exists yet, so the contract is only proven against `opencode`
 
 Assessment:
 
-Good enough for the first executor. The adapter boundary exists and can be extended later.
+Good enough for the first executor. The adapter boundary now exists in a more honest form and can be extended later.
 
 ### 6. Evaluator And Delivery Normalizer
 
@@ -171,15 +182,17 @@ Implemented:
   - `test`
   - `lint`
   - `verify_cmd`
+- soft/strict artifact checks
+- web-only visual checks
+- soft judge fallback when a model is available
 - automatic script discovery from `package.json`
 - failure result persistence into `evaluation`
 
 Not yet done:
 
-- artifact-level acceptance checks beyond command results
-- web visual evaluation
-- judge fallback
+- richer web visual evidence such as screenshots and diffs
 - HTML trace capture into delivery
+- stronger judge prompting and model policy
 
 Assessment:
 
@@ -226,14 +239,12 @@ Implemented:
 
 Not yet done:
 
-- OpenAPI regen
-- JS SDK regen
 - dedicated headless API docs page
 - CLI docs for `serve` and `slack` beyond README
 
 Assessment:
 
-Documentation direction is corrected, but generated client surfaces still need to be refreshed.
+Documentation direction is corrected and SDK generation is now refreshed, but dedicated docs still lag.
 
 ### 9. Board UI
 
@@ -321,10 +332,10 @@ These are no longer design assumptions.
 Priority order:
 
 1. split `src/orchestrator/service.ts` into clearer sub-services
-2. regenerate OpenAPI and JS SDK from the current headless API
-3. add visual evaluation hooks to the evaluator contract
-4. document `opencorvus serve` and `opencorvus slack` as the canonical V1 flow
-5. add board docs and route portability cleanup
+2. strengthen project-level task and result exploration in the UI
+3. improve web visual evidence beyond lightweight page checks
+4. document `opencorvus serve`, `opencorvus slack`, and `/tasks` as the canonical V1 flow
+5. add board/task route portability cleanup
 6. decide which legacy GUI/TUI entry points are still officially supported
 
 ## Guardrail

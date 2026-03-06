@@ -442,4 +442,57 @@ describe("orchestrator routes", () => {
 
     expect(submit).toHaveBeenCalledTimes(1)
   })
+
+  test("GET /tasks returns project-level aggregation", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "first task",
+          }),
+        })
+        await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "second task",
+          }),
+        })
+
+        const response = await app.request("/tasks", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          summary: { total_tasks: number; open_tasks: number }
+          tasks: Array<{ task: { id: string; request: string } }>
+        }
+        expect(body.summary.total_tasks).toBe(2)
+        expect(body.summary.open_tasks).toBe(2)
+        expect(body.tasks.length).toBe(2)
+      },
+    })
+
+    expect(submit).toHaveBeenCalledTimes(2)
+  })
 })

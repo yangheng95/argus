@@ -35,6 +35,32 @@ export const CheckConfig = z.object({
   test: z.array(z.string()).optional(),
   lint: z.array(z.string()).optional(),
   verify_cmd: z.array(z.string()).optional(),
+  artifact: z
+    .object({
+      require_changed_files: z.boolean().optional(),
+      min_changed_files: z.number().int().min(0).optional(),
+      require_diff: z.boolean().optional(),
+      require_summary: z.boolean().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
+  visual: z
+    .object({
+      target: z.literal("web"),
+      url: z.string().url(),
+      require_text: z.array(z.string()).optional(),
+      require_title: z.string().optional(),
+      timeout_ms: z.number().int().positive().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
+  judge: z
+    .object({
+      enabled: z.boolean().optional(),
+      prompt: z.string().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
   timeout_ms: z.number().int().positive().optional(),
 })
 
@@ -298,11 +324,44 @@ export const TaskBoard = z.object({
   task: Task,
   plan: PlanVersion.optional(),
   run: Run.optional(),
+  delivery: Delivery.optional(),
+  evaluation: Evaluation.optional(),
+  interactions: Interaction.array(),
+  artifacts: Artifact.array(),
+  snapshots: ProgressSnapshot.array(),
   brief: z.object({
     content: z.string(),
     updated_at: z.number(),
   }),
   lanes: TaskBoardLane.array(),
+})
+
+export const ProjectTaskSummary = z.object({
+  task: Task,
+  plan: PlanVersion.optional(),
+  run: Run.optional(),
+  evaluation: Evaluation.optional(),
+  pending_interactions: z.number().int(),
+  updated_at: z.number(),
+})
+
+export const ProjectBoard = z.object({
+  project: z.object({
+    id: z.string(),
+    name: z.string().optional(),
+    worktree: z.string(),
+  }),
+  summary: z.object({
+    total_tasks: z.number().int(),
+    open_tasks: z.number().int(),
+    running_tasks: z.number().int(),
+    blocked_tasks: z.number().int(),
+    completed_tasks: z.number().int(),
+    failed_tasks: z.number().int(),
+    cancelled_tasks: z.number().int(),
+    median_completion_ms: z.number().int().optional(),
+  }),
+  tasks: ProjectTaskSummary.array(),
 })
 
 export const TaskEvent = z.object({
@@ -328,4 +387,5 @@ export const Event = {
   InteractionResolved: BusEvent.define("orchestrator.interaction.resolved", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), interactionID: Identifier.schema("interaction"), status: Interaction.shape.status, summary: z.string() })),
   DeliveryReady: BusEvent.define("orchestrator.delivery.ready", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), deliveryID: Identifier.schema("delivery"), summary: z.string() })),
   EvaluationCompleted: BusEvent.define("orchestrator.evaluation.completed", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), evaluationID: Identifier.schema("evaluation"), status: Evaluation.shape.status, verdict: Evaluation.shape.verdict, summary: z.string() })),
+  TaskMessageRecorded: BusEvent.define("orchestrator.task.message", z.object({ taskID: Identifier.schema("task"), kind: TaskMessageResult.shape.kind, source: z.string(), text: z.string(), summary: z.string() })),
 }
