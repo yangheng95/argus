@@ -25,6 +25,7 @@ import { ProviderRoutes } from "./provider"
 import { FileRoutes } from "./file"
 import { McpRoutes } from "./mcp"
 import { TuiRoutes } from "./tui"
+import { OrchestratorRoutes } from "./orchestrator"
 
 const log = Log.create({ service: "server" })
 
@@ -54,6 +55,7 @@ export function AppRoutes(root: Hono) {
     .route("/permission", PermissionRoutes())
     .route("/question", QuestionRoutes())
     .route("/provider", ProviderRoutes())
+    .route("/", OrchestratorRoutes())
     .route("/", FileRoutes())
     .route("/mcp", McpRoutes())
     .route("/tui", TuiRoutes())
