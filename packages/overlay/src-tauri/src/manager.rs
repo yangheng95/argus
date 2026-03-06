@@ -1093,6 +1093,16 @@ fn watch_pipe<R: Read + Send + 'static>(
                 }
             }
         }
+        // Stream closure usually means process termination or pipe teardown.
+        // Probe once to collapse stale running/channel state promptly.
+        probe(&shared, &app);
+    });
+}
+
+fn start_probe_loop(shared: Shared, app: AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(1000));
+        probe(&shared, &app);
     });
 }
 
@@ -2316,6 +2326,7 @@ pub fn probe(shared: &Shared, app: &AppHandle) {
 }
 
 pub fn init(shared: &Shared, app: &AppHandle) {
+    start_probe_loop(shared.clone(), app.clone());
     if let Ok(path) = log_path(app) {
         shared.lock().unwrap().log_path = path.to_string_lossy().to_string();
     }
@@ -2352,7 +2363,7 @@ fn start_channel(shared: &Shared, app: &AppHandle, config: &ManagerConfig) -> Re
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     cmd.env("OPENCORVUS_BOT_SERVER_URL", config.server_url.clone());
-    cmd.env("OPENCORVUS_SHARED_SESSION_MODE", "1");
+    cmd.env("OPENCORVUS_SHARED_SESSION_MODE", "0");
     cmd.env("OPENCORVUS_MIRROR_STDOUT", "1");
     cmd.env(
         "OPENCORVUS_SHARED_SESSION_FILE",

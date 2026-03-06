@@ -367,7 +367,15 @@ pub fn start_stdin_bridge(app: &tauri::App) {
             }
         }
         if exit_on_eof {
-            std::process::exit(0);
+            let shared = handle.state::<manager::Shared>();
+            if let Err(error) = manager::stop_bot(shared.inner(), &handle) {
+                manager::push_log(
+                    shared.inner(),
+                    &handle,
+                    format!("stdin eof stop failed: {error}"),
+                );
+            }
+            handle.exit(0);
         }
     });
 }
