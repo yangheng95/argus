@@ -10,3 +10,16 @@ export { TaskQueueTable } from "../scheduler/task-queue.sql"
 export { ScratchpadTable } from "../memory/scratchpad.sql"
 export { TaskPlanTable } from "../memory/task-plan.sql"
 export { GoalTable } from "../session/goal.sql"
+export { WorkbenchPreferenceTable, WorkbenchTaskNoteTable, WorkbenchBriefSnapshotTable } from "../workbench/workbench.sql"
+export {
+  OrchestratorTaskTable,
+  OrchestratorPlanVersionTable,
+  OrchestratorGoalTable,
+  OrchestratorRunTable,
+  OrchestratorInteractionRequestTable,
+  OrchestratorArtifactTable,
+  OrchestratorDeliveryTable,
+  OrchestratorEvaluationTable,
+  OrchestratorProgressSnapshotTable,
+  OrchestratorChannelBindingTable,
+} from "../orchestrator/orchestrator.sql"

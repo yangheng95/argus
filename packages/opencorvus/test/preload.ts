@@ -10,6 +10,7 @@ const dir = path.join(os.tmpdir(), "opencorvus-test-data-" + process.pid)
 await fs.mkdir(dir, { recursive: true })
 afterAll(async () => {
   const { Database } = await import("../src/storage/db")
+  const { Log } = await import("../src/util/log")
   Database.close()
   const busy = (error: unknown) =>
     typeof error === "object" && error !== null && "code" in error && error.code === "EBUSY"
@@ -18,7 +19,10 @@ afterAll(async () => {
     await Bun.sleep(100)
     return fs.rm(dir, { recursive: true, force: true }).catch((error) => {
       if (!busy(error)) throw error
-      if (left <= 1) throw error
+      if (left <= 1) {
+        Log.Default.warn("test cleanup skipped due to persistent EBUSY", { dir, error })
+        return
+      }
       return rm(left - 1)
     })
   }

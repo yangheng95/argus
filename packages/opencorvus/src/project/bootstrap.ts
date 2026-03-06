@@ -15,6 +15,7 @@ import { Truncate } from "../tool/truncation"
 import { CronService } from "../scheduler/cron-service"
 import { EventService } from "../scheduler/event-service"
 import { TaskQueueService } from "../scheduler/task-queue-service"
+import { OrchestratorService } from "@/orchestrator/service"
 
 export async function InstanceBootstrap() {
   Log.Default.info("bootstrapping", { directory: Instance.directory })
@@ -30,6 +31,7 @@ export async function InstanceBootstrap() {
   CronService.init()
   EventService.init()
   TaskQueueService.init()
+  OrchestratorService.init()
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {

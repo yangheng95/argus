@@ -1,2 +1,0 @@
-{"ts":1772727405,"level":"info","tag":"manager","message":"OpenCorvus manager ready","detail":null}
-{"ts":1772727405,"level":"warn","tag":"overlay","message":"overlay diagnostic: e2e-debug","detail":{"available":false,"circuit_open_until":null,"consecutive_failures":null,"detail":null,"event":"e2e-debug","failures":null,"next_retry_at":null,"path":null,"reason":"probe","ts":null}}

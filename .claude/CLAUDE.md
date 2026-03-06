@@ -1,32 +1,98 @@
 # Agent to Read
 
+## 产品定位 (PRD)
+
+OpenCorvus 是一个可以 **coding 和操作 GUI** 的异步编排助手。
+
+核心能力：
+- **编码执行**：通过 opencode kernel（session/prompt/tool）执行代码修改、终端命令、文件操作
+- **GUI 自动化**：通过 screen/input/overlay 工具操作桌面应用（截图、点击、键盘、拖拽、窗口绑定）
+- **视觉分析**：独立子 agent 处理截图分析，不进入主消息流
+- **任务编排**：orchestrator 层管理 task → plan → run → evaluate → retry/replan 生命周期
+- **多渠道交互**：用户通过 Slack/Telegram 等渠道提交任务、接收进度、回答问题
+
+**GUI 自动化是一等公民能力，不是附加功能。**
+
+## 系统架构
+
+### 运行时层级
+
+```
+Channel (Slack/Telegram)  ←→  Orchestrator (task/plan/run/evaluation)
+                                    ↓
+                               Executor (opencode adapter)
+                                    ↓
+                            Kernel (opencode session/prompt/tool)
+                                    ↓
+                   ┌────────────────┼────────────────┐
+                   ↓                ↓                ↓
+              GUI Tools        Terminal Tools    File Tools
+         (screen/input/       (bash/pty)      (edit/write/read)
+          overlay/vision)
+```
+
+### 关键模块与职责
+
+| 层 | 目录 | 职责 |
+|---|---|---|
+| **Channel** | `channel/slack.ts`, `packages/bot/` | 渠道适配、消息收发、线程绑定 |
+| **Orchestrator** | `orchestrator/` | Task/Run/Goal 生命周期、重试/重规划、预算控制 |
+| **Workbench** | `workbench/` | 用户偏好、任务笔记、上下文摘要（brief/board） |
+| **Planner** | `planner/` | 初始计划生成、失败后重规划 |
+| **Evaluator** | `evaluator/` | build/test/lint 确定性检查、LLM judge 兜底 |
+| **Executor** | `executor/opencode.ts` | 将 orchestrator run 映射到 opencode session |
+| **Kernel** | `session/`, `tool/`, `server/` | opencode 上游能力：session 管理、工具执行、API |
+| **GUI** | `opencorvus/perception/`, `opencorvus/gui/`, `tool/screen.ts`, `tool/input.ts` | 截图、窗口绑定、坐标转换、overlay 网格、输入操作 |
+| **Overlay** | `packages/overlay/` (Tauri) | 坐标网格 UI、点击标记、启动入口 |
+| **Bot** | `packages/bot/` | SSE 事件循环、task_report 多轮协议、截图上传、权限自动回复 |
+
+### Bot 与 Orchestrator 的关系
+
+两套系统当前并存：
+
+- **Bot 模式**（`packages/bot/src/core.ts`）：直接通过 SSE 订阅 session 事件，用 `task_report` 工具驱动多轮循环。适合简单的单 session 任务。
+- **Orchestrator 模式**（`orchestrator/`）：管理 Task→Run→Evaluation 生命周期，支持重试、重规划、多 Goal 验证。适合需要质量门控的复杂任务。
+
+Bot 可以作为 orchestrator 的 channel 层使用，也可以独立运行。迁移方向：Bot 逐步调用 orchestrator API 而非直接操作 session。
+
+### 启动方式
+
+- **Overlay（Tauri）是推荐启动入口**，会自动拉起 bot 和其他组件
+- Bot 也可独立启动（开发调试场景）
+- TUI 按需启动，必须能绑定到 bot session
+
+### 窗口绑定原则
+
+- 先截图 → 用 `screen.list_windows` 搜索 → `screen.bind_window` 绑定目标窗口
+- 焦点切换键（Win+I, Alt+Tab）后自动解绑旧窗口，下次截图捕获全屏
+- 必要时随时重新搜索绑定新窗口
+- System prompt 必须包含窗口搜索和绑定指令
+
+### 视觉分析
+
+- 独立子 agent 处理，输入截图输出分析，不进入主消息流
+- 仅在启用 `OPENCORVUS_VISION_MODEL` 且图片 < 7MB 且变化超过阈值时触发
+
 ## 开发测试须知
 
-1. 项目中存在 Slack user token，你需要用 user token（禁止用 bot token 发布任务）模拟开发者行为，向 OpenCorvus 发送消息触发流程。阅读 bot 回复并查看日志，确保行为正确，修复 bug，推进迭代并验证改进效果。
-2. 验收级测试禁止跳过 Slack，必须通过 Slack 交互，确保全链路集成测试真实性。
-3. 验收级测试不允许直接调用 Claude Code 终端或其他组件绕过 Slack；必须由 Slack 指令触发主流程，模拟真实用户交互。
-4. 每次测试前需 kill 掉旧的 OpenCorvus 相关进程，确保环境干净，避免状态污染。
-5. 默认用开发模式启动和调试 OpenCorvus，确保可实时查看日志并快速定位问题。除非验证发布行为，否则不要用二进制包做日常调试。
-6. 如果发现系统未使用 GUI 工具交互、未使用终端执行命令、未使用视觉分析监控屏幕、或未通过 Slack 进行进度汇报，需修复后再继续验收。
-7. 不要给slack发乱码，用json
+1. 项目中存在 Slack user token，用 user token（禁止用 bot token）模拟开发者行为向 OpenCorvus 发送消息触发流程。
+2. 验收级测试禁止跳过 Slack，必须通过 Slack 交互确保全链路集成测试真实性。
+3. 验收级测试不允许直接调用终端或组件绕过 Slack；必须由 Slack 指令触发主流程。
+4. 每次测试前 kill 掉旧的 OpenCorvus 相关进程，确保环境干净。
+5. 默认用开发模式启动和调试。除非验证发布行为，否则不用二进制包。
+6. 如果发现系统未使用 GUI 工具交互、未使用终端执行命令、未使用视觉分析监控屏幕、或未通过 Slack 汇报进度，需修复后再继续验收。
+7. 不要给 Slack 发乱码，用 JSON。
 
 ## 测试分层（避免规则冲突）
 
-- **E2E 验收**：必须走 Slack 链路（发起 -> 执行 -> 汇报 -> 完成），用于确认真实用户路径。
-- **本地诊断**：允许使用本地命令、HTTP API、SSE 订阅、日志等手段做定位和修复；但这不替代 E2E 验收结论。
-- **结论判定**：最终是否通过，以上述 E2E 验收结果为准。
+- **E2E 验收**：必须走 Slack 链路（发起 → 执行 → 汇报 → 完成），确认真实用户路径。
+- **本地诊断**：允许使用本地命令、HTTP API、SSE 订阅、日志等手段定位和修复；不替代 E2E 验收。
+- **结论判定**：最终以 E2E 验收结果为准。
 
 ## Tips
 
-- 如果要进行调查，则优先使用sonnet agent，除非你需要使用Opus的特定功能或优势。
-- 如果使用Sonnet Agents，则最少使用5个agent，协同完成整个调查和分析过程，确保尽可能全面和深入的调查结果。
-
-PRD：
-
-- OpenCorvus 是一个可以 coding 和操作 GUI 的助手。用户通过 Slack 与 OpenCorvus 交互，OpenCorvus 通过 Claude Code 终端执行命令，通过视觉分析监控屏幕，并通过 Slack 汇报进度和结果。
-- bot和TUI不一定同时启动，bot永远最先启动，然后根据需求启动TUI，确保系统资源的合理利用和用户体验的优化。但启动的TUI必须能够内部正确绑定到bot上，确保两者之间的通信和协作正常进行。对于其他的GUI工具也是同样的原则，先搜索再确定目标窗口，必须确保它们能够正确绑定到bot上，确保系统的整体协作和功能的正常实现。最后fallback到桌面环境。在必要场景可以随时重新搜索绑定新窗口。这也体现在system prompt的设计上，必须包含搜索和绑定窗口的指令，确保用户可以随时管理和调整系统的GUI工具，确保系统的灵活性和适应性。
-- 截图分析机制设计一个字agent，输入截图，输出分析。着用截图就不用进入主消息流了，避免干扰主流程的交互和处理。这个agent可以独立处理视觉分析的任务，专注于图像处理和分析，提供更专业和高效的视觉分析能力。同时，这个agent也可以与主消息流进行通信，提供分析结果和反馈，确保系统的整体协作和功能的正常实现。
-- 如果你发现 OpenCorvus 没有使用 GUI 工具进行交互，或者没有使用 Claude Code 终端进行命令执行，或者没有使用视觉分析进行屏幕监控，或者没有使用 Slack 进行进度汇报，那么你需要修复这些问题，确保系统按照设计方案正确运行。
+- 调查任务优先使用 sonnet agent，除非需要 Opus 的特定能力。
+- 使用 Sonnet Agents 时最少 5 个 agent 协同完成调查分析。
 
 ## 全平台打包 (Self-Contained Binary)
 

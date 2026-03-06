@@ -19,6 +19,7 @@ Conclusion:
 
 - `opencorvus/opencode` remains the execution kernel
 - a new orchestrator protocol sits above it
+- operator context and board projection are first-class control-plane concerns
 - the architecture is now structurally complete enough for a V1 design baseline
 - implementation details and tuning will still evolve, but the object model and boundaries should now stay stable
 
@@ -64,6 +65,7 @@ This makes it a good kernel for repository execution and session state.
 It is not enough by itself because it does not yet provide:
 
 - durable task orchestration
+- operator context and long-lived task memory
 - explicit goal gating
 - project-level progress assessment
 - multi-executor routing
@@ -181,7 +183,20 @@ Responsibilities:
 
 This is the real product core.
 
-### 3. Executor Layer
+### 3. Workbench Layer
+
+Module inside `packages/opencorvus`
+
+Responsibilities:
+
+- store durable operator preferences
+- store short-term task notes
+- compile assistant briefs before each run
+- project normalized board views for humans and channels
+
+This layer is not just prompt decoration. It is the operator context that keeps API, Slack, and UI aligned.
+
+### 4. Executor Layer
 
 Module inside `packages/opencorvus`
 
@@ -194,7 +209,7 @@ Responsibilities:
 
 This layer prevents the control plane from being coupled to one tool.
 
-### 4. Evaluation Layer
+### 5. Evaluation Layer
 
 Module inside `packages/opencorvus`
 
@@ -206,7 +221,7 @@ Responsibilities:
 - web visual evaluation
 - LLM judge fallback only when deterministic checks are insufficient
 
-### 5. Channel Layer
+### 6. Channel And UI Layer
 
 Module inside `packages/opencorvus`
 
@@ -217,6 +232,7 @@ Responsibilities:
 - user replies
 - approval and escalation prompts
 - artifact and status summaries
+- board and dashboard surfaces over the orchestrator API
 
 OpenClaw can later be used here as a gateway, but product state remains inside the orchestrator.
 
@@ -228,6 +244,7 @@ packages/
     src/
       kernel/        # kernel-facing wrappers and reused opencode logic
       orchestrator/  # task/plan/run/evaluation control plane
+      workbench/     # preferences, notes, briefs, board projection
       executor/      # opencode/codex/claude adapters
       evaluator/     # acceptance and visual checks
       channel/       # Slack/Telegram/OpenClaw gateway
@@ -259,6 +276,9 @@ The system must be explicit about which layer owns which state.
 - `evaluation`
 - `progress_snapshot`
 - `channel_binding`
+- `workbench_preference`
+- `workbench_task_note`
+- `workbench_brief_snapshot`
 
 ### Executor-Owned State
 
@@ -411,21 +431,17 @@ Fields:
 - `plan_version_id`
 - `description`
 - `criteria`
-- `kind`
 - `priority`
 - `retry_budget`
 - `current_attempts`
 - `status`
+- `metadata.check_selector`
 
-Kinds:
+Important rule:
 
-- `build`
-- `test`
-- `lint`
-- `policy`
-- `visual`
-- `artifact`
-- `judge`
+- `goal` expresses the desired outcome
+- evaluator checks express how that outcome is verified
+- `metadata.check_selector` links a goal to one or more evaluator checks without collapsing goals into checker kinds
 
 Priorities:
 
@@ -607,6 +623,74 @@ Fields:
 - `last_failure_reason`
 - `last_progress_at`
 
+### WorkbenchPreference
+
+Represents durable operator preferences.
+
+Fields:
+
+- `id`
+- `project_id`
+- `task_id`
+- `user_id`
+- `scope`
+- `key`
+- `value`
+- `source`
+- `confidence`
+
+### WorkbenchTaskNote
+
+Represents short-lived task memory captured from user messages or system decisions.
+
+Fields:
+
+- `id`
+- `task_id`
+- `run_id`
+- `kind`
+- `source`
+- `user_id`
+- `content`
+- `metadata`
+
+### TaskBrief
+
+Represents the compiled assistant-facing context for a task or run.
+
+Fields:
+
+- `task_id`
+- `run_id`
+- `content`
+- `preferences`
+- `notes`
+- `goals`
+
+Rule:
+
+- assistants consume the brief, not raw database state
+
+### TaskBoard
+
+Represents the projected control-plane view for human operators.
+
+Fields:
+
+- `task`
+- `plan`
+- `run`
+- `brief`
+- `lanes`
+
+Lane kinds in V1:
+
+- `run`
+- `goals`
+- `blockers`
+- `preferences`
+- `notes`
+
 ### ChannelBinding
 
 Fields:
@@ -686,6 +770,9 @@ This is the API channels and external systems should use.
 - `GET /task/:id`
 - `GET /task/:id/progress`
 - `GET /task/:id/events`
+- `POST /task/:id/message`
+- `GET /task/:id/brief`
+- `GET /task/:id/board`
 - `POST /task/:id/cancel`
 
 ### Interaction APIs
@@ -707,7 +794,8 @@ This is the API channels and external systems should use.
 
 - `POST /task` returns immediately with `task_id`
 - `GET /task/:id/events` uses SSE
-- all mutable operations must be idempotent by caller-provided request id or server-side dedupe key
+- `POST /task` should accept a caller-provided `request_id` and return the existing task on replay
+- all mutable operations should converge on caller-provided request ids or dedupe keys
 - channels never call executor-specific APIs directly
 
 ## Event Model
@@ -753,6 +841,7 @@ This event stream becomes the source for:
 - dashboards
 - audit logs
 - retry decisions
+- board refresh and live operator surfaces
 
 ## Executor Contract
 
@@ -1030,6 +1119,22 @@ Minimum project-level metrics:
 
 This should be exposed as both API response and channel summary.
 
+## Board UI
+
+The board is a control-plane surface, not a desktop overlay.
+
+Purpose:
+
+- let operators inspect the current task state without reading raw session logs
+- let operators inspect the compiled brief and current plan
+- let operators send free-form updates that become preferences, goals, plan hints, or notes
+
+Rules:
+
+- board data is projected from orchestrator + workbench state
+- board refresh should prefer SSE and fall back to polling
+- desktop overlay may deep-link into the board, but should not own the board state model
+
 ## Channel Model
 
 Channels are adapters, not the source of truth.
@@ -1218,15 +1323,9 @@ Mitigation:
 
 ## Immediate Next Work
 
-1. Create `packages/opencorvus/src/orchestrator` with storage schema only.
-2. Implement `Task`, `PlanVersion`, `Goal`, `Run`, `InteractionRequest`, `Artifact`, `Delivery`, `Evaluation`, and `ProgressSnapshot`.
-3. Implement `src/executor/opencode` using existing server and SDK.
-4. Add orchestrator APIs:
-   - `POST /task`
-   - `GET /task/:id`
-   - `GET /task/:id/events`
-   - `GET /task/:id/progress`
-   - `POST /interaction/:id/reply`
-   - `POST /task/:id/cancel`
-5. Add a minimal worker loop that dispatches queued tasks to `opencode_executor`.
-6. Add a delivery normalizer that converts opencode session state into artifacts and delivery records.
+1. Add idempotent task creation using caller-provided `request_id`.
+2. Regenerate OpenAPI and JS SDK from the current headless API surface.
+3. Complete executor contract parity by adding real `resume` and executor event streaming.
+4. Add evaluator layers for artifact checks, web visual checks, and judge fallback.
+5. Add project-level progress and board aggregation APIs.
+6. Reduce legacy CLI surface so headless entrypoints become the obvious default.
