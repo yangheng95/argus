@@ -133,6 +133,7 @@ The headless board now has a web control surface in `packages/console/app`.
 Current working entry for local development on Windows:
 
 ```text
+/tasks?directory=<repo_path>
 /board?task_id=<task_id>&directory=<repo_path>
 ```
 
@@ -148,6 +149,7 @@ Runtime behavior:
 - live updates prefer SSE via `task/:id/events`
 - polling remains as a fallback when the SSE stream is unavailable
 - free-form operator input posts back into the task workbench and refreshes the board
+- `/tasks` provides project-level task creation and task list aggregation
 
 Supporting local proxy routes inside `packages/console/app`:
 

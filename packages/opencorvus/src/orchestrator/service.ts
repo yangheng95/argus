@@ -5,6 +5,7 @@ import { OpencodeExecutor } from "@/executor/opencode"
 import { PermissionNext } from "@/permission/next"
 import { PlannerService } from "@/planner/service"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
@@ -61,6 +62,7 @@ import {
   findRuns,
   findTask,
   findTaskByRequest,
+  listProjectTasks,
   listGoals,
   listGoalsByPlan,
   listInteractions,
@@ -298,6 +300,50 @@ export namespace OrchestratorService {
     return WorkbenchService.compileBoard({ taskID })
   }
 
+  export async function getProjectBoard(limit = 50) {
+    const project = Project.get(Instance.project.id) ?? Instance.project
+    const rows = listProjectTasks(Instance.project.id, limit)
+    const tasks = rows.map((task) => {
+      const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+      const evaluation = run ? findEvaluationByRun(run.id) : undefined
+      const pendingInteractions = listInteractions(task.id).filter((item) => item.status === "pending").length
+      return {
+        task: viewTask(task),
+        plan: plan ? viewPlan(plan) : undefined,
+        run: run ? viewRun(run) : undefined,
+        evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
+        pending_interactions: pendingInteractions,
+        updated_at: task.time_updated,
+      }
+    })
+    const completed = rows
+      .filter((task) => typeof task.time_started === "number" && typeof task.time_completed === "number")
+      .map((task) => (task.time_completed ?? 0) - (task.time_started ?? 0))
+      .filter((value) => value > 0)
+      .sort((a, b) => a - b)
+
+    return {
+      project: {
+        id: project.id,
+        name: project.name,
+        worktree: project.worktree,
+      },
+      summary: {
+        total_tasks: rows.length,
+        open_tasks: rows.filter((task) => !["completed", "failed", "cancelled"].includes(task.status)).length,
+        running_tasks: rows.filter((task) => task.status === "running" || task.status === "evaluating").length,
+        blocked_tasks: rows.filter((task) => task.status === "blocked").length,
+        completed_tasks: rows.filter((task) => task.status === "completed").length,
+        failed_tasks: rows.filter((task) => task.status === "failed").length,
+        cancelled_tasks: rows.filter((task) => task.status === "cancelled").length,
+        median_completion_ms:
+          completed.length === 0 ? undefined : completed[Math.floor((completed.length - 1) / 2)],
+      },
+      tasks,
+    }
+  }
+
   export async function getDelivery(runID: string) {
     await OrchestratorRuntime.syncRun(runID, hooks())
     const delivery = findDeliveryByRun(runID)
@@ -446,6 +492,13 @@ export namespace OrchestratorService {
       text: input.text,
       source: input.source ?? "user_message",
       userID: input.user_id,
+    })
+    await Bus.publish(Event.TaskMessageRecorded, {
+      taskID,
+      kind: result.kind,
+      source: input.source ?? "user_message",
+      text: input.text,
+      summary: result.message,
     })
     if (!result.should_resume) {
       return result
