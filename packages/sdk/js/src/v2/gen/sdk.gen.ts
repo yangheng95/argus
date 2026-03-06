@@ -62,6 +62,10 @@ import type {
   GlobalEventResponses,
   GlobalHealthResponses,
   InstanceDisposeResponses,
+  InteractionRejectErrors,
+  InteractionRejectResponses,
+  InteractionReplyErrors,
+  InteractionReplyResponses,
   LspStatusResponses,
   McpAddErrors,
   McpAddResponses,
@@ -116,6 +120,18 @@ import type {
   QuestionRejectResponses,
   QuestionReplyErrors,
   QuestionReplyResponses,
+  RunAbortErrors,
+  RunAbortResponses,
+  RunArtifactsErrors,
+  RunArtifactsResponses,
+  RunBriefErrors,
+  RunBriefResponses,
+  RunDeliveryErrors,
+  RunDeliveryResponses,
+  RunEvaluationsErrors,
+  RunEvaluationsResponses,
+  RunGetErrors,
+  RunGetResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -166,6 +182,25 @@ import type {
   SessionUpdateErrors,
   SessionUpdateResponses,
   SubtaskPartInput,
+  TaskBoardErrors,
+  TaskBoardResponses,
+  TaskBriefErrors,
+  TaskBriefResponses,
+  TaskCancelErrors,
+  TaskCancelResponses,
+  TaskCreateErrors,
+  TaskCreateResponses,
+  TaskEventsResponses,
+  TaskGetErrors,
+  TaskGetResponses,
+  TaskInteractionsErrors,
+  TaskInteractionsResponses,
+  TaskMessageErrors,
+  TaskMessageResponses,
+  TaskProgressErrors,
+  TaskProgressResponses,
+  TaskRunsErrors,
+  TaskRunsResponses,
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
@@ -2921,6 +2956,597 @@ export class Provider extends HeyApiClient {
   }
 }
 
+export class Task extends HeyApiClient {
+  /**
+   * Create task
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      project?: string
+      requestID?: string
+      source?: string
+      title?: string
+      request?: string
+      priority?: "high" | "normal" | "low"
+      budget?: {
+        maxRuns?: number
+        maxReplans?: number
+        maxEvaluations?: number
+        maxWallTimeMs?: number
+      }
+      checks?: {
+        build?: Array<string>
+        test?: Array<string>
+        lint?: Array<string>
+        verify_cmd?: Array<string>
+        timeout_ms?: number
+      }
+      goals?: Array<{
+        description: string
+        criteria: string
+        priority?: "blocking" | "advisory"
+        metadata?: {
+          check_selector?: Array<string>
+        }
+      }>
+      channelBinding?: {
+        platform: string
+        channel: string
+        thread: string
+        payload?: {
+          [key: string]: unknown
+        }
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "project" },
+            { in: "body", key: "requestID" },
+            { in: "body", key: "source" },
+            { in: "body", key: "title" },
+            { in: "body", key: "request" },
+            { in: "body", key: "priority" },
+            { in: "body", key: "budget" },
+            { in: "body", key: "checks" },
+            { in: "body", key: "goals" },
+            { in: "body", key: "channelBinding" },
+            { in: "body", key: "metadata" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskCreateResponses, TaskCreateErrors, ThrowOnError>({
+      url: "/task",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get task
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskGetResponses, TaskGetErrors, ThrowOnError>({
+      url: "/task/{taskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get task progress
+   */
+  public progress<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskProgressResponses, TaskProgressErrors, ThrowOnError>({
+      url: "/task/{taskID}/progress",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Subscribe to task events
+   */
+  public events<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).sse.get<TaskEventsResponses, unknown, ThrowOnError>({
+      url: "/task/{taskID}/events",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get task brief
+   */
+  public brief<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskBriefResponses, TaskBriefErrors, ThrowOnError>({
+      url: "/task/{taskID}/brief",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get task board
+   */
+  public board<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskBoardResponses, TaskBoardErrors, ThrowOnError>({
+      url: "/task/{taskID}/board",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List task runs
+   */
+  public runs<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskRunsResponses, TaskRunsErrors, ThrowOnError>({
+      url: "/task/{taskID}/runs",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List task interactions
+   */
+  public interactions<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskInteractionsResponses, TaskInteractionsErrors, ThrowOnError>({
+      url: "/task/{taskID}/interactions",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Handle task message
+   */
+  public message<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      text?: string
+      source?: string
+      user_id?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "text" },
+            { in: "body", key: "source" },
+            { in: "body", key: "user_id" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskMessageResponses, TaskMessageErrors, ThrowOnError>({
+      url: "/task/{taskID}/message",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Cancel task
+   */
+  public cancel<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskCancelResponses, TaskCancelErrors, ThrowOnError>({
+      url: "/task/{taskID}/cancel",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Run extends HeyApiClient {
+  /**
+   * Get run
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunGetResponses, RunGetErrors, ThrowOnError>({
+      url: "/run/{runID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get run brief
+   */
+  public brief<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunBriefResponses, RunBriefErrors, ThrowOnError>({
+      url: "/run/{runID}/brief",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Abort run
+   */
+  public abort<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<RunAbortResponses, RunAbortErrors, ThrowOnError>({
+      url: "/run/{runID}/abort",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get run delivery
+   */
+  public delivery<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunDeliveryResponses, RunDeliveryErrors, ThrowOnError>({
+      url: "/run/{runID}/delivery",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List run artifacts
+   */
+  public artifacts<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunArtifactsResponses, RunArtifactsErrors, ThrowOnError>({
+      url: "/run/{runID}/artifacts",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List run evaluations
+   */
+  public evaluations<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunEvaluationsResponses, RunEvaluationsErrors, ThrowOnError>({
+      url: "/run/{runID}/evaluations",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Interaction extends HeyApiClient {
+  /**
+   * Reply to interaction
+   */
+  public reply<ThrowOnError extends boolean = false>(
+    parameters: {
+      interactionID: string
+      directory?: string
+      reply?: "once" | "always" | "reject"
+      message?: string
+      answers?: Array<QuestionAnswer>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "interactionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "reply" },
+            { in: "body", key: "message" },
+            { in: "body", key: "answers" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<InteractionReplyResponses, InteractionReplyErrors, ThrowOnError>({
+      url: "/interaction/{interactionID}/reply",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Reject interaction
+   */
+  public reject<ThrowOnError extends boolean = false>(
+    parameters: {
+      interactionID: string
+      directory?: string
+      message?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "interactionID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "message" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<InteractionRejectResponses, InteractionRejectErrors, ThrowOnError>({
+      url: "/interaction/{interactionID}/reject",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
 export class Find extends HeyApiClient {
   /**
    * Find text
@@ -4265,6 +4891,21 @@ export class OpencodeClient extends HeyApiClient {
   private _provider?: Provider
   get provider(): Provider {
     return (this._provider ??= new Provider({ client: this.client }))
+  }
+
+  private _task?: Task
+  get task(): Task {
+    return (this._task ??= new Task({ client: this.client }))
+  }
+
+  private _run?: Run
+  get run(): Run {
+    return (this._run ??= new Run({ client: this.client }))
+  }
+
+  private _interaction?: Interaction
+  get interaction(): Interaction {
+    return (this._interaction ??= new Interaction({ client: this.client }))
   }
 
   private _find?: Find

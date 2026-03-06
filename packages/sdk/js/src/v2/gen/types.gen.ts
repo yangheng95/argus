@@ -1011,6 +1011,124 @@ export type EventWorkspaceFailed = {
   }
 }
 
+export type EventOrchestratorTaskCreated = {
+  type: "orchestrator.task.created"
+  properties: {
+    taskID: string
+    status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventOrchestratorTaskUpdated = {
+  type: "orchestrator.task.updated"
+  properties: {
+    taskID: string
+    status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+    summary: string
+  }
+}
+
+export type EventOrchestratorPlanCreated = {
+  type: "orchestrator.plan.created"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorPlanActivated = {
+  type: "orchestrator.plan.activated"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorGoalPassed = {
+  type: "orchestrator.goal.passed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorGoalFailed = {
+  type: "orchestrator.goal.failed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorRunCreated = {
+  type: "orchestrator.run.created"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventOrchestratorRunUpdated = {
+  type: "orchestrator.run.updated"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventOrchestratorInteractionRequested = {
+  type: "orchestrator.interaction.requested"
+  properties: {
+    taskID: string
+    runID: string
+    interactionID: string
+    requestType: "permission" | "question"
+    summary: string
+  }
+}
+
+export type EventOrchestratorInteractionResolved = {
+  type: "orchestrator.interaction.resolved"
+  properties: {
+    taskID: string
+    runID: string
+    interactionID: string
+    status: "pending" | "answered" | "rejected" | "expired"
+    summary: string
+  }
+}
+
+export type EventOrchestratorDeliveryReady = {
+  type: "orchestrator.delivery.ready"
+  properties: {
+    taskID: string
+    runID: string
+    deliveryID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorEvaluationCompleted = {
+  type: "orchestrator.evaluation.completed"
+  properties: {
+    taskID: string
+    runID: string
+    evaluationID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  }
+}
+
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -1061,6 +1179,18 @@ export type Event =
   | EventWorktreeFailed
   | EventWorkspaceReady
   | EventWorkspaceFailed
+  | EventOrchestratorTaskCreated
+  | EventOrchestratorTaskUpdated
+  | EventOrchestratorPlanCreated
+  | EventOrchestratorPlanActivated
+  | EventOrchestratorGoalPassed
+  | EventOrchestratorGoalFailed
+  | EventOrchestratorRunCreated
+  | EventOrchestratorRunUpdated
+  | EventOrchestratorInteractionRequested
+  | EventOrchestratorInteractionResolved
+  | EventOrchestratorDeliveryReady
+  | EventOrchestratorEvaluationCompleted
 
 export type GlobalEvent = {
   directory: string
@@ -4545,6 +4675,1060 @@ export type ProviderOauthCallbackResponses = {
 }
 
 export type ProviderOauthCallbackResponse = ProviderOauthCallbackResponses[keyof ProviderOauthCallbackResponses]
+
+export type TaskCreateData = {
+  body?: {
+    project?: string
+    requestID?: string
+    source?: string
+    title?: string
+    request: string
+    priority?: "high" | "normal" | "low"
+    budget?: {
+      maxRuns?: number
+      maxReplans?: number
+      maxEvaluations?: number
+      maxWallTimeMs?: number
+    }
+    checks?: {
+      build?: Array<string>
+      test?: Array<string>
+      lint?: Array<string>
+      verify_cmd?: Array<string>
+      timeout_ms?: number
+    }
+    goals?: Array<{
+      description: string
+      criteria: string
+      priority?: "blocking" | "advisory"
+      metadata?: {
+        check_selector?: Array<string>
+      }
+    }>
+    channelBinding?: {
+      platform: string
+      channel: string
+      thread: string
+      payload?: {
+        [key: string]: unknown
+      }
+    }
+    metadata?: {
+      [key: string]: unknown
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/task"
+}
+
+export type TaskCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskCreateError = TaskCreateErrors[keyof TaskCreateErrors]
+
+export type TaskCreateResponses = {
+  /**
+   * Task accepted
+   */
+  202: {
+    task_id: string
+  }
+}
+
+export type TaskCreateResponse = TaskCreateResponses[keyof TaskCreateResponses]
+
+export type TaskGetData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}"
+}
+
+export type TaskGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskGetError = TaskGetErrors[keyof TaskGetErrors]
+
+export type TaskGetResponses = {
+  /**
+   * Task
+   */
+  200: {
+    id: string
+    projectID: string
+    sessionID?: string | null
+    activePlanVersionID?: string | null
+    activeRunID?: string | null
+    requestID?: string
+    source: string
+    title: string
+    request: string
+    status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+    priority: "high" | "normal" | "low"
+    blockingReason?: string
+    error?: string
+    budget?: {
+      maxRuns?: number
+      maxReplans?: number
+      maxEvaluations?: number
+      maxWallTimeMs?: number
+    }
+    metadata?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskGetResponse = TaskGetResponses[keyof TaskGetResponses]
+
+export type TaskProgressData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/progress"
+}
+
+export type TaskProgressErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskProgressError = TaskProgressErrors[keyof TaskProgressErrors]
+
+export type TaskProgressResponses = {
+  /**
+   * Task progress
+   */
+  200: {
+    task: {
+      id: string
+      projectID: string
+      sessionID?: string | null
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      requestID?: string
+      source: string
+      title: string
+      request: string
+      status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+      priority: "high" | "normal" | "low"
+      blockingReason?: string
+      error?: string
+      budget?: {
+        maxRuns?: number
+        maxReplans?: number
+        maxEvaluations?: number
+        maxWallTimeMs?: number
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+    plan?: {
+      id: string
+      taskID: string
+      version: number
+      status: "active" | "superseded"
+      summary: string
+      prompt: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    goals: Array<{
+      id: string
+      taskID: string
+      planVersionID: string
+      description: string
+      criteria: string
+      priority: "blocking" | "advisory"
+      status: "pending" | "passed" | "failed"
+      orderIndex: number
+      metadata?: {
+        check_selector?: Array<string>
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    run?: {
+      id: string
+      taskID: string
+      planVersionID?: string | null
+      sessionID?: string | null
+      executor: "opencode"
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+      phase: "plan" | "execute" | "evaluate" | "replan"
+      blockingReason?: string
+      error?: string
+      retryCount: number
+      executorRef?: {
+        sessionID?: string
+        queueTaskID?: string
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+    pendingInteractions: Array<{
+      id: string
+      taskID: string
+      runID: string
+      sessionID?: string | null
+      externalID: string
+      type: "permission" | "question"
+      status: "pending" | "answered" | "rejected" | "expired"
+      title: string
+      body: string
+      payload?: {
+        [key: string]: unknown
+      }
+      response?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        resolved?: number
+      }
+    }>
+    delivery?: {
+      id: string
+      taskID: string
+      runID: string
+      status: "ready"
+      summary: string
+      result: {
+        summary: string
+        changedFiles: Array<string>
+        diffs: Array<FileDiff>
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    evaluation?: {
+      id: string
+      taskID: string
+      runID: string
+      deliveryID?: string | null
+      status: "pending" | "passed" | "failed" | "inconclusive"
+      verdict: "accepted" | "rejected" | "inconclusive"
+      summary: string
+      checks: Array<{
+        name: string
+        status: "passed" | "failed" | "skipped"
+        evidence?: string
+      }>
+      time: {
+        created: number
+        updated: number
+        completed?: number
+      }
+    }
+    snapshots: Array<{
+      id: string
+      taskID: string
+      status: "created" | "running" | "blocked" | "completed" | "failed" | "cancelled"
+      summary: string
+      payload?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+  }
+}
+
+export type TaskProgressResponse = TaskProgressResponses[keyof TaskProgressResponses]
+
+export type TaskEventsData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/events"
+}
+
+export type TaskEventsResponses = {
+  /**
+   * Task event stream
+   */
+  200: {
+    event_id: string
+    task_id: string
+    run_id?: string
+    type: string
+    timestamp: number
+    summary: string
+    payload: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type TaskEventsResponse = TaskEventsResponses[keyof TaskEventsResponses]
+
+export type TaskBriefData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/brief"
+}
+
+export type TaskBriefErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskBriefError = TaskBriefErrors[keyof TaskBriefErrors]
+
+export type TaskBriefResponses = {
+  /**
+   * Task brief
+   */
+  200: {
+    content: string
+    preferences: Array<{
+      key: string
+      value: string
+    }>
+    notes: Array<{
+      kind: string
+      content: string
+    }>
+    goals: Array<{
+      description: string
+      criteria: string
+    }>
+  }
+}
+
+export type TaskBriefResponse = TaskBriefResponses[keyof TaskBriefResponses]
+
+export type TaskBoardData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/board"
+}
+
+export type TaskBoardErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskBoardError = TaskBoardErrors[keyof TaskBoardErrors]
+
+export type TaskBoardResponses = {
+  /**
+   * Task board
+   */
+  200: {
+    task: {
+      id: string
+      projectID: string
+      sessionID?: string | null
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      requestID?: string
+      source: string
+      title: string
+      request: string
+      status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+      priority: "high" | "normal" | "low"
+      blockingReason?: string
+      error?: string
+      budget?: {
+        maxRuns?: number
+        maxReplans?: number
+        maxEvaluations?: number
+        maxWallTimeMs?: number
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+    plan?: {
+      id: string
+      taskID: string
+      version: number
+      status: "active" | "superseded"
+      summary: string
+      prompt: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    run?: {
+      id: string
+      taskID: string
+      planVersionID?: string | null
+      sessionID?: string | null
+      executor: "opencode"
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+      phase: "plan" | "execute" | "evaluate" | "replan"
+      blockingReason?: string
+      error?: string
+      retryCount: number
+      executorRef?: {
+        sessionID?: string
+        queueTaskID?: string
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+    brief: {
+      content: string
+      updated_at: number
+    }
+    lanes: Array<{
+      id: string
+      title: string
+      cards: Array<{
+        id: string
+        kind: "goal" | "interaction" | "preference" | "note" | "run" | "plan_hint"
+        title: string
+        detail?: string
+        status?: string
+        metadata?: {
+          [key: string]: unknown
+        }
+      }>
+    }>
+  }
+}
+
+export type TaskBoardResponse = TaskBoardResponses[keyof TaskBoardResponses]
+
+export type TaskRunsData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/runs"
+}
+
+export type TaskRunsErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskRunsError = TaskRunsErrors[keyof TaskRunsErrors]
+
+export type TaskRunsResponses = {
+  /**
+   * Task runs
+   */
+  200: Array<{
+    id: string
+    taskID: string
+    planVersionID?: string | null
+    sessionID?: string | null
+    executor: "opencode"
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    phase: "plan" | "execute" | "evaluate" | "replan"
+    blockingReason?: string
+    error?: string
+    retryCount: number
+    executorRef?: {
+      sessionID?: string
+      queueTaskID?: string
+    }
+    metadata?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }
+  }>
+}
+
+export type TaskRunsResponse = TaskRunsResponses[keyof TaskRunsResponses]
+
+export type TaskInteractionsData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/interactions"
+}
+
+export type TaskInteractionsErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskInteractionsError = TaskInteractionsErrors[keyof TaskInteractionsErrors]
+
+export type TaskInteractionsResponses = {
+  /**
+   * Task interactions
+   */
+  200: Array<{
+    id: string
+    taskID: string
+    runID: string
+    sessionID?: string | null
+    externalID: string
+    type: "permission" | "question"
+    status: "pending" | "answered" | "rejected" | "expired"
+    title: string
+    body: string
+    payload?: {
+      [key: string]: unknown
+    }
+    response?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      resolved?: number
+    }
+  }>
+}
+
+export type TaskInteractionsResponse = TaskInteractionsResponses[keyof TaskInteractionsResponses]
+
+export type TaskMessageData = {
+  body?: {
+    text: string
+    source?: string
+    user_id?: string
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/message"
+}
+
+export type TaskMessageErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskMessageError = TaskMessageErrors[keyof TaskMessageErrors]
+
+export type TaskMessageResponses = {
+  /**
+   * Task message handled
+   */
+  200: {
+    kind: "preference" | "goal" | "plan" | "note"
+    message: string
+    should_resume: boolean
+  }
+}
+
+export type TaskMessageResponse = TaskMessageResponses[keyof TaskMessageResponses]
+
+export type TaskCancelData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/cancel"
+}
+
+export type TaskCancelErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskCancelError = TaskCancelErrors[keyof TaskCancelErrors]
+
+export type TaskCancelResponses = {
+  /**
+   * Task cancelled
+   */
+  200: boolean
+}
+
+export type TaskCancelResponse = TaskCancelResponses[keyof TaskCancelResponses]
+
+export type RunGetData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}"
+}
+
+export type RunGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunGetError = RunGetErrors[keyof RunGetErrors]
+
+export type RunGetResponses = {
+  /**
+   * Run
+   */
+  200: {
+    id: string
+    taskID: string
+    planVersionID?: string | null
+    sessionID?: string | null
+    executor: "opencode"
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    phase: "plan" | "execute" | "evaluate" | "replan"
+    blockingReason?: string
+    error?: string
+    retryCount: number
+    executorRef?: {
+      sessionID?: string
+      queueTaskID?: string
+    }
+    metadata?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type RunGetResponse = RunGetResponses[keyof RunGetResponses]
+
+export type RunBriefData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}/brief"
+}
+
+export type RunBriefErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunBriefError = RunBriefErrors[keyof RunBriefErrors]
+
+export type RunBriefResponses = {
+  /**
+   * Run brief
+   */
+  200: {
+    content: string
+    preferences: Array<{
+      key: string
+      value: string
+    }>
+    notes: Array<{
+      kind: string
+      content: string
+    }>
+    goals: Array<{
+      description: string
+      criteria: string
+    }>
+  }
+}
+
+export type RunBriefResponse = RunBriefResponses[keyof RunBriefResponses]
+
+export type RunAbortData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}/abort"
+}
+
+export type RunAbortErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunAbortError = RunAbortErrors[keyof RunAbortErrors]
+
+export type RunAbortResponses = {
+  /**
+   * Run aborted
+   */
+  200: boolean
+}
+
+export type RunAbortResponse = RunAbortResponses[keyof RunAbortResponses]
+
+export type RunDeliveryData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}/delivery"
+}
+
+export type RunDeliveryErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunDeliveryError = RunDeliveryErrors[keyof RunDeliveryErrors]
+
+export type RunDeliveryResponses = {
+  /**
+   * Run delivery
+   */
+  200: {
+    id: string
+    taskID: string
+    runID: string
+    status: "ready"
+    summary: string
+    result: {
+      summary: string
+      changedFiles: Array<string>
+      diffs: Array<FileDiff>
+    }
+    time: {
+      created: number
+      updated: number
+    }
+  }
+}
+
+export type RunDeliveryResponse = RunDeliveryResponses[keyof RunDeliveryResponses]
+
+export type RunArtifactsData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}/artifacts"
+}
+
+export type RunArtifactsErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunArtifactsError = RunArtifactsErrors[keyof RunArtifactsErrors]
+
+export type RunArtifactsResponses = {
+  /**
+   * Run artifacts
+   */
+  200: Array<{
+    id: string
+    taskID: string
+    runID: string
+    deliveryID?: string | null
+    kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link"
+    label: string
+    payload?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+    }
+  }>
+}
+
+export type RunArtifactsResponse = RunArtifactsResponses[keyof RunArtifactsResponses]
+
+export type RunEvaluationsData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}/evaluations"
+}
+
+export type RunEvaluationsErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunEvaluationsError = RunEvaluationsErrors[keyof RunEvaluationsErrors]
+
+export type RunEvaluationsResponses = {
+  /**
+   * Run evaluations
+   */
+  200: Array<{
+    id: string
+    taskID: string
+    runID: string
+    deliveryID?: string | null
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+    checks: Array<{
+      name: string
+      status: "passed" | "failed" | "skipped"
+      evidence?: string
+    }>
+    time: {
+      created: number
+      updated: number
+      completed?: number
+    }
+  }>
+}
+
+export type RunEvaluationsResponse = RunEvaluationsResponses[keyof RunEvaluationsResponses]
+
+export type InteractionReplyData = {
+  body?: {
+    reply?: "once" | "always" | "reject"
+    message?: string
+    answers?: Array<QuestionAnswer>
+  }
+  path: {
+    interactionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/interaction/{interactionID}/reply"
+}
+
+export type InteractionReplyErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type InteractionReplyError = InteractionReplyErrors[keyof InteractionReplyErrors]
+
+export type InteractionReplyResponses = {
+  /**
+   * Interaction resolved
+   */
+  200: {
+    id: string
+    taskID: string
+    runID: string
+    sessionID?: string | null
+    externalID: string
+    type: "permission" | "question"
+    status: "pending" | "answered" | "rejected" | "expired"
+    title: string
+    body: string
+    payload?: {
+      [key: string]: unknown
+    }
+    response?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      resolved?: number
+    }
+  }
+}
+
+export type InteractionReplyResponse = InteractionReplyResponses[keyof InteractionReplyResponses]
+
+export type InteractionRejectData = {
+  body?: {
+    message?: string
+  }
+  path: {
+    interactionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/interaction/{interactionID}/reject"
+}
+
+export type InteractionRejectErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type InteractionRejectError = InteractionRejectErrors[keyof InteractionRejectErrors]
+
+export type InteractionRejectResponses = {
+  /**
+   * Interaction rejected
+   */
+  200: {
+    id: string
+    taskID: string
+    runID: string
+    sessionID?: string | null
+    externalID: string
+    type: "permission" | "question"
+    status: "pending" | "answered" | "rejected" | "expired"
+    title: string
+    body: string
+    payload?: {
+      [key: string]: unknown
+    }
+    response?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      resolved?: number
+    }
+  }
+}
+
+export type InteractionRejectResponse = InteractionRejectResponses[keyof InteractionRejectResponses]
 
 export type FindTextData = {
   body?: never
