@@ -126,37 +126,6 @@ Verified flows as of `2026-03-07`:
 - real inbound root message -> task creation
 - real permission interaction reply in thread
 
-## Board UI
-
-The headless board now has a web control surface in `packages/console/app`.
-
-Current working entry for local development on Windows:
-
-```text
-/tasks?directory=<repo_path>
-/board?task_id=<task_id>&directory=<repo_path>
-```
-
-Why this shape:
-
-- it works reliably with the current SolidStart route generation on Windows
-- it keeps browser traffic same-origin
-- it lets the console app proxy orchestrator auth server-side
-
-Runtime behavior:
-
-- initial board snapshot is SSR-backed
-- live updates prefer SSE via `task/:id/events`
-- polling remains as a fallback when the SSE stream is unavailable
-- free-form operator input posts back into the task workbench and refreshes the board
-- `/tasks` provides project-level task creation and task list aggregation
-
-Supporting local proxy routes inside `packages/console/app`:
-
-- `GET /board-data`
-- `POST /board-message`
-- `GET /board-events`
-
 ## Use From Source (Repo Developers)
 
 ```bash
