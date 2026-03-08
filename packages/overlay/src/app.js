@@ -71,6 +71,7 @@ const state = {
   memoryFiles: [],
   memorySearchMode: false,
   preferences: [],
+  criteriaSpecs: [],
 };
 
 // ── DOM Refs ──
@@ -1459,7 +1460,6 @@ function renderBoard() {
   // Status
   setTaskStatus(task.status, task.status);
   startElapsedTimer(task.time.started || task.time.created);
-  syncCriteriaSelection(task);
 
   // Overview
   renderOverview(overview, task);
@@ -1472,7 +1472,7 @@ function renderBoard() {
   renderGoals(goalsLane?.cards || []);
 
   // Criteria + Evaluation
-  renderCriteria(evaluation);
+  renderCriteria(task, evaluation);
 
   // Evaluation
   renderEvaluation(evaluation, delivery);

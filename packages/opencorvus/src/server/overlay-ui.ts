@@ -1,7 +1,6 @@
 import { Hono } from "hono"
 import path from "path"
 import fs from "fs"
-import { Installation } from "../installation"
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -19,13 +18,12 @@ function resolveOverlayDir(): string | undefined {
   const distUi = path.join(binDir, "ui")
   if (fs.existsSync(path.join(distUi, "index.html"))) return distUi
 
-  // 2. Dev mode: resolve from the opencorvus package root → sibling overlay package
-  if (Installation.isLocal()) {
-    // import.meta.dir = .../packages/opencorvus/src/server
-    const pkgRoot = import.meta.dir.replace(/[/\\]src[/\\]server$/, "")
-    const devUi = path.resolve(pkgRoot, "../overlay/src")
-    if (fs.existsSync(path.join(devUi, "index.html"))) return devUi
-  }
+  // 2. Source fallback: works in dev (any CHANNEL) when no compiled ui/ exists
+  // import.meta.dir = .../packages/opencorvus/src/server
+  const pkgRoot = import.meta.dir.replace(/[/\\]src[/\\]server$/, "")
+  const devUi = path.resolve(pkgRoot, "../overlay/src")
+  if (fs.existsSync(path.join(devUi, "index.html"))) return devUi
+
   return undefined
 }
 
