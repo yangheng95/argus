@@ -1,6 +1,7 @@
 import z from "zod"
 import { Filesystem } from "../util/filesystem"
 import path from "path"
+import { createHash } from "crypto"
 import { Database, eq } from "../storage/db"
 import { ProjectTable } from "./project.sql"
 import { SessionTable } from "../session/session.sql"
@@ -28,6 +29,50 @@ export namespace Project {
 
     if (path.isAbsolute(name)) return path.normalize(name)
     return path.resolve(cwd, name)
+  }
+
+  function marker(dir: string) {
+    return path.join(dir, "opencorvus")
+  }
+
+  function generated(seed: string) {
+    return createHash("sha1").update(Filesystem.windowsPath(seed)).digest("hex")
+  }
+
+  async function text(args: string[], cwd: string) {
+    const result = await git(args, { cwd }).catch(() => undefined)
+    if (!result || result.exitCode !== 0) return
+    const value = result.text().trim()
+    if (!value) return
+    return value
+  }
+
+  async function roots(cwd: string) {
+    const result = await git(["rev-list", "--max-parents=0", "--all"], { cwd }).catch(() => undefined)
+    if (!result || result.exitCode !== 0) return []
+    return result
+      .text()
+      .split("\n")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .toSorted()
+  }
+
+  async function init(directory: string) {
+    const result = await git(["init"], { cwd: directory }).catch(() => undefined)
+    if (!result || result.exitCode !== 0) return false
+    return Filesystem.exists(path.join(directory, ".git"))
+  }
+
+  async function identify(cwd: string, common: string) {
+    const cached = await Filesystem.readText(marker(common))
+      .then((x) => x.trim())
+      .catch(() => undefined)
+    if (cached) return cached
+
+    const next = (await roots(cwd))[0] || generated(common)
+    await Filesystem.write(marker(common), next).catch(() => undefined)
+    return next
   }
 
   export const Info = z
@@ -91,101 +136,48 @@ export namespace Project {
     log.info("fromDirectory", { directory })
 
     const data = await iife(async () => {
-      const matches = Filesystem.up({ targets: [".git"], start: directory })
-      const dotgit = await matches.next().then((x) => x.value)
-      await matches.return()
-      if (dotgit) {
-        let sandbox = path.dirname(dotgit)
+      const gitBinary = Bun.which("git")
+      const dotgit = path.join(directory, ".git")
+      const local = await Filesystem.exists(dotgit)
 
-        const gitBinary = Bun.which("git")
-
-        // cached id calculation
-        let id = await Filesystem.readText(path.join(dotgit, "opencorvus"))
-          .then((x) => x.trim())
-          .catch(() => undefined)
-
-        if (!gitBinary) {
-          return {
-            id: id ?? "global",
-            worktree: sandbox,
-            sandbox: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
-          }
-        }
-
-        // generate id from root commit
-        if (!id) {
-          const roots = await git(["rev-list", "--max-parents=0", "--all"], {
-            cwd: sandbox,
-          })
-            .then(async (result) =>
-              (await result.text())
-                .split("\n")
-                .filter(Boolean)
-                .map((x) => x.trim())
-                .toSorted(),
-            )
-            .catch(() => undefined)
-
-          if (!roots) {
-            return {
-              id: "global",
-              worktree: sandbox,
-              sandbox: sandbox,
-              vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
-            }
-          }
-
-          id = roots[0]
-          if (id) {
-            await Filesystem.write(path.join(dotgit, "opencorvus"), id).catch(() => undefined)
-          }
-        }
-
-        if (!id) {
+      if (!gitBinary) {
+        if (!local) {
           return {
             id: "global",
-            worktree: sandbox,
-            sandbox: sandbox,
-            vcs: "git",
-          }
-        }
-
-        const top = await git(["rev-parse", "--show-toplevel"], {
-          cwd: sandbox,
-        })
-          .then(async (result) => gitpath(sandbox, await result.text()))
-          .catch(() => undefined)
-
-        if (!top) {
-          return {
-            id,
-            sandbox,
-            worktree: sandbox,
+            worktree: "/",
+            sandbox: "/",
             vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
           }
         }
 
-        sandbox = top
+        const id =
+          (await Filesystem.readText(marker(dotgit))
+            .then((x) => x.trim())
+            .catch(() => undefined)) || generated(dotgit)
 
-        const worktree = await git(["rev-parse", "--git-common-dir"], {
-          cwd: sandbox,
-        })
-          .then(async (result) => {
-            const common = gitpath(sandbox, await result.text())
-            // Avoid going to parent of sandbox when git-common-dir is empty.
-            return common === sandbox ? sandbox : path.dirname(common)
-          })
-          .catch(() => undefined)
-
-        if (!worktree) {
-          return {
-            id,
-            sandbox,
-            worktree: sandbox,
-            vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
-          }
+        return {
+          id,
+          sandbox: directory,
+          worktree: directory,
+          vcs: Info.shape.vcs.parse(Flag.OPENCORVUS_FAKE_VCS),
         }
+      }
+
+      const inherited = local ? undefined : await text(["rev-parse", "--show-toplevel"], directory)
+      const root = inherited ? path.resolve(gitpath(directory, inherited)) : undefined
+      const hasLocalGit = local || (!!root && root !== path.resolve(directory) && (await init(directory)))
+
+      if (hasLocalGit) {
+        let sandbox = directory
+        const top = await text(["rev-parse", "--show-toplevel"], sandbox)
+        if (top) {
+          sandbox = gitpath(sandbox, top)
+        }
+
+        const commonText = await text(["rev-parse", "--git-common-dir"], sandbox)
+        const common = commonText ? gitpath(sandbox, commonText) : undefined
+        const id = await identify(sandbox, common || path.join(sandbox, ".git"))
+        const worktree = !common || common === sandbox ? sandbox : path.dirname(common)
 
         return {
           id,

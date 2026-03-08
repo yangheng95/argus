@@ -13,7 +13,7 @@
 import { generateText, stepCountIs } from "ai"
 import z from "zod"
 import { Provider } from "@/provider/provider"
-import { createCodebaseTools } from "@/orchestrator/codebase-tools"
+import { createEvaluatorTools } from "./tools"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "evaluator-agent" })
@@ -31,7 +31,6 @@ export const FailureClassification = z.enum([
   "strategy",
   "unknown",
 ])
-export type FailureClassificationType = z.infer<typeof FailureClassification>
 
 export const ReplanGuidance = z.object({
   root_cause: z.string().describe("What actually went wrong at the technical level"),
@@ -39,7 +38,6 @@ export const ReplanGuidance = z.object({
   suggested_strategy: z.string().describe("How the next attempt should approach the problem differently"),
   avoid_approaches: z.array(z.string()).describe("Approaches that were tried and failed — do not repeat"),
 })
-export type ReplanGuidanceType = z.infer<typeof ReplanGuidance>
 
 export const GoalAssessment = z.object({
   goal_index: z.number(),
@@ -85,8 +83,8 @@ export interface DeliveryInfo {
 // EvaluatorAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 10
-const TIMEOUT_MS = 120_000
+const MAX_STEPS = 15
+const TIMEOUT_MS = 180_000
 
 export namespace EvaluatorAgent {
   export async function analyze(input: {
@@ -99,12 +97,8 @@ export namespace EvaluatorAgent {
     if (!model) throw new Error("no LLM model available for evaluator agent")
 
     const language = await Provider.getLanguage(model)
-    // Evaluator only needs read_file and search_code for investigation
-    const allTools = createCodebaseTools()
-    const tools = {
-      read_file: allTools.read_file,
-      search_code: allTools.search_code,
-    }
+    // Full evaluator tool set: codebase exploration + memory + preferences
+    const tools = createEvaluatorTools()
 
     const userPrompt = buildUserPrompt(input)
 
@@ -162,7 +156,10 @@ function extractJSON(text: string): EvaluatorAnalysisType {
     if (match) raw = match[1]
   }
 
-  return EvaluatorAnalysis.parse(JSON.parse(raw))
+  const obj = JSON.parse(raw)
+  // Normalize empty classification (LLM sometimes leaves it empty for accepted verdicts)
+  if (!obj.classification) obj.classification = "evaluation"
+  return EvaluatorAnalysis.parse(obj)
 }
 
 async function agentModel() {
@@ -270,12 +267,21 @@ function indent(text: string, prefix = "   "): string {
 
 const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer. Your job is to analyze the results of a coding task: review automated check outputs, investigate failures, and assess whether each goal was met.
 
+## Available Tools
+
+- **read_file**: Read file contents with line numbers
+- **find_files**: Find files matching a glob pattern
+- **search_code**: Search file contents with regex (ripgrep)
+- **list_directory**: List files and directories at a path
+- **memory_search**: Search project memory for prior failures, known issues, or historical patterns
+- **preference_list**: List project conventions to check compliance
+
 ## Your Process
 
 ### Phase 1: REVIEW the automated check results
 
 Look at each check (build, test, lint, etc.):
-- If ALL passed → likely "accepted"
+- If ALL passed → likely "accepted", but still verify code quality
 - If any FAILED → investigate WHY using the tools
 
 ### Phase 2: INVESTIGATE failures (if any)
@@ -284,8 +290,18 @@ When checks fail, use tools to understand the root cause:
 - Read the failing test file to understand what was expected
 - Read the changed source files to see what the agent actually did
 - Search for related code to understand if the change was correct
+- List directories to check for missing or unexpected files
+- Find test files related to changed code
+- Search memory for similar past failures — the same issue may have been solved before
 
-Spend 2-5 tool calls investigating. Don't guess — verify.
+Spend 3-8 tool calls investigating. Don't guess — verify.
+
+### Phase 2.5: CHECK conventions (if code quality goals exist)
+
+If the goals include code quality, code review, or convention compliance:
+- List preferences to see project conventions
+- Verify the delivered code follows established patterns
+- Check for violations of naming, structure, or documentation conventions
 
 ### Phase 3: ASSESS each goal independently
 

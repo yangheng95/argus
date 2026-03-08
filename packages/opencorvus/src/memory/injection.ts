@@ -4,26 +4,28 @@ import { Log } from "@/util/log"
 /**
  * Memory recall system prompt section.
  *
- * Architecture reference: OpenClaw buildMemorySection()
+ * Architecture notes:
  * - Memory is NOT auto-injected into the system prompt.
- * - Instead, a system prompt instruction tells the agent to call memory_search
- *   before answering questions about prior work, decisions, or preferences.
+ * - Instead, a system prompt instruction tells the agent to call the memory
+ *   and preference tools before answering questions about prior work or preferences.
  * - Memory content enters the LLM context as tool results, not system prompt text.
  */
 export namespace MemoryInjection {
   const log = Log.create({ service: "memory.injection" })
 
-  const MEMORY_RECALL_INSTRUCTION = `## Memory Recall
+  const MEMORY_RECALL_INSTRUCTION = `## Memory And Preference Recall
 
 You have access to a persistent memory store via the \`memory\` tool.
+You also have access to a scoped preference store via the \`preference\` tool.
 
-### At the start of every task — search BEFORE planning:
+### At the start of every task — recall BEFORE planning:
 
-1. Call \`memory\` with \`action: "search"\` using keywords from the task (e.g. the app name, technology, pattern, or problem type)
+1. Call \`memory\` with \`action: "search"\` and \`scope: "all"\` using keywords from the task
 2. If results are sparse, try a second search with broader or alternate keywords
-3. Use any recalled prior work, known patterns, gotchas, or preferences to inform your plan — do not re-discover what is already known
+3. Call \`preference\` with \`action: "list"\` and \`scope: "all"\` to confirm project-wide and session-specific preferences
+4. Use recalled prior work, known patterns, gotchas, and preferences to inform your plan — do not re-discover what is already known
 
-This is not optional. Prior sessions may have already solved parts of this problem or identified traps you should avoid. Skipping memory recall risks duplicating work or repeating past mistakes.
+This is not optional. Prior sessions may have already solved parts of this problem or identified traps you should avoid. Skipping recall risks duplicating work or repeating past mistakes.
 
 ### During execution — write as you go:
 
@@ -35,6 +37,14 @@ After each significant discovery or completed subtask, call \`memory\` with \`ac
 
 Do not batch writes to the end. If a step reveals something worth keeping, write it immediately before moving on.
 
+Default \`memory.write\` to \`scope: "global"\` so it survives across all sessions in this project.
+Use \`scope: "session"\` only for temporary knowledge that should stay inside the current session.
+
+When you confirm a stable instruction such as response style, change policy, naming convention, or workflow preference,
+call \`preference\` with \`action: "write"\`.
+Default \`preference.write\` to \`scope: "global"\`.
+Use \`scope: "session"\` only when the instruction is explicitly temporary or only applies to this session.
+
 ### After task completion — write a summary:
 
 Write a final memory entry summarising: what was accomplished, key decisions made, anything that was tricky, and what the next steps would be if this task were revisited.
@@ -42,7 +52,11 @@ Write a final memory entry summarising: what was accomplished, key decisions mad
 ### Other memory actions:
 
 - \`action: "list"\` — browse available memory files when search results are sparse
-- \`action: "delete"\` — remove outdated or incorrect memories`
+- \`action: "delete"\` — remove outdated or incorrect memories
+
+### Other preference actions:
+
+- \`action: "delete"\` — remove outdated preferences`
 
   /**
    * Returns the memory recall instruction for the system prompt,

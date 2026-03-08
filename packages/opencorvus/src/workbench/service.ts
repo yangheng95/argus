@@ -2,6 +2,7 @@ import z from "zod"
 import { generateObject } from "ai"
 import { Identifier } from "@/id/id"
 import { Memory } from "@/memory"
+import { Preference } from "@/preference"
 import { Provider } from "@/provider/provider"
 import { Snapshot } from "@/snapshot"
 import {
@@ -18,7 +19,7 @@ import {
 } from "@/orchestrator/orchestrator.sql"
 import { EvaluationCheck } from "@/orchestrator/model"
 import { Database, eq } from "@/storage/db"
-import { WorkbenchBriefSnapshotTable, WorkbenchPreferenceTable, WorkbenchTaskNoteTable } from "./workbench.sql"
+import { WorkbenchBriefSnapshotTable, WorkbenchTaskNoteTable } from "./workbench.sql"
 
 const MessageInput = z.object({
   taskID: z.string(),
@@ -61,14 +62,12 @@ export namespace WorkbenchService {
     )
   }
 
-  export function preferences(input: { projectID: string; taskID: string; userID?: string }) {
-    return Database.use((db) =>
-      db
-        .select()
-        .from(WorkbenchPreferenceTable)
-        .where(input.userID ? eq(WorkbenchPreferenceTable.user_id, input.userID) : eq(WorkbenchPreferenceTable.project_id, input.projectID))
-        .all(),
-    )
+  export function preferences(input: { projectID: string; sessionID?: string }) {
+    return Preference.list({
+      projectID: input.projectID,
+      sessionID: input.sessionID,
+      scope: "all",
+    })
   }
 
   export function updatePreference(input: {
@@ -76,33 +75,11 @@ export namespace WorkbenchService {
     key: string
     value: string
   }) {
-    const row = Database.use((db) =>
-      db.select().from(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, input.preferenceID)).get(),
-    )
-    if (!row) throw new Error(`Preference not found: ${input.preferenceID}`)
-    Database.use((db) =>
-      db
-        .update(WorkbenchPreferenceTable)
-        .set({
-          key: input.key,
-          value: input.value,
-          time_updated: Date.now(),
-        })
-        .where(eq(WorkbenchPreferenceTable.id, input.preferenceID))
-        .run(),
-    )
-    return true
+    return Preference.update(input)
   }
 
   export function deletePreference(preferenceID: string) {
-    const row = Database.use((db) =>
-      db.select().from(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, preferenceID)).get(),
-    )
-    if (!row) throw new Error(`Preference not found: ${preferenceID}`)
-    Database.use((db) =>
-      db.delete(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, preferenceID)).run(),
-    )
-    return true
+    return Preference.remove(preferenceID)
   }
 
   export function recordTaskRequest(input: {
@@ -144,23 +121,41 @@ export namespace WorkbenchService {
       }
     }
 
+    const explicitPreference = parsePreference(text)
+    if (explicitPreference) {
+      setPreference({
+        taskID: input.taskID,
+        userID: input.userID,
+        key: explicitPreference.key,
+        value: explicitPreference.value,
+        scope: explicitPreference.scope,
+      })
+      return {
+        kind: "preference" as const,
+        message: `Preference saved (${explicitPreference.scope}): \`${explicitPreference.key}=${explicitPreference.value}\``,
+        should_resume: false,
+      }
+    }
+
     const interpreted = await interpretWithLLM(input).then((result) =>
       result.success ? result.intent : fallbackIntent(text),
     )
     const resolved = interpreted.kind === "note" ? enrichIntent(text, interpreted) : interpreted
 
     if (resolved.kind === "preference" && resolved.preferences.length > 0) {
+      const scope = inferPreferenceScope(text)
       for (const pref of resolved.preferences) {
         setPreference({
           taskID: input.taskID,
           userID: input.userID,
           key: pref.key,
           value: pref.value,
+          scope,
         })
       }
       return {
         kind: "preference" as const,
-        message: `Preference saved: ${resolved.preferences.map((item) => `\`${item.key}=${item.value}\``).join(", ")}`,
+        message: `Preference saved (${scope}): ${resolved.preferences.map((item) => `\`${item.key}=${item.value}\``).join(", ")}`,
         should_resume: false,
       }
     }
@@ -244,17 +239,14 @@ export namespace WorkbenchService {
             .all(),
         )
       : []
-    const userID = taskUser({
-      taskID: task.id,
-      metadata: task.metadata,
-    })
     const prefs = preferences({
       projectID: task.project_id,
-      taskID: task.id,
-      userID,
+      sessionID: task.session_id ?? input.sessionID,
     })
     const notes = taskNotes(task.id)
     const memory = recallMemory(task)
+    const globalPrefs = prefs.filter((item) => item.scope === "global")
+    const sessionPrefs = prefs.filter((item) => item.scope === "session")
     const content = [
       "<assistant-brief>",
       `Task: ${task.title}`,
@@ -277,14 +269,20 @@ export namespace WorkbenchService {
             )
             .join("\n")
         : "",
-      prefs.length > 0
-        ? "User preferences:\n" + prefs.map((pref) => `- ${pref.key}: ${pref.value}`).join("\n")
+      globalPrefs.length > 0
+        ? "Global preferences:\n" + globalPrefs.map((pref) => `- ${pref.key}: ${pref.value}`).join("\n")
+        : "",
+      sessionPrefs.length > 0
+        ? "Session preferences:\n" + sessionPrefs.map((pref) => `- ${pref.key}: ${pref.value}`).join("\n")
         : "",
       notes.length > 0
         ? "Recent task notes:\n" + notes.slice(-6).map((note) => `- [${note.kind}] ${note.content}`).join("\n")
         : "",
       memory.length > 0
-        ? "Relevant memory:\n" + memory.map((item) => `- ${item.fileTitle}: ${item.content.slice(0, 200)}`).join("\n")
+        ? "Relevant memory:\n" +
+          memory
+            .map((item) => `- [${item.scope}] ${item.fileTitle}: ${item.content.slice(0, 200)}`)
+            .join("\n")
         : "",
       "</assistant-brief>",
       "Use the brief above to align your work before executing the task.",
@@ -303,9 +301,9 @@ export namespace WorkbenchService {
           run_id: input.runID ?? null,
           content,
           inputs: {
-            userID,
             notes: notes.length,
-            preferences: prefs.length,
+            globalPreferences: globalPrefs.length,
+            sessionPreferences: sessionPrefs.length,
             memory: memory.length,
           },
           time_created: now,
@@ -316,7 +314,13 @@ export namespace WorkbenchService {
 
     return {
       content,
-      preferences: prefs,
+      preferences: Preference.merged({
+        projectID: task.project_id,
+        sessionID: task.session_id ?? input.sessionID,
+      }).map((item) => ({
+        key: item.key,
+        value: item.value,
+      })),
       notes,
       goals,
     }
@@ -366,11 +370,7 @@ export namespace WorkbenchService {
     )
     const prefs = preferences({
       projectID: task.project_id,
-      taskID: task.id,
-      userID: taskUser({
-        taskID: task.id,
-        metadata: task.metadata,
-      }),
+      sessionID: task.session_id ?? undefined,
     })
     const notes = taskNotes(task.id, 12)
     const staging = notes.filter((note) =>
@@ -616,6 +616,23 @@ export namespace WorkbenchService {
             : [],
         },
         {
+          id: "delivery",
+          title: "Delivery",
+          cards: latestDelivery
+            ? [
+                {
+                  id: latestDelivery.id,
+                  kind: "note" as const,
+                  title: latestDelivery.status,
+                  detail: latestDelivery.summary,
+                  status: latestDelivery.status,
+                  time: latestDelivery.time_updated,
+                  metadata: latestDelivery.result ?? undefined,
+                },
+              ]
+            : [],
+        },
+        {
           id: "goals",
           title: "Dynamic Goals",
           cards: goals
@@ -672,7 +689,7 @@ export namespace WorkbenchService {
             title: pref.key,
             detail: pref.value,
             status: pref.scope,
-            time: pref.time_updated,
+            time: pref.timeUpdated,
           })),
         },
         {
@@ -710,6 +727,7 @@ async function interpretWithLLM(input: z.infer<typeof MessageInput>) {
 
 Rules:
 - Use "preference" when the user expresses durable preferences or style constraints.
+- Default preferences to global unless the user clearly says they only apply to this session.
 - Use "goal" when the user adds or changes acceptance goals.
 - Use "plan" when the user suggests how the task should be executed.
 - Use "note" for everything else.
@@ -824,6 +842,14 @@ function inferPreferences(text: string) {
   return prefs
 }
 
+function inferPreferenceScope(text: string): Preference.Scope {
+  const lower = text.toLowerCase()
+  if (/(this session|for this session|only for now|temporarily|temporary|暂时|这次会话|本次会话|仅本次)/.test(lower)) {
+    return "session"
+  }
+  return "global"
+}
+
 function inferGoals(text: string) {
   const lower = text.toLowerCase()
   const goals: string[] = []
@@ -936,18 +962,21 @@ function viewBoardDelivery(
     | undefined,
 ) {
   if (!row) return undefined
+  const result = (row.result ?? {}) as Record<string, unknown>
   return {
     id: row.id,
     taskID: row.task_id,
     runID: row.run_id,
-    status: "ready" as const,
+    status: row.status,
     summary: clipBoard(row.summary),
     result: {
-      summary: clipBoard(String(row.result?.summary ?? row.summary)),
-      changedFiles: Array.isArray(row.result?.changed_files)
-        ? row.result.changed_files.filter((item): item is string => typeof item === "string").slice(0, BOARD_CHANGED_FILE_LIMIT)
+      summary: clipBoard(String(result.summary ?? row.summary)),
+      changedFiles: Array.isArray(result.changed_files)
+        ? result.changed_files.filter((item): item is string => typeof item === "string").slice(0, BOARD_CHANGED_FILE_LIMIT)
         : [],
       diffs: [],
+      artifacts: Array.isArray(result.artifacts) ? result.artifacts.slice(0, 12) : [],
+      publish: result.publish && typeof result.publish === "object" ? result.publish : undefined,
     },
     time: {
       created: row.time_created,
@@ -1047,13 +1076,15 @@ function boardOverview(input: {
       }
     | undefined
 }) {
-  const active = ["queued", "planning", "running", "evaluating"].includes(input.task.status)
+  const active = ["queued", "planning", "running", "evaluating", "delivering"].includes(input.task.status)
   const canResume = Boolean(input.run) && !active && input.pendingInteractions.length === 0
   const headline =
     input.pendingInteractions.length > 0
       ? "Waiting on human input"
       : input.task.status === "completed"
         ? "Accepted delivery is ready"
+        : input.task.status === "delivering"
+          ? "Publishing the accepted delivery"
         : input.task.status === "failed"
           ? "Current attempt failed acceptance"
           : input.task.status === "cancelled"
@@ -1070,6 +1101,8 @@ function boardOverview(input: {
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
       : input.task.status === "completed" && input.acceptedDelivery
         ? clipBoard(input.acceptedDelivery.summary)
+        : input.task.status === "delivering" && input.candidateDelivery
+          ? clipBoard(input.candidateDelivery.summary)
         : input.currentFailure?.summary ??
           (input.task.status === "evaluating"
             ? "Execution finished. Acceptance checks are running against the latest delivery."
@@ -1097,13 +1130,19 @@ function boardOverview(input: {
               title: "Retry if the task should continue",
               detail: "The task is cancelled. Retry will queue a new run from the latest context.",
             }
-          : input.task.status === "completed"
-            ? {
-                kind: "review_delivery" as const,
-                title: "Review the accepted delivery",
-                detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
-              }
-            : active
+            : input.task.status === "completed"
+              ? {
+                  kind: "review_delivery" as const,
+                  title: "Review the accepted delivery",
+                  detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
+                }
+              : input.task.status === "delivering"
+                ? {
+                    kind: "observe" as const,
+                    title: "Wait for delivery exports",
+                    detail: "Delivery artifacts are being published and summarized.",
+                  }
+              : active
               ? {
                   kind: "observe" as const,
                   title: "Monitor the active run",
@@ -1128,42 +1167,25 @@ function boardOverview(input: {
   }
 }
 
-function setPreference(input: { taskID: string; userID?: string; key: string; value: string }) {
+function setPreference(input: {
+  taskID: string
+  userID?: string
+  key: string
+  value: string
+  scope?: Preference.Scope
+}) {
   const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
-  const now = Date.now()
-  Database.use((db) => {
-    const existing = db
-      .select()
-      .from(WorkbenchPreferenceTable)
-      .where(eq(WorkbenchPreferenceTable.key, input.key))
-      .all()
-      .find((item) => item.task_id === task.id || (!!input.userID && item.user_id === input.userID))
-    if (existing) {
-      db.update(WorkbenchPreferenceTable)
-        .set({
-          value: input.value,
-          time_updated: now,
-        })
-        .where(eq(WorkbenchPreferenceTable.id, existing.id))
-        .run()
-      return
-    }
-    db.insert(WorkbenchPreferenceTable)
-      .values({
-        id: Identifier.ascending("preference"),
-        project_id: task.project_id,
-        task_id: task.id,
-        user_id: input.userID,
-        scope: input.userID ? "user" : "task",
-        key: input.key,
-        value: input.value,
-        source: "user_message",
-        confidence: 100,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+  Preference.set({
+    projectID: task.project_id,
+    taskID: task.id,
+    sessionID: task.session_id ?? undefined,
+    userID: input.userID,
+    key: input.key,
+    value: input.value,
+    scope: input.scope ?? "global",
+    source: "user_message",
+    confidence: 100,
   })
 }
 
@@ -1300,49 +1322,13 @@ function recallMemory(task: typeof OrchestratorTaskTable.$inferSelect) {
     return Memory.search({
       query,
       projectId: task.project_id,
+      sessionID: task.session_id ?? undefined,
+      scope: "all",
       limit: 3,
     })
   } catch {
     return []
   }
-}
-
-function taskUser(input: { taskID: string; metadata: unknown }) {
-  if (input.metadata && typeof input.metadata === "object") {
-    const workbench = (input.metadata as Record<string, unknown>).workbench
-    if (workbench && typeof workbench === "object") {
-      const user = (workbench as Record<string, unknown>).user
-      if (typeof user === "string" && user) return user
-    }
-    const slack = (input.metadata as Record<string, unknown>).slack
-    if (slack && typeof slack === "object") {
-      const user = (slack as Record<string, unknown>).user
-      if (typeof user === "string" && user) return user
-    }
-  }
-  const note = Database.use((db) =>
-    db
-      .select()
-      .from(WorkbenchTaskNoteTable)
-      .where(eq(WorkbenchTaskNoteTable.task_id, input.taskID))
-      .orderBy(WorkbenchTaskNoteTable.time_created)
-      .all()
-      .filter((item) => typeof item.user_id === "string" && item.user_id)
-      .at(-1),
-  )
-  if (note?.user_id) return note.user_id
-  const pref = Database.use((db) =>
-    db
-      .select()
-      .from(WorkbenchPreferenceTable)
-      .where(eq(WorkbenchPreferenceTable.task_id, input.taskID))
-      .orderBy(WorkbenchPreferenceTable.time_created)
-      .all()
-      .filter((item) => typeof item.user_id === "string" && item.user_id)
-      .at(-1),
-  )
-  if (pref?.user_id) return pref.user_id
-  return undefined
 }
 
 function planHints(metadata: unknown) {
@@ -1362,9 +1348,18 @@ function parseCommand(text: string, prefix: string) {
 function parsePreference(text: string) {
   const pref = parseCommand(text, "/pref")
   if (!pref) return undefined
+  const scoped = pref.match(/^(global|session)\s+([a-zA-Z0-9._-]+)\s*[:=]\s*(.+)$/i)
+  if (scoped) {
+    return {
+      scope: scoped[1].toLowerCase() as Preference.Scope,
+      key: scoped[2],
+      value: scoped[3].trim(),
+    }
+  }
   const match = pref.match(/^([a-zA-Z0-9._-]+)\s*[:=]\s*(.+)$/)
   if (!match) return undefined
   return {
+    scope: "global" as const,
     key: match[1],
     value: match[2].trim(),
   }

@@ -1,13 +1,26 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import path from "path"
+import type { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { SkillTool } from "../../src/tool/skill"
+import type { Tool } from "../../src/tool/tool"
 import { Log } from "../../src/util/log"
 import { Filesystem } from "../../src/util/filesystem"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+const baseCtx: Omit<Tool.Context, "ask"> = {
+  sessionID: "test",
+  messageID: "",
+  callID: "",
+  agent: "build",
+  abort: AbortSignal.any([]),
+  messages: [],
+  metadata: () => {},
+}
 
 describe("skill routes", () => {
   afterEach(async () => {
@@ -101,7 +114,7 @@ describe("skill routes", () => {
         expect(item?.risk.has_scripts).toBe(true)
       },
     })
-  })
+  }, 40000)
 
   test("POST /skill/policy updates effective policy and /skill/remove removes the source", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -177,5 +190,71 @@ describe("skill routes", () => {
         expect(afterBody.some((item) => item.name === "local-note")).toBe(false)
       },
     })
-  })
+  }, 20000)
+
+  test("installed skill can be loaded through SkillTool after route install", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const skillDir = path.join(tmp.path, "skill-e2e")
+    await Filesystem.write(
+      path.join(skillDir, "SKILL.md"),
+      [
+        "---",
+        "name: route-installed-skill",
+        "description: Route installed skill for e2e coverage",
+        "---",
+        "",
+        "Use this skill after installation.",
+      ].join("\n"),
+    )
+    await Filesystem.write(path.join(skillDir, "scripts", "demo.txt"), "demo")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const installed = await app.request("/skill/install", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            kind: "path",
+            value: skillDir,
+            policy: "ask",
+          }),
+        })
+
+        expect(installed.status).toBe(200)
+
+        const listed = await app.request("/skill/installed", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(listed.status).toBe(200)
+        const body = await listed.json() as Array<{ name: string; policy: string }>
+        expect(body.find((item) => item.name === "route-installed-skill")?.policy).toBe("ask")
+
+        const tool = await SkillTool.init()
+        const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+        const ctx: Tool.Context = {
+          ...baseCtx,
+          ask: async (req) => {
+            requests.push(req)
+          },
+        }
+
+        const result = await tool.execute({ name: "route-installed-skill" }, ctx)
+        expect(requests.length).toBe(1)
+        expect(requests[0].permission).toBe("skill")
+        expect(requests[0].patterns).toContain("route-installed-skill")
+        expect(result.title).toBe("Loaded skill: route-installed-skill")
+        expect(result.metadata.dir).toBe(skillDir)
+        expect(result.output).toContain('<skill_content name="route-installed-skill">')
+        expect(result.output).toContain("Use this skill after installation.")
+        expect(result.output).toContain(path.resolve(skillDir, "scripts", "demo.txt"))
+      },
+    })
+  }, 20000)
 })

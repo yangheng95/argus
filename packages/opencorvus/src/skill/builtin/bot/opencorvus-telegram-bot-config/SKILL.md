@@ -7,7 +7,6 @@ description: Configure and troubleshoot Telegram bot integration for OpenCorvus.
 
 ## Overview
 
-Configure Telegram for OpenCorvus using OpenClaw channel guidance and Telegram official bot docs.
 Map platform setup to the OpenCorvus long-polling adapter in `packages/bot`.
 
 ## Workflow
@@ -22,12 +21,9 @@ Map platform setup to the OpenCorvus long-polling adapter in `packages/bot`.
 
 1. Confirm scope.
 
-- Confirm this task targets OpenCorvus (`packages/bot`) and not OpenClaw CLI runtime.
-- If user is on OpenClaw runtime, use the OpenClaw commands from the reference directly.
 
 2. Load checklist.
 
-- Read `references/openclaw.md`.
 
 3. Configure Telegram bot and environment.
 
@@ -54,7 +50,6 @@ Map platform setup to the OpenCorvus long-polling adapter in `packages/bot`.
 
 ## Guardrails
 
-- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Do not output real tokens.
 - Do not suggest webhook-only setup for OpenCorvus unless user explicitly asks for webhook mode.
 - Keep edits minimal and focused on env and adapter wiring.

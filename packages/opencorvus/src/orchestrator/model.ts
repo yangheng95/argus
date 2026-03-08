@@ -6,6 +6,12 @@ import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { Snapshot } from "@/snapshot"
 
+/** Task statuses that indicate a terminal or notable state change worth mirroring to channels. */
+export const TASK_TERMINAL_STATUSES = ["blocked", "completed", "failed", "cancelled"] as const
+
+/** Run statuses that indicate a terminal or notable state change worth mirroring to channels. */
+export const RUN_TERMINAL_STATUSES = ["blocked", "failed", "completed", "aborted"] as const
+
 export const Budget = z.object({
   maxRuns: z.number().int().positive().optional(),
   maxReplans: z.number().int().positive().optional(),
@@ -38,10 +44,10 @@ export const MilestoneInput = z.object({
 })
 
 export const CheckConfig = z.object({
-  build: z.array(z.string()).optional(),
-  test: z.array(z.string()).optional(),
-  lint: z.array(z.string()).optional(),
-  verify_cmd: z.array(z.string()).optional(),
+  build: z.union([z.array(z.string()), z.literal(false)]).optional(),
+  test: z.union([z.array(z.string()), z.literal(false)]).optional(),
+  lint: z.union([z.array(z.string()), z.literal(false)]).optional(),
+  verify_cmd: z.union([z.array(z.string()), z.literal(false)]).optional(),
   startup: z
     .object({
       command: z.string().min(1),
@@ -164,7 +170,7 @@ export const Task = z.object({
   source: z.string(),
   title: z.string(),
   request: z.string(),
-  status: z.enum(["queued", "planning", "running", "blocked", "evaluating", "completed", "failed", "cancelled"]),
+  status: z.enum(["queued", "planning", "running", "blocked", "evaluating", "delivering", "completed", "failed", "cancelled"]),
   priority: z.enum(["high", "normal", "low"]),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
@@ -240,7 +246,7 @@ export const Run = z.object({
   sessionID: Identifier.schema("session").nullable().optional(),
   executor: ExecutorName,
   status: z.enum(["queued", "accepted", "running", "blocked", "completed", "failed", "aborted"]),
-  phase: z.enum(["plan", "execute", "evaluate", "replan"]),
+  phase: z.enum(["plan", "execute", "evaluate", "deliver", "replan"]),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
   retryCount: z.number().int(),
@@ -278,7 +284,7 @@ export const Artifact = z.object({
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
   deliveryID: Identifier.schema("delivery").nullable().optional(),
-  kind: z.enum(["patch", "changed_file", "log", "report", "image", "diff", "html_trace", "link"]),
+  kind: z.enum(["patch", "changed_file", "log", "report", "image", "diff", "html_trace", "link", "git_ref", "pr"]),
   label: z.string(),
   payload: z.record(z.string(), z.any()).optional(),
   time: z.object({
@@ -291,12 +297,22 @@ export const Delivery = z.object({
   id: Identifier.schema("delivery"),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
-  status: z.literal("ready"),
+  status: z.enum(["candidate", "publishing", "delivered", "failed"]),
   summary: z.string(),
   result: z.object({
     summary: z.string(),
     changedFiles: z.string().array(),
     diffs: Snapshot.FileDiff.array(),
+    artifacts: z
+      .array(
+        z.object({
+          kind: z.string(),
+          label: z.string(),
+          payload: z.record(z.string(), z.any()).optional(),
+        }),
+      )
+      .optional(),
+    publish: z.record(z.string(), z.any()).optional(),
   }),
   time: z.object({
     created: z.number(),
@@ -370,6 +386,10 @@ export const UpdateGoalInput = z.object({
   criteria: z.string().min(1),
 })
 
+export const UpdateTaskChecksInput = z.object({
+  checks: CheckConfig.optional(),
+})
+
 export const TaskAccepted = z.object({
   task_id: Identifier.schema("task"),
 })
@@ -378,6 +398,10 @@ export const TaskMessageInput = z.object({
   text: z.string(),
   source: z.string().optional(),
   user_id: z.string().optional(),
+})
+
+export const InjectMessageInput = z.object({
+  message: z.string().min(1),
 })
 
 export const TaskMessageResult = z.object({
@@ -536,4 +560,7 @@ export const Event = {
   DeliveryReady: BusEvent.define("orchestrator.delivery.ready", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), deliveryID: Identifier.schema("delivery"), summary: z.string() })),
   EvaluationCompleted: BusEvent.define("orchestrator.evaluation.completed", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), evaluationID: Identifier.schema("evaluation"), status: Evaluation.shape.status, verdict: Evaluation.shape.verdict, summary: z.string() })),
   TaskMessageRecorded: BusEvent.define("orchestrator.task.message", z.object({ taskID: Identifier.schema("task"), kind: TaskMessageResult.shape.kind, source: z.string(), text: z.string(), summary: z.string() })),
+  RunProgress: BusEvent.define("orchestrator.run.progress", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), summary: z.string(), payload: z.record(z.string(), z.any()).optional() })),
+  RunOutput: BusEvent.define("orchestrator.run.output", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), text: z.string() })),
+  MessageInjected: BusEvent.define("orchestrator.message.injected", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), text: z.string(), summary: z.string() })),
 }

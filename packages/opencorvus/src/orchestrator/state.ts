@@ -65,12 +65,14 @@ export async function updateRun(
   const nextStarted = values.time_started === undefined ? row.time_started : values.time_started
   const nextCompleted = values.time_completed === undefined ? row.time_completed : values.time_completed
   const nextRef = values.executor_ref === undefined ? row.executor_ref : values.executor_ref
+  const nextPhase = values.phase ?? row.phase
   if (
     nextStatus === row.status &&
     nextBlocking === row.blocking_reason &&
     nextError === row.error &&
     nextStarted === row.time_started &&
     nextCompleted === row.time_completed &&
+    nextPhase === row.phase &&
     JSON.stringify(nextRef ?? {}) === JSON.stringify(row.executor_ref ?? {})
   ) {
     return row

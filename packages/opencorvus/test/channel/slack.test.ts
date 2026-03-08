@@ -11,6 +11,8 @@ import {
 } from "../../src/orchestrator/orchestrator.sql"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { PermissionNext } from "../../src/permission/next"
+import { ControlMessage } from "../../src/control"
+import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { Database, and, eq } from "../../src/storage/db"
@@ -19,6 +21,26 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+function stub() {
+  spyOn(PlannerService, "initial").mockResolvedValue({
+    summary: "Implement feature",
+    prompt: "Do the work",
+    goals: [
+      {
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+      },
+    ],
+    metadata: {
+      strategy: "initial",
+      steps: ["Implement the requested change"],
+      clarification: undefined,
+      spec_analysis: undefined,
+    },
+  })
+}
 
 const slackMock = {
   postMessage: async (_input: { channel: string; thread_ts: string; text: string }) => ({ ok: true }),
@@ -49,6 +71,7 @@ describe("channel.slack", () => {
   test("root Slack message creates task and binding", async () => {
     await using tmp = await tmpdir({ git: true })
     const { SlackGateway } = await import("../../src/channel/slack")
+    stub()
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -59,6 +82,24 @@ describe("channel.slack", () => {
       posted.push(input)
       return { ok: true }
     }
+    spyOn(ControlMessage, "handle").mockImplementation(async (input) => {
+      const taskID = await OrchestratorService.createTask({
+        request: input.text,
+        source: "slack",
+        channelBinding: {
+          platform: "slack",
+          channel: input.channel!,
+          thread: input.thread!,
+          payload: input.metadata ?? {},
+        },
+        metadata: input.metadata,
+      })
+      return {
+        kind: "created" as const,
+        task_id: taskID,
+        message: `Task accepted: \`${taskID}\``,
+      }
+    })
     const gateway = new SlackGateway({
       directory: tmp.path,
       token: "xoxb-test",
@@ -94,6 +135,7 @@ describe("channel.slack", () => {
   test("thread reply answers pending permission interaction", async () => {
     await using tmp = await tmpdir({ git: true })
     const { SlackGateway } = await import("../../src/channel/slack")
+    stub()
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -109,6 +151,33 @@ describe("channel.slack", () => {
       posted.push(input)
       return { ok: true }
     }
+    spyOn(ControlMessage, "handle").mockImplementation(async (input) => {
+      const interaction = Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorInteractionRequestTable)
+          .where(
+            and(
+              eq(OrchestratorInteractionRequestTable.task_id, input.taskID!),
+              eq(OrchestratorInteractionRequestTable.status, "pending"),
+            ),
+          )
+          .get(),
+      )
+      if (interaction) {
+        await OrchestratorService.replyInteraction(interaction.id, { reply: "once" })
+        return {
+          kind: "interaction" as const,
+          task_id: interaction.task_id,
+          interaction_id: interaction.id,
+          message: "Permission reply recorded: `once`.",
+        }
+      }
+      return {
+        kind: "panel_response" as const,
+        message: "No interaction.",
+      }
+    })
     const gateway = new SlackGateway({
       directory: tmp.path,
       token: "xoxb-test",
@@ -201,6 +270,7 @@ describe("channel.slack", () => {
   test("publishes orchestrator events to bound Slack thread", async () => {
     await using tmp = await tmpdir({ git: true })
     const { SlackGateway } = await import("../../src/channel/slack")
+    stub()
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),

@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Config } from "../../config/config"
+import { ChannelSupervisor } from "@/channel/supervisor"
 import { Provider } from "../../provider/provider"
 import { mapValues } from "remeda"
 import { errors } from "../error"
@@ -55,6 +56,9 @@ export const ConfigRoutes = lazy(() =>
       async (c) => {
         const config = c.req.valid("json")
         await Config.update(config)
+        await ChannelSupervisor.sync(config).catch((error) => {
+          log.warn("channel runtime sync failed", { error: String(error) })
+        })
         return c.json(config)
       },
     )

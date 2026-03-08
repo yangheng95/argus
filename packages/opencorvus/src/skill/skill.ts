@@ -15,6 +15,7 @@ import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import codingMd from "./builtin/coding.md" with { type: "text" }
+import panelMd from "./builtin/panel.md" with { type: "text" }
 import planMd from "./builtin/plan.md" with { type: "text" }
 
 export namespace Skill {
@@ -65,6 +66,10 @@ export namespace Skill {
     },
     {
       skill: planMd,
+      files: {},
+    },
+    {
+      skill: panelMd,
       files: {},
     },
   ] as const

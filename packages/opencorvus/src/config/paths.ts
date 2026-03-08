@@ -31,13 +31,6 @@ export namespace ConfigPaths {
             }),
           )
         : []),
-      ...(await Array.fromAsync(
-        Filesystem.up({
-          targets: [".opencorvus"],
-          start: Global.Path.home,
-          stop: Global.Path.home,
-        }),
-      )),
       ...(Flag.OPENCORVUS_CONFIG_DIR ? [Flag.OPENCORVUS_CONFIG_DIR] : []),
     ]
   }

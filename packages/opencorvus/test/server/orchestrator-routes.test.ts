@@ -267,7 +267,7 @@ describe("orchestrator routes", () => {
         })
         expect(response.status).toBe(200)
         const body = (await response.json()) as { content: string }
-        expect(body.content).toContain("User preferences:")
+        expect(body.content).toContain("Global preferences:")
         expect(body.content).toContain("lockfile_policy: avoid_changes")
       },
     })
@@ -527,7 +527,7 @@ describe("orchestrator routes", () => {
           },
           body: JSON.stringify({
             project: Instance.project.id,
-            request: "make a change",
+            request: "update the landing page hero section copy",
             budget: {
               maxRuns: 1,
             },
@@ -588,7 +588,7 @@ describe("orchestrator routes", () => {
           },
           body: JSON.stringify({
             project: Instance.project.id,
-            request: "make a change",
+            request: "update the landing page hero section copy",
             budget: {
               maxRuns: 1,
             },

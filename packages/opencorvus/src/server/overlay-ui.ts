@@ -59,7 +59,7 @@ export namespace OverlayUI {
         const contentType = MIME[ext] || "application/octet-stream"
         return c.body(await file.arrayBuffer(), 200, {
           "Content-Type": contentType,
-          "Cache-Control": ext === ".html" ? "no-cache" : "public, max-age=3600",
+          "Cache-Control": "no-cache",
         })
       } catch {
         return c.text("Not Found", 404)

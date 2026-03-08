@@ -176,6 +176,7 @@ export namespace Server {
     }
 
     _url = server.url
+    process.env.OPENCORVUS_SERVER_URL = server.url.origin
 
     const shouldPublishMDNS =
       opts.mdns &&

@@ -9,6 +9,7 @@ import {
   CreateTaskInput,
   Delivery,
   Evaluation,
+  InjectMessageInput,
   Interaction,
   Progress,
   ProjectBoard,
@@ -23,6 +24,7 @@ import {
   TaskEvent,
   Task,
   UpdateGoalInput,
+  UpdateTaskChecksInput,
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
 import { ExecutorNotConfiguredError, OrchestratorService } from "@/orchestrator/service"
@@ -83,7 +85,10 @@ export const OrchestratorRoutes = lazy(() =>
         },
       }),
       async (c) => {
-        return c.json(await OrchestratorService.getProjectBoard())
+        const query = c.req.query("q") || undefined
+        const status = c.req.query("status") || undefined
+        const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined
+        return c.json(await OrchestratorService.getProjectBoard({ query, status, limit }))
       },
     )
     .get(
@@ -295,6 +300,52 @@ export const OrchestratorRoutes = lazy(() =>
       validator("json", TaskMessageInput),
       async (c) => {
         return c.json(await OrchestratorService.handleTaskMessage(c.req.valid("param").taskID, c.req.valid("json")))
+      },
+    )
+    .post(
+      "/task/:taskID/inject",
+      describeRoute({
+        summary: "Inject message into running task",
+        operationId: "task.inject",
+        responses: {
+          200: {
+            description: "Message injected",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ resumed: z.boolean(), status: z.string() })),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator("json", InjectMessageInput),
+      async (c) => {
+        return c.json(await OrchestratorService.injectMessage(c.req.valid("param").taskID, c.req.valid("json").message))
+      },
+    )
+    .patch(
+      "/task/:taskID/checks",
+      describeRoute({
+        summary: "Update task checks",
+        operationId: "task.checks.update",
+        responses: {
+          200: {
+            description: "Task checks updated",
+            content: {
+              "application/json": {
+                schema: resolver(Task),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator("json", UpdateTaskChecksInput),
+      async (c) => {
+        return c.json(await OrchestratorService.updateTaskChecks(c.req.valid("param").taskID, c.req.valid("json")))
       },
     )
     .post(

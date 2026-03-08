@@ -45,6 +45,7 @@ import { Truncate } from "@/tool/truncation"
 import { MemoryInjection } from "@/memory/injection"
 import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
+import { Preference } from "@/preference"
 import { Goal } from "@/session/goal"
 import { messageControlOnly, textForBoth } from "./part-visibility"
 
@@ -109,6 +110,7 @@ export namespace SessionPrompt {
     format: MessageV2.Format.optional(),
     system: z.string().optional(),
     variant: z.string().optional(),
+    extra: z.record(z.string(), z.any()).optional(),
     parts: z.array(
       z.discriminatedUnion("type", [
         MessageV2.TextPart.omit({
@@ -697,6 +699,11 @@ export namespace SessionPrompt {
       system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
     }
 
+    const preferenceSection = Preference.systemPromptSection({
+      projectID: Instance.project.id,
+      sessionID: input.sessionID,
+    })
+    if (preferenceSection) system.push(preferenceSection)
     const memoryInstruction = await MemoryInjection.systemPromptSection()
     if (memoryInstruction) system.push(memoryInstruction)
     const scratchpadSection = Scratchpad.systemPromptSection(input.sessionID)
@@ -1022,6 +1029,7 @@ export namespace SessionPrompt {
     processor: SessionProcessor.Info
     bypassAgentCheck: boolean
     messages: MessageV2.WithParts[]
+    extra?: Record<string, any>
   }) {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
@@ -1031,7 +1039,7 @@ export namespace SessionPrompt {
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
-      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck },
+      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, ...(input.extra ?? {}) },
       agent: input.agent.name,
       messages: input.messages,
       metadata: async (val: { title?: string; metadata?: any }) => {

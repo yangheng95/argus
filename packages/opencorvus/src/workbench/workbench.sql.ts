@@ -3,7 +3,7 @@ import { ProjectTable } from "@/project/project.sql"
 import { OrchestratorPlanVersionTable, OrchestratorRunTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
-export type WorkbenchPreferenceScope = "user" | "project" | "task"
+export type WorkbenchPreferenceScope = "global" | "session" | "user" | "project" | "task"
 export type WorkbenchNoteKind =
   | "user_request"
   | "operator_note"
@@ -12,7 +12,6 @@ export type WorkbenchNoteKind =
   | "constraint"
   | "decision"
   | "summary"
-export type WorkbenchMessageKind = "preference" | "goal" | "plan" | "note"
 
 export const WorkbenchPreferenceTable = sqliteTable(
   "workbench_preference",
@@ -20,8 +19,9 @@ export const WorkbenchPreferenceTable = sqliteTable(
     id: text().primaryKey(),
     project_id: text().references(() => ProjectTable.id, { onDelete: "cascade" }),
     task_id: text().references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    session_id: text(),
     user_id: text(),
-    scope: text().notNull().$type<WorkbenchPreferenceScope>().default("user"),
+    scope: text().notNull().$type<WorkbenchPreferenceScope>().default("global"),
     key: text().notNull(),
     value: text().notNull(),
     source: text().notNull().default("user_message"),
@@ -31,6 +31,7 @@ export const WorkbenchPreferenceTable = sqliteTable(
   (table) => [
     index("workbench_preference_project_idx").on(table.project_id),
     index("workbench_preference_task_idx").on(table.task_id),
+    index("workbench_preference_session_idx").on(table.session_id),
     index("workbench_preference_user_idx").on(table.user_id),
     index("workbench_preference_key_idx").on(table.key),
   ],

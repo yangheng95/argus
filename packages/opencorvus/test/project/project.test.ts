@@ -74,13 +74,13 @@ describe("Project.fromDirectory", () => {
     const { project } = await p.fromDirectory(tmp.path)
 
     expect(project).toBeDefined()
-    expect(project.id).toBe("global")
+    expect(project.id).not.toBe("global")
     expect(project.vcs).toBe("git")
     expect(project.worktree).toBe(tmp.path)
 
     const opencorvusFile = path.join(tmp.path, ".git", "opencorvus")
     const fileExists = await Filesystem.exists(opencorvusFile)
-    expect(fileExists).toBe(false)
+    expect(fileExists).toBe(true)
   })
 
   test("should handle git repository with commits", async () => {
@@ -107,9 +107,38 @@ describe("Project.fromDirectory", () => {
     await withMode("rev-list-fail", async () => {
       const { project } = await p.fromDirectory(tmp.path)
       expect(project.vcs).toBe("git")
-      expect(project.id).toBe("global")
+      expect(project.id).not.toBe("global")
       expect(project.worktree).toBe(tmp.path)
     })
+  })
+
+  test("initializes a local git repo instead of inheriting an unrelated parent git", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir({ git: true })
+    const child = path.join(tmp.path, "generated-project")
+    await Filesystem.write(path.join(child, "README.md"), "hello")
+
+    const parent = await p.fromDirectory(tmp.path)
+    const nested = await p.fromDirectory(child)
+
+    expect(await Filesystem.exists(path.join(child, ".git"))).toBe(true)
+    expect(nested.project.vcs).toBe("git")
+    expect(nested.project.worktree).toBe(child)
+    expect(nested.sandbox).toBe(child)
+    expect(nested.project.id).not.toBe(parent.project.id)
+  })
+
+  test("keeps standalone non-git directories outside git mode", async () => {
+    const p = await loadProject()
+    await using tmp = await tmpdir()
+
+    const { project, sandbox } = await p.fromDirectory(tmp.path)
+
+    expect(project.id).toBe("global")
+    expect(project.vcs).toBeUndefined()
+    expect(project.worktree).toBe("/")
+    expect(sandbox).toBe("/")
+    expect(await Filesystem.exists(path.join(tmp.path, ".git"))).toBe(false)
   })
 
   test("keeps git vcs when show-toplevel exits non-zero with empty output", async () => {

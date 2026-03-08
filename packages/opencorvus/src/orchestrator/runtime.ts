@@ -9,6 +9,7 @@ import { Instance } from "@/project/instance"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
+import { DeliveryService } from "./delivery"
 import {
   OrchestratorArtifactTable,
   OrchestratorDeliveryTable,
@@ -47,6 +48,7 @@ import {
   requireRun,
   requireTask,
   type GoalRow,
+  type DeliveryRow,
   type PlanRow,
   type RunRow,
   type TaskRow,
@@ -128,6 +130,8 @@ export namespace OrchestratorRuntime {
       },
       "Run dispatched",
     )
+    // Start executor event bridge (fire-and-forget background coroutine)
+    consumeExecutorEvents(task.id, run.id, run.executor, task.session_id)
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -272,8 +276,12 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       return
     }
     if (task.active_run_id !== run.id) return
-    if (evaluation.status === "passed" && task.status !== "completed") {
+    if (evaluation.status === "passed" && existingDelivery.status === "delivered" && task.status !== "completed") {
       await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+      return
+    }
+    if (evaluation.status === "passed" && existingDelivery.status !== "delivered") {
+      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
       return
     }
     if (evaluation.status !== "passed") {
@@ -302,7 +310,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
         id: deliveryID,
         task_id: task.id,
         run_id: run.id,
-        status: "ready",
+        status: "candidate",
         summary: delivery.summary,
         result: {
           summary: delivery.summary,
@@ -526,12 +534,17 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     )
   })
 
-  if (finalStatus === "passed") {
+  if (finalStatus === "passed" || finalStatus === "inconclusive") {
     const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
 
     if (pendingBlocking.length === 0) {
-      await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+      const accepted = findDeliveryByRun(run.id)
+      if (!accepted) {
+        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+        return
+      }
+      await publishAcceptedDelivery(task, run, accepted, hooks)
       return
     }
     const remaining = pendingBlocking.map((g) => g.description).join(", ")
@@ -574,6 +587,89 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   if (task.active_run_id === run.id) {
     await hooks.updateTask(task, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
   }
+}
+
+async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: DeliveryRow, hooks: RuntimeHooks) {
+  if (task.active_run_id !== run.id) return
+  if (delivery.status === "delivered") {
+    if (task.status !== "completed") {
+      await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+    }
+    return
+  }
+
+  const now = Date.now()
+  await hooks.updateRun(run, { phase: "deliver" }, "Publishing accepted delivery")
+  await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
+  Database.use((db) =>
+    db
+      .update(OrchestratorDeliveryTable)
+      .set({
+        status: "publishing",
+        time_updated: now,
+      })
+      .where(eq(OrchestratorDeliveryTable.id, delivery.id))
+      .run(),
+  )
+
+  const result = await DeliveryService.deliver({ task, run, delivery }).catch((error) => ({
+    status: "failed" as const,
+    summary: String(error),
+    artifacts: [] as Array<{ kind: "patch" | "report" | "html_trace" | "link" | "git_ref"; label: string; payload: Record<string, unknown> }>,
+    publish: {
+      mode: "manual" as const,
+      adapters: [{
+        id: "delivery",
+        status: "skipped" as const,
+        summary: "Delivery export failed.",
+        detail: String(error),
+      }],
+    },
+  }))
+
+  const completed = Date.now()
+  Database.transaction((db) => {
+    db.update(OrchestratorDeliveryTable)
+      .set({
+        status: result.status,
+        summary: result.summary,
+        result: {
+          ...(delivery.result ?? {}),
+          summary: result.summary,
+          artifacts: result.artifacts.map((item) => ({
+            kind: item.kind,
+            label: item.label,
+          })),
+          publish: result.publish,
+        },
+        time_updated: completed,
+      })
+      .where(eq(OrchestratorDeliveryTable.id, delivery.id))
+      .run()
+    for (const artifact of result.artifacts) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: task.id,
+          run_id: run.id,
+          delivery_id: delivery.id,
+          kind: artifact.kind,
+          label: artifact.label,
+          payload: artifact.payload,
+          time_created: completed,
+          time_updated: completed,
+        })
+        .run()
+    }
+  })
+
+  if (result.status === "delivered") {
+    await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
+    await hooks.updateRun(run, { phase: "deliver" }, "Delivery published")
+    return
+  }
+
+  await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
 }
 
 async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType) {
@@ -958,6 +1054,37 @@ async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow, summar
     )
   })
   return nextRunID
+}
+
+/** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */
+function consumeExecutorEvents(taskID: string, runID: string, executorName: Parameters<typeof ExecutorRegistry.require>[0], sessionID: string) {
+  const executor = ExecutorRegistry.require(executorName)
+  if (!executor.capabilities().events) return
+  // 异步消费 — 不阻塞 dispatch 返回
+  ;(async () => {
+    try {
+      for await (const event of executor.events({ sessionID })) {
+        if (event.type === "text_delta") {
+          Bus.publish(Event.RunOutput, {
+            taskID,
+            runID,
+            type: "text_delta",
+            text: event.summary ?? "",
+          })
+        } else {
+          Bus.publish(Event.RunProgress, {
+            taskID,
+            runID,
+            type: event.type,
+            summary: event.summary ?? event.type,
+            payload: event.payload,
+          })
+        }
+      }
+    } catch (err) {
+      log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
+    }
+  })()
 }
 
 type RuntimeHooks = {

@@ -14,7 +14,7 @@ const state = {
 export namespace ExecutorBootstrap {
   export async function autoRegister(force = false) {
     if (!force && state.done) return ExecutorDiscovery.scan()
-    if (process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS !== "1") return ExecutorDiscovery.scan()
+    if (!force && process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS !== "1") return ExecutorDiscovery.scan()
     state.done = true
 
     const found = await ExecutorDiscovery.scan()

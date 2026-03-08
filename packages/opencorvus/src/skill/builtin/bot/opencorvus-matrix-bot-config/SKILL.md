@@ -21,12 +21,9 @@ Configure Matrix for OpenCorvus using a repeatable checklist and map platform se
 
 1. Confirm scope.
 
-- Confirm the task targets OpenCorvus bot runtime (packages/bot) rather than OpenClaw runtime.
-- If the task is strictly OpenClaw runtime work, use the OpenClaw commands from the reference as-is.
 
 2. Load checklist.
 
-- Read references/openclaw.md.
 
 3. Configure platform and environment.
 
@@ -54,7 +51,6 @@ Configure Matrix for OpenCorvus using a repeatable checklist and map platform se
 
 ## Guardrails
 
-- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Do not output real secrets.
 - Keep edits focused on adapter wiring, env keys, and transport configuration.
 - Do not claim parity features that the adapter does not implement.

@@ -1,19 +1,23 @@
 /**
- * PlannerAgent — An independent-context agent that explores the codebase
- * and generates a comprehensive development plan.
+ * PlannerAgent — A full-featured planning agent that mirrors the upstream
+ * opencode plan skill workflow.
  *
- * Unlike the old one-shot LLM call, this agent:
- * 1. Reads project files (package.json, tsconfig, source code)
- * 2. Searches for relevant patterns and conventions
- * 3. Understands the existing architecture before planning
- * 4. Produces: expanded PRD, goals, milestones, subtask decomposition
- * 5. On replan: receives structured failure analysis and adjusts strategy
+ * Capabilities:
+ * 1. Memory recall — searches project memory for prior work, patterns, gotchas
+ * 2. Preference awareness — respects project conventions and constraints
+ * 3. Codebase exploration — reads files, searches code, lists directories
+ * 4. Web research — searches external documentation when needed
+ * 5. Structured output — PRD, goals, milestones, subtasks, risks, assumptions
+ * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
 import { generateText, stepCountIs } from "ai"
 import z from "zod"
 import { Provider } from "@/provider/provider"
-import { createCodebaseTools } from "@/orchestrator/codebase-tools"
+import { createPlannerTools, prefetchContext } from "./tools"
+import { Filesystem } from "@/util/filesystem"
+import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import path from "path"
 
 const log = Log.create({ service: "planner-agent" })
 
@@ -57,6 +61,16 @@ export const PlannerOutput = z.object({
       }),
     )
     .optional(),
+  clarifications: z
+    .array(
+      z.object({
+        header: z.string(),
+        question: z.string(),
+        context: z.string().optional(),
+        default_assumption: z.string().optional(),
+      }),
+    )
+    .optional(),
 })
 
 export type PlannerOutputType = z.infer<typeof PlannerOutput>
@@ -85,8 +99,8 @@ export interface ReplanContext {
 // PlannerAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 20
-const TIMEOUT_MS = 180_000
+const MAX_STEPS = 30
+const TIMEOUT_MS = 300_000
 
 export namespace PlannerAgent {
   export async function plan(input: {
@@ -98,14 +112,18 @@ export namespace PlannerAgent {
     if (!model) throw new Error("no LLM model available for planner agent")
 
     const language = await Provider.getLanguage(model)
-    const tools = createCodebaseTools()
+    const tools = createPlannerTools()
 
-    const userPrompt = buildUserPrompt(input)
+    const fileRefs = await resolveFileReferences(input.request)
+    const context = prefetchContext(input.title, input.request)
+    const userPrompt = buildUserPrompt(input, fileRefs, context)
 
     log.info("planner agent starting", {
       title: input.title,
       isReplan: !!input.replanContext,
       model: `${model.providerID}/${model.id}`,
+      prefetchedContext: context.length > 0,
+      toolCount: Object.keys(tools).length,
     })
 
     const result = await generateText({
@@ -158,7 +176,21 @@ function extractJSON(text: string): PlannerOutputType {
     if (match) raw = match[1]
   }
 
-  return PlannerOutput.parse(JSON.parse(raw))
+  const obj = JSON.parse(raw)
+  // Normalize LLM output quirks before strict validation
+  if (Array.isArray(obj.goals)) {
+    for (const g of obj.goals) {
+      if (g.priority && g.priority !== "blocking" && g.priority !== "advisory") {
+        g.priority = "advisory"
+      }
+    }
+  }
+  if (Array.isArray(obj.subtasks)) {
+    for (let i = 0; i < obj.subtasks.length; i++) {
+      if (obj.subtasks[i].order == null) obj.subtasks[i].order = i + 1
+    }
+  }
+  return PlannerOutput.parse(obj)
 }
 
 async function agentModel() {
@@ -186,12 +218,60 @@ async function agentModel() {
   return undefined
 }
 
-function buildUserPrompt(input: {
-  title: string
-  request: string
-  replanContext?: ReplanContext
-}): string {
+/**
+ * 解析 request 中的 @file:path 或 @path 引用，读取文件内容。
+ * 支持格式：@file:src/foo.ts, @src/foo.ts, @./specs/doc.md
+ */
+async function resolveFileReferences(request: string): Promise<Array<{ ref: string; path: string; content: string }>> {
+  // 匹配 @file:path 或 @path（路径不含空白，以 / . 或字母开头）
+  const pattern = /@(?:file:)?([./a-zA-Z][\w./\\-]*\.\w+)/g
+  const refs = new Set<string>()
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(request)) !== null) {
+    refs.add(match[1])
+  }
+  if (refs.size === 0) return []
+
+  const results: Array<{ ref: string; path: string; content: string }> = []
+  for (const ref of refs) {
+    const resolved = path.isAbsolute(ref) ? ref : path.resolve(Instance.worktree, ref)
+    try {
+      const content = await Filesystem.readText(resolved)
+      if (content) {
+        // 限制单文件内容大小，防止上下文爆炸
+        const truncated = content.length > 8000 ? content.slice(0, 8000) + "\n\n... (truncated)" : content
+        results.push({ ref, path: resolved, content: truncated })
+      }
+    } catch {
+      log.warn("file reference not found", { ref, resolved })
+    }
+  }
+  return results
+}
+
+function buildUserPrompt(
+  input: {
+    title: string
+    request: string
+    replanContext?: ReplanContext
+  },
+  fileRefs?: Array<{ ref: string; path: string; content: string }>,
+  context?: string,
+): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  // Inject prefetched context (auto-recalled memory + active preferences)
+  if (context) {
+    sections.push(`# Project Context (Pre-fetched)\n\n${context}`)
+  }
+
+  // 将引用的文件内容附加到 prompt 中
+  if (fileRefs && fileRefs.length > 0) {
+    const refSections = fileRefs.map(
+      (f) => `### @${f.ref}\n\`\`\`\n${f.content}\n\`\`\``,
+    )
+    sections.push(`# Referenced Files\n\n${refSections.join("\n\n")}`)
+  }
 
   if (input.replanContext) {
     const ctx = input.replanContext
@@ -222,7 +302,7 @@ function buildUserPrompt(input: {
   }
 
   sections.push(
-    "Now explore the codebase to understand the project, then produce your plan as a JSON object.",
+    "Now recall memory, check preferences, explore the codebase, then produce your plan as a JSON object.",
   )
   return sections.join("\n\n")
 }
@@ -231,44 +311,86 @@ function buildUserPrompt(input: {
 // System prompt
 // ---------------------------------------------------------------------------
 
-const PLANNER_SYSTEM = `You are a senior software architect. Your job is to analyze a development task, explore the codebase thoroughly, and create a comprehensive development plan.
+const PLANNER_SYSTEM = `You are a senior software architect acting as the planning brain for OpenCorvus, an autonomous coding orchestrator. Your job is to leverage accumulated project knowledge, explore the codebase, and create a comprehensive development plan.
+
+## Available Tools
+
+- **memory_search**: Search project memory for prior work, patterns, gotchas
+- **memory_get**: Read full content of a memory file by ID
+- **preference_list**: List active project conventions and constraints (BINDING)
+- **read_file**: Read file contents with line numbers
+- **find_files**: Find files matching a glob pattern
+- **search_code**: Search file contents with regex (ripgrep)
+- **list_directory**: List files and directories at a path
+- **web_search**: Search the web for external documentation (use only when needed)
 
 ## Your Process
 
-### Phase 1: EXPLORE the codebase (MANDATORY — do not skip)
+### Phase 0: RECALL — Leverage Past Experience (DO THIS FIRST)
 
-Before producing any plan, you MUST use the provided tools to understand the project:
+Before touching the codebase, recall what you already know:
 
-1. List the project root to see top-level structure
-2. Read package.json (or equivalent) to understand the tech stack, scripts, and dependencies
-3. Read the main config files (tsconfig.json, vite.config.ts, etc.) for build configuration
-4. List the source directory structure to understand the architecture
-5. Read 2-3 key files related to the task to understand existing patterns and conventions
-6. Search (grep) for relevant code patterns, function names, or types mentioned in the request
+1. **Search memory** (memory_search) with keywords from the task. Try 1-2 searches with different phrasings.
+   Prior sessions may have documented solutions, known gotchas, architectural decisions,
+   or approaches you should follow or extend.
+   If pre-fetched memory is provided in the task context, review it and search for more only if needed.
 
-Spend 5-8 tool calls exploring (no more than 12). A blind plan is a bad plan, but spending too long exploring wastes budget. After exploring, STOP using tools and OUTPUT your JSON plan.
+2. **List preferences** (preference_list) to see current project conventions and constraints.
+   If pre-fetched preferences are provided in the task context, you can skip this call.
+   Preferences are BINDING — your plan must respect them.
 
-### Phase 2: PLAN based on what you learned
+### Phase 1: EXPLORE — Understand the Codebase (MANDATORY)
 
-Based on your codebase understanding, create a detailed plan:
+Explore the codebase with purpose — don't explore blindly:
 
-1. **Expanded PRD**: Rewrite the user's request as a detailed technical specification. Include:
-   - What files need to be created or modified (with exact paths from your exploration)
-   - What patterns and conventions to follow (based on what you read)
-   - What dependencies or APIs to use
-   - Edge cases and error handling requirements
+1. List the project root and key directories to understand layout
+2. Read package.json (or equivalent) for tech stack, scripts, dependencies
+3. Read config files (tsconfig.json, etc.) for build setup
+4. Read 2-3 key source files related to the task for existing patterns and conventions
+5. Search (grep) for relevant code patterns, function names, types mentioned in the request
+6. Trace dependencies — what depends on code you'll change? What will your changes depend on?
 
-2. **Goals**: Specific, measurable acceptance criteria. Each goal must be independently verifiable.
+**Exploration budget**: 8-12 tool calls for recall + codebase combined.
+A blind plan is a bad plan, but over-exploring wastes budget.
 
-3. **Subtasks**: Ordered steps the coding agent should follow. Each subtask should be small enough to be independently executable.
+### Phase 1.5: RESEARCH — External Knowledge (if needed)
 
-4. **Milestones**: Group related goals into milestones (optional, for complex tasks).
+If the task involves external APIs, third-party libraries, unfamiliar protocols,
+or systems you haven't encountered — use web_search to find current documentation.
+Do NOT guess what can be looked up. Skip this phase for internal-only tasks.
 
-5. **Risks**: What could go wrong? What assumptions might be wrong?
+### Phase 2: PLAN — Synthesize Everything
+
+Based on memory, preferences, codebase exploration, and any web research, create:
+
+1. **Expanded PRD**: Detailed technical specification with:
+   - Exact file paths from exploration
+   - Patterns and conventions to follow (from preferences AND codebase)
+   - Dependencies, APIs, edge cases, error handling
+   - Gotchas and lessons from memory
+
+2. **Goals**: Specific, measurable acceptance criteria
+   - Each must be independently verifiable
+   - Blocking goals MUST have at least one check_selector
+   - Include functional goals AND quality gates
+
+3. **Subtasks**: Ordered execution steps
+   - Reference specific files and patterns from exploration
+   - Each independently executable and verifiable
+   - Order: setup → core → integration → tests → verification
+   - Include verification steps ("run tests", "typecheck", "grep for residuals")
+
+4. **Milestones**: Group related goals (optional, for complex tasks)
+
+5. **Risks**: What could go wrong? What assumptions might be incorrect?
+
+6. **Clarifications**: Only if a CRITICAL ambiguity blocks safe implementation
+   - At most 1 clarification
+   - Prefer actionable questions over vague ones
 
 ### Phase 3: OUTPUT as JSON
 
-After exploring and planning, respond with ONLY a JSON object (no markdown fences, no explanation before or after):
+After exploring and planning, respond with ONLY a JSON object (no markdown fences, no surrounding text):
 
 {
   "prd": "Expanded PRD with full technical context...",
@@ -291,7 +413,7 @@ After exploring and planning, respond with ONLY a JSON object (no markdown fence
   "subtasks": [
     {
       "title": "Subtask name",
-      "description": "Detailed instructions for what to do",
+      "description": "Detailed instructions with specific file paths and patterns to follow",
       "order": 1
     }
   ],
@@ -301,16 +423,27 @@ After exploring and planning, respond with ONLY a JSON object (no markdown fence
       "question": "Ambiguous aspect of the request",
       "assumption": "What we will assume"
     }
+  ],
+  "clarifications": [
+    {
+      "header": "Scope",
+      "question": "Which specific module should this change target?",
+      "context": "The request is too broad to implement safely.",
+      "default_assumption": "Start with the most directly related module."
+    }
   ]
 }
 
 ## Rules
 
+- ALWAYS recall memory and preferences FIRST. Past experience is the cheapest intelligence.
 - ALWAYS explore the codebase before planning. A plan without codebase context is worthless.
 - goals.criteria must be concrete and machine-verifiable when possible
-- goals.check_selector maps to evaluator checks: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, judge
+- goals.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, judge
 - Every blocking goal MUST have at least one check_selector
-- subtasks should reference specific files and patterns you found during exploration
+- subtasks should reference specific files and patterns from exploration
 - Write in the same language as the request (Chinese request → Chinese plan)
 - If replanning: your new plan MUST differ from the previous failed approach
-- The prd field should be detailed enough that a coding agent can implement without further questions`
+- Respect all preferences — they are binding project conventions
+- The prd field should be detailed enough that a coding agent can implement without further questions
+- After finishing tool calls, STOP and output JSON immediately — do not make additional tool calls`
