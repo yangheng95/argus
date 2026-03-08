@@ -33,5 +33,8 @@ if (bump === "minor") {
 console.log(`${major}.${minor}.${patch + 1}`)' "$ARG")
 fi
 
+echo "Synchronizing versions to $VERSION"
+bun ./script/sync-version.ts "$VERSION"
+
 echo "Dispatching build.yml for v$VERSION"
 gh workflow run build.yml -f "version=$VERSION"

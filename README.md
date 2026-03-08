@@ -1,194 +1,178 @@
 <p align="center">
-  <a href="https://github.com/yangheng95/opencorvus">
-    <img src="assets/readme-head-gemini.png" alt="OpenCorvus head image">
+  <a href="https://opencorvus.ai">
+    <img src="packages/overlay/src/opencorvus.svg" width="64" height="64" alt="OpenCorvus logo">
   </a>
 </p>
+<p align="center">The open source AI development operator for delegated software work.</p>
+<p align="center">Runs in your repo. Works from API, Slack, and local sessions. Plans, executes, evaluates, retries.</p>
+<p align="center">
+  <a href="https://www.npmjs.com/package/opencorvus-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencorvus-ai?style=flat-square" /></a>
+  <a href="https://github.com/yangheng95/opencorvus/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/yangheng95/opencorvus/test.yml?style=flat-square&branch=dev&label=tests" /></a>
+  <a href="https://github.com/yangheng95/opencorvus/actions/workflows/typecheck.yml"><img alt="Typecheck" src="https://img.shields.io/github/actions/workflow/status/yangheng95/opencorvus/typecheck.yml?style=flat-square&branch=dev&label=typecheck" /></a>
+</p>
 
-<h2 align="center">Headless coding orchestration for repositories, API, and Slack.</h2>
+OpenCorvus sits between human requests and coding agents. You hand it a task. It expands the request into an executable spec, turns that into goals and a plan, dispatches an executor, evaluates the delivery, and either completes, retries, or replans.
 
----
+### Why OpenCorvus
 
-## Current Direction
+- Delegated development instead of live pair-programming only
+- Durable orchestration state in SQLite: `task`, `plan_version`, `run`, `interaction`, `delivery`, `evaluation`, and progress snapshots
+- Scoped project knowledge: session memory plus global memory and preferences shared across sessions
+- Built-in `opencode` execution path, with optional `codex` and `claude-code` executors when those CLIs are present
+- Human-in-the-loop permission and question handling
+- Evaluator-driven loops for `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, and LLM review checks
+- Local TUI, headless server, overlay UI, and Slack gateway in the same repo
+- A separate bot package with adapters for Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk
 
-OpenCorvus is being repositioned around a headless orchestration core.
+### How It Works
 
-Current primary path:
+1. Accept a task from API, Slack, or a local session.
+2. Expand the request into a concrete PRD, goals, and subtasks.
+3. Dispatch an executor against the repo.
+4. Capture delivery artifacts and run evaluator checks.
+5. Retry the same plan or create a new plan version until the task passes or the budget is exhausted.
 
-- async task intake over HTTP API
-- durable `task / plan_version / run / interaction / delivery / evaluation`
-- `opencode` as the first executor
-- Slack as the first production channel
-- goal and evaluator driven completion
-
-Legacy TUI, overlay, and desktop automation code still exists in the repo, but it is no longer the product center for Headless V1.
-
-## What Is OpenCorvus
-
-OpenCorvus is an AI orchestration system for real software work.
-
-- It can accept a coding task, create a plan, dispatch execution, evaluate the result, and iterate until pass or stop.
-- It can work on your repository through the existing `opencode` execution kernel.
-- It can expose that workflow through API server mode and Slack threads.
-
-## Core Features
-
-- Headless task orchestration with durable task and run state.
-- Versioned planning with retry and replan behavior.
-- Delivery and evaluation records, not just raw session messages.
-- Human-in-the-loop blocking flows for permission and question handling.
-- Slack thread binding for task creation, interaction replies, and status summaries.
-
-## Typical Use Cases
-
-- Submit a repo task over API and let the system iterate until evaluation passes.
-- Create a task from a Slack root message and continue it in the same thread.
-- Route failed evaluations into retry or replan instead of stopping at the first executor completion.
-- Track delivery artifacts and acceptance results per run.
-
-## Install
+### Installation
 
 ```bash
-# npm
-npm i -g opencorvus-ai@latest
+# Install script
+curl -fsSL https://opencorvus.ai/install | bash
 
-# Homebrew (macOS/Linux)
+# Package managers
+npm i -g opencorvus-ai@latest     # or bun/pnpm/yarn
 brew install yangheng95/tap/opencorvus
-
-# Windows
 scoop install opencorvus
-# or
 choco install opencorvus
-
-# Arch Linux
-sudo pacman -S opencorvus
-
-# Nix
-nix run nixpkgs#opencorvus
 ```
 
-## 3-Minute Start
+### Quick Start
+
+Start the headless server in the repository you want OpenCorvus to work on:
 
 ```bash
-# 1) Go to your project
-cd /path/to/your/project
-
-# 2) Start the headless API
+cd /path/to/your/repo
 opencorvus serve
 ```
 
-Then create a task:
+Open the local overlay UI at `http://127.0.0.1:7878/ui/`, then create a task over HTTP:
 
 ```bash
-curl -X POST http://localhost:7878/task \
+curl -X POST http://127.0.0.1:7878/task \
   -H "content-type: application/json" \
   -d '{
-    "project": "your-project-id",
-    "requestID": "req-001",
-    "request": "Implement the requested change and run acceptance checks"
+    "request": "Implement the requested change, run validation, and stop only when the delivery is ready."
   }'
 ```
 
-`requestID` is optional but recommended for idempotent task creation.
-
-## Common Commands
+The server returns `202` with a `task_id`. Stream progress with SSE:
 
 ```bash
-# Start API server (headless orchestrator)
-opencorvus serve
-
-# Start Slack gateway
-opencorvus slack
-
-# Custom server port
-opencorvus serve --port 8080
+curl -N http://127.0.0.1:7878/task/<task_id>/events
 ```
 
-## Slack Gateway
+Useful task endpoints:
+
+- `GET /tasks`
+- `GET /task/<task_id>`
+- `GET /task/<task_id>/board`
+- `POST /task/<task_id>/message`
+- `POST /task/<task_id>/retry`
+- `POST /task/<task_id>/replan`
+- `POST /task/<task_id>/cancel`
+
+> [!TIP]
+> If you expose `opencorvus serve` beyond localhost, set `OPENCORVUS_SERVER_PASSWORD` first.
+
+### Slack Threads
+
+Slack is the first channel wired directly into the headless orchestrator.
 
 ```bash
-# Use repo root .env or shell env
+export SLACK_BOT_TOKEN=xoxb-...
+export SLACK_APP_TOKEN=xapp-...
 opencorvus slack
 ```
 
-Required env keys:
+What the Slack gateway does today:
 
-- `SLACK_BOT_TOKEN`
-- `SLACK_APP_TOKEN`
-- optional `SLACK_SIGNING_SECRET`
-- `SLACK_CHANNEL_ID` for live verification flows
+- Starts a task from the first message in a thread
+- Mirrors plan, run, delivery, and evaluation updates back into the thread
+- Accepts permission replies like `allow`, `always`, and `reject`
+- Accepts follow-up operator messages and routes them into the task loop
 
-Verified flows as of `2026-03-07`:
+### Executors
 
-- real `auth.test`
-- real `apps.connections.open`
-- real `chat.postMessage` / `chat.delete`
-- real Slack gateway start/stop
-- real inbound root message -> task creation
-- real permission interaction reply in thread
+OpenCorvus always has the built-in `opencode` executor. It can also dispatch to external coding CLIs when they are installed and auto-discovery is enabled.
 
-## Use From Source (Repo Developers)
+```bash
+export OPENCORVUS_AUTO_DISCOVER_EXECUTORS=1
+```
+
+Supported executor names today:
+
+- `opencode`
+- `codex`
+- `claude-code`
+
+If `codex` or `claude-code` are not discovered, task creation with that executor is rejected instead of silently falling back.
+
+### Product Surface
+
+| Surface | Status | Notes |
+| --- | --- | --- |
+| Local TUI and sessions | Available | Default `opencorvus` command, session continue/fork/export flows |
+| Headless HTTP API | Available | `opencorvus serve`, task lifecycle routes, SSE event stream |
+| Overlay UI | Available | Served from `/ui/` by the headless server |
+| Slack gateway | Available | First integrated remote channel for the orchestrator |
+| Multi-channel bot adapters | In repo | `packages/bot` includes Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk |
+| GitHub Action | Available | See [`github/README.md`](./github/README.md) |
+
+### Development
 
 ```bash
 # repo root
 bun install
+
+# core CLI and orchestrator
 bun run --cwd packages/opencorvus typecheck
+bun run --cwd packages/opencorvus test
+
+# bot adapters
+bun run --cwd packages/bot test
+
+# regenerate the JavaScript SDK
+bun ./packages/sdk/js/script/build.ts
 ```
 
-Run the main verification set:
+### FAQ
 
-```bash
-bun test --timeout 60000 test/channel/slack.test.ts test/orchestrator/service.test.ts test/planner/service.test.ts test/evaluator/service.test.ts test/server/orchestrator-routes.test.ts
-```
+#### How is this different from OpenCode?
 
-Run the real Slack live tests only when you intentionally want to hit Slack APIs:
+OpenCode is the interactive coding agent. OpenCorvus builds on that execution core and adds durable task orchestration, goal tracking, evaluator-driven retries, remote channels, and operator feedback loops.
 
-```bash
-OPENCORVUS_RUN_LIVE_SLACK_TEST=1 bun test --timeout 180000 test/channel/slack-live.test.ts
-```
+#### Is OpenCorvus only a Slack bot?
 
-## FAQ
+No. The repo includes a local TUI, headless API server, overlay UI, GitHub Action, and a broader multi-channel bot package. Slack is simply the first channel promoted into the headless task orchestration flow.
 
-### Is OpenCorvus production-ready?
+#### Does it keep state between runs?
 
-Not fully. It is usable, but still early-stage and changing quickly.
+Yes. Tasks, plans, runs, interactions, deliveries, evaluations, session state, and project knowledge are persisted locally in SQLite.
+OpenCorvus now keeps both session-scoped and global memory/preferences. New memory and preference entries default to global so they are available across future sessions in the same project.
 
-### What is the fastest way to start?
+#### Is it finished?
 
-Run `opencorvus serve` in your project directory and create a task over HTTP.
+No. The core orchestration loop is implemented, but the product surface is still expanding. This README reflects what is in the repo today, not a promise that every planned interface is already fully integrated.
 
-### When should I use `opencorvus serve`?
+### Docs and Contributing
 
-Use it for the headless orchestrator, API-driven workflows, and Slack integration.
+- Docs: https://opencorvus.ai/docs
+- GitHub Action: [`github/README.md`](./github/README.md)
+- Contributing: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 
-### Is Slack really working end to end?
+### Acknowledgments
 
-Yes. The repo now includes live Slack tests covering outbound delivery, inbound root-message task creation, and thread-based permission replies.
+OpenCorvus started from the OpenCode codebase and extends it toward delegated development, remote channels, and evaluator-driven automation.
 
-### What is still legacy?
-
-TUI, overlay, and desktop automation paths are still in the repository, but they are not the primary Headless V1 direction.
-
-### Where are detailed config references?
-
-- Docs: <https://opencorvus.ai/docs>
-- Bot env reference: `packages/bot/.env.example`
-- Contributing guide: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-
-## Early-stage Notice
-
-OpenCorvus is still in early development.
-
-- It is usable now, but the headless orchestration layer is still settling.
-- The product direction is now API + Slack first.
-- For architecture and plan alignment, see:
-  - [`specs/opencode-architecture.md`](./specs/opencode-architecture.md)
-  - [`specs/plan.md`](./specs/plan.md)
-  - [`specs/headless-v1-status.md`](./specs/headless-v1-status.md)
-
-## Acknowledgments
-
-OpenCorvus is built upon code originally from [OpenCode](https://github.com/nicepkg/opencode). We are grateful to the OpenCode contributors for their foundational work.
-
-## License
+### License
 
 [MIT](./LICENSE)

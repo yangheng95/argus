@@ -13,12 +13,17 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  ChannelListResponses,
+  ChannelMessageResponses,
+  ChannelRuntimeResponses,
+  ChannelRuntimeRestartResponses,
   CommandListResponses,
   Config as Config3,
   ConfigGetResponses,
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  ControlTimelineResponses,
   DeleteGoalGoalIdResponses,
   DeletePreferencePreferenceIdResponses,
   EventSubscribeResponses,
@@ -26,15 +31,10 @@ import type {
   EventTuiPromptAppend,
   EventTuiSessionSelect,
   EventTuiToastShow,
-  ExperimentalBindWindowErrors,
-  ExperimentalBindWindowResponses,
+  ExecutorListResponses,
   ExperimentalEventscheduleCreateResponses,
   ExperimentalEventscheduleDeleteResponses,
   ExperimentalEventscheduleListResponses,
-  ExperimentalMemoryCreateResponses,
-  ExperimentalMemoryDeleteResponses,
-  ExperimentalMemoryListResponses,
-  ExperimentalMemorySearchResponses,
   ExperimentalResourceListResponses,
   ExperimentalScheduleCreateResponses,
   ExperimentalScheduleDeleteResponses,
@@ -42,7 +42,6 @@ import type {
   ExperimentalScratchpadGetResponses,
   ExperimentalSessionListResponses,
   ExperimentalTaskplanListResponses,
-  ExperimentalWindowsListResponses,
   ExperimentalWorkspaceCreateErrors,
   ExperimentalWorkspaceCreateResponses,
   ExperimentalWorkspaceListResponses,
@@ -85,6 +84,7 @@ import type {
   McpRemoteConfig,
   McpStatusResponses,
   OutputFormat,
+  PanelMessageResponses,
   Part as Part2,
   PartDeleteErrors,
   PartDeleteResponses,
@@ -93,6 +93,7 @@ import type {
   PatchGoalGoalIdResponses,
   PatchPreferencePreferenceIdResponses,
   PathGetResponses,
+  PermissionAction,
   PermissionListResponses,
   PermissionReplyErrors,
   PermissionReplyResponses,
@@ -107,6 +108,8 @@ import type {
   ProviderOauthAuthorizeResponses,
   ProviderOauthCallbackErrors,
   ProviderOauthCallbackResponses,
+  ProviderTestErrors,
+  ProviderTestResponses,
   PtyConnectErrors,
   PtyConnectResponses,
   PtyCreateErrors,
@@ -169,8 +172,6 @@ import type {
   SessionPromptResponses,
   SessionRevertErrors,
   SessionRevertResponses,
-  SessionShareErrors,
-  SessionShareResponses,
   SessionShellErrors,
   SessionShellResponses,
   SessionStatusErrors,
@@ -181,10 +182,14 @@ import type {
   SessionTodoResponses,
   SessionUnrevertErrors,
   SessionUnrevertResponses,
-  SessionUnshareErrors,
-  SessionUnshareResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
+  SkillDirectoriesResponses,
+  SkillInstalledResponses,
+  SkillInstallResponses,
+  SkillMarketResponses,
+  SkillPolicyResponses,
+  SkillRemoveResponses,
   SubtaskPartInput,
   TaskBoardErrors,
   TaskBoardResponses,
@@ -192,6 +197,8 @@ import type {
   TaskBriefResponses,
   TaskCancelErrors,
   TaskCancelResponses,
+  TaskChecksUpdateErrors,
+  TaskChecksUpdateResponses,
   TaskCreateErrors,
   TaskCreateResponses,
   TaskEventsResponses,
@@ -204,6 +211,8 @@ import type {
   TaskMessageResponses,
   TaskProgressErrors,
   TaskProgressResponses,
+  TaskReplanErrors,
+  TaskReplanResponses,
   TaskRetryErrors,
   TaskRetryResponses,
   TaskRunsErrors,
@@ -213,9 +222,6 @@ import type {
   ToolIdsResponses,
   ToolListErrors,
   ToolListResponses,
-  TuiAppendPromptErrors,
-  TuiAppendPromptResponses,
-  TuiClearPromptResponses,
   TuiControlNextResponses,
   TuiControlResponseResponses,
   TuiExecuteCommandErrors,
@@ -240,7 +246,6 @@ import type {
   TuiSelectSessionResponses,
   TuiShowToastResponses,
   TuiStatusResponses,
-  TuiSubmitPromptResponses,
   VcsGetResponses,
   WorktreeCreateErrors,
   WorktreeCreateInput,
@@ -797,6 +802,155 @@ export class Config2 extends HeyApiClient {
   }
 }
 
+export class Runtime extends HeyApiClient {
+  /**
+   * Restart managed channel runtime
+   *
+   * Restart the managed Telegram and Discord bot runtime with the current config.
+   */
+  public restart<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<ChannelRuntimeRestartResponses, unknown, ThrowOnError>({
+      url: "/channel/runtime/restart",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Channel extends HeyApiClient {
+  /**
+   * List channels
+   *
+   * Get available channel integrations, configuration status, and runtime status.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ChannelListResponses, unknown, ThrowOnError>({
+      url: "/channel",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Handle channel message
+   *
+   * Bridge an external channel message into the task board and panel control workflow.
+   */
+  public message<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      platform?: "slack" | "telegram" | "discord"
+      channel?: string
+      thread?: string
+      text?: string
+      user_id?: string
+      request_id?: string
+      source?: string
+      executor?: "opencode" | "codex" | "claude-code"
+      allow_create?: boolean
+      metadata?: {
+        [key: string]: unknown
+      }
+      intent_hint?: {
+        action: string
+        payload?: {
+          [key: string]: unknown
+        }
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "platform" },
+            { in: "body", key: "channel" },
+            { in: "body", key: "thread" },
+            { in: "body", key: "text" },
+            { in: "body", key: "user_id" },
+            { in: "body", key: "request_id" },
+            { in: "body", key: "source" },
+            { in: "body", key: "executor" },
+            { in: "body", key: "allow_create" },
+            { in: "body", key: "metadata" },
+            { in: "body", key: "intent_hint" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ChannelMessageResponses, unknown, ThrowOnError>({
+      url: "/channel/message",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get managed channel runtime
+   *
+   * Get managed bot runtime status for Telegram and Discord channels.
+   */
+  public runtime<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ChannelRuntimeResponses, unknown, ThrowOnError>({
+      url: "/channel/runtime",
+      ...options,
+      ...params,
+    })
+  }
+
+  private _runtime?: Runtime
+  get runtime2(): Runtime {
+    return (this._runtime ??= new Runtime({ client: this.client }))
+  }
+}
+
+export class Executor extends HeyApiClient {
+  /**
+   * List executors
+   *
+   * Get executor availability, local discovery state, and whether each executor is selectable for new tasks.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<ExecutorListResponses, unknown, ThrowOnError>({
+      url: "/executor",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Tool extends HeyApiClient {
   /**
    * List tool IDs
@@ -1140,161 +1294,6 @@ export class Resource extends HeyApiClient {
   }
 }
 
-export class Windows extends HeyApiClient {
-  /**
-   * List windows
-   *
-   * List all visible desktop windows.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<ExperimentalWindowsListResponses, unknown, ThrowOnError>({
-      url: "/experimental/windows",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Memory extends HeyApiClient {
-  /**
-   * List memory files
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters: {
-      directory?: string
-      projectId: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "projectId" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExperimentalMemoryListResponses, unknown, ThrowOnError>({
-      url: "/experimental/memory",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Create memory file
-   */
-  public create<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      title?: string
-      content?: string
-      projectId?: string
-      source?: "agent" | "compaction" | "user"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "title" },
-            { in: "body", key: "content" },
-            { in: "body", key: "projectId" },
-            { in: "body", key: "source" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ExperimentalMemoryCreateResponses, unknown, ThrowOnError>({
-      url: "/experimental/memory",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Search memories
-   */
-  public search<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      query?: string
-      projectId?: string
-      limit?: number
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "query" },
-            { in: "body", key: "projectId" },
-            { in: "body", key: "limit" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<ExperimentalMemorySearchResponses, unknown, ThrowOnError>({
-      url: "/experimental/memory/search",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Delete memory file
-   */
-  public delete<ThrowOnError extends boolean = false>(
-    parameters: {
-      id: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "id" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).delete<ExperimentalMemoryDeleteResponses, unknown, ThrowOnError>({
-      url: "/experimental/memory/{id}",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Schedule extends HeyApiClient {
   /**
    * List scheduled tasks
@@ -1568,47 +1567,6 @@ export class Scratchpad extends HeyApiClient {
 }
 
 export class Experimental extends HeyApiClient {
-  /**
-   * Bind window
-   *
-   * Bind to a desktop window by window_id (preferred) or title substring. Activates GUI state and sets the window as the target for screenshots and input.
-   */
-  public bindWindow<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      window_id?: number | string
-      title?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "window_id" },
-            { in: "body", key: "title" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperimentalBindWindowResponses,
-      ExperimentalBindWindowErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/bind_window",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
   private _workspace?: Workspace
   get workspace(): Workspace {
     return (this._workspace ??= new Workspace({ client: this.client }))
@@ -1622,16 +1580,6 @@ export class Experimental extends HeyApiClient {
   private _resource?: Resource
   get resource(): Resource {
     return (this._resource ??= new Resource({ client: this.client }))
-  }
-
-  private _windows?: Windows
-  get windows(): Windows {
-    return (this._windows ??= new Windows({ client: this.client }))
-  }
-
-  private _memory?: Memory
-  get memory(): Memory {
-    return (this._memory ??= new Memory({ client: this.client }))
   }
 
   private _schedule?: Schedule
@@ -2020,66 +1968,6 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Unshare session
-   *
-   * Remove the shareable link for a session, making it private again.
-   */
-  public unshare<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).delete<SessionUnshareResponses, SessionUnshareErrors, ThrowOnError>({
-      url: "/session/{sessionID}/share",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Share session
-   *
-   * Create a shareable link for a session, allowing others to view the conversation.
-   */
-  public share<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionShareResponses, SessionShareErrors, ThrowOnError>({
-      url: "/session/{sessionID}/share",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
    * Get message diff
    *
    * Get the file changes (diff) that resulted from a specific user message in the session.
@@ -2243,6 +2131,9 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
+      extra?: {
+        [key: string]: unknown
+      }
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -2262,6 +2153,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
+            { in: "body", key: "extra" },
             { in: "body", key: "parts" },
           ],
         },
@@ -2369,6 +2261,9 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
+      extra?: {
+        [key: string]: unknown
+      }
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -2388,6 +2283,7 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
+            { in: "body", key: "extra" },
             { in: "body", key: "parts" },
           ],
         },
@@ -2957,37 +2853,421 @@ export class Provider extends HeyApiClient {
     })
   }
 
+  /**
+   * Test provider connection
+   *
+   * Run a minimal live request against a provider using the selected or default model.
+   */
+  public test<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+      modelID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "modelID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProviderTestResponses, ProviderTestErrors, ThrowOnError>({
+      url: "/provider/{providerID}/test",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
   private _oauth?: Oauth
   get oauth(): Oauth {
     return (this._oauth ??= new Oauth({ client: this.client }))
   }
 }
 
-export class Task extends HeyApiClient {
+export class App extends HeyApiClient {
   /**
-   * Create task
+   * List skills
+   *
+   * Get a list of all available skills in the OpenCorvus system.
    */
-  public create<ThrowOnError extends boolean = false>(
+  public skills<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      project?: string
-      requestID?: string
-      source?: string
-      executor?: "opencode" | "codex" | "claude-code"
-      title?: string
-      request?: string
-      priority?: "high" | "normal" | "low"
-      budget?: {
-        maxRuns?: number
-        maxReplans?: number
-        maxEvaluations?: number
-        maxWallTimeMs?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<AppSkillsResponses, unknown, ThrowOnError>({
+      url: "/skill",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Write log
+   *
+   * Write a log entry to the server logs with specified level and metadata.
+   */
+  public log<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      service?: string
+      level?: "debug" | "info" | "error" | "warn"
+      message?: string
+      extra?: {
+        [key: string]: unknown
       }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "service" },
+            { in: "body", key: "level" },
+            { in: "body", key: "message" },
+            { in: "body", key: "extra" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<AppLogResponses, AppLogErrors, ThrowOnError>({
+      url: "/log",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * List agents
+   *
+   * Get a list of all available AI agents in the OpenCorvus system.
+   */
+  public agents<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<AppAgentsResponses, unknown, ThrowOnError>({
+      url: "/agent",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Skill extends HeyApiClient {
+  /**
+   * List installed skills
+   *
+   * Get installed skills with source classification and effective permission policy.
+   */
+  public installed<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SkillInstalledResponses, unknown, ThrowOnError>({
+      url: "/skill/installed",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List skill markets
+   *
+   * Get curated skill marketplaces and official registries relevant to OpenCorvus imports.
+   */
+  public market<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SkillMarketResponses, unknown, ThrowOnError>({
+      url: "/skill/market",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get skill directories
+   *
+   * Get global config, managed skill install, and remote cache directories.
+   */
+  public directories<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<SkillDirectoriesResponses, unknown, ThrowOnError>({
+      url: "/skill/directories",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Install or import a skill source
+   *
+   * Install a skill source from a local path, remote URL, or git repository into the global skill config.
+   */
+  public install<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      kind?: "path" | "url" | "git"
+      value?: string
+      policy?: PermissionAction
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "kind" },
+            { in: "body", key: "value" },
+            { in: "body", key: "policy" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillInstallResponses, unknown, ThrowOnError>({
+      url: "/skill/install",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Remove a skill source
+   *
+   * Remove a configured skill source from global config and delete managed installs when applicable.
+   */
+  public remove<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      source?: string
+      kind?: "path" | "url" | "git"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "source" },
+            { in: "body", key: "kind" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillRemoveResponses, unknown, ThrowOnError>({
+      url: "/skill/remove",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Set skill permission policy
+   *
+   * Set the global allow, ask, or deny policy for a named skill.
+   */
+  public policy<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      name?: string
+      action?: PermissionAction
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "name" },
+            { in: "body", key: "action" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SkillPolicyResponses, unknown, ThrowOnError>({
+      url: "/skill/policy",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Panel extends HeyApiClient {
+  /**
+   * Handle desktop panel message
+   *
+   * Route a desktop panel chat or button intent through the control message service.
+   */
+  public message<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      surface?: "panel" | "slack" | "telegram" | "discord"
+      text?: string
+      taskID?: string
+      sessionID?: string
+      executor?: "opencode" | "codex" | "claude-code"
+      channel?: string
+      thread?: string
+      user_id?: string
+      request_id?: string
+      source?: string
+      allow_create?: boolean
+      metadata?: {
+        [key: string]: unknown
+      }
+      intent_hint?: {
+        action: string
+        payload?: {
+          [key: string]: unknown
+        }
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "surface" },
+            { in: "body", key: "text" },
+            { in: "body", key: "taskID" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "executor" },
+            { in: "body", key: "channel" },
+            { in: "body", key: "thread" },
+            { in: "body", key: "user_id" },
+            { in: "body", key: "request_id" },
+            { in: "body", key: "source" },
+            { in: "body", key: "allow_create" },
+            { in: "body", key: "metadata" },
+            { in: "body", key: "intent_hint" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<PanelMessageResponses, unknown, ThrowOnError>({
+      url: "/panel/message",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Control extends HeyApiClient {
+  /**
+   * Get control timeline
+   *
+   * Retrieve the persisted control-plane conversation for a task, session, or the current surface.
+   */
+  public timeline<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      taskID?: string
+      sessionID?: string
+      surface?: "panel" | "slack" | "telegram" | "discord"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "taskID" },
+            { in: "query", key: "sessionID" },
+            { in: "query", key: "surface" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ControlTimelineResponses, unknown, ThrowOnError>({
+      url: "/control/timeline",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Checks extends HeyApiClient {
+  /**
+   * Update task checks
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
       checks?: {
-        build?: Array<string>
-        test?: Array<string>
-        lint?: Array<string>
-        verify_cmd?: Array<string>
+        build?: Array<string> | false
+        test?: Array<string> | false
+        lint?: Array<string> | false
+        verify_cmd?: Array<string> | false
         startup?: {
           command: string
           ready_url?: string
@@ -3009,6 +3289,23 @@ export class Task extends HeyApiClient {
           url: string
           require_text?: Array<string>
           require_title?: string
+          timeout_ms?: number
+          mode?: "soft" | "strict"
+        }
+        puppeteer?: {
+          target: "web"
+          url: string
+          browser?: "chrome" | "edge" | "chromium"
+          executable_path?: string
+          wait_for_selector?: string
+          wait_for_text?: string
+          require_text?: Array<string>
+          require_title?: string
+          full_page?: boolean
+          viewport?: {
+            width?: number
+            height?: number
+          }
           timeout_ms?: number
           mode?: "soft" | "strict"
         }
@@ -3043,6 +3340,143 @@ export class Task extends HeyApiClient {
           prompt?: string
           mode?: "soft" | "strict"
         }
+        custom?: {
+          [key: string]: {
+            [key: string]: unknown
+          }
+        }
+        timeout_ms?: number
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "checks" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<TaskChecksUpdateResponses, TaskChecksUpdateErrors, ThrowOnError>({
+      url: "/task/{taskID}/checks",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Task extends HeyApiClient {
+  /**
+   * Create task
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      project?: string
+      requestID?: string
+      source?: string
+      executor?: "opencode" | "codex" | "claude-code"
+      title?: string
+      request?: string
+      priority?: "high" | "normal" | "low"
+      budget?: {
+        maxRuns?: number
+        maxReplans?: number
+        maxEvaluations?: number
+        maxWallTimeMs?: number
+      }
+      checks?: {
+        build?: Array<string> | false
+        test?: Array<string> | false
+        lint?: Array<string> | false
+        verify_cmd?: Array<string> | false
+        startup?: {
+          command: string
+          ready_url?: string
+          ready_text?: string
+          timeout_ms?: number
+          warmup_ms?: number
+          require_exit_zero?: boolean
+          mode?: "soft" | "strict"
+        }
+        artifact?: {
+          require_changed_files?: boolean
+          min_changed_files?: number
+          require_diff?: boolean
+          require_summary?: boolean
+          mode?: "soft" | "strict"
+        }
+        visual?: {
+          target: "web"
+          url: string
+          require_text?: Array<string>
+          require_title?: string
+          timeout_ms?: number
+          mode?: "soft" | "strict"
+        }
+        puppeteer?: {
+          target: "web"
+          url: string
+          browser?: "chrome" | "edge" | "chromium"
+          executable_path?: string
+          wait_for_selector?: string
+          wait_for_text?: string
+          require_text?: Array<string>
+          require_title?: string
+          full_page?: boolean
+          viewport?: {
+            width?: number
+            height?: number
+          }
+          timeout_ms?: number
+          mode?: "soft" | "strict"
+        }
+        ui_review?: {
+          target: "web"
+          url?: string
+          prompt?: string
+          focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+          timeout_ms?: number
+          mode?: "soft" | "strict"
+        }
+        code_quality?: {
+          enabled?: boolean
+          prompt?: string
+          max_diffs?: number
+          mode?: "soft" | "strict"
+        }
+        code_review?: {
+          enabled?: boolean
+          prompt?: string
+          max_diffs?: number
+          mode?: "soft" | "strict"
+        }
+        dead_code_review?: {
+          enabled?: boolean
+          prompt?: string
+          max_diffs?: number
+          mode?: "soft" | "strict"
+        }
+        judge?: {
+          enabled?: boolean
+          prompt?: string
+          mode?: "soft" | "strict"
+        }
+        custom?: {
+          [key: string]: {
+            [key: string]: unknown
+          }
+        }
         timeout_ms?: number
       }
       goals?: Array<{
@@ -3052,6 +3486,18 @@ export class Task extends HeyApiClient {
         metadata?: {
           check_selector?: Array<string>
         }
+      }>
+      milestones?: Array<{
+        title: string
+        description?: string
+        goals: Array<{
+          description: string
+          criteria: string
+          priority?: "blocking" | "advisory"
+          metadata?: {
+            check_selector?: Array<string>
+          }
+        }>
       }>
       channelBinding?: {
         platform: string
@@ -3083,6 +3529,7 @@ export class Task extends HeyApiClient {
             { in: "body", key: "budget" },
             { in: "body", key: "checks" },
             { in: "body", key: "goals" },
+            { in: "body", key: "milestones" },
             { in: "body", key: "channelBinding" },
             { in: "body", key: "metadata" },
           ],
@@ -3407,6 +3854,39 @@ export class Task extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  /**
+   * Replan task
+   */
+  public replan<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskReplanResponses, TaskReplanErrors, ThrowOnError>({
+      url: "/task/{taskID}/replan",
+      ...options,
+      ...params,
+    })
+  }
+
+  private _checks?: Checks
+  get checks(): Checks {
+    return (this._checks ??= new Checks({ client: this.client }))
   }
 }
 
@@ -4085,7 +4565,7 @@ export class Mcp extends HeyApiClient {
   }
 }
 
-export class Runtime extends HeyApiClient {
+export class Runtime2 extends HeyApiClient {
   /**
    * Start or connect TUI runtime
    *
@@ -4313,7 +4793,7 @@ export class Runtime extends HeyApiClient {
   }
 }
 
-export class Control extends HeyApiClient {
+export class Control2 extends HeyApiClient {
   /**
    * Get next TUI request
    *
@@ -4388,79 +4868,6 @@ export class Tui extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<TuiStatusResponses, unknown, ThrowOnError>({
       url: "/tui/status",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Append TUI prompt
-   *
-   * Append prompt to the TUI
-   */
-  public appendPrompt<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      text?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "text" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<TuiAppendPromptResponses, TuiAppendPromptErrors, ThrowOnError>({
-      url: "/tui/append-prompt",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Submit TUI prompt
-   *
-   * Submit the prompt
-   */
-  public submitPrompt<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiSubmitPromptResponses, unknown, ThrowOnError>({
-      url: "/tui/submit-prompt",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Clear TUI prompt
-   *
-   * Clear the prompt
-   */
-  public clearPrompt<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).post<TuiClearPromptResponses, unknown, ThrowOnError>({
-      url: "/tui/clear-prompt",
       ...options,
       ...params,
     })
@@ -4688,14 +5095,14 @@ export class Tui extends HeyApiClient {
     })
   }
 
-  private _runtime?: Runtime
-  get runtime(): Runtime {
-    return (this._runtime ??= new Runtime({ client: this.client }))
+  private _runtime?: Runtime2
+  get runtime(): Runtime2 {
+    return (this._runtime ??= new Runtime2({ client: this.client }))
   }
 
-  private _control?: Control
-  get control(): Control {
-    return (this._control ??= new Control({ client: this.client }))
+  private _control?: Control2
+  get control(): Control2 {
+    return (this._control ??= new Control2({ client: this.client }))
   }
 }
 
@@ -4745,7 +5152,7 @@ export class Vcs extends HeyApiClient {
   /**
    * Get VCS info
    *
-   * Retrieve version control system (VCS) information for the current project, such as git branch.
+   * Retrieve version control system (VCS) information for the current project, such as git branch and working tree status.
    */
   public get<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -4777,89 +5184,6 @@ export class Command extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<CommandListResponses, unknown, ThrowOnError>({
       url: "/command",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class App extends HeyApiClient {
-  /**
-   * Write log
-   *
-   * Write a log entry to the server logs with specified level and metadata.
-   */
-  public log<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      service?: string
-      level?: "debug" | "info" | "error" | "warn"
-      message?: string
-      extra?: {
-        [key: string]: unknown
-      }
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "service" },
-            { in: "body", key: "level" },
-            { in: "body", key: "message" },
-            { in: "body", key: "extra" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<AppLogResponses, AppLogErrors, ThrowOnError>({
-      url: "/log",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * List agents
-   *
-   * Get a list of all available AI agents in the OpenCorvus system.
-   */
-  public agents<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<AppAgentsResponses, unknown, ThrowOnError>({
-      url: "/agent",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * List skills
-   *
-   * Get a list of all available skills in the OpenCorvus system.
-   */
-  public skills<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<AppSkillsResponses, unknown, ThrowOnError>({
-      url: "/skill",
       ...options,
       ...params,
     })
@@ -5080,6 +5404,16 @@ export class OpencodeClient extends HeyApiClient {
     return (this._config ??= new Config2({ client: this.client }))
   }
 
+  private _channel?: Channel
+  get channel(): Channel {
+    return (this._channel ??= new Channel({ client: this.client }))
+  }
+
+  private _executor?: Executor
+  get executor(): Executor {
+    return (this._executor ??= new Executor({ client: this.client }))
+  }
+
   private _tool?: Tool
   get tool(): Tool {
     return (this._tool ??= new Tool({ client: this.client }))
@@ -5118,6 +5452,26 @@ export class OpencodeClient extends HeyApiClient {
   private _provider?: Provider
   get provider(): Provider {
     return (this._provider ??= new Provider({ client: this.client }))
+  }
+
+  private _app?: App
+  get app(): App {
+    return (this._app ??= new App({ client: this.client }))
+  }
+
+  private _skill?: Skill
+  get skill(): Skill {
+    return (this._skill ??= new Skill({ client: this.client }))
+  }
+
+  private _panel?: Panel
+  get panel(): Panel {
+    return (this._panel ??= new Panel({ client: this.client }))
+  }
+
+  private _control?: Control
+  get control(): Control {
+    return (this._control ??= new Control({ client: this.client }))
   }
 
   private _task?: Task
@@ -5173,11 +5527,6 @@ export class OpencodeClient extends HeyApiClient {
   private _command?: Command
   get command(): Command {
     return (this._command ??= new Command({ client: this.client }))
-  }
-
-  private _app?: App
-  get app(): App {
-    return (this._app ??= new App({ client: this.client }))
   }
 
   private _lsp?: Lsp

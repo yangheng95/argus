@@ -1,7 +1,6 @@
 import { Bus } from "@/bus"
 import { BusEvent } from "@/bus/bus-event"
 import { Agent } from "@/agent/agent"
-import { Skill } from "@/skill/skill"
 import { Global } from "@/global"
 import { Vcs } from "@/project/vcs"
 import { Instance } from "@/project/instance"
@@ -22,18 +21,23 @@ import { SessionRoutes } from "./session"
 import { PermissionRoutes } from "./permission"
 import { QuestionRoutes } from "./question"
 import { ChannelRoutes } from "./channel"
+import { ExecutorRoutes } from "./executor"
 import { ProviderRoutes } from "./provider"
 import { FileRoutes } from "./file"
 import { McpRoutes } from "./mcp"
+import { SkillRoutes } from "./skill"
 import { TuiRoutes } from "./tui"
+import { ExportRoutes } from "./export"
 import { OrchestratorRoutes } from "./orchestrator"
+import { PanelRoutes } from "./panel"
+import { ControlRoutes } from "./control"
 
 const log = Log.create({ service: "server" })
 
 export const AppDocumentation = {
   info: {
     title: "opencorvus",
-    version: "1.2.15",
+    version: "0.0.1",
     description: "opencorvus api",
   },
   openapi: "3.1.1",
@@ -52,12 +56,17 @@ export function AppRoutes(root: Hono) {
     .route("/pty", PtyRoutes())
     .route("/config", ConfigRoutes())
     .route("/channel", ChannelRoutes())
+    .route("/executor", ExecutorRoutes())
     .route("/experimental", ExperimentalRoutes())
     .route("/session", SessionRoutes())
     .route("/permission", PermissionRoutes())
     .route("/question", QuestionRoutes())
     .route("/provider", ProviderRoutes())
+    .route("/skill", SkillRoutes())
+    .route("/panel", PanelRoutes())
+    .route("/control", ControlRoutes())
     .route("/", OrchestratorRoutes())
+    .route("/export", ExportRoutes())
     .route("/", FileRoutes())
     .route("/mcp", McpRoutes())
     .route("/tui", TuiRoutes())
@@ -237,28 +246,6 @@ export function AppRoutes(root: Hono) {
       async (c) => {
         const modes = await Agent.list()
         return c.json(modes)
-      },
-    )
-    .get(
-      "/skill",
-      describeRoute({
-        summary: "List skills",
-        description: "Get a list of all available skills in the OpenCorvus system.",
-        operationId: "app.skills",
-        responses: {
-          200: {
-            description: "List of skills",
-            content: {
-              "application/json": {
-                schema: resolver(Skill.Info.array()),
-              },
-            },
-          },
-        },
-      }),
-      async (c) => {
-        const skills = await Skill.all()
-        return c.json(skills)
       },
     )
     .get(

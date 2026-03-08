@@ -3,31 +3,81 @@ name: build
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 1.2.3). Leave empty for dev snapshot (no release).'
+        description: "Release version (e.g. 0.0.1). Leave empty for dev snapshot artifact builds."
         required: false
-        default: ''
+        default: ""
 
 jobs:
-  package:
-    name: package (all platforms)
+  prepare:
+    name: prepare
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
       release: ${{ steps.meta.outputs.release }}
       version: ${{ steps.meta.outputs.version }}
-    defaults:
-      run:
-        shell: bash
-
     steps:
       - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup-bun
+
+      - name: Resolve version and release flag
+        id: meta
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            RELEASE=1
+          elif [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+            RELEASE=1
+          else
+            VERSION="$(bun -e 'const pkg = await Bun.file("packages/opencorvus/package.json").json(); console.log(pkg.version)')"
+            RELEASE=0
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "release=$RELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Sync repo versions
+        shell: bash
+        run: bun ./script/sync-version.ts "${{ steps.meta.outputs.version }}"
+
+      - name: Verify version alignment
+        shell: bash
+        run: bun ./script/sync-version.ts "${{ steps.meta.outputs.version }}" --check
+
+      - name: Create GitHub Release
+        if: steps.meta.outputs.release == '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --repo "$GITHUB_REPOSITORY" || true
+
+  package-cli:
+    name: cli (cross-platform archives)
+    runs-on: ubuntu-latest
+    needs: prepare
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Sync repo versions
+        run: bun ./script/sync-version.ts "${{ needs.prepare.outputs.version }}"
 
       - name: Fetch models.dev snapshot
         run: curl -fsSL https://models.dev/api.json | tr -d '\n\r' > /tmp/models-api-clean.json
@@ -52,115 +102,204 @@ jobs:
           done
           rm -f /tmp/_warmup.ts /tmp/_warmup_out*
 
-      - name: Resolve version and release flag
-        id: meta
-        run: |
-          # tag push: use tag name
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-            RELEASE=1
-          # workflow_dispatch with version input
-          elif [[ -n "${{ inputs.version }}" ]]; then
-            VERSION="${{ inputs.version }}"
-            RELEASE=1
-          else
-            VERSION=""
-            RELEASE=0
-          fi
-          echo "version=$VERSION"    >> "$GITHUB_OUTPUT"
-          echo "release=$RELEASE"    >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        if: steps.meta.outputs.release == '1'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION="${{ steps.meta.outputs.version }}"
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --generate-notes \
-            --repo "$GITHUB_REPOSITORY" || true
-
-      - name: Build all platforms
+      - name: Build CLI archives
         working-directory: packages/opencorvus
         env:
           MODELS_DEV_API_JSON: /tmp/models-api-clean.json
-          OPENCORVUS_RELEASE:  ${{ steps.meta.outputs.release == '1' && '1' || '' }}
-          OPENCORVUS_VERSION:  ${{ steps.meta.outputs.version }}
-          OPENCORVUS_CHANNEL:  ${{ steps.meta.outputs.release == '1' && 'latest' || '' }}
-          GH_REPO:           ${{ github.repository }}
-          GH_TOKEN:          ${{ secrets.GITHUB_TOKEN }}
+          OPENCORVUS_RELEASE: ${{ needs.prepare.outputs.release == '1' && '1' || '' }}
+          OPENCORVUS_VERSION: ${{ needs.prepare.outputs.version }}
+          OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bun run script/build.ts --all
 
-      - name: Upload dist artifact
+      - name: Validate CLI assets
+        shell: bash
+        run: |
+          EXTRA=""
+          if [[ "${{ needs.prepare.outputs.release }}" == "1" ]]; then
+            EXTRA="--require-archives"
+          fi
+          bun ./script/check-release-assets.ts cli \
+            --dir packages/opencorvus/dist \
+            --platforms linux-x64,linux-arm64,darwin-x64,darwin-arm64,windows-x64 \
+            --version "${{ needs.prepare.outputs.version }}" \
+            $EXTRA
+
+      - name: Upload CLI dist artifact
         uses: actions/upload-artifact@v4
         with:
           name: opencorvus-dist
           path: packages/opencorvus/dist/
           retention-days: 7
 
-  publish:
-    name: publish release branch
-    needs: package
-    if: needs.package.outputs.release == '1'
+  package-overlay:
+    name: overlay (${{ matrix.platform }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+          - runner: macos-latest
+            platform: darwin-arm64
+          - runner: macos-15-intel
+            platform: darwin-x64
+          - runner: windows-latest
+            platform: windows-x64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Sync repo versions
+        run: bun ./script/sync-version.ts "${{ needs.prepare.outputs.version }}"
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/overlay/src-tauri -> target
+
+      - name: Build bound overlay bundle
+        working-directory: packages/overlay
+        env:
+          OPENCORVUS_VERSION: ${{ needs.prepare.outputs.version }}
+          OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
+        run: bun run build
+
+      - name: Stage overlay artifacts
+        shell: bash
+        run: |
+          OUT="packages/overlay/dist-artifacts/${{ matrix.platform }}"
+          mkdir -p "$OUT"
+          cp -f packages/overlay/src-tauri/target/release/opencorvus-overlay* "$OUT/" 2>/dev/null || true
+          find packages/overlay/src-tauri/target/release/bundle -type f -exec cp {} "$OUT/" \; 2>/dev/null || true
+
+      - name: Validate overlay assets
+        run: >
+          bun ./script/check-release-assets.ts overlay
+          --dir packages/overlay/dist-artifacts/${{ matrix.platform }}
+          --platform "${{ matrix.platform }}"
+          --version "${{ needs.prepare.outputs.version }}"
+
+      - name: Upload overlay artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: overlay-${{ matrix.platform }}
+          path: packages/overlay/dist-artifacts/${{ matrix.platform }}
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release-assets:
+    name: publish release assets
+    needs:
+      - prepare
+      - package-cli
+      - package-overlay
+    if: needs.prepare.outputs.release == '1'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     defaults:
       run:
         shell: bash
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/release-assets
 
+      - name: Upload overlay assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          mapfile -t FILES < <(find /tmp/release-assets -type f | sort)
+          printf '%s\n' "${FILES[@]}"
+          gh release upload "v${VERSION}" "${FILES[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+
+  publish-release-branch:
+    name: publish release branch
+    needs:
+      - prepare
+      - package-cli
+      - package-overlay
+    if: needs.prepare.outputs.release == '1'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Download dist artifact
+      - name: Download CLI dist artifact
         uses: actions/download-artifact@v4
         with:
           name: opencorvus-dist
           path: /tmp/dist
 
+      - name: Download overlay artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/overlay
+
       - name: Assemble and push release branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION:  ${{ needs.package.outputs.version }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           git config user.email "actions@github.com"
           git config user.name  "GitHub Actions"
 
-          # Prepare a clean worktree for the release branch
           WORK=$(mktemp -d)
           cd "$WORK"
           git init
           git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-          # Reuse existing history if branch exists; otherwise start orphan
           if git fetch origin release --depth=1 2>/dev/null; then
             git checkout release
           else
             git checkout --orphan release
           fi
 
-          # Wipe everything, start fresh
           git rm -rf . 2>/dev/null || true
 
-          # README from source repo
           cp "$GITHUB_WORKSPACE/README.md" . 2>/dev/null || echo "# OpenCorvus v${VERSION}" > README.md
+          cp "$GITHUB_WORKSPACE/RELEASE.md" . 2>/dev/null || true
 
-          # Primary platform binaries (skip baseline / musl variants)
           for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64; do
             src="/tmp/dist/opencorvus-${platform}/bin"
             [[ -d "$src" ]] || continue
             mkdir -p "$platform"
-            # copy binaries, skip sourcemaps
             find "$src" -maxdepth 1 -type f ! -name '*.map' -exec cp {} "$platform/" \;
             chmod +x "$platform"/opencorvus* 2>/dev/null || true
           done
 
-          echo "── Release branch contents ──────────────────────"
-          find . -not -path './.git/*' | sort
-          echo "─────────────────────────────────────────────────"
+          mkdir -p overlay
+          cp -r /tmp/overlay/overlay-* overlay/ 2>/dev/null || true
 
           git add -A
           git commit -m "release: v${VERSION}"

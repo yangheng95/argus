@@ -7,6 +7,19 @@ on:
   pull_request:
   workflow_dispatch:
 jobs:
+  version-sync:
+    name: version-sync
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Verify opencorvus and overlay versions are aligned
+        run: bun ./script/sync-version.ts --check
+
   unit:
     name: unit (${{ matrix.settings.name }})
     strategy:
@@ -41,6 +54,9 @@ jobs:
   build-critical:
     name: build-critical (linux)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,7 +65,7 @@ jobs:
         uses: ./.github/actions/setup-bun
 
       - name: Run critical builds
-        run: bunx turbo run build --filter=@opencorvus-ai/console-app --filter=@opencorvus-ai/web
+        run: bun run --cwd packages/opencorvus build --single --skip-install
 
   gui-coordinate-smoke:
     name: gui-coordinate-smoke (${{ matrix.settings.name }})
@@ -136,6 +152,7 @@ jobs:
     name: test (linux)
     runs-on: ubuntu-latest
     needs:
+      - version-sync
       - unit
       - build-critical
       - gui-coordinate-smoke
@@ -145,11 +162,13 @@ jobs:
     steps:
       - name: Verify upstream test jobs passed
         run: |
+          echo "version-sync=${{ needs['version-sync'].result }}"
           echo "unit=${{ needs.unit.result }}"
           echo "build-critical=${{ needs['build-critical'].result }}"
           echo "gui-coordinate-smoke=${{ needs['gui-coordinate-smoke'].result }}"
           echo "bot-unit=${{ needs['bot-unit'].result }}"
           echo "overlay-check=${{ needs['overlay-check'].result }}"
+          test "${{ needs['version-sync'].result }}" = "success"
           test "${{ needs.unit.result }}" = "success"
           test "${{ needs['build-critical'].result }}" = "success"
           test "${{ needs['gui-coordinate-smoke'].result }}" = "success"

@@ -8,11 +8,10 @@
   "scripts": {
     "dev": "bun run --cwd packages/opencorvus dev",
     "dev:overlay": "cd packages/overlay/src-tauri && cargo run --release",
-    "dev:console": "bun run --cwd packages/console/app dev",
     "check:sdk-imports": "bun run scripts/check-sdk-imports.ts",
     "patch:follow-redirects": "bun run scripts/patch-follow-redirects.ts",
     "postinstall": "bun run patch:follow-redirects",
-    "typecheck": "bun run check:sdk-imports && bunx turbo run typecheck",
+    "typecheck": "bun run check:sdk-imports && bun run --cwd packages/opencorvus db:check && bunx turbo run typecheck",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"
   },
@@ -68,8 +67,10 @@
   },
   "devDependencies": {
     "@actions/artifact": "5.0.1",
+    "@babel/preset-typescript": "7.28.5",
     "@tsconfig/bun": "catalog:",
     "@types/mime-types": "3.0.1",
+    "babel-preset-solid": "1.9.10",
     "glob": "13.0.5",
     "husky": "9.1.7",
     "prettier": "3.6.2",
