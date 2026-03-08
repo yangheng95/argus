@@ -137,6 +137,7 @@ export namespace OrchestratorService {
     }
     ExecutorRegistry.require(executor)
     const session = await Session.create({ title })
+    const resolvedChecks = await EvaluatorService.resolveChecks(input.checks ? { checks: input.checks } : undefined)
     const now = Date.now()
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
@@ -145,7 +146,7 @@ export namespace OrchestratorService {
     const questionID = Identifier.ascending("question")
     const metadata = {
       ...(input.metadata ?? {}),
-      ...(input.checks ? { checks: input.checks } : {}),
+      ...(Object.keys(resolvedChecks).length > 0 ? { checks: resolvedChecks } : {}),
     }
     // Orchestrator-dispatched tasks run headless — auto-approve all tool permissions
     await Session.setPermission({
@@ -530,9 +531,18 @@ export namespace OrchestratorService {
     })
   }
 
-  export async function getBoard(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks()).catch(() => undefined)
+  export async function getBoard(taskID: string, input?: { sync?: boolean }) {
+    if (input?.sync !== false) {
+      await OrchestratorRuntime.syncTask(taskID, hooks()).catch(() => undefined)
+    }
     return WorkbenchService.compileBoard({ taskID })
+  }
+
+  export async function getBoardTag(taskID: string, input?: { sync?: boolean }) {
+    if (input?.sync !== false) {
+      await OrchestratorRuntime.syncTask(taskID, hooks()).catch(() => undefined)
+    }
+    return WorkbenchService.boardTag({ taskID })
   }
 
   export async function getProjectBoard(opts?: { limit?: number; query?: string; status?: string }) {
@@ -625,7 +635,7 @@ export namespace OrchestratorService {
 
   export async function selectTaskChecks(
     taskID: string,
-    selection: Partial<Record<"lint" | "build" | "test" | "code_quality" | "code_review" | "judge", boolean>>,
+    selection: Record<string, boolean>,
   ) {
     const task = requireTask(taskID)
     const next = mergeTaskChecks(task.metadata?.checks, selection)
@@ -1038,24 +1048,40 @@ function writeTaskChecks(task: TaskRow, checks: Record<string, unknown> | undefi
 
 function mergeTaskChecks(
   raw: unknown,
-  selection: Partial<Record<"lint" | "build" | "test" | "code_quality" | "code_review" | "judge", boolean>>,
+  selection: Record<string, boolean>,
 ) {
   const checks =
     raw && typeof raw === "object" && !Array.isArray(raw)
       ? structuredClone(raw as Record<string, unknown>)
       : {}
 
-  for (const key of ["lint", "build", "test"] as const) {
-    if (selection[key] === true) {
-      if (checks[key] === false) delete checks[key]
+  const named =
+    checks.named && typeof checks.named === "object" && !Array.isArray(checks.named)
+      ? structuredClone(checks.named as Record<string, unknown>)
+      : {}
+
+  for (const [key, enabled] of Object.entries(selection)) {
+    if (key.startsWith("named:")) {
+      const name = key.slice("named:".length)
+      const current = named[name]
+      if (!name || !current || typeof current !== "object" || Array.isArray(current)) continue
+      named[name] = {
+        ...current,
+        enabled,
+      }
       continue
     }
-    if (selection[key] === false) checks[key] = false
-  }
 
-  // The panel only edits enablement for review-style checks; preserve existing detail.
-  for (const key of ["code_quality", "code_review", "judge"] as const) {
-    if (selection[key] === true) {
+    if (["lint", "build", "test", "verify_cmd"].includes(key)) {
+      if (enabled) {
+        if (checks[key] === false) delete checks[key]
+        continue
+      }
+      checks[key] = false
+      continue
+    }
+
+    if (enabled) {
       const current = checks[key]
       checks[key] =
         current && typeof current === "object" && !Array.isArray(current)
@@ -1063,8 +1089,11 @@ function mergeTaskChecks(
           : { enabled: true }
       continue
     }
-    if (selection[key] === false) delete checks[key]
+    delete checks[key]
   }
+
+  if (Object.keys(named).length > 0) checks.named = named
+  else delete checks.named
 
   return Object.keys(checks).length > 0 ? checks : undefined
 }

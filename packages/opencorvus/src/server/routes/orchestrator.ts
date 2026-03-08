@@ -239,7 +239,19 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.getBoard(c.req.valid("param").taskID))
+        const taskID = c.req.valid("param").taskID
+        const sync = c.req.query("sync") !== "0"
+        const etag = await OrchestratorService.getBoardTag(taskID, { sync })
+        if (c.req.header("if-none-match") === etag) {
+          return new Response(null, {
+            status: 304,
+            headers: {
+              ETag: etag,
+            },
+          })
+        }
+        c.header("ETag", etag)
+        return c.json(await OrchestratorService.getBoard(taskID, { sync: false }))
       },
     )
     .get(

@@ -7,9 +7,13 @@ import { SessionPrompt } from "@/session/prompt"
 import { Skill } from "@/skill"
 import { ToolRegistry } from "@/tool/registry"
 import { Database, eq, inArray } from "@/storage/db"
-import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import {
+  OrchestratorEvaluationTable,
+  OrchestratorGoalTable,
+  OrchestratorRunTable,
+  OrchestratorTaskTable,
+} from "@/orchestrator/orchestrator.sql"
 import { OrchestratorService } from "@/orchestrator/service"
-import { WorkbenchService } from "@/workbench/service"
 import { Instance } from "@/project/instance"
 import { ControlMessageInput, ControlMessageResult } from "./message-schema"
 import { ControlTimeline } from "./timeline"
@@ -353,39 +357,58 @@ function looksLikeTaskRequest(text: string) {
 
 function queryTaskProgress(taskID: string): z.infer<typeof ControlMessageResult> {
   try {
-    const board = WorkbenchService.compileBoard({ taskID })
-    const lines = [
-      `**Task**: ${board.task.title}`,
-      `**Status**: ${board.task.status}`,
-    ]
-    if (board.run) {
-      lines.push(`**Run**: ${board.run.status} (phase: ${board.run.phase ?? "—"}, retries: ${board.run.retryCount ?? 0})`)
+    const task = Database.use((db) =>
+      db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+    )
+    if (!task) {
+      return ControlMessageResult.parse({
+        kind: "panel_response",
+        message: `Task not found: \`${taskID}\``,
+      })
     }
-    if (board.evaluation) {
-      lines.push(`**Evaluation**: ${board.evaluation.verdict ?? board.evaluation.status}`)
-    }
-    if (board.lanes && board.lanes.length > 0) {
-      const goalLane = board.lanes.find((lane) => lane.id === "goals")
-      if (goalLane && goalLane.cards.length > 0) {
-        const goalLines = goalLane.cards.map(
-          (card) => `- [${card.status}] ${card.title}`,
+    const run = task.active_run_id
+      ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
+      : undefined
+    const evaluation = Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorEvaluationTable)
+        .where(eq(OrchestratorEvaluationTable.task_id, task.id))
+        .orderBy(OrchestratorEvaluationTable.time_created)
+        .all()
+        .filter((item) => !run || item.run_id === run.id)
+        .at(-1),
+    )
+    const goals = task.active_plan_version_id
+      ? Database.use((db) =>
+          db
+            .select({
+              description: OrchestratorGoalTable.description,
+              status: OrchestratorGoalTable.status,
+            })
+            .from(OrchestratorGoalTable)
+            .where(eq(OrchestratorGoalTable.plan_version_id, task.active_plan_version_id!))
+            .orderBy(OrchestratorGoalTable.order_index)
+            .all(),
         )
-        lines.push("**Goals**:", ...goalLines)
-      }
+      : []
+    const lines = [
+      `**Task**: ${task.title}`,
+      `**Status**: ${task.status}`,
+    ]
+    if (run) {
+      lines.push(`**Run**: ${run.status} (phase: ${run.phase ?? "—"}, retries: ${run.retry_count ?? 0})`)
     }
-    if (board.task.error) {
-      lines.push(`**Error**: ${board.task.error}`)
+    if (evaluation) {
+      lines.push(`**Evaluation**: ${evaluation.verdict ?? evaluation.status}`)
     }
-    return ControlMessageResult.parse({
-      kind: "progress",
-      message: lines.join("\n"),
-      task_id: taskID,
-    })
+    if (goals.length > 0) {
+      lines.push("**Goals**:", ...goals.map((goal) => `- [${goal.status}] ${goal.description}`))
+    }
+    if (task.error) lines.push(`**Error**: ${task.error}`)
+    return ControlMessageResult.parse({ kind: "progress", message: lines.join("\n"), task_id: taskID })
   } catch {
-    return ControlMessageResult.parse({
-      kind: "panel_response",
-      message: `Task not found: \`${taskID}\``,
-    })
+    return ControlMessageResult.parse({ kind: "panel_response", message: `Task not found: \`${taskID}\`` })
   }
 }
 

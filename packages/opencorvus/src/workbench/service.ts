@@ -19,7 +19,7 @@ import {
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
 import { EvaluationCheck } from "@/orchestrator/model"
-import { Database, eq } from "@/storage/db"
+import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchBriefSnapshotTable, WorkbenchTaskNoteTable } from "./workbench.sql"
 
 const MessageInput = z.object({
@@ -49,6 +49,7 @@ const WorkbenchIntent = z.object({
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
 const BOARD_SUMMARY_LIMIT = 4000
+const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
 
 export namespace WorkbenchService {
   export function taskNotes(taskID: string, limit = 8) {
@@ -57,9 +58,10 @@ export namespace WorkbenchService {
         .select()
         .from(WorkbenchTaskNoteTable)
         .where(eq(WorkbenchTaskNoteTable.task_id, taskID))
-        .orderBy(WorkbenchTaskNoteTable.time_created)
+        .orderBy(desc(WorkbenchTaskNoteTable.time_created))
         .limit(limit)
-        .all(),
+        .all()
+        .reverse(),
     )
   }
 
@@ -438,129 +440,147 @@ export namespace WorkbenchService {
   export function compileBoard(input: { taskID: string }) {
     const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
     if (!task) throw new Error(`Task not found: ${input.taskID}`)
-    const run = task.active_run_id
-      ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
-      : undefined
-    const plan = task.active_plan_version_id
-      ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
-      : undefined
-    const goals = plan
-      ? Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorGoalTable)
-            .where(eq(OrchestratorGoalTable.plan_version_id, plan.id))
-            .orderBy(OrchestratorGoalTable.order_index)
-            .all(),
-        )
-      : []
-    const interactions = Database.use((db) =>
-      db
-        .select()
-        .from(OrchestratorInteractionRequestTable)
-        .where(eq(OrchestratorInteractionRequestTable.task_id, task.id))
-        .orderBy(OrchestratorInteractionRequestTable.time_created)
-        .all(),
-    )
-    const prefs = preferences({
-      projectID: task.project_id,
-      sessionID: task.session_id ?? undefined,
-    })
-    const notes = taskNotes(task.id, 12)
-    const brief = compileBrief({
-      taskID: task.id,
-      runID: run?.id ?? undefined,
-      planVersionID: plan?.id ?? undefined,
-      sessionID: task.session_id ?? undefined,
-    })
-    const staging = notes.filter((note) =>
-      ["plan_hint", "goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
-    )
-    const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
-    const allDeliveries = Database.use((db) =>
-      db
-        .select()
-        .from(OrchestratorDeliveryTable)
-        .where(eq(OrchestratorDeliveryTable.task_id, task.id))
-        .orderBy(OrchestratorDeliveryTable.time_created)
-        .all(),
-    )
-    const delivery = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
-    const latestDelivery = delivery ?? allDeliveries.at(-1)
-    const allEvaluations = Database.use((db) =>
-      db
-        .select()
-        .from(OrchestratorEvaluationTable)
-        .where(eq(OrchestratorEvaluationTable.task_id, task.id))
-        .orderBy(OrchestratorEvaluationTable.time_created)
-        .all(),
-    )
-    const evaluation = run ? allEvaluations.filter((item) => item.run_id === run.id).at(-1) : undefined
-    const latestEvaluation = evaluation ?? allEvaluations.at(-1)
-    const acceptedEvaluation = [...allEvaluations]
-      .reverse()
-      .find((item) => item.verdict === "accepted" || item.status === "passed")
-    const acceptedDelivery = acceptedEvaluation?.delivery_id
-      ? allDeliveries.find((item) => item.id === acceptedEvaluation.delivery_id)
-      : undefined
-    const bindings = Database.use((db) =>
-      db
-        .select()
-        .from(OrchestratorChannelBindingTable)
-        .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
-        .orderBy(OrchestratorChannelBindingTable.time_created)
-        .all(),
-    )
-    const artifacts = run
-      ? Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorArtifactTable)
-            .where(eq(OrchestratorArtifactTable.run_id, run.id))
-            .orderBy(OrchestratorArtifactTable.time_created)
-            .all(),
-        )
-      : []
-    const latestArtifacts =
-      artifacts.length > 0
-        ? artifacts
-        : latestDelivery
-          ? Database.use((db) =>
-              db
-                .select()
-                .from(OrchestratorArtifactTable)
-                .where(eq(OrchestratorArtifactTable.delivery_id, latestDelivery.id))
-                .orderBy(OrchestratorArtifactTable.time_created)
-                .all(),
-            )
-          : []
-    const snapshots = Database.use((db) =>
-      db
-        .select()
-        .from(OrchestratorProgressSnapshotTable)
-        .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
-        .orderBy(OrchestratorProgressSnapshotTable.time_created)
-        .all(),
-    )
-    const compactSnapshots = compactBoardSnapshots(snapshots).slice(-BOARD_SNAPSHOT_LIMIT)
-    const pendingInteractions = interactions.filter((item) => item.status === "pending")
-    const currentFailure = boardFailure({
-      task,
-      run,
-      interactions: pendingInteractions,
-      evaluation: latestEvaluation,
-    })
-    const overview = boardOverview({
-      task,
-      run,
-      pendingInteractions,
-      candidateDelivery: latestDelivery,
-      acceptedDelivery,
-      evaluation: latestEvaluation,
-      currentFailure,
-    })
+    const tag = boardTagForTask(task)
+    const cached = boardCache.get(task.id)
+    if (cached?.tag === tag) return cached.board
+    const board = buildBoard(task)
+    boardCache.set(task.id, { tag, board })
+    return board
+  }
 
-    return {
+  export function boardTag(input: { taskID: string }) {
+    const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
+    if (!task) throw new Error(`Task not found: ${input.taskID}`)
+    return boardTagForTask(task)
+  }
+}
+
+function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
+  const run = task.active_run_id
+    ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
+    : undefined
+  const plan = task.active_plan_version_id
+    ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
+    : undefined
+  const goals = plan
+    ? Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorGoalTable)
+          .where(eq(OrchestratorGoalTable.plan_version_id, plan.id))
+          .orderBy(OrchestratorGoalTable.order_index)
+          .all(),
+      )
+    : []
+  const interactions = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorInteractionRequestTable)
+      .where(eq(OrchestratorInteractionRequestTable.task_id, task.id))
+      .orderBy(OrchestratorInteractionRequestTable.time_created)
+      .all(),
+  )
+  const prefs = WorkbenchService.preferences({
+    projectID: task.project_id,
+    sessionID: task.session_id ?? undefined,
+  })
+  const notes = WorkbenchService.taskNotes(task.id, 12)
+  const brief = WorkbenchService.compileBrief({
+    taskID: task.id,
+    runID: run?.id ?? undefined,
+    planVersionID: plan?.id ?? undefined,
+    sessionID: task.session_id ?? undefined,
+  })
+  const staging = notes.filter((note) =>
+    ["plan_hint", "goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
+  )
+  const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
+  const allDeliveries = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorDeliveryTable)
+      .where(eq(OrchestratorDeliveryTable.task_id, task.id))
+      .orderBy(OrchestratorDeliveryTable.time_created)
+      .all(),
+  )
+  const delivery = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
+  const latestDelivery = delivery ?? allDeliveries.at(-1)
+  const allEvaluations = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorEvaluationTable)
+      .where(eq(OrchestratorEvaluationTable.task_id, task.id))
+      .orderBy(OrchestratorEvaluationTable.time_created)
+      .all(),
+  )
+  const evaluation = run ? allEvaluations.filter((item) => item.run_id === run.id).at(-1) : undefined
+  const latestEvaluation = evaluation ?? allEvaluations.at(-1)
+  const acceptedEvaluation = [...allEvaluations]
+    .reverse()
+    .find((item) => item.verdict === "accepted" || item.status === "passed")
+  const acceptedDelivery = acceptedEvaluation?.delivery_id
+    ? allDeliveries.find((item) => item.id === acceptedEvaluation.delivery_id)
+    : undefined
+  const bindings = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorChannelBindingTable)
+      .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
+      .orderBy(OrchestratorChannelBindingTable.time_created)
+      .all(),
+  )
+  const artifacts = run
+    ? Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorArtifactTable)
+          .where(eq(OrchestratorArtifactTable.run_id, run.id))
+          .orderBy(OrchestratorArtifactTable.time_created)
+          .all(),
+      )
+    : []
+  const latestArtifacts =
+    artifacts.length > 0
+      ? artifacts
+      : latestDelivery
+        ? Database.use((db) =>
+            db
+              .select()
+              .from(OrchestratorArtifactTable)
+              .where(eq(OrchestratorArtifactTable.delivery_id, latestDelivery.id))
+              .orderBy(OrchestratorArtifactTable.time_created)
+              .all(),
+          )
+        : []
+  const snapshots = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorProgressSnapshotTable)
+      .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
+      .orderBy(desc(OrchestratorProgressSnapshotTable.time_created))
+      .limit(BOARD_SNAPSHOT_LIMIT * 4)
+      .all()
+      .reverse(),
+  )
+  const compactSnapshots = compactBoardSnapshots(snapshots).slice(-BOARD_SNAPSHOT_LIMIT)
+  const pendingInteractions = interactions.filter((item) => item.status === "pending")
+  const currentFailure = boardFailure({
+    task,
+    run,
+    interactions: pendingInteractions,
+    evaluation: latestEvaluation,
+  })
+  const overview = boardOverview({
+    task,
+    run,
+    pendingInteractions,
+    candidateDelivery: latestDelivery,
+    acceptedDelivery,
+    evaluation: latestEvaluation,
+    currentFailure,
+  })
+
+  return {
       task: {
         id: task.id,
         projectID: task.project_id,
@@ -805,8 +825,131 @@ export namespace WorkbenchService {
           })),
         },
       ],
-    }
   }
+}
+
+function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
+  const run = task.active_run_id
+    ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
+    : undefined
+  const plan = task.active_plan_version_id
+    ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
+    : undefined
+  const goals = plan
+    ? Database.use((db) =>
+        db
+          .select({
+            count: sql<number>`count(*)`,
+            updated: sql<number>`coalesce(max(${OrchestratorGoalTable.time_updated}), 0)`,
+          })
+          .from(OrchestratorGoalTable)
+          .where(eq(OrchestratorGoalTable.plan_version_id, plan.id))
+          .get(),
+      )
+    : undefined
+  const interactions = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorInteractionRequestTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorInteractionRequestTable)
+      .where(eq(OrchestratorInteractionRequestTable.task_id, task.id))
+      .get(),
+  )
+  const deliveries = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorDeliveryTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorDeliveryTable)
+      .where(eq(OrchestratorDeliveryTable.task_id, task.id))
+      .get(),
+  )
+  const evaluations = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorEvaluationTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorEvaluationTable)
+      .where(eq(OrchestratorEvaluationTable.task_id, task.id))
+      .get(),
+  )
+  const artifacts = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorArtifactTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorArtifactTable)
+      .where(eq(OrchestratorArtifactTable.task_id, task.id))
+      .get(),
+  )
+  const bindings = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorChannelBindingTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorChannelBindingTable)
+      .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
+      .get(),
+  )
+  const snapshots = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${OrchestratorProgressSnapshotTable.time_updated}), 0)`,
+      })
+      .from(OrchestratorProgressSnapshotTable)
+      .where(eq(OrchestratorProgressSnapshotTable.task_id, task.id))
+      .get(),
+  )
+  const notes = Database.use((db) =>
+    db
+      .select({
+        count: sql<number>`count(*)`,
+        updated: sql<number>`coalesce(max(${WorkbenchTaskNoteTable.time_updated}), 0)`,
+      })
+      .from(WorkbenchTaskNoteTable)
+      .where(eq(WorkbenchTaskNoteTable.task_id, task.id))
+      .get(),
+  )
+  const prefs = Preference.list({
+    projectID: task.project_id,
+    sessionID: task.session_id ?? undefined,
+    scope: "all",
+  })
+  const prefUpdated = prefs.reduce((max, item) => Math.max(max, item.timeUpdated), 0)
+  return [
+    task.id,
+    task.time_created,
+    task.time_updated,
+    run?.id ?? "",
+    run?.time_updated ?? 0,
+    plan?.id ?? "",
+    plan?.time_updated ?? 0,
+    goals?.count ?? 0,
+    goals?.updated ?? 0,
+    prefs.length,
+    prefUpdated,
+    notes?.count ?? 0,
+    notes?.updated ?? 0,
+    interactions?.count ?? 0,
+    interactions?.updated ?? 0,
+    deliveries?.count ?? 0,
+    deliveries?.updated ?? 0,
+    evaluations?.count ?? 0,
+    evaluations?.updated ?? 0,
+    artifacts?.count ?? 0,
+    artifacts?.updated ?? 0,
+    bindings?.count ?? 0,
+    bindings?.updated ?? 0,
+    snapshots?.count ?? 0,
+    snapshots?.updated ?? 0,
+  ].join("|")
 }
 
 function briefSignature(input: {

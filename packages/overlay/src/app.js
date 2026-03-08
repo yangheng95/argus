@@ -9,6 +9,9 @@ const DEFAULT_SERVER = (() => {
 })();
 const POLL_INTERVAL = 4000;
 const SESSION_POLL = 6000;
+const SSE_BACKSTOP = 15000;
+const BOARD_EVENT_DEBOUNCE = 150;
+const SESSION_EVENT_DEBOUNCE = 150;
 const DEFAULT_OVERLAY_SETTINGS = {
   serverUrl: DEFAULT_SERVER,
   password: "",
@@ -43,13 +46,23 @@ const state = {
   skillMarket: [],
   mcp: {},
   board: null,
+  boardEtag: "",
+  boardLoading: null,
+  boardQueued: false,
+  boardKick: null,
+  boardUpdatedAt: 0,
   chatSessionID: "",
   sessions: [],
   managedSession: null,
   managedChildren: [],
   session: [],
+  sessionLoading: null,
+  sessionQueued: false,
+  sessionKick: null,
+  sessionUpdatedAt: 0,
   changes: [],
   sse: null,
+  sseConnected: false,
   pollTimer: null,
   sessionTimer: null,
   elapsedTimer: null,
@@ -1119,6 +1132,9 @@ async function selectTask(taskID) {
   stopPolling();
   stopSSE();
   state.board = null;
+  state.boardEtag = "";
+  state.boardUpdatedAt = 0;
+  state.sessionUpdatedAt = 0;
   state.session = [];
   renderClear();
 
@@ -1142,57 +1158,118 @@ async function selectTask(taskID) {
 
 // ── Board Loading ──
 
+function scheduleBoard(delay = 0) {
+  if (state.boardKick) clearTimeout(state.boardKick);
+  state.boardKick = setTimeout(() => {
+    state.boardKick = null;
+    loadBoard();
+  }, delay);
+}
+
 async function loadBoard() {
   if (!state.selectedTaskID) return;
   // Don't reload while an interaction button click is in flight
   if (typeof _interactionBusy !== "undefined" && _interactionBusy) return;
-  try {
-    const board = await apiJson(`task/${state.selectedTaskID}/board`);
-    state.board = board;
-    renderBoard();
-    await loadChanges();
-  } catch {
-    // silent
+  if (state.boardLoading) {
+    state.boardQueued = true;
+    return state.boardLoading;
   }
+  const taskID = state.selectedTaskID;
+  state.boardLoading = (async () => {
+    try {
+      const headers = apiHeaders();
+      if (state.boardEtag) headers["If-None-Match"] = state.boardEtag;
+      const res = await fetch(apiUrl(`task/${taskID}/board?sync=0`), {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+      if (taskID !== state.selectedTaskID) return;
+      if (res.status === 304) {
+        state.boardUpdatedAt = Date.now();
+        return;
+      }
+      if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+      const etag = res.headers.get("etag");
+      if (etag) state.boardEtag = etag;
+      state.board = await res.json();
+      state.boardUpdatedAt = Date.now();
+      renderBoard();
+      await loadChanges();
+    } catch {
+      // silent
+    } finally {
+      state.boardLoading = null;
+      if (state.boardQueued) {
+        state.boardQueued = false;
+        queueMicrotask(() => loadBoard());
+      }
+    }
+  })();
+  return state.boardLoading;
 }
 
 // ── Control Conversation ──
 
+function scheduleConversation(delay = 0) {
+  if (state.sessionKick) clearTimeout(state.sessionKick);
+  state.sessionKick = setTimeout(() => {
+    state.sessionKick = null;
+    loadConversation();
+  }, delay);
+}
+
 async function loadConversation() {
   const target = conversationTarget();
-  try {
-    const params = new URLSearchParams();
-    if (target.taskID) params.set("taskID", target.taskID);
-    else if (target.sessionID) params.set("sessionID", target.sessionID);
-    else params.set("surface", "panel");
-    const messages = await apiJson(`control/timeline?${params.toString()}`);
-    let result = Array.isArray(messages) ? messages : [];
+  if (state.sessionLoading) {
+    state.sessionQueued = true;
+    return state.sessionLoading;
+  }
+  state.sessionLoading = (async () => {
+    try {
+      const params = new URLSearchParams();
+      if (target.taskID) params.set("taskID", target.taskID);
+      else if (target.sessionID) params.set("sessionID", target.sessionID);
+      else params.set("surface", "panel");
+      const messages = await apiJson(`control/timeline?${params.toString()}`);
+      let result = Array.isArray(messages) ? messages : [];
 
-    // Fallback: if control timeline is empty, load the underlying session messages
-    // (headless API tasks don't write to the control timeline)
-    if (result.length === 0) {
-      const sessionID = currentSessionID();
-      if (sessionID) {
-        try {
-          const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-          result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-        } catch {}
+      // Fallback: if control timeline is empty, load the underlying session messages
+      // (headless API tasks don't write to the control timeline)
+      if (result.length === 0) {
+        const sessionID = currentSessionID();
+        if (sessionID) {
+          try {
+            const sessionMsgs = await apiJson(`session/${sessionID}/message`);
+            result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
+          } catch {}
+        }
+      }
+
+      if (target.key !== conversationTarget().key) return;
+      state.session = result;
+      state.sessionUpdatedAt = Date.now();
+      renderSession();
+      if (!state.selectedTaskID || state.chatSessionID) {
+        await loadChanges();
+      }
+    } catch (e) {
+      console.error("Failed to load conversation:", e);
+      if (target.key !== conversationTarget().key) return;
+      state.session = [];
+      state.sessionUpdatedAt = Date.now();
+      renderSession();
+      if (!state.selectedTaskID || state.chatSessionID) {
+        await loadChanges();
+      }
+    } finally {
+      state.sessionLoading = null;
+      if (state.sessionQueued) {
+        state.sessionQueued = false;
+        queueMicrotask(() => loadConversation());
       }
     }
-
-    state.session = result;
-    renderSession();
-    if (!state.selectedTaskID || state.chatSessionID) {
-      await loadChanges();
-    }
-  } catch (e) {
-    console.error("Failed to load conversation:", e);
-    state.session = [];
-    renderSession();
-    if (!state.selectedTaskID || state.chatSessionID) {
-      await loadChanges();
-    }
-  }
+  })();
+  return state.sessionLoading;
 }
 
 function currentSessionID() {
@@ -1280,6 +1357,7 @@ function startSSE(taskID) {
   stopSSE();
   const controller = new AbortController();
   state.sse = controller;
+  state.sseConnected = false;
 
   (async () => {
     try {
@@ -1288,6 +1366,7 @@ function startSSE(taskID) {
         signal: controller.signal,
       });
       if (!res.ok || !res.body) return;
+      state.sseConnected = true;
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -1308,6 +1387,7 @@ function startSSE(taskID) {
         }
       }
     } catch (e) {
+      state.sseConnected = false;
       if (e.name === "AbortError") return;
       // Retry after delay
       setTimeout(() => {
@@ -1322,6 +1402,7 @@ function stopSSE() {
     state.sse.abort();
     state.sse = null;
   }
+  state.sseConnected = false;
 }
 
 function handleSSEEvent(event) {
@@ -1337,8 +1418,10 @@ function handleSSEEvent(event) {
     type.includes("evaluation.") ||
     type.includes("interaction.")
   ) {
-    loadBoard();
-    loadConversation();
+    scheduleBoard(BOARD_EVENT_DEBOUNCE);
+    if (type.includes("interaction.")) {
+      scheduleConversation(SESSION_EVENT_DEBOUNCE);
+    }
   }
 }
 
@@ -1347,16 +1430,24 @@ function handleSSEEvent(event) {
 function startPolling() {
   stopPolling();
   state.pollTimer = setInterval(() => {
-    loadBoard();
+    if (!state.sseConnected || Date.now() - state.boardUpdatedAt > SSE_BACKSTOP) {
+      loadBoard();
+    }
     loadMeta();
   }, POLL_INTERVAL);
-  state.sessionTimer = setInterval(() => loadConversation(), SESSION_POLL);
+  state.sessionTimer = setInterval(() => {
+    if (!state.sseConnected || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP) {
+      loadConversation();
+    }
+  }, SESSION_POLL);
 }
 
 function stopPolling() {
   if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
   if (state.sessionTimer) { clearInterval(state.sessionTimer); state.sessionTimer = null; }
   if (state.elapsedTimer) { clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
+  if (state.boardKick) { clearTimeout(state.boardKick); state.boardKick = null; }
+  if (state.sessionKick) { clearTimeout(state.sessionKick); state.sessionKick = null; }
 }
 
 // ── Rendering: Board ──
@@ -1897,19 +1988,21 @@ function renderEvaluation(evaluation, delivery) {
 
   // Update criteria status dots from evaluation checks
   const errors = [];
-  if (evaluation.checks?.length > 0) {
-    for (const check of evaluation.checks) {
-      // Match check name to criteria checkbox data-check attribute
-      const key = check.name?.toLowerCase().replace(/[\s_-]+/g, "_");
-      const item = document.querySelector(`[data-check="${key}"]`)?.closest(".criteria-item");
-      if (item) {
-        setCriteriaResult(item, check.status);
-      }
-      if (check.status === "failed" && check.evidence) {
-        errors.push({ name: check.name, evidence: check.evidence });
-      }
+  const checkMap = {};
+  for (const check of evaluation.checks || []) {
+    checkMap[check.name?.toLowerCase().replace(/[^a-z0-9_#]/g, "_")] = check;
+    if (check.status === "failed" && check.evidence) {
+      errors.push({ name: check.name, evidence: check.evidence });
     }
   }
+  document.querySelectorAll(".criteria-item").forEach((item) => {
+    const key = item.querySelector("input[type=checkbox]")?.dataset.check;
+    if (!key || !isCriteriaEnabled(item)) return;
+    const matched = findCheck(checkMap, key);
+    if (matched) {
+      setCriteriaResult(item, matched.status);
+    }
+  });
 
   // Build evalBody: only show errors and summary
   let html = "";

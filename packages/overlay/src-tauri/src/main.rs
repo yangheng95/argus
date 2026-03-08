@@ -146,6 +146,23 @@ fn restart_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::err
     start_server(app)
 }
 
+/// Embed the window icon at compile time so it works in both dev and prod builds.
+const WINDOW_ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
+
+fn set_window_icon<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    match image::load_from_memory_with_format(WINDOW_ICON_PNG, image::ImageFormat::Png) {
+        Ok(img) => {
+            let rgba = img.to_rgba8();
+            let (width, height) = rgba.dimensions();
+            let icon = tauri::image::Image::new_owned(rgba.into_raw(), width, height);
+            let _ = window.set_icon(icon);
+        }
+        Err(err) => {
+            eprintln!("overlay: failed to decode window icon: {err}");
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -159,6 +176,12 @@ fn main() {
             app.manage(Server(Mutex::new(None)));
             let handle = app.handle().clone();
             let _ = restart_server(&handle);
+
+            // Set window icon (needed for taskbar/alt-tab when decorations=false).
+            // bundle.icon only applies to the packaged exe, not cargo run dev builds.
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = set_window_icon(&window);
+            }
 
             // Adapt window size & position to primary monitor
             if let Some(window) = app.get_webview_window("main") {

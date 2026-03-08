@@ -44,11 +44,22 @@ export const MilestoneInput = z.object({
   goals: GoalInput.array(),
 })
 
+export const NamedCheckFamily = z.enum(["build", "test", "lint", "verify_cmd"])
+
+export const NamedCheckConfig = z.object({
+  label: z.string().min(1).optional(),
+  family: NamedCheckFamily.optional(),
+  commands: z.array(z.string().min(1)).min(1),
+  enabled: z.boolean().optional(),
+  cwd: z.string().min(1).optional(),
+})
+
 export const CheckConfig = z.object({
   build: z.union([z.array(z.string()), z.literal(false)]).optional(),
   test: z.union([z.array(z.string()), z.literal(false)]).optional(),
   lint: z.union([z.array(z.string()), z.literal(false)]).optional(),
   verify_cmd: z.union([z.array(z.string()), z.literal(false)]).optional(),
+  named: z.record(z.string(), NamedCheckConfig).optional(),
   startup: z
     .object({
       command: z.string().min(1),
@@ -361,6 +372,8 @@ export const Delivery = z.object({
 
 export const EvaluationCheck = z.object({
   name: z.string(),
+  label: z.string().optional(),
+  family: z.string().optional(),
   status: z.enum(["passed", "failed", "skipped"]),
   evidence: z.string().optional(),
 })
