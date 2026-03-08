@@ -11,6 +11,7 @@ const SUPPORTED_IDES = [
   { name: "Cursor" as const, cmd: "cursor" },
   { name: "VSCodium" as const, cmd: "codium" },
 ]
+const EXTENSION = process.env.OPENCORVUS_IDE_EXTENSION_ID || "yangheng95.opencorvus"
 
 export namespace Ide {
   const log = Log.create({ service: "ide" })
@@ -51,7 +52,7 @@ export namespace Ide {
     const cmd = SUPPORTED_IDES.find((i) => i.name === ide)?.cmd
     if (!cmd) throw new Error(`Unknown IDE: ${ide}`)
 
-    const p = spawn([cmd, "--install-extension", "sst-dev.opencorvus"], {
+    const p = spawn([cmd, "--install-extension", EXTENSION], {
       stdout: "pipe",
       stderr: "pipe",
     })

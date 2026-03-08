@@ -31,6 +31,7 @@ export const ManagedCodingExecutor = {
       cwd?: string | (() => string | undefined)
       system?: string | (() => string | undefined)
       maxTurns?: number | (() => number | undefined)
+      tools?: unknown[] | (() => unknown[] | undefined)
     },
   ): ExecutorAdapter {
     const tasks = new Map<string, State>()
@@ -43,6 +44,7 @@ export const ManagedCodingExecutor = {
         cwd: value(options.cwd),
         system: value(options.system),
         maxTurns: value(options.maxTurns),
+        tools: value(options.tools),
         signal: state.abort.signal,
       }
       const stream =
@@ -177,6 +179,18 @@ export const ManagedCodingExecutor = {
           queueTaskID: id,
         }
       },
+      async resolve(input) {
+        if (!provider.respond) return false
+        const state = pick(tasks, latest, input)
+        if (!state) return false
+        return provider.respond({
+          sessionID: state.externalSessionID ?? state.sessionID,
+          requestID: input.requestID,
+          kind: input.kind,
+          response: input.response,
+          error: input.error,
+        })
+      },
       async *events(input) {
         const state = pick(tasks, latest, input)
         if (!state) return
@@ -303,6 +317,7 @@ function map(state: State, event: CodingEventInfo): Notify {
         id: event.id,
         name: event.name,
         input: event.input,
+        ...(event.meta ?? {}),
       },
     }
   }
@@ -315,6 +330,92 @@ function map(state: State, event: CodingEventInfo): Notify {
         queueTaskID: state.id,
         id: event.id,
         output: event.output,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
+  if (event.type === "reasoning_delta") {
+    return {
+      type: "reasoning.delta",
+      summary: event.text,
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
+  if (event.type === "plan_delta") {
+    return {
+      type: "plan.delta",
+      summary: event.summary ?? "Plan updated",
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
+  if (event.type === "diff_delta") {
+    return {
+      type: "diff.delta",
+      summary: event.summary ?? "Diff updated",
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
+  if (event.type === "approval_request") {
+    return {
+      type: "approval.request",
+      summary: event.message ?? event.approval,
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        id: event.id,
+        approval: event.approval,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
+  if (event.type === "input_request") {
+    return {
+      type: "input.request",
+      summary: "User input requested",
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        id: event.id,
+        questions: event.questions,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
+  if (event.type === "usage") {
+    return {
+      type: "usage.updated",
+      summary: event.totalTokens ? `${event.totalTokens} tokens` : "Usage updated",
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        totalTokens: event.totalTokens,
+        costUSD: event.costUSD,
+        ...(event.meta ?? {}),
+      },
+    }
+  }
+  if (event.type === "raw") {
+    return {
+      type: "protocol.raw",
+      summary: event.name,
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        ...(event.meta ?? {}),
       },
     }
   }

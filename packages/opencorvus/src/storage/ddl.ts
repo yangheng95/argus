@@ -521,6 +521,52 @@ CREATE TABLE IF NOT EXISTS orchestrator_progress_snapshot (
 );
 CREATE INDEX IF NOT EXISTS orchestrator_progress_task_idx ON orchestrator_progress_snapshot (task_id);
 
+CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
+  id               text PRIMARY KEY,
+  task_id          text NOT NULL,
+  run_id           text NOT NULL,
+  provider         text NOT NULL,
+  protocol         text NOT NULL,
+  protocol_version text NOT NULL,
+  transport        text NOT NULL,
+  status           text NOT NULL DEFAULT 'active',
+  refs             text,
+  capabilities     text,
+  settings         text,
+  time_started     integer,
+  time_completed   integer,
+  time_created     integer NOT NULL,
+  time_updated     integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
+  FOREIGN KEY (run_id)  REFERENCES orchestrator_run(id)  ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_session_task_idx ON orchestrator_executor_session (task_id);
+CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_session_status_idx ON orchestrator_executor_session (status);
+
+CREATE TABLE IF NOT EXISTS orchestrator_executor_event (
+  id                  text PRIMARY KEY,
+  executor_session_id text NOT NULL,
+  task_id             text NOT NULL,
+  run_id              text NOT NULL,
+  sequence            integer NOT NULL,
+  kind                text NOT NULL,
+  summary             text,
+  refs                text,
+  payload             text,
+  raw                 text,
+  time_observed       integer NOT NULL,
+  time_created        integer NOT NULL,
+  time_updated        integer NOT NULL,
+  FOREIGN KEY (executor_session_id) REFERENCES orchestrator_executor_session(id) ON DELETE CASCADE,
+  FOREIGN KEY (task_id)             REFERENCES orchestrator_task(id)             ON DELETE CASCADE,
+  FOREIGN KEY (run_id)              REFERENCES orchestrator_run(id)              ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_event_session_idx ON orchestrator_executor_event (executor_session_id, sequence);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_event_run_idx ON orchestrator_executor_event (run_id, sequence);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_event_task_idx ON orchestrator_executor_event (task_id, sequence);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_event_kind_idx ON orchestrator_executor_event (kind);
+
 CREATE TABLE IF NOT EXISTS orchestrator_channel_binding (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,

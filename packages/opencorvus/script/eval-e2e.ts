@@ -14,6 +14,11 @@ import fs from "fs"
 import path from "path"
 import os from "os"
 
+/** Normalize Windows backslashes to forward slashes for shell commands */
+function toUnixPath(p: string): string {
+  return p.replace(/\\/g, "/")
+}
+
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
@@ -138,8 +143,17 @@ interface EvalResult {
 // Test Cases
 // ---------------------------------------------------------------------------
 
-function evalWorkspaceDir(): string {
-  return path.join(os.tmpdir(), "opencorvus-eval-" + Date.now())
+/** Create workspace inside the project worktree so the agent can access it */
+async function evalWorkspaceDir(): Promise<string> {
+  // Get project worktree from server config
+  try {
+    const tasks = await apiCall<{ project: { worktree: string } }>("GET", "/tasks")
+    const worktree = tasks.project.worktree
+    return path.join(worktree, "eval-workspace-" + Date.now())
+  } catch {
+    // Fallback: use cwd
+    return path.join(process.cwd(), "eval-workspace-" + Date.now())
+  }
 }
 
 const CASES: EvalCase[] = [
@@ -159,6 +173,7 @@ const CASES: EvalCase[] = [
           },
           devDependencies: {
             typescript: "^5.4.0",
+            "@types/bun": "latest",
           },
         },
         null,
@@ -194,7 +209,7 @@ const CASES: EvalCase[] = [
         "同时在 src/math.test.ts 中编写测试，覆盖正常情况和边界情况（如除以0）。\n" +
         "在 src/index.ts 中 re-export 所有函数。",
       checks: {
-        build: ["tsc --noEmit"],
+        build: ["bunx tsc --noEmit"],
         test: ["bun test"],
       },
       goals: [
@@ -239,6 +254,7 @@ const CASES: EvalCase[] = [
           },
           devDependencies: {
             typescript: "^5.4.0",
+            "@types/bun": "latest",
           },
         },
         null,
@@ -317,7 +333,7 @@ test("findMedian with large numbers", () => {
         "修复 sortNumbers、sortDescending 和 findMedian 中的排序逻辑，确保所有现有测试通过。\n" +
         "不要修改测试文件。",
       checks: {
-        build: ["tsc --noEmit"],
+        build: ["bunx tsc --noEmit"],
         test: ["bun test"],
       },
       goals: [
@@ -362,6 +378,7 @@ test("findMedian with large numbers", () => {
           },
           devDependencies: {
             typescript: "^5.4.0",
+            "@types/bun": "latest",
           },
         },
         null,
@@ -473,7 +490,7 @@ test("updateUser invalid", () => {
         "4. 验证函数可以放在 src/validate.ts 或同一文件中\n\n" +
         "重构后每个验证逻辑应只出现一次。",
       checks: {
-        build: ["tsc --noEmit"],
+        build: ["bunx tsc --noEmit"],
         test: ["bun test"],
       },
       goals: [
@@ -518,6 +535,7 @@ test("updateUser invalid", () => {
           },
           devDependencies: {
             typescript: "^5.4.0",
+            "@types/bun": "latest",
           },
         },
         null,
@@ -650,7 +668,7 @@ test("stringify skips undefined", () => {
         "不要修改测试文件，只修改 src/query.ts。\n" +
         "注意边界情况：URI 编码、数组值、空值、null/undefined 输入。",
       checks: {
-        build: ["tsc --noEmit"],
+        build: ["bunx tsc --noEmit"],
         test: ["bun test"],
       },
       goals: [
@@ -700,6 +718,7 @@ test("stringify skips undefined", () => {
           },
           devDependencies: {
             typescript: "^5.4.0",
+            "@types/bun": "latest",
           },
         },
         null,
@@ -873,7 +892,7 @@ test("existing routes still work without middleware", async () => {
         "确保现有测试（src/router.test.ts）和新的中间件测试（src/middleware.test.ts）都通过。\n" +
         "只修改 src/router.ts。",
       checks: {
-        build: ["tsc --noEmit"],
+        build: ["bunx tsc --noEmit"],
         test: ["bun test"],
       },
       goals: [
@@ -917,18 +936,31 @@ test("existing routes still work without middleware", async () => {
 // API helpers
 // ---------------------------------------------------------------------------
 
-async function apiCall<T>(method: string, path: string, body?: unknown): Promise<T> {
+async function apiCall<T>(method: string, path: string, body?: unknown, retries = 3): Promise<T> {
   const opts: RequestInit = {
     method,
     headers: { "Content-Type": "application/json" },
   }
   if (body) opts.body = JSON.stringify(body)
-  const res = await fetch(`${SERVER}${path}`, opts)
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`${method} ${path} → ${res.status}: ${text}`)
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(`${SERVER}${path}`, opts)
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(`${method} ${path} → ${res.status}: ${text}`)
+      }
+      return res.json() as Promise<T>
+    } catch (err) {
+      const isConnection = String(err).includes("ConnectionRefused") || String(err).includes("ECONNREFUSED")
+      if (isConnection && attempt < retries - 1) {
+        console.log(`   [WARN] Connection lost, retrying in 5s... (${attempt + 1}/${retries})`)
+        await new Promise((r) => setTimeout(r, 5000))
+        continue
+      }
+      throw err
+    }
   }
-  return res.json() as Promise<T>
+  throw new Error("unreachable")
 }
 
 async function createTask(payload: EvalCase["task"]): Promise<string> {
@@ -1020,6 +1052,16 @@ function scaffoldCase(evalCase: EvalCase, baseDir: string): string {
     const fullPath = path.join(caseDir, relPath)
     fs.mkdirSync(path.dirname(fullPath), { recursive: true })
     fs.writeFileSync(fullPath, content, "utf-8")
+  }
+
+  // Install dependencies if package.json exists
+  if (evalCase.scaffold["package.json"]) {
+    const unixDir = toUnixPath(caseDir)
+    console.log(`   Installing dependencies in ${unixDir}...`)
+    const result = Bun.spawnSync(["bun", "install"], { cwd: caseDir, stdout: "pipe", stderr: "pipe" })
+    if (result.exitCode !== 0) {
+      console.warn(`   [WARN] bun install failed: ${result.stderr.toString().slice(0, 200)}`)
+    }
   }
 
   return caseDir
@@ -1180,29 +1222,50 @@ function printReport(results: EvalResult[]) {
 async function runCase(evalCase: EvalCase): Promise<EvalResult> {
   console.log(`\n>> Running ${evalCase.id}: ${evalCase.name} [${evalCase.difficulty}]`)
 
-  // 1. Scaffold the project files
-  const baseDir = evalWorkspaceDir()
+  // 1. Scaffold the project files (inside project worktree so agent can access them)
+  const baseDir = await evalWorkspaceDir()
   const caseDir = scaffoldCase(evalCase, baseDir)
   console.log(`   Scaffolded to: ${caseDir}`)
 
-  // 2. Modify task request to include the working directory
+  // 2. Modify task request to include the working directory (use Unix paths for shell)
+  const unixDir = toUnixPath(caseDir)
+  // Compute relative path from project worktree for cleaner agent instructions
+  let relDir = unixDir
+  try {
+    const tasks = await apiCall<{ project: { worktree: string } }>("GET", "/tasks")
+    const worktree = toUnixPath(tasks.project.worktree)
+    if (unixDir.startsWith(worktree)) {
+      relDir = unixDir.slice(worktree.length + 1) // e.g., "eval-workspace-xxx/e2"
+    }
+  } catch { /* use absolute */ }
+
   const modifiedTask = {
     ...evalCase.task,
     request:
-      `[工作目录: ${caseDir}]\n\n` +
-      `请在以下目录中完成任务。所有文件路径相对于 ${caseDir}。\n` +
-      `先用 cd ${caseDir} 切换到工作目录，然后开始工作。\n\n` +
+      `## 工作目录\n\n` +
+      `本任务的工作目录是 \`${relDir}\`（绝对路径: ${unixDir}）。\n` +
+      `所有源代码文件都在这个目录下。请先用以下命令切换到工作目录：\n` +
+      `\`\`\`bash\ncd "${unixDir}"\n\`\`\`\n\n` +
+      `然后查看目录结构和文件内容，理解当前代码后再开始修改。\n\n` +
+      `## 任务描述\n\n` +
       evalCase.task.request,
     checks: evalCase.task.checks
       ? Object.fromEntries(
           Object.entries(evalCase.task.checks).map(([key, val]) => {
             if (Array.isArray(val)) {
-              return [key, val.map((cmd: string) => `cd ${caseDir} && ${cmd}`)]
+              return [key, val.map((cmd: string) => `cd "${unixDir}" && ${cmd}`)]
             }
             return [key, val]
           }),
         )
       : undefined,
+    // Override budget to limit retries during eval (avoids server crashes)
+    budget: {
+      maxRuns: evalCase.task.budget?.maxRuns ?? 2,
+      maxReplans: evalCase.task.budget?.maxReplans ?? 1,
+      maxEvaluations: 5,
+      maxWallTimeMs: MAX_WAIT_MS,
+    },
   }
 
   if (DRY_RUN) {

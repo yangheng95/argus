@@ -196,6 +196,7 @@ export namespace Skill {
         cwd: resolved,
         absolute: true,
         include: "file",
+        dot: true,
         symlink: true,
       })
       for (const match of matches) {
@@ -212,6 +213,7 @@ export namespace Skill {
           cwd: dir,
           absolute: true,
           include: "file",
+          dot: true,
           symlink: true,
         })
         for (const match of matches) {

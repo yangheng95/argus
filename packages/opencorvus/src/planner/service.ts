@@ -1,6 +1,9 @@
 import z from "zod"
+import fs from "fs"
+import path from "path"
 import { GoalInput } from "@/orchestrator/model"
 import { Log } from "@/util/log"
+import { Instance } from "@/project/instance"
 import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agent"
 
 const log = Log.create({ service: "planner" })
@@ -70,6 +73,18 @@ export namespace PlannerService {
   }) {
     const hasUserGoals = input.goals && input.goals.length > 0
 
+    // Pre-analyze the request: extract file references, requirements, entities.
+    // This is fast (sync disk reads) and benefits both the agent and the template fallback.
+    const analysis = preAnalyzeRequest(input.request)
+    if (analysis.files.length > 0) {
+      log.info("pre-analysis found referenced files", {
+        refs: analysis.files.map((f) => f.ref),
+        requirements: analysis.requirements.length,
+        entities: analysis.entities,
+        workDir: analysis.workDir,
+      })
+    }
+
     // ALWAYS use PlannerAgent — even with user-provided goals, the agent explores
     // the codebase and produces a detailed plan grounded in real file paths.
     // User goals are passed as context for the agent to refine and expand.
@@ -100,8 +115,17 @@ export namespace PlannerService {
     })
 
     if (!agentResult) {
+      log.warn("planner agent returned no result — using template fallback", {
+        preAnalysis: {
+          filesFound: analysis.files.length,
+          fileRefs: analysis.files.map((f) => f.ref),
+          requirements: analysis.requirements.length,
+          entities: analysis.entities,
+          workDir: analysis.workDir,
+        },
+      })
       const goals = hasUserGoals ? input.goals! : normalizeGoals(input.request)
-      return templatePlan(input.title, input.request, goals, input.allowClarification !== false)
+      return templatePlan(input.title, input.request, goals, input.allowClarification !== false, analysis)
     }
 
     // When user provided explicit goals, use them (they have the correct check_selectors
@@ -338,7 +362,119 @@ ${input.prd.trim()}`,
 }
 
 // ---------------------------------------------------------------------------
-// Template-based plan (fallback)
+// Pre-analysis — deterministic extraction before LLM call
+// ---------------------------------------------------------------------------
+
+interface RequestAnalysis {
+  /** Files mentioned in the request, resolved and pre-read */
+  files: Array<{ ref: string; absPath: string; content: string }>
+  /** Structured requirements extracted from bullet/numbered lists */
+  requirements: string[]
+  /** Code entities (type/class/function names) mentioned */
+  entities: string[]
+  /** Working directory extracted from the request */
+  workDir?: string
+}
+
+function preAnalyzeRequest(request: string): RequestAnalysis {
+  const FILE_EXTS = "ts|tsx|js|jsx|mjs|cjs|py|rs|go|java|json|yaml|yml|toml|md|css|html|sql|sh|vue|svelte"
+
+  // 1. Extract working directory
+  let workDir: string | undefined
+  const cwdMatch =
+    request.match(/(?:绝对路径|absolute path)[：:\s]*([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i) ??
+    request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
+  if (cwdMatch) workDir = cwdMatch[1].replace(/[/\\]+$/, "")
+
+  // 2. Extract file references
+  const refs = new Set<string>()
+  let match: RegExpExecArray | null
+
+  // @file:path or @path
+  const atPat = /@(?:file:)?([./a-zA-Z][\w./\\-]*\.\w+)/g
+  while ((match = atPat.exec(request)) !== null) refs.add(match[1])
+
+  // Backtick-wrapped: `src/router.ts`
+  const btPat = new RegExp("`([./]?(?:[\\w@-]+[/\\\\])*[\\w.-]+\\.(?:" + FILE_EXTS + "))`", "g")
+  while ((match = btPat.exec(request)) !== null) refs.add(match[1])
+
+  // Bare relative paths with at least one slash: src/router.ts
+  const barePat = new RegExp(
+    "(?:^|[\\s,;，；（(])(\\.?(?:[\\w@-]+[/\\\\])+[\\w.-]+\\.(?:" + FILE_EXTS + "))(?=[\\s,;，；）)。:：]|$)",
+    "gm",
+  )
+  while ((match = barePat.exec(request)) !== null) refs.add(match[1].trim())
+
+  // Resolve and read files
+  const baseDirs: string[] = []
+  if (workDir) baseDirs.push(workDir)
+  try { baseDirs.push(Instance.directory) } catch { /* may not be initialized */ }
+  try { if (!baseDirs.includes(Instance.worktree)) baseDirs.push(Instance.worktree) } catch { /* ok */ }
+
+  const files: RequestAnalysis["files"] = []
+  for (const ref of refs) {
+    if (path.isAbsolute(ref)) {
+      const content = readFileSafe(ref)
+      if (content) files.push({ ref, absPath: ref, content })
+      continue
+    }
+    for (const base of baseDirs) {
+      const abs = path.resolve(base, ref)
+      const content = readFileSafe(abs)
+      if (content) {
+        files.push({ ref, absPath: abs, content })
+        break
+      }
+    }
+  }
+
+  // 3. Extract structured requirements (bullet points, numbered items, action-verb lines)
+  const requirements: string[] = []
+  // Chinese action verbs don't need a trailing space (Chinese has no word spacing)
+  const CN_ACTION_PAT = /^(?:添加|修改|删除|创建|导出|导入|确保|实现|重构|优化|移除|更新|替换|支持|使用|配置|设置|检查|启用|禁用)/
+  // English action verbs require a trailing space to avoid matching mid-sentence words
+  const EN_ACTION_PAT = /^(?:add|create|modify|delete|remove|implement|ensure|replace|fix|refactor|export|import|enable|disable|configure|check|support)\s/i
+  for (const line of request.split("\n")) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.length < 4) continue
+    if (/^[-*•]\s+/.test(trimmed)) {
+      requirements.push(trimmed.replace(/^[-*•]\s+/, ""))
+    } else if (/^\d+[.、)）]\s+/.test(trimmed)) {
+      requirements.push(trimmed.replace(/^\d+[.、)）]\s+/, ""))
+    } else if (CN_ACTION_PAT.test(trimmed) || EN_ACTION_PAT.test(trimmed)) {
+      requirements.push(trimmed)
+    }
+  }
+
+  // 4. Extract code entities (backtick-wrapped names, type/class/function keywords)
+  const entitySet = new Set<string>()
+  // English order: keyword Name (e.g., "class Router", "type Middleware")
+  const entPat = /`(\w+)`|(?:class|type|interface|function|method)\s+(\w+)/gi
+  while ((match = entPat.exec(request)) !== null) {
+    const name = match[1] || match[2]
+    if (name && name.length > 1 && !/^(the|and|or|is|to|a|of|in)$/i.test(name)) entitySet.add(name)
+  }
+  // Chinese order: Name 类型/方法/函数/接口 (e.g., "Middleware 类型", "Router 类")
+  const cnPat = /(\w{2,})\s*(?:类型|类|方法|函数|接口)/g
+  while ((match = cnPat.exec(request)) !== null) {
+    entitySet.add(match[1])
+  }
+
+  return { files, requirements, entities: [...entitySet], workDir }
+}
+
+function readFileSafe(absPath: string, maxLen = 6000): string | null {
+  try {
+    const content = fs.readFileSync(absPath, "utf-8")
+    if (!content) return null
+    return content.length > maxLen ? content.slice(0, maxLen) + "\n... (truncated)" : content
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Template-based plan (fallback) — now task-aware via pre-analysis
 // ---------------------------------------------------------------------------
 
 function templatePlan(
@@ -346,15 +482,18 @@ function templatePlan(
   request: string,
   goals: z.infer<typeof GoalInput>[],
   allowClarification = true,
+  analysis?: RequestAnalysis,
 ) {
   const clarification = allowClarification ? heuristicClarification(request) : undefined
+  const steps = buildSmartSteps(request, analysis)
+
   return {
     summary: summarize(request),
-    prompt: renderPlanModePrompt({ title, request, goals }),
+    prompt: renderPlanModePrompt({ title, request, goals, analysis }),
     goals,
     metadata: {
       strategy: "initial" as const,
-      steps: PLAN_MODE_STEPS,
+      steps,
       clarification,
       spec_analysis:
         clarification
@@ -379,8 +518,43 @@ function templatePlan(
   }
 }
 
+/**
+ * Generate task-specific plan steps from pre-analysis.
+ * Falls back to generic steps only when no file refs or requirements are found.
+ */
+function buildSmartSteps(request: string, analysis?: RequestAnalysis): string[] {
+  if (!analysis || (analysis.files.length === 0 && analysis.requirements.length === 0)) {
+    log.warn("buildSmartSteps: no analysis data, using generic PLAN_MODE_STEPS", {
+      hasAnalysis: !!analysis,
+      filesCount: analysis?.files.length ?? 0,
+      requirementsCount: analysis?.requirements.length ?? 0,
+    })
+    return PLAN_MODE_STEPS
+  }
+
+  const steps: string[] = []
+
+  // Step: analyze referenced files
+  if (analysis.files.length > 0) {
+    steps.push(`Analyze source files: ${analysis.files.map((f) => f.ref).join(", ")}`)
+  }
+
+  // Steps from structured requirements
+  if (analysis.requirements.length > 0) {
+    for (const req of analysis.requirements) {
+      steps.push(req)
+    }
+  } else {
+    steps.push("Plan and implement the requested changes based on the source analysis.")
+  }
+
+  // Step: verify
+  steps.push("Run acceptance checks (build, test, lint) and verify all goals pass.")
+  return steps
+}
+
 // ---------------------------------------------------------------------------
-// Plan-mode workflow steps (mirrors upstream Claude Code plan-mode phases)
+// Plan-mode workflow steps (last-resort fallback when no analysis is available)
 // ---------------------------------------------------------------------------
 
 const PLAN_MODE_STEPS = [
@@ -398,8 +572,10 @@ function renderPlanModePrompt(input: {
   title: string
   request: string
   goals: z.infer<typeof GoalInput>[]
+  analysis?: RequestAnalysis
 }) {
-  return `You are executing a headless coding task inside OpenCorvus.
+  const sections = [
+    `You are executing a headless coding task inside OpenCorvus.
 
 Task: ${input.title}
 
@@ -407,9 +583,23 @@ Request:
 ${input.request.trim()}
 
 Goals:
-${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"}] ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n\n")}
+${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"}] ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n\n")}`,
+  ]
 
-## Execution Steps
+  // Inject pre-read file contents so the executor starts with full code context
+  if (input.analysis?.files && input.analysis.files.length > 0) {
+    const fileSections = input.analysis.files.map(
+      (f) => `### ${f.ref}\n\`\`\`\n${f.content}\n\`\`\``,
+    )
+    sections.push(`## Source Files (Pre-read)\n\nThese files were referenced in the task and pre-read for your convenience.\n\n${fileSections.join("\n\n")}`)
+  }
+
+  // Inject extracted entities as search hints
+  if (input.analysis?.entities && input.analysis.entities.length > 0) {
+    sections.push(`## Key Entities\n\nMentioned in the request: ${input.analysis.entities.map((e) => `\`${e}\``).join(", ")}`)
+  }
+
+  sections.push(`## Execution Steps
 
 1. **Recall**: Search memory and check preferences before starting.
 2. **Explore**: Read relevant files, understand existing patterns and conventions. Identify exact file paths to create/modify.
@@ -417,7 +607,9 @@ ${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"
 4. **Execute**: Work through subtasks in order. Verify each step immediately (typecheck, test).
 5. **Verify**: Run ALL acceptance checks from the Goals section. Confirm every blocking goal is met.
 
-**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), goal (acceptance criteria), task (parallel sub-agents), websearch/webfetch (external docs).`
+**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), goal (acceptance criteria), task (parallel sub-agents), websearch/webfetch (external docs).`)
+
+  return sections.join("\n\n")
 }
 
 function buildWorkflowSection(input: {

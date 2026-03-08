@@ -101,6 +101,14 @@ export type ExecutorAdapter = {
     summary?: string
     payload?: Record<string, unknown>
   }>
+  resolve?(input: {
+    sessionID?: string
+    queueTaskID?: string
+    requestID: string
+    kind: "approval" | "input"
+    response?: Record<string, unknown>
+    error?: Record<string, unknown>
+  }): Promise<boolean>
 }
 
 const Meta = z.record(z.string(), z.unknown())
@@ -120,11 +128,54 @@ export const CodingEvent = z.discriminatedUnion("type", [
     id: z.string(),
     name: z.string(),
     input: z.string(),
+    meta: Meta.optional(),
   }),
   z.object({
     type: z.literal("tool_result"),
     id: z.string(),
     output: z.string(),
+    meta: Meta.optional(),
+  }),
+  z.object({
+    type: z.literal("reasoning_delta"),
+    text: z.string(),
+    meta: Meta.optional(),
+  }),
+  z.object({
+    type: z.literal("plan_delta"),
+    summary: z.string().optional(),
+    meta: Meta.optional(),
+  }),
+  z.object({
+    type: z.literal("diff_delta"),
+    summary: z.string().optional(),
+    meta: Meta.optional(),
+  }),
+  z.object({
+    type: z.literal("approval_request"),
+    id: z.string(),
+    approval: z.string(),
+    message: z.string().optional(),
+    meta: Meta.optional(),
+  }),
+  z.object({
+    type: z.literal("input_request"),
+    id: z.string(),
+    questions: z.array(z.record(z.string(), z.unknown())).optional(),
+    meta: Meta.optional(),
+  }),
+  z.object({
+    type: z.literal("usage"),
+    inputTokens: z.number().int().nonnegative().optional(),
+    outputTokens: z.number().int().nonnegative().optional(),
+    totalTokens: z.number().int().nonnegative().optional(),
+    costUSD: z.number().nonnegative().optional(),
+    meta: Meta.optional(),
+  }),
+  z.object({
+    type: z.literal("raw"),
+    name: z.string(),
+    meta: Meta.optional(),
   }),
   z.object({
     type: z.literal("done"),
@@ -148,6 +199,13 @@ export interface CodingProvider {
   run(input: CodingRunInfo): AsyncIterable<CodingEventInfo>
   resume(input: CodingResumeInfo): AsyncIterable<CodingEventInfo>
   interrupt(sessionID: string): Promise<boolean>
+  respond?(input: {
+    sessionID: string
+    requestID: string
+    kind: "approval" | "input"
+    response?: Record<string, unknown>
+    error?: Record<string, unknown>
+  }): Promise<boolean>
 }
 
 export function text(input: unknown) {

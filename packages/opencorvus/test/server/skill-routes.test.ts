@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import { rm } from "fs/promises"
 import path from "path"
 import type { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
@@ -11,6 +12,16 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+
+const cleanupTargets = [
+  path.resolve(process.cwd(), "opencorvus.jsonc"),
+  path.resolve(process.cwd(), "opencorvus.json"),
+  path.resolve(process.cwd(), "config.json"),
+  path.resolve(process.cwd(), "skills-market"),
+].map((target) => ({
+  target,
+  existed: Promise.resolve(Bun.file(target).exists()),
+}))
 
 const baseCtx: Omit<Tool.Context, "ask"> = {
   sessionID: "test",
@@ -26,6 +37,12 @@ describe("skill routes", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
+    await Promise.all(
+      cleanupTargets.map(async (item) => {
+        if (await item.existed) return
+        await rm(item.target, { recursive: true, force: true }).catch(() => undefined)
+      }),
+    )
   })
 
   test("GET /skill/market returns curated market entries", async () => {
@@ -257,4 +274,91 @@ describe("skill routes", () => {
       },
     })
   }, 20000)
+
+  test("real market entry can be installed and loaded through SkillTool", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const app = Server.App()
+    const market = await app.request("/skill/market", {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(market.status).toBe(200)
+    const entries = await market.json() as Array<{
+      id: string
+      name: string
+      source?: string
+      install_kind: "git" | "url" | "manual"
+      recommended_policy: "ask" | "allow" | "deny"
+    }>
+    const entry =
+      entries.find((item) => item.id === "openai-skills" && item.install_kind === "git" && item.source) ??
+      entries.find((item) => item.install_kind === "git" && item.source)
+    expect(entry).toBeDefined()
+
+    const before = await app.request("/skill/installed", {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(before.status).toBe(200)
+    const beforeBody = await before.json() as Array<{ name: string }>
+    const beforeNames = new Set(beforeBody.map((item) => item.name))
+
+    const installed = await app.request("/skill/install", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-opencorvus-directory": tmp.path,
+      },
+      body: JSON.stringify({
+        kind: entry!.install_kind,
+        value: entry!.source,
+        policy: entry!.recommended_policy,
+      }),
+    })
+    expect(installed.status).toBe(200)
+
+    const listed = await app.request("/skill/installed", {
+      headers: {
+        "x-opencorvus-directory": tmp.path,
+      },
+    })
+    expect(listed.status).toBe(200)
+    const body = await listed.json() as Array<{
+      name: string
+      policy: string
+      source_type: string
+      source?: string
+    }>
+    const installedSkills = body.filter(
+      (item) => item.source_type === "managed_git" && !beforeNames.has(item.name),
+    )
+    expect(installedSkills.length > 0).toBe(true)
+    expect(installedSkills.every((item) => item.policy === entry!.recommended_policy)).toBe(true)
+
+    const selected = installedSkills[0]
+    expect(selected).toBeDefined()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await SkillTool.init()
+        const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+        const ctx: Tool.Context = {
+          ...baseCtx,
+          ask: async (req) => {
+            requests.push(req)
+          },
+        }
+
+        const result = await tool.execute({ name: selected!.name }, ctx)
+        expect(requests.length).toBe(1)
+        expect(requests[0].permission).toBe("skill")
+        expect(requests[0].patterns).toContain(selected!.name)
+        expect(result.title).toBe(`Loaded skill: ${selected!.name}`)
+        expect(result.output).toContain(`<skill_content name="${selected!.name}">`)
+      },
+    })
+  }, 120000)
 })

@@ -2,6 +2,7 @@ import { integer, sqliteTable, text, index, uniqueIndex } from "drizzle-orm/sqli
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
 import { Timestamps } from "@/storage/schema.sql"
+import type { ProtocolCapabilitiesInfo, ProtocolRefsInfo, ProtocolSettingsInfo } from "@/executor/protocol"
 
 export type OrchestratorBudget = {
   max_runs?: number
@@ -48,6 +49,8 @@ export type OrchestratorDeliveryStatus = "candidate" | "publishing" | "delivered
 export type OrchestratorEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type OrchestratorEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
 export type OrchestratorProgressStatus = "created" | "running" | "blocked" | "completed" | "failed" | "cancelled"
+export type OrchestratorExecutorTransport = "inproc" | "stdio" | "ws" | "http"
+export type OrchestratorExecutorSessionStatus = "active" | "completed" | "failed" | "aborted"
 
 export type OrchestratorGoalCheck = {
   name: string
@@ -59,6 +62,10 @@ export type OrchestratorExecutorRef = {
   session_id?: string
   queue_task_id?: string
 }
+
+export type OrchestratorExecutorProtocolRef = ProtocolRefsInfo
+export type OrchestratorExecutorCapability = ProtocolCapabilitiesInfo
+export type OrchestratorExecutorSettings = ProtocolSettingsInfo
 
 export const OrchestratorTaskTable = sqliteTable(
   "orchestrator_task",
@@ -293,6 +300,65 @@ export const OrchestratorProgressSnapshotTable = sqliteTable(
   },
   (table) => [
     index("orchestrator_progress_task_idx").on(table.task_id),
+  ],
+)
+
+export const OrchestratorExecutorSessionTable = sqliteTable(
+  "orchestrator_executor_session",
+  {
+    id: text().primaryKey(),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    run_id: text()
+      .notNull()
+      .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    provider: text().notNull().$type<OrchestratorExecutor>(),
+    protocol: text().notNull(),
+    protocol_version: text().notNull(),
+    transport: text().notNull().$type<OrchestratorExecutorTransport>(),
+    status: text().notNull().$type<OrchestratorExecutorSessionStatus>().default("active"),
+    refs: text({ mode: "json" }).$type<OrchestratorExecutorProtocolRef>(),
+    capabilities: text({ mode: "json" }).$type<OrchestratorExecutorCapability>(),
+    settings: text({ mode: "json" }).$type<OrchestratorExecutorSettings>(),
+    time_started: integer(),
+    time_completed: integer(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_executor_session_task_idx").on(table.task_id),
+    uniqueIndex("orchestrator_executor_session_run_idx").on(table.run_id),
+    index("orchestrator_executor_session_status_idx").on(table.status),
+  ],
+)
+
+export const OrchestratorExecutorEventTable = sqliteTable(
+  "orchestrator_executor_event",
+  {
+    id: text().primaryKey(),
+    executor_session_id: text()
+      .notNull()
+      .references(() => OrchestratorExecutorSessionTable.id, { onDelete: "cascade" }),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    run_id: text()
+      .notNull()
+      .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    sequence: integer().notNull(),
+    kind: text().notNull(),
+    summary: text(),
+    refs: text({ mode: "json" }).$type<OrchestratorExecutorProtocolRef>(),
+    payload: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    raw: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    time_observed: integer().notNull(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_executor_event_session_idx").on(table.executor_session_id, table.sequence),
+    index("orchestrator_executor_event_run_idx").on(table.run_id, table.sequence),
+    index("orchestrator_executor_event_task_idx").on(table.task_id, table.sequence),
+    index("orchestrator_executor_event_kind_idx").on(table.kind),
   ],
 )
 

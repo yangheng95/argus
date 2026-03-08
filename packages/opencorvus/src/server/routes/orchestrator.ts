@@ -8,6 +8,8 @@ import {
   Artifact,
   CreateTaskInput,
   Delivery,
+  ExecutorEvent,
+  ExecutorSession,
   Evaluation,
   InjectMessageInput,
   Interaction,
@@ -434,6 +436,50 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ runID: Run.shape.id })),
       async (c) => {
         return c.json(await OrchestratorService.getRun(c.req.valid("param").runID))
+      },
+    )
+    .get(
+      "/run/:runID/executor",
+      describeRoute({
+        summary: "Get run executor session",
+        operationId: "run.executorSession",
+        responses: {
+          200: {
+            description: "Executor session",
+            content: {
+              "application/json": {
+                schema: resolver(ExecutorSession),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ runID: Run.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.getExecutorSession(c.req.valid("param").runID))
+      },
+    )
+    .get(
+      "/run/:runID/executor-events",
+      describeRoute({
+        summary: "List run executor events",
+        operationId: "run.executorEvents",
+        responses: {
+          200: {
+            description: "Executor events",
+            content: {
+              "application/json": {
+                schema: resolver(ExecutorEvent.array()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ runID: Run.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.listExecutorEvents(c.req.valid("param").runID))
       },
     )
     .get(

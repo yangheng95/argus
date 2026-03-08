@@ -52,8 +52,7 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
   }
 
   // Get commits that touch the relevant packages
-  const log =
-    await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/opencorvus packages/sdk packages/plugin packages/extensions github`.text()
+  const log = await $`git log ${fromRef}..${toRef} --oneline --format="%H" -- packages/opencorvus packages/sdk packages/plugin github`.text()
   const hashes = log.split("\n").filter(Boolean)
 
   const commits: Commit[] = []
@@ -71,7 +70,6 @@ export async function getCommits(from: string, to: string): Promise<Commit[]> {
       if (file.startsWith("packages/opencorvus/")) areas.add("core")
       else if (file.startsWith("packages/sdk/")) areas.add("sdk")
       else if (file.startsWith("packages/plugin/")) areas.add("plugin")
-      else if (file.startsWith("packages/extensions/")) areas.add("extensions/zed")
       else if (file.startsWith("github/")) areas.add("github")
     }
 
@@ -117,13 +115,12 @@ const sections = {
   tauri: "Desktop",
   sdk: "SDK",
   plugin: "SDK",
-  "extensions/zed": "Extensions",
-  github: "Extensions",
+  github: "GitHub",
 } as const
 
 function getSection(areas: Set<string>): string {
   // Priority order for multi-area commits
-  const priority = ["core", "tui", "app", "tauri", "sdk", "plugin", "extensions/zed", "github"]
+  const priority = ["core", "tui", "app", "tauri", "sdk", "plugin", "github"]
   for (const area of priority) {
     if (areas.has(area)) return sections[area as keyof typeof sections]
   }
@@ -182,7 +179,7 @@ export async function generateChangelog(commits: Commit[], opencorvus: Awaited<R
     grouped.get(section)!.push(entry)
   }
 
-  const sectionOrder = ["Core", "TUI", "Desktop", "SDK", "Extensions"]
+  const sectionOrder = ["Core", "TUI", "Desktop", "SDK", "GitHub"]
   const lines: string[] = []
   for (const section of sectionOrder) {
     const entries = grouped.get(section)

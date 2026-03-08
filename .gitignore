@@ -29,7 +29,6 @@ opencorvus-dev
 logs/
 *.bun-build
 tsconfig.tsbuildinfo
-packages/storybook/debug-storybook.log
 tmp_slack_msg.json
 overlay.json
 .tmp_image_files.txt

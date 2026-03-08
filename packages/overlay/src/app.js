@@ -15,6 +15,7 @@ const DEFAULT_OVERLAY_SETTINGS = {
   username: "opencorvus",
   executor: "opencode",
   alwaysOnTop: false,
+  theme: "dark",
 };
 const OVERLAY_VERSION = "0.0.1";
 
@@ -26,6 +27,7 @@ const state = {
   username: DEFAULT_OVERLAY_SETTINGS.username,
   executor: DEFAULT_OVERLAY_SETTINGS.executor,
   alwaysOnTop: DEFAULT_OVERLAY_SETTINGS.alwaysOnTop,
+  theme: DEFAULT_OVERLAY_SETTINGS.theme,
   connected: false,
   tasks: [],
   selectedTaskID: "",
@@ -63,6 +65,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const dom = {
   connBadge: $("#connBadge"),
   brandVersion: $("#brandVersion"),
+  btnTheme: $("#btnTheme"),
   taskSelect: $("#taskSelect"),
   taskDir: $("#taskDir"),
   taskGit: $("#taskGit"),
@@ -110,6 +113,7 @@ const dom = {
   btnUseTaskSession: $("#btnUseTaskSession"),
   btnOpenSession: $("#btnOpenSession"),
   btnForkSession: $("#btnForkSession"),
+  btnCopySession: $("#btnCopySession"),
   btnExportSession: $("#btnExportSession"),
   btnDeleteSession: $("#btnDeleteSession"),
   btnCloseSessions: $("#btnCloseSessions"),
@@ -174,10 +178,29 @@ const dom = {
   serverUrl: $("#serverUrl"),
   serverPassword: $("#serverPassword"),
   serverUsername: $("#serverUsername"),
+  themeMode: $("#themeMode"),
   settingsConfigRoot: $("#settingsConfigRoot"),
   settingsConfigFile: $("#settingsConfigFile"),
   settingsOverlayFile: $("#settingsOverlayFile"),
 };
+
+function sanitizeTheme(value) {
+  if (value === "light" || value === "system") return value;
+  return "dark";
+}
+
+const systemThemeMedia =
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: light)")
+    : null;
+
+function resolvedTheme() {
+  const theme = sanitizeTheme(state.theme);
+  if (theme === "system") {
+    return systemThemeMedia?.matches ? "light" : "dark";
+  }
+  return theme;
+}
 
 async function tauriInvoke(command, args) {
   const globalInvoke = window.__TAURI__?.core?.invoke;
@@ -201,6 +224,7 @@ function browserOverlaySettings() {
     username: localStorage.getItem("oc_username") || DEFAULT_OVERLAY_SETTINGS.username,
     executor: localStorage.getItem("oc_executor") || DEFAULT_OVERLAY_SETTINGS.executor,
     alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
+    theme: sanitizeTheme(localStorage.getItem("oc_theme")),
   };
 }
 
@@ -219,6 +243,7 @@ function applyOverlaySettings(settings) {
       ? settings.executor.trim()
       : DEFAULT_OVERLAY_SETTINGS.executor;
   state.alwaysOnTop = settings?.alwaysOnTop === true;
+  state.theme = sanitizeTheme(settings?.theme);
 }
 
 async function loadOverlaySettings() {
@@ -237,6 +262,7 @@ async function persistOverlaySettings() {
     username: state.username,
     executor: state.executor,
     alwaysOnTop: state.alwaysOnTop,
+    theme: state.theme,
   };
   const saved = await tauriInvoke("overlay_settings_save", { settings }).catch(() => undefined);
   if (saved) return;
@@ -245,6 +271,23 @@ async function persistOverlaySettings() {
   localStorage.setItem("oc_username", settings.username);
   localStorage.setItem("oc_executor", settings.executor);
   localStorage.setItem("oc_always_on_top", String(settings.alwaysOnTop));
+  localStorage.setItem("oc_theme", settings.theme);
+}
+
+function renderTheme() {
+  const theme = sanitizeTheme(state.theme);
+  const effective = theme === "system" ? resolvedTheme() : theme;
+  state.theme = theme;
+  document.body.dataset.theme = effective;
+  if (dom.btnTheme) {
+    dom.btnTheme.dataset.theme = effective;
+    dom.btnTheme.dataset.mode = theme;
+    dom.btnTheme.title = effective === "light" ? "Switch to dark mode" : "Switch to light mode";
+    dom.btnTheme.setAttribute("aria-label", dom.btnTheme.title);
+  }
+  if (dom.themeMode) {
+    dom.themeMode.value = theme;
+  }
 }
 
 // ── API Client ──
@@ -679,6 +722,28 @@ async function nativePrompt(message, options) {
     inputValue: options?.inputValue || "",
   });
   return result.confirmed ? result.value : null;
+}
+
+async function copyText(text) {
+  if (!text) return false;
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {}
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+  document.body.appendChild(textarea);
+  textarea.select();
+  textarea.setSelectionRange(0, text.length);
+  const ok = document.execCommand("copy");
+  textarea.remove();
+  return ok;
 }
 
 function showAppDialog(options = {}) {
@@ -2070,6 +2135,110 @@ async function exportManagedSession() {
   }
 }
 
+function transcriptRole(role) {
+  if (role === "user") return "User";
+  if (role === "assistant") return "Assistant";
+  if (role === "system") return "System";
+  return "Message";
+}
+
+function transcriptTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatTranscriptText(part, role) {
+  let text = part?.text || "";
+  if (!text.trim()) return "";
+  if (part.audience && part.audience.ui === false) return "";
+  if (part.kind === "trace" && !part.audience?.ui) return "";
+  const orchestratorRoles = ["user", "planner", "scheduler", "system"];
+  if (orchestratorRoles.includes(role) && text.includes("<assistant-brief>")) {
+    text = stripAssistantBrief(text);
+  }
+  return text.trim();
+}
+
+function formatTranscriptTool(part) {
+  const toolName = part?.tool || "unknown";
+  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
+  if (hiddenTools.includes(toolName.toLowerCase())) return "";
+  const st = part?.state || {};
+  const detail = toolDetail(toolName, st.input || {}, st);
+  const status = st.status || "pending";
+  return [`[Tool:${status}] ${toolName}`, detail].filter(Boolean).join(" ");
+}
+
+function formatTranscriptPart(part, role) {
+  if (!part || typeof part !== "object") return "";
+  if (part.type === "text") return formatTranscriptText(part, role);
+  if (part.type === "reasoning") return part.text?.trim() ? `[Reasoning]\n${part.text.trim()}` : "";
+  if (part.type === "tool") return formatTranscriptTool(part);
+  if (part.type === "file") return part.filename || part.url ? `[File] ${part.filename || part.url}` : "";
+  if (part.type === "subtask") {
+    const text = part.description || part.prompt || "";
+    return text ? `[Subtask] ${text}` : "";
+  }
+  if (part.type === "patch") {
+    const files = Array.isArray(part.files) ? part.files.filter(Boolean) : [];
+    return files.length ? `[Patch] ${files.join(", ")}` : "[Patch]";
+  }
+  if (part.type === "compaction") return "[Compaction]";
+  return "";
+}
+
+function formatSessionTranscript(messages) {
+  return (Array.isArray(messages) ? messages : [])
+    .map((item) => {
+      const role = item?.info?.role || "assistant";
+      const header = [transcriptRole(role), transcriptTime(item?.info?.time?.created)].filter(Boolean).join(" · ");
+      const body = (Array.isArray(item?.parts) ? item.parts : [])
+        .map((part) => formatTranscriptPart(part, role))
+        .filter(Boolean)
+        .join("\n\n")
+        .trim();
+      if (!body) return "";
+      return `${header}\n${body}`;
+    })
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+}
+
+async function copyManagedSessionDialogue() {
+  if (!state.managedSession?.id) return;
+  try {
+    const messages = await apiJson(`session/${state.managedSession.id}/message`);
+    const transcript = formatSessionTranscript(messages);
+    if (!transcript) {
+      await nativeMessage("Selected session has no dialogue content to copy.", {
+        title: "Copy Dialogue",
+        kind: "info",
+      });
+      return;
+    }
+    const ok = await copyText(transcript);
+    if (!ok) throw new Error("Clipboard write failed");
+    await nativeMessage("Session dialogue copied to clipboard.", {
+      title: "Copy Dialogue",
+      kind: "info",
+    });
+  } catch (e) {
+    console.error("Failed to copy session dialogue:", e);
+    await nativeMessage("Failed to copy session dialogue: " + e.message, {
+      title: "Copy Dialogue",
+      kind: "error",
+    });
+  }
+}
+
 async function openManagedSession(sessionID) {
   state.chatSessionID = sessionID;
   await loadConversation();
@@ -2895,6 +3064,7 @@ dom.btnOpenSession.addEventListener("click", async () => {
   await openManagedSession(state.managedSession.id);
 });
 dom.btnForkSession.addEventListener("click", () => forkManagedSession());
+dom.btnCopySession.addEventListener("click", () => copyManagedSessionDialogue());
 dom.btnExportSession.addEventListener("click", () => exportManagedSession());
 dom.btnDeleteSession.addEventListener("click", () => deleteManagedSession());
 
@@ -3109,9 +3279,16 @@ function openServerSettings() {
   dom.serverUrl.value = state.serverUrl;
   dom.serverPassword.value = state.password;
   dom.serverUsername.value = state.username;
+  dom.themeMode.value = sanitizeTheme(state.theme);
   renderSettingsPaths();
   dom.settingsDialog.showModal();
 }
+
+dom.btnTheme?.addEventListener("click", async () => {
+  state.theme = resolvedTheme() === "light" ? "dark" : "light";
+  renderTheme();
+  await persistOverlaySettings();
+});
 
 $("#btnSettings").addEventListener("click", () => {
   openServerSettings();
@@ -3254,6 +3431,8 @@ dom.settingsForm.addEventListener("submit", async (e) => {
   state.serverUrl = fd.get("serverUrl")?.toString().trim() || DEFAULT_SERVER;
   state.password = fd.get("password")?.toString() || "";
   state.username = fd.get("username")?.toString().trim() || "opencorvus";
+  state.theme = sanitizeTheme(fd.get("themeMode")?.toString().trim());
+  renderTheme();
   await persistOverlaySettings();
   dom.settingsDialog.close();
   const ok = await checkConnection();
@@ -3420,6 +3599,7 @@ async function loadConfigInfo() {
 
 async function init() {
   await loadOverlaySettings();
+  renderTheme();
   renderVersions();
   await setupTauri();
   renderExecutor();
@@ -3443,3 +3623,15 @@ async function init() {
 }
 
 init();
+
+if (systemThemeMedia) {
+  const onThemeChange = () => {
+    if (state.theme !== "system") return;
+    renderTheme();
+  };
+  if (typeof systemThemeMedia.addEventListener === "function") {
+    systemThemeMedia.addEventListener("change", onThemeChange);
+  } else if (typeof systemThemeMedia.addListener === "function") {
+    systemThemeMedia.addListener(onThemeChange);
+  }
+}

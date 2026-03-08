@@ -1319,13 +1319,32 @@ function recallMemory(task: typeof OrchestratorTaskTable.$inferSelect) {
     .join(" ")
   if (!query) return []
   try {
-    return Memory.search({
+    const primary = Memory.search({
       query,
+      projectId: task.project_id,
+      sessionID: task.session_id ?? undefined,
+      scope: "all",
+      limit: 5,
+    })
+    // Secondary search using first line of request for broader recall
+    const requestLine = task.request.split("\n").find(Boolean)?.trim()
+    if (!requestLine || requestLine === query) return primary
+    const secondary = Memory.search({
+      query: requestLine.slice(0, 120),
       projectId: task.project_id,
       sessionID: task.session_id ?? undefined,
       scope: "all",
       limit: 3,
     })
+    // Merge and deduplicate by chunkId
+    const seen = new Set(primary.map((item) => item.chunkId))
+    for (const item of secondary) {
+      if (!seen.has(item.chunkId)) {
+        primary.push(item)
+        seen.add(item.chunkId)
+      }
+    }
+    return primary.slice(0, 8)
   } catch {
     return []
   }

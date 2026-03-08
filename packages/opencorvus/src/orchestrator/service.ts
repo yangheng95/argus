@@ -18,6 +18,7 @@ import {
   OrchestratorArtifactTable,
   OrchestratorChannelBindingTable,
   OrchestratorDeliveryTable,
+  OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
@@ -58,6 +59,7 @@ import {
   activeRunBySession,
   findArtifacts,
   findDeliveryByRun,
+  findExecutorSessionByRun,
   findEvaluationByRun,
   findEvaluations,
   findInteractionByExternal,
@@ -72,6 +74,7 @@ import {
   searchProjectTasks,
   listGoals,
   listGoalsByPlan,
+  listExecutorEvents as listExecutorProtocolEvents,
   listInteractions,
   listMilestones,
   listMilestonesByPlan,
@@ -81,6 +84,8 @@ import {
   requireTask,
   viewArtifact,
   viewDelivery,
+  viewExecutorEvent,
+  viewExecutorSession,
   viewEvaluation,
   viewGoal,
   viewInteraction,
@@ -508,6 +513,22 @@ export namespace OrchestratorService {
     return findEvaluations(runID).map(viewEvaluation)
   }
 
+  export async function getExecutorSession(runID: string) {
+    await OrchestratorRuntime.syncRun(runID, hooks())
+    requireRun(runID)
+    const row = findExecutorSessionByRun(runID)
+    if (!row) throw new NotFoundError({ message: `Executor session not found for run ${runID}` })
+    return viewExecutorSession(row)
+  }
+
+  export async function listExecutorEvents(runID: string) {
+    await OrchestratorRuntime.syncRun(runID, hooks())
+    requireRun(runID)
+    const row = findExecutorSessionByRun(runID)
+    if (!row) return []
+    return listExecutorProtocolEvents(row.id).map(viewExecutorEvent)
+  }
+
   export async function listTaskInteractions(taskID: string) {
     await OrchestratorRuntime.syncTask(taskID, hooks())
     requireTask(taskID)
@@ -614,6 +635,11 @@ export namespace OrchestratorService {
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
     const input = ReplyInteractionInput.parse(raw)
     const row = requireInteraction(interactionID)
+    if (row.payload?.protocol_request === true) {
+      await resolveProtocolInteraction(row, input)
+      await OrchestratorRuntime.syncTask(row.task_id, hooks())
+      return viewInteraction(requireInteraction(interactionID))
+    }
     if (row.request_type === "permission") {
       await PermissionNext.reply({
         requestID: row.external_id,
@@ -640,6 +666,11 @@ export namespace OrchestratorService {
   export async function rejectInteraction(interactionID: string, raw?: z.input<typeof RejectInteractionInput>) {
     const input = RejectInteractionInput.parse(raw ?? {})
     const row = requireInteraction(interactionID)
+    if (row.payload?.protocol_request === true) {
+      await rejectProtocolInteraction(row, input.message)
+      await OrchestratorRuntime.syncTask(row.task_id, hooks())
+      return viewInteraction(requireInteraction(interactionID))
+    }
     if (row.request_type === "permission") {
       await PermissionNext.reply({
         requestID: row.external_id,
@@ -886,6 +917,17 @@ export namespace OrchestratorService {
       },
       "Run aborted",
     )
+    Database.use((db) =>
+      db
+        .update(OrchestratorExecutorSessionTable)
+        .set({
+          status: "aborted",
+          time_completed: Date.now(),
+          time_updated: Date.now(),
+        })
+        .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
+        .run(),
+    )
     const task = requireTask(run.task_id)
     if (task.active_run_id === run.id) {
       await updateTask(task, { status: "failed", error: "run aborted", blocking_reason: null, time_completed: Date.now() }, "Run aborted")
@@ -1105,6 +1147,120 @@ function answersFromMessage(message?: string) {
   const text = message?.trim()
   if (!text) return
   return [[text]]
+}
+
+async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<typeof ReplyInteractionInput>) {
+  const run = requireRun(row.run_id)
+  const executor = ExecutorRegistry.require(run.executor)
+  if (!executor.resolve) throw new Error(`executor ${run.executor} does not support interaction resolution`)
+  const payload = row.payload ?? {}
+  const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
+  const now = Date.now()
+
+  if (row.request_type === "permission") {
+    await executor.resolve({
+      sessionID: run.session_id ?? undefined,
+      queueTaskID: run.executor_ref?.queue_task_id,
+      requestID,
+      kind: "approval",
+      response: {
+        decision: input.reply === "always" ? "acceptForSession" : "accept",
+      },
+    })
+    markProtocolInteraction(row, "answered", {
+      reply: input.reply ?? "once",
+      message: input.message,
+    }, now)
+    return
+  }
+
+  const questions = Array.isArray(payload.questions)
+    ? payload.questions.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const next = item as Record<string, unknown>
+        if (typeof next.id !== "string" || !next.id) return []
+        return [next.id]
+      })
+    : []
+  const answers = input.answers ?? answersFromMessage(input.message)
+  if (!answers) throw new Error("answers or message are required for protocol input replies")
+  const response = Object.fromEntries(
+    questions.map((id, index) => [id, { answers: answers[index] ?? answers[0] ?? [] }]),
+  )
+  await executor.resolve({
+    sessionID: run.session_id ?? undefined,
+    queueTaskID: run.executor_ref?.queue_task_id,
+    requestID,
+    kind: "input",
+    response: {
+      answers: response,
+    },
+  })
+  markProtocolInteraction(row, "answered", {
+    answers: response,
+    message: input.message,
+  }, now)
+}
+
+async function rejectProtocolInteraction(row: InteractionRow, message?: string) {
+  const run = requireRun(row.run_id)
+  const executor = ExecutorRegistry.require(run.executor)
+  if (!executor.resolve) throw new Error(`executor ${run.executor} does not support interaction resolution`)
+  const payload = row.payload ?? {}
+  const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
+  const now = Date.now()
+  if (row.request_type === "permission") {
+    await executor.resolve({
+      sessionID: run.session_id ?? undefined,
+      queueTaskID: run.executor_ref?.queue_task_id,
+      requestID,
+      kind: "approval",
+      response: {
+        decision: "decline",
+      },
+    })
+    markProtocolInteraction(row, "rejected", { message }, now)
+    return
+  }
+  await executor.resolve({
+    sessionID: run.session_id ?? undefined,
+    queueTaskID: run.executor_ref?.queue_task_id,
+    requestID,
+    kind: "input",
+    error: {
+      code: -32000,
+      message: message?.trim() || "Rejected by operator",
+    },
+  })
+  markProtocolInteraction(row, "rejected", { message }, now)
+}
+
+function markProtocolInteraction(
+  row: InteractionRow,
+  status: OrchestratorInteractionStatus,
+  response: Record<string, unknown>,
+  now: number,
+) {
+  Database.transaction((db) => {
+    db.update(OrchestratorInteractionRequestTable)
+      .set({
+        status,
+        response,
+        time_resolved: now,
+        time_updated: now,
+      })
+      .where(eq(OrchestratorInteractionRequestTable.id, row.id))
+      .run()
+    Database.effect(() =>
+      Bus.publish(Event.InteractionResolved, {
+        taskID: row.task_id,
+        runID: row.run_id,
+        interactionID: row.id,
+        status,
+        summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
+      }),
+    )
+  })
 }
 
 function isPlannerClarification(row: InteractionRow) {

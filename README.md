@@ -146,9 +146,9 @@ bun ./packages/sdk/js/script/build.ts
 
 ### FAQ
 
-#### How is this different from OpenCode?
+#### How is this different from a direct coding agent?
 
-OpenCode is the interactive coding agent. OpenCorvus builds on that execution core and adds durable task orchestration, goal tracking, evaluator-driven retries, remote channels, and operator feedback loops.
+OpenCorvus is built for delegated development workflows. It adds durable task orchestration, goal tracking, evaluator-driven retries, remote channels, and operator feedback loops on top of direct coding-agent execution.
 
 #### Is OpenCorvus only a Slack bot?
 
@@ -171,7 +171,7 @@ No. The core orchestration loop is implemented, but the product surface is still
 
 ### Acknowledgments
 
-OpenCorvus started from the OpenCode codebase and extends it toward delegated development, remote channels, and evaluator-driven automation.
+OpenCorvus extends direct coding-agent execution toward delegated development, remote channels, and evaluator-driven automation.
 
 ### License
 
