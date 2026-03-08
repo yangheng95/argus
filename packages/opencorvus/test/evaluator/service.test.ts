@@ -65,6 +65,73 @@ describe("evaluator.service", () => {
     })
   })
 
+  test("executes named checks with their own ids and labels", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            metadata: {
+              checks: {
+                named: {
+                  py_compile: {
+                    label: "Python Compile",
+                    family: "build",
+                    commands: [`"${BunProc.which()}" -e "process.exit(0)"`],
+                  },
+                  pytest: {
+                    label: "Pytest",
+                    family: "test",
+                    commands: [`"${BunProc.which()}" -e "process.exit(0)"`],
+                  },
+                  typecheck: {
+                    label: "Type Check",
+                    family: "lint",
+                    commands: [`"${BunProc.which()}" -e "process.exit(0)"`],
+                  },
+                },
+              },
+            },
+          },
+          { summary: "delivery ready" },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["py_compile", "pytest", "typecheck"])
+        expect(result.checks.map((item) => item.label)).toEqual(["Python Compile", "Pytest", "Type Check"])
+      },
+    })
+  })
+
+  test("discovers typecheck script as a named lint check", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({
+        name: "evaluator-typecheck",
+        scripts: {
+          typecheck: "bun -e \"console.log('typecheck ok')\"",
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await EvaluatorService.resolveChecks()
+        expect(resolved.named?.typecheck?.label).toBe("Type Check")
+        expect(resolved.named?.typecheck?.family).toBe("lint")
+        expect(resolved.named?.typecheck?.commands).toEqual(["bun run typecheck"])
+
+        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready" })
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["typecheck"])
+        expect(result.checks[0]?.family).toBe("lint")
+      },
+    })
+  })
+
   test("honors build, test, and lint being explicitly disabled", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(

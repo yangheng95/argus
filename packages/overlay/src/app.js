@@ -3337,6 +3337,9 @@ dom.criteriaList?.addEventListener("change", async () => {
   try {
     await apiJson(`task/${encodeURIComponent(state.selectedTaskID)}/checks`, {
       method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+      },
       body: JSON.stringify({
         checks: buildCheckConfig(),
       }),

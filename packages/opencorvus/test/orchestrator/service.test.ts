@@ -196,6 +196,56 @@ describe("orchestrator.service", () => {
     })
   })
 
+  test("selectTaskChecks toggles named checks without losing their commands", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stubPlanner()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "completed",
+      error: null,
+    })
+    spyOn(OpencodeExecutor, "delivery").mockResolvedValue({
+      summary: "executor finished",
+      diffs: [],
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "run a custom check",
+          checks: {
+            named: {
+              typecheck: {
+                label: "Type Check",
+                family: "lint",
+                commands: [`"${process.execPath}" -e "process.exit(0)"`],
+              },
+            },
+          },
+        })
+
+        await OrchestratorService.selectTaskChecks(taskID, { "named:typecheck": false })
+        let task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )
+        expect(task?.metadata?.checks?.named?.typecheck?.enabled).toBe(false)
+        expect(task?.metadata?.checks?.named?.typecheck?.commands).toEqual([`"${process.execPath}" -e "process.exit(0)"`])
+
+        await OrchestratorService.selectTaskChecks(taskID, { "named:typecheck": true })
+        task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )
+        expect(task?.metadata?.checks?.named?.typecheck?.enabled).toBe(true)
+        expect(task?.metadata?.checks?.named?.typecheck?.commands).toEqual([`"${process.execPath}" -e "process.exit(0)"`])
+      },
+    })
+  })
+
   test("replans after second evaluation failure", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()

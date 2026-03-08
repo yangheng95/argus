@@ -441,6 +441,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   // Analyzes check results, investigates failures, assesses each goal, classifies failure type
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   let analysis: EvaluatorAnalysisType
+  let analysisError: string | undefined
   try {
     analysis = await EvaluatorService.analyzeDelivery({
       task: { title: task.title, request: task.request },
@@ -462,74 +463,9 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       })),
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    log.error("evaluator agent analysis failed", { error: message })
-    Database.transaction((db) => {
-      db.insert(OrchestratorEvaluationTable)
-        .values({
-          id: evaluationID,
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: deliveryID,
-          status: "failed",
-          verdict: "inconclusive",
-          summary: `Evaluator failure: ${message}`,
-          checks: result.checks,
-          time_completed: Date.now(),
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      for (const artifact of result.artifacts) {
-        db.insert(OrchestratorArtifactTable)
-          .values({
-            id: Identifier.ascending("artifact"),
-            task_id: task.id,
-            run_id: run.id,
-            delivery_id: deliveryID,
-            kind: artifact.kind,
-            label: artifact.label,
-            payload: artifact.payload,
-            time_created: Date.now(),
-            time_updated: Date.now(),
-          })
-          .run()
-      }
-      db.insert(OrchestratorArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: deliveryID,
-          kind: "report",
-          label: "evaluator-agent-error",
-          payload: { error: message },
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        })
-        .run()
-      Database.effect(() =>
-        Bus.publish(Event.EvaluationCompleted, {
-          taskID: task.id,
-          runID: run.id,
-          evaluationID,
-          status: "failed",
-          verdict: "inconclusive",
-          summary: `Evaluator failure: ${message}`,
-        }),
-      )
-    })
-    await hooks.updateTask(
-      task,
-      {
-        status: "failed",
-        blocking_reason: null,
-        error: `Evaluator failure: ${message}`,
-        time_completed: Date.now(),
-      },
-      `Evaluator failure: ${message}`,
-    )
-    return
+    analysisError = err instanceof Error ? err.message : String(err)
+    log.error("evaluator agent analysis failed", { error: analysisError })
+    analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
   const finalVerdict = analysis.verdict
@@ -563,6 +499,21 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
           kind: artifact.kind,
           label: artifact.label,
           payload: artifact.payload,
+          time_created: Date.now(),
+          time_updated: Date.now(),
+        })
+        .run()
+    }
+    if (analysisError) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: task.id,
+          run_id: run.id,
+          delivery_id: deliveryID,
+          kind: "report",
+          label: "evaluator-agent-error",
+          payload: { error: analysisError, fallback: true },
           time_created: Date.now(),
           time_updated: Date.now(),
         })
@@ -932,6 +883,49 @@ function deriveMilestoneStatus(goals: GoalRow[]): OrchestratorMilestoneStatus {
   if (blocking.every((g) => g.status === "passed")) return "passed"
   if (goals.some((g) => g.status === "passed")) return "active"
   return "pending"
+}
+
+function fallbackAnalysis(
+  result: {
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  },
+  goalCount: number,
+  message: string,
+): EvaluatorAnalysisType {
+  const goalStatus =
+    result.verdict === "accepted"
+      ? "passed"
+      : result.verdict === "rejected"
+        ? "failed"
+        : "inconclusive"
+  const summary =
+    result.verdict === "accepted"
+      ? result.summary
+      : `${result.summary} Evaluator agent unavailable: ${message}`
+  const reasoning =
+    result.verdict === "accepted"
+      ? "Automated evaluator checks passed; fell back because evaluator agent analysis was unavailable."
+      : `Fell back to automated evaluator result because evaluator agent analysis failed: ${message}`
+  return {
+    verdict: result.verdict,
+    classification: "evaluation",
+    summary,
+    goal_statuses: Array.from({ length: goalCount }, (_, goal_index) => ({
+      goal_index,
+      status: goalStatus,
+      evidence: summary,
+      reasoning,
+    })),
+    replan_guidance: result.verdict === "rejected"
+      ? {
+          root_cause: `Evaluator agent unavailable: ${message}`,
+          what_failed: result.summary,
+          suggested_strategy: "Fix the failing automated checks and retry the current plan.",
+          avoid_approaches: [],
+        }
+      : null,
+  }
 }
 
 function selectorList(metadata: unknown) {
