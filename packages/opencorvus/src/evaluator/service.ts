@@ -17,20 +17,6 @@ import { Log } from "@/util/log"
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT = 12000
 
-export const EvaluationResult = z.object({
-  status: z.enum(["passed", "failed", "inconclusive"]),
-  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
-  summary: z.string(),
-  checks: EvaluationCheck.array(),
-  artifacts: z.array(
-    z.object({
-      kind: z.enum(["log", "report", "image"]),
-      label: z.string(),
-      payload: z.record(z.string(), z.any()),
-    }),
-  ),
-})
-
 const JudgeResult = z.object({
   verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   rationale: z.string(),
@@ -237,7 +223,8 @@ async function resolveConfig(metadata?: Record<string, unknown>) {
   return CheckConfig.parse(configured.success ? configured.data : {})
 }
 
-function commandSpecs(configured?: string[], discovered: EvaluatorCommand[] = []) {
+function commandSpecs(configured?: string[] | false, discovered: EvaluatorCommand[] = []) {
+  if (configured === false) return []
   if (configured && configured.length > 0) {
     return configured.map((command) => ({ command }))
   }
@@ -788,7 +775,7 @@ async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppeteer"])
         config.wait_for_text,
       )
     }
-    await page.waitForTimeout(500)
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
     const title = await page.title().catch(() => "")
     const content = await page.content().catch(() => "")
@@ -1227,7 +1214,10 @@ async function judgeResult(
       },
     ],
     schema: JudgeResult,
-  }).catch(() => undefined)
+  }).catch((err) => {
+    evaluatorLog.warn("judge model call failed", { error: String(err), model: `${model.providerID}/${model.id}` })
+    return undefined
+  })
 
   if (!result) {
     return softOrStrict({

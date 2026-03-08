@@ -1,11 +1,10 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { Database } from "bun:sqlite"
 import { drizzle } from "drizzle-orm/bun-sqlite"
-import { migrate } from "drizzle-orm/bun-sqlite/migrator"
 import path from "path"
 import fs from "fs/promises"
-import { readFileSync, readdirSync } from "fs"
 import { JsonMigration } from "../../src/storage/json-migration"
+import { SCHEMA_DDL } from "../../src/storage/ddl"
 import { Global } from "../../src/global"
 import { ProjectTable } from "../../src/project/project.sql"
 import { SessionTable, MessageTable, PartTable, TodoTable, PermissionTable } from "../../src/session/session.sql"
@@ -75,19 +74,7 @@ async function writeSession(storageDir: string, projectID: string, session: Reco
 function createTestDb() {
   const sqlite = new Database(":memory:")
   sqlite.exec("PRAGMA foreign_keys = ON")
-
-  // Apply schema migrations using drizzle migrate
-  const dir = path.join(import.meta.dirname, "../../migration")
-  const entries = readdirSync(dir, { withFileTypes: true })
-  const migrations = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
-      sql: readFileSync(path.join(dir, entry.name, "migration.sql"), "utf-8"),
-      timestamp: Number(entry.name.split("_")[0]),
-    }))
-    .sort((a, b) => a.timestamp - b.timestamp)
-  migrate(drizzle({ client: sqlite }), migrations)
-
+  sqlite.exec(SCHEMA_DDL)
   return sqlite
 }
 

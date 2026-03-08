@@ -29,10 +29,6 @@ Switch to text-guided checklist mode only when requested or when desktop confirm
 
 - Read `references/channel-matrix.md` for required env keys and checkpoint structure.
 - For platform details, read only target channel docs:
-  - `.opencorvus/skill/opencorvus-slack-bot-config/references/openclaw.md`
-  - `.opencorvus/skill/opencorvus-telegram-bot-config/references/openclaw.md`
-  - `.opencorvus/skill/opencorvus-feishu-bot-config/references/openclaw.md`
-  - `.opencorvus/skill/opencorvus-whatsapp-bot-config/references/openclaw.md`
   - and other channel references only if explicitly in scope.
 
 3. Run overlay-guided loop by default.
@@ -52,7 +48,6 @@ Switch to text-guided checklist mode only when requested or when desktop confirm
 - In overlay mode, write channel env keys through the `Environment Variables` panel then click `Save Config`.
 - In text-guided fallback, write channel env keys to `packages/bot/.env` (or system env if user requests).
 - Keep existing unrelated env keys unchanged.
-- Prefer canonical key names from `packages/bot/src/registry.ts`; keep `OPENCLAW_*` fallbacks as optional compatibility only.
 
 5. Validate and report.
 
@@ -66,7 +61,6 @@ Switch to text-guided checklist mode only when requested or when desktop confirm
 
 ## Guardrails
 
-- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Redact secrets in all outputs; never print full tokens or secrets.
 - Keep guidance stepwise; one action per checkpoint in overlay-guided mode.
 - Do not claim full automation for provider-side actions requiring human login, OAuth consent, QR scan, or security challenge.

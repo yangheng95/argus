@@ -95,6 +95,13 @@ export const ServeCommand = cmd({
       }
     }
 
+    process.on("uncaughtException", (err) => {
+      console.error("[serve] uncaughtException:", err)
+    })
+    process.on("unhandledRejection", (err) => {
+      console.error("[serve] unhandledRejection:", err)
+    })
+
     const server = Server.listen(opts)
     console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
     console.log(`overlay UI available at http://${server.hostname}:${server.port}/ui/`)

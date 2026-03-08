@@ -62,4 +62,24 @@ describe("planner.service", () => {
     expect(plan.goals[0]?.metadata?.check_selector).toContain("code_review")
     expect(plan.goals[0]?.metadata?.check_selector).toContain("dead_code_review")
   })
+
+  test("flags vague requests for clarification by default", async () => {
+    const plan = await PlannerService.initial({
+      title: "优化性能",
+      request: "优化性能",
+    })
+
+    expect(plan.metadata.clarification?.questions.length).toBe(1)
+    expect(plan.metadata.clarification?.reason).toBeTruthy()
+  })
+
+  test("suppresses clarification when allowClarification is false", async () => {
+    const plan = await PlannerService.initial({
+      title: "优化性能",
+      request: "优化性能",
+      allowClarification: false,
+    })
+
+    expect(plan.metadata.clarification).toBeUndefined()
+  })
 })

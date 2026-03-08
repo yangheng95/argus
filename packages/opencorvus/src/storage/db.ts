@@ -1,6 +1,5 @@
 import { Database as BunDatabase } from "bun:sqlite"
 import { drizzle, type SQLiteBunDatabase } from "drizzle-orm/bun-sqlite"
-import { migrate } from "drizzle-orm/bun-sqlite/migrator"
 import { type SQLiteTransaction } from "drizzle-orm/sqlite-core"
 export * from "drizzle-orm"
 import { Context } from "../util/context"
@@ -10,10 +9,8 @@ import { Log } from "../util/log"
 import { NamedError } from "@opencorvus-ai/util/error"
 import z from "zod"
 import path from "path"
-import { readFileSync, readdirSync, existsSync } from "fs"
 import * as schema from "./schema"
-
-declare const OPENCORVUS_MIGRATIONS: { sql: string; timestamp: number }[] | undefined
+import { SCHEMA_DDL } from "./ddl"
 
 export const NotFoundError = NamedError.create(
   "NotFoundError",
@@ -24,6 +21,30 @@ export const NotFoundError = NamedError.create(
 
 const log = Log.create({ service: "db" })
 
+function columnNames(sqlite: BunDatabase, table: string) {
+  return sqlite
+    .query(`PRAGMA table_info(${table})`)
+    .all() as Array<{ name: string }>
+}
+
+function ensureColumn(sqlite: BunDatabase, table: string, name: string, definition: string) {
+  if (columnNames(sqlite, table).some((item) => item.name === name)) return
+  sqlite.run(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
+}
+
+function applySchemaPatches(sqlite: BunDatabase) {
+  ensureColumn(sqlite, "control_message", "scope", "scope text NOT NULL DEFAULT 'global'")
+  ensureColumn(sqlite, "control_message", "scope_id", "scope_id text NOT NULL DEFAULT 'panel'")
+  ensureColumn(sqlite, "memory_file", "session_id", "session_id text")
+  ensureColumn(sqlite, "memory_file", "scope", "scope text NOT NULL DEFAULT 'global'")
+  ensureColumn(sqlite, "workbench_preference", "session_id", "session_id text")
+  sqlite.run("CREATE INDEX IF NOT EXISTS control_message_scope_idx ON control_message (scope, scope_id)")
+  sqlite.run("CREATE INDEX IF NOT EXISTS memory_file_session_idx ON memory_file (session_id)")
+  sqlite.run("CREATE INDEX IF NOT EXISTS memory_file_scope_idx ON memory_file (scope)")
+  sqlite.run("CREATE INDEX IF NOT EXISTS workbench_preference_session_idx ON workbench_preference (session_id)")
+  sqlite.run("CREATE INDEX IF NOT EXISTS workbench_preference_scope_idx ON workbench_preference (scope)")
+}
+
 export namespace Database {
   export const Path = path.join(Global.Path.data, "opencorvus.db")
   type Schema = typeof schema
@@ -31,42 +52,8 @@ export namespace Database {
 
   type Client = SQLiteBunDatabase<Schema>
 
-  type Journal = { sql: string; timestamp: number }[]
-
   const state = {
     sqlite: undefined as BunDatabase | undefined,
-  }
-
-  function time(tag: string) {
-    const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(tag)
-    if (!match) return 0
-    return Date.UTC(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      Number(match[4]),
-      Number(match[5]),
-      Number(match[6]),
-    )
-  }
-
-  function migrations(dir: string): Journal {
-    const dirs = readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-
-    const sql = dirs
-      .map((name) => {
-        const file = path.join(dir, name, "migration.sql")
-        if (!existsSync(file)) return
-        return {
-          sql: readFileSync(file, "utf-8"),
-          timestamp: time(name),
-        }
-      })
-      .filter(Boolean) as Journal
-
-    return sql.sort((a, b) => a.timestamp - b.timestamp)
   }
 
   export const Client = lazy(() => {
@@ -82,20 +69,12 @@ export namespace Database {
     sqlite.run("PRAGMA foreign_keys = ON")
     sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
 
-    const db = drizzle({ client: sqlite, schema })
+    // Create all tables (IF NOT EXISTS — idempotent)
+    sqlite.exec(SCHEMA_DDL)
+    applySchemaPatches(sqlite)
+    log.info("schema applied")
 
-    // Apply schema migrations
-    const entries =
-      typeof OPENCORVUS_MIGRATIONS !== "undefined"
-        ? OPENCORVUS_MIGRATIONS
-        : migrations(path.join(import.meta.dirname, "../../migration"))
-    if (entries.length > 0) {
-      log.info("applying migrations", {
-        count: entries.length,
-        mode: typeof OPENCORVUS_MIGRATIONS !== "undefined" ? "bundled" : "dev",
-      })
-      migrate(db, entries)
-    }
+    const db = drizzle({ client: sqlite, schema })
 
     return db
   })

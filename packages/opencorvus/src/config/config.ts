@@ -935,9 +935,31 @@ export namespace Config {
       ref: "SlackChannelConfig",
     })
 
+  export const TelegramChannel = z
+    .object({
+      enabled: z.boolean().optional().describe("Enable Telegram channel integration"),
+      token: z.string().optional().describe("Telegram bot token"),
+    })
+    .strict()
+    .meta({
+      ref: "TelegramChannelConfig",
+    })
+
+  export const DiscordChannel = z
+    .object({
+      enabled: z.boolean().optional().describe("Enable Discord channel integration"),
+      token: z.string().optional().describe("Discord bot token"),
+    })
+    .strict()
+    .meta({
+      ref: "DiscordChannelConfig",
+    })
+
   export const Channel = z
     .object({
       slack: SlackChannel.optional(),
+      telegram: TelegramChannel.optional(),
+      discord: DiscordChannel.optional(),
     })
     .strict()
     .meta({
@@ -1006,7 +1028,7 @@ export namespace Config {
     .object({
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
       logLevel: Log.Level.optional().describe("Log level"),
-      server: Server.optional().describe("Server configuration for opencorvus serve and web commands"),
+      server: Server.optional().describe("Server configuration for opencorvus serve"),
       channel: Channel.optional().describe("Channel integration configuration"),
       command: z
         .record(z.string(), Command)
@@ -1151,11 +1173,6 @@ export namespace Config {
       layout: Layout.optional().describe("@deprecated Always uses stretch layout."),
       permission: Permission.optional(),
       tools: z.record(z.string(), z.boolean()).optional(),
-      enterprise: z
-        .object({
-          url: z.string().optional().describe("Enterprise URL"),
-        })
-        .optional(),
       compaction: z
         .object({
           auto: z.boolean().optional().describe("Enable automatic compaction when context is full (default: true)"),
@@ -1325,9 +1342,7 @@ export namespace Config {
   }
 
   export async function update(config: Info) {
-    const filepath = path.join(Instance.directory, "config.json")
-    const existing = await loadFile(filepath)
-    await Filesystem.writeJson(filepath, mergeDeep(existing, config))
+    await updateGlobal(config)
     await Instance.dispose()
   }
 
@@ -1419,17 +1434,14 @@ export namespace Config {
 
     global.reset()
 
-    void Instance.disposeAll()
-      .catch(() => undefined)
-      .finally(() => {
-        GlobalBus.emit("event", {
-          directory: "global",
-          payload: {
-            type: Event.Disposed.type,
-            properties: {},
-          },
-        })
-      })
+    await Instance.disposeAll().catch(() => undefined)
+    GlobalBus.emit("event", {
+      directory: "global",
+      payload: {
+        type: Event.Disposed.type,
+        properties: {},
+      },
+    })
 
     return next
   }

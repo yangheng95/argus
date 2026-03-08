@@ -45,7 +45,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
           },
@@ -94,7 +94,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
           },
@@ -147,7 +147,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
           },
@@ -197,7 +197,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
           },
@@ -241,7 +241,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
           },
@@ -281,7 +281,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           budget: {
             maxRuns: 1,
           },
@@ -333,7 +333,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           checks: {
             build: [`"${process.execPath}" -e "process.exit(0)"`],
           },
@@ -391,7 +391,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           checks: {
             build: [`"${process.execPath}" -e "process.exit(0)"`],
           },
@@ -479,7 +479,7 @@ describe("orchestrator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "make a change",
+          request: "update the landing page hero section copy",
           executor: "codex",
         })
 
@@ -496,6 +496,6 @@ describe("orchestrator.service", () => {
     })
 
     expect(calls).toHaveLength(1)
-    expect(calls[0]?.prompt).toContain("make a change")
+    expect(calls[0]?.prompt).toContain("update the landing page hero section copy")
   })
 })

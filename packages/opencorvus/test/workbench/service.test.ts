@@ -52,6 +52,7 @@ describe("workbench.service", () => {
         const pref = Database.use((db) => db.select().from(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.user_id, "U1")).get())
         expect(pref?.key).toBe("style")
         expect(pref?.value).toBe("concise")
+        expect(pref?.scope).toBe("global")
       },
     })
   })
@@ -85,6 +86,41 @@ describe("workbench.service", () => {
         )
         expect(prefs.some((item) => item.key === "style" && item.value === "concise")).toBe(true)
         expect(prefs.some((item) => item.key === "lockfile_policy" && item.value === "avoid_changes")).toBe(true)
+        expect(prefs.every((item) => item.scope === "global")).toBe(true)
+      },
+    })
+  })
+
+  test("stores session preference when explicitly requested", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
+      sessionID: input.sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "implement feature",
+        })
+        const result = await OrchestratorService.handleTaskMessage(taskID, {
+          text: "/pref session style=concise",
+          source: "api",
+          user_id: "U-SESSION",
+        })
+        expect(result.kind).toBe("preference")
+        const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get())!
+        const pref = Database.use((db) =>
+          db
+            .select()
+            .from(WorkbenchPreferenceTable)
+            .where(eq(WorkbenchPreferenceTable.task_id, taskID))
+            .all()
+            .find((item) => item.key === "style"),
+        )
+        expect(pref?.scope).toBe("session")
+        expect(pref?.session_id).toBe(task.session_id)
       },
     })
   })
@@ -185,7 +221,7 @@ describe("workbench.service", () => {
           planVersionID: task.active_plan_version_id!,
           sessionID: task.session_id!,
         })
-        expect(brief.content).toContain("User preferences:")
+        expect(brief.content).toContain("Global preferences:")
         expect(brief.content).toContain("Recent task notes:")
         const snapshot = Database.use((db) =>
           db
@@ -233,7 +269,7 @@ describe("workbench.service", () => {
         expect(board.lanes.find((lane) => lane.id === "preferences")?.cards.length).toBeGreaterThan(0)
         expect(board.lanes.find((lane) => lane.id === "staging")?.cards.length).toBeGreaterThan(0)
         expect(board.lanes.find((lane) => lane.id === "notes")?.cards.length).toBeGreaterThan(0)
-        expect(board.brief.content).toContain("User preferences:")
+        expect(board.brief.content).toContain("Global preferences:")
       },
     })
   })
@@ -259,6 +295,48 @@ describe("workbench.service", () => {
         const board = WorkbenchService.compileBoard({ taskID })
         expect(board.lanes.find((lane) => lane.id === "preferences")?.cards.some((card) => card.title === "style")).toBe(true)
         expect(board.brief.content).toContain("lockfile_policy: avoid_changes")
+      },
+    })
+  })
+
+  test("global preferences apply across sessions while session preferences stay local", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
+      sessionID: input.sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const firstTaskID = await OrchestratorService.createTask({
+          request: "first feature",
+        })
+        await OrchestratorService.handleTaskMessage(firstTaskID, {
+          text: "/pref style=concise",
+          source: "api",
+        })
+        await OrchestratorService.handleTaskMessage(firstTaskID, {
+          text: "/pref session branch_policy=scratch_only",
+          source: "api",
+        })
+
+        const secondTaskID = await OrchestratorService.createTask({
+          request: "second feature",
+        })
+        const secondTask = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, secondTaskID)).get(),
+        )!
+        const secondRun = Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, secondTaskID)).get())!
+        const brief = WorkbenchService.compileBrief({
+          taskID: secondTaskID,
+          runID: secondRun.id,
+          planVersionID: secondTask.active_plan_version_id!,
+          sessionID: secondTask.session_id!,
+        })
+
+        expect(brief.content).toContain("style: concise")
+        expect(brief.content).not.toContain("branch_policy: scratch_only")
       },
     })
   })

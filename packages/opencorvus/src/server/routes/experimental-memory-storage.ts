@@ -33,7 +33,7 @@ export function ExperimentalMemoryStorageRoutes() {
       validator("query", z.object({ projectId: z.string() })),
       async (c) => {
         const { projectId } = c.req.valid("query")
-        const files = Memory.listFiles(projectId)
+        const files = Memory.listFiles({ projectId })
         return c.json(files)
       },
     )

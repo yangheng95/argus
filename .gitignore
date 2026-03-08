@@ -39,6 +39,8 @@ overlay.json
 packages/bot/bot_e2e_rerun.err
 packages/bot/bot_e2e_rerun.out
 packages/opencorvus/tmp-modelcheck.ts
+packages/opencorvus/eval-report-*.json
+packages/opencorvus/opencorvus.jsonc
 packages/overlay/dist-artifacts/
 packages/overlay/src-tauri/resources/
 tmp-api.log

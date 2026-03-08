@@ -1,16 +1,15 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "version": "1.2.15",
+  "version": "0.0.1",
   "name": "opencorvus",
   "type": "module",
   "license": "MIT",
   "private": true,
   "scripts": {
     "typecheck": "tsgo --noEmit",
-    "test": "bun test --timeout 60000 test/opencorvus && bun test --timeout 60000 test/acp test/agent test/bus test/cli test/config test/control-plane test/env test/file test/flag test/format test/id test/ide test/lsp test/mcp test/memory test/patch test/permission test/plugin test/project test/provider test/pty test/question test/scheduler test/server test/session test/skill test/snapshot test/storage test/tool test/tui test/util test/bun.test.ts test/keybind.test.ts test/permission-task.test.ts test/scheduler.test.ts",
+    "test": "bun test --timeout 60000 test/acp test/agent test/bus test/cli test/config test/control-plane test/env test/file test/flag test/format test/id test/ide test/lsp test/mcp test/memory test/patch test/permission test/plugin test/project test/provider test/pty test/question test/scheduler test/server test/session test/skill test/snapshot test/storage test/tool test/tui test/util test/bun.test.ts test/keybind.test.ts test/permission-task.test.ts test/scheduler.test.ts",
     "build": "bun run script/build.ts",
-    "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts",
-    "db": "bun drizzle-kit"
+    "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts"
   },
   "bin": {
     "opencorvus": "./bin/opencorvus"
@@ -37,7 +36,6 @@
     "@types/turndown": "5.0.5",
     "@types/yargs": "17.0.33",
     "@typescript/native-preview": "catalog:",
-    "drizzle-kit": "1.0.0-beta.12-a5629fb",
     "drizzle-orm": "1.0.0-beta.12-a5629fb",
     "typescript": "catalog:",
     "vscode-languageserver-types": "3.17.5",

@@ -31,11 +31,14 @@ the right files, and produces a verifiable execution checklist.
 
 ### Phase 1 — Recall, Research, Explore
 
-**Step 1 — Search memory first (always):**
+**Step 1 — Recall memory and preferences first (always):**
 
-Before touching the codebase, call `memory` with `action: "search"` using keywords from the task.
+Before touching the codebase, call `memory` with `action: "search"` and `scope: "all"` using keywords from the task.
 Try 1–2 searches with different phrasings. If prior sessions handled related work, you may find
 ready solutions, known gotchas, or an existing approach you should follow or extend.
+
+Then call `preference` with `action: "list"` and `scope: "all"` to confirm current project-wide
+preferences and any session-only overrides.
 
 **Step 2 — Search the web if needed:**
 
@@ -109,6 +112,7 @@ For each task:
   3. planner.update_task(id, status="completed")
   4. Run verification for this unit before moving to next
   5. memory.write any discoveries, gotchas, or patterns confirmed by this step
+  6. preference.write any newly confirmed stable convention or instruction
 ```
 
 **Never batch verify at the end.** Catch errors per task so failures are isolated.
@@ -120,17 +124,21 @@ should produce a memory entry.
 After all tasks complete, write a final memory summary: what was built, key decisions made,
 what was tricky, and what the logical next steps would be.
 
+Default both `memory.write` and `preference.write` to `scope: "global"` so the result survives
+across all sessions in the project. Use `scope: "session"` only for temporary instructions or
+notes that should not leak into future sessions.
+
 ## Tool Usage During Planning
 
 | Phase     | Tools                                                                |
 | --------- | -------------------------------------------------------------------- |
-| Recall    | `memory` (search prior work, known patterns, gotchas)                |
+| Recall    | `memory`, `preference` (search prior work, known patterns, gotchas, current constraints) |
 | Research  | `websearch`, `webfetch` (external APIs, unfamiliar systems)          |
 | Explore   | `task` (parallel sub-agents), `glob`, `grep`, `read`                 |
 | Decompose | `planner.add_task`, `planner.scratchpad_write`                       |
 | Execute   | `edit`, `write`, `bash` (tests, typecheck, lint)                     |
 | Track     | `planner.update_task`, `planner.list_tasks`                          |
-| Persist   | `memory` (write discoveries, working solutions, gotchas per subtask) |
+| Persist   | `memory`, `preference` (write discoveries and stable conventions) |
 
 **Sub-agent prompt template for exploration:**
 

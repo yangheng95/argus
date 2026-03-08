@@ -21,13 +21,9 @@ Configure WeCom for OpenCorvus using a repeatable checklist and map platform set
 
 1. Confirm scope.
 
-- Confirm the task targets OpenCorvus bot runtime (packages/bot) rather than OpenClaw runtime.
-- OpenClaw does not currently publish an official WeCom channel page; treat this workflow as OpenCorvus-native and use vendor docs for platform-side steps.
 
 2. Load checklist.
 
-- Read references/openclaw.md.
-- Follow the "Verified OpenClaw facts" section to keep claims explicit about what is and is not officially documented.
 
 3. Configure platform and environment.
 
@@ -55,7 +51,6 @@ Configure WeCom for OpenCorvus using a repeatable checklist and map platform set
 
 ## Guardrails
 
-- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Do not output real secrets.
 - Keep edits focused on adapter wiring, env keys, and transport configuration.
 - Do not claim parity features that the adapter does not implement.

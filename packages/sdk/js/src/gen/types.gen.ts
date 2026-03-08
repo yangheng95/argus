@@ -1059,7 +1059,7 @@ export type GlobalEvent = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Server configuration for opencorvus serve and web commands
+ * Server configuration for opencorvus serve
  */
 export type ServerConfig = {
   /**

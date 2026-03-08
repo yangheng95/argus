@@ -473,14 +473,11 @@ export const GithubRunCommand = cmd({
           ? (payload as IssueCommentEvent | IssuesEvent).issue.number
           : (payload as PullRequestEvent | PullRequestReviewCommentEvent).pull_request.number
       const runUrl = `/${owner}/${repo}/actions/runs/${runId}`
-      const shareBaseUrl = isMock ? "https://dev.opencorvus.ai" : "https://opencorvus.ai"
-
       let appToken: string
       let octoRest: Octokit
       let octoGraph: typeof graphql
       let gitConfig: string
       let session: { id: string; title: string; version: string }
-      let shareId: string | undefined
       let exitCode = 0
       type PromptFiles = Awaited<ReturnType<typeof getUserPrompt>>["promptFiles"]
       const triggerCommentId = isCommentEvent
@@ -533,12 +530,6 @@ export const GithubRunCommand = cmd({
           ],
         })
         subscribeSessionEvents()
-        shareId = await (async () => {
-          if (share === false) return
-          if (!share && repoData.data.private) return
-          await Session.share(session.id)
-          return session.id.slice(-8)
-        })()
         console.log("opencorvus session", session.id)
 
         // Handle event types:
@@ -568,7 +559,7 @@ export const GithubRunCommand = cmd({
               repoData.data.default_branch,
               branch,
               summary,
-              `${response}\n\nTriggered by ${triggerType}${footer({ image: true })}`,
+              `${response}\n\nTriggered by ${triggerType}${footer()}`,
             )
             if (pr) {
               console.log(`Created PR #${pr}`)
@@ -597,8 +588,7 @@ export const GithubRunCommand = cmd({
               const summary = await summarize(response)
               await pushToLocalBranch(summary, uncommittedChanges)
             }
-            const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
-            await createComment(`${response}${footer({ image: !hasShared })}`)
+            await createComment(`${response}${footer()}`)
             await removeReaction(commentType)
           }
           // Fork PR
@@ -615,8 +605,7 @@ export const GithubRunCommand = cmd({
               const summary = await summarize(response)
               await pushToForkBranch(summary, prData, uncommittedChanges)
             }
-            const hasShared = prData.comments.nodes.some((c) => c.body.includes(`${shareBaseUrl}/s/${shareId}`))
-            await createComment(`${response}${footer({ image: !hasShared })}`)
+            await createComment(`${response}${footer()}`)
             await removeReaction(commentType)
           }
         }
@@ -631,7 +620,7 @@ export const GithubRunCommand = cmd({
           if (switched) {
             // Agent switched branches (likely created its own branch/PR).
             // Don't push the stale infrastructure branch — just comment.
-            await createComment(`${response}${footer({ image: true })}`)
+            await createComment(`${response}${footer()}`)
             await removeReaction(commentType)
           } else if (dirty) {
             const summary = await summarize(response)
@@ -640,16 +629,16 @@ export const GithubRunCommand = cmd({
               repoData.data.default_branch,
               branch,
               summary,
-              `${response}\n\nCloses #${issueId}${footer({ image: true })}`,
+              `${response}\n\nCloses #${issueId}${footer()}`,
             )
             if (pr) {
-              await createComment(`Created PR #${pr}${footer({ image: true })}`)
+          await createComment(`Created PR #${pr}${footer()}`)
             } else {
-              await createComment(`${response}${footer({ image: true })}`)
+          await createComment(`${response}${footer()}`)
             }
             await removeReaction(commentType)
           } else {
-            await createComment(`${response}${footer({ image: true })}`)
+        await createComment(`${response}${footer()}`)
             await removeReaction(commentType)
           }
         }
@@ -1379,18 +1368,8 @@ Co-authored-by: ${actor} <${actor}@users.noreply.github.com>"`
         }
       }
 
-      function footer(opts?: { image?: boolean }) {
-        const image = (() => {
-          if (!shareId) return ""
-          if (!opts?.image) return ""
-
-          const titleAlt = encodeURIComponent(session.title.substring(0, 50))
-          const title64 = Buffer.from(session.title.substring(0, 700), "utf8").toString("base64")
-
-          return `<a href="${shareBaseUrl}/s/${shareId}"><img width="200" alt="${titleAlt}" src="https://social-cards.sst.dev/opencorvus-share/${title64}.png?model=${providerID}/${modelID}&version=${session.version}&id=${shareId}" /></a>\n`
-        })()
-        const shareUrl = shareId ? `[opencorvus session](${shareBaseUrl}/s/${shareId})&nbsp;&nbsp;|&nbsp;&nbsp;` : ""
-        return `\n\n${image}${shareUrl}[github run](${runUrl})`
+      function footer() {
+        return `\n\n[github run](${runUrl})`
       }
 
       async function fetchRepo() {

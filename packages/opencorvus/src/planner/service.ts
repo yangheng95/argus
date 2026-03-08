@@ -31,26 +31,18 @@ const SpecAnalysis = z.object({
 })
 type SpecAnalysisResult = z.infer<typeof SpecAnalysis>
 
-export const PlanDraft = z.object({
-  summary: z.string(),
-  prompt: z.string(),
-  goals: z.array(
-    GoalInput.extend({
-      metadata: z
-        .object({
-          check_selector: z.array(z.string()).optional(),
-        })
-        .optional(),
+const Clarification = z.object({
+  reason: z.string(),
+  questions: z.array(
+    z.object({
+      header: z.string(),
+      question: z.string(),
+      context: z.string().optional(),
+      default_assumption: z.string().optional(),
     }),
   ),
-  metadata: z.object({
-    strategy: z.enum(["initial", "replan"]),
-    steps: z.array(z.string()),
-    failure_summary: z.string().optional(),
-    previous_plan_id: z.string().optional(),
-    spec_analysis: SpecAnalysis.optional(),
-  }),
 })
+type ClarificationResult = z.infer<typeof Clarification>
 
 /**
  * PlannerService — generates execution prompts with LLM-powered spec analysis.
@@ -64,10 +56,15 @@ export const PlanDraft = z.object({
  * Falls back to template-based planning if LLM is unavailable.
  */
 export namespace PlannerService {
-  export async function initial(input: { title: string; request: string; goals?: z.infer<typeof GoalInput>[] }) {
+  export async function initial(input: {
+    title: string
+    request: string
+    goals?: z.infer<typeof GoalInput>[]
+    allowClarification?: boolean
+  }) {
     // If user provided explicit goals, skip agent planning
     if (input.goals && input.goals.length > 0) {
-      return templatePlan(input.title, input.request, input.goals)
+      return templatePlan(input.title, input.request, input.goals, false)
     }
 
     // Use PlannerAgent — independent-context agent that explores codebase before planning
@@ -81,10 +78,10 @@ export namespace PlannerService {
 
     if (!agentResult) {
       const goals = normalizeGoals(input.request)
-      return templatePlan(input.title, input.request, goals)
+      return templatePlan(input.title, input.request, goals, input.allowClarification !== false)
     }
 
-    return agentOutputToDraft(input.title, input.request, agentResult, "initial")
+    return agentOutputToDraft(input.title, input.request, agentResult, "initial", undefined, undefined, input.allowClarification !== false)
   }
 
   export async function replan(input: {
@@ -161,6 +158,7 @@ function agentOutputToDraft(
   strategy: "initial" | "replan",
   previousPlanID?: string,
   failureSummary?: string,
+  allowClarification = true,
 ) {
   const goals = output.goals.map((g) => ({
     description: g.description,
@@ -182,8 +180,9 @@ function agentOutputToDraft(
   })
 
   const steps = output.subtasks
-    .sort((a, b) => a.order - b.order)
-    .map((s) => `${s.order}. ${s.title}: ${s.description}`)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((s, i) => `${s.order ?? i + 1}. ${s.title}: ${s.description}`)
+  const clarification = allowClarification ? deriveClarification(request, output) : undefined
 
   return {
     summary: output.summary,
@@ -196,6 +195,24 @@ function agentOutputToDraft(
       previous_plan_id: previousPlanID,
       milestones: output.milestones,
       risks: output.risks,
+      clarification,
+      spec_analysis: {
+        expanded_spec: output.prd,
+        ambiguities: clarification?.questions.map((item) => item.question) ?? [],
+        questions:
+          clarification?.questions.map((item) => ({
+            question: item.question,
+            context: item.context ?? clarification.reason,
+            default_assumption: item.default_assumption ?? "",
+          })) ?? [],
+        goals: goals.map((goal) => ({
+          description: goal.description,
+          criteria: goal.criteria,
+          priority: goal.priority ?? "blocking",
+        })),
+        risk_areas: output.risks,
+        confidence: clarification ? 0.45 : 0.9,
+      },
     },
   }
 }
@@ -204,8 +221,8 @@ function renderAgentPrompt(input: {
   title: string
   request: string
   prd: string
-  goals: Array<{ description: string; criteria: string; priority?: string }>
-  subtasks: Array<{ title: string; description: string; order: number }>
+  goals: Array<{ description: string; criteria: string; priority?: string; metadata?: { check_selector?: string[] } }>
+  subtasks: Array<{ title: string; description: string; order?: number }>
   risks: string[]
   assumptions?: Array<{ question: string; assumption: string }>
 }) {
@@ -231,16 +248,21 @@ ${input.prd.trim()}`,
     )
   }
 
+  // Goals with check selectors for self-verification
   sections.push(
     `## Goals\n${input.goals
-      .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
-      .join("\n\n")}`,
+      .map((g, i) => {
+        const checks = g.metadata?.check_selector
+        const checksLine = checks?.length ? `\n   Checks: ${checks.join(", ")}` : ""
+        return `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}${checksLine}`
+      })
+      .join("\n\n")}\n\nAfter completing all subtasks, verify EVERY blocking goal by running its listed checks. A goal without evidence of passing is a goal not met.`,
   )
 
   sections.push(
     `## Subtasks (execute in order)\n${input.subtasks
-      .sort((a, b) => a.order - b.order)
-      .map((s) => `${s.order}. **${s.title}**\n   ${s.description}`)
+      .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      .map((s, i) => `${s.order ?? i + 1}. **${s.title}**\n   ${s.description}`)
       .join("\n\n")}`,
   )
 
@@ -263,7 +285,9 @@ function templatePlan(
   title: string,
   request: string,
   goals: z.infer<typeof GoalInput>[],
+  allowClarification = true,
 ) {
+  const clarification = allowClarification ? heuristicClarification(request) : undefined
   return {
     summary: summarize(request),
     prompt: renderPlanModePrompt({ title, request, goals }),
@@ -271,7 +295,26 @@ function templatePlan(
     metadata: {
       strategy: "initial" as const,
       steps: PLAN_MODE_STEPS,
-      spec_analysis: undefined as SpecAnalysisResult | undefined,
+      clarification,
+      spec_analysis:
+        clarification
+          ? {
+              expanded_spec: request,
+              ambiguities: clarification.questions.map((item) => item.question),
+              questions: clarification.questions.map((item) => ({
+                question: item.question,
+                context: item.context ?? clarification.reason,
+                default_assumption: item.default_assumption ?? "",
+              })),
+              goals: goals.map((goal) => ({
+                description: goal.description,
+                criteria: goal.criteria,
+                priority: goal.priority ?? "blocking",
+              })),
+              risk_areas: [],
+              confidence: 0.2,
+            }
+          : undefined as SpecAnalysisResult | undefined,
     },
   }
 }
@@ -311,7 +354,18 @@ ${WORKFLOW_SECTION}`
 
 const WORKFLOW_SECTION = `## Planning & Execution Workflow
 
-Follow this structured workflow. Do NOT skip the planning phase.
+Follow this structured workflow. Do NOT skip any phase.
+
+### Phase 0: Recall — Leverage Prior Knowledge
+
+Before touching code, recall what you already know:
+
+1. **Search memory** — Call \`memory\` with \`action: "search"\` and \`scope: "all"\` using keywords from the task.
+   Try 1-2 searches with different phrasings to find prior solutions, known gotchas, or established patterns.
+2. **Check preferences** — Call \`preference\` with \`action: "list"\` and \`scope: "all"\` to see current project conventions.
+   Preferences are BINDING — your implementation must respect them.
+
+If the assistant-brief above already contains memory and preferences, review them first and only search for more if needed.
 
 ### Phase 1: Explore & Understand
 
@@ -321,7 +375,7 @@ Before making any changes, gain a thorough understanding of the codebase:
 2. **Understand conventions** — Look at existing patterns, naming conventions, test structure, and architecture.
 3. **Identify dependencies** — Find what depends on the code you'll change and what your changes depend on.
 
-Use up to 3 parallel agent (Explore) calls if the scope is broad. Use 1 if the task is well-scoped.
+Use up to 3 parallel \`task\` (Explore) agents if the scope is broad. Use 1 if the task is well-scoped.
 
 ### Phase 2: Plan with the Planner Tool
 
@@ -331,34 +385,53 @@ Use the \`planner\` tool to create a structured task decomposition:
 2. Use \`parentId\` to create subtasks where appropriate.
 3. Each task should have a clear, verifiable goal.
 4. Order tasks logically: setup → core changes → tests → verification.
+5. Use \`planner\` with action \`scratchpad_write\` to record critical findings, gotchas, and constraints.
 
-Example:
-  planner({ action: "add_task", goal: "Read and understand the auth module" })
-  planner({ action: "add_task", goal: "Implement the new validation logic" })
-  planner({ action: "add_task", goal: "Update tests for the validation change" })
-  planner({ action: "add_task", goal: "Run build and test to verify" })
+Include a final verification task that runs the acceptance checks listed in the Goals section.
 
-### Phase 3: Execute
+### Phase 3: Execute & Verify Incrementally
 
-Work through your plan systematically:
+Work through your plan systematically with per-step verification:
 
-1. Before starting each subtask, update its status to \`in_progress\`.
-2. Complete the work for each subtask.
-3. Mark each subtask as \`completed\` when done.
-4. If blocked, mark the subtask as \`blocked\` and explain why.
+\`\`\`
+For each subtask:
+  1. planner({ action: "update_task", taskId, status: "in_progress" })
+  2. Execute the work (read → edit/write → verify)
+  3. Run a quick check for this unit (e.g., typecheck, run related test)
+  4. planner({ action: "update_task", taskId, status: "completed" })
+  5. memory({ action: "write", title: "...", content: "..." }) — record any discoveries or gotchas
+\`\`\`
 
-### Phase 4: Verify
+**CRITICAL**: Verify each subtask before moving to the next. Do NOT batch all verification to the end.
+Catch errors early so failures are isolated and fixable.
 
-After implementation:
-1. Run the relevant acceptance checks (build, test, lint).
-2. Verify that all goals are met.
+### Phase 4: Final Verification
+
+After all subtasks complete:
+
+1. Run ALL acceptance checks referenced in the Goals section (build, test, lint, etc.).
+2. For each goal, verify the criteria is met and note the evidence.
 3. Summarize what changed, what was verified, and any remaining risks.
+4. Write a final memory entry summarizing: what was built, key decisions, tricky parts, and logical next steps.
+
+## Available High-Level Tools
+
+Beyond basic file tools (read, edit, write, glob, grep, bash), you have:
+
+- **memory** — Search/read/write project knowledge. Always recall before starting. Write discoveries as you go.
+- **preference** — List/read project conventions. These are binding.
+- **planner** — Structured task decomposition with scratchpad. Use throughout to track progress.
+- **goal** — View and track acceptance goals during execution.
+- **task** — Spawn parallel sub-agents for exploration or independent subtasks.
+- **websearch** / **webfetch** — Look up external APIs, documentation, or guides when needed.
+- **skill** — Load specialized skills for specific task types.
 
 ## Constraints
 
 - Work autonomously until the task is complete or blocked.
 - If you need clarification or approval, use the existing question or permission flow.
 - Use the planner tool throughout to track progress — do not skip it.
+- Write memory entries for non-obvious discoveries — if the session is cut short, only written memories survive.
 - When finished, ensure all planner tasks are marked completed and provide a final summary.`
 
 function renderReplanPrompt(input: {
@@ -412,6 +485,63 @@ function normalizeGoals(request: string, goals?: z.infer<typeof GoalInput>[]) {
       },
     },
   ]
+}
+
+function deriveClarification(request: string, output: PlannerOutputType): ClarificationResult | undefined {
+  if (Array.isArray(output.clarifications) && output.clarifications.length > 0) {
+    const [first] = output.clarifications
+    if (!first) return undefined
+    return {
+      reason: first.context ?? "Critical ambiguity requires user clarification before execution.",
+      questions: [first],
+    }
+  }
+  return heuristicClarification(request)
+}
+
+function heuristicClarification(request: string): ClarificationResult | undefined {
+  const text = request.trim()
+  if (!text) return undefined
+  const lower = text.toLowerCase()
+  const vague =
+    text.length <= 18 ||
+    [
+      "优化性能",
+      "修复bug",
+      "修 bug",
+      "修复问题",
+      "重构",
+      "优化一下",
+      "improve performance",
+      "fix bug",
+      "refactor",
+      "clean this up",
+    ].some((item) => lower === item || text === item)
+  if (!vague) return undefined
+  const chinese = /[\u3400-\u9fff]/.test(text)
+  return chinese
+    ? {
+        reason: "当前需求过于宽泛，直接执行容易偏离目标。",
+        questions: [
+          {
+            header: "范围",
+            question: "请明确这次要改的具体模块、页面或问题现象，以及你希望如何验收。",
+            context: `原始请求：${text}`,
+            default_assumption: "如果你不补充，我会优先处理当前仓库里最直接相关的热点问题。",
+          },
+        ],
+      }
+    : {
+        reason: "The request is too broad to execute safely without a concrete target.",
+        questions: [
+          {
+            header: "Scope",
+            question: "Which specific module, page, or failure should this task target, and how should success be verified?",
+            context: `Original request: ${text}`,
+            default_assumption: "If no extra detail is provided, prioritize the most directly related hotspot in the repo.",
+          },
+        ],
+      }
 }
 
 function inferSelectors(request: string) {

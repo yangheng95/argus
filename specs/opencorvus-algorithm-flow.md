@@ -163,15 +163,16 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │      ├─ base = plan.prompt (或 run.metadata.prompt_override)
          │      ├─ brief = WorkbenchService.compileBrief()
          │      │    ├─ 任务请求原文
-         │      │    ├─ 用户偏好 (preferences)
+         │      │    ├─ 全局偏好 + 会话偏好 (session overrides global)
          │      │    ├─ 操作员笔记 (notes)
          │      │    ├─ 目标概要 (goals)
+         │      │    ├─ 全局记忆 + 会话记忆召回结果
          │      │    └─ 前次运行上下文 (如 replan)
          │      └─ prompt = brief + "\n\n" + base
          │
          ├─ 3. executor.submit({ sessionID, prompt, priority })
          │      │
-         │      ├─ [opencode] TaskQueueService.enqueuePrompt()
+         │      ├─ [内置执行器] TaskQueueService.enqueuePrompt()
          │      │   └─ 加入任务队列、触发 runNow()
          │      │
          │      └─ [codex/claude-code] ManagedCodingExecutor
@@ -185,11 +186,13 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
 ### 3.3 Phase 3: 执行期 (Session 内部)
 
 ```
-  Session 执行期 (opencode 内核)
+  Session 执行期 (内置执行内核)
          │
          ├─ 系统提示词注入:
          │    ├─ SystemPrompt.environment() (模型/平台信息)
          │    ├─ InstructionPrompt.system() (CLAUDE.md / AGENTS.md)
+         │    ├─ Preference.systemPromptSection() ← 全局/会话偏好直接注入
+         │    ├─ MemoryInjection.systemPromptSection() ← 先检索记忆/偏好再规划
          │    ├─ Scratchpad 内容
          │    ├─ TaskPlan.toMarkdown() ← planner 工具产出的任务树
          │    └─ Goal.toMarkdown()     ← session-level 目标
@@ -203,6 +206,7 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │    │         └─ toMarkdown() 注入后续系统提示
          │    ├─ 目标: GoalTool
          │    ├─ 记忆: MemoryTool, Scratchpad
+         │    ├─ 偏好: PreferenceTool
          │    ├─ 网络: WebFetch, WebSearch
          │    ├─ 其他: ApplyPatch, TodoWrite, Skill, Schedule
          │    └─ 实验性: LSP, Batch
@@ -215,6 +219,9 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │    ├─ Phase 3: 逐步执行
          │    │    ├─ planner({ action: "update_task", taskId, status: "in_progress" })
          │    │    ├─ 执行代码修改 (Edit/Write/Bash)
+         │    │    ├─ 记忆写入默认 `scope=global`
+         │    │    ├─ 偏好写入默认 `scope=global`
+         │    │    └─ 仅临时指令才写入 `scope=session`
          │    │    └─ planner({ action: "update_task", taskId, status: "completed" })
          │    └─ Phase 4: 验证
          │         └─ 运行 build/test/lint
@@ -537,7 +544,13 @@ Run 3: 重规划执行 (plan v2, retry 0)
 
   Session (1) ◄──── Task.session_id
     │
-    └── TaskPlan (0..N)  ← PlannerTool 在 session 中创建的任务树
+    ├── TaskPlan (0..N)       ← PlannerTool 在 session 中创建的任务树
+    ├── Session Memory (0..N) ← MemoryTool scope=session
+    └── Session Preference (0..N) ← PreferenceTool / task message scope=session
+
+  Project (1)
+    ├── Global Memory (0..N)      ← MemoryTool 默认 scope=global
+    └── Global Preference (0..N)  ← PreferenceTool / task message 默认 scope=global
 ```
 
 ---

@@ -26,11 +26,14 @@ import { Log } from "@/util/log"
 import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
 
+import { AnalyticsTool } from "./analytics"
 import { ApplyPatchTool } from "./apply_patch"
 import { MemoryTool } from "./memory"
+import { PreferenceTool } from "./preference"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { GoalTool } from "./goal"
+import { PanelTool } from "./panel"
 import { TuiTool } from "./tui"
 import { TaskReportTool } from "./task-report"
 import { Glob } from "../util/glob"
@@ -127,11 +130,14 @@ export namespace ToolRegistry {
       SkillTool,
       ApplyPatchTool,
       MemoryTool,
+      PreferenceTool,
       ScheduleTool,
       PlannerTool,
       GoalTool,
+      PanelTool,
       TuiTool,
       TaskReportTool,
+      AnalyticsTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),
       ...custom,

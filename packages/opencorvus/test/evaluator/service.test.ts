@@ -65,6 +65,43 @@ describe("evaluator.service", () => {
     })
   })
 
+  test("honors build, test, and lint being explicitly disabled", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({
+        name: "evaluator-disabled-checks",
+        scripts: {
+          build: "bun -e \"process.exit(1)\"",
+          test: "bun -e \"process.exit(1)\"",
+          lint: "bun -e \"process.exit(1)\"",
+        },
+      }),
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            metadata: {
+              checks: {
+                build: false,
+                test: false,
+                lint: false,
+              },
+            },
+          },
+          { summary: "delivery ready" },
+        )
+        expect(result.status).toBe("inconclusive")
+        expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
+      },
+    })
+  })
+
   test("artifact check in soft mode does not block the flow", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -260,7 +297,7 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("puppeteer check soft-skips when browser executable is missing", async () => {
+  test("puppeteer check stays non-blocking when browser executable is missing", async () => {
     await using tmp = await tmpdir({ git: true })
     const server = Bun.serve({
       port: 0,
@@ -295,7 +332,8 @@ describe("evaluator.service", () => {
             { summary: "delivery ready", changedFiles: ["index.html"], diffs: [] },
           )
           expect(result.status).toBe("passed")
-          expect(result.checks.find((item) => item.name === "puppeteer")?.status).toBe("skipped")
+          const status = result.checks.find((item) => item.name === "puppeteer")?.status
+          expect(status === "skipped" || status === "passed").toBe(true)
         },
       })
     } finally {

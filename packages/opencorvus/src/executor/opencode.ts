@@ -13,36 +13,20 @@ import { Database, eq } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 
-export const SubmitInput = z.object({
+const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
   prompt: z.string(),
   priority: z.enum(["high", "normal", "low"]).optional(),
   source: z.enum(["planner", "scheduler", "system"]).optional(),
 })
 
-export const SubmitResult = z.object({
-  sessionID: Identifier.schema("session"),
-  queueTaskID: Identifier.schema("task"),
-})
-
-export const ResumeInput = z.object({
+const ResumeInput = z.object({
   sessionID: Identifier.schema("session"),
   message: z.string(),
   priority: z.enum(["high", "normal", "low"]).optional(),
 })
 
-export const StatusResult = z.object({
-  queueTaskID: Identifier.schema("task"),
-  status: z.enum(["queued", "retrying", "running", "completed", "failed"]),
-  error: z.string().nullable(),
-})
-
-export const DeliveryResult = z.object({
-  summary: z.string(),
-  diffs: Snapshot.FileDiff.array(),
-})
-
-export const EventResult = z.object({
+const EventResult = z.object({
   type: z.string(),
   summary: z.string().optional(),
   payload: z.record(z.string(), z.unknown()).optional(),

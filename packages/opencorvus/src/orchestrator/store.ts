@@ -1,5 +1,5 @@
 import { Instance } from "@/project/instance"
-import { Database, NotFoundError, and, desc, eq, inArray } from "@/storage/db"
+import { Database, NotFoundError, and, desc, eq, inArray, like } from "@/storage/db"
 import { Snapshot } from "@/snapshot"
 import { EvaluationCheck } from "./model"
 import {
@@ -184,6 +184,29 @@ export function listProjectTasks(projectID: string, limit = 50) {
       .where(eq(OrchestratorTaskTable.project_id, projectID))
       .orderBy(desc(OrchestratorTaskTable.time_updated))
       .limit(limit)
+      .all(),
+  )
+}
+
+/** 按关键词和/或状态搜索 project 内的 task */
+export function searchProjectTasks(
+  projectID: string,
+  opts: { query?: string; status?: string; limit?: number },
+) {
+  const conditions = [eq(OrchestratorTaskTable.project_id, projectID)]
+  if (opts.status) {
+    conditions.push(eq(OrchestratorTaskTable.status, opts.status as typeof OrchestratorTaskTable.$inferSelect.status))
+  }
+  if (opts.query) {
+    conditions.push(like(OrchestratorTaskTable.title, `%${opts.query}%`))
+  }
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorTaskTable)
+      .where(and(...conditions))
+      .orderBy(desc(OrchestratorTaskTable.time_updated))
+      .limit(opts.limit ?? 50)
       .all(),
   )
 }
@@ -406,6 +429,7 @@ export function viewArtifact(row: ArtifactRow) {
 }
 
 export function viewDelivery(row: DeliveryRow) {
+  const result = (row.result ?? {}) as Record<string, unknown>
   return {
     id: row.id,
     taskID: row.task_id,
@@ -413,9 +437,15 @@ export function viewDelivery(row: DeliveryRow) {
     status: row.status,
     summary: row.summary,
     result: {
-      summary: String(row.result?.summary ?? row.summary),
-      changedFiles: arrayOfStrings(row.result?.changed_files),
-      diffs: arrayOfDiffs(row.result?.diffs),
+      summary: String(result.summary ?? row.summary),
+      changedFiles: arrayOfStrings(result.changed_files),
+      diffs: arrayOfDiffs(result.diffs),
+      artifacts: Array.isArray(result.artifacts)
+        ? result.artifacts.filter((item): item is { kind: string; label: string; payload?: Record<string, unknown> } =>
+            !!item && typeof item === "object" && typeof (item as Record<string, unknown>).kind === "string" && typeof (item as Record<string, unknown>).label === "string",
+          )
+        : [],
+      publish: result.publish && typeof result.publish === "object" ? result.publish as Record<string, unknown> : undefined,
     },
     time: {
       created: row.time_created,

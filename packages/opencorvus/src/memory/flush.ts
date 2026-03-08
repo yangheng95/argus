@@ -52,6 +52,7 @@ export namespace MemoryFlush {
         title,
         source: "compaction",
         projectId,
+        scope: "global",
       })
 
       Memory.writeChunks(file.id, projectId, summaryText)

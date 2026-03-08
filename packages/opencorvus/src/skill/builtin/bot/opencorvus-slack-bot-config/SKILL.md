@@ -7,7 +7,6 @@ description: Configure and troubleshoot Slack bot integration for OpenCorvus. Us
 
 ## Overview
 
-Configure Slack for OpenCorvus using a verified checklist from OpenClaw channel docs and Slack official Socket Mode docs.
 Map platform setup steps to the OpenCorvus bot runtime in `packages/bot`.
 
 ## Workflow
@@ -22,12 +21,9 @@ Map platform setup steps to the OpenCorvus bot runtime in `packages/bot`.
 
 1. Confirm scope.
 
-- Confirm this task targets OpenCorvus (`packages/bot`) and not OpenClaw CLI runtime.
-- If user is on OpenClaw runtime, use the OpenClaw commands in the reference as-is.
 
 2. Load checklist.
 
-- Read `references/openclaw.md`.
 
 3. Configure Slack app and environment.
 
@@ -56,7 +52,6 @@ Map platform setup steps to the OpenCorvus bot runtime in `packages/bot`.
 
 ## Guardrails
 
-- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Do not output real secrets.
 - Do not instruct webhook URL setup for Socket Mode-only requests unless user asks for HTTP mode.
 - Keep edits minimal and localized to env files and Slack adapter wiring.

@@ -729,7 +729,7 @@ function App() {
     toast.show({
       variant: "info",
       title: "Update Available",
-      message: `OpenCorvus v${evt.properties.version} is available. Run 'opencorvus upgrade' to update manually.`,
+      message: `OpenCorvus ${evt.properties.version} is available. Run 'opencorvus upgrade' to update manually.`,
       duration: 10000,
     })
   })

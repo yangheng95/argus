@@ -7,7 +7,6 @@ description: Configure and troubleshoot Feishu or Lark bot integration for OpenC
 
 ## Overview
 
-Guide Feishu or Lark integration for OpenCorvus using OpenClaw Feishu plugin documentation as a complete reference baseline.
 Use this as implementation and configuration guidance for the built-in Feishu adapter in `packages/bot`.
 
 ## Workflow
@@ -27,7 +26,6 @@ Use this as implementation and configuration guidance for the built-in Feishu ad
 
 2. Load reference baseline.
 
-- Read `references/openclaw.md`.
 
 3. Verify native adapter wiring.
 
@@ -51,7 +49,6 @@ Use this as implementation and configuration guidance for the built-in Feishu ad
 
 ## Guardrails
 
-- Separate verified OpenClaw facts from OpenCorvus mapping and label inference explicitly.
 - Do not claim unsupported features that the current Feishu adapter does not implement.
 - Do not expose app secrets in plain text outputs.
 - Keep implementation scope focused on adapter, env, and message flow.

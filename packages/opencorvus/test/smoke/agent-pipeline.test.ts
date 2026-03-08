@@ -161,7 +161,7 @@ describe("PlannerAgent output structure", () => {
     }
 
     // Subtasks are ordered
-    const orders = output.subtasks.map((s) => s.order)
+    const orders = output.subtasks.map((s) => s.order ?? 0)
     expect(orders).toEqual([...orders].sort((a, b) => a - b))
   })
 

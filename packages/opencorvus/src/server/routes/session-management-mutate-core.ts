@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
 import { Session } from "../../session"
+import { OrchestratorService } from "@/orchestrator/service"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -56,9 +57,17 @@ export const SessionManagementMutateCoreRoutes = lazy(() =>
           sessionID: Session.remove.schema,
         }),
       ),
+      validator(
+        "query",
+        z.object({
+          deleteTasks: z.coerce.boolean().optional(),
+        }),
+      ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        await Session.remove(sessionID)
+        await OrchestratorService.deleteSession(sessionID, {
+          deleteTasks: c.req.valid("query").deleteTasks === true,
+        })
         return c.json(true)
       },
     )

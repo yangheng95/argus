@@ -57,6 +57,9 @@ export namespace PermissionNext {
   export type Ruleset = z.infer<typeof Ruleset>
 
   export function fromConfig(permission: Config.Permission) {
+    if (typeof permission === "string") {
+      return [{ permission: "*", pattern: "*", action: permission as Action }]
+    }
     const ruleset: Ruleset = []
     for (const [key, value] of Object.entries(permission)) {
       if (typeof value === "string") {

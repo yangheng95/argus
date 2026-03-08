@@ -48,4 +48,12 @@ export namespace ExecutorRegistry {
   export function reset() {
     state.items = base()
   }
+
+  export function has(name: ExecutorNameInfo) {
+    return !!get(name)
+  }
+
+  export function list() {
+    return [...state.items.keys()]
+  }
 }

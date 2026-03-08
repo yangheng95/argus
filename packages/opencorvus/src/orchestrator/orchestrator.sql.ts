@@ -18,6 +18,7 @@ export type OrchestratorTaskStatus =
   | "running"
   | "blocked"
   | "evaluating"
+  | "delivering"
   | "completed"
   | "failed"
   | "cancelled"
@@ -29,7 +30,7 @@ export type OrchestratorGoalPriority = "blocking" | "advisory"
 export type OrchestratorGoalStatus = "pending" | "passed" | "failed"
 export type OrchestratorMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type OrchestratorRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-export type OrchestratorRunPhase = "plan" | "execute" | "evaluate" | "replan"
+export type OrchestratorRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "replan"
 export type OrchestratorInteractionType = "permission" | "question"
 export type OrchestratorInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 export type OrchestratorArtifactKind =
@@ -41,7 +42,9 @@ export type OrchestratorArtifactKind =
   | "diff"
   | "html_trace"
   | "link"
-export type OrchestratorDeliveryStatus = "ready"
+  | "git_ref"
+  | "pr"
+export type OrchestratorDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
 export type OrchestratorEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
 export type OrchestratorEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
 export type OrchestratorProgressStatus = "created" | "running" | "blocked" | "completed" | "failed" | "cancelled"
@@ -221,7 +224,7 @@ export const OrchestratorDeliveryTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
-    status: text().notNull().$type<OrchestratorDeliveryStatus>().default("ready"),
+    status: text().notNull().$type<OrchestratorDeliveryStatus>().default("candidate"),
     summary: text().notNull(),
     result: text({ mode: "json" }).$type<OrchestratorMetadata>(),
     ...Timestamps,
@@ -308,5 +311,6 @@ export const OrchestratorChannelBindingTable = sqliteTable(
   },
   (table) => [
     index("orchestrator_channel_task_idx").on(table.task_id),
+    uniqueIndex("orchestrator_channel_binding_thread_idx").on(table.platform, table.channel, table.thread),
   ],
 )

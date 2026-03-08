@@ -3,25 +3,15 @@ import { Tool } from "./tool"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 
-/**
- * Memory tool — persistent knowledge store across sessions.
- *
- * Architecture reference: OpenClaw memory_search + memory_get tools
- * - "search": mandatory recall step — semantically search past knowledge
- * - "get": retrieve full content of a specific memory file
- * - "write": persist new knowledge
- * - "list": browse saved memory files
- * - "delete": remove outdated memories
- */
-const DESCRIPTION = `Persistent memory store for knowledge across sessions.
+const DESCRIPTION = `Scoped memory store for project knowledge.
 
-**Mandatory recall**: Before answering about prior work, decisions, dates, preferences, or project history, ALWAYS search memory first.
+**Mandatory recall**: Before answering about prior work, decisions, dates, preferences, or project history, ALWAYS recall memory and preferences first.
 
 Actions:
-- **search**: Semantically search past knowledge. Returns top snippets with scores. Use BEFORE answering from memory.
+- **search**: Search session memory, global memory, or both. Use BEFORE answering from memory.
 - **get**: Retrieve full content of a memory file by ID. Use after search to read detailed content.
-- **write**: Save important knowledge (decisions, patterns, preferences, discoveries). Use ## headings to organize.
-- **list**: Browse all saved memory files for this project.
+- **write**: Save important knowledge. Defaults to global so it survives across all sessions in this project.
+- **list**: Browse saved memory files by scope.
 - **delete**: Remove outdated or incorrect memory by file ID.`
 
 export const MemoryTool = Tool.define("memory", {
@@ -30,6 +20,10 @@ export const MemoryTool = Tool.define("memory", {
     z.object({
       action: z.literal("search"),
       query: z.string().describe("Search query — keywords, phrases, or a question about past knowledge"),
+      scope: z
+        .enum(["all", "global", "session"])
+        .optional()
+        .describe("Which memory scope to search (default: all)"),
       maxResults: z
         .preprocess((v) => (typeof v === "string" ? Number(v) : v), z.number().int().min(1).max(50).optional())
         .describe("Max results (default: 6)"),
@@ -45,9 +39,17 @@ export const MemoryTool = Tool.define("memory", {
       action: z.literal("write"),
       title: z.string().describe("Short descriptive title (e.g. 'Project architecture decisions')"),
       content: z.string().describe("Markdown content to save. Use ## headings to organize sections."),
+      scope: z
+        .enum(["global", "session"])
+        .optional()
+        .describe("Storage scope (default: global)"),
     }),
     z.object({
       action: z.literal("list"),
+      scope: z
+        .enum(["all", "global", "session"])
+        .optional()
+        .describe("Which memory scope to list (default: all)"),
     }),
     z.object({
       action: z.literal("delete"),
@@ -69,6 +71,8 @@ export const MemoryTool = Tool.define("memory", {
         const results = Memory.search({
           query: params.query,
           projectId,
+          sessionID: ctx.sessionID,
+          scope: params.scope,
           limit: params.maxResults,
           minScore: params.minScore,
         })
@@ -79,10 +83,11 @@ export const MemoryTool = Tool.define("memory", {
             metadata: {},
           }
         }
-        // Format results with citations (OpenClaw pattern)
+        // Format results with citations for downstream prompts.
         const formatted = results.map((r) => ({
           fileId: r.fileId,
           fileTitle: r.fileTitle,
+          scope: r.scope,
           score: Number(r.score.toFixed(4)),
           snippet: r.content.slice(0, 700),
           citation: `memory:${r.fileId}`,
@@ -107,31 +112,53 @@ export const MemoryTool = Tool.define("memory", {
         const text = chunks.map((c) => c.content).join("\n\n")
         return {
           title: file.title,
-          output: JSON.stringify({ fileId: file.id, title: file.title, source: file.source, text }),
+          output: JSON.stringify({
+            fileId: file.id,
+            title: file.title,
+            source: file.source,
+            scope: file.scope,
+            sessionID: file.sessionID,
+            text,
+          }),
           metadata: {},
         }
       }
 
       case "write": {
+        const scope = params.scope ?? "global"
         const file = Memory.createFile({
           title: params.title,
           source: "agent",
           projectId,
+          scope,
+          sessionID: scope === "session" ? ctx.sessionID : undefined,
         })
         const chunks = Memory.writeChunks(file.id, projectId, params.content)
         return {
           title: `Saved: ${params.title}`,
-          output: JSON.stringify({ fileId: file.id, title: params.title, chunks: chunks.length }),
+          output: JSON.stringify({
+            fileId: file.id,
+            title: params.title,
+            scope,
+            sessionID: file.sessionID,
+            chunks: chunks.length,
+          }),
           metadata: {},
         }
       }
 
       case "list": {
-        const files = Memory.listFiles(projectId)
+        const files = Memory.listFiles({
+          projectId,
+          sessionID: ctx.sessionID,
+          scope: params.scope,
+        })
         const formatted = files.map((f) => ({
           id: f.id,
           title: f.title,
           source: f.source,
+          scope: f.scope,
+          sessionID: f.sessionID,
           created: new Date(f.timeCreated).toISOString(),
         }))
         return {
@@ -153,7 +180,13 @@ export const MemoryTool = Tool.define("memory", {
         Memory.deleteFile(params.fileId)
         return {
           title: `Deleted: ${file.title}`,
-          output: JSON.stringify({ deleted: true, fileId: params.fileId, title: file.title }),
+          output: JSON.stringify({
+            deleted: true,
+            fileId: params.fileId,
+            title: file.title,
+            scope: file.scope,
+            sessionID: file.sessionID,
+          }),
           metadata: {},
         }
       }

@@ -1,5 +1,5 @@
 import fs from "fs/promises"
-import { xdgData, xdgCache, xdgConfig, xdgState } from "xdg-basedir"
+import { xdgData, xdgCache, xdgState } from "xdg-basedir"
 import path from "path"
 import os from "os"
 import { Filesystem } from "../util/filesystem"
@@ -19,7 +19,7 @@ function resolveHome() {
 const home = resolveHome()
 const isWin = process.platform === "win32"
 const winLocal = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local")
-const winRoaming = process.env.APPDATA || path.join(home, "AppData", "Roaming")
+const cwd = process.cwd()
 
 const data = portableRoot
   ? path.join(portableRoot, "data")
@@ -27,9 +27,7 @@ const data = portableRoot
 const cache = portableRoot
   ? path.join(portableRoot, "cache")
   : path.join(xdgCache || (isWin ? winLocal : path.join(home, ".cache")), app)
-const config = portableRoot
-  ? path.join(portableRoot, "config")
-  : path.join(xdgConfig || (isWin ? winRoaming : path.join(home, ".config")), app)
+const config = cwd
 const state = portableRoot
   ? path.join(portableRoot, "state")
   : path.join(xdgState || (isWin ? winLocal : path.join(home, ".local", "state")), app)
