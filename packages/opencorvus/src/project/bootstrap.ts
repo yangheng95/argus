@@ -33,7 +33,7 @@ export async function InstanceBootstrap() {
   EventService.init()
   TaskQueueService.init()
   OrchestratorService.init()
-  SlackMirror.init()
+  await SlackMirror.init()
 
   Bus.subscribe(Command.Event.Executed, async (payload) => {
     if (payload.properties.name === Command.Default.INIT) {

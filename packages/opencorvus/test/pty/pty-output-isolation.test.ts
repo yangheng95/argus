@@ -142,4 +142,45 @@ describe("pty", () => {
       },
     })
   })
+
+  test("does not leak output when socket data changes between primitive values", async () => {
+    await using dir = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: dir.path,
+      fn: async () => {
+        const a = await Pty.create({ command: "cat", title: "a" })
+        try {
+          const outA: string[] = []
+          const outB: string[] = []
+
+          const ws = {
+            readyState: 1,
+            data: "a",
+            send: (data: unknown) => {
+              outA.push(typeof data === "string" ? data : Buffer.from(data as Uint8Array).toString("utf8"))
+            },
+            close: () => {
+              // no-op
+            },
+          }
+
+          Pty.connect(a.id, ws as any)
+          outA.length = 0
+
+          ws.data = "b"
+          ws.send = (data: unknown) => {
+            outB.push(typeof data === "string" ? data : Buffer.from(data as Uint8Array).toString("utf8"))
+          }
+
+          Pty.write(a.id, "AAA\n")
+          await Bun.sleep(100)
+
+          expect(outB.join("")).not.toContain("AAA")
+        } finally {
+          await Pty.remove(a.id)
+        }
+      },
+    })
+  })
 })

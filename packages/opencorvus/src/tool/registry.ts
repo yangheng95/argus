@@ -27,15 +27,11 @@ import { LspTool } from "./lsp"
 import { Truncate } from "./truncation"
 
 import { ApplyPatchTool } from "./apply_patch"
-import { ScreenTool } from "./screen"
-import { InputTool } from "./input"
 import { MemoryTool } from "./memory"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
 import { GoalTool } from "./goal"
-import { VisionAnalyzeTool } from "./vision-analyze"
 import { TuiTool } from "./tui"
-import { AutomationTool } from "./automation"
 import { TaskReportTool } from "./task-report"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
@@ -130,15 +126,11 @@ export namespace ToolRegistry {
       CodeSearchTool,
       SkillTool,
       ApplyPatchTool,
-      ScreenTool,
-      InputTool,
       MemoryTool,
       ScheduleTool,
       PlannerTool,
       GoalTool,
-      VisionAnalyzeTool,
       TuiTool,
-      AutomationTool,
       TaskReportTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),
       ...(config.experimental?.batch_tool === true ? [BatchTool] : []),

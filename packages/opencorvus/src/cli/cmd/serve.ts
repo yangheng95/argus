@@ -5,7 +5,6 @@ import { Flag } from "../../flag/flag"
 import { Workspace } from "../../control-plane/workspace"
 import { Project } from "../../project/project"
 import { Installation } from "../../installation"
-import { startOverlay } from "../../tool/overlay-client"
 import { createConnection } from "net"
 
 /** Hide the console window on Windows using Win32 API. */
@@ -75,7 +74,7 @@ export const ServeCommand = cmd({
   builder: (yargs) => withNetworkOptions(yargs),
   describe: "starts a headless opencorvus server",
   handler: async (args) => {
-    // When launched as default entry (double-click), hide console and start overlay
+    // When launched as default entry (double-click), hide console window
     const isDefaultMode = !process.argv.slice(2).some((a) => a === "serve")
     if (isDefaultMode) {
       hideConsoleWindow()
@@ -98,11 +97,7 @@ export const ServeCommand = cmd({
 
     const server = Server.listen(opts)
     console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
-
-    // Start overlay GUI immediately in default mode
-    if (isDefaultMode) {
-      startOverlay()
-    }
+    console.log(`overlay UI available at http://${server.hostname}:${server.port}/ui/`)
 
     let workspaceSync: Array<ReturnType<typeof Workspace.startSyncing>> = []
     // Only available in development right now

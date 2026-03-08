@@ -6,6 +6,7 @@ import { Provider } from "@/provider/provider"
 import { Snapshot } from "@/snapshot"
 import {
   OrchestratorArtifactTable,
+  OrchestratorChannelBindingTable,
   OrchestratorDeliveryTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
@@ -43,6 +44,10 @@ const WorkbenchIntent = z.object({
   confidence: z.number().min(0).max(1).default(0.5),
 })
 
+const BOARD_SNAPSHOT_LIMIT = 80
+const BOARD_CHANGED_FILE_LIMIT = 80
+const BOARD_SUMMARY_LIMIT = 4000
+
 export namespace WorkbenchService {
   export function taskNotes(taskID: string, limit = 8) {
     return Database.use((db) =>
@@ -64,6 +69,40 @@ export namespace WorkbenchService {
         .where(input.userID ? eq(WorkbenchPreferenceTable.user_id, input.userID) : eq(WorkbenchPreferenceTable.project_id, input.projectID))
         .all(),
     )
+  }
+
+  export function updatePreference(input: {
+    preferenceID: string
+    key: string
+    value: string
+  }) {
+    const row = Database.use((db) =>
+      db.select().from(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, input.preferenceID)).get(),
+    )
+    if (!row) throw new Error(`Preference not found: ${input.preferenceID}`)
+    Database.use((db) =>
+      db
+        .update(WorkbenchPreferenceTable)
+        .set({
+          key: input.key,
+          value: input.value,
+          time_updated: Date.now(),
+        })
+        .where(eq(WorkbenchPreferenceTable.id, input.preferenceID))
+        .run(),
+    )
+    return true
+  }
+
+  export function deletePreference(preferenceID: string) {
+    const row = Database.use((db) =>
+      db.select().from(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, preferenceID)).get(),
+    )
+    if (!row) throw new Error(`Preference not found: ${preferenceID}`)
+    Database.use((db) =>
+      db.delete(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, preferenceID)).run(),
+    )
+    return true
   }
 
   export function recordTaskRequest(input: {
@@ -334,28 +373,44 @@ export namespace WorkbenchService {
       }),
     })
     const notes = taskNotes(task.id, 12)
-    const delivery = run
-      ? Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorDeliveryTable)
-            .where(eq(OrchestratorDeliveryTable.run_id, run.id))
-            .orderBy(OrchestratorDeliveryTable.time_created)
-            .all()
-            .at(-1),
-        )
+    const staging = notes.filter((note) =>
+      ["plan_hint", "goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
+    )
+    const history = notes.filter((note) => ["user_request", "summary"].includes(note.kind))
+    const allDeliveries = Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorDeliveryTable)
+        .where(eq(OrchestratorDeliveryTable.task_id, task.id))
+        .orderBy(OrchestratorDeliveryTable.time_created)
+        .all(),
+    )
+    const delivery = run ? allDeliveries.filter((item) => item.run_id === run.id).at(-1) : undefined
+    const latestDelivery = delivery ?? allDeliveries.at(-1)
+    const allEvaluations = Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorEvaluationTable)
+        .where(eq(OrchestratorEvaluationTable.task_id, task.id))
+        .orderBy(OrchestratorEvaluationTable.time_created)
+        .all(),
+    )
+    const evaluation = run ? allEvaluations.filter((item) => item.run_id === run.id).at(-1) : undefined
+    const latestEvaluation = evaluation ?? allEvaluations.at(-1)
+    const acceptedEvaluation = [...allEvaluations]
+      .reverse()
+      .find((item) => item.verdict === "accepted" || item.status === "passed")
+    const acceptedDelivery = acceptedEvaluation?.delivery_id
+      ? allDeliveries.find((item) => item.id === acceptedEvaluation.delivery_id)
       : undefined
-    const evaluation = run
-      ? Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorEvaluationTable)
-            .where(eq(OrchestratorEvaluationTable.run_id, run.id))
-            .orderBy(OrchestratorEvaluationTable.time_created)
-            .all()
-            .at(-1),
-        )
-      : undefined
+    const bindings = Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorChannelBindingTable)
+        .where(eq(OrchestratorChannelBindingTable.task_id, task.id))
+        .orderBy(OrchestratorChannelBindingTable.time_created)
+        .all(),
+    )
     const artifacts = run
       ? Database.use((db) =>
           db
@@ -366,6 +421,19 @@ export namespace WorkbenchService {
             .all(),
         )
       : []
+    const latestArtifacts =
+      artifacts.length > 0
+        ? artifacts
+        : latestDelivery
+          ? Database.use((db) =>
+              db
+                .select()
+                .from(OrchestratorArtifactTable)
+                .where(eq(OrchestratorArtifactTable.delivery_id, latestDelivery.id))
+                .orderBy(OrchestratorArtifactTable.time_created)
+                .all(),
+            )
+          : []
     const snapshots = Database.use((db) =>
       db
         .select()
@@ -374,6 +442,23 @@ export namespace WorkbenchService {
         .orderBy(OrchestratorProgressSnapshotTable.time_created)
         .all(),
     )
+    const compactSnapshots = compactBoardSnapshots(snapshots).slice(-BOARD_SNAPSHOT_LIMIT)
+    const pendingInteractions = interactions.filter((item) => item.status === "pending")
+    const currentFailure = boardFailure({
+      task,
+      run,
+      interactions: pendingInteractions,
+      evaluation: latestEvaluation,
+    })
+    const overview = boardOverview({
+      task,
+      run,
+      pendingInteractions,
+      candidateDelivery: latestDelivery,
+      acceptedDelivery,
+      evaluation: latestEvaluation,
+      currentFailure,
+    })
 
     return {
       task: {
@@ -427,7 +512,7 @@ export namespace WorkbenchService {
             taskID: run.task_id,
             planVersionID: run.plan_version_id ?? undefined,
             sessionID: run.session_id ?? undefined,
-            executor: "opencode" as const,
+            executor: run.executor,
             status: run.status,
             phase: run.phase,
             blockingReason: run.blocking_reason ?? undefined,
@@ -448,53 +533,10 @@ export namespace WorkbenchService {
             },
           }
         : undefined,
-      delivery: delivery
-        ? {
-            id: delivery.id,
-            taskID: delivery.task_id,
-            runID: delivery.run_id,
-            status: "ready" as const,
-            summary: delivery.summary,
-            result: {
-              summary: String(delivery.result?.summary ?? delivery.summary),
-              changedFiles: Array.isArray(delivery.result?.changed_files)
-                ? delivery.result.changed_files.filter((item): item is string => typeof item === "string")
-                : [],
-              diffs: Array.isArray(delivery.result?.diffs)
-                ? delivery.result.diffs.flatMap((item) => {
-                    const parsed = Snapshot.FileDiff.safeParse(item)
-                    return parsed.success ? [parsed.data] : []
-                  })
-                : [],
-            },
-            time: {
-              created: delivery.time_created,
-              updated: delivery.time_updated,
-            },
-          }
-        : undefined,
-      evaluation: evaluation
-        ? {
-            id: evaluation.id,
-            taskID: evaluation.task_id,
-            runID: evaluation.run_id,
-            deliveryID: evaluation.delivery_id ?? undefined,
-            status: evaluation.status,
-            verdict: evaluation.verdict,
-            summary: evaluation.summary,
-            checks: Array.isArray(evaluation.checks)
-              ? evaluation.checks.flatMap((item) => {
-                  const parsed = EvaluationCheck.safeParse(item)
-                  return parsed.success ? [parsed.data] : []
-                })
-              : [],
-            time: {
-              created: evaluation.time_created,
-              updated: evaluation.time_updated,
-              completed: evaluation.time_completed ?? undefined,
-            },
-          }
-        : undefined,
+      delivery: viewBoardDelivery(latestDelivery),
+      candidateDelivery: viewBoardDelivery(latestDelivery),
+      acceptedDelivery: viewBoardDelivery(acceptedDelivery),
+      evaluation: viewBoardEvaluation(latestEvaluation),
       interactions: interactions.map((item) => ({
         id: item.id,
         taskID: item.task_id,
@@ -513,30 +555,44 @@ export namespace WorkbenchService {
           resolved: item.time_resolved ?? undefined,
         },
       })),
-      artifacts: artifacts.map((item) => ({
+      channels: bindings.map((item) => ({
+        id: item.id,
+        platform: item.platform,
+        channel: item.channel,
+        thread: item.thread,
+        payload: item.payload ?? undefined,
+        time: {
+          created: item.time_created,
+          updated: item.time_updated,
+        },
+      })),
+      artifacts: latestArtifacts
+        .filter((item) => item.kind !== "diff" && item.kind !== "changed_file")
+        .map((item) => ({
         id: item.id,
         taskID: item.task_id,
         runID: item.run_id,
         deliveryID: item.delivery_id ?? undefined,
         kind: item.kind,
         label: item.label,
-        payload: item.payload ?? undefined,
+        payload: compactArtifactPayload(item.kind, item.payload),
         time: {
           created: item.time_created,
           updated: item.time_updated,
         },
       })),
-      snapshots: snapshots.map((item) => ({
+      snapshots: compactSnapshots.map((item) => ({
         id: item.id,
         taskID: item.task_id,
         status: item.status,
         summary: item.summary,
-        payload: item.payload ?? undefined,
+        payload: compactSnapshotPayload(item.payload),
         time: {
           created: item.time_created,
           updated: item.time_updated,
         },
       })),
+      overview,
       brief: {
         content: brief.content,
         updated_at: snapshot?.time_created ?? Date.now(),
@@ -553,6 +609,7 @@ export namespace WorkbenchService {
                   title: `${run.executor} / ${run.phase}`,
                   detail: run.error ?? task.blocking_reason ?? undefined,
                   status: run.status,
+                  time: run.time_updated,
                   metadata: run.executor_ref ?? undefined,
                 },
               ]
@@ -560,14 +617,33 @@ export namespace WorkbenchService {
         },
         {
           id: "goals",
-          title: "Goals",
-          cards: goals.map((goal) => ({
-            id: goal.id,
-            kind: "goal" as const,
-            title: goal.description,
-            detail: goal.criteria,
-            status: goal.status,
-            metadata: goal.metadata ?? undefined,
+          title: "Dynamic Goals",
+          cards: goals
+            .toSorted((a, b) => {
+              const score = (value: string) => (value === "pending" ? 0 : value === "failed" ? 1 : 2)
+              return score(a.status) - score(b.status)
+            })
+            .map((goal) => ({
+              id: goal.id,
+              kind: "goal" as const,
+              title: goal.description,
+              detail: goal.criteria,
+              status: goal.status,
+              time: goal.time_updated,
+              metadata: goal.metadata ?? undefined,
+            })),
+        },
+        {
+          id: "staging",
+          title: "Staging",
+          cards: staging.slice(-8).map((note) => ({
+            id: note.id,
+            kind: note.kind === "plan_hint" ? ("plan_hint" as const) : ("note" as const),
+            title: note.kind,
+            detail: note.content,
+            status: note.source,
+            time: note.time_created,
+            metadata: note.metadata ?? undefined,
           })),
         },
         {
@@ -581,6 +657,7 @@ export namespace WorkbenchService {
               title: item.title,
               detail: item.body,
               status: item.status,
+              time: item.time_updated,
               metadata: {
                 type: item.request_type,
               },
@@ -595,17 +672,19 @@ export namespace WorkbenchService {
             title: pref.key,
             detail: pref.value,
             status: pref.scope,
+            time: pref.time_updated,
           })),
         },
         {
           id: "notes",
-          title: "Notes",
-          cards: notes.slice(-8).map((note) => ({
+          title: "History",
+          cards: history.slice(-8).map((note) => ({
             id: note.id,
             kind: note.kind === "plan_hint" ? ("plan_hint" as const) : ("note" as const),
             title: note.kind,
             detail: note.content,
             status: note.source,
+            time: note.time_created,
           })),
         },
       ],
@@ -770,10 +849,282 @@ function inferGoalMetadata(text: string) {
     lower.includes("lint") ? "lint" : undefined,
     lower.includes("verify") ? "verify_cmd" : undefined,
     lower.includes("regression") || lower.includes("coverage") ? "test" : undefined,
+    /(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(lower) ? "ui_review" : undefined,
+    /(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(lower) ? "code_quality" : undefined,
+    /\bcr\b|code review|审查|代码评审|review finding|review comment/.test(lower) ? "code_review" : undefined,
+    /(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(lower) ? "dead_code_review" : undefined,
+    /(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(lower) ? "startup" : undefined,
   ].filter((item): item is string => Boolean(item))
   if (selectors.length === 0) return undefined
   return {
     check_selector: [...new Set(selectors)],
+  }
+}
+
+function clipBoard(input: string) {
+  if (input.length <= BOARD_SUMMARY_LIMIT) return input
+  return `${input.slice(0, BOARD_SUMMARY_LIMIT)}\n...[truncated]`
+}
+
+function compactBoardSnapshots(
+  input: Array<{
+    id: string
+    task_id: string
+    status: string
+    summary: string
+    payload: unknown
+    time_created: number
+    time_updated: number
+  }>,
+) {
+  return input.reduce<typeof input>((acc, item) => {
+    const prev = acc.at(-1)
+    if (prev && prev.status === item.status && prev.summary === item.summary) {
+      acc[acc.length - 1] = item
+      return acc
+    }
+    acc.push(item)
+    return acc
+  }, [])
+}
+
+function compactSnapshotPayload(input: unknown) {
+  if (!input || typeof input !== "object") return undefined
+  const item = input as Record<string, unknown>
+  return {
+    note: typeof item.note === "string" ? clipBoard(item.note) : undefined,
+    description: typeof item.description === "string" ? clipBoard(item.description) : undefined,
+    status: typeof item.status === "string" ? item.status : undefined,
+    blockingReason: typeof item.blockingReason === "string" ? clipBoard(item.blockingReason) : undefined,
+    error: typeof item.error === "string" ? clipBoard(item.error) : undefined,
+    activeRunID: typeof item.activeRunID === "string" ? item.activeRunID : undefined,
+  }
+}
+
+function compactArtifactPayload(kind: string, input: unknown) {
+  if (!input || typeof input !== "object") return undefined
+  const item = input as Record<string, unknown>
+  if (kind === "log") {
+    return {
+      command: typeof item.command === "string" ? item.command : undefined,
+      code: typeof item.code === "number" ? item.code : undefined,
+      output: typeof item.output === "string" ? clipBoard(item.output) : undefined,
+    }
+  }
+  if (kind === "report") {
+    return Object.fromEntries(
+      Object.entries(item).map(([key, value]) => [
+        key,
+        typeof value === "string" ? clipBoard(value) : value,
+      ]),
+    )
+  }
+  return item
+}
+
+function boardChecks(input: unknown) {
+  if (!Array.isArray(input)) return []
+  return input.flatMap((item) => {
+    const parsed = EvaluationCheck.safeParse(item)
+    return parsed.success ? [parsed.data] : []
+  })
+}
+
+function viewBoardDelivery(
+  row:
+    | (typeof OrchestratorDeliveryTable.$inferSelect)
+    | undefined,
+) {
+  if (!row) return undefined
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    runID: row.run_id,
+    status: "ready" as const,
+    summary: clipBoard(row.summary),
+    result: {
+      summary: clipBoard(String(row.result?.summary ?? row.summary)),
+      changedFiles: Array.isArray(row.result?.changed_files)
+        ? row.result.changed_files.filter((item): item is string => typeof item === "string").slice(0, BOARD_CHANGED_FILE_LIMIT)
+        : [],
+      diffs: [],
+    },
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+    },
+  }
+}
+
+function viewBoardEvaluation(
+  row:
+    | (typeof OrchestratorEvaluationTable.$inferSelect)
+    | undefined,
+) {
+  if (!row) return undefined
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    runID: row.run_id,
+    deliveryID: row.delivery_id ?? undefined,
+    status: row.status,
+    verdict: row.verdict,
+    summary: clipBoard(row.summary),
+    checks: boardChecks(row.checks),
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+      completed: row.time_completed ?? undefined,
+    },
+  }
+}
+
+function boardFailure(input: {
+  task: typeof OrchestratorTaskTable.$inferSelect
+  run: (typeof OrchestratorRunTable.$inferSelect) | undefined
+  interactions: Array<typeof OrchestratorInteractionRequestTable.$inferSelect>
+  evaluation: (typeof OrchestratorEvaluationTable.$inferSelect) | undefined
+}) {
+  const interaction = input.interactions[0]
+  if (interaction) {
+    return {
+      source: "interaction" as const,
+      title: interaction.title,
+      summary:
+        input.interactions.length > 1
+          ? `${clipBoard(interaction.body)}\n\n${input.interactions.length} pending interactions need attention.`
+          : clipBoard(interaction.body),
+      checks: undefined,
+    }
+  }
+  if (input.evaluation && input.evaluation.status !== "passed") {
+    return {
+      source: "evaluation" as const,
+      title: "Latest acceptance failed",
+      summary: clipBoard(input.evaluation.summary),
+      checks: boardChecks(input.evaluation.checks),
+    }
+  }
+  if (input.run?.error) {
+    return {
+      source: "run" as const,
+      title: "Current run failed",
+      summary: clipBoard(input.run.error),
+      checks: undefined,
+    }
+  }
+  if (input.task.error) {
+    return {
+      source: "task" as const,
+      title: "Task failed",
+      summary: clipBoard(input.task.error),
+      checks: undefined,
+    }
+  }
+  const blocking = input.task.blocking_reason ?? input.run?.blocking_reason
+  if (!blocking) return undefined
+  return {
+    source: input.run?.blocking_reason ? ("run" as const) : ("task" as const),
+    title: "Task is blocked",
+    summary: clipBoard(blocking),
+    checks: undefined,
+  }
+}
+
+function boardOverview(input: {
+  task: typeof OrchestratorTaskTable.$inferSelect
+  run: (typeof OrchestratorRunTable.$inferSelect) | undefined
+  pendingInteractions: Array<typeof OrchestratorInteractionRequestTable.$inferSelect>
+  candidateDelivery: (typeof OrchestratorDeliveryTable.$inferSelect) | undefined
+  acceptedDelivery: (typeof OrchestratorDeliveryTable.$inferSelect) | undefined
+  evaluation: (typeof OrchestratorEvaluationTable.$inferSelect) | undefined
+  currentFailure:
+    | {
+        source: "task" | "run" | "interaction" | "evaluation"
+        title: string
+        summary: string
+        checks?: Array<z.infer<typeof EvaluationCheck>>
+      }
+    | undefined
+}) {
+  const active = ["queued", "planning", "running", "evaluating"].includes(input.task.status)
+  const canResume = Boolean(input.run) && !active && input.pendingInteractions.length === 0
+  const headline =
+    input.pendingInteractions.length > 0
+      ? "Waiting on human input"
+      : input.task.status === "completed"
+        ? "Accepted delivery is ready"
+        : input.task.status === "failed"
+          ? "Current attempt failed acceptance"
+          : input.task.status === "cancelled"
+            ? "Task was cancelled"
+            : input.task.status === "blocked"
+              ? "Task is blocked"
+              : input.task.status === "evaluating"
+                ? "Evaluating the latest candidate delivery"
+                : input.task.status === "running"
+                  ? "Task is actively progressing"
+                  : "Task is queued"
+  const summary =
+    input.pendingInteractions.length > 0
+      ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
+      : input.task.status === "completed" && input.acceptedDelivery
+        ? clipBoard(input.acceptedDelivery.summary)
+        : input.currentFailure?.summary ??
+          (input.task.status === "evaluating"
+            ? "Execution finished. Acceptance checks are running against the latest delivery."
+            : input.candidateDelivery
+              ? clipBoard(input.candidateDelivery.summary)
+              : input.run
+                ? `Current run is in ${input.run.phase}.`
+                : "Task is ready for the first run.")
+  const nextStep =
+    input.pendingInteractions.length > 0
+      ? {
+          kind: "resolve_blocker" as const,
+          title: "Resolve the pending interaction",
+          detail: "Reply to the permission or question request to unblock the task.",
+        }
+      : input.task.status === "failed"
+        ? {
+            kind: "replan" as const,
+            title: "Replan from the latest failure",
+            detail: "Review the failed acceptance result, tighten the scope if needed, then replan or retry.",
+          }
+        : input.task.status === "cancelled"
+          ? {
+              kind: "retry" as const,
+              title: "Retry if the task should continue",
+              detail: "The task is cancelled. Retry will queue a new run from the latest context.",
+            }
+          : input.task.status === "completed"
+            ? {
+                kind: "review_delivery" as const,
+                title: "Review the accepted delivery",
+                detail: "Inspect the accepted result, changed files, and evaluation evidence before closing the loop.",
+              }
+            : active
+              ? {
+                  kind: "observe" as const,
+                  title: "Monitor the active run",
+                  detail: "Watch progress, handle blockers quickly, and keep follow-up instructions concise.",
+                }
+              : {
+                  kind: "message" as const,
+                  title: "Add the next instruction",
+                  detail: "Use natural language to refine goals, preferences, or plan hints before resuming the task.",
+                }
+
+  return {
+    headline,
+    summary,
+    currentFailure: input.currentFailure,
+    nextStep,
+    controls: {
+      canRetry: canResume,
+      canReplan: canResume && Boolean(input.task.active_plan_version_id ?? input.run?.plan_version_id),
+      canCancel: Boolean(input.run) && ["queued", "planning", "running", "evaluating", "blocked"].includes(input.task.status),
+    },
   }
 }
 

@@ -1,5 +1,6 @@
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
+import { ExecutorName } from "@/executor/compat"
 import { Identifier } from "@/id/id"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
@@ -30,11 +31,28 @@ export const GoalInput = z.object({
     .optional(),
 })
 
+export const MilestoneInput = z.object({
+  title: z.string(),
+  description: z.string().optional(),
+  goals: GoalInput.array(),
+})
+
 export const CheckConfig = z.object({
   build: z.array(z.string()).optional(),
   test: z.array(z.string()).optional(),
   lint: z.array(z.string()).optional(),
   verify_cmd: z.array(z.string()).optional(),
+  startup: z
+    .object({
+      command: z.string().min(1),
+      ready_url: z.string().url().optional(),
+      ready_text: z.string().optional(),
+      timeout_ms: z.number().int().positive().optional(),
+      warmup_ms: z.number().int().positive().optional(),
+      require_exit_zero: z.boolean().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
   artifact: z
     .object({
       require_changed_files: z.boolean().optional(),
@@ -49,8 +67,63 @@ export const CheckConfig = z.object({
       target: z.literal("web"),
       url: z.string().url(),
       require_text: z.array(z.string()).optional(),
+        require_title: z.string().optional(),
+        timeout_ms: z.number().int().positive().optional(),
+        mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
+  puppeteer: z
+    .object({
+      target: z.literal("web"),
+      url: z.string().url(),
+      browser: z.enum(["chrome", "edge", "chromium"]).optional(),
+      executable_path: z.string().optional(),
+      wait_for_selector: z.string().optional(),
+      wait_for_text: z.string().optional(),
+      require_text: z.array(z.string()).optional(),
       require_title: z.string().optional(),
+      full_page: z.boolean().optional(),
+      viewport: z
+        .object({
+          width: z.number().int().positive().optional(),
+          height: z.number().int().positive().optional(),
+        })
+        .optional(),
       timeout_ms: z.number().int().positive().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
+  ui_review: z
+    .object({
+      target: z.literal("web"),
+      url: z.string().url().optional(),
+      prompt: z.string().optional(),
+      focus: z.array(z.enum(["layout", "hierarchy", "clarity", "navigation", "feedback", "accessibility"])).optional(),
+      timeout_ms: z.number().int().positive().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
+  code_quality: z
+    .object({
+      enabled: z.boolean().optional(),
+      prompt: z.string().optional(),
+      max_diffs: z.number().int().positive().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
+  code_review: z
+    .object({
+      enabled: z.boolean().optional(),
+      prompt: z.string().optional(),
+      max_diffs: z.number().int().positive().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
+  dead_code_review: z
+    .object({
+      enabled: z.boolean().optional(),
+      prompt: z.string().optional(),
+      max_diffs: z.number().int().positive().optional(),
       mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
@@ -61,6 +134,7 @@ export const CheckConfig = z.object({
       mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
+  custom: z.record(z.string(), z.record(z.string(), z.any())).optional(),
   timeout_ms: z.number().int().positive().optional(),
 })
 
@@ -68,12 +142,14 @@ export const CreateTaskInput = z.object({
   project: z.string().optional(),
   requestID: z.string().optional(),
   source: z.string().optional(),
+  executor: ExecutorName.optional(),
   title: z.string().optional(),
   request: z.string(),
   priority: z.enum(["high", "normal", "low"]).optional(),
   budget: Budget.optional(),
   checks: CheckConfig.optional(),
   goals: GoalInput.array().optional(),
+  milestones: MilestoneInput.array().optional(),
   channelBinding: ChannelBinding.optional(),
   metadata: z.record(z.string(), z.any()).optional(),
 })
@@ -120,6 +196,7 @@ export const Goal = z.object({
   id: Identifier.schema("goal"),
   taskID: Identifier.schema("task"),
   planVersionID: Identifier.schema("plan"),
+  milestoneID: z.string().nullable().optional(),
   description: z.string(),
   criteria: z.string(),
   priority: z.enum(["blocking", "advisory"]),
@@ -136,6 +213,21 @@ export const Goal = z.object({
   }),
 })
 
+export const Milestone = z.object({
+  id: z.string(),
+  taskID: Identifier.schema("task"),
+  planVersionID: Identifier.schema("plan"),
+  title: z.string(),
+  description: z.string(),
+  status: z.enum(["pending", "active", "passed", "failed"]),
+  orderIndex: z.number().int(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+  }),
+})
+
 export const ExecutorRef = z.object({
   sessionID: Identifier.schema("session").optional(),
   queueTaskID: Identifier.schema("task").optional(),
@@ -146,7 +238,7 @@ export const Run = z.object({
   taskID: Identifier.schema("task"),
   planVersionID: Identifier.schema("plan").nullable().optional(),
   sessionID: Identifier.schema("session").nullable().optional(),
-  executor: z.literal("opencode"),
+  executor: ExecutorName,
   status: z.enum(["queued", "accepted", "running", "blocked", "completed", "failed", "aborted"]),
   phase: z.enum(["plan", "execute", "evaluate", "replan"]),
   blockingReason: z.string().optional(),
@@ -250,6 +342,7 @@ export const Progress = z.object({
   task: Task,
   plan: PlanVersion.optional(),
   goals: Goal.array(),
+  milestones: Milestone.array().optional(),
   run: Run.optional(),
   pendingInteractions: Interaction.array(),
   delivery: Delivery.optional(),
@@ -265,6 +358,16 @@ export const ReplyInteractionInput = z.object({
 
 export const RejectInteractionInput = z.object({
   message: z.string().optional(),
+})
+
+export const UpdatePreferenceInput = z.object({
+  key: z.string().min(1),
+  value: z.string().min(1),
+})
+
+export const UpdateGoalInput = z.object({
+  description: z.string().min(1),
+  criteria: z.string().min(1),
 })
 
 export const TaskAccepted = z.object({
@@ -305,12 +408,25 @@ export const TaskBrief = z.object({
   ),
 })
 
+export const TaskChannelBinding = z.object({
+  id: z.string(),
+  platform: z.string(),
+  channel: z.string(),
+  thread: z.string(),
+  payload: z.record(z.string(), z.any()).optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+  }),
+})
+
 export const TaskBoardCard = z.object({
   id: z.string(),
   kind: z.enum(["goal", "interaction", "preference", "note", "run", "plan_hint"]),
   title: z.string(),
   detail: z.string().optional(),
   status: z.string().optional(),
+  time: z.number().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
 })
 
@@ -320,15 +436,44 @@ export const TaskBoardLane = z.object({
   cards: TaskBoardCard.array(),
 })
 
+export const TaskBoardFailure = z.object({
+  source: z.enum(["task", "run", "interaction", "evaluation"]),
+  title: z.string(),
+  summary: z.string(),
+  checks: EvaluationCheck.array().optional(),
+})
+
+export const TaskBoardNextStep = z.object({
+  kind: z.enum(["resolve_blocker", "retry", "replan", "observe", "review_delivery", "message"]),
+  title: z.string(),
+  detail: z.string().optional(),
+})
+
+export const TaskBoardOverview = z.object({
+  headline: z.string(),
+  summary: z.string(),
+  currentFailure: TaskBoardFailure.optional(),
+  nextStep: TaskBoardNextStep,
+  controls: z.object({
+    canRetry: z.boolean(),
+    canReplan: z.boolean(),
+    canCancel: z.boolean(),
+  }),
+})
+
 export const TaskBoard = z.object({
   task: Task,
   plan: PlanVersion.optional(),
   run: Run.optional(),
   delivery: Delivery.optional(),
+  candidateDelivery: Delivery.optional(),
+  acceptedDelivery: Delivery.optional(),
   evaluation: Evaluation.optional(),
   interactions: Interaction.array(),
+  channels: TaskChannelBinding.array(),
   artifacts: Artifact.array(),
   snapshots: ProgressSnapshot.array(),
+  overview: TaskBoardOverview,
   brief: z.object({
     content: z.string(),
     updated_at: z.number(),
@@ -381,6 +526,9 @@ export const Event = {
   PlanActivated: BusEvent.define("orchestrator.plan.activated", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   GoalPassed: BusEvent.define("orchestrator.goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
   GoalFailed: BusEvent.define("orchestrator.goal.failed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),
+  MilestoneActivated: BusEvent.define("orchestrator.milestone.activated", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
+  MilestonePassed: BusEvent.define("orchestrator.milestone.passed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
+  MilestoneFailed: BusEvent.define("orchestrator.milestone.failed", z.object({ taskID: Identifier.schema("task"), milestoneID: z.string(), summary: z.string() })),
   RunCreated: BusEvent.define("orchestrator.run.created", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), status: Run.shape.status, summary: z.string() })),
   RunUpdated: BusEvent.define("orchestrator.run.updated", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), status: Run.shape.status, summary: z.string() })),
   InteractionRequested: BusEvent.define("orchestrator.interaction.requested", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), interactionID: Identifier.schema("interaction"), requestType: Interaction.shape.type, summary: z.string() })),

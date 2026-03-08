@@ -12,10 +12,7 @@ import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { type SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
-import { GuiState } from "@/tool/gui-state"
-import { ScreenshotStore } from "./screenshot-store"
 import { textForModel } from "./part-visibility"
-import { traceSync } from "@/util/debug-trace"
 
 export namespace MessageV2 {
   export const OutputLengthError = NamedError.create("MessageOutputLengthError", z.object({}))
@@ -533,10 +530,7 @@ export namespace MessageV2 {
           attachments?: Array<{ mime: string; url: string }>
         }
         const attachments = (outputObject.attachments ?? []).filter((attachment) => {
-          return (
-            ScreenshotStore.isFileUrl(attachment.url) ||
-            (attachment.url.startsWith("data:") && attachment.url.includes(","))
-          )
+          return attachment.url.startsWith("data:") && attachment.url.includes(",")
         })
 
         return {
@@ -547,14 +541,6 @@ export namespace MessageV2 {
               type: "media",
               mediaType: attachment.mime,
               data: iife(() => {
-                if (ScreenshotStore.isFileUrl(attachment.url)) {
-                  traceSync("message.toModelMessages.resolveSync", {
-                    phase: "tool-output",
-                    url_len: attachment.url.length,
-                  })
-                  const resolved = ScreenshotStore.resolveSync(attachment.url)
-                  return resolved ? resolved.buffer.toString("base64") : ""
-                }
                 const commaIndex = attachment.url.indexOf(",")
                 return commaIndex === -1 ? attachment.url : attachment.url.slice(commaIndex + 1)
               }),
@@ -565,10 +551,6 @@ export namespace MessageV2 {
 
       return { type: "json", value: output as never }
     }
-
-    // Preserve screenshots only in the latest assistant message (model hasn't described them yet);
-    // older screenshots are stripped — the model's text description serves as the lasting record.
-    const lastAssistantID = input.findLast((m) => m.info.role === "assistant")?.info.id
 
     for (const msg of input) {
       if (msg.parts.length === 0) continue
@@ -642,22 +624,13 @@ export namespace MessageV2 {
           if (part.type === "tool") {
             toolNames.add(part.tool)
             if (part.state.status === "completed") {
-              const isOldScreenshot =
-                part.tool === "screen" && part.state.input.action === "screenshot" && msg.info.id !== lastAssistantID
-
               let outputText: string
               if (part.state.time.compacted) {
                 outputText = "[Old tool result content cleared]"
-              } else if (isOldScreenshot) {
-                const hash = part.state.metadata?.screenshotHash as string | undefined
-                const desc = hash ? GuiState.getDescription(hash) : null
-                outputText = desc
-                  ? `[Screenshot removed — your description from this turn:]\n${desc}`
-                  : "[Screenshot removed from context — refer to your earlier text description of this screenshot]"
               } else {
                 outputText = part.state.output
               }
-              const attachments = part.state.time.compacted || isOldScreenshot ? [] : (part.state.attachments ?? [])
+              const attachments = part.state.time.compacted ? [] : (part.state.attachments ?? [])
 
               // For providers that don't support media in tool results, extract media files
               // (images, PDFs) to be sent as a separate user message
@@ -729,22 +702,11 @@ export namespace MessageV2 {
                   type: "text" as const,
                   text: "Attached image(s) from tool result:",
                 },
-                ...media.map((attachment) => {
-                  let url = attachment.url
-                  if (ScreenshotStore.isFileUrl(url)) {
-                    traceSync("message.toModelMessages.resolveSync", {
-                      phase: "media-inject",
-                      url_len: url.length,
-                    })
-                    const resolved = ScreenshotStore.resolveSync(url)
-                    if (resolved) url = `data:${resolved.mime};base64,${resolved.buffer.toString("base64")}`
-                  }
-                  return {
-                    type: "file" as const,
-                    url,
-                    mediaType: attachment.mime,
-                  }
-                }),
+                ...media.map((attachment) => ({
+                  type: "file" as const,
+                  url: attachment.url,
+                  mediaType: attachment.mime,
+                })),
               ],
             })
           }

@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
+import { generateText } from "ai"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
@@ -78,6 +79,110 @@ export const ProviderRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await ProviderAuth.methods())
+      },
+    )
+    .post(
+      "/:providerID/test",
+      describeRoute({
+        summary: "Test provider connection",
+        description: "Run a minimal live request against a provider using the selected or default model.",
+        operationId: "provider.test",
+        responses: {
+          200: {
+            description: "Provider test result",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    ok: z.boolean(),
+                    status: z.enum(["connected", "error"]),
+                    providerID: z.string(),
+                    modelID: z.string(),
+                    message: z.string(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          providerID: z.string().meta({ description: "Provider ID" }),
+        }),
+      ),
+      validator(
+        "json",
+        z
+          .object({
+            modelID: z.string().optional(),
+          })
+          .optional(),
+      ),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        const body = c.req.valid("json") ?? {}
+        const provider = await Provider.getProvider(providerID)
+        if (!provider) {
+          return c.json(
+            {
+              ok: false,
+              status: "error",
+              providerID,
+              modelID: body.modelID ?? "",
+              message: "Provider is not configured. Set API key or auth first.",
+            },
+            400,
+          )
+        }
+
+        const modelID = body.modelID ?? Provider.sort(Object.values(provider.models))[0]?.id
+        if (!modelID) {
+          return c.json(
+            {
+              ok: false,
+              status: "error",
+              providerID,
+              modelID: "",
+              message: "Provider has no available models.",
+            },
+            400,
+          )
+        }
+
+        try {
+          const model = await Provider.getModel(providerID, modelID)
+          const language = await Provider.getLanguage(model)
+          await generateText({
+            model: language,
+            maxOutputTokens: 1,
+            abortSignal: AbortSignal.timeout(20_000),
+            messages: [
+              {
+                role: "user",
+                content: "Reply with OK.",
+              },
+            ],
+          })
+
+          return c.json({
+            ok: true,
+            status: "connected",
+            providerID,
+            modelID,
+            message: "Provider is reachable.",
+          })
+        } catch (error) {
+          return c.json({
+            ok: false,
+            status: "error",
+            providerID,
+            modelID,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
       },
     )
     .post(

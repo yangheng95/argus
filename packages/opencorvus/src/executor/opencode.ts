@@ -5,6 +5,7 @@ import { TaskQueueTable } from "@/scheduler/task-queue.sql"
 import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message"
+import { SessionSummary } from "@/session/summary"
 import { SessionPrompt } from "@/session/prompt"
 import { SessionStatus } from "@/session/status"
 import { Snapshot } from "@/snapshot"
@@ -16,6 +17,7 @@ export const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
   prompt: z.string(),
   priority: z.enum(["high", "normal", "low"]).optional(),
+  source: z.enum(["planner", "scheduler", "system"]).optional(),
 })
 
 export const SubmitResult = z.object({
@@ -67,6 +69,7 @@ export namespace OpencodeExecutor {
           {
             type: "text",
             text: input.prompt,
+            ...(input.source ? { source: input.source } : {}),
           },
         ],
       },
@@ -121,11 +124,16 @@ export namespace OpencodeExecutor {
     return true
   }
 
-  export async function delivery(sessionID: string) {
-    const msgs = await Session.messages({ sessionID })
-    const diffs = await Session.diff(sessionID)
+  export async function delivery(input: { sessionID: string; since?: number }) {
+    const msgs = await Session.messages({ sessionID: input.sessionID })
+    const scoped = typeof input.since === "number"
+      ? msgs.filter((item) => (item.info.time?.created ?? 0) >= input.since!)
+      : msgs
+    const diffs = typeof input.since === "number"
+      ? await SessionSummary.computeDiff({ messages: scoped })
+      : await Session.diff(input.sessionID)
     return {
-      summary: summarize(msgs),
+      summary: summarize(scoped),
       diffs,
     }
   }

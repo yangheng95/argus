@@ -69,3 +69,37 @@ describe("session.started event", () => {
     })
   })
 })
+
+describe("Session.fork", () => {
+  test("tracks parent session and exposes children", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const root = await Session.create({ title: "root-session" })
+        const child = await Session.fork({ sessionID: root.id })
+
+        expect(child.parentID).toBe(root.id)
+
+        const children = await Session.children(root.id)
+        expect(children.map((item) => item.id)).toContain(child.id)
+
+        await Session.remove(root.id)
+      },
+    })
+  })
+
+  test("removing a parent session removes forked children", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const root = await Session.create({ title: "root-session" })
+        const child = await Session.fork({ sessionID: root.id })
+
+        await Session.remove(root.id)
+
+        await expect(Session.get(root.id)).rejects.toThrow()
+        await expect(Session.get(child.id)).rejects.toThrow()
+      },
+    })
+  })
+})

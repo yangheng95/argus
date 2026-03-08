@@ -8,7 +8,6 @@ import { MessageV2 } from "./message"
 import z from "zod"
 import { Token } from "../util/token"
 import { Log } from "../util/log"
-import { ScreenshotStore } from "./screenshot-store"
 import { SessionProcessor } from "./processor"
 import { fn } from "@/util/fn"
 import { Agent } from "@/agent/agent"
@@ -93,12 +92,6 @@ export namespace SessionCompaction {
       for (const part of toPrune) {
         if (part.state.status === "completed") {
           part.state.time.compacted = Date.now()
-          // Delete file-backed screenshot files for compacted parts
-          for (const att of part.state.attachments ?? []) {
-            if (ScreenshotStore.isFileUrl(att.url)) {
-              await ScreenshotStore.removeByUrl(att.url).catch(() => {})
-            }
-          }
           await Session.updatePart(part)
         }
       }

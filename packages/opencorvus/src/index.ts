@@ -41,6 +41,7 @@ import { UninstallCommand } from "./cli/cmd/uninstall"
 import { ModelsCommand } from "./cli/cmd/models"
 import { UI } from "./cli/ui"
 import { Installation } from "./installation"
+import { ExecutorBootstrap } from "./executor/bootstrap"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
@@ -109,6 +110,12 @@ let cli = yargs(hideBin(process.argv))
 
     process.env.AGENT = "1"
     process.env.OPENCORVUS = "1"
+
+    await ExecutorBootstrap.autoRegister().catch((error) => {
+      Log.Default.warn("executor.bootstrap.failed", {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
 
     Log.Default.info("opencorvus", {
       version: Installation.VERSION,

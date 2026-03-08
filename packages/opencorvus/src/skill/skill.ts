@@ -15,12 +15,7 @@ import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
 import codingMd from "./builtin/coding.md" with { type: "text" }
-import desktopMd from "./builtin/desktop.md" with { type: "text" }
-import desktopWindowsMd from "./builtin/desktop-windows.md" with { type: "text" }
-import desktopMacosMd from "./builtin/desktop-macos.md" with { type: "text" }
-import desktopLinuxMd from "./builtin/desktop-linux.md" with { type: "text" }
 import planMd from "./builtin/plan.md" with { type: "text" }
-import { botBundles } from "./builtin/bot"
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -69,26 +64,9 @@ export namespace Skill {
       files: {},
     },
     {
-      skill: desktopMd,
-      files: {},
-    },
-    {
-      skill: desktopWindowsMd,
-      files: {},
-    },
-    {
-      skill: desktopMacosMd,
-      files: {},
-    },
-    {
-      skill: desktopLinuxMd,
-      files: {},
-    },
-    {
       skill: planMd,
       files: {},
     },
-    ...botBundles,
   ] as const
 
   async function install(id: string, skill: string, files: Readonly<Record<string, string>>) {

@@ -21,6 +21,7 @@ import { ExperimentalRoutes } from "./experimental"
 import { SessionRoutes } from "./session"
 import { PermissionRoutes } from "./permission"
 import { QuestionRoutes } from "./question"
+import { ChannelRoutes } from "./channel"
 import { ProviderRoutes } from "./provider"
 import { FileRoutes } from "./file"
 import { McpRoutes } from "./mcp"
@@ -50,6 +51,7 @@ export function AppRoutes(root: Hono) {
     .route("/project", ProjectRoutes())
     .route("/pty", PtyRoutes())
     .route("/config", ConfigRoutes())
+    .route("/channel", ChannelRoutes())
     .route("/experimental", ExperimentalRoutes())
     .route("/session", SessionRoutes())
     .route("/permission", PermissionRoutes())
@@ -124,7 +126,7 @@ export function AppRoutes(root: Hono) {
       "/vcs",
       describeRoute({
         summary: "Get VCS info",
-        description: "Retrieve version control system (VCS) information for the current project, such as git branch.",
+        description: "Retrieve version control system (VCS) information for the current project, such as git branch and working tree status.",
         operationId: "vcs.get",
         responses: {
           200: {
@@ -138,10 +140,7 @@ export function AppRoutes(root: Hono) {
         },
       }),
       async (c) => {
-        const branch = await Vcs.branch()
-        return c.json({
-          branch,
-        })
+        return c.json(await Vcs.info())
       },
     )
     .get(

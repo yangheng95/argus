@@ -8,6 +8,7 @@ import {
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
+  OrchestratorMilestoneTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
   OrchestratorRunTable,
@@ -20,6 +21,7 @@ import {
 export type TaskRow = typeof OrchestratorTaskTable.$inferSelect
 export type PlanRow = typeof OrchestratorPlanVersionTable.$inferSelect
 export type GoalRow = typeof OrchestratorGoalTable.$inferSelect
+export type MilestoneRow = typeof OrchestratorMilestoneTable.$inferSelect
 export type RunRow = typeof OrchestratorRunTable.$inferSelect
 export type InteractionRow = typeof OrchestratorInteractionRequestTable.$inferSelect
 export type DeliveryRow = typeof OrchestratorDeliveryTable.$inferSelect
@@ -137,6 +139,28 @@ export function listGoalsByPlan(planID: string) {
       .from(OrchestratorGoalTable)
       .where(eq(OrchestratorGoalTable.plan_version_id, planID))
       .orderBy(OrchestratorGoalTable.order_index)
+      .all(),
+  )
+}
+
+export function listMilestonesByPlan(planID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorMilestoneTable)
+      .where(eq(OrchestratorMilestoneTable.plan_version_id, planID))
+      .orderBy(OrchestratorMilestoneTable.order_index)
+      .all(),
+  )
+}
+
+export function listMilestones(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorMilestoneTable)
+      .where(eq(OrchestratorMilestoneTable.task_id, taskID))
+      .orderBy(OrchestratorMilestoneTable.order_index)
       .all(),
   )
 }
@@ -291,11 +315,29 @@ export function viewGoal(row: GoalRow) {
     id: row.id,
     taskID: row.task_id,
     planVersionID: row.plan_version_id,
+    milestoneID: row.milestone_id ?? undefined,
     description: row.description,
     criteria: row.criteria,
     priority: row.priority,
     status: row.status,
     orderIndex: row.order_index,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+    },
+  }
+}
+
+export function viewMilestone(row: MilestoneRow) {
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    planVersionID: row.plan_version_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    orderIndex: row.order_index,
+    metadata: row.metadata ?? undefined,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -309,7 +351,7 @@ export function viewRun(row: RunRow) {
     taskID: row.task_id,
     planVersionID: row.plan_version_id ?? undefined,
     sessionID: row.session_id ?? undefined,
-    executor: "opencode" as const,
+    executor: row.executor,
     status: row.status,
     phase: row.phase,
     blockingReason: row.blocking_reason ?? undefined,

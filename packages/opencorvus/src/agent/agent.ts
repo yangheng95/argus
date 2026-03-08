@@ -69,6 +69,8 @@ export namespace Agent {
       memory: "allow",
       schedule: "allow",
       skill: "allow",
+      todoread: "allow",
+      todowrite: "allow",
       screen: "allow",
       input: "ask",
       external_directory: {

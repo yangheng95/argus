@@ -20,12 +20,71 @@ export namespace Vcs {
 
   export const Info = z
     .object({
-      branch: z.string(),
+      branch: z.string().optional(),
+      clean: z.boolean(),
+      dirty: z.boolean(),
+      staged: z.number().int().nonnegative(),
+      modified: z.number().int().nonnegative(),
+      untracked: z.number().int().nonnegative(),
+      conflicts: z.number().int().nonnegative(),
+      ahead: z.number().int().nonnegative(),
+      behind: z.number().int().nonnegative(),
     })
     .meta({
       ref: "VcsInfo",
     })
   export type Info = z.infer<typeof Info>
+
+  function parse(text: string, branch?: string): Info {
+    let ahead = 0
+    let behind = 0
+    let staged = 0
+    let modified = 0
+    let untracked = 0
+    let conflicts = 0
+
+    for (const line of text.split(/\r?\n/).filter(Boolean)) {
+      if (line.startsWith("## ")) {
+        const status = line.match(/\[(.*?)\]/)?.[1]
+        if (!status) continue
+        for (const item of status.split(",").map((x) => x.trim()).filter(Boolean)) {
+          const nextAhead = item.match(/^ahead (\d+)$/)
+          if (nextAhead) {
+            ahead = Number(nextAhead[1])
+            continue
+          }
+          const nextBehind = item.match(/^behind (\d+)$/)
+          if (nextBehind) behind = Number(nextBehind[1])
+        }
+        continue
+      }
+
+      const x = line[0] ?? " "
+      const y = line[1] ?? " "
+      if (x === "?" && y === "?") {
+        untracked += 1
+        continue
+      }
+      if (x === "U" || y === "U" || (x === "A" && y === "A") || (x === "D" && y === "D")) {
+        conflicts += 1
+      }
+      if (x !== " " && x !== "?") staged += 1
+      if (y !== " " && y !== "?") modified += 1
+    }
+
+    const dirty = staged > 0 || modified > 0 || untracked > 0 || conflicts > 0
+    return {
+      branch,
+      clean: !dirty,
+      dirty,
+      staged,
+      modified,
+      untracked,
+      conflicts,
+      ahead,
+      behind,
+    }
+  }
 
   async function currentBranch() {
     return $`git rev-parse --abbrev-ref HEAD`
@@ -71,5 +130,19 @@ export namespace Vcs {
 
   export async function branch() {
     return await state().then((s) => s.branch())
+  }
+
+  export async function info() {
+    const branch = await state().then((s) => s.branch())
+    if (Instance.project.vcs !== "git") {
+      return parse("", branch)
+    }
+    const text = await $`git status --porcelain=v1 --branch`
+      .quiet()
+      .nothrow()
+      .cwd(Instance.directory)
+      .text()
+      .catch(() => "")
+    return parse(text, branch)
   }
 }

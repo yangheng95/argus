@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
+import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { Bus } from "@/bus"
 import {
@@ -21,8 +22,10 @@ import {
   TaskAccepted,
   TaskEvent,
   Task,
+  UpdateGoalInput,
+  UpdatePreferenceInput,
 } from "@/orchestrator/model"
-import { OrchestratorService } from "@/orchestrator/service"
+import { ExecutorNotConfiguredError, OrchestratorService } from "@/orchestrator/service"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -52,6 +55,13 @@ export const OrchestratorRoutes = lazy(() =>
         const taskID = await OrchestratorService.createTask({
           ...input,
           requestID: input.requestID ?? requestID,
+        }).catch((error) => {
+          if (error instanceof ExecutorNotConfiguredError) {
+            throw new HTTPException(400, {
+              message: error.data.message,
+            })
+          }
+          throw error
         })
         return c.json({ task_id: taskID }, 202)
       },
@@ -309,6 +319,50 @@ export const OrchestratorRoutes = lazy(() =>
         return c.json(await OrchestratorService.cancelTask(c.req.valid("param").taskID))
       },
     )
+    .post(
+      "/task/:taskID/retry",
+      describeRoute({
+        summary: "Retry task",
+        operationId: "task.retry",
+        responses: {
+          200: {
+            description: "Task retry queued",
+            content: {
+              "application/json": {
+                schema: resolver(Run),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.retryTask(c.req.valid("param").taskID))
+      },
+    )
+    .post(
+      "/task/:taskID/replan",
+      describeRoute({
+        summary: "Replan task",
+        operationId: "task.replan",
+        responses: {
+          200: {
+            description: "Task replan queued",
+            content: {
+              "application/json": {
+                schema: resolver(Run),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.replanTask(c.req.valid("param").taskID))
+      },
+    )
     .get(
       "/run/:runID",
       describeRoute({
@@ -491,6 +545,36 @@ export const OrchestratorRoutes = lazy(() =>
         return c.json(
           await OrchestratorService.rejectInteraction(c.req.valid("param").interactionID, c.req.valid("json")),
         )
+      },
+    )
+    .patch(
+      "/preference/:preferenceID",
+      validator("param", z.object({ preferenceID: z.string() })),
+      validator("json", UpdatePreferenceInput),
+      async (c) => {
+        return c.json(await OrchestratorService.updatePreference(c.req.valid("param").preferenceID, c.req.valid("json")))
+      },
+    )
+    .delete(
+      "/preference/:preferenceID",
+      validator("param", z.object({ preferenceID: z.string() })),
+      async (c) => {
+        return c.json(await OrchestratorService.deletePreference(c.req.valid("param").preferenceID))
+      },
+    )
+    .patch(
+      "/goal/:goalID",
+      validator("param", z.object({ goalID: z.string() })),
+      validator("json", UpdateGoalInput),
+      async (c) => {
+        return c.json(await OrchestratorService.updateGoal(c.req.valid("param").goalID, c.req.valid("json")))
+      },
+    )
+    .delete(
+      "/goal/:goalID",
+      validator("param", z.object({ goalID: z.string() })),
+      async (c) => {
+        return c.json(await OrchestratorService.deleteGoal(c.req.valid("param").goalID))
       },
     ),
 )

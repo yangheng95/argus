@@ -19,6 +19,8 @@ import type {
   ConfigProvidersResponses,
   ConfigUpdateErrors,
   ConfigUpdateResponses,
+  DeleteGoalGoalIdResponses,
+  DeletePreferencePreferenceIdResponses,
   EventSubscribeResponses,
   EventTuiCommandExecute,
   EventTuiPromptAppend,
@@ -88,6 +90,8 @@ import type {
   PartDeleteResponses,
   PartUpdateErrors,
   PartUpdateResponses,
+  PatchGoalGoalIdResponses,
+  PatchPreferencePreferenceIdResponses,
   PathGetResponses,
   PermissionListResponses,
   PermissionReplyErrors,
@@ -195,10 +199,13 @@ import type {
   TaskGetResponses,
   TaskInteractionsErrors,
   TaskInteractionsResponses,
+  TaskListResponses,
   TaskMessageErrors,
   TaskMessageResponses,
   TaskProgressErrors,
   TaskProgressResponses,
+  TaskRetryErrors,
+  TaskRetryResponses,
   TaskRunsErrors,
   TaskRunsResponses,
   TextPartInput,
@@ -2966,6 +2973,7 @@ export class Task extends HeyApiClient {
       project?: string
       requestID?: string
       source?: string
+      executor?: "opencode" | "codex" | "claude-code"
       title?: string
       request?: string
       priority?: "high" | "normal" | "low"
@@ -2980,6 +2988,15 @@ export class Task extends HeyApiClient {
         test?: Array<string>
         lint?: Array<string>
         verify_cmd?: Array<string>
+        startup?: {
+          command: string
+          ready_url?: string
+          ready_text?: string
+          timeout_ms?: number
+          warmup_ms?: number
+          require_exit_zero?: boolean
+          mode?: "soft" | "strict"
+        }
         artifact?: {
           require_changed_files?: boolean
           min_changed_files?: number
@@ -2993,6 +3010,32 @@ export class Task extends HeyApiClient {
           require_text?: Array<string>
           require_title?: string
           timeout_ms?: number
+          mode?: "soft" | "strict"
+        }
+        ui_review?: {
+          target: "web"
+          url?: string
+          prompt?: string
+          focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+          timeout_ms?: number
+          mode?: "soft" | "strict"
+        }
+        code_quality?: {
+          enabled?: boolean
+          prompt?: string
+          max_diffs?: number
+          mode?: "soft" | "strict"
+        }
+        code_review?: {
+          enabled?: boolean
+          prompt?: string
+          max_diffs?: number
+          mode?: "soft" | "strict"
+        }
+        dead_code_review?: {
+          enabled?: boolean
+          prompt?: string
+          max_diffs?: number
           mode?: "soft" | "strict"
         }
         judge?: {
@@ -3033,6 +3076,7 @@ export class Task extends HeyApiClient {
             { in: "body", key: "project" },
             { in: "body", key: "requestID" },
             { in: "body", key: "source" },
+            { in: "body", key: "executor" },
             { in: "body", key: "title" },
             { in: "body", key: "request" },
             { in: "body", key: "priority" },
@@ -3054,6 +3098,23 @@ export class Task extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+
+  /**
+   * List project tasks
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<TaskListResponses, unknown, ThrowOnError>({
+      url: "/tasks",
+      ...options,
+      ...params,
     })
   }
 
@@ -3315,6 +3376,34 @@ export class Task extends HeyApiClient {
     )
     return (options?.client ?? this.client).post<TaskCancelResponses, TaskCancelErrors, ThrowOnError>({
       url: "/task/{taskID}/cancel",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Retry task
+   */
+  public retry<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskRetryResponses, TaskRetryErrors, ThrowOnError>({
+      url: "/task/{taskID}/retry",
       ...options,
       ...params,
     })
@@ -4846,6 +4935,124 @@ export class OpencodeClient extends HeyApiClient {
   constructor(args?: { client?: Client; key?: string }) {
     super(args)
     OpencodeClient.__registry.set(this, args?.key)
+  }
+
+  public deletePreferencePreferenceId<ThrowOnError extends boolean = false>(
+    parameters: {
+      preferenceID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "preferenceID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<DeletePreferencePreferenceIdResponses, unknown, ThrowOnError>({
+      url: "/preference/{preferenceID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  public patchPreferencePreferenceId<ThrowOnError extends boolean = false>(
+    parameters: {
+      preferenceID: string
+      directory?: string
+      key?: string
+      value?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "preferenceID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "key" },
+            { in: "body", key: "value" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<PatchPreferencePreferenceIdResponses, unknown, ThrowOnError>({
+      url: "/preference/{preferenceID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  public deleteGoalGoalId<ThrowOnError extends boolean = false>(
+    parameters: {
+      goalID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "goalID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<DeleteGoalGoalIdResponses, unknown, ThrowOnError>({
+      url: "/goal/{goalID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  public patchGoalGoalId<ThrowOnError extends boolean = false>(
+    parameters: {
+      goalID: string
+      directory?: string
+      description?: string
+      criteria?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "goalID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "description" },
+            { in: "body", key: "criteria" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<PatchGoalGoalIdResponses, unknown, ThrowOnError>({
+      url: "/goal/{goalID}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
   }
 
   private _global?: Global

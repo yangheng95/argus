@@ -182,4 +182,469 @@ describe("evaluator.service", () => {
       },
     })
   })
+
+  test("startup check passes when a service becomes ready", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const port = 39000 + Math.floor(Math.random() * 1000)
+    await Bun.write(
+      path.join(tmp.path, "server.ts"),
+      `
+        const port = ${port}
+        Bun.serve({
+          port,
+          fetch() {
+            return new Response("ready ok")
+          },
+        })
+        await new Promise(() => {})
+      `,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "start the service",
+            metadata: {
+              checks: {
+                startup: {
+                  command: `"${BunProc.which()}" server.ts`,
+                  ready_url: `http://127.0.0.1:${port}`,
+                  ready_text: "ready ok",
+                  timeout_ms: 10_000,
+                  mode: "strict",
+                },
+              },
+            },
+          },
+          { summary: "delivery ready", changedFiles: [], diffs: [] },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "startup")?.status).toBe("passed")
+      },
+    })
+  })
+
+  test("startup check fails in strict mode when readiness never appears", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(
+      path.join(tmp.path, "hang.ts"),
+      `
+        setTimeout(() => {}, 10000)
+      `,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "start the service",
+            metadata: {
+              checks: {
+                startup: {
+                  command: `"${BunProc.which()}" hang.ts`,
+                  ready_url: "http://127.0.0.1:39999",
+                  timeout_ms: 1_500,
+                  mode: "strict",
+                },
+              },
+            },
+          },
+          { summary: "delivery ready", changedFiles: [], diffs: [] },
+        )
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "startup")?.status).toBe("failed")
+      },
+    })
+  })
+
+  test("puppeteer check soft-skips when browser executable is missing", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response("<html><head><title>Tank</title></head><body><canvas id='game'></canvas></body></html>", {
+          headers: {
+            "content-type": "text/html",
+          },
+        })
+      },
+    })
+
+    try {
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          const result = await EvaluatorService.evaluate(
+            {
+              request: "verify browser render",
+              metadata: {
+                checks: {
+                  puppeteer: {
+                    target: "web",
+                    url: server.url.href,
+                    executable_path: path.join(tmp.path, "missing-browser.exe"),
+                    mode: "soft",
+                    wait_for_selector: "#game",
+                  },
+                },
+              },
+            },
+            { summary: "delivery ready", changedFiles: ["index.html"], diffs: [] },
+          )
+          expect(result.status).toBe("passed")
+          expect(result.checks.find((item) => item.name === "puppeteer")?.status).toBe("skipped")
+        },
+      })
+    } finally {
+      server.stop(true)
+    }
+  })
+
+  test("ui review soft-skips when no review model is available", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "Review the UI hierarchy.",
+            metadata: {
+              checks: {
+                ui_review: {
+                  target: "web",
+                  mode: "soft",
+                },
+              },
+            },
+          },
+          { summary: "Updated the dashboard layout.", changedFiles: ["ui.tsx"], diffs: [] },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "ui_review")?.status).toBe("skipped")
+      },
+    })
+  })
+
+  test("code quality review soft-skips when no review model is available", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "Check code quality.",
+            metadata: {
+              checks: {
+                code_quality: {
+                  enabled: true,
+                  mode: "soft",
+                },
+              },
+            },
+          },
+          {
+            summary: "Updated the service implementation.",
+            changedFiles: ["service.ts"],
+            diffs: [
+              {
+                file: "service.ts",
+                before: "export const value = 1\n",
+                after: "export const value = 2\n",
+                additions: 1,
+                deletions: 1,
+                status: "modified",
+              },
+            ],
+          },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "code_quality")?.status).toBe("skipped")
+      },
+    })
+  })
+
+  test("code review soft-skips when no review model is available", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "Do a code review.",
+            metadata: {
+              checks: {
+                code_review: {
+                  enabled: true,
+                  mode: "soft",
+                },
+              },
+            },
+          },
+          {
+            summary: "Updated the controller.",
+            changedFiles: ["controller.ts"],
+            diffs: [
+              {
+                file: "controller.ts",
+                before: "export const value = 1\n",
+                after: "export const value = 2\n",
+                additions: 1,
+                deletions: 1,
+                status: "modified",
+              },
+            ],
+          },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "code_review")?.status).toBe("skipped")
+      },
+    })
+  })
+
+  test("dead code review soft-skips when no review model is available", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "Review dead code cleanup.",
+            metadata: {
+              checks: {
+                dead_code_review: {
+                  enabled: true,
+                  mode: "soft",
+                },
+              },
+            },
+          },
+          {
+            summary: "Removed old helpers.",
+            changedFiles: ["legacy.ts"],
+            diffs: [
+              {
+                file: "legacy.ts",
+                before: "export const old = 1\n",
+                after: "",
+                additions: 0,
+                deletions: 1,
+                status: "deleted",
+              },
+            ],
+          },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("skipped")
+      },
+    })
+  })
+
+  test("prefers changed playwright spec files over root test script discovery", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({
+        name: "evaluator-playwright-test",
+        scripts: {
+          test: "bun -e \"process.exit(1)\"",
+        },
+      }),
+    )
+    await Bun.write(
+      path.join(tmp.path, "sample.spec.ts"),
+      `
+        import { test, expect } from "@playwright/test"
+        test("sample", async ({ page }) => {
+          await page.setContent("<h1>ok</h1>")
+          await expect(page.getByText("ok")).toBeVisible()
+        })
+      `,
+    )
+    await Bun.spawn(["bun", "add", "-d", "@playwright/test@1.51.0"], {
+      cwd: tmp.path,
+      stdout: "ignore",
+      stderr: "ignore",
+    }).exited
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "run playwright test",
+            metadata: {
+              delivery_changed_files: ["sample.spec.ts"],
+            },
+          },
+          { summary: "delivery ready", changedFiles: ["sample.spec.ts"], diffs: [] },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
+      },
+    })
+  })
+
+  test("ignores bun:test files when selecting changed playwright specs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({
+        name: "evaluator-mixed-test",
+        scripts: {
+          test: "bun -e \"process.exit(1)\"",
+        },
+      }),
+    )
+    await Bun.write(
+      path.join(tmp.path, "sample.spec.ts"),
+      `
+        import { test, expect } from "@playwright/test"
+        test("sample", async ({ page }) => {
+          await page.setContent("<h1>ok</h1>")
+          await expect(page.getByText("ok")).toBeVisible()
+        })
+      `,
+    )
+    await Bun.write(
+      path.join(tmp.path, "unit.test.ts"),
+      `
+        import { describe, expect, test } from "bun:test"
+        const embedded = 'from "@playwright/test"'
+        describe("unit", () => {
+          test("works", () => {
+            expect(embedded.includes("@playwright/test")).toBe(true)
+            expect(1 + 1).toBe(2)
+          })
+        })
+      `,
+    )
+    await Bun.spawn(["bun", "add", "-d", "@playwright/test@1.51.0"], {
+      cwd: tmp.path,
+      stdout: "ignore",
+      stderr: "ignore",
+    }).exited
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "run playwright test",
+            metadata: {
+              delivery_changed_files: ["sample.spec.ts", "unit.test.ts"],
+            },
+          },
+          { summary: "delivery ready", changedFiles: ["sample.spec.ts", "unit.test.ts"], diffs: [] },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
+      },
+    })
+  })
+
+  test("runs changed bun tests before falling back to root scripts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({
+        name: "evaluator-bun-test",
+        scripts: {
+          test: "bun -e \"process.exit(1)\"",
+        },
+      }),
+    )
+    await Bun.write(
+      path.join(tmp.path, "unit.test.ts"),
+      `
+        import { describe, expect, test } from "bun:test"
+        describe("unit", () => {
+          test("works", () => {
+            expect(1 + 1).toBe(2)
+          })
+        })
+      `,
+    )
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "run unit test",
+            metadata: {
+              delivery_changed_files: ["unit.test.ts"],
+            },
+          },
+          { summary: "delivery ready", changedFiles: ["unit.test.ts"], diffs: [] },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
+      },
+    })
+  })
+
+  test("prefers nearest subproject package scripts over repo root scripts", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(
+      path.join(tmp.path, "package.json"),
+      JSON.stringify({
+        name: "root-project",
+        scripts: {
+          build: "bun -e \"process.exit(1)\"",
+          test: "bun -e \"process.exit(1)\"",
+          lint: "bun -e \"process.exit(1)\"",
+        },
+      }),
+    )
+    const app = path.join(tmp.path, "tank-battle-game")
+    await Bun.write(
+      path.join(app, "package.json"),
+      JSON.stringify({
+        name: "tank-battle-game",
+        scripts: {
+          build: "bun -e \"console.log('build ok')\"",
+          test: "bun -e \"console.log('test ok')\"",
+          lint: "bun -e \"console.log('lint ok')\"",
+        },
+      }),
+    )
+    await Bun.write(path.join(app, "index.html"), "<!doctype html><title>tank</title>\n")
+    await Bun.write(path.join(app, "game.js"), "console.log('tank')\n")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "create a tank battle game",
+            metadata: {
+              delivery_changed_files: ["tank-battle-game/package.json", "tank-battle-game/index.html", "tank-battle-game/game.js"],
+            },
+          },
+          {
+            summary: "Created a tank battle game project.",
+            changedFiles: ["tank-battle-game/package.json", "tank-battle-game/index.html", "tank-battle-game/game.js"],
+            diffs: [],
+          },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["build", "test", "lint"])
+        const commands = result.artifacts
+          .filter((item) => item.kind === "log")
+          .map((item) => String(item.payload.command ?? ""))
+        expect(commands.every((item) => item.includes("bun run"))).toBe(true)
+      },
+    })
+  })
 })

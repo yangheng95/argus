@@ -923,6 +923,27 @@ export namespace Config {
       ref: "ServerConfig",
     })
 
+  export const SlackChannel = z
+    .object({
+      enabled: z.boolean().optional().describe("Enable Slack channel integration"),
+      botToken: z.string().optional().describe("Slack bot token"),
+      appToken: z.string().optional().describe("Slack app token for Socket Mode"),
+      signingSecret: z.string().optional().describe("Slack signing secret"),
+    })
+    .strict()
+    .meta({
+      ref: "SlackChannelConfig",
+    })
+
+  export const Channel = z
+    .object({
+      slack: SlackChannel.optional(),
+    })
+    .strict()
+    .meta({
+      ref: "ChannelConfig",
+    })
+
   export const Layout = z.enum(["auto", "stretch"]).meta({
     ref: "LayoutConfig",
   })
@@ -986,6 +1007,7 @@ export namespace Config {
       $schema: z.string().optional().describe("JSON schema reference for configuration validation"),
       logLevel: Log.Level.optional().describe("Log level"),
       server: Server.optional().describe("Server configuration for opencorvus serve and web commands"),
+      channel: Channel.optional().describe("Channel integration configuration"),
       command: z
         .record(z.string(), Command)
         .optional()

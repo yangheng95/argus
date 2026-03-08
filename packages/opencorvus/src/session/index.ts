@@ -18,7 +18,6 @@ import { Log } from "../util/log"
 import { MessageV2 } from "./message"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
-import { ScreenshotStore } from "./screenshot-store"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
@@ -237,6 +236,7 @@ export namespace Session {
       const title = getForkedTitle(original.title)
       const session = await createNext({
         directory: Instance.directory,
+        parentID: input.sessionID,
         title,
       })
       const msgs = await messages({ sessionID: input.sessionID })
@@ -638,25 +638,20 @@ export namespace Session {
   })
 
   export const remove = fn(Identifier.schema("session"), async (sessionID) => {
-    try {
-      const session = await get(sessionID)
-      for (const child of await children(sessionID)) {
-        await remove(child.id)
-      }
-      await unshare(sessionID).catch(() => {})
-      await ScreenshotStore.removeSession(sessionID).catch(() => {})
-      // CASCADE delete handles messages and parts automatically
-      Database.use((db) => {
-        db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
-        Database.effect(() =>
-          Bus.publish(Event.Deleted, {
-            info: session,
-          }),
-        )
-      })
-    } catch (e) {
-      log.error(e)
+    const session = await get(sessionID)
+    for (const child of await children(sessionID)) {
+      await remove(child.id)
     }
+    await unshare(sessionID).catch(() => {})
+    // CASCADE delete handles messages and parts automatically
+    Database.use((db) => {
+      db.delete(SessionTable).where(eq(SessionTable.id, sessionID)).run()
+      Database.effect(() =>
+        Bus.publish(Event.Deleted, {
+          info: session,
+        }),
+      )
+    })
   })
 
   export const updateMessage = fn(MessageV2.Info, async (msg) => {
