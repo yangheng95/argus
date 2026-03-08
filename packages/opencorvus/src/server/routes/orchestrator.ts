@@ -29,7 +29,7 @@ import {
   UpdateTaskChecksInput,
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
-import { ExecutorNotConfiguredError, OrchestratorService } from "@/orchestrator/service"
+import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -63,6 +63,11 @@ export const OrchestratorRoutes = lazy(() =>
           if (error instanceof ExecutorNotConfiguredError) {
             throw new HTTPException(400, {
               message: error.data.message,
+            })
+          }
+          if (error instanceof PlannerFailureError) {
+            throw new HTTPException(503, {
+              message: error.message,
             })
           }
           throw error
@@ -413,7 +418,14 @@ export const OrchestratorRoutes = lazy(() =>
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
-        return c.json(await OrchestratorService.replanTask(c.req.valid("param").taskID))
+        return c.json(await OrchestratorService.replanTask(c.req.valid("param").taskID).catch((error) => {
+          if (error instanceof PlannerFailureError) {
+            throw new HTTPException(503, {
+              message: error.message,
+            })
+          }
+          throw error
+        }))
       },
     )
     .get(

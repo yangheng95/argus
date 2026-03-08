@@ -55,6 +55,9 @@ const state = {
   elapsedTimer: null,
   changeKey: "",
   _renderedGroupKey: "",
+  memoryFiles: [],
+  memorySearchMode: false,
+  preferences: [],
 };
 
 // ── DOM Refs ──
@@ -182,6 +185,29 @@ const dom = {
   settingsConfigRoot: $("#settingsConfigRoot"),
   settingsConfigFile: $("#settingsConfigFile"),
   settingsOverlayFile: $("#settingsOverlayFile"),
+  // Knowledge: Memory & Preferences
+  memoryBadge: $("#memoryBadge"),
+  memoryList: $("#memoryList"),
+  memorySearch: $("#memorySearch"),
+  btnMemorySearch: $("#btnMemorySearch"),
+  btnMemoryRefresh: $("#btnMemoryRefresh"),
+  preferenceBadge: $("#preferenceBadge"),
+  preferenceList: $("#preferenceList"),
+  btnPreferenceRefresh: $("#btnPreferenceRefresh"),
+  btnPreferenceAdd: $("#btnPreferenceAdd"),
+  memoryDialog: $("#memoryDialog"),
+  memoryDialogTitle: $("#memoryDialogTitle"),
+  memoryDialogMeta: $("#memoryDialogMeta"),
+  memoryDialogContent: $("#memoryDialogContent"),
+  btnDeleteMemory: $("#btnDeleteMemory"),
+  btnCloseMemory: $("#btnCloseMemory"),
+  prefEditDialog: $("#prefEditDialog"),
+  prefEditForm: $("#prefEditForm"),
+  prefEditTitle: $("#prefEditTitle"),
+  prefEditId: $("#prefEditId"),
+  prefEditKey: $("#prefEditKey"),
+  prefEditValue: $("#prefEditValue"),
+  btnCancelPrefEdit: $("#btnCancelPrefEdit"),
 };
 
 function sanitizeTheme(value) {
@@ -2429,11 +2455,110 @@ function groupMessagesByRole(sorted) {
 // Inject synthetic messages from the board data so the chat shows the full
 // task lifecycle: user request, plan, goal updates, evaluation results.
 
+function boardArtifact(board, label) {
+  const list = board?.artifacts || [];
+  return list.find((item) => item.label === label);
+}
+
+function planContextText(plan, goals) {
+  const planner = plan.metadata?.planner || {};
+  const steps = Array.isArray(plan.metadata?.steps) ? plan.metadata.steps : [];
+  const milestones = Array.isArray(plan.metadata?.milestones) ? plan.metadata.milestones : [];
+  const risks = Array.isArray(plan.metadata?.risks) ? plan.metadata.risks : [];
+  const clarification = plan.metadata?.clarification;
+  const spec = plan.metadata?.spec_analysis;
+
+  const lines = [`**Plan v${plan.version}**`];
+  if (plan.summary) lines.push("", `Summary: ${plan.summary}`);
+  if (planner.role || planner.quality || planner.source) {
+    lines.push("", `Planner: ${[planner.role, planner.quality, planner.source].filter(Boolean).join(" / ")}`);
+  }
+  if (steps.length > 0) {
+    lines.push("", "**Execution Outline**");
+    lines.push(...steps.slice(0, 8).map((s, i) => `${i + 1}. ${s}`));
+  }
+  if (milestones.length > 0) {
+    lines.push("", "**Milestones**");
+    lines.push(...milestones.map((m, i) => `- ${i + 1}. ${m.title}`));
+  }
+  if (goals.length > 0) {
+    lines.push("", `**Goal Count**: ${goals.length}`);
+  }
+  if (risks.length > 0) {
+    lines.push("", "**Risks**");
+    lines.push(...risks.slice(0, 5).map((r) => `- ${r}`));
+  }
+  if (clarification?.questions?.length) {
+    lines.push("", `**Clarification Needed**: ${clarification.questions.length} open question${clarification.questions.length > 1 ? "s" : ""}`);
+  }
+  if (typeof spec?.expanded_spec === "string" && spec.expanded_spec.trim()) {
+    lines.push("", "**Expanded Spec**");
+    lines.push(spec.expanded_spec.slice(0, 600));
+  }
+  return lines.join("\n");
+}
+
+function goalContextText(goals) {
+  const passed = goals.filter((g) => g.status === "passed").length;
+  const failed = goals.filter((g) => g.status === "failed").length;
+  const pending = goals.filter((g) => g.status !== "passed" && g.status !== "failed").length;
+  const header =
+    passed + failed > 0
+      ? `**Goal Results** (${passed}/${goals.length} passed, ${failed} failed, ${pending} pending)`
+      : `**Goals** (${goals.length})`;
+  const lines = [header, ""];
+  for (const goal of goals) {
+    const icon = goal.status === "passed" ? "\u2705" : goal.status === "failed" ? "\u274C" : "\u23F3";
+    lines.push(`${icon} **${goal.title}**`);
+    if (goal.detail) lines.push(`   Criteria: ${goal.detail}`);
+    if (goal.metadata?.origin) lines.push(`   Origin: ${goal.metadata.origin}`);
+  }
+  return lines.join("\n");
+}
+
+function evaluationContextText(board, goals) {
+  const evaluation = board.evaluation;
+  const analysis = boardArtifact(board, "evaluator-agent-analysis")?.payload || {};
+  const error = boardArtifact(board, "evaluator-agent-error")?.payload || {};
+  const verdictIcon = evaluation.verdict === "accepted" ? "\u2705" : evaluation.verdict === "rejected" ? "\u274C" : "\u26A0";
+  const lines = [`${verdictIcon} **Evaluation: ${evaluation.verdict}**`];
+  if (analysis.classification) lines.push("", `Classification: ${analysis.classification}`);
+  if (evaluation.summary) lines.push("", evaluation.summary);
+  if (error.error) lines.push("", `Evaluator error: ${error.error}`);
+
+  const checks = evaluation.checks || [];
+  if (checks.length > 0) {
+    lines.push("", "**Checks**");
+    for (const check of checks) {
+      const icon = check.status === "passed" ? "\u2713" : check.status === "failed" ? "\u2717" : "\u2014";
+      lines.push(`- ${icon} ${check.name}: ${check.evidence || check.status}`);
+    }
+  }
+
+  const goalStatuses = Array.isArray(analysis.goal_statuses) ? analysis.goal_statuses : [];
+  if (goalStatuses.length > 0) {
+    lines.push("", "**Goal Assessments**");
+    for (const item of goalStatuses) {
+      const goal = goals[item.goal_index];
+      const icon = item.status === "passed" ? "\u2705" : item.status === "failed" ? "\u274C" : "\u23F3";
+      lines.push(`- ${icon} ${(goal && goal.title) || `Goal ${item.goal_index + 1}`}: ${item.evidence || item.status}`);
+    }
+  }
+
+  if (analysis.replan_guidance?.root_cause || analysis.replan_guidance?.suggested_strategy) {
+    lines.push("", "**Replan Guidance**");
+    if (analysis.replan_guidance.root_cause) lines.push(`- Root cause: ${analysis.replan_guidance.root_cause}`);
+    if (analysis.replan_guidance.suggested_strategy) lines.push(`- Strategy: ${analysis.replan_guidance.suggested_strategy}`);
+  }
+
+  return lines.join("\n");
+}
+
 function buildBoardContextMessages() {
   const board = state.board;
   if (!board) return [];
   const msgs = [];
-  const { task, plan, evaluation, delivery, lanes, snapshots } = board;
+  const { task, plan, evaluation, delivery, lanes } = board;
 
   // 1. User request — show the original task request as a "user" turn
   if (task?.request) {
@@ -2446,14 +2571,9 @@ function buildBoardContextMessages() {
 
   // 2. Plan — show plan steps and full context
   if (plan) {
-    const steps = plan.metadata?.steps || [];
-    let planText = `**Plan v${plan.version}**`;
-    if (steps.length > 0) {
-      planText += "\n\n" + steps.map((s, i) => `${i + 1}. ${s}`).join("\n");
-    } else if (plan.summary && !plan.summary.endsWith("...")) {
-      // Only use summary if not truncated
-      planText += `: ${plan.summary}`;
-    }
+    const goalsLane = (lanes || []).find((l) => l.id === "goals");
+    const goals = goalsLane?.cards || [];
+    const planText = planContextText(plan, goals);
     msgs.push({
       _synthetic: true,
       info: { role: "planner", time: { created: plan.time?.created || (task?.time?.created || 0) - 1 } },
@@ -2465,52 +2585,20 @@ function buildBoardContextMessages() {
   const goalsLane = (lanes || []).find((l) => l.id === "goals");
   const goals = goalsLane?.cards || [];
   if (goals.length > 0) {
-    const resolvedGoals = goals.filter((g) => g.status === "passed" || g.status === "failed");
-    const goalLines = goals.map((g) => {
-      const icon = g.status === "passed" ? "\u2705" : g.status === "failed" ? "\u274C" : "\u23F3";
-      return `${icon} **${g.title}** — ${g.detail || g.status || "pending"}`;
-    });
-    const header = resolvedGoals.length > 0
-      ? `**Goal Results** (${resolvedGoals.filter(g => g.status === "passed").length}/${goals.length} passed)`
-      : `**Goals** (${goals.length})`;
     const goalTime = evaluation?.time?.created || task?.time?.updated || Date.now();
     msgs.push({
       _synthetic: true,
       info: { role: "goal_gate", time: { created: goalTime - 1 } },
-      parts: [{ type: "text", text: `${header}\n\n${goalLines.join("\n")}` }],
+      parts: [{ type: "text", text: goalContextText(goals) }],
     });
   }
 
   // 4. Evaluation verdict — show as "scheduler" turn
   if (evaluation?.verdict) {
-    const verdictIcon = evaluation.verdict === "accepted" ? "\u2705" : "\u274C";
-    let evalText = `${verdictIcon} **Evaluation: ${evaluation.verdict}**`;
-    const checks = evaluation.checks || [];
-    if (checks.length > 0) {
-      const checkLines = checks.map((c) => {
-        const ci = c.status === "passed" ? "\u2713" : c.status === "failed" ? "\u2717" : c.status === "skipped" ? "\u2014" : "\u2022";
-        const checkName = c.kind || c.name || c.status;
-        return `- ${ci} **${checkName}**: ${c.summary || c.status}`;
-      });
-      evalText += "\n\n" + checkLines.join("\n");
-    }
-    // Evaluation summary
-    if (evaluation.summary) {
-      evalText += "\n\n" + evaluation.summary;
-    }
-    // Goal evaluations
-    const goalEvals = evaluation.goals || [];
-    if (goalEvals.length > 0) {
-      const gLines = goalEvals.map((g) => {
-        const gi = g.status === "passed" ? "\u2705" : "\u274C";
-        return `- ${gi} ${g.description || g.title}`;
-      });
-      evalText += "\n\n**Goals:**\n" + gLines.join("\n");
-    }
     msgs.push({
       _synthetic: true,
       info: { role: "scheduler", time: { created: evaluation.time?.created || Date.now() } },
-      parts: [{ type: "text", text: evalText }],
+      parts: [{ type: "text", text: evaluationContextText(board, goals) }],
     });
   }
 
@@ -3528,6 +3616,249 @@ function setupDialogBackdropClose() {
   });
 }
 
+// ── Knowledge: Memory & Preferences ──
+
+async function loadMemory() {
+  try {
+    const files = await apiJson("panel/knowledge/memory");
+    state.memoryFiles = Array.isArray(files) ? files : [];
+    state.memorySearchMode = false;
+    renderMemory();
+  } catch {
+    state.memoryFiles = [];
+    renderMemory();
+  }
+}
+
+async function searchMemory(query) {
+  if (!query || !query.trim()) {
+    return loadMemory();
+  }
+  try {
+    const results = await apiJson("panel/knowledge/memory/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query.trim(), limit: 20 }),
+    });
+    // Convert search results to a display-friendly format
+    state.memoryFiles = (Array.isArray(results) ? results : []).map((r) => ({
+      id: r.fileId,
+      title: r.fileTitle,
+      scope: r.scope || "global",
+      source: "search",
+      score: r.score,
+      snippet: r.content ? r.content.slice(0, 200) : "",
+      timeUpdated: r.timeCreated || 0,
+    }));
+    state.memorySearchMode = true;
+    renderMemory();
+  } catch {
+    // fallback
+  }
+}
+
+function renderMemory() {
+  const files = state.memoryFiles;
+  if (dom.memoryBadge) {
+    dom.memoryBadge.textContent = files.length ? String(files.length) : "";
+  }
+  if (!dom.memoryList) return;
+
+  if (!files.length) {
+    dom.memoryList.innerHTML = `<div class="empty-hint">${state.memorySearchMode ? "No results" : "No memories"}</div>`;
+    return;
+  }
+
+  dom.memoryList.innerHTML = files
+    .map((f) => {
+      const time = f.timeUpdated ? new Date(f.timeUpdated).toLocaleDateString() : "";
+      const mode = state.memorySearchMode ? "search" : "list";
+      const scoreHint = f.score != null ? ` · score: ${f.score.toFixed(2)}` : "";
+      return `<div class="knowledge-item" data-mode="${mode}" data-id="${escapeHtml(f.id)}" onclick="openMemoryDetail('${escapeHtml(f.id)}')">
+        <div class="knowledge-item-main">
+          <div class="knowledge-item-title">${escapeHtml(f.title)}</div>
+          <div class="knowledge-item-meta">${escapeHtml(f.source)}${scoreHint} · ${time}</div>
+          ${f.snippet ? `<div class="knowledge-item-meta">${escapeHtml(f.snippet)}</div>` : ""}
+        </div>
+        <span class="knowledge-scope" data-scope="${escapeHtml(f.scope)}">${escapeHtml(f.scope)}</span>
+      </div>`;
+    })
+    .join("");
+}
+
+let _currentMemoryId = "";
+
+async function openMemoryDetail(fileId) {
+  _currentMemoryId = fileId;
+  if (!dom.memoryDialog) return;
+  dom.memoryDialogTitle.textContent = "Loading...";
+  dom.memoryDialogMeta.innerHTML = "";
+  dom.memoryDialogContent.textContent = "Loading...";
+  dom.memoryDialog.showModal();
+
+  try {
+    const data = await apiJson(`panel/knowledge/memory/${encodeURIComponent(fileId)}`);
+    const f = data.file;
+    dom.memoryDialogTitle.textContent = f.title;
+    dom.memoryDialogMeta.innerHTML = [
+      `<span class="knowledge-scope" data-scope="${escapeHtml(f.scope)}">${escapeHtml(f.scope)}</span>`,
+      `<span>Source: ${escapeHtml(f.source)}</span>`,
+      `<span>Created: ${new Date(f.timeCreated).toLocaleString()}</span>`,
+      `<span>Updated: ${new Date(f.timeUpdated).toLocaleString()}</span>`,
+    ].join("");
+    dom.memoryDialogContent.textContent = data.content || "(empty)";
+  } catch (e) {
+    dom.memoryDialogTitle.textContent = "Error";
+    dom.memoryDialogContent.textContent = e.message || "Failed to load memory";
+  }
+}
+
+async function deleteMemory(fileId) {
+  if (!fileId) return;
+  try {
+    await apiJson(`panel/knowledge/memory/${encodeURIComponent(fileId)}`, { method: "DELETE" });
+    dom.memoryDialog?.close();
+    await loadMemory();
+  } catch (e) {
+    console.error("Failed to delete memory:", e);
+  }
+}
+
+async function loadPreferences() {
+  try {
+    const prefs = await apiJson("panel/knowledge/preference");
+    state.preferences = Array.isArray(prefs) ? prefs : [];
+    renderPreferences();
+  } catch {
+    state.preferences = [];
+    renderPreferences();
+  }
+}
+
+function renderPreferences() {
+  const prefs = state.preferences;
+  if (dom.preferenceBadge) {
+    dom.preferenceBadge.textContent = prefs.length ? String(prefs.length) : "";
+  }
+  if (!dom.preferenceList) return;
+
+  if (!prefs.length) {
+    dom.preferenceList.innerHTML = '<div class="empty-hint">No preferences</div>';
+    return;
+  }
+
+  dom.preferenceList.innerHTML = prefs
+    .map((p) => {
+      const isBuiltin = p.source === "builtin_default";
+      const deleteBtn = isBuiltin
+        ? ""
+        : `<button class="btn btn-ghost mini danger" onclick="event.stopPropagation(); deletePreference('${escapeHtml(p.id)}')">Del</button>`;
+      return `<div class="pref-item" onclick="openPrefEdit('${escapeHtml(p.id)}')">
+        <div class="pref-item-head">
+          <span class="pref-item-key">${escapeHtml(p.key)}</span>
+          <span class="knowledge-scope" data-scope="${escapeHtml(p.scope)}" data-source="${escapeHtml(p.source)}">${isBuiltin ? "default" : escapeHtml(p.scope)}</span>
+          <div class="pref-item-actions">
+            ${deleteBtn}
+          </div>
+        </div>
+        <div class="pref-item-value">${escapeHtml(p.value)}</div>
+      </div>`;
+    })
+    .join("");
+}
+
+function openPrefEdit(prefId) {
+  if (!dom.prefEditDialog) return;
+  if (prefId) {
+    const pref = state.preferences.find((p) => p.id === prefId);
+    if (!pref) return;
+    dom.prefEditTitle.textContent = "Edit Preference";
+    dom.prefEditId.value = prefId;
+    dom.prefEditKey.value = pref.key;
+    dom.prefEditValue.value = pref.value;
+    // Disable key editing for existing prefs
+    dom.prefEditKey.readOnly = true;
+  } else {
+    dom.prefEditTitle.textContent = "Add Preference";
+    dom.prefEditId.value = "";
+    dom.prefEditKey.value = "";
+    dom.prefEditValue.value = "";
+    dom.prefEditKey.readOnly = false;
+  }
+  dom.prefEditDialog.showModal();
+}
+
+async function savePrefEdit() {
+  const key = dom.prefEditKey?.value?.trim();
+  const value = dom.prefEditValue?.value?.trim();
+  if (!key || !value) return;
+  try {
+    await apiJson("panel/knowledge/preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    });
+    dom.prefEditDialog?.close();
+    await loadPreferences();
+  } catch (e) {
+    console.error("Failed to save preference:", e);
+  }
+}
+
+async function deletePreference(prefId) {
+  if (!prefId || prefId.startsWith("default:")) return;
+  try {
+    await apiJson(`panel/knowledge/preference/${encodeURIComponent(prefId)}`, { method: "DELETE" });
+    await loadPreferences();
+  } catch (e) {
+    console.error("Failed to delete preference:", e);
+  }
+}
+
+async function loadKnowledge() {
+  await Promise.all([loadMemory(), loadPreferences()]);
+}
+
+// Knowledge event listeners
+if (dom.btnMemorySearch) {
+  dom.btnMemorySearch.addEventListener("click", () => searchMemory(dom.memorySearch?.value));
+}
+if (dom.memorySearch) {
+  dom.memorySearch.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      searchMemory(dom.memorySearch.value);
+    }
+  });
+}
+if (dom.btnMemoryRefresh) {
+  dom.btnMemoryRefresh.addEventListener("click", () => {
+    if (dom.memorySearch) dom.memorySearch.value = "";
+    loadMemory();
+  });
+}
+if (dom.btnCloseMemory) {
+  dom.btnCloseMemory.addEventListener("click", () => dom.memoryDialog?.close());
+}
+if (dom.btnDeleteMemory) {
+  dom.btnDeleteMemory.addEventListener("click", () => deleteMemory(_currentMemoryId));
+}
+if (dom.btnPreferenceRefresh) {
+  dom.btnPreferenceRefresh.addEventListener("click", () => loadPreferences());
+}
+if (dom.btnPreferenceAdd) {
+  dom.btnPreferenceAdd.addEventListener("click", () => openPrefEdit(null));
+}
+if (dom.prefEditForm) {
+  dom.prefEditForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    savePrefEdit();
+  });
+}
+if (dom.btnCancelPrefEdit) {
+  dom.btnCancelPrefEdit.addEventListener("click", () => dom.prefEditDialog?.close());
+}
+
 // ── Init ──
 
 toggleMcpFields();
@@ -3605,7 +3936,7 @@ async function init() {
   renderExecutor();
   const ok = await checkConnection();
   if (ok) {
-    await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
+    await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
   } else {
     renderMeta();
     renderExtensions();
@@ -3615,7 +3946,7 @@ async function init() {
     if (!state.connected) {
       const ok = await checkConnection();
       if (ok) {
-        await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
+        await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
         if (state.selectedTaskID) selectTask(state.selectedTaskID);
       }
     }

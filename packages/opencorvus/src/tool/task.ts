@@ -44,6 +44,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
     parameters,
     async execute(params: z.infer<typeof parameters>, ctx) {
       const config = await Config.get()
+      const planMode = ctx.extra?.planMode === true || ctx.agent === "plan"
 
       // Skip permission check when user explicitly invoked via @ or command subtask
       if (!ctx.extra?.bypassAgentCheck) {
@@ -73,6 +74,30 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           parentID: ctx.sessionID,
           title: params.description + ` (@${agent.name} subagent)`,
           permission: [
+            ...(planMode
+              ? [
+                  {
+                    permission: "edit" as const,
+                    pattern: "*" as const,
+                    action: "deny" as const,
+                  },
+                  {
+                    permission: "bash" as const,
+                    pattern: "*" as const,
+                    action: "deny" as const,
+                  },
+                  {
+                    permission: "apply_patch" as const,
+                    pattern: "*" as const,
+                    action: "deny" as const,
+                  },
+                  {
+                    permission: "schedule" as const,
+                    pattern: "*" as const,
+                    action: "deny" as const,
+                  },
+                ]
+              : []),
             {
               permission: "todowrite",
               pattern: "*",
@@ -139,6 +164,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
           ...(hasTaskPermission ? {} : { task: false }),
           ...Object.fromEntries((config.experimental?.primary_tools ?? []).map((t) => [t, false])),
         },
+        extra: planMode ? { planMode: true } : undefined,
         parts: promptParts,
       })
 

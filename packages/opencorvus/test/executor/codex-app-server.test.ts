@@ -213,6 +213,65 @@ describe("codex app server executor", () => {
     expect(result.some((item) => item.type === "approval_request")).toBe(true)
     expect(result.filter((item) => item.type === "input_request").length).toBe(2)
   })
+
+  test("stops streaming once the current turn completes", async () => {
+    const provider = CodexAppServerExecutor.create({
+      async initialize() {
+        return {}
+      },
+      async threadStart() {
+        return {
+          thread: {
+            id: "thr_stop",
+          },
+        }
+      },
+      async threadResume() {
+        return {
+          thread: {
+            id: "thr_stop",
+          },
+        }
+      },
+      async turnStart() {
+        return {
+          turn: {
+            id: "turn_stop",
+          },
+        }
+      },
+      async turnInterrupt() {
+        return true
+      },
+      async *events() {
+        yield {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_stop",
+            turn: {
+              id: "turn_stop",
+              items: [],
+              status: "completed",
+              error: null,
+            },
+          },
+        }
+        await new Promise(() => {})
+      },
+    })
+
+    const result = await Promise.race([
+      collect(provider.run({ prompt: "test" })),
+      Bun.sleep(100).then(() => "timeout"),
+    ])
+
+    expect(result).not.toBe("timeout")
+    expect(Array.isArray(result)).toBe(true)
+    if (Array.isArray(result)) {
+      expect(result.at(-1)?.type).toBe("done")
+    }
+  })
 })
 
 function client(events: Array<{

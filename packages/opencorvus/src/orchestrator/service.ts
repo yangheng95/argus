@@ -5,7 +5,7 @@ import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PermissionNext } from "@/permission/next"
-import { PlannerService } from "@/planner/service"
+import { PlannerFailureError, PlannerService } from "@/planner/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
@@ -52,6 +52,7 @@ import {
   orchestratorState,
   progressStatus,
 } from "./helpers"
+import { GoalService } from "./goal-service"
 import { OrchestratorInteraction } from "./interaction"
 import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
@@ -135,17 +136,7 @@ export namespace OrchestratorService {
       await ExecutorBootstrap.autoRegister(true).catch(() => undefined)
     }
     ExecutorRegistry.require(executor)
-    const planDraft = await PlannerService.initial({
-      title,
-      request: input.request,
-      goals: input.goals,
-    })
     const session = await Session.create({ title })
-    // Orchestrator-dispatched tasks run headless — auto-approve all tool permissions
-    await Session.setPermission({
-      sessionID: session.id,
-      permission: [{ permission: "*", pattern: "*", action: "allow" }],
-    })
     const now = Date.now()
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
@@ -156,6 +147,103 @@ export namespace OrchestratorService {
       ...(input.metadata ?? {}),
       ...(input.checks ? { checks: input.checks } : {}),
     }
+    // Orchestrator-dispatched tasks run headless — auto-approve all tool permissions
+    await Session.setPermission({
+      sessionID: session.id,
+      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+    })
+    const planDraft = await PlannerService.initial({
+      title,
+      request: input.request,
+      goals: input.goals,
+    }).catch(async (error) => {
+      if (!(error instanceof PlannerFailureError)) throw error
+      try {
+        Database.transaction((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              active_run_id: runID,
+              request_id: requestID,
+              source: input.source ?? "api",
+              title,
+              request: input.request,
+              status: "failed",
+              priority: input.priority ?? "normal",
+              budget: budgetRow(input.budget),
+              metadata: {
+                ...metadata,
+                planner_failure: true,
+              },
+              error: error.message,
+              time_created: now,
+              time_updated: now,
+              time_completed: now,
+            })
+            .run()
+          db.insert(OrchestratorRunTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              session_id: session.id,
+              executor,
+              status: "failed",
+              phase: "plan",
+              retry_count: 0,
+              error: error.message,
+              metadata: {
+                strategy: "planning_failed",
+              },
+              time_created: now,
+              time_updated: now,
+              time_completed: now,
+            })
+            .run()
+          if (input.channelBinding) {
+            db.insert(OrchestratorChannelBindingTable)
+              .values({
+                id: Identifier.ascending("binding"),
+                task_id: taskID,
+                platform: input.channelBinding.platform,
+                channel: input.channelBinding.channel,
+                thread: input.channelBinding.thread,
+                payload: input.channelBinding.payload ?? {},
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          }
+          db.insert(OrchestratorProgressSnapshotTable)
+            .values({
+              id: Identifier.ascending("progress"),
+              task_id: taskID,
+              status: "failed",
+              summary: "Planning failed before execution",
+              payload: {
+                error: error.message,
+                sessionID: session.id,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          Database.effect(() => Bus.publish(Event.TaskCreated, { taskID, status: "failed", summary: "Task created" }))
+          Database.effect(() => Bus.publish(Event.RunCreated, { taskID, runID, status: "failed", summary: "Planning failed" }))
+          Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID, status: "failed", summary: "Planning failed before execution" }))
+        })
+      } catch {
+        // Best effort: planner failure should still surface even if persistence also fails.
+      }
+      WorkbenchService.recordTaskRequest({
+        taskID,
+        content: input.request,
+        source: input.source ?? "api",
+        userID: slackUser(metadata),
+      })
+      throw error
+    })
     const clarification = plannerClarification(planDraft)
 
     if (clarification) {
@@ -570,18 +658,11 @@ export namespace OrchestratorService {
       db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).get(),
     )
     if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
-    Database.use((db) =>
-      db
-        .update(OrchestratorGoalTable)
-        .set({
-          description: body.description,
-          criteria: body.criteria,
-          metadata: inferGoalMetadata(body.description, body.criteria),
-          time_updated: Date.now(),
-        })
-        .where(eq(OrchestratorGoalTable.id, goalID))
-        .run(),
-    )
+    GoalService.updateGoal({
+      goalID,
+      description: body.description,
+      criteria: body.criteria,
+    })
     return true
   }
 
@@ -590,9 +671,7 @@ export namespace OrchestratorService {
       db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).get(),
     )
     if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
-    Database.use((db) =>
-      db.delete(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).run(),
-    )
+    GoalService.deleteGoal(goalID)
     return true
   }
 }
@@ -936,7 +1015,7 @@ export namespace OrchestratorService {
   }
 }
 
-export { ExecutorNotConfiguredError }
+export { ExecutorNotConfiguredError, PlannerFailureError }
 
 function writeTaskChecks(task: TaskRow, checks: Record<string, unknown> | undefined) {
   const metadata = {
@@ -1030,7 +1109,7 @@ function plannerClarification(planDraft: {
   if (questions.length === 0) return
   return {
     reason,
-    questions: [questions[0]!],
+    questions,
   }
 }
 

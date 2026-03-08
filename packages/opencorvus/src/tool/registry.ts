@@ -6,7 +6,7 @@ import { GrepTool } from "./grep"
 import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
-import { TodoWriteTool } from "./todo"
+import { TodoReadTool, TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
@@ -32,10 +32,10 @@ import { MemoryTool } from "./memory"
 import { PreferenceTool } from "./preference"
 import { ScheduleTool } from "./schedule"
 import { PlannerTool } from "./planner"
-import { GoalTool } from "./goal"
 import { PanelTool } from "./panel"
 import { TuiTool } from "./tui"
 import { TaskReportTool } from "./task-report"
+import { PlanEnterTool, PlanExitTool } from "./plan"
 import { Glob } from "../util/glob"
 import { pathToFileURL } from "url"
 
@@ -122,9 +122,11 @@ export namespace ToolRegistry {
       EditTool,
       WriteTool,
       TaskTool,
+      PlanEnterTool,
+      PlanExitTool,
       WebFetchTool,
       TodoWriteTool,
-      // TodoReadTool,
+      TodoReadTool,
       WebSearchTool,
       CodeSearchTool,
       SkillTool,
@@ -133,7 +135,6 @@ export namespace ToolRegistry {
       PreferenceTool,
       ScheduleTool,
       PlannerTool,
-      GoalTool,
       PanelTool,
       TuiTool,
       TaskReportTool,

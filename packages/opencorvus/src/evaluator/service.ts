@@ -1109,27 +1109,14 @@ function reviewOutcome(
   extra: Record<string, unknown>,
 ) {
   if (!result.ok) {
-    return softOrStrict({
-      mode,
-      name,
-      summary: result.summary,
-      evidence: result.evidence,
-      payload: {
-        ...extra,
-        ...result.payload,
-      },
-    })
-  }
-
-  if (result.object.verdict === "accepted") {
     return {
-      outcome: "passed" as const,
-      summary: `${name} accepted the delivery.`,
+      outcome: "failed" as const,
+      summary: result.summary,
       checks: [
         {
           name,
-          status: "passed" as const,
-          evidence: clip(result.object.rationale),
+          status: "failed" as const,
+          evidence: result.evidence,
         },
       ],
       artifacts: [
@@ -1138,23 +1125,45 @@ function reviewOutcome(
           label: `evaluation:${name}`,
           payload: {
             ...extra,
-            ...result.object,
+            ...result.payload,
           },
         },
       ],
     }
   }
 
-  return softOrStrict({
-    mode,
-    name,
-    summary: result.object.verdict === "rejected" ? `${name} rejected the delivery.` : `${name} was inconclusive.`,
-    evidence: clip(result.object.rationale),
-    payload: {
-      ...extra,
-      ...result.object,
-    },
-  })
+  return result.object.verdict === "accepted"
+    ? {
+        outcome: "passed" as const,
+        summary: `${name} accepted the delivery.`,
+        checks: [
+          {
+            name,
+            status: "passed" as const,
+            evidence: clip(result.object.rationale),
+          },
+        ],
+        artifacts: [
+          {
+            kind: "report" as const,
+            label: `evaluation:${name}`,
+            payload: {
+              ...extra,
+              ...result.object,
+            },
+          },
+        ],
+      }
+    : softOrStrict({
+        mode,
+        name,
+        summary: result.object.verdict === "rejected" ? `${name} rejected the delivery.` : `${name} was inconclusive.`,
+        evidence: clip(result.object.rationale),
+        payload: {
+          ...extra,
+          ...result.object,
+        },
+      })
 }
 
 async function judgeResult(
@@ -1166,30 +1175,52 @@ async function judgeResult(
   const mode = config.mode ?? "soft"
   const model = await judgeModel()
   if (!model) {
-    return softOrStrict({
-      mode,
-      name: "judge",
+    return {
+      outcome: "failed" as const,
       summary: "Judge check unavailable because no model is configured.",
-      evidence: "No evaluator judge model available.",
-      payload: {
-        mode,
-        available: false,
-      },
-    })
+      checks: [
+        {
+          name: "judge",
+          status: "failed" as const,
+          evidence: "No evaluator judge model available.",
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:judge",
+          payload: {
+            mode,
+            available: false,
+          },
+        },
+      ],
+    }
   }
 
   const language = await Provider.getLanguage(model).catch(() => undefined)
   if (!language) {
-    return softOrStrict({
-      mode,
-      name: "judge",
+    return {
+      outcome: "failed" as const,
       summary: "Judge check unavailable because the language model could not be loaded.",
-      evidence: "Could not load evaluator judge model.",
-      payload: {
-        mode,
-        available: false,
-      },
-    })
+      checks: [
+        {
+          name: "judge",
+          status: "failed" as const,
+          evidence: "Could not load evaluator judge model.",
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:judge",
+          payload: {
+            mode,
+            available: false,
+          },
+        },
+      ],
+    }
   }
 
   const result = await generateObject({
@@ -1220,16 +1251,27 @@ async function judgeResult(
   })
 
   if (!result) {
-    return softOrStrict({
-      mode,
-      name: "judge",
+    return {
+      outcome: "failed" as const,
       summary: "Judge check failed to execute.",
-      evidence: "Judge model call failed.",
-      payload: {
-        mode,
-        available: true,
-      },
-    })
+      checks: [
+        {
+          name: "judge",
+          status: "failed" as const,
+          evidence: "Judge model call failed.",
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:judge",
+          payload: {
+            mode,
+            available: true,
+          },
+        },
+      ],
+    }
   }
 
   if (result.object.verdict === "accepted") {

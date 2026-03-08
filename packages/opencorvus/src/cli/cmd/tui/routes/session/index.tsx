@@ -76,7 +76,7 @@ import { Global } from "@/global"
 import { PermissionPrompt } from "./permission"
 import { QuestionPrompt } from "./question"
 import { DialogExportOptions } from "../../ui/dialog-export-options"
-import { formatTranscript } from "../../util/transcript"
+import { formatMessage, formatTranscript } from "../../util/transcript"
 import { textForBoth, textForUI } from "@/session/part-visibility"
 import { UI } from "@/cli/ui.ts"
 import { useTuiConfig } from "../../context/tui-config"
@@ -100,6 +100,7 @@ const context = createContext<{
   showThinking: () => boolean
   showTimestamps: () => boolean
   showDetails: () => boolean
+  showAssistantMetadata: () => boolean
   showGenericToolOutput: () => boolean
   diffWrapMode: () => "word" | "none"
   sync: ReturnType<typeof useSync>
@@ -721,30 +722,11 @@ export function Session() {
           return
         }
 
-        const parts = sync.data.part[lastAssistantMessage.id] ?? []
-        const textParts = parts.filter((part) => part.type === "text")
-        if (textParts.length === 0) {
-          toast.show({ message: "No text parts found in last assistant message", variant: "error" })
-          dialog.clear()
-          return
-        }
-
-        const text = textParts
-          .map((part) => part.text)
-          .join("\n")
-          .trim()
-        if (!text) {
-          toast.show({
-            message: "No text content found in last assistant message",
-            variant: "error",
-          })
-          dialog.clear()
-          return
-        }
-
-        Clipboard.copy(text)
-          .then(() => toast.show({ message: "Message copied to clipboard!", variant: "success" }))
-          .catch(() => toast.show({ message: "Failed to copy to clipboard", variant: "error" }))
+        void copyFormattedMessage(lastAssistantMessage, sync.data.part[lastAssistantMessage.id] ?? [], {
+          thinking: showThinking(),
+          toolDetails: showDetails(),
+          assistantMetadata: showAssistantMetadata(),
+        }, toast)
         dialog.clear()
       },
     },
@@ -948,13 +930,14 @@ export function Session() {
         },
         sessionID: route.sessionID,
         conceal,
-        showThinking,
-        showTimestamps,
-        showDetails,
-        showGenericToolOutput,
-        diffWrapMode,
-        sync,
-        tui: tuiConfig,
+      showThinking,
+      showTimestamps,
+      showDetails,
+      showAssistantMetadata,
+      showGenericToolOutput,
+      diffWrapMode,
+      sync,
+      tui: tuiConfig,
       }}
     >
       <box flexDirection="row">
@@ -1139,6 +1122,77 @@ const MIME_BADGE: Record<string, string> = {
   "application/x-directory": "dir",
 }
 
+function formattedMessage(
+  message: UserMessage | AssistantMessage,
+  parts: Part[],
+  options: {
+    thinking: boolean
+    toolDetails: boolean
+    assistantMetadata: boolean
+  },
+) {
+  return formatMessage(message, parts, options).trim()
+}
+
+function copyFormattedMessage(
+  message: UserMessage | AssistantMessage,
+  parts: Part[],
+  options: {
+    thinking: boolean
+    toolDetails: boolean
+    assistantMetadata: boolean
+  },
+  toast: ReturnType<typeof useToast>,
+) {
+  const text = formattedMessage(message, parts, options)
+  if (!text) {
+    toast.show({
+      message: "No formatted message content to copy",
+      variant: "error",
+    })
+    return Promise.resolve()
+  }
+  return Clipboard.copy(text)
+    .then(() => {
+      toast.show({
+        message: "Formatted message copied to clipboard!",
+        variant: "success",
+      })
+    })
+    .catch(() => {
+      toast.show({
+        message: "Failed to copy formatted message",
+        variant: "error",
+      })
+    })
+}
+
+function CopyMessageButton(props: {
+  message: UserMessage | AssistantMessage
+  parts: Part[]
+}) {
+  const ctx = use()
+  const { theme } = useTheme()
+  const toast = useToast()
+
+  return (
+    <text
+      fg={theme.textMuted}
+      onMouseUp={(evt) => {
+        evt.preventDefault()
+        evt.stopPropagation()
+        void copyFormattedMessage(props.message, props.parts, {
+          thinking: ctx.showThinking(),
+          toolDetails: ctx.showDetails(),
+          assistantMetadata: ctx.showAssistantMetadata(),
+        }, toast)
+      }}
+    >
+      <span style={{ bg: theme.backgroundElement, fg: theme.textMuted }}> copy </span>
+    </text>
+  )
+}
+
 function UserMessage(props: {
   message: UserMessage
   parts: Part[]
@@ -1155,7 +1209,7 @@ function UserMessage(props: {
   const queued = createMemo(() => props.pending && props.message.id > props.pending)
   const color = createMemo(() => local.agent.color(props.message.agent))
   const queuedFg = createMemo(() => selectedForeground(theme, color()))
-  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps())
+  const metadataVisible = createMemo(() => queued() || ctx.showTimestamps() || hover())
 
   const compaction = createMemo(() => props.parts.find((x) => x.type === "compaction"))
 
@@ -1203,21 +1257,28 @@ function UserMessage(props: {
                 </For>
               </box>
             </Show>
-            <Show
-              when={queued()}
-              fallback={
-                <Show when={ctx.showTimestamps()}>
+            <Show when={metadataVisible()}>
+              <box flexDirection="row" gap={1} alignItems="center" paddingTop={1}>
+                <Show
+                  when={queued()}
+                  fallback={
+                    <Show when={ctx.showTimestamps()}>
+                      <text fg={theme.textMuted}>
+                        <span style={{ fg: theme.textMuted }}>
+                          {Locale.todayTimeOrDateTime(props.message.time.created)}
+                        </span>
+                      </text>
+                    </Show>
+                  }
+                >
                   <text fg={theme.textMuted}>
-                    <span style={{ fg: theme.textMuted }}>
-                      {Locale.todayTimeOrDateTime(props.message.time.created)}
-                    </span>
+                    <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
                   </text>
                 </Show>
-              }
-            >
-              <text fg={theme.textMuted}>
-                <span style={{ bg: color(), fg: queuedFg(), bold: true }}> QUEUED </span>
-              </text>
+                <Show when={hover()}>
+                  <CopyMessageButton message={props.message} parts={props.parts} />
+                </Show>
+              </box>
             </Show>
           </box>
         </box>
@@ -1286,8 +1347,8 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
       </Show>
       <Switch>
         <Match when={props.last || final() || props.message.error?.name === "MessageAbortedError"}>
-          <box paddingLeft={3}>
-            <text marginTop={1}>
+          <box paddingLeft={3} marginTop={1} flexDirection="row" gap={1} alignItems="center">
+            <text>
               <span
                 style={{
                   fg:
@@ -1307,6 +1368,7 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
                 <span style={{ fg: theme.textMuted }}> · interrupted</span>
               </Show>
             </text>
+            <CopyMessageButton message={props.message} parts={props.parts} />
           </box>
         </Match>
       </Switch>

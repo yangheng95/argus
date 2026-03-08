@@ -1,6 +1,7 @@
 /**
- * PlannerAgent — A full-featured planning agent that mirrors the upstream
- * opencode plan skill workflow.
+ * HeadlessPlannerAgent — the orchestrator-owned planning stage that expands a
+ * task request into PRD/goals/milestones/subtasks/risks for downstream
+ * execution.
  *
  * Capabilities:
  * 1. Memory recall — searches project memory for prior work, patterns, gotchas
@@ -12,10 +13,7 @@
  */
 import { generateText, stepCountIs, type LanguageModelV2 } from "ai"
 import z from "zod"
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { Provider } from "@/provider/provider"
-import { Config } from "@/config/config"
-import { Env } from "@/env"
 import { createPlannerTools, prefetchContext } from "./tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
@@ -99,13 +97,13 @@ export interface ReplanContext {
 }
 
 // ---------------------------------------------------------------------------
-// PlannerAgent
+// HeadlessPlannerAgent
 // ---------------------------------------------------------------------------
 
 const MAX_STEPS = 30
 const TIMEOUT_MS = 300_000
 
-export namespace PlannerAgent {
+export namespace HeadlessPlannerAgent {
   export async function plan(input: {
     title: string
     request: string
@@ -153,7 +151,7 @@ export namespace PlannerAgent {
       model: language as LanguageModelV2,
       stopWhen: stepCountIs(MAX_STEPS),
       tools,
-      maxTokens: 16384,
+      maxTokens: 32768,
       abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
       system: PLANNER_SYSTEM,
       prompt: userPrompt,
@@ -173,20 +171,49 @@ export namespace PlannerAgent {
       textPreview: allText.slice(0, 200),
     })
 
-    // Extract JSON from collected text
-    const parsed = extractJSON(allText)
+    // Count actual tool calls — a plan without exploration is worthless
+    const toolCallCount = result.steps.reduce(
+      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
+      0,
+    )
 
+    // Extract JSON from collected text
+    let parsed = extractJSON(allText)
+
+    // If JSON was truncated and critical fields are thin, synthesize from exploration + request
+    if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
+      log.warn("planner: plan seems truncated, synthesizing from exploration", {
+        prdLength: parsed.prd.length,
+        subtasksCount: parsed.subtasks.length,
+      })
+      parsed = synthesizeFromExploration(parsed, input, result.steps)
+    }
+
+    // Validate plan quality: the plan should contain file paths discovered
+    // from exploration, not just echo the original request.
+    const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
     log.info("planner agent output", {
       goals: parsed.goals.length,
       subtasks: parsed.subtasks.length,
       milestones: parsed.milestones?.length ?? 0,
       risks: parsed.risks.length,
       prdLength: parsed.prd.length,
+      toolCalls: toolCallCount,
+      quality: planQuality,
     })
+
+    if (planQuality.score < 0.3) {
+      log.warn("planner: plan quality is very low — likely echoing request without exploration", {
+        ...planQuality,
+      })
+    }
 
     return parsed
   }
 }
+
+// Backwards-compatible alias during the architecture transition.
+export import PlannerAgent = HeadlessPlannerAgent
 
 // ---------------------------------------------------------------------------
 // Internals
@@ -376,142 +403,250 @@ function trimToLastComplete(raw: string): string {
 }
 
 /**
- * Resolve a LanguageModelV2 for the planner agent.
- *
- * Strategy:
- * 1. Try Provider system (respects config, auth, models.dev database)
- * 2. If Provider fails (stale models.dev cache, missing model ID), fall back to
- *    direct model creation using config's baseURL + API key.
- * 3. Last resort: env var API keys with hardcoded provider defaults.
+ * Synthesize a complete plan from partial LLM output + tool exploration results + user request.
+ * Called when the LLM's JSON output was truncated and critical fields are missing/incomplete.
  */
-async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
-  // --- Path 1: Provider system (best case) ---
-  const def = await Provider.defaultModel().catch((err) => {
-    log.warn("planner: Provider.defaultModel() failed", { error: String(err) })
-    return undefined
-  })
-  if (def) {
-    log.info("planner: default model resolved", { providerID: def.providerID, modelID: def.modelID })
-    try {
-      const model = await Provider.getModel(def.providerID, def.modelID)
-      const language = await Provider.getLanguage(model)
-      log.info("planner: model ready via Provider", { modelId: language.modelId })
-      return language
-    } catch (err) {
-      log.warn("planner: Provider.getModel/getLanguage failed for default — trying direct fallback", {
-        providerID: def.providerID,
-        modelID: def.modelID,
-        error: String(err),
+function synthesizeFromExploration(
+  partial: PlannerOutputType,
+  input: { title: string; request: string },
+  steps: any[],
+): PlannerOutputType {
+  const result = { ...partial }
+
+  // Collect file paths discovered during exploration
+  const discoveredFiles = new Set<string>()
+  const explorationNotes: string[] = []
+  for (const step of steps) {
+    if (!step.toolCalls) continue
+    for (let i = 0; i < step.toolCalls.length; i++) {
+      const call = step.toolCalls[i]
+      if (call.toolName === "read_file" && call.args?.path) {
+        discoveredFiles.add(call.args.path)
+      }
+      if (call.toolName === "list_directory" && call.args?.path) {
+        discoveredFiles.add(call.args.path + "/")
+      }
+      // Collect tool result summaries for PRD synthesis
+      const toolResult = step.toolResults?.[i]
+      if (toolResult?.result && typeof toolResult.result === "string") {
+        const preview = toolResult.result.slice(0, 200)
+        if (call.toolName === "read_file") {
+          explorationNotes.push(`Read ${call.args.path}: ${preview}`)
+        } else if (call.toolName === "search_code") {
+          explorationNotes.push(`Search "${call.args.pattern}": ${preview}`)
+        }
+      }
+    }
+  }
+
+  // Extract requirements from request text for subtask synthesis
+  const requirements: string[] = []
+  const CN_ACTION = /^(?:添加|修改|删除|创建|导出|导入|确保|实现|重构|优化|移除|更新|替换|支持|使用)/
+  const EN_ACTION = /^(?:add|create|modify|delete|remove|implement|ensure|replace|fix|refactor|export|import)\s/i
+  for (const line of input.request.split("\n")) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.length < 4) continue
+    if (/^[-*•]\s+/.test(trimmed)) requirements.push(trimmed.replace(/^[-*•]\s+/, ""))
+    else if (/^\d+[.、)）]\s+/.test(trimmed)) requirements.push(trimmed.replace(/^\d+[.、)）]\s+/, ""))
+    else if (CN_ACTION.test(trimmed) || EN_ACTION.test(trimmed)) requirements.push(trimmed)
+  }
+
+  // Extract file references from request
+  const FILE_EXTS = "ts|tsx|js|jsx|py|rs|go|java|json|yaml|yml|toml|md|css|html|sql"
+  const fileRefs = new Set<string>()
+  const btPat = new RegExp("`([./]?(?:[\\w@-]+[/\\\\])*[\\w.-]+\\.(?:" + FILE_EXTS + "))`", "g")
+  let m: RegExpExecArray | null
+  while ((m = btPat.exec(input.request)) !== null) fileRefs.add(m[1])
+  const barePat = new RegExp(
+    "(?:^|[\\s,;，；（(])(\\.?(?:[\\w@-]+[/\\\\])+[\\w.-]+\\.(?:" + FILE_EXTS + "))(?=[\\s,;，；）)。:：]|$)", "gm",
+  )
+  while ((m = barePat.exec(input.request)) !== null) fileRefs.add(m[1].trim())
+
+  // Synthesize PRD if too short
+  if (result.prd.length < 200) {
+    const prdParts: string[] = []
+    if (fileRefs.size > 0) prdParts.push(`**Files**: ${Array.from(fileRefs).join(", ")}`)
+    if (discoveredFiles.size > 0) {
+      const relevant = Array.from(discoveredFiles).filter(f => !f.endsWith("/")).slice(0, 10)
+      if (relevant.length > 0) prdParts.push(`**Explored**: ${relevant.join(", ")}`)
+    }
+    if (requirements.length > 0) {
+      prdParts.push(`**Requirements**:\n${requirements.map(r => `- ${r}`).join("\n")}`)
+    }
+    if (explorationNotes.length > 0) {
+      prdParts.push(`**Exploration Notes**:\n${explorationNotes.slice(0, 5).map(n => `- ${n}`).join("\n")}`)
+    }
+    // Prepend any partial PRD content we already have
+    const existingPrd = result.prd.trim()
+    result.prd = existingPrd
+      ? existingPrd + "\n\n" + prdParts.join("\n\n")
+      : prdParts.join("\n\n")
+  }
+
+  // Synthesize subtasks from requirements if missing
+  if (result.subtasks.length < 2 && requirements.length > 0) {
+    const files = Array.from(fileRefs)
+    const synthSubtasks = []
+    if (files.length > 0) {
+      synthSubtasks.push({
+        title: `Analyze ${files.slice(0, 3).join(", ")}`,
+        description: `Read and understand the source files: ${files.join(", ")}. Identify types, exports, and patterns.`,
+        order: 1,
       })
     }
-
-    // --- Path 2: Direct model creation (bypasses stale models.dev cache) ---
-    // The model is configured but not in the models database. Create it directly
-    // using the provider's baseURL and API key from config/env.
-    const directModel = await createDirectModel(def.providerID, def.modelID)
-    if (directModel) return directModel
-  }
-
-  // --- Path 3: Env var fallbacks ---
-  const dashscopeKey = getDashscopeKey()
-  if (dashscopeKey) {
-    log.info("planner: trying DashScope env fallback")
-    try {
-      const model = await Provider.getModel("alibaba-cn", "qwen3.5-plus")
-      return await Provider.getLanguage(model)
-    } catch {
-      // Provider doesn't have the model — create directly
-      return createDirectDashscope(dashscopeKey, "qwen3.5-plus")
+    for (let i = 0; i < requirements.length; i++) {
+      synthSubtasks.push({
+        title: requirements[i].slice(0, 80),
+        description: requirements[i],
+        order: (files.length > 0 ? 2 : 1) + i,
+      })
+    }
+    synthSubtasks.push({
+      title: "Verify changes",
+      description: "Run build, test, and lint checks to ensure all changes work correctly.",
+      order: synthSubtasks.length + 1,
+    })
+    // Merge: keep any existing subtasks, add synthesized ones for gaps
+    if (result.subtasks.length === 0) {
+      result.subtasks = synthSubtasks
+    } else {
+      // Keep existing, add verification if missing
+      const hasVerify = result.subtasks.some(s => /verify|test|check|验证|测试/.test(s.title.toLowerCase()))
+      if (!hasVerify) {
+        result.subtasks.push(synthSubtasks[synthSubtasks.length - 1])
+      }
     }
   }
 
-  if (process.env.DEEPSEEK_API_KEY) {
-    log.info("planner: trying DeepSeek env fallback")
-    try {
-      const model = await Provider.getModel("deepseek", "deepseek-chat")
-      return await Provider.getLanguage(model)
-    } catch {
-      return undefined
+  // Synthesize goals if missing
+  if (result.goals.length === 0) {
+    const goals: PlannerOutputType["goals"] = []
+    if (fileRefs.size > 0) {
+      goals.push({
+        description: "TypeScript compilation succeeds",
+        criteria: "`bunx tsc --noEmit` exits 0",
+        priority: "blocking",
+        check_selector: ["build"],
+      })
     }
-  }
-
-  if (process.env.MOONSHOT_API_KEY) {
-    log.info("planner: trying Moonshot env fallback")
-    try {
-      const model =
-        (await Provider.getModel("moonshotai-cn", "kimi-k2.5").catch(() => undefined)) ??
-        (await Provider.getModel("moonshotai", "kimi-k2.5").catch(() => undefined))
-      if (model) return await Provider.getLanguage(model)
-    } catch {
-      return undefined
+    const testFiles = Array.from(fileRefs).filter(f => f.includes("test"))
+    if (testFiles.length > 0) {
+      goals.push({
+        description: `Tests pass: ${testFiles.join(", ")}`,
+        criteria: `\`bun test ${testFiles.join(" ")}\` passes all assertions`,
+        priority: "blocking",
+        check_selector: ["test"],
+      })
     }
+    if (goals.length > 0) result.goals = goals
   }
 
-  log.error("planner: NO model available — no default model, no API keys")
-  return undefined
-}
-
-/** Get DashScope API key from Instance-scoped env or process.env */
-function getDashscopeKey(): string | undefined {
-  try {
-    return Env.get("DASHSCOPE_API_KEY") || process.env.DASHSCOPE_API_KEY || process.env.CODING_DASHSCOPE_API_KEY
-  } catch {
-    return process.env.DASHSCOPE_API_KEY || process.env.CODING_DASHSCOPE_API_KEY
+  // Ensure summary
+  if (!result.summary || result.summary.length < 10) {
+    result.summary = input.title
   }
+
+  log.info("planner: synthesized plan from exploration", {
+    prdLength: result.prd.length,
+    subtasks: result.subtasks.length,
+    goals: result.goals.length,
+    discoveredFiles: discoveredFiles.size,
+    requirements: requirements.length,
+  })
+
+  return result
 }
 
 /**
- * Create a LanguageModelV2 directly, bypassing the Provider models database.
- * Used when the model exists in config but not in the stale models.dev cache.
+ * Validate that the planner output reflects actual codebase exploration,
+ * not just echoing the user's request.
+ *
+ * Scoring (0.0 – 1.0):
+ *   - toolCalls >= 5  → +0.3  (agent explored)
+ *   - PRD has file paths not in request → +0.25  (discovered new info)
+ *   - Goals have concrete criteria (commands) → +0.2
+ *   - Subtasks reference file paths → +0.15
+ *   - PRD length > 300 chars → +0.1
  */
-async function createDirectModel(providerID: string, modelID: string): Promise<LanguageModelV2 | undefined> {
-  try {
-    const config = await Config.get()
-    const providerConfig = config.provider?.[providerID]
-    const baseURL = providerConfig?.options?.baseURL as string | undefined
+function validatePlanQuality(
+  plan: PlannerOutputType,
+  request: string,
+  toolCallCount: number,
+): { score: number; reasons: string[] } {
+  let score = 0
+  const reasons: string[] = []
 
-    // Get the API key from Provider (it might have loaded from auth.json)
-    const provider = await Provider.getProvider(providerID)
-    const apiKey = provider?.key
-
-    if (!apiKey) {
-      // Try env vars
-      if (providerID === "alibaba-cn" || providerID === "alibaba") {
-        const key = getDashscopeKey()
-        if (key) return createDirectDashscope(key, modelID, baseURL)
-      }
-      log.warn("planner: no API key for direct model creation", { providerID, modelID })
-      return undefined
-    }
-
-    const url = baseURL ?? provider?.options?.baseURL as string | undefined
-    log.info("planner: creating direct model (bypassing models.dev cache)", {
-      providerID,
-      modelID,
-      baseURL: url,
-    })
-
-    const sdk = createOpenAICompatible({
-      name: providerID,
-      baseURL: url ?? `https://api.${providerID}.com/v1`,
-      apiKey,
-    })
-    return sdk.languageModel(modelID)
-  } catch (err) {
-    log.warn("planner: direct model creation failed", { providerID, modelID, error: String(err) })
-    return undefined
+  // 1. Tool call count — did the agent actually explore?
+  if (toolCallCount >= 5) {
+    score += 0.3
+  } else if (toolCallCount >= 2) {
+    score += 0.15
+    reasons.push(`only ${toolCallCount} tool calls (need ≥5 for deep exploration)`)
+  } else {
+    reasons.push(`${toolCallCount} tool calls — no codebase exploration`)
   }
+
+  // 2. PRD contains file paths not present in the request
+  const FILE_PAT = /(?:[a-zA-Z_@][\w@-]*\/)+[\w.-]+\.(?:ts|tsx|js|jsx|py|rs|go|java|json|yaml|yml|toml|css|html|sql)/g
+  const requestPaths = new Set(Array.from(request.matchAll(FILE_PAT)).map((m) => m[0]))
+  const prdPaths = new Set(Array.from(plan.prd.matchAll(FILE_PAT)).map((m) => m[0]))
+  const newPaths = [...prdPaths].filter((p) => !requestPaths.has(p))
+  if (newPaths.length >= 2) {
+    score += 0.25
+  } else if (newPaths.length === 1) {
+    score += 0.12
+    reasons.push("PRD has only 1 file path beyond the request")
+  } else {
+    reasons.push("PRD contains no file paths discovered from exploration")
+  }
+
+  // 3. Goals have concrete criteria (contain command-like patterns)
+  const CMD_PAT = /`[^`]+`|bun |tsc |npm |npx |bunx |eslint |jest /i
+  const goalsWithCriteria = plan.goals.filter((g) => CMD_PAT.test(g.criteria))
+  if (goalsWithCriteria.length >= plan.goals.length * 0.5 && plan.goals.length > 0) {
+    score += 0.2
+  } else {
+    reasons.push("goals lack concrete/executable criteria")
+  }
+
+  // 4. Subtasks reference specific file paths
+  const subtaskText = plan.subtasks.map((s) => `${s.title} ${s.description}`).join(" ")
+  const subtaskPaths = Array.from(subtaskText.matchAll(FILE_PAT))
+  if (subtaskPaths.length >= 2) {
+    score += 0.15
+  } else {
+    reasons.push("subtasks don't reference specific file paths")
+  }
+
+  // 5. PRD length — detailed specs are longer
+  if (plan.prd.length >= 300) {
+    score += 0.1
+  } else {
+    reasons.push(`PRD too short (${plan.prd.length} chars)`)
+  }
+
+  return { score: Math.min(1, score), reasons }
 }
 
-/** Create a DashScope model directly with known configuration */
-function createDirectDashscope(apiKey: string, modelID: string, baseURL?: string): LanguageModelV2 {
-  log.info("planner: creating direct DashScope model", { modelID, baseURL })
-  const sdk = createOpenAICompatible({
-    name: "alibaba-cn",
-    baseURL: baseURL ?? "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    apiKey,
+/**
+ * Resolve a LanguageModelV2 for the planner agent.
+ *
+ * Strategy:
+ * 1. Resolve the default model from Provider
+ * 2. Load that exact model and language surface
+ * 3. If that fails, surface the planner failure directly
+ */
+async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
+  const def = await Provider.defaultModel().catch((err) => {
+    log.error("planner: Provider.defaultModel() failed", { error: String(err) })
+    return undefined
   })
-  return sdk.languageModel(modelID)
+  if (!def) return undefined
+  log.info("planner: default model resolved", { providerID: def.providerID, modelID: def.modelID })
+  const model = await Provider.getModel(def.providerID, def.modelID)
+  const language = await Provider.getLanguage(model)
+  log.info("planner: model ready via Provider", { modelId: language.modelId })
+  return language
 }
 
 /**
@@ -726,62 +861,55 @@ For external APIs, unfamiliar libraries, or protocols — use web_search. Skip f
 
 ### Phase 2: PLAN — Synthesize into Actionable Spec
 
-Your output must be CONCRETE, not abstract. Every item must reference specific files, functions, or commands from your exploration.
+Your output must be CONCRETE, not abstract. Reference specific files, functions, and commands.
 
-**PRD** — Write a detailed technical specification:
-- List every file to create/modify with full paths (e.g., "Create \`src/utils/parser.ts\`", "Modify \`src/handler.ts\` lines 45-60")
-- Describe the exact changes: what to add, what to modify, what to remove
-- Reference existing patterns by file path (e.g., "Follow the pattern in \`src/utils/validator.ts:validateInput()\`")
-- Note dependencies: imports to add, types to extend, tests to update
-- Include build/test commands to verify (e.g., "\`bun test test/parser.test.ts\`", "\`bunx tsc --noEmit\`")
+**Goals** — DETAILED descriptions of what to achieve. Each goal must include:
+- A clear description explaining the specific outcome (not just "tests pass" — say WHICH functionality must work and HOW)
+- Machine-verifiable criteria with exact commands AND expected outcomes
+- Relevant check_selectors
+- Example GOOD goal: {"description": "Router 中间件链按洋葱模型执行：每个中间件依次调用 next()，handler 在最内层执行，中间件可以在 next() 前后执行逻辑，也可以短路直接返回 Response", "criteria": "bun test src/middleware.test.ts 通过，验证 before→handler→after 执行顺序正确", "priority": "blocking", "check_selector": ["test"]}
+- Example BAD goal: {"description": "中间件测试通过", "criteria": "bun test exits 0"} — too vague!
 
-**Goals** — Each with machine-verifiable criteria:
-- BAD: "Code compiles successfully" → GOOD: "\`bunx tsc --noEmit\` exits with code 0"
-- BAD: "Tests pass" → GOOD: "\`bun test test/parser.test.ts\` passes all assertions"
-- BAD: "Feature works" → GOOD: "GET /api/parse?q=test returns 200 with {result: 'test'}"
-
-**Subtasks** — Ordered execution steps with implementation details:
-- BAD: "Implement the parser" → GOOD: "Create \`src/utils/parser.ts\` exporting \`parseQuery(input: string): ParseResult\`. Use the tokenizer pattern from \`src/utils/lexer.ts:tokenize()\`. Handle edge cases: empty input (return empty result), malformed input (throw ParseError). Add JSDoc matching the style in \`src/utils/validator.ts\`."
-- Each subtask should tell the executor WHAT to do, WHERE to do it, and HOW to verify it
-- Include verification commands for each subtask, not just at the end
+**Subtasks** — Ordered steps: WHAT to change, WHERE (file path), HOW to verify
+**PRD** — Bullet-point spec: files to modify, changes, patterns to follow, verification commands.
 
 ### Phase 3: OUTPUT as JSON
 
-Respond with ONLY a JSON object:
+Respond with ONLY a JSON object. **CRITICAL**: Output fields in EXACTLY this order — summary and goals FIRST, prd LAST. This protects critical fields from truncation.
+
+Keep PRD concise (bullet points, ≤ 2000 chars). Goals and subtasks should be DETAILED — do not sacrifice clarity for brevity.
 
 {
-  "prd": "Detailed technical spec with exact file paths, code patterns, and verification commands...",
-  "summary": "One-line summary",
+  "summary": "One-line summary of the plan",
   "goals": [
     {
-      "description": "What to achieve",
-      "criteria": "Machine-verifiable criterion (exact command + expected outcome)",
+      "description": "Detailed description of what to achieve — explain the specific outcome, not just a command",
+      "criteria": "Exact command + expected outcome (e.g., 'bun test src/foo.test.ts 通过所有断言')",
       "priority": "blocking",
       "check_selector": ["build", "test"]
-    }
-  ],
-  "milestones": [
-    {
-      "title": "Milestone name",
-      "description": "What this milestone covers",
-      "goal_indices": [0, 1]
     }
   ],
   "subtasks": [
     {
       "title": "Short title",
-      "description": "Detailed implementation instructions: which file to modify, what to add/change, which pattern to follow, how to verify",
+      "description": "Implementation details: which file to modify, what to add/change, which pattern to follow, how to verify",
       "order": 1
     }
   ],
   "risks": ["Specific risk with mitigation"],
+  "milestones": [
+    {
+      "title": "Milestone name",
+      "goal_indices": [0, 1]
+    }
+  ],
   "assumptions": [
     {
       "question": "Ambiguous aspect",
-      "assumption": "What we will assume and why"
+      "assumption": "What we will assume"
     }
   ],
-  "clarifications": []
+  "prd": "Technical spec with bullet points: files to modify, exact changes, patterns to follow, verification commands. ≤ 2000 chars."
 }
 
 ## Rules
@@ -798,13 +926,19 @@ Respond with ONLY a JSON object:
 - After finishing tool calls, output JSON immediately.
 - Do NOT produce generic advice like "follow best practices" or "handle edge cases" — be specific about WHICH practices and WHICH edge cases.
 
-## Quality Self-Check (before outputting JSON)
+## Quality Self-Check
 
-Before producing your final JSON, verify:
-1. Does the PRD reference SPECIFIC file paths, function names, and line ranges? (not generic "the source file")
-2. Does every subtask say WHAT to change, WHERE (exact file), and HOW to verify?
-3. Are test files and test commands explicitly listed?
-4. If pre-read files were provided, did you analyze their structure (types, exports, methods)?
-5. Would an executor be able to implement this plan WITHOUT asking any questions?
+Before outputting JSON, verify:
+1. Does EVERY goal have a detailed description explaining the specific outcome? (not just "tests pass")
+2. Does every goal criteria include an exact command AND expected outcome?
+3. Do subtasks reference specific files, functions, and patterns?
+4. Is the PRD concise but complete (bullet points, not paragraphs)?
 
-If any answer is NO, go back and make one more exploration tool call to fill the gap.`
+If any answer is NO, go back and fill the gap.
+
+## Output Format
+
+- PRD: Use bullet points, keep under 2000 chars.
+- Goals: Be DETAILED in description and criteria. Goals are the most important output.
+- Subtasks: Include file paths and verification steps.
+- Output fields in the order shown above (summary → goals → subtasks → ... → prd).`

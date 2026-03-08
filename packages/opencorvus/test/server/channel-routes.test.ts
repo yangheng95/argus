@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
@@ -8,6 +8,7 @@ import { OrchestratorChannelBindingTable, OrchestratorTaskTable } from "../../sr
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { SessionSummary } from "../../src/session/summary"
 import { Log } from "../../src/util/log"
 import { installControlModel } from "../control-plane/mock-control-model"
 import { resetDatabase } from "../fixture/db"
@@ -41,6 +42,10 @@ function stub() {
 }
 
 describe("channel routes", () => {
+  beforeEach(() => {
+    spyOn(SessionSummary, "summarize").mockResolvedValue(undefined as never)
+  })
+
   afterEach(async () => {
     mock.restore()
     delete process.env.OPENCORVUS_WORKBENCH_LLM
@@ -100,7 +105,7 @@ describe("channel routes", () => {
         expect(binding?.platform).toBe("discord")
         expect(binding?.channel).toBe("room-1")
         expect(binding?.thread).toBe("thread-1")
-        expect(binding?.payload?.user_id).toBe("user-1")
+        expect(binding?.payload?.channel?.user_id).toBe("user-1")
       },
     })
   })
@@ -153,7 +158,7 @@ describe("channel routes", () => {
         expect(response.status).toBe(200)
         const body = (await response.json()) as { kind: string; message: string }
         expect(body.kind).toBe("message")
-        expect(body.message).toContain("Preference saved")
+        expect(body.message).toContain("Intent analysis failed")
 
         const brief = await app.request(`/task/${task_id}/brief`, {
           headers: {
@@ -162,8 +167,9 @@ describe("channel routes", () => {
         })
         expect(brief.status).toBe(200)
         const briefBody = (await brief.json()) as { content: string }
-        expect(briefBody.content).toContain("style: concise")
-        expect(briefBody.content).toContain("lockfile_policy: avoid_changes")
+        expect(briefBody.content).not.toContain("style: concise")
+        expect(briefBody.content).not.toContain("lockfile_policy: avoid_changes")
+        expect(briefBody.content).toContain("Please keep updates concise")
       },
     })
   })
@@ -198,7 +204,7 @@ describe("channel routes", () => {
 
         expect(response.status).toBe(200)
         const body = (await response.json()) as { kind: string; message: string }
-        expect(body.kind).toBe("ignored")
+        expect(body.kind).toBe("panel_response")
         expect(body.message).toContain("No task is bound")
 
         const tasks = Database.use((db) =>

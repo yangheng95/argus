@@ -10,11 +10,13 @@ const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
 const tauri = path.resolve(dir, "src-tauri")
 const resources = path.join(tauri, "resources")
+const target = path.join(tauri, "target")
+const buildTarget = path.join(target, "bundle-build")
+const buildRelease = path.join(buildTarget, "release")
+const release = path.join(target, "release")
 
-const serverFile =
-  process.platform === "win32"
-    ? "opencorvus.exe"
-    : "opencorvus"
+const serverFile = process.platform === "win32" ? "opencorvus.exe" : "opencorvus"
+const overlayName = process.platform === "win32" ? "opencorvus-overlay.exe" : "opencorvus-overlay"
 
 const distName = [
   "opencorvus",
@@ -24,8 +26,12 @@ const distName = [
 
 const distServer = path.join(opencorvus, "dist", distName, "bin", serverFile)
 const stagedServer = path.join(resources, serverFile)
-const releaseServer = path.join(tauri, "target", "release", serverFile)
-const overlayFile = path.join(tauri, "target", "release", process.platform === "win32" ? "opencorvus-overlay.exe" : "opencorvus-overlay")
+const builtServer = path.join(buildRelease, serverFile)
+const builtOverlay = path.join(buildRelease, overlayName)
+const releaseServer = path.join(release, serverFile)
+const releaseOverlay = path.join(release, overlayName)
+const builtBundle = path.join(buildRelease, "bundle")
+const releaseBundle = path.join(release, "bundle")
 
 function text(error: unknown) {
   if (typeof error === "string") return error
@@ -34,75 +40,51 @@ function text(error: unknown) {
   return [error.message, typeof stderr === "string" ? stderr : ""].filter(Boolean).join("\n")
 }
 
-function locked(error: unknown) {
-  if (process.platform !== "win32") return false
-  const message = text(error)
-  return (
-    message.includes("failed to remove file") &&
-    message.includes("opencorvus-overlay.exe") &&
-    message.includes("os error 5")
-  )
+async function exists(file: string) {
+  return Bun.file(file).exists()
 }
 
-function busy(error: unknown) {
-  if (process.platform !== "win32") return false
-  const message = text(error)
-  return (
-    message.includes("EBUSY") ||
-    message.includes("EPERM") ||
-    message.includes("resource busy or locked") ||
-    message.includes("Access is denied")
-  )
-}
-
-async function unlock() {
-  if (process.platform !== "win32") return
-  for (const _ of Array.from({ length: 12 })) {
-    Bun.spawnSync(["taskkill", "/IM", "opencorvus-overlay.exe", "/T", "/F"], {
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-    })
-    await fs.rm(overlayFile, { force: true }).catch(() => undefined)
-    if (!(await Bun.file(overlayFile).exists())) return
-    await Bun.sleep(250)
+async function copyFile(src: string, dest: string, options?: { required?: boolean; tolerateBusy?: boolean }) {
+  if (!(await exists(src))) {
+    if (options?.required) throw new Error(`Missing required file: ${src}`)
+    return false
   }
-}
-
-async function copy(src: string, dest: string) {
-  for (const i of Array.from({ length: 12 }).keys()) {
-    try {
-      await fs.copyFile(src, dest)
-      return
-    } catch (error) {
-      if (!busy(error) || i === 11) throw error
-      await unlock()
-      await fs.rm(dest, { force: true }).catch(() => undefined)
-      await Bun.sleep(250)
+  await fs.mkdir(path.dirname(dest), { recursive: true })
+  try {
+    await fs.copyFile(src, dest)
+    return true
+  } catch (error) {
+    if (options?.tolerateBusy && process.platform === "win32") {
+      console.warn(`overlay build: unable to copy ${src} -> ${dest}\n${text(error)}`)
+      return false
     }
+    throw error
   }
+}
+
+async function copyTree(src: string, dest: string) {
+  if (!(await exists(src))) return false
+  await fs.rm(dest, { recursive: true, force: true }).catch(() => undefined)
+  await fs.mkdir(path.dirname(dest), { recursive: true })
+  await fs.cp(src, dest, { recursive: true, force: true })
+  return true
 }
 
 await $`bun run build`.cwd(opencorvus)
 
-const exists = await fs.stat(distServer).catch(() => undefined)
-if (!exists) {
+if (!(await exists(distServer))) {
   throw new Error(`Bundled opencorvus binary not found at ${distServer}`)
 }
 
 await fs.mkdir(resources, { recursive: true })
-await unlock()
-await copy(distServer, stagedServer)
+await copyFile(distServer, stagedServer, { required: true })
+await fs.rm(buildTarget, { recursive: true, force: true }).catch(() => undefined)
 
-await unlock()
-for (const i of Array.from({ length: 3 }).keys()) {
-  try {
-    await $`tauri build`.cwd(dir)
-    break
-  } catch (error) {
-    if (!locked(error) || i === 2) throw error
-    await unlock()
-  }
-}
+await $`tauri build`.cwd(dir).env({
+  CARGO_TARGET_DIR: buildTarget,
+})
 
-await fs.copyFile(stagedServer, releaseServer).catch(() => undefined)
+await copyFile(distServer, builtServer)
+await copyFile(builtOverlay, releaseOverlay, { tolerateBusy: true })
+await copyFile(distServer, releaseServer, { tolerateBusy: true })
+await copyTree(builtBundle, releaseBundle)

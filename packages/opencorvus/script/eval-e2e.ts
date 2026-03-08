@@ -4,15 +4,20 @@
  * Submits real tasks through the orchestrator API, polls for completion,
  * and scores deliveries using the evaluation system's own metrics.
  *
+ * Features:
+ *   - Real-time session message display (simulates overlay session area)
+ *   - SSE event streaming for live task updates
+ *   - Auto-start compiled binary with --start-server
+ *
  * Usage:
  *   OPENCORVUS_SERVER=http://127.0.0.1:7878 bun run script/eval-e2e.ts
  *   OPENCORVUS_SERVER=http://127.0.0.1:7878 bun run script/eval-e2e.ts --case=E1
- *   OPENCORVUS_SERVER=http://127.0.0.1:7878 bun run script/eval-e2e.ts --dry-run
+ *   bun run script/eval-e2e.ts --start-server --case=E2
+ *   bun run script/eval-e2e.ts --dry-run
  */
 
 import fs from "fs"
 import path from "path"
-import os from "os"
 
 /** Normalize Windows backslashes to forward slashes for shell commands */
 function toUnixPath(p: string): string {
@@ -25,12 +30,15 @@ function toUnixPath(p: string): string {
 
 const SERVER = process.env.OPENCORVUS_SERVER ?? "http://127.0.0.1:7878"
 const POLL_INTERVAL_MS = 3_000
+const SESSION_POLL_MS = 2_000
 const MAX_WAIT_MS = 10 * 60 * 1000 // 10 minutes per case
 const DRY_RUN = process.argv.includes("--dry-run")
+const START_SERVER = process.argv.includes("--start-server")
 const CASE_FILTER = process.argv.find((a) => a.startsWith("--case="))?.split("=")[1]
+const VERBOSE = process.argv.includes("--verbose") || process.argv.includes("-v")
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (aligned with orchestrator/model.ts Progress schema)
 // ---------------------------------------------------------------------------
 
 interface EvalCase {
@@ -65,16 +73,27 @@ interface EvalCase {
 interface TaskProgress {
   task: {
     id: string
+    projectID: string
+    sessionID?: string | null
+    activeRunID?: string | null
+    activePlanVersionID?: string | null
+    requestID?: string
+    source: string
     status: string
     title: string
     request: string
+    priority: string
+    blockingReason?: string
     error?: string
+    budget?: Record<string, unknown>
     time: { created: number; updated: number; started?: number; completed?: number }
   }
   plan?: {
     id: string
     summary: string
     prompt: string
+    goals?: Array<{ description: string; criteria: string; priority?: string }>
+    metadata?: Record<string, unknown>
   }
   goals: Array<{
     id: string
@@ -82,12 +101,38 @@ interface TaskProgress {
     criteria: string
     priority: string
     status: string
+    metadata?: Record<string, unknown>
+  }>
+  milestones?: Array<{
+    id: string
+    title: string
+    status: string
   }>
   run?: {
     id: string
+    taskID: string
+    sessionID?: string | null
     status: string
-    phase: string
-    retry_count: number
+    phase?: string
+    executor?: string
+    attempt?: number
+    retryCount?: number
+    time: { created: number; updated: number; started?: number; completed?: number }
+  }
+  pendingInteractions: Array<{
+    id: string
+    status: string
+    type: string
+    title?: string
+  }>
+  delivery?: {
+    id: string
+    status: string
+    summary: string
+    result?: {
+      changed_files?: string[]
+      diffs?: Array<{ file: string; diff?: string }>
+    }
   }
   evaluation?: {
     id: string
@@ -100,15 +145,29 @@ interface TaskProgress {
       evidence?: string
     }>
   }
-  delivery?: {
+  snapshots: Array<{
     id: string
     status: string
     summary: string
-    result?: {
-      changed_files?: string[]
-      diffs?: Array<{ file: string; diff?: string }>
-    }
+  }>
+}
+
+/** Session message (from GET /session/:id/message) */
+interface SessionMessage {
+  info: {
+    id: string
+    role: string
+    time?: { created: number; updated: number }
+    parentID?: string
   }
+  parts: Array<{
+    id: string
+    type: string
+    text?: string
+    toolName?: string
+    input?: unknown
+    output?: unknown
+  }>
 }
 
 interface EvalResult {
@@ -119,15 +178,15 @@ interface EvalResult {
   status: "completed" | "failed" | "cancelled" | "timeout"
   wallTimeMs: number
   totalRuns: number
-  // Scores (0-100)
+  sessionMessageCount: number
   scores: {
-    completion: number      // 100 if completed, 0 if failed
-    checkPassRate: number   // % of checks that passed
-    goalPassRate: number    // % of goals that passed
-    efficiency: number      // Penalize retries: 100 / (1 + retries)
-    wallTimeScore: number   // Based on difficulty: easy < 2min=100, medium < 4min=100, hard < 6min=100
+    completion: number
+    checkPassRate: number
+    goalPassRate: number
+    efficiency: number
+    wallTimeScore: number
   }
-  overall: number // Weighted average
+  overall: number
   details: {
     planSummary?: string
     evalVerdict?: string
@@ -136,7 +195,29 @@ interface EvalResult {
     goals?: Array<{ description: string; status: string }>
     changedFiles?: string[]
     error?: string
+    sessionFlow?: string[]
   }
+}
+
+// ---------------------------------------------------------------------------
+// ANSI color helpers
+// ---------------------------------------------------------------------------
+
+const color = {
+  reset: "\x1b[0m",
+  dim: "\x1b[2m",
+  bold: "\x1b[1m",
+  green: "\x1b[32m",
+  yellow: "\x1b[33m",
+  blue: "\x1b[34m",
+  cyan: "\x1b[36m",
+  red: "\x1b[31m",
+  magenta: "\x1b[35m",
+  gray: "\x1b[90m",
+}
+
+function c(text: string, ...styles: string[]) {
+  return styles.join("") + text + color.reset
 }
 
 // ---------------------------------------------------------------------------
@@ -145,13 +226,11 @@ interface EvalResult {
 
 /** Create workspace inside the project worktree so the agent can access it */
 async function evalWorkspaceDir(): Promise<string> {
-  // Get project worktree from server config
   try {
     const tasks = await apiCall<{ project: { worktree: string } }>("GET", "/tasks")
     const worktree = tasks.project.worktree
     return path.join(worktree, "eval-workspace-" + Date.now())
   } catch {
-    // Fallback: use cwd
     return path.join(process.cwd(), "eval-workspace-" + Date.now())
   }
 }
@@ -276,7 +355,6 @@ const CASES: EvalCase[] = [
         null,
         2,
       ),
-      // BUG: sort() without comparator sorts numbers as strings
       "src/sort.ts": `
 export function sortNumbers(arr: number[]): number[] {
   return [...arr].sort();
@@ -295,7 +373,6 @@ export function findMedian(arr: number[]): number {
   return sorted[mid];
 }
 `.trim(),
-      // Tests that FAIL with the bug
       "src/sort.test.ts": `
 import { test, expect } from "bun:test";
 import { sortNumbers, sortDescending, findMedian } from "./sort";
@@ -400,7 +477,6 @@ test("findMedian with large numbers", () => {
         null,
         2,
       ),
-      // Duplicated validation logic across two files
       "src/user.ts": `
 export interface User {
   name: string;
@@ -557,7 +633,6 @@ test("updateUser invalid", () => {
         null,
         2,
       ),
-      // Interface definition with no implementation
       "src/query.ts": `
 /**
  * Parse a URL query string into a key-value map.
@@ -799,7 +874,6 @@ test("POST route", async () => {
   expect(await res.text()).toBe("OK");
 });
 `.trim(),
-      // New test file for middleware (tests that should pass after implementation)
       "src/middleware.test.ts": `
 import { test, expect } from "bun:test";
 import { Router } from "./router";
@@ -936,7 +1010,7 @@ test("existing routes still work without middleware", async () => {
 // API helpers
 // ---------------------------------------------------------------------------
 
-async function apiCall<T>(method: string, path: string, body?: unknown, retries = 3): Promise<T> {
+async function apiCall<T>(method: string, urlPath: string, body?: unknown, retries = 3): Promise<T> {
   const opts: RequestInit = {
     method,
     headers: { "Content-Type": "application/json" },
@@ -944,16 +1018,16 @@ async function apiCall<T>(method: string, path: string, body?: unknown, retries 
   if (body) opts.body = JSON.stringify(body)
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
-      const res = await fetch(`${SERVER}${path}`, opts)
+      const res = await fetch(`${SERVER}${urlPath}`, opts)
       if (!res.ok) {
         const text = await res.text()
-        throw new Error(`${method} ${path} → ${res.status}: ${text}`)
+        throw new Error(`${method} ${urlPath} -> ${res.status}: ${text}`)
       }
       return res.json() as Promise<T>
     } catch (err) {
       const isConnection = String(err).includes("ConnectionRefused") || String(err).includes("ECONNREFUSED")
       if (isConnection && attempt < retries - 1) {
-        console.log(`   [WARN] Connection lost, retrying in 5s... (${attempt + 1}/${retries})`)
+        console.log(`   ${c("[WARN]", color.yellow)} Connection lost, retrying in 5s... (${attempt + 1}/${retries})`)
         await new Promise((r) => setTimeout(r, 5000))
         continue
       }
@@ -986,58 +1060,168 @@ async function getProgress(taskID: string): Promise<TaskProgress> {
   return apiCall<TaskProgress>("GET", `/task/${taskID}/progress`)
 }
 
-async function getBoard(taskID: string): Promise<Record<string, unknown>> {
-  return apiCall<Record<string, unknown>>("GET", `/task/${taskID}/board`)
+async function getSessionMessages(sessionID: string): Promise<SessionMessage[]> {
+  try {
+    const msgs = await apiCall<SessionMessage[]>("GET", `/session/${sessionID}/message`)
+    return Array.isArray(msgs) ? msgs : []
+  } catch {
+    return []
+  }
 }
 
-async function pollUntilDone(taskID: string): Promise<TaskProgress> {
+// ---------------------------------------------------------------------------
+// Session message rendering (simulates overlay session area)
+// ---------------------------------------------------------------------------
+
+const printedMessageIDs = new Set<string>()
+
+function renderSessionMessage(msg: SessionMessage) {
+  if (printedMessageIDs.has(msg.info.id)) return
+  printedMessageIDs.add(msg.info.id)
+
+  const roleColors: Record<string, string> = {
+    user: color.blue,
+    assistant: color.green,
+    system: color.gray,
+  }
+  const roleColor = roleColors[msg.info.role] ?? color.dim
+  const roleLabel = msg.info.role.padEnd(9)
+
+  for (const part of msg.parts) {
+    if (part.type === "text" && part.text) {
+      const lines = part.text.split("\n")
+      const preview = lines[0]?.slice(0, 120) ?? ""
+      const suffix = lines.length > 1 ? c(` (+${lines.length - 1} lines)`, color.dim) : ""
+      console.log(`   ${c("|", color.dim)} ${c(roleLabel, roleColor)} ${preview}${suffix}`)
+    } else if (part.type === "tool-invocation" && part.toolName) {
+      const inputPreview = part.input ? JSON.stringify(part.input).slice(0, 80) : ""
+      console.log(`   ${c("|", color.dim)} ${c(roleLabel, roleColor)} ${c("tool:", color.cyan)} ${part.toolName} ${c(inputPreview, color.dim)}`)
+    } else if (part.type === "step-start") {
+      console.log(`   ${c("|", color.dim)} ${c(roleLabel, roleColor)} ${c("--- step start ---", color.dim)}`)
+    } else if (part.type === "step-finish") {
+      console.log(`   ${c("|", color.dim)} ${c(roleLabel, roleColor)} ${c("--- step finish ---", color.dim)}`)
+    }
+  }
+}
+
+function renderSessionHeader(taskID: string, sessionID: string) {
+  console.log(`   ${c("=== Session Area ===", color.bold + color.cyan)}`)
+  console.log(`   ${c("Task:", color.dim)} ${taskID}  ${c("Session:", color.dim)} ${sessionID}`)
+  console.log(`   ${c("-".repeat(60), color.dim)}`)
+}
+
+// ---------------------------------------------------------------------------
+// Progress display
+// ---------------------------------------------------------------------------
+
+function renderProgressLine(progress: TaskProgress, elapsed: number) {
+  const status = progress.task.status
+  const phase = progress.run?.phase ?? "-"
+  const executor = progress.run?.executor ?? "?"
+  const attempt = progress.run?.attempt ?? 0
+
+  const statusColors: Record<string, string> = {
+    running: color.green,
+    evaluating: color.yellow,
+    completed: color.green + color.bold,
+    failed: color.red,
+    blocked: color.magenta,
+    planning: color.blue,
+    delivering: color.cyan,
+    queued: color.dim,
+  }
+  const sColor = statusColors[status] ?? color.dim
+
+  const parts = [
+    c(`[${elapsed}s]`, color.dim),
+    c(status.toUpperCase(), sColor),
+    c(`phase=${phase}`, color.dim),
+    c(`executor=${executor}`, color.dim),
+    attempt > 0 ? c(`attempt=${attempt}`, color.yellow) : "",
+  ].filter(Boolean)
+
+  const goalsInfo = progress.goals.length > 0
+    ? ` goals: ${progress.goals.filter((g) => g.status === "passed").length}/${progress.goals.length}`
+    : ""
+  const interactionInfo = progress.pendingInteractions.length > 0
+    ? c(` [${progress.pendingInteractions.length} pending interactions]`, color.magenta)
+    : ""
+
+  console.log(`   ${parts.join(" ")}${goalsInfo}${interactionInfo}`)
+}
+
+// ---------------------------------------------------------------------------
+// Poll with session streaming
+// ---------------------------------------------------------------------------
+
+async function pollUntilDone(taskID: string): Promise<{ progress: TaskProgress; sessionMsgCount: number; sessionFlow: string[] }> {
   const start = Date.now()
   const terminalStatuses = ["completed", "failed", "cancelled"]
+  let sessionID: string | undefined
+  let lastProgressStatus = ""
+  let sessionMsgCount = 0
+  const sessionFlow: string[] = []
+
+  printedMessageIDs.clear()
 
   while (Date.now() - start < MAX_WAIT_MS) {
     const progress = await getProgress(taskID)
     const status = progress.task.status
+    const elapsed = Math.round((Date.now() - start) / 1000)
 
+    // Detect session ID from task or run
+    const newSessionID = progress.task.sessionID ?? progress.run?.sessionID ?? undefined
+    if (newSessionID && newSessionID !== sessionID) {
+      sessionID = newSessionID
+      renderSessionHeader(taskID, sessionID)
+    }
+
+    // Print status change
+    if (status !== lastProgressStatus) {
+      renderProgressLine(progress, elapsed)
+      lastProgressStatus = status
+      sessionFlow.push(`${elapsed}s: ${status}`)
+    } else if (VERBOSE) {
+      renderProgressLine(progress, elapsed)
+    }
+
+    // Poll session messages for real-time display
+    if (sessionID) {
+      const messages = await getSessionMessages(sessionID)
+      for (const msg of messages) {
+        renderSessionMessage(msg)
+      }
+      sessionMsgCount = messages.length
+    }
+
+    // Done?
     if (terminalStatuses.includes(status)) {
-      return progress
+      return { progress, sessionMsgCount, sessionFlow }
     }
 
     // Auto-answer interactions (approve all permissions for eval)
-    if (status === "blocked") {
-      try {
-        const board = await getBoard(taskID)
-        const interactions = board.interactions as Array<{
-          id: string
-          status: string
-          type: string
-        }> | undefined
-        if (interactions) {
-          for (const i of interactions.filter((x) => x.status === "pending")) {
-            try {
-              await apiCall("POST", `/interaction/${i.id}/reply`, {
-                reply: "always",
-                message: "approved for evaluation",
-              })
-            } catch {
-              // ignore
-            }
+    if (progress.pendingInteractions.length > 0) {
+      for (const interaction of progress.pendingInteractions) {
+        if (interaction.status === "pending") {
+          try {
+            await apiCall("POST", `/interaction/${interaction.id}/reply`, {
+              reply: "always",
+              message: "approved for evaluation",
+            })
+            console.log(`   ${c(">>", color.magenta)} Auto-approved interaction ${interaction.id} (${interaction.type})`)
+          } catch {
+            // ignore
           }
         }
-      } catch {
-        // ignore
       }
     }
-
-    // Print progress dot
-    const elapsed = Math.round((Date.now() - start) / 1000)
-    process.stdout.write(`  [${elapsed}s] ${status} / ${progress.run?.phase ?? "?"}\r`)
 
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
   }
 
   // Timeout
   const final = await getProgress(taskID)
-  return final
+  return { progress: final, sessionMsgCount, sessionFlow }
 }
 
 // ---------------------------------------------------------------------------
@@ -1054,13 +1238,12 @@ function scaffoldCase(evalCase: EvalCase, baseDir: string): string {
     fs.writeFileSync(fullPath, content, "utf-8")
   }
 
-  // Install dependencies if package.json exists
   if (evalCase.scaffold["package.json"]) {
     const unixDir = toUnixPath(caseDir)
-    console.log(`   Installing dependencies in ${unixDir}...`)
+    console.log(`   Installing dependencies in ${c(unixDir, color.dim)}...`)
     const result = Bun.spawnSync(["bun", "install"], { cwd: caseDir, stdout: "pipe", stderr: "pipe" })
     if (result.exitCode !== 0) {
-      console.warn(`   [WARN] bun install failed: ${result.stderr.toString().slice(0, 200)}`)
+      console.warn(`   ${c("[WARN]", color.yellow)} bun install failed: ${result.stderr.toString().slice(0, 200)}`)
     }
   }
 
@@ -1079,24 +1262,20 @@ function cleanupCase(caseDir: string) {
 // Scoring
 // ---------------------------------------------------------------------------
 
-function scoreResult(evalCase: EvalCase, progress: TaskProgress, wallTimeMs: number): EvalResult {
+function scoreResult(evalCase: EvalCase, progress: TaskProgress, wallTimeMs: number, sessionMsgCount: number, sessionFlow: string[]): EvalResult {
   const taskStatus = progress.task.status as EvalResult["status"]
   const isComplete = taskStatus === "completed"
 
-  // Check pass rate
   const checks = progress.evaluation?.checks ?? []
   const checksPassed = checks.filter((c) => c.status === "passed").length
   const checkPassRate = checks.length > 0 ? checksPassed / checks.length : 0
 
-  // Goal pass rate
   const goals = progress.goals ?? []
   const goalsPassed = goals.filter((g) => g.status === "passed").length
   const goalPassRate = goals.length > 0 ? goalsPassed / goals.length : 0
 
-  // Retries
-  const totalRuns = (progress.run?.retry_count ?? 0) + 1
+  const totalRuns = (progress.run?.retryCount ?? progress.run?.attempt ?? 0) + 1
 
-  // Wall time score: based on difficulty
   const timeLimits = { easy: 120_000, medium: 240_000, hard: 360_000 }
   const timeLimit = timeLimits[evalCase.difficulty]
   const wallTimeScore = wallTimeMs <= timeLimit ? 100 : Math.max(0, 100 - ((wallTimeMs - timeLimit) / timeLimit) * 100)
@@ -1109,7 +1288,6 @@ function scoreResult(evalCase: EvalCase, progress: TaskProgress, wallTimeMs: num
     wallTimeScore: Math.round(wallTimeScore),
   }
 
-  // Weighted average: completion 30%, checks 25%, goals 25%, efficiency 10%, time 10%
   const overall = Math.round(
     scores.completion * 0.3 +
       scores.checkPassRate * 0.25 +
@@ -1126,6 +1304,7 @@ function scoreResult(evalCase: EvalCase, progress: TaskProgress, wallTimeMs: num
     status: taskStatus === "completed" || taskStatus === "failed" || taskStatus === "cancelled" ? taskStatus : "timeout",
     wallTimeMs,
     totalRuns,
+    sessionMessageCount: sessionMsgCount,
     scores,
     overall,
     details: {
@@ -1136,6 +1315,7 @@ function scoreResult(evalCase: EvalCase, progress: TaskProgress, wallTimeMs: num
       goals: progress.goals?.map((g) => ({ description: g.description, status: g.status })),
       changedFiles: progress.delivery?.result?.changed_files,
       error: progress.task.error,
+      sessionFlow,
     },
   }
 }
@@ -1145,54 +1325,68 @@ function scoreResult(evalCase: EvalCase, progress: TaskProgress, wallTimeMs: num
 // ---------------------------------------------------------------------------
 
 function printReport(results: EvalResult[]) {
-  console.log("\n" + "=".repeat(80))
-  console.log("  OPENCORVUS E2E EVALUATION REPORT")
-  console.log("=".repeat(80))
-  console.log(`  Date: ${new Date().toISOString()}`)
-  console.log(`  Server: ${SERVER}`)
-  console.log(`  Cases: ${results.length}`)
+  console.log("\n" + c("=".repeat(80), color.bold))
+  console.log(c("  OPENCORVUS E2E EVALUATION REPORT", color.bold + color.cyan))
+  console.log(c("=".repeat(80), color.bold))
+  console.log(`  ${c("Date:", color.dim)} ${new Date().toISOString()}`)
+  console.log(`  ${c("Server:", color.dim)} ${SERVER}`)
+  console.log(`  ${c("Model:", color.dim)} qwen3.5-plus (alibaba-cn)`)
+  console.log(`  ${c("Cases:", color.dim)} ${results.length}`)
   console.log("")
 
   // Summary table
-  console.log("  ID   | Difficulty | Status     | Score | Comp | Check | Goal | Eff  | Time ")
-  console.log("  " + "-".repeat(76))
+  console.log(c("  ID   | Difficulty | Status     | Score | Comp | Check | Goal | Eff  | Time | Msgs", color.bold))
+  console.log("  " + "-".repeat(85))
 
   for (const r of results) {
     const status = r.status.padEnd(10)
+    const statusColor = r.status === "completed" ? color.green : r.status === "failed" ? color.red : color.yellow
     const score = String(r.overall).padStart(3)
     const comp = String(r.scores.completion).padStart(3)
     const check = String(r.scores.checkPassRate).padStart(3)
     const goal = String(r.scores.goalPassRate).padStart(3)
     const eff = String(r.scores.efficiency).padStart(3)
     const time = String(r.scores.wallTimeScore).padStart(3)
-    console.log(`  ${r.caseID.padEnd(4)} | ${r.difficulty.padEnd(10)} | ${status} | ${score}%  | ${comp}% | ${check}%  | ${goal}% | ${eff}% | ${time}%`)
+    const msgs = String(r.sessionMessageCount).padStart(4)
+    console.log(`  ${r.caseID.padEnd(4)} | ${r.difficulty.padEnd(10)} | ${c(status, statusColor)} | ${score}%  | ${comp}% | ${check}%  | ${goal}% | ${eff}% | ${time}% | ${msgs}`)
   }
 
   // Overall
   const avgScore = Math.round(results.reduce((s, r) => s + r.overall, 0) / results.length)
-  console.log("  " + "-".repeat(76))
+  console.log("  " + "-".repeat(85))
   console.log(`  AVERAGE                            | ${String(avgScore).padStart(3)}%  |`)
+  console.log("")
+
+  // Session flow summary
+  console.log(c("  Session Information Flow:", color.bold))
+  for (const r of results) {
+    const msgIcon = r.sessionMessageCount > 0 ? c("OK", color.green) : c("EMPTY", color.red)
+    console.log(`  ${r.caseID}: ${r.sessionMessageCount} messages [${msgIcon}]`)
+    if (r.details.sessionFlow && r.details.sessionFlow.length > 0) {
+      console.log(`    ${c("Flow:", color.dim)} ${r.details.sessionFlow.join(" -> ")}`)
+    }
+  }
   console.log("")
 
   // Detailed results
   for (const r of results) {
-    console.log(`  --- ${r.caseID}: ${r.caseName} ---`)
-    console.log(`  Status: ${r.status} | Runs: ${r.totalRuns} | Wall: ${Math.round(r.wallTimeMs / 1000)}s`)
+    console.log(`  ${c(`--- ${r.caseID}: ${r.caseName} ---`, color.bold)}`)
+    console.log(`  Status: ${r.status} | Runs: ${r.totalRuns} | Wall: ${Math.round(r.wallTimeMs / 1000)}s | Session msgs: ${r.sessionMessageCount}`)
     if (r.details.planSummary) {
       console.log(`  Plan: ${r.details.planSummary.slice(0, 100)}`)
     }
     if (r.details.evalVerdict) {
-      console.log(`  Eval: ${r.details.evalVerdict} — ${r.details.evalSummary?.slice(0, 100)}`)
+      console.log(`  Eval: ${r.details.evalVerdict} -- ${r.details.evalSummary?.slice(0, 100)}`)
     }
     if (r.details.checks && r.details.checks.length > 0) {
-      for (const c of r.details.checks) {
-        const icon = c.status === "passed" ? "PASS" : "FAIL"
-        console.log(`    [${icon}] ${c.name}`)
+      for (const ck of r.details.checks) {
+        const icon = ck.status === "passed" ? c("PASS", color.green) : c("FAIL", color.red)
+        console.log(`    [${icon}] ${ck.name}`)
       }
     }
     if (r.details.goals && r.details.goals.length > 0) {
       for (const g of r.details.goals) {
-        const icon = g.status === "passed" ? "PASS" : g.status === "failed" ? "FAIL" : "????"
+        const icon = g.status === "passed" ? c("PASS", color.green) : g.status === "failed" ? c("FAIL", color.red) : c("????", color.yellow)
         console.log(`    [${icon}] ${g.description}`)
       }
     }
@@ -1200,7 +1394,7 @@ function printReport(results: EvalResult[]) {
       console.log(`  Changed: ${r.details.changedFiles.join(", ")}`)
     }
     if (r.details.error) {
-      console.log(`  Error: ${r.details.error.slice(0, 200)}`)
+      console.log(`  ${c("Error:", color.red)} ${r.details.error.slice(0, 200)}`)
     }
     console.log("")
   }
@@ -1211,8 +1405,58 @@ function printReport(results: EvalResult[]) {
     `eval-report-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
   )
   fs.writeFileSync(reportPath, JSON.stringify(results, null, 2))
-  console.log(`  Report saved to: ${reportPath}`)
-  console.log("=".repeat(80))
+  console.log(`  ${c("Report saved:", color.dim)} ${reportPath}`)
+  console.log(c("=".repeat(80), color.bold))
+}
+
+// ---------------------------------------------------------------------------
+// Server management
+// ---------------------------------------------------------------------------
+
+let serverProc: ReturnType<typeof Bun.spawn> | undefined
+
+async function startServer(): Promise<void> {
+  const binaryPath = path.resolve(process.cwd(), "dist/opencorvus-windows-x64/bin/opencorvus.exe")
+  if (!fs.existsSync(binaryPath)) {
+    console.error(`Binary not found at ${binaryPath}`)
+    console.error("Build first: bun run script/build.local.ts --single --binary-only")
+    process.exit(1)
+  }
+
+  console.log(`Starting server: ${c(binaryPath, color.dim)}`)
+  serverProc = Bun.spawn([binaryPath, "serve", "--port", "7878"], {
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      OPENCORVUS_CHANNEL: "local",
+    },
+  })
+
+  // Wait for server to be ready
+  const maxWait = 30_000
+  const start = Date.now()
+  while (Date.now() - start < maxWait) {
+    try {
+      const res = await fetch(`${SERVER}/tasks`)
+      if (res.ok) {
+        console.log(`Server ready at ${c(SERVER, color.cyan)}`)
+        return
+      }
+    } catch {
+      // not ready yet
+    }
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  throw new Error(`Server failed to start within ${maxWait / 1000}s`)
+}
+
+function stopServer() {
+  if (serverProc) {
+    console.log("Stopping server...")
+    serverProc.kill()
+    serverProc = undefined
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1220,22 +1464,21 @@ function printReport(results: EvalResult[]) {
 // ---------------------------------------------------------------------------
 
 async function runCase(evalCase: EvalCase): Promise<EvalResult> {
-  console.log(`\n>> Running ${evalCase.id}: ${evalCase.name} [${evalCase.difficulty}]`)
+  console.log(`\n${c(">>", color.bold)} Running ${c(evalCase.id, color.bold + color.cyan)}: ${evalCase.name} [${evalCase.difficulty}]`)
 
-  // 1. Scaffold the project files (inside project worktree so agent can access them)
+  // 1. Scaffold
   const baseDir = await evalWorkspaceDir()
   const caseDir = scaffoldCase(evalCase, baseDir)
-  console.log(`   Scaffolded to: ${caseDir}`)
+  console.log(`   Scaffolded to: ${c(toUnixPath(caseDir), color.dim)}`)
 
-  // 2. Modify task request to include the working directory (use Unix paths for shell)
+  // 2. Build modified task request with working directory
   const unixDir = toUnixPath(caseDir)
-  // Compute relative path from project worktree for cleaner agent instructions
   let relDir = unixDir
   try {
     const tasks = await apiCall<{ project: { worktree: string } }>("GET", "/tasks")
     const worktree = toUnixPath(tasks.project.worktree)
     if (unixDir.startsWith(worktree)) {
-      relDir = unixDir.slice(worktree.length + 1) // e.g., "eval-workspace-xxx/e2"
+      relDir = unixDir.slice(worktree.length + 1)
     }
   } catch { /* use absolute */ }
 
@@ -1259,7 +1502,6 @@ async function runCase(evalCase: EvalCase): Promise<EvalResult> {
           }),
         )
       : undefined,
-    // Override budget to limit retries during eval (avoids server crashes)
     budget: {
       maxRuns: evalCase.task.budget?.maxRuns ?? 2,
       maxReplans: evalCase.task.budget?.maxReplans ?? 1,
@@ -1279,6 +1521,7 @@ async function runCase(evalCase: EvalCase): Promise<EvalResult> {
       status: "completed",
       wallTimeMs: 0,
       totalRuns: 1,
+      sessionMessageCount: 0,
       scores: { completion: 0, checkPassRate: 0, goalPassRate: 0, efficiency: 100, wallTimeScore: 100 },
       overall: 0,
       details: {},
@@ -1290,9 +1533,9 @@ async function runCase(evalCase: EvalCase): Promise<EvalResult> {
   let taskID: string
   try {
     taskID = await createTask(modifiedTask)
-    console.log(`   Task created: ${taskID}`)
+    console.log(`   Task created: ${c(taskID, color.cyan)}`)
   } catch (err) {
-    console.error(`   Failed to create task: ${err}`)
+    console.error(`   ${c("Failed to create task:", color.red)} ${err}`)
     cleanupCase(baseDir)
     return {
       caseID: evalCase.id,
@@ -1302,38 +1545,57 @@ async function runCase(evalCase: EvalCase): Promise<EvalResult> {
       status: "failed",
       wallTimeMs: 0,
       totalRuns: 0,
+      sessionMessageCount: 0,
       scores: { completion: 0, checkPassRate: 0, goalPassRate: 0, efficiency: 0, wallTimeScore: 0 },
       overall: 0,
       details: { error: String(err) },
     }
   }
 
-  // 4. Poll until done
+  // 4. Poll with real-time session display
   console.log(`   Polling (max ${MAX_WAIT_MS / 1000}s)...`)
-  const progress = await pollUntilDone(taskID)
+  const { progress, sessionMsgCount, sessionFlow } = await pollUntilDone(taskID)
   const wallTimeMs = Date.now() - startTime
-  console.log(`\n   Done: ${progress.task.status} (${Math.round(wallTimeMs / 1000)}s)`)
+
+  // Print final session messages
+  const finalSessionID = progress.task.sessionID ?? progress.run?.sessionID
+  if (finalSessionID) {
+    const finalMsgs = await getSessionMessages(finalSessionID)
+    for (const msg of finalMsgs) {
+      renderSessionMessage(msg)
+    }
+  }
+
+  console.log(`   ${c("-".repeat(60), color.dim)}`)
+  console.log(`   Done: ${c(progress.task.status.toUpperCase(), progress.task.status === "completed" ? color.green : color.red)} (${Math.round(wallTimeMs / 1000)}s, ${sessionMsgCount} session messages)`)
 
   // 5. Score
-  const result = scoreResult(evalCase, progress, wallTimeMs)
-
-  // 6. Cleanup (optional — keep for debugging)
-  // cleanupCase(baseDir)
-
+  const result = scoreResult(evalCase, progress, wallTimeMs, sessionMsgCount, sessionFlow)
   return result
 }
 
 async function main() {
-  console.log("OpenCorvus E2E Evaluation")
-  console.log(`Server: ${SERVER}`)
-  console.log(`Dry run: ${DRY_RUN}`)
+  console.log(c("OpenCorvus E2E Evaluation", color.bold + color.cyan))
+  console.log(`${c("Server:", color.dim)} ${SERVER}`)
+  console.log(`${c("Model:", color.dim)} qwen3.5-plus`)
+  console.log(`${c("Dry run:", color.dim)} ${DRY_RUN}`)
+  console.log(`${c("Auto-start:", color.dim)} ${START_SERVER}`)
+
+  // Auto-start server if requested
+  if (START_SERVER) {
+    await startServer()
+  }
 
   // Check server is reachable
   if (!DRY_RUN) {
     try {
-      await fetch(`${SERVER}/tasks`)
+      const res = await fetch(`${SERVER}/tasks`)
+      if (!res.ok) throw new Error(`Server returned ${res.status}`)
+      const body = await res.json() as { project?: { worktree?: string } }
+      console.log(`${c("Project:", color.dim)} ${body.project?.worktree ?? "unknown"}`)
     } catch (err) {
-      console.error(`Cannot reach server at ${SERVER}: ${err}`)
+      console.error(`${c("Cannot reach server:", color.red)} ${SERVER}: ${err}`)
+      stopServer()
       process.exit(1)
     }
   }
@@ -1343,16 +1605,20 @@ async function main() {
   if (cases.length === 0) {
     console.error(`No cases matching filter: ${CASE_FILTER}`)
     console.error(`Available: ${CASES.map((c) => c.id).join(", ")}`)
+    stopServer()
     process.exit(1)
   }
 
   console.log(`Running ${cases.length} case(s): ${cases.map((c) => c.id).join(", ")}`)
 
-  // Run sequentially (each case may consume server resources)
   const results: EvalResult[] = []
-  for (const evalCase of cases) {
-    const result = await runCase(evalCase)
-    results.push(result)
+  try {
+    for (const evalCase of cases) {
+      const result = await runCase(evalCase)
+      results.push(result)
+    }
+  } finally {
+    stopServer()
   }
 
   printReport(results)
@@ -1360,5 +1626,6 @@ async function main() {
 
 main().catch((err) => {
   console.error("Fatal:", err)
+  stopServer()
   process.exit(1)
 })

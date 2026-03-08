@@ -4,7 +4,7 @@
  * Tests the full flow: PlannerAgent → PlannerService → EvaluatorAgent → Runtime
  * without requiring actual LLM calls (mocks the Provider layer).
  */
-import { describe, test, expect, mock, beforeEach } from "bun:test"
+import { describe, test, expect, mock, beforeEach, spyOn } from "bun:test"
 import { PlannerAgent, type PlannerOutputType } from "@/planner/agent"
 import { PlannerService } from "@/planner/service"
 import {
@@ -204,7 +204,8 @@ describe("EvaluatorAgent output structure", () => {
 })
 
 describe("PlannerService integration", () => {
-  test("initial() with explicit goals uses template plan (no agent call)", async () => {
+  test("initial() with explicit goals uses planner output when available", async () => {
+    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN_OUTPUT)
     const result = await PlannerService.initial({
       title: "Test task",
       request: "Do something",
@@ -219,33 +220,28 @@ describe("PlannerService integration", () => {
     expect(result.metadata.strategy).toBe("initial")
   })
 
-  test("initial() without goals falls back to template when agent unavailable", async () => {
-    // Without LLM keys configured, PlannerAgent.plan() will throw
-    const result = await PlannerService.initial({
-      title: "Add button",
-      request: "Add a submit button to the form",
-    })
-    // Should fall back to template plan
-    expect(result.summary).toBeTruthy()
-    expect(result.prompt).toContain("Add button")
-    expect(result.goals.length).toBeGreaterThan(0)
-    expect(result.metadata.strategy).toBe("initial")
+  test("initial() throws when agent is unavailable", async () => {
+    spyOn(PlannerAgent, "plan").mockRejectedValue(new Error("no model"))
+    await expect(
+      PlannerService.initial({
+        title: "Add button",
+        request: "Add a submit button to the form",
+      }),
+    ).rejects.toThrow("planner agent failed")
   })
 
-  test("replan() falls back to template when agent unavailable", async () => {
-    const result = await PlannerService.replan({
-      title: "Fix bug",
-      request: "Fix the login validation bug",
-      goals: [{ description: "Login works", criteria: "Test passes", priority: "blocking" }],
-      previousPrompt: "Previous prompt content...",
-      previousPlanID: "plan_001",
-      failureSummary: "Build failed due to syntax error",
-    })
-    expect(result.summary).toContain("Fix")
-    expect(result.prompt).toContain("previous attempt failed")
-    expect(result.metadata.strategy).toBe("replan")
-    expect(result.metadata.failure_summary).toBe("Build failed due to syntax error")
-    expect(result.metadata.previous_plan_id).toBe("plan_001")
+  test("replan() throws when agent is unavailable", async () => {
+    spyOn(PlannerAgent, "plan").mockRejectedValue(new Error("no model"))
+    await expect(
+      PlannerService.replan({
+        title: "Fix bug",
+        request: "Fix the login validation bug",
+        goals: [{ description: "Login works", criteria: "Test passes", priority: "blocking" }],
+        previousPrompt: "Previous prompt content...",
+        previousPlanID: "plan_001",
+        failureSummary: "Build failed due to syntax error",
+      }),
+    ).rejects.toThrow("planner agent replan failed")
   })
 })
 
@@ -328,8 +324,7 @@ describe("Classification-based retry policy", () => {
 
 describe("Agent output to PlanDraft conversion", () => {
   test("agentOutputToDraft produces valid prompt with all sections", async () => {
-    // Use PlannerService.initial with explicit goals to test template path
-    // Then verify the template prompt structure
+    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN_OUTPUT)
     const result = await PlannerService.initial({
       title: "Test conversion",
       request: "Implement feature X",
@@ -343,12 +338,10 @@ describe("Agent output to PlanDraft conversion", () => {
     })
 
     expect(result.prompt).toContain("Test conversion")
-    expect(result.prompt).toContain("Feature X works")
-    expect(result.prompt).toContain("bun run test passes")
-    expect(result.prompt).toContain("Phase 1: Explore")
-    expect(result.prompt).toContain("Phase 2: Plan")
-    expect(result.prompt).toContain("Phase 3: Execute")
-    expect(result.prompt).toContain("Phase 4: Verify")
+    expect(result.prompt).toContain("Expanded PRD")
+    expect(result.prompt).toContain("## Goals")
+    expect(result.prompt).toContain("## Subtasks")
+    expect(result.prompt).toContain("## Execution Guide")
   })
 })
 

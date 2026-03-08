@@ -36,6 +36,12 @@
   --dialog-backdrop: rgba(0, 0, 0, 0.5);
   --dialog-bg: rgba(22, 25, 32, 0.98);
   --divider-soft: rgba(255, 255, 255, 0.03);
+  --title-size: 14px;
+  --title-weight: 600;
+  --title-track: 0.02em;
+  --subhead-size: 13px;
+  --subhead-weight: 600;
+  --subhead-track: 0.03em;
   --font: -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
   --mono: "SF Mono", "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
 }
@@ -86,8 +92,8 @@ body[data-theme="light"] {
 
 body {
   font-family: var(--font);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
   color: var(--text);
   background: var(--bg);
   overflow: hidden;
@@ -2116,3 +2122,165 @@ select.field-input {
 .config-value[data-status="active"] { color: var(--good); }
 .config-value[data-status="warn"] { color: var(--warn); }
 .config-value[data-status="error"] { color: var(--bad); }
+
+/* ── Knowledge: Memory & Preferences ── */
+
+.knowledge-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 8px;
+}
+.knowledge-search {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font);
+  outline: none;
+}
+.knowledge-search:focus {
+  border-color: var(--accent);
+}
+.knowledge-search::placeholder {
+  color: var(--text-muted);
+}
+.knowledge-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* Memory items */
+.knowledge-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--divider-soft);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.knowledge-item:hover {
+  background: var(--subtle-3);
+}
+.knowledge-item:last-child {
+  border-bottom: none;
+}
+.knowledge-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.knowledge-item-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.knowledge-item-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.knowledge-item-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.knowledge-scope {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--subtle-4);
+  color: var(--text-soft);
+}
+.knowledge-scope[data-scope="global"] {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.knowledge-scope[data-scope="session"] {
+  background: var(--warn-dim);
+  color: var(--warn);
+}
+.knowledge-scope[data-source="builtin_default"] {
+  background: var(--subtle-3);
+  color: var(--text-muted);
+}
+
+/* Preference items */
+.pref-item {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--divider-soft);
+}
+.pref-item:last-child {
+  border-bottom: none;
+}
+.pref-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pref-item-key {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: var(--mono);
+}
+.pref-item-value {
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 4px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pref-item-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Memory detail dialog */
+.memory-detail-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.memory-detail-content {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 12px;
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-family: var(--mono);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+}
+
+/* Search result highlight */
+.knowledge-item[data-mode="search"] .knowledge-item-meta {
+  color: var(--good);
+}
+.knowledge-item[data-mode="search"] .knowledge-item-title::after {
+  content: " (search)";
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 10px;
+}

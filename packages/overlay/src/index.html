@@ -11,7 +11,7 @@
   <!-- Titlebar (draggable) -->
   <header class="titlebar">
     <div class="titlebar-brand" data-tauri-drag-region>
-      <img class="brand-logo" src="opencorvus.svg" alt="OpenCorvus logo">
+      <img class="brand-logo" src="opencorvus-logo.png" alt="OpenCorvus logo">
       <span class="brand-name">OpenCorvus</span>
       <span class="brand-version" id="brandVersion">overlay v0.0.1</span>
       <span class="conn-badge" id="connBadge" data-status="offline">Offline</span>
@@ -291,6 +291,35 @@
                   <div class="extension-list" id="mcpList">
                     <div class="empty-hint">No MCP servers configured</div>
                   </div>
+                </div>
+              </div>
+            </details>
+
+            <!-- Memory -->
+            <details class="config-section" id="memorySection">
+              <summary class="config-section-head">Memory <span class="section-badge" id="memoryBadge"></span></summary>
+              <div class="config-section-body" id="memoryBody">
+                <div class="knowledge-toolbar">
+                  <input type="text" class="knowledge-search" id="memorySearch" placeholder="Search memories...">
+                  <button type="button" class="btn btn-ghost mini" id="btnMemorySearch">Search</button>
+                  <button type="button" class="btn btn-ghost mini" id="btnMemoryRefresh">Refresh</button>
+                </div>
+                <div class="knowledge-list" id="memoryList">
+                  <div class="empty-hint">No memories</div>
+                </div>
+              </div>
+            </details>
+
+            <!-- Preferences -->
+            <details class="config-section" id="preferenceSection">
+              <summary class="config-section-head">Preferences <span class="section-badge" id="preferenceBadge"></span></summary>
+              <div class="config-section-body" id="preferenceBody">
+                <div class="knowledge-toolbar">
+                  <button type="button" class="btn btn-ghost mini" id="btnPreferenceRefresh">Refresh</button>
+                  <button type="button" class="btn btn-ghost mini" id="btnPreferenceAdd">Add</button>
+                </div>
+                <div class="knowledge-list" id="preferenceList">
+                  <div class="empty-hint">No preferences</div>
                 </div>
               </div>
             </details>
@@ -580,6 +609,43 @@
       <div class="dialog-actions">
         <button type="button" class="btn btn-ghost" id="btnCancelSettings">Cancel</button>
         <button type="submit" class="btn btn-primary">Save Server</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Memory Detail Dialog -->
+  <dialog class="dialog dialog-wide" id="memoryDialog">
+    <div class="dialog-form">
+      <div class="dialog-head">
+        <h3 class="dialog-title" id="memoryDialogTitle">Memory</h3>
+        <div class="dialog-actions compact">
+          <button type="button" class="btn btn-ghost danger mini" id="btnDeleteMemory">Delete</button>
+          <button type="button" class="btn btn-ghost" id="btnCloseMemory">Close</button>
+        </div>
+      </div>
+      <div class="memory-detail-meta" id="memoryDialogMeta"></div>
+      <div class="memory-detail-content" id="memoryDialogContent">
+        <p class="empty-hint">Loading...</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Preference Edit Dialog -->
+  <dialog class="dialog" id="prefEditDialog">
+    <form class="dialog-form" id="prefEditForm">
+      <h3 class="dialog-title" id="prefEditTitle">Preference</h3>
+      <input type="hidden" id="prefEditId">
+      <label class="field">
+        <span class="field-label">Key <em>*</em></span>
+        <input class="field-input" id="prefEditKey" name="key" required placeholder="e.g. code_style">
+      </label>
+      <label class="field">
+        <span class="field-label">Value <em>*</em></span>
+        <textarea class="field-input" id="prefEditValue" name="value" required rows="4" placeholder="Preference value..."></textarea>
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" id="btnCancelPrefEdit">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
       </div>
     </form>
   </dialog>

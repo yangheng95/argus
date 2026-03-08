@@ -2,7 +2,6 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { ExecutorRegistry } from "./registry"
 import { ExecutorDiscovery } from "./discovery"
-import type { CodingProvider } from "./compat"
 import { ToolAdapterRegistry, protocolInfo } from "./protocol"
 import { CodexCLIExecutor } from "./codex-cli"
 import { CodexAppServerClientProcess } from "./codex-app-server-client"
@@ -86,13 +85,10 @@ function codexProvider(command: string[]) {
   if (process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL === "cli") {
     return CodexCLIExecutor.create({ command })
   }
-  return fallback(
-    CodexAppServerExecutor.create(() =>
-      CodexAppServerClientProcess.create({
-        command: [...command, "app-server", "--listen", "stdio://"],
-      }),
-    ),
-    CodexCLIExecutor.create({ command }),
+  return CodexAppServerExecutor.create(() =>
+    CodexAppServerClientProcess.create({
+      command: [...command, "app-server", "--listen", "stdio://"],
+    }),
   )
 }
 
@@ -100,53 +96,5 @@ function claudeProvider(command: string[]) {
   if (process.env.OPENCORVUS_EXECUTOR_CLAUDE_PROTOCOL === "cli") {
     return ClaudeCLIExecutor.create({ command })
   }
-  return fallback(ClaudeAgentExecutor.createSdk(), ClaudeCLIExecutor.create({ command }))
-}
-
-function fallback(primary: CodingProvider, secondary: CodingProvider): CodingProvider {
-  return {
-    name: primary.name,
-    capabilities() {
-      return primary.capabilities()
-    },
-    async *run(input: Parameters<typeof primary.run>[0]) {
-      try {
-        yield* primary.run(input)
-        return
-      } catch (error) {
-        log.warn("primary executor protocol failed, falling back", {
-          provider: primary.name,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        yield* secondary.run(input)
-      }
-    },
-    async *resume(input: Parameters<typeof primary.resume>[0]) {
-      try {
-        yield* primary.resume(input)
-        return
-      } catch (error) {
-        log.warn("primary executor protocol resume failed, falling back", {
-          provider: primary.name,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        yield* secondary.resume(input)
-      }
-    },
-    async interrupt(sessionID: string) {
-      try {
-        return await primary.interrupt(sessionID)
-      } catch (error) {
-        log.warn("primary executor protocol interrupt failed, falling back", {
-          provider: primary.name,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        return secondary.interrupt(sessionID)
-      }
-    },
-    async respond(input: Parameters<NonNullable<typeof primary.respond>>[0]) {
-      if (!primary.respond) return false
-      return primary.respond(input)
-    },
-  }
+  return ClaudeAgentExecutor.createSdk()
 }
