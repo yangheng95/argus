@@ -18,6 +18,9 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+// Force PlannerAgent to fail fast — orchestrator tests focus on orchestrator logic, not planning
+process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = "100"
+
 describe("orchestrator.service", () => {
   afterEach(async () => {
     mock.restore()

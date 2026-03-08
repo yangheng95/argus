@@ -5,6 +5,12 @@ import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agen
 
 const log = Log.create({ service: "planner" })
 
+/** Max time to wait for PlannerAgent before falling back to template plan.
+ *  Override via OPENCORVUS_PLANNER_TIMEOUT_MS env var (useful for tests). */
+function plannerTimeoutMs() {
+  return Number(process.env.OPENCORVUS_PLANNER_TIMEOUT_MS) || 120_000
+}
+
 // ---------------------------------------------------------------------------
 // Spec analysis schema — output of LLM-based spec expansion
 // ---------------------------------------------------------------------------
@@ -62,23 +68,55 @@ export namespace PlannerService {
     goals?: z.infer<typeof GoalInput>[]
     allowClarification?: boolean
   }) {
-    // If user provided explicit goals, skip agent planning
-    if (input.goals && input.goals.length > 0) {
-      return templatePlan(input.title, input.request, input.goals, false)
-    }
+    const hasUserGoals = input.goals && input.goals.length > 0
 
-    // Use PlannerAgent — independent-context agent that explores codebase before planning
-    const agentResult = await PlannerAgent.plan({
-      title: input.title,
-      request: input.request,
-    }).catch((error) => {
-      log.warn("planner agent failed, falling back to template", { error: error?.message ?? String(error) })
-      return undefined
+    // ALWAYS use PlannerAgent — even with user-provided goals, the agent explores
+    // the codebase and produces a detailed plan grounded in real file paths.
+    // User goals are passed as context for the agent to refine and expand.
+    // Hard timeout via Promise.race + abort signal for cleanup.
+    const timeoutMs = plannerTimeoutMs()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    const agentResult = await Promise.race([
+      PlannerAgent.plan({
+        title: input.title,
+        request: input.request,
+        userGoals: hasUserGoals
+          ? input.goals!.map((g) => ({
+              description: g.description,
+              criteria: g.criteria,
+              priority: g.priority,
+            }))
+          : undefined,
+        signal: controller.signal,
+      }).catch((error) => {
+        log.warn("planner agent failed, falling back to template", { error: error?.message ?? String(error) })
+        return undefined as PlannerOutputType | undefined
+      }),
+      new Promise<undefined>((resolve) => setTimeout(resolve, timeoutMs)),
+    ]).finally(() => {
+      clearTimeout(timer)
+      controller.abort()
     })
 
     if (!agentResult) {
-      const goals = normalizeGoals(input.request)
+      const goals = hasUserGoals ? input.goals! : normalizeGoals(input.request)
       return templatePlan(input.title, input.request, goals, input.allowClarification !== false)
+    }
+
+    // When user provided explicit goals, use them (they have the correct check_selectors
+    // and metadata). The agent's PRD, subtasks, risks provide the codebase context.
+    if (hasUserGoals) {
+      return agentOutputToDraft(
+        input.title,
+        input.request,
+        { ...agentResult, goals: agentResult.goals },
+        "initial",
+        undefined,
+        undefined,
+        input.allowClarification !== false,
+        input.goals,
+      )
     }
 
     return agentOutputToDraft(input.title, input.request, agentResult, "initial", undefined, undefined, input.allowClarification !== false)
@@ -159,15 +197,28 @@ function agentOutputToDraft(
   previousPlanID?: string,
   failureSummary?: string,
   allowClarification = true,
+  /** When user provided explicit goals, prefer them over agent-generated ones */
+  userGoals?: z.infer<typeof GoalInput>[],
 ) {
-  const goals = output.goals.map((g) => ({
-    description: g.description,
-    criteria: g.criteria,
-    priority: g.priority,
-    metadata: {
-      check_selector: g.check_selector ?? inferSelectors(`${g.description} ${g.criteria}`),
-    },
-  }))
+  // User-provided goals take precedence — they have the correct check_selectors and metadata.
+  // Agent goals are used when no user goals were provided.
+  const goals = userGoals && userGoals.length > 0
+    ? userGoals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria,
+        priority: g.priority ?? ("blocking" as const),
+        metadata: {
+          check_selector: g.metadata?.check_selector ?? inferSelectors(`${g.description} ${g.criteria}`),
+        },
+      }))
+    : output.goals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria,
+        priority: g.priority,
+        metadata: {
+          check_selector: g.check_selector ?? inferSelectors(`${g.description} ${g.criteria}`),
+        },
+      }))
 
   const prompt = renderAgentPrompt({
     title,
@@ -177,6 +228,8 @@ function agentOutputToDraft(
     subtasks: output.subtasks,
     risks: output.risks,
     assumptions: output.assumptions,
+    strategy,
+    milestones: output.milestones?.map((m) => ({ title: m.title })),
   })
 
   const steps = output.subtasks
@@ -225,6 +278,8 @@ function renderAgentPrompt(input: {
   subtasks: Array<{ title: string; description: string; order?: number }>
   risks: string[]
   assumptions?: Array<{ question: string; assumption: string }>
+  strategy?: "initial" | "replan"
+  milestones?: Array<{ title: string }>
 }) {
   const sections = [
     `You are executing a headless coding task inside OpenCorvus.
@@ -272,7 +327,12 @@ ${input.prd.trim()}`,
     )
   }
 
-  sections.push(WORKFLOW_SECTION)
+  sections.push(buildWorkflowSection({
+    taskType: input.strategy ?? "initial",
+    hasRelevantMemory: false,
+    hasPriorFailure: input.strategy === "replan",
+    milestones: input.milestones,
+  }))
 
   return sections.join("\n\n")
 }
@@ -347,92 +407,65 @@ Request:
 ${input.request.trim()}
 
 Goals:
-${input.goals.map((goal, index) => `${index + 1}. ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n\n")}
+${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"}] ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n\n")}
 
-${WORKFLOW_SECTION}`
+## Execution Steps
+
+1. **Recall**: Search memory and check preferences before starting.
+2. **Explore**: Read relevant files, understand existing patterns and conventions. Identify exact file paths to create/modify.
+3. **Plan**: Use the planner tool to decompose the task into subtasks. Each subtask should have a clear verification step.
+4. **Execute**: Work through subtasks in order. Verify each step immediately (typecheck, test).
+5. **Verify**: Run ALL acceptance checks from the Goals section. Confirm every blocking goal is met.
+
+**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), goal (acceptance criteria), task (parallel sub-agents), websearch/webfetch (external docs).`
 }
 
-const WORKFLOW_SECTION = `## Planning & Execution Workflow
+function buildWorkflowSection(input: {
+  taskType: "initial" | "replan" | "retry"
+  hasRelevantMemory: boolean
+  hasPriorFailure: boolean
+  failureClassification?: string
+  milestones?: Array<{ title: string }>
+}): string {
+  const sections: string[] = ["## Execution Guide"]
 
-Follow this structured workflow. Do NOT skip any phase.
+  if (input.taskType === "retry") {
+    sections.push(
+      `This is a **retry** — focus on the specific failure, not broad exploration.`,
+      `1. Read the failure details above. Identify the exact failing check and root cause.`,
+      `2. Make targeted fixes — do not refactor or change unrelated code.`,
+      `3. Re-run the failing checks to verify your fix.`,
+    )
+  } else if (input.taskType === "replan") {
+    sections.push(
+      `This is a **replan** after a failed attempt. Read the Replan Context below.`,
+      `1. Understand what went wrong. Do NOT repeat the failed approach.`,
+      `2. Try a different strategy as suggested in the failure analysis.`,
+      `3. Verify each step before moving on.`,
+    )
+  } else {
+    sections.push(
+      `Execute the subtasks above in order. For each:`,
+      `1. Use \`planner\` tool to track progress (add_task → in_progress → completed).`,
+      `2. Implement the change, then immediately verify it (typecheck, test, etc.).`,
+      `3. Record discoveries via \`memory\` tool — written memories survive across sessions.`,
+      ``,
+      `After all subtasks: run ALL checks listed in the Goals section and confirm every blocking goal is met.`,
+    )
+  }
 
-### Phase 0: Recall — Leverage Prior Knowledge
+  if (input.milestones && input.milestones.length > 0) {
+    sections.push(
+      `\n**Milestones**: ${input.milestones.map((m, i) => `${i + 1}. ${m.title}`).join(" | ")}`,
+    )
+  }
 
-Before touching code, recall what you already know:
+  sections.push(
+    `\n**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), goal (acceptance criteria), task (parallel sub-agents), websearch/webfetch (external docs).`,
+  )
 
-1. **Search memory** — Call \`memory\` with \`action: "search"\` and \`scope: "all"\` using keywords from the task.
-   Try 1-2 searches with different phrasings to find prior solutions, known gotchas, or established patterns.
-2. **Check preferences** — Call \`preference\` with \`action: "list"\` and \`scope: "all"\` to see current project conventions.
-   Preferences are BINDING — your implementation must respect them.
-
-If the assistant-brief above already contains memory and preferences, review them first and only search for more if needed.
-
-### Phase 1: Explore & Understand
-
-Before making any changes, gain a thorough understanding of the codebase:
-
-1. **Read relevant files** — Identify the files and modules affected by this task. Use read, glob, and grep tools to explore.
-2. **Understand conventions** — Look at existing patterns, naming conventions, test structure, and architecture.
-3. **Identify dependencies** — Find what depends on the code you'll change and what your changes depend on.
-
-Use up to 3 parallel \`task\` (Explore) agents if the scope is broad. Use 1 if the task is well-scoped.
-
-### Phase 2: Plan with the Planner Tool
-
-Use the \`planner\` tool to create a structured task decomposition:
-
-1. Call \`planner\` with action \`add_task\` for each major step.
-2. Use \`parentId\` to create subtasks where appropriate.
-3. Each task should have a clear, verifiable goal.
-4. Order tasks logically: setup → core changes → tests → verification.
-5. Use \`planner\` with action \`scratchpad_write\` to record critical findings, gotchas, and constraints.
-
-Include a final verification task that runs the acceptance checks listed in the Goals section.
-
-### Phase 3: Execute & Verify Incrementally
-
-Work through your plan systematically with per-step verification:
-
-\`\`\`
-For each subtask:
-  1. planner({ action: "update_task", taskId, status: "in_progress" })
-  2. Execute the work (read → edit/write → verify)
-  3. Run a quick check for this unit (e.g., typecheck, run related test)
-  4. planner({ action: "update_task", taskId, status: "completed" })
-  5. memory({ action: "write", title: "...", content: "..." }) — record any discoveries or gotchas
-\`\`\`
-
-**CRITICAL**: Verify each subtask before moving to the next. Do NOT batch all verification to the end.
-Catch errors early so failures are isolated and fixable.
-
-### Phase 4: Final Verification
-
-After all subtasks complete:
-
-1. Run ALL acceptance checks referenced in the Goals section (build, test, lint, etc.).
-2. For each goal, verify the criteria is met and note the evidence.
-3. Summarize what changed, what was verified, and any remaining risks.
-4. Write a final memory entry summarizing: what was built, key decisions, tricky parts, and logical next steps.
-
-## Available High-Level Tools
-
-Beyond basic file tools (read, edit, write, glob, grep, bash), you have:
-
-- **memory** — Search/read/write project knowledge. Always recall before starting. Write discoveries as you go.
-- **preference** — List/read project conventions. These are binding.
-- **planner** — Structured task decomposition with scratchpad. Use throughout to track progress.
-- **goal** — View and track acceptance goals during execution.
-- **task** — Spawn parallel sub-agents for exploration or independent subtasks.
-- **websearch** / **webfetch** — Look up external APIs, documentation, or guides when needed.
-- **skill** — Load specialized skills for specific task types.
-
-## Constraints
-
-- Work autonomously until the task is complete or blocked.
-- If you need clarification or approval, use the existing question or permission flow.
-- Use the planner tool throughout to track progress — do not skip it.
-- Write memory entries for non-obvious discoveries — if the session is cut short, only written memories survive.
-- When finished, ensure all planner tasks are marked completed and provide a final summary.`
+  return sections.join("\n")
+}
 
 function renderReplanPrompt(input: {
   title: string
@@ -446,27 +479,35 @@ function renderReplanPrompt(input: {
       ? input.previousPrompt.slice(0, 3000) + "\n...(truncated)"
       : input.previousPrompt
 
-  return `${renderPlanModePrompt({
-    title: input.title,
-    request: input.request,
-    goals: input.goals,
-  })}
+  return `You are executing a headless coding task inside OpenCorvus.
+
+Task: ${input.title}
+
+Request:
+${input.request.trim()}
+
+Goals:
+${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"}] ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n\n")}
 
 ## Replan Context
 
-The previous attempt failed. You MUST address the failure before proceeding.
+The previous attempt **failed**. You MUST use a DIFFERENT strategy.
 
-Previous plan context:
-${truncatedPrevious}
-
-Failure summary:
+### Failure Summary
 ${input.failureSummary}
 
-**Instructions for replanning:**
-1. Analyze what went wrong in the previous attempt.
-2. Use the planner tool to create a NEW task decomposition that addresses the failure.
-3. Do not repeat the same approach that failed — adjust your strategy.
-4. Continue until all blocking goals are satisfied or you are blocked on external input.`
+### Previous Plan (for reference)
+${truncatedPrevious}
+
+## Instructions
+
+1. Analyze the failure. Understand what went wrong and why.
+2. Explore the codebase to verify your understanding — read the affected files.
+3. Use the planner tool to create a NEW task decomposition that avoids the previous failure.
+4. Execute the new plan. Verify each step immediately.
+5. Run ALL acceptance checks. Confirm every blocking goal is met.
+
+**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), goal (acceptance criteria), task (parallel sub-agents).`
 }
 
 // ---------------------------------------------------------------------------
