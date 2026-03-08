@@ -1,6 +1,6 @@
 import { Identifier } from "@/id/id"
 import { OrchestratorGoalTable, OrchestratorProgressSnapshotTable, OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
-import { Database, eq } from "@/storage/db"
+import { Database, desc, eq } from "@/storage/db"
 
 function inferGoalMetadata(text: string, criteria?: string) {
   const lower = `${text} ${criteria ?? ""}`.toLowerCase()
@@ -33,12 +33,13 @@ export namespace GoalService {
     if (!task || !planVersionID) return
 
     const now = Date.now()
-    const count = Database.use((db) =>
+    const last = Database.use((db) =>
       db
         .select()
         .from(OrchestratorGoalTable)
         .where(eq(OrchestratorGoalTable.plan_version_id, planVersionID))
-        .all().length,
+        .orderBy(desc(OrchestratorGoalTable.order_index))
+        .get(),
     )
 
     Database.use((db) =>
@@ -56,7 +57,7 @@ export namespace GoalService {
           },
           priority: "blocking",
           status: "pending",
-          order_index: count,
+          order_index: (last?.order_index ?? -1) + 1,
           time_created: now,
           time_updated: now,
         })

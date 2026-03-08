@@ -21,16 +21,23 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 function stubPlanner() {
-  spyOn(PlannerService, "initial").mockResolvedValue({
+  spyOn(PlannerService, "initial").mockImplementation(async (input: any) => ({
     summary: "Compiled plan",
     prompt: "Execute the compiled plan",
-    goals: [
-      {
-        description: "Implement the requested change",
-        criteria: "The requested change is implemented and checks pass.",
-        priority: "blocking",
-      },
-    ],
+    goals: input.goals && input.goals.length > 0
+      ? input.goals.map((g: any) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority ?? "blocking",
+          metadata: g.metadata,
+        }))
+      : [
+          {
+            description: "Implement the requested change",
+            criteria: "The requested change is implemented and checks pass.",
+            priority: "blocking",
+          },
+        ],
     metadata: {
       strategy: "initial",
       steps: ["Explore", "Plan", "Verify"],
@@ -43,7 +50,7 @@ function stubPlanner() {
       clarification: undefined,
       spec_analysis: undefined,
     },
-  } as any)
+  }) as any)
   spyOn(PlannerService, "replan").mockResolvedValue({
     summary: "Compiled replan",
     prompt: "Execute the replanned approach",

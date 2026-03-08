@@ -297,6 +297,47 @@ describe("workbench.service", () => {
     })
   })
 
+  test("brief and board prioritize the latest task notes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
+      sessionID: input.sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "implement feature",
+        })
+        for (const index of Array.from({ length: 14 }, (_, item) => item + 1)) {
+          await OrchestratorService.handleTaskMessage(taskID, {
+            text: `/plan hint-${index}`,
+            source: "api",
+          })
+        }
+
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )!
+        const run = Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).get())!
+        const brief = WorkbenchService.compileBrief({
+          taskID,
+          runID: run.id,
+          planVersionID: task.active_plan_version_id!,
+          sessionID: task.session_id!,
+        })
+        const board = WorkbenchService.compileBoard({ taskID })
+        const staging = board.lanes.find((lane) => lane.id === "staging")?.cards ?? []
+
+        expect(brief.content).toContain("[plan_hint] hint-14")
+        expect(brief.content).not.toContain("[plan_hint] hint-1")
+        expect(staging.some((card) => String(card.detail ?? "").includes("hint-14"))).toBe(true)
+        expect(staging.some((card) => String(card.detail ?? "").includes("hint-1"))).toBe(false)
+      },
+    })
+  })
+
   test("does not infer free-form api preferences when intent analysis is unavailable", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({

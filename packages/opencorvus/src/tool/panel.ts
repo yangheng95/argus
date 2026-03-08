@@ -8,15 +8,7 @@ import { LLMTrace } from "@/session/llm-trace"
 import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
-const CheckSelection = z
-  .object({
-    lint: z.boolean().optional(),
-    build: z.boolean().optional(),
-    test: z.boolean().optional(),
-    code_quality: z.boolean().optional(),
-    code_review: z.boolean().optional(),
-    judge: z.boolean().optional(),
-  })
+const CheckSelection = z.record(z.string(), z.boolean())
 
 export const PanelTool = Tool.define("panel", {
   description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",

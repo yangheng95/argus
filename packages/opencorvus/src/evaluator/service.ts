@@ -6,11 +6,12 @@ import { Shell as ShellUtil } from "@/shell/shell"
 import { Snapshot } from "@/snapshot"
 import { Filesystem } from "@/util/filesystem"
 import { spawn } from "child_process"
+import fs from "fs/promises"
 import { generateObject } from "ai"
 import path from "path"
 import puppeteer from "puppeteer-core"
 import z from "zod"
-import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
+import { CheckConfig, EvaluationCheck, NamedCheckConfig, NamedCheckFamily } from "@/orchestrator/model"
 import { EvaluatorAgent, type EvaluatorAnalysisType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
 
@@ -36,19 +37,27 @@ type EvaluatorCommand = {
   cwd?: string
 }
 
+type CommandGroup = {
+  name: string
+  label?: string
+  family?: z.infer<typeof NamedCheckFamily>
+  commands: EvaluatorCommand[]
+}
+
 export namespace EvaluatorService {
+  export async function resolveChecks(metadata?: Record<string, unknown>, changedFiles?: unknown) {
+    const config = await resolveConfig(metadata)
+    const discovered = await discoverChecks(changedFiles)
+    return resolvedChecks(config, discovered)
+  }
+
   export async function evaluate(
     task: { request?: string; metadata?: Record<string, unknown> },
     delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
   ) {
     const config = await resolveConfig(task.metadata)
-    const discovered = await discoverScripts(task.metadata?.delivery_changed_files)
-    const commands = [
-      { name: "build", commands: commandSpecs(config.build, discovered.build) },
-      { name: "test", commands: commandSpecs(config.test, discovered.test) },
-      { name: "lint", commands: commandSpecs(config.lint, discovered.lint) },
-      { name: "verify_cmd", commands: commandSpecs(config.verify_cmd) },
-    ].filter((item) => item.commands.length > 0)
+    const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
+    const commands = commandGroups(config, discovered)
 
     const results: z.infer<typeof EvaluationCheck>[] = []
     const artifacts: Array<{ kind: "log" | "report" | "image"; label: string; payload: Record<string, unknown> }> = []
@@ -70,6 +79,8 @@ export namespace EvaluatorService {
         if (result.code === 0) {
           results.push({
             name: label,
+            label: group.label,
+            family: group.family,
             status: "passed",
             evidence: clip(result.output) || `${command} passed`,
           })
@@ -77,6 +88,8 @@ export namespace EvaluatorService {
         }
         results.push({
           name: label,
+          label: group.label,
+          family: group.family,
           status: "failed",
           evidence: clip(result.output) || `${command} failed`,
         })
@@ -91,17 +104,17 @@ export namespace EvaluatorService {
       })
     }
 
-    const optional = [
-      await startupResult(config.startup),
-      await artifactResult(config.artifact, delivery),
-      await visualResult(config.visual),
-      await puppeteerResult(config.puppeteer),
-      await uiReviewResult(config.ui_review, task.request, delivery),
-      await codeQualityResult(config.code_quality, task.request, delivery),
-      await codeReviewResult(config.code_review, task.request, delivery),
-      await deadCodeReviewResult(config.dead_code_review, task.request, delivery),
-      await judgeResult(config.judge, task.request, delivery),
-    ]
+    const optional = await Promise.all([
+      startupResult(config.startup),
+      artifactResult(config.artifact, delivery),
+      visualResult(config.visual),
+      puppeteerResult(config.puppeteer),
+      uiReviewResult(config.ui_review, task.request, delivery),
+      codeQualityResult(config.code_quality, task.request, delivery),
+      codeReviewResult(config.code_review, task.request, delivery),
+      deadCodeReviewResult(config.dead_code_review, task.request, delivery),
+      judgeResult(config.judge, task.request, delivery),
+    ])
 
     const pluginChecksOutput = { checks: [] as Array<{ name: string; mode: "soft" | "strict"; run: (ctx: { request?: string; delivery: { summary: string; diffs?: any[] } }) => Promise<{ status: "passed" | "failed" | "skipped"; evidence: string; artifacts?: Array<{ kind: string; label: string; payload: Record<string, any> }> }> }> }
     await Plugin.trigger("evaluation.checks", {
@@ -111,24 +124,34 @@ export namespace EvaluatorService {
       config: (config as Record<string, unknown>).custom as Record<string, unknown> ?? {},
     }, pluginChecksOutput).catch(() => undefined)
 
-    for (const pluginCheck of pluginChecksOutput.checks) {
-      const checkResult = await pluginCheck.run({ request: task.request, delivery }).catch(() => ({
-        status: "skipped" as const,
-        evidence: `Plugin check ${pluginCheck.name} threw an error.`,
-      }))
-      const outcome = softOrStrict({
-        mode: pluginCheck.mode,
-        name: pluginCheck.name,
-        summary: checkResult.status === "passed" ? `${pluginCheck.name} passed.` : `${pluginCheck.name} ${checkResult.status}.`,
-        evidence: checkResult.evidence,
-        payload: {},
-      })
-      optional.push(outcome)
-      if ("artifacts" in checkResult && checkResult.artifacts) {
-        for (const art of checkResult.artifacts) {
-          artifacts.push({ kind: art.kind as "log" | "report" | "image", label: art.label, payload: art.payload })
+    const pluginResults = await Promise.all(
+      pluginChecksOutput.checks.map(async (pluginCheck) => {
+        const checkResult = await pluginCheck.run({ request: task.request, delivery }).catch(() => ({
+          status: "skipped" as const,
+          evidence: `Plugin check ${pluginCheck.name} threw an error.`,
+        }))
+        return {
+          outcome: softOrStrict({
+            mode: pluginCheck.mode,
+            name: pluginCheck.name,
+            summary: checkResult.status === "passed" ? `${pluginCheck.name} passed.` : `${pluginCheck.name} ${checkResult.status}.`,
+            evidence: checkResult.evidence,
+            payload: {},
+          }),
+          artifacts: "artifacts" in checkResult && checkResult.artifacts
+            ? checkResult.artifacts.map((art) => ({
+                kind: art.kind as "log" | "report" | "image",
+                label: art.label,
+                payload: art.payload,
+              }))
+            : [],
         }
-      }
+      }),
+    )
+
+    for (const item of pluginResults) {
+      optional.push(item.outcome)
+      artifacts.push(...item.artifacts)
     }
 
     for (const item of optional) {
@@ -231,7 +254,104 @@ function commandSpecs(configured?: string[] | false, discovered: EvaluatorComman
   return discovered
 }
 
-async function discoverScripts(changedFiles?: unknown) {
+function commandGroups(
+  config: z.infer<typeof CheckConfig>,
+  discovered: Awaited<ReturnType<typeof discoverChecks>>,
+) {
+  return [
+    group("build", config.build, discovered.build, "Build", "build"),
+    group("test", config.test, discovered.test, "Unit Tests", "test"),
+    group("lint", config.lint, discovered.lint, "Lint", "lint"),
+    group("verify_cmd", config.verify_cmd, [], "Verify Command", "verify_cmd"),
+    ...namedGroups(config.named, discovered.named),
+  ].flatMap((item) => item ?? [])
+}
+
+function group(
+  name: "build" | "test" | "lint" | "verify_cmd",
+  configured: string[] | false | undefined,
+  discovered: EvaluatorCommand[],
+  label: string,
+  family: z.infer<typeof NamedCheckFamily>,
+) {
+  const commands = commandSpecs(configured, discovered)
+  if (commands.length === 0) return
+  return {
+    name,
+    label,
+    family,
+    commands,
+  } satisfies CommandGroup
+}
+
+function namedGroups(
+  configured: Record<string, z.infer<typeof NamedCheckConfig>> | undefined,
+  discovered: Record<string, CommandGroup>,
+) {
+  const keys = new Set([
+    ...Object.keys(discovered),
+    ...Object.keys(configured ?? {}),
+  ])
+  return [...keys].flatMap((key) => {
+    const current = configured?.[key]
+    if (current?.enabled === false) return []
+    if (current) {
+      return [{
+        name: key,
+        label: current.label ?? discovered[key]?.label ?? checkLabel(key),
+        family: current.family ?? discovered[key]?.family ?? inferFamily(key),
+        commands: current.commands.map((command) => ({
+          command,
+          cwd: current.cwd,
+        })),
+      } satisfies CommandGroup]
+    }
+    const fallback = discovered[key]
+    if (!fallback) return []
+    return [fallback]
+  })
+}
+
+function resolvedChecks(
+  config: z.infer<typeof CheckConfig>,
+  discovered: Awaited<ReturnType<typeof discoverChecks>>,
+) {
+  const next = {
+    ...(config.build !== undefined ? { build: config.build } : discovered.build.length > 0 ? { build: discovered.build.map((item) => item.command) } : {}),
+    ...(config.test !== undefined ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
+    ...(config.lint !== undefined ? { lint: config.lint } : discovered.lint.length > 0 ? { lint: discovered.lint.map((item) => item.command) } : {}),
+    ...(config.verify_cmd !== undefined ? { verify_cmd: config.verify_cmd } : {}),
+    ...(config.startup ? { startup: config.startup } : {}),
+    ...(config.artifact ? { artifact: config.artifact } : {}),
+    ...(config.visual ? { visual: config.visual } : {}),
+    ...(config.puppeteer ? { puppeteer: config.puppeteer } : {}),
+    ...(config.ui_review ? { ui_review: config.ui_review } : {}),
+    ...(config.code_quality ? { code_quality: config.code_quality } : {}),
+    ...(config.code_review ? { code_review: config.code_review } : {}),
+    ...(config.dead_code_review ? { dead_code_review: config.dead_code_review } : {}),
+    ...(config.judge ? { judge: config.judge } : {}),
+    ...(config.custom ? { custom: config.custom } : {}),
+    ...(config.timeout_ms ? { timeout_ms: config.timeout_ms } : {}),
+  } as Record<string, unknown>
+  const named = {
+    ...Object.fromEntries(
+      Object.entries(discovered.named).map(([key, value]) => [
+        key,
+        {
+          label: value.label ?? checkLabel(key),
+          family: value.family,
+          commands: value.commands.map((item) => item.command),
+          enabled: true,
+        },
+      ]),
+    ),
+    ...(config.named ?? {}),
+  }
+  if (Object.keys(named).length > 0) next.named = named
+  return CheckConfig.parse(next)
+}
+
+async function discoverChecks(changedFiles?: unknown) {
   const cwd = await discoverPackageRoot(changedFiles)
   const file = Bun.file(path.join(cwd, "package.json"))
   const json = await file.json().catch(() => undefined) as { scripts?: Record<string, string> } | undefined
@@ -245,6 +365,33 @@ async function discoverScripts(changedFiles?: unknown) {
         .map((item) => path.relative(cwd, item).replaceAll("\\", "/"))
     : []
   const tests = await classifyTests(files, cwd)
+  const named = {
+    ...(scripts.typecheck ? {
+      typecheck: {
+        name: "typecheck",
+        label: "Type Check",
+        family: "lint" as const,
+        commands: run("typecheck"),
+      },
+    } : {}),
+    ...(scripts.pycompile ? {
+      py_compile: {
+        name: "py_compile",
+        label: "Python Compile",
+        family: "build" as const,
+        commands: run("pycompile"),
+      },
+    } : {}),
+    ...(scripts.pytest ? {
+      pytest: {
+        name: "pytest",
+        label: "Pytest",
+        family: "test" as const,
+        commands: run("pytest"),
+      },
+    } : {}),
+    ...(await discoverPythonChecks(cwd, files)),
+  }
   return {
     build: scripts.build ? run("build") : [],
     test: tests.playwright.length > 0
@@ -253,7 +400,112 @@ async function discoverScripts(changedFiles?: unknown) {
         ? [{ command: `bun test ${tests.bun.map(quote).join(" ")}`, cwd }]
         : scripts.test ? run("test") : [],
     lint: scripts.lint ? run("lint") : [],
+    named,
   }
+}
+
+async function discoverPythonChecks(cwd: string, files: string[]) {
+  const markers = await Promise.all([
+    exists(path.join(cwd, "pyproject.toml")),
+    exists(path.join(cwd, "setup.py")),
+    exists(path.join(cwd, "setup.cfg")),
+    exists(path.join(cwd, "requirements.txt")),
+    exists(path.join(cwd, "tests")),
+    exists(path.join(cwd, "pytest.ini")),
+    exists(path.join(cwd, "mypy.ini")),
+    exists(path.join(cwd, ".mypy.ini")),
+    exists(path.join(cwd, "ruff.toml")),
+    exists(path.join(cwd, ".ruff.toml")),
+  ])
+  const pyproject = await Bun.file(path.join(cwd, "pyproject.toml")).text().catch(() => "")
+  const hasPythonFiles = files.some((item) => item.endsWith(".py")) || (await hasPythonTopLevel(cwd))
+  const isPythonProject = hasPythonFiles || markers.some(Boolean)
+  if (!isPythonProject) return {}
+
+  const python = pythonLauncher()
+  const pytest = pythonToolCommand("pytest", "pytest")
+  const mypy = pythonToolCommand("mypy", "mypy")
+  const ruff = pythonToolCommand("ruff", "ruff")
+  const checks = {} as Record<string, CommandGroup>
+
+  if (python) {
+    checks.py_compile = {
+      name: "py_compile",
+      label: "Python Compile",
+      family: "build",
+      commands: [{ command: `${python} -m compileall .`, cwd }],
+    }
+  }
+  if (pytest && (markers[4] || markers[5] || files.some((item) => /(^|\/)test_.*\.py$|(^|\/).+_test\.py$/.test(item)))) {
+    checks.pytest = {
+      name: "pytest",
+      label: "Pytest",
+      family: "test",
+      commands: [{ command: `${pytest} -q`, cwd }],
+    }
+  }
+  if (mypy && (markers[6] || markers[7] || pyproject.includes("[tool.mypy]"))) {
+    checks.typecheck = {
+      name: "typecheck",
+      label: "Type Check",
+      family: "lint",
+      commands: [{ command: `${mypy} .`, cwd }],
+    }
+  }
+  if (ruff && (markers[8] || markers[9] || pyproject.includes("[tool.ruff]"))) {
+    checks.ruff = {
+      name: "ruff",
+      label: "Ruff",
+      family: "lint",
+      commands: [{ command: `${ruff} check .`, cwd }],
+    }
+  }
+  return checks
+}
+
+async function exists(filepath: string) {
+  return Bun.file(filepath).exists()
+}
+
+async function hasPythonTopLevel(cwd: string) {
+  const entries = await fs.readdir(cwd).catch(() => [])
+  return entries.some((item) => item.endsWith(".py"))
+}
+
+function pythonLauncher() {
+  return ["python", "python3", "py"].find((item) => Bun.which(item))
+}
+
+function pythonToolCommand(module: string, fallback: string) {
+  const python = pythonLauncher()
+  if (python) return `${python} -m ${module}`
+  if (Bun.which(fallback)) return fallback
+}
+
+function checkLabel(key: string) {
+  const known = {
+    build: "Build",
+    test: "Unit Tests",
+    lint: "Lint",
+    verify_cmd: "Verify Command",
+    py_compile: "Python Compile",
+    pytest: "Pytest",
+    typecheck: "Type Check",
+  } as Record<string, string>
+  if (known[key]) return known[key]
+  return key
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((item) => item[0]?.toUpperCase() + item.slice(1))
+    .join(" ")
+}
+
+function inferFamily(key: string): z.infer<typeof NamedCheckFamily> {
+  const lower = key.toLowerCase()
+  if (lower.includes("test") || lower.includes("pytest")) return "test"
+  if (lower.includes("lint") || lower.includes("type") || lower.includes("ruff") || lower.includes("mypy")) return "lint"
+  if (lower.includes("verify")) return "verify_cmd"
+  return "build"
 }
 
 async function startupResult(config: z.infer<typeof CheckConfig>["startup"]) {
