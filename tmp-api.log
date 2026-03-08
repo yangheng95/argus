@@ -1,0 +1,3 @@
+Warning: OPENCORVUS_SERVER_PASSWORD is not set; server is unsecured.
+opencorvus server listening on http://127.0.0.1:7878
+overlay UI available at http://127.0.0.1:7878/ui/
