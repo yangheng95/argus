@@ -329,9 +329,10 @@ describe("workbench.service", () => {
         })
         const board = WorkbenchService.compileBoard({ taskID })
         const staging = board.lanes.find((lane) => lane.id === "staging")?.cards ?? []
+        const noteSection = brief.content.split("Recent task notes:\n").at(1)?.split("\n\nRelevant memory:").at(0) ?? brief.content
 
-        expect(brief.content).toContain("[plan_hint] hint-14")
-        expect(brief.content).not.toContain("[plan_hint] hint-1")
+        expect(noteSection).toMatch(/\[plan_hint\] hint-14(?:\D|$)/)
+        expect(noteSection).not.toMatch(/\[plan_hint\] hint-1(?:\D|$)/)
         expect(staging.some((card) => String(card.detail ?? "").includes("hint-14"))).toBe(true)
         expect(staging.some((card) => String(card.detail ?? "").includes("hint-1"))).toBe(false)
       },
