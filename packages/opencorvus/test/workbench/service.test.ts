@@ -333,8 +333,8 @@ describe("workbench.service", () => {
 
         expect(noteSection).toMatch(/\[plan_hint\] hint-14(?:\D|$)/)
         expect(noteSection).not.toMatch(/\[plan_hint\] hint-1(?:\D|$)/)
-        expect(staging.some((card) => String(card.detail ?? "").includes("hint-14"))).toBe(true)
-        expect(staging.some((card) => String(card.detail ?? "").includes("hint-1"))).toBe(false)
+        expect(staging.some((card) => String(card.detail ?? "") === "hint-14")).toBe(true)
+        expect(staging.some((card) => String(card.detail ?? "") === "hint-1")).toBe(false)
       },
     })
   })
