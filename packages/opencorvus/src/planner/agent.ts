@@ -102,18 +102,21 @@ export interface ReplanContext {
 
 const MAX_STEPS = 30
 const TIMEOUT_MS = 300_000
+const MIN_TOOL_CALLS = 3
+const QUALITY_RETRY_THRESHOLD = 0.5
+const MAX_PLAN_ATTEMPTS = 2
 
 export namespace HeadlessPlannerAgent {
   export async function plan(input: {
     title: string
     request: string
-    /** User-provided goals — planner should refine/expand, not discard */
+    /** User-provided goals -- planner should refine/expand, not discard */
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
     replanContext?: ReplanContext
     /** External abort signal (overrides internal timeout when provided) */
     signal?: AbortSignal
   }): Promise<PlannerOutputType> {
-    // Check abort signal early — setup calls (model resolution, memory search) can be slow
+    // Check abort signal early -- setup calls (model resolution, memory search) can be slow
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
 
     const language = await agentLanguageModel()
@@ -135,80 +138,114 @@ export namespace HeadlessPlannerAgent {
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
 
     const context = prefetchContext(input.title, input.request)
-    const userPrompt = buildUserPrompt(input, fileRefs, context)
 
-    log.info("planner agent starting", {
-      title: input.title,
-      isReplan: !!input.replanContext,
-      model: language.modelId,
-      prefetchedContext: context.length > 0,
-      fileRefsFound: fileRefs.length,
-      taskWorkDir,
-      toolCount: Object.keys(tools).length,
-    })
+    // Quality-gated retry loop: if the first plan attempt scores below
+    // QUALITY_RETRY_THRESHOLD, retry once with enhanced prompt that includes
+    // quality feedback from the previous attempt.
+    let lastParsed: PlannerOutputType | undefined
+    let lastQuality: { score: number; reasons: string[] } | undefined
 
-    const result = await generateText({
-      model: language as LanguageModelV2,
-      stopWhen: stepCountIs(MAX_STEPS),
-      tools,
-      maxTokens: 32768,
-      abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-      system: PLANNER_SYSTEM,
-      prompt: userPrompt,
-    })
+    for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
+      if (input.signal?.aborted) throw new Error("planner aborted before attempt " + (attempt + 1))
 
-    // Collect text from all steps — the model may output JSON across multiple steps
-    // Try result.text first, then concatenate all step texts
-    let allText = result.text?.trim() || ""
-    if (!allText || !allText.includes("{")) {
-      allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
-    }
+      const retryContext = attempt > 0 && lastQuality
+        ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
+        : undefined
+      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext)
 
-    log.info("planner agent finished", {
-      steps: result.steps.length,
-      finishReason: result.finishReason,
-      textLength: allText.length,
-      textPreview: allText.slice(0, 200),
-    })
+      log.info("planner agent starting", {
+        title: input.title,
+        isReplan: !!input.replanContext,
+        model: language.modelId,
+        prefetchedContext: context.length > 0,
+        fileRefsFound: fileRefs.length,
+        taskWorkDir,
+        toolCount: Object.keys(tools).length,
+        attempt: attempt + 1,
+        retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
+      })
 
-    // Count actual tool calls — a plan without exploration is worthless
-    const toolCallCount = result.steps.reduce(
-      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-      0,
-    )
+      const result = await generateText({
+        model: language as LanguageModelV2,
+        stopWhen: stepCountIs(MAX_STEPS),
+        tools,
+        maxTokens: 32768,
+        abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+        system: PLANNER_SYSTEM,
+        prompt: userPrompt,
+      })
 
-    // Extract JSON from collected text
-    let parsed = extractJSON(allText)
+      // Collect text from all steps
+      let allText = result.text?.trim() || ""
+      if (!allText || !allText.includes("{")) {
+        allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
+      }
 
-    // If JSON was truncated and critical fields are thin, synthesize from exploration + request
-    if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
-      log.warn("planner: plan seems truncated, synthesizing from exploration", {
+      log.info("planner agent finished", {
+        steps: result.steps.length,
+        finishReason: result.finishReason,
+        textLength: allText.length,
+        textPreview: allText.slice(0, 200),
+        attempt: attempt + 1,
+      })
+
+      // Count actual tool calls
+      const toolCallCount = result.steps.reduce(
+        (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
+        0,
+      )
+
+      // Extract JSON from collected text
+      let parsed = extractJSON(allText)
+
+      // If JSON was truncated, synthesize from exploration + request
+      if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
+        log.warn("planner: plan seems truncated, synthesizing from exploration", {
+          prdLength: parsed.prd.length,
+          subtasksCount: parsed.subtasks.length,
+        })
+        parsed = synthesizeFromExploration(parsed, input, result.steps)
+      }
+
+      // Ensure summary is meaningful (not garbage like "## heading" or empty)
+      parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
+
+      // Validate plan quality
+      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
+      log.info("planner agent output", {
+        goals: parsed.goals.length,
+        subtasks: parsed.subtasks.length,
+        milestones: parsed.milestones?.length ?? 0,
+        risks: parsed.risks.length,
         prdLength: parsed.prd.length,
-        subtasksCount: parsed.subtasks.length,
+        toolCalls: toolCallCount,
+        quality: planQuality,
+        attempt: attempt + 1,
       })
-      parsed = synthesizeFromExploration(parsed, input, result.steps)
+
+      lastParsed = parsed
+      lastQuality = planQuality
+
+      // If quality is acceptable or we've exhausted retries, return
+      if (planQuality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_PLAN_ATTEMPTS - 1) {
+        if (planQuality.score < 0.3) {
+          log.warn("planner: final plan quality is very low", { ...planQuality, attempt: attempt + 1 })
+        }
+        return parsed
+      }
+
+      // Quality too low -- retry with feedback
+      log.warn("planner: plan quality below threshold, retrying", {
+        score: planQuality.score,
+        threshold: QUALITY_RETRY_THRESHOLD,
+        reasons: planQuality.reasons,
+        toolCalls: toolCallCount,
+        minToolCalls: MIN_TOOL_CALLS,
+      })
     }
 
-    // Validate plan quality: the plan should contain file paths discovered
-    // from exploration, not just echo the original request.
-    const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
-    log.info("planner agent output", {
-      goals: parsed.goals.length,
-      subtasks: parsed.subtasks.length,
-      milestones: parsed.milestones?.length ?? 0,
-      risks: parsed.risks.length,
-      prdLength: parsed.prd.length,
-      toolCalls: toolCallCount,
-      quality: planQuality,
-    })
-
-    if (planQuality.score < 0.3) {
-      log.warn("planner: plan quality is very low — likely echoing request without exploration", {
-        ...planQuality,
-      })
-    }
-
-    return parsed
+    // Should never reach here, but satisfy TypeScript
+    return lastParsed!
   }
 }
 
@@ -219,20 +256,50 @@ export import PlannerAgent = HeadlessPlannerAgent
 // Internals
 // ---------------------------------------------------------------------------
 
+/**
+ * Ensure the plan summary is meaningful -- not garbage like "## heading",
+ * empty string, or just echoing the first line of the request.
+ */
+function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string {
+  if (!summary) return fallbackTitle
+  const trimmed = summary.trim()
+  // Reject summaries that look like markdown headings, blank, or too short
+  if (trimmed.length < 5) return fallbackTitle
+  if (/^#+\s/.test(trimmed)) return fallbackTitle
+  // Reject summaries that are just a file path or directory
+  if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return fallbackTitle
+  return trimmed
+}
+
 function extractJSON(text: string): PlannerOutputType {
   let raw = text.trim()
 
-  // Try fenced JSON block
-  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenced) raw = fenced[1].trim()
+  // Try fenced JSON block (complete or truncated)
+  const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fencedComplete) {
+    raw = fencedComplete[1].trim()
+  } else {
+    // Truncated fenced block: opening ``` but no closing ```
+    const fencedOpen = raw.match(/```(?:json)?\s*([\s\S]*)/)
+    if (fencedOpen && fencedOpen[1].includes("{")) {
+      raw = fencedOpen[1].trim()
+    }
+  }
 
   // Try to find a JSON object in the text
   if (!raw.startsWith("{")) {
+    // First try complete JSON object
     const match = raw.match(/(\{[\s\S]*\})/)
-    if (match) raw = match[1]
+    if (match) {
+      raw = match[1]
+    } else {
+      // Truncated: find the first { and take everything after
+      const idx = raw.indexOf("{")
+      if (idx >= 0) raw = raw.slice(idx)
+    }
   }
 
-  // If no closing brace, the JSON is truncated — try to repair it
+  // If no closing brace, the JSON is truncated -- try to repair it
   if (raw.startsWith("{") && !raw.endsWith("}")) {
     log.warn("planner: JSON appears truncated, attempting repair", { length: raw.length, tail: raw.slice(-100) })
     raw = repairTruncatedJSON(raw)
@@ -254,29 +321,49 @@ function extractJSON(text: string): PlannerOutputType {
       })
       obj = retryErr.value
     } else {
-      // Log the raw text for debugging
-      log.error("planner: JSON parse failed after all repair attempts", {
+      // Last resort: return a minimal plan instead of throwing.
+      // The caller will synthesize from exploration data.
+      log.error("planner: JSON parse failed after all repair attempts, returning minimal plan", {
         error: String(parseErr.error),
         rawLength: raw.length,
         rawHead: raw.slice(0, 500),
         rawTail: raw.slice(-300),
       })
-      throw parseErr.error
+      obj = { prd: "", summary: "", goals: [], subtasks: [], risks: [] }
     }
   }
 
   // Normalize LLM output quirks before strict validation
   if (Array.isArray(obj.goals)) {
+    // Filter out incomplete goals from truncated JSON
+    obj.goals = obj.goals.filter((g: any) => g && typeof g === "object" && g.description && g.criteria)
     for (const g of obj.goals) {
       if (g.priority && g.priority !== "blocking" && g.priority !== "advisory") {
         g.priority = "advisory"
       }
+      // Ensure check_selector is array or undefined
+      if (g.check_selector && !Array.isArray(g.check_selector)) {
+        g.check_selector = [String(g.check_selector)]
+      }
     }
   }
   if (Array.isArray(obj.subtasks)) {
+    // Filter out incomplete subtasks from truncated JSON
+    obj.subtasks = obj.subtasks.filter((s: any) => s && typeof s === "object" && s.title)
     for (let i = 0; i < obj.subtasks.length; i++) {
       if (obj.subtasks[i].order == null) obj.subtasks[i].order = i + 1
+      if (!obj.subtasks[i].description) obj.subtasks[i].description = obj.subtasks[i].title
     }
+  }
+  if (Array.isArray(obj.milestones)) {
+    // Filter out incomplete milestones
+    obj.milestones = obj.milestones.filter((m: any) => m && typeof m === "object" && m.title)
+    for (const m of obj.milestones) {
+      if (!Array.isArray(m.goal_indices)) m.goal_indices = []
+    }
+  }
+  if (Array.isArray(obj.assumptions)) {
+    obj.assumptions = obj.assumptions.filter((a: any) => a && typeof a === "object" && a.question && a.assumption)
   }
 
   // Fill in missing required fields when the JSON was truncated
@@ -286,7 +373,23 @@ function extractJSON(text: string): PlannerOutputType {
   if (!Array.isArray(obj.subtasks)) obj.subtasks = []
   if (!Array.isArray(obj.risks)) obj.risks = []
 
-  return PlannerOutput.parse(obj)
+  try {
+    return PlannerOutput.parse(obj)
+  } catch (zodErr) {
+    log.error("planner: Zod validation failed, returning with defaults", {
+      error: String(zodErr),
+      goalsCount: obj.goals?.length,
+      subtasksCount: obj.subtasks?.length,
+    })
+    // Return a minimal valid plan rather than crashing
+    return PlannerOutput.parse({
+      prd: obj.prd || "",
+      summary: obj.summary || "",
+      goals: [],
+      subtasks: [],
+      risks: Array.isArray(obj.risks) ? obj.risks : [],
+    })
+  }
 }
 
 function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
@@ -739,8 +842,39 @@ function buildUserPrompt(
   },
   fileRefs?: Array<{ ref: string; path: string; content: string }>,
   context?: string,
+  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  // If this is a quality retry, inject feedback from the previous attempt
+  if (retryContext) {
+    sections.push(
+      [
+        "# QUALITY RETRY - Previous Attempt Was Insufficient",
+        "",
+        `Your previous plan scored ${retryContext.previousScore.toFixed(2)} / 1.0 (threshold: ${QUALITY_RETRY_THRESHOLD}).`,
+        "",
+        "**Issues found:**",
+        ...retryContext.reasons.map((r) => `- ${r}`),
+        "",
+        "**You MUST fix these issues this time:**",
+        retryContext.reasons.some((r) => r.includes("tool call"))
+          ? `- Make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase (list_directory, read_file, search_code)`
+          : "",
+        retryContext.reasons.some((r) => r.includes("file path"))
+          ? "- Include specific file paths discovered from your exploration in PRD and subtasks"
+          : "",
+        retryContext.reasons.some((r) => r.includes("criteria"))
+          ? "- Write concrete, executable criteria for each goal (e.g., 'bun test src/x.test.ts passes')"
+          : "",
+        retryContext.reasons.some((r) => r.includes("PRD"))
+          ? "- Write a detailed PRD with bullet points (>300 chars)"
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    )
+  }
 
   // Include user-provided goals so the planner can refine and expand them
   if (input.userGoals && input.userGoals.length > 0) {
@@ -820,6 +954,8 @@ function buildUserPrompt(
 
 const PLANNER_SYSTEM = `You are a senior software architect acting as the planning brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, then produce a plan so detailed and specific that an executor agent can implement it without guessing.
 
+CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. A plan produced without tool calls is ALWAYS rejected. You are scored on exploration depth -- plans that don't reference specific file paths, function signatures, and code patterns discovered via tools will be automatically retried.
+
 ## Available Tools
 
 - **memory_search**: Search project memory for prior work, patterns, gotchas
@@ -833,45 +969,67 @@ const PLANNER_SYSTEM = `You are a senior software architect acting as the planni
 
 ## Your Process
 
+Think of yourself as a tech lead doing code review BEFORE implementation starts. You need to understand the codebase well enough to give precise, actionable instructions.
+
 ### Phase 0: RECALL (1-3 tool calls)
 
 1. **Search memory** (memory_search) with task keywords. If pre-fetched memory exists, only search for gaps.
 2. **List preferences** (preference_list) unless pre-fetched. Preferences are BINDING.
 
-### Phase 1: EXPLORE (5-10 tool calls — this is the MOST IMPORTANT phase)
+### Phase 1: EXPLORE (5-15 tool calls -- this is the MOST IMPORTANT phase)
 
 You MUST explore the codebase thoroughly. A plan without specific file paths is worthless.
+Minimum ${MIN_TOOL_CALLS} tool calls required. Aim for 8-15 for complex tasks.
 
-1. **list_directory** on project root → understand top-level layout
-2. **read_file** on package.json / tsconfig.json / build config → tech stack, scripts, build commands
-3. **search_code** for key types, functions, interfaces mentioned in the request → find exact locations
-4. **read_file** on 3-5 files directly related to the task → understand existing patterns, APIs, conventions
+Strategy (adapt based on task type):
+
+**For modification tasks** (fix bug, add feature, refactor):
+1. **list_directory** on project root and relevant subdirectories -- understand layout
+2. **read_file** on package.json / tsconfig.json / build config -- tech stack, scripts, build commands
+3. **search_code** for key types, functions, interfaces mentioned in the request -- find exact locations
+4. **read_file** on 3-5 files directly related to the task -- understand existing patterns, APIs, conventions
 5. **find_files** to discover test files, related modules, config files in the affected area
-6. **search_code** for imports/usages of code you'll modify → understand dependency chain
+6. **search_code** for imports/usages of code you'll modify -- understand dependency chain
+7. **read_file** on existing test files -- understand test patterns and assertion styles
+8. **search_code** for error handling patterns in the area -- understand how errors propagate
+
+**For new module/feature tasks**:
+1. **list_directory** on the target package and similar existing modules
+2. **read_file** on 2-3 existing modules in the same package -- copy their structure exactly
+3. **search_code** for export/registration patterns -- understand how modules are wired up
+4. **read_file** on the test directory for existing test patterns
+5. **search_code** for type definitions that the new module must implement
 
 After exploration, you should know:
-- The EXACT file paths to create or modify
-- The existing code patterns and naming conventions to follow
-- The build/test/lint commands and how to verify your changes
-- What other code depends on what you'll change
+- The EXACT file paths to create or modify (from actual tool results, not guessed)
+- The existing code patterns and naming conventions to follow (from reading real code)
+- The build/test/lint commands and how to verify your changes (from package.json scripts)
+- What other code depends on what you'll change (from search_code on imports)
+- How existing tests are structured (from reading test files)
 
 ### Phase 1.5: RESEARCH (if needed)
 
-For external APIs, unfamiliar libraries, or protocols — use web_search. Skip for internal-only tasks.
+For external APIs, unfamiliar libraries, or protocols -- use web_search. Skip for internal-only tasks.
 
-### Phase 2: PLAN — Synthesize into Actionable Spec
+### Phase 2: PLAN -- Synthesize into Actionable Spec
 
 Your output must be CONCRETE, not abstract. Reference specific files, functions, and commands.
+Think: "Could an executor implement this plan without asking me any questions?" If not, add more detail.
 
-**Goals** — DETAILED descriptions of what to achieve. Each goal must include:
-- A clear description explaining the specific outcome (not just "tests pass" — say WHICH functionality must work and HOW)
+**Goals** -- DETAILED descriptions of what to achieve. Each goal must include:
+- A clear description explaining the specific outcome (not just "tests pass" -- say WHICH functionality must work and HOW)
 - Machine-verifiable criteria with exact commands AND expected outcomes
 - Relevant check_selectors
-- Example GOOD goal: {"description": "Router 中间件链按洋葱模型执行：每个中间件依次调用 next()，handler 在最内层执行，中间件可以在 next() 前后执行逻辑，也可以短路直接返回 Response", "criteria": "bun test src/middleware.test.ts 通过，验证 before→handler→after 执行顺序正确", "priority": "blocking", "check_selector": ["test"]}
-- Example BAD goal: {"description": "中间件测试通过", "criteria": "bun test exits 0"} — too vague!
+- Example GOOD goal: {"description": "Router middleware chain executes in onion model: each middleware calls next(), handler runs innermost, middleware can execute logic before/after next(), or short-circuit by returning Response directly", "criteria": "bun test src/middleware.test.ts passes, verifying before->handler->after execution order", "priority": "blocking", "check_selector": ["test"]}
+- Example BAD goal: {"description": "Tests pass", "criteria": "bun test exits 0"} -- too vague!
 
-**Subtasks** — Ordered steps: WHAT to change, WHERE (file path), HOW to verify
-**PRD** — Bullet-point spec: files to modify, changes, patterns to follow, verification commands.
+**Subtasks** -- Ordered implementation steps. Each subtask must specify:
+- WHAT to change (specific code change)
+- WHERE (exact file path from exploration)
+- HOW to verify (command to run after this step)
+- DEPENDENCIES (which subtask must complete first)
+
+**PRD** -- Bullet-point spec: files to modify, changes, patterns to follow, verification commands.
 
 ### Phase 3: OUTPUT as JSON
 
@@ -914,31 +1072,35 @@ Keep PRD concise (bullet points, ≤ 2000 chars). Goals and subtasks should be D
 
 ## Rules
 
-- ALWAYS explore the codebase before planning. No exceptions.
-- Every file path in your plan MUST come from actual tool results or pre-read files — never guess paths.
+- ALWAYS explore the codebase before planning. No exceptions. Plans without tool calls score 0.
+- Every file path in your plan MUST come from actual tool results or pre-read files -- never guess paths.
 - goals.criteria must be executable commands with expected outcomes, not vague statements.
 - goals.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, judge
 - Every blocking goal MUST have at least one check_selector.
 - subtask descriptions must reference specific files, functions, and patterns discovered during exploration.
-- Write in the same language as the request (Chinese request → Chinese plan).
+- Write in the same language as the request (Chinese request -> Chinese plan).
 - If replanning: your new plan MUST differ from the previous failed approach.
 - The prd field must be detailed enough that an executor agent can implement everything without further exploration.
-- After finishing tool calls, output JSON immediately.
-- Do NOT produce generic advice like "follow best practices" or "handle edge cases" — be specific about WHICH practices and WHICH edge cases.
+- After finishing tool calls, output JSON immediately. Do NOT add commentary outside the JSON.
+- Do NOT produce generic advice like "follow best practices" or "handle edge cases" -- be specific about WHICH practices and WHICH edge cases.
+- Do NOT output markdown headings or prose before the JSON -- the output must be parseable JSON.
 
-## Quality Self-Check
+## Quality Self-Check (MANDATORY)
 
-Before outputting JSON, verify:
-1. Does EVERY goal have a detailed description explaining the specific outcome? (not just "tests pass")
-2. Does every goal criteria include an exact command AND expected outcome?
-3. Do subtasks reference specific files, functions, and patterns?
-4. Is the PRD concise but complete (bullet points, not paragraphs)?
+Before outputting JSON, verify each of these. If ANY answer is NO, use more tools to fill the gap:
 
-If any answer is NO, go back and fill the gap.
+1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
+2. Does EVERY goal have a detailed description explaining the specific outcome? (not just "tests pass")
+3. Does every goal criteria include an exact command AND expected outcome?
+4. Do subtasks reference specific file paths (not "relevant files" -- actual paths)?
+5. Is the PRD concise but complete (bullet points, not paragraphs)?
+6. Could an executor implement this plan WITHOUT asking follow-up questions?
+7. Does the summary accurately describe the plan in one line? (not a file path or heading)
 
 ## Output Format
 
 - PRD: Use bullet points, keep under 2000 chars.
 - Goals: Be DETAILED in description and criteria. Goals are the most important output.
 - Subtasks: Include file paths and verification steps.
-- Output fields in the order shown above (summary → goals → subtasks → ... → prd).`
+- Output fields in the order shown above (summary -> goals -> subtasks -> ... -> prd).
+- Output ONLY the JSON object. No markdown, no commentary, no headers.`

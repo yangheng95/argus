@@ -150,15 +150,15 @@ type Target = (typeof allTargets)[number]
 async function installOverlay(_item: Target, name: string) {
   const overlayDir = path.resolve(dir, "../overlay/src")
   const destDir = path.join(dir, "dist", name, "bin", "ui")
-  const files = ["index.html", "app.js", "styles.css"]
-  const exists = files.every((f) => fs.existsSync(path.join(overlayDir, f)))
-  if (!exists) {
+  const ASSET_EXTS = new Set([".html", ".js", ".css", ".png", ".svg", ".ico", ".json", ".woff", ".woff2"])
+  if (!fs.existsSync(path.join(overlayDir, "index.html"))) {
     console.log(`  overlay: skipping (no frontend assets in ${overlayDir})`)
     return
   }
+  const allFiles = fs.readdirSync(overlayDir).filter((f) => ASSET_EXTS.has(path.extname(f)))
   await fs.promises.mkdir(destDir, { recursive: true })
-  await Promise.all(files.map((f) => fs.promises.copyFile(path.join(overlayDir, f), path.join(destDir, f))))
-  console.log(`  overlay: installed ${files.length} UI files`)
+  await Promise.all(allFiles.map((f) => fs.promises.copyFile(path.join(overlayDir, f), path.join(destDir, f))))
+  console.log(`  overlay: installed ${allFiles.length} UI files`)
 }
 
 // Dev and CI builds only need a native binary; full matrix is for release packaging.

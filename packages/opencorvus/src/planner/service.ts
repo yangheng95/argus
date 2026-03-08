@@ -9,9 +9,10 @@ import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agen
 const log = Log.create({ service: "planner" })
 
 /** Max time to wait for PlannerAgent before surfacing a planner failure.
- *  Override via OPENCORVUS_PLANNER_TIMEOUT_MS env var (useful for tests). */
+ *  Must be >= the agent's internal TIMEOUT_MS (300s) to avoid killing the agent
+ *  mid-exploration. Override via OPENCORVUS_PLANNER_TIMEOUT_MS env var. */
 function plannerTimeoutMs() {
-  return Number(process.env.OPENCORVUS_PLANNER_TIMEOUT_MS) || 120_000
+  return Number(process.env.OPENCORVUS_PLANNER_TIMEOUT_MS) || 300_000
 }
 
 // ---------------------------------------------------------------------------
