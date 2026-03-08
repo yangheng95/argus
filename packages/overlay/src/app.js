@@ -1909,69 +1909,270 @@ function goalIcon(status) {
 
 // ── Criteria Rendering ──
 
-function renderCriteria(evaluation) {
-  const checks = evaluation?.checks || [];
-  const checkMap = {};
-  for (const c of checks) checkMap[c.name.toLowerCase().replace(/[^a-z_]/g, "_")] = c;
+const COMMAND_CHECKS = [
+  { key: "build", label: "Build", kind: "command", family: "build" },
+  { key: "test", label: "Unit Tests", kind: "command", family: "test" },
+  { key: "lint", label: "Lint", kind: "command", family: "lint" },
+  { key: "verify_cmd", label: "Verify Command", kind: "command", family: "verify_cmd" },
+];
 
-  const criteriaItems = dom.criteriaList.querySelectorAll(".criteria-item");
+const TOGGLE_CHECKS = [
+  { key: "startup", label: "Startup", kind: "toggle" },
+  { key: "artifact", label: "Artifacts", kind: "toggle" },
+  { key: "visual", label: "Visual Check", kind: "toggle" },
+  { key: "puppeteer", label: "Puppeteer", kind: "toggle" },
+  { key: "ui_review", label: "UI Review", kind: "toggle" },
+  { key: "code_quality", label: "Code Quality", kind: "toggle" },
+  { key: "code_review", label: "Code Review", kind: "toggle" },
+  { key: "dead_code_review", label: "Dead Code Review", kind: "toggle" },
+  { key: "judge", label: "LLM Judge", kind: "toggle" },
+];
+
+function normalizeCheckName(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_#:-]/g, "_");
+}
+
+function baseCheckName(value) {
+  return normalizeCheckName(value).replace(/#\d+$/, "");
+}
+
+function checkLabel(key) {
+  const known = {
+    build: "Build",
+    test: "Unit Tests",
+    lint: "Lint",
+    verify_cmd: "Verify Command",
+    py_compile: "Python Compile",
+    pytest: "Pytest",
+    typecheck: "Type Check",
+    ruff: "Ruff",
+    mypy: "MyPy",
+    startup: "Startup",
+    artifact: "Artifacts",
+    visual: "Visual Check",
+    puppeteer: "Puppeteer",
+    ui_review: "UI Review",
+    code_quality: "Code Quality",
+    code_review: "Code Review",
+    dead_code_review: "Dead Code Review",
+    judge: "LLM Judge",
+  };
+  if (known[key]) return known[key];
+  return key
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((item) => item[0]?.toUpperCase() + item.slice(1))
+    .join(" ");
+}
+
+function checkConfig(task) {
+  const checks = task?.metadata?.checks;
+  if (!checks || typeof checks !== "object" || Array.isArray(checks)) return {};
+  return structuredClone(checks);
+}
+
+function hasExplicitChecks(config) {
+  return Object.keys(config).length > 0;
+}
+
+function criteriaEnabledValue(key, value, fallback) {
+  if (["build", "test", "lint", "verify_cmd"].includes(key)) {
+    return value !== false && (value !== undefined || fallback);
+  }
+  if (value === true) return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return value.enabled !== false;
+}
+
+function aggregateCheckStatus(checks, key) {
+  const matches = (Array.isArray(checks) ? checks : []).filter((item) => baseCheckName(item.name || item.label) === key);
+  if (matches.length === 0) return "pending";
+  if (matches.some((item) => item.status === "failed")) return "failed";
+  if (matches.some((item) => item.status === "passed")) return "passed";
+  if (matches.every((item) => item.status === "skipped")) return "skipped";
+  return "pending";
+}
+
+function criteriaSpecs(task, evaluation) {
+  const config = checkConfig(task);
+  const named =
+    config.named && typeof config.named === "object" && !Array.isArray(config.named)
+      ? config.named
+      : {};
+  const seen = new Set();
+  const specs = [];
+  const showDefault = !hasExplicitChecks(config) && (!evaluation?.checks || evaluation.checks.length === 0);
+
+  const push = (spec) => {
+    if (seen.has(spec.key)) return;
+    seen.add(spec.key);
+    specs.push(spec);
+  };
+
+  for (const item of COMMAND_CHECKS) {
+    const value = config[item.key];
+    const visible =
+      value !== undefined ||
+      aggregateCheckStatus(evaluation?.checks, item.key) !== "pending" ||
+      (showDefault && ["build", "test", "lint"].includes(item.key));
+    if (!visible) continue;
+    push({
+      key: item.key,
+      name: item.key,
+      label: item.label,
+      kind: item.kind,
+      family: item.family,
+      enabled: criteriaEnabledValue(item.key, value, showDefault),
+      readOnly: false,
+    });
+  }
+
+  for (const item of TOGGLE_CHECKS) {
+    const value = config[item.key];
+    const visible = value !== undefined || aggregateCheckStatus(evaluation?.checks, item.key) !== "pending";
+    if (!visible) continue;
+    push({
+      key: item.key,
+      name: item.key,
+      label: item.label,
+      kind: item.kind,
+      enabled: criteriaEnabledValue(item.key, value, false),
+      readOnly: false,
+    });
+  }
+
+  for (const [key, value] of Object.entries(named)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    push({
+      key: `named:${key}`,
+      name: key,
+      label: value.label || checkLabel(key),
+      kind: "named",
+      family: value.family || undefined,
+      enabled: value.enabled !== false,
+      readOnly: false,
+    });
+  }
+
+  for (const check of evaluation?.checks || []) {
+    const key = baseCheckName(check.name || check.label);
+    if (!key) continue;
+    if (seen.has(key) || seen.has(`named:${key}`)) continue;
+    push({
+      key: key,
+      name: key,
+      label: check.label || checkLabel(key),
+      kind: "named",
+      family: check.family || undefined,
+      enabled: true,
+      readOnly: true,
+    });
+  }
+
+  return specs;
+}
+
+function renderCriteria(task, evaluation) {
+  const specs = criteriaSpecs(task, evaluation);
+  state.criteriaSpecs = specs;
+
+  if (specs.length === 0) {
+    dom.criteriaList.innerHTML = '<div class="empty-hint">No checks configured</div>';
+    dom.criteriaBadge.textContent = "";
+    delete dom.criteriaBadge.dataset.tone;
+    return;
+  }
+
+  dom.criteriaList.innerHTML = specs
+    .map((spec) => `
+      <label class="criteria-item"${spec.readOnly ? ' data-readonly="true"' : ""}>
+        <input type="checkbox" data-check="${escapeHtml(spec.key)}"${spec.enabled ? " checked" : ""}${spec.readOnly ? " disabled" : ""}>
+        <span class="check-mark"></span>
+        <span class="criteria-name">${escapeHtml(spec.label)}</span>
+        <span class="criteria-status" data-result="pending"></span>
+        <span class="criteria-result">pending</span>
+      </label>
+    `)
+    .join("");
+
   let enabledCount = 0;
   let passedCount = 0;
-
-  criteriaItems.forEach((item) => {
-    const checkbox = item.querySelector("input[type=checkbox]");
-    const statusDot = item.querySelector(".criteria-status");
-    const checkName = checkbox?.dataset.check;
-    if (!checkName || !statusDot) return;
-
-    // Find matching evaluation check
-    const evalCheck = findCheck(checkMap, checkName);
-    if (!isCriteriaEnabled(item)) {
-      setCriteriaResult(item, "off");
-    } else if (evalCheck) {
-      setCriteriaResult(item, evalCheck.status);
-      if (evalCheck.status === "passed") passedCount++;
-    } else {
-      setCriteriaResult(item, "pending");
-    }
-
-    if (checkbox.checked) enabledCount++;
+  dom.criteriaList.querySelectorAll(".criteria-item").forEach((item) => {
+    const key = item.querySelector("input[type=checkbox]")?.dataset.check;
+    const spec = specs.find((entry) => entry.key === key);
+    if (!key || !spec) return;
+    const enabled = isCriteriaEnabled(item);
+    const status = enabled ? aggregateCheckStatus(evaluation?.checks, spec.name) : "off";
+    setCriteriaResult(item, status);
+    if (!enabled) return;
+    enabledCount += 1;
+    if (status === "passed") passedCount += 1;
   });
 
   if (enabledCount > 0) {
     dom.criteriaBadge.textContent = `${passedCount}/${enabledCount}`;
     dom.criteriaBadge.dataset.tone = passedCount === enabledCount ? "good" : passedCount > 0 ? "warn" : "";
-  } else {
-    dom.criteriaBadge.textContent = "0 enabled";
-    dom.criteriaBadge.dataset.tone = "";
+    return;
   }
+  dom.criteriaBadge.textContent = "0 enabled";
+  dom.criteriaBadge.dataset.tone = "";
 }
 
-function buildCheckSelection() {
+function buildCheckConfig() {
+  const current = checkConfig(state.board?.task);
+  const next = structuredClone(current);
+  const named =
+    next.named && typeof next.named === "object" && !Array.isArray(next.named)
+      ? structuredClone(next.named)
+      : {};
   const selection = {};
   dom.criteriaList.querySelectorAll("input[type=checkbox][data-check]").forEach((input) => {
     selection[input.dataset.check] = input.checked;
   });
-  return selection;
-}
 
-function findCheck(checkMap, name) {
-  // Try exact match, then fuzzy
-  if (checkMap[name]) return checkMap[name];
-  for (const [k, v] of Object.entries(checkMap)) {
-    if (k.includes(name) || name.includes(k)) return v;
+  for (const spec of state.criteriaSpecs) {
+    if (spec.readOnly) continue;
+    const enabled = selection[spec.key];
+    if (enabled === undefined) continue;
+    if (spec.kind === "named") {
+      const currentNamed = named[spec.name];
+      if (!currentNamed || typeof currentNamed !== "object" || Array.isArray(currentNamed)) continue;
+      named[spec.name] = {
+        ...currentNamed,
+        enabled,
+      };
+      continue;
+    }
+    if (spec.kind === "command") {
+      if (enabled) {
+        if (next[spec.name] === false) delete next[spec.name];
+        continue;
+      }
+      next[spec.name] = false;
+      continue;
+    }
+    if (enabled) {
+      const currentValue = next[spec.name];
+      next[spec.name] =
+        currentValue && typeof currentValue === "object" && !Array.isArray(currentValue)
+          ? { ...currentValue, enabled: true }
+          : { enabled: true };
+      continue;
+    }
+    delete next[spec.name];
   }
-  return null;
+
+  if (Object.keys(named).length > 0) next.named = named;
+  else delete next.named;
+
+  return next;
 }
 
 // ── Evaluation Rendering ──
 
 function renderEvaluation(evaluation, delivery) {
-  // Reset all criteria status dots
-  document.querySelectorAll(".criteria-item").forEach((item) => {
-    setCriteriaResult(item, isCriteriaEnabled(item) ? "pending" : "off");
-  });
-
   if (!evaluation) {
     if (dom.criteriaBadge) { dom.criteriaBadge.textContent = ""; delete dom.criteriaBadge.dataset.tone; }
     if (dom.evalBody) dom.evalBody.innerHTML = delivery ? renderDeliveryCard(delivery) : "";
@@ -1986,23 +2187,12 @@ function renderEvaluation(evaluation, delivery) {
       evaluation.verdict === "rejected" ? "bad" : "warn";
   }
 
-  // Update criteria status dots from evaluation checks
   const errors = [];
-  const checkMap = {};
   for (const check of evaluation.checks || []) {
-    checkMap[check.name?.toLowerCase().replace(/[^a-z0-9_#]/g, "_")] = check;
     if (check.status === "failed" && check.evidence) {
       errors.push({ name: check.name, evidence: check.evidence });
     }
   }
-  document.querySelectorAll(".criteria-item").forEach((item) => {
-    const key = item.querySelector("input[type=checkbox]")?.dataset.check;
-    if (!key || !isCriteriaEnabled(item)) return;
-    const matched = findCheck(checkMap, key);
-    if (matched) {
-      setCriteriaResult(item, matched.status);
-    }
-  });
 
   // Build evalBody: only show errors and summary
   let html = "";
@@ -2061,29 +2251,6 @@ function criteriaResultText(status) {
 function isCriteriaEnabled(item) {
   const input = item?.querySelector('input[type="checkbox"][data-check]');
   return !!input?.checked;
-}
-
-function syncCriteriaSelection(task) {
-  const checks =
-    task?.metadata?.checks && typeof task.metadata.checks === "object" && !Array.isArray(task.metadata.checks)
-      ? task.metadata.checks
-      : {};
-
-  dom.criteriaList?.querySelectorAll('input[type="checkbox"][data-check]').forEach((input) => {
-    const key = input.dataset.check;
-    if (!key) return;
-    input.checked = criteriaEnabledFromConfig(key, checks);
-  });
-}
-
-function criteriaEnabledFromConfig(key, checks) {
-  const value = checks?.[key];
-  if (key === "lint" || key === "build" || key === "test") {
-    return value !== false;
-  }
-  if (value === true) return true;
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  return value.enabled !== false;
 }
 
 // ── Session Manager ──
@@ -3168,10 +3335,11 @@ dom.taskSelect.addEventListener("change", () => {
 dom.criteriaList?.addEventListener("change", async () => {
   if (!state.selectedTaskID) return;
   try {
-    await panelMessage("Update the current task acceptance checks to match the selected criteria.", {
-      taskID: state.selectedTaskID,
-      selection: buildCheckSelection(),
-      ui_context: "criteria",
+    await apiJson(`task/${encodeURIComponent(state.selectedTaskID)}/checks`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        checks: buildCheckConfig(),
+      }),
     });
     await loadBoard();
   } catch (e) {
