@@ -758,6 +758,187 @@ export type EventGoalDeadlock = {
   }
 }
 
+export type EventOrchestratorTaskCreated = {
+  type: "orchestrator.task.created"
+  properties: {
+    taskID: string
+    status:
+      | "queued"
+      | "planning"
+      | "running"
+      | "blocked"
+      | "evaluating"
+      | "delivering"
+      | "completed"
+      | "failed"
+      | "cancelled"
+    summary: string
+  }
+}
+
+export type EventOrchestratorTaskUpdated = {
+  type: "orchestrator.task.updated"
+  properties: {
+    taskID: string
+    status:
+      | "queued"
+      | "planning"
+      | "running"
+      | "blocked"
+      | "evaluating"
+      | "delivering"
+      | "completed"
+      | "failed"
+      | "cancelled"
+    summary: string
+  }
+}
+
+export type EventOrchestratorPlanCreated = {
+  type: "orchestrator.plan.created"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorPlanActivated = {
+  type: "orchestrator.plan.activated"
+  properties: {
+    taskID: string
+    planID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorGoalPassed = {
+  type: "orchestrator.goal.passed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorGoalFailed = {
+  type: "orchestrator.goal.failed"
+  properties: {
+    taskID: string
+    goalID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorMilestoneActivated = {
+  type: "orchestrator.milestone.activated"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorMilestonePassed = {
+  type: "orchestrator.milestone.passed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorMilestoneFailed = {
+  type: "orchestrator.milestone.failed"
+  properties: {
+    taskID: string
+    milestoneID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorRunCreated = {
+  type: "orchestrator.run.created"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventOrchestratorRunUpdated = {
+  type: "orchestrator.run.updated"
+  properties: {
+    taskID: string
+    runID: string
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    summary: string
+  }
+}
+
+export type EventOrchestratorInteractionRequested = {
+  type: "orchestrator.interaction.requested"
+  properties: {
+    taskID: string
+    runID: string
+    interactionID: string
+    requestType: "permission" | "question"
+    summary: string
+  }
+}
+
+export type EventOrchestratorInteractionResolved = {
+  type: "orchestrator.interaction.resolved"
+  properties: {
+    taskID: string
+    runID: string
+    interactionID: string
+    status: "pending" | "answered" | "rejected" | "expired"
+    summary: string
+  }
+}
+
+export type EventOrchestratorDeliveryReady = {
+  type: "orchestrator.delivery.ready"
+  properties: {
+    taskID: string
+    runID: string
+    deliveryID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorEvaluationCompleted = {
+  type: "orchestrator.evaluation.completed"
+  properties: {
+    taskID: string
+    runID: string
+    evaluationID: string
+    status: "pending" | "passed" | "failed" | "inconclusive"
+    verdict: "accepted" | "rejected" | "inconclusive"
+    summary: string
+  }
+}
+
+export type EventOrchestratorTaskMessage = {
+  type: "orchestrator.task.message"
+  properties: {
+    taskID: string
+    kind: "preference" | "goal" | "plan" | "note"
+    source: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventVcsBranchUpdated = {
+  type: "vcs.branch.updated"
+  properties: {
+    branch?: string
+  }
+}
+
 export type EventTuiPromptAppend = {
   type: "tui.prompt.append"
   properties: {
@@ -771,7 +952,6 @@ export type EventTuiCommandExecute = {
     command:
       | "session.list"
       | "session.new"
-      | "session.share"
       | "session.interrupt"
       | "session.compact"
       | "session.page.up"
@@ -936,13 +1116,6 @@ export type EventSessionError = {
   }
 }
 
-export type EventVcsBranchUpdated = {
-  type: "vcs.branch.updated"
-  properties: {
-    branch?: string
-  }
-}
-
 export type Pty = {
   id: string
   title: string
@@ -1011,135 +1184,6 @@ export type EventWorkspaceFailed = {
   }
 }
 
-export type EventOrchestratorTaskCreated = {
-  type: "orchestrator.task.created"
-  properties: {
-    taskID: string
-    status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventOrchestratorTaskUpdated = {
-  type: "orchestrator.task.updated"
-  properties: {
-    taskID: string
-    status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
-    summary: string
-  }
-}
-
-export type EventOrchestratorPlanCreated = {
-  type: "orchestrator.plan.created"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventOrchestratorPlanActivated = {
-  type: "orchestrator.plan.activated"
-  properties: {
-    taskID: string
-    planID: string
-    summary: string
-  }
-}
-
-export type EventOrchestratorGoalPassed = {
-  type: "orchestrator.goal.passed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventOrchestratorGoalFailed = {
-  type: "orchestrator.goal.failed"
-  properties: {
-    taskID: string
-    goalID: string
-    summary: string
-  }
-}
-
-export type EventOrchestratorRunCreated = {
-  type: "orchestrator.run.created"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventOrchestratorRunUpdated = {
-  type: "orchestrator.run.updated"
-  properties: {
-    taskID: string
-    runID: string
-    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    summary: string
-  }
-}
-
-export type EventOrchestratorInteractionRequested = {
-  type: "orchestrator.interaction.requested"
-  properties: {
-    taskID: string
-    runID: string
-    interactionID: string
-    requestType: "permission" | "question"
-    summary: string
-  }
-}
-
-export type EventOrchestratorInteractionResolved = {
-  type: "orchestrator.interaction.resolved"
-  properties: {
-    taskID: string
-    runID: string
-    interactionID: string
-    status: "pending" | "answered" | "rejected" | "expired"
-    summary: string
-  }
-}
-
-export type EventOrchestratorDeliveryReady = {
-  type: "orchestrator.delivery.ready"
-  properties: {
-    taskID: string
-    runID: string
-    deliveryID: string
-    summary: string
-  }
-}
-
-export type EventOrchestratorEvaluationCompleted = {
-  type: "orchestrator.evaluation.completed"
-  properties: {
-    taskID: string
-    runID: string
-    evaluationID: string
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  }
-}
-
-export type EventOrchestratorTaskMessage = {
-  type: "orchestrator.task.message"
-  properties: {
-    taskID: string
-    kind: "preference" | "goal" | "plan" | "note"
-    source: string
-    text: string
-    summary: string
-  }
-}
-
 export type Event =
   | EventInstallationUpdated
   | EventInstallationUpdateAvailable
@@ -1168,6 +1212,23 @@ export type Event =
   | EventTaskPlanUpdated
   | EventGoalUpdated
   | EventGoalDeadlock
+  | EventOrchestratorTaskCreated
+  | EventOrchestratorTaskUpdated
+  | EventOrchestratorPlanCreated
+  | EventOrchestratorPlanActivated
+  | EventOrchestratorGoalPassed
+  | EventOrchestratorGoalFailed
+  | EventOrchestratorMilestoneActivated
+  | EventOrchestratorMilestonePassed
+  | EventOrchestratorMilestoneFailed
+  | EventOrchestratorRunCreated
+  | EventOrchestratorRunUpdated
+  | EventOrchestratorInteractionRequested
+  | EventOrchestratorInteractionResolved
+  | EventOrchestratorDeliveryReady
+  | EventOrchestratorEvaluationCompleted
+  | EventOrchestratorTaskMessage
+  | EventVcsBranchUpdated
   | EventTuiPromptAppend
   | EventTuiCommandExecute
   | EventTuiToastShow
@@ -1181,7 +1242,6 @@ export type Event =
   | EventSessionDeleted
   | EventSessionDiff
   | EventSessionError
-  | EventVcsBranchUpdated
   | EventPtyCreated
   | EventPtyUpdated
   | EventPtyExited
@@ -1190,19 +1250,6 @@ export type Event =
   | EventWorktreeFailed
   | EventWorkspaceReady
   | EventWorkspaceFailed
-  | EventOrchestratorTaskCreated
-  | EventOrchestratorTaskUpdated
-  | EventOrchestratorPlanCreated
-  | EventOrchestratorPlanActivated
-  | EventOrchestratorGoalPassed
-  | EventOrchestratorGoalFailed
-  | EventOrchestratorRunCreated
-  | EventOrchestratorRunUpdated
-  | EventOrchestratorInteractionRequested
-  | EventOrchestratorInteractionResolved
-  | EventOrchestratorDeliveryReady
-  | EventOrchestratorEvaluationCompleted
-  | EventOrchestratorTaskMessage
 
 export type GlobalEvent = {
   directory: string
@@ -1215,7 +1262,7 @@ export type GlobalEvent = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Server configuration for opencorvus serve and web commands
+ * Server configuration for opencorvus serve
  */
 export type ServerConfig = {
   /**
@@ -1238,6 +1285,56 @@ export type ServerConfig = {
    * Additional domains to allow for CORS
    */
   cors?: Array<string>
+}
+
+export type SlackChannelConfig = {
+  /**
+   * Enable Slack channel integration
+   */
+  enabled?: boolean
+  /**
+   * Slack bot token
+   */
+  botToken?: string
+  /**
+   * Slack app token for Socket Mode
+   */
+  appToken?: string
+  /**
+   * Slack signing secret
+   */
+  signingSecret?: string
+}
+
+export type TelegramChannelConfig = {
+  /**
+   * Enable Telegram channel integration
+   */
+  enabled?: boolean
+  /**
+   * Telegram bot token
+   */
+  token?: string
+}
+
+export type DiscordChannelConfig = {
+  /**
+   * Enable Discord channel integration
+   */
+  enabled?: boolean
+  /**
+   * Discord bot token
+   */
+  token?: string
+}
+
+/**
+ * Channel integration configuration
+ */
+export type ChannelConfig = {
+  slack?: SlackChannelConfig
+  telegram?: TelegramChannelConfig
+  discord?: DiscordChannelConfig
 }
 
 export type PermissionActionConfig = "ask" | "allow" | "deny"
@@ -1509,6 +1606,7 @@ export type Config = {
   $schema?: string
   logLevel?: LogLevel
   server?: ServerConfig
+  channel?: ChannelConfig
   /**
    * Command configuration, see https://opencorvus.ai/docs/commands
    */
@@ -1652,12 +1750,6 @@ export type Config = {
   permission?: PermissionConfig
   tools?: {
     [key: string]: boolean
-  }
-  enterprise?: {
-    /**
-     * Enterprise URL
-     */
-    url?: string
   }
   compaction?: {
     /**
@@ -2076,7 +2168,15 @@ export type Path = {
 }
 
 export type VcsInfo = {
-  branch: string
+  branch?: string
+  clean: boolean
+  dirty: boolean
+  staged: number
+  modified: number
+  untracked: number
+  conflicts: number
+  ahead: number
+  behind: number
 }
 
 export type Command = {
@@ -2596,6 +2696,171 @@ export type ConfigProvidersResponses = {
 
 export type ConfigProvidersResponse = ConfigProvidersResponses[keyof ConfigProvidersResponses]
 
+export type ChannelListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/channel"
+}
+
+export type ChannelListResponses = {
+  /**
+   * List of channels
+   */
+  200: Array<{
+    id: string
+    name: string
+    status: "disabled" | "configured" | "partial" | "missing"
+    summary: string
+    runtime_status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+    runtime_detail: string
+    fields: Array<{
+      key: string
+      label: string
+      type: "boolean" | "text" | "secret"
+      placeholder?: string
+    }>
+  }>
+}
+
+export type ChannelListResponse = ChannelListResponses[keyof ChannelListResponses]
+
+export type ChannelMessageData = {
+  body?: {
+    platform: "slack" | "telegram" | "discord"
+    channel: string
+    thread: string
+    text: string
+    user_id?: string
+    request_id?: string
+    source?: string
+    executor?: "opencode" | "codex" | "claude-code"
+    allow_create?: boolean
+    metadata?: {
+      [key: string]: unknown
+    }
+    intent_hint?: {
+      action: string
+      payload?: {
+        [key: string]: unknown
+      }
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/channel/message"
+}
+
+export type ChannelMessageResponses = {
+  /**
+   * Message handled
+   */
+  200: {
+    kind: "panel_response" | "created" | "message" | "interaction" | "ignored"
+    message: string
+    task_id?: string
+    interaction_id?: string
+    session_id?: string
+    local_action?:
+      | {
+          type: "set_executor"
+          executor: "opencode" | "codex" | "claude-code"
+        }
+      | {
+          type: "select_task"
+          taskID: string
+        }
+      | {
+          type: "select_session"
+          sessionID: string
+        }
+      | {
+          type: "invalidate_session"
+          sessionID: string
+        }
+  }
+}
+
+export type ChannelMessageResponse = ChannelMessageResponses[keyof ChannelMessageResponses]
+
+export type ChannelRuntimeData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/channel/runtime"
+}
+
+export type ChannelRuntimeResponses = {
+  /**
+   * Channel runtime status
+   */
+  200: {
+    status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+    detail: string
+    channels: Array<string>
+    logs: Array<string>
+    running: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+  }
+}
+
+export type ChannelRuntimeResponse = ChannelRuntimeResponses[keyof ChannelRuntimeResponses]
+
+export type ChannelRuntimeRestartData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/channel/runtime/restart"
+}
+
+export type ChannelRuntimeRestartResponses = {
+  /**
+   * Restarted channel runtime
+   */
+  200: {
+    status: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+    detail: string
+    channels: Array<string>
+    logs: Array<string>
+    running: "disabled" | "unavailable" | "starting" | "running" | "stopped" | "error"
+  }
+}
+
+export type ChannelRuntimeRestartResponse = ChannelRuntimeRestartResponses[keyof ChannelRuntimeRestartResponses]
+
+export type ExecutorListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/executor"
+}
+
+export type ExecutorListResponses = {
+  /**
+   * Executor status
+   */
+  200: Array<{
+    id: "opencode" | "codex" | "claude-code"
+    label: string
+    registered: boolean
+    discovered: boolean
+    selectable: boolean
+    detail: string
+    version?: string
+  }>
+}
+
+export type ExecutorListResponse = ExecutorListResponses[keyof ExecutorListResponses]
+
 export type ToolIdsData = {
   body?: never
   path?: never
@@ -2903,168 +3168,6 @@ export type ExperimentalResourceListResponses = {
 
 export type ExperimentalResourceListResponse =
   ExperimentalResourceListResponses[keyof ExperimentalResourceListResponses]
-
-export type ExperimentalWindowsListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/windows"
-}
-
-export type ExperimentalWindowsListResponses = {
-  /**
-   * Window list
-   */
-  200: Array<{
-    id: number
-    title: string
-    appName: string
-  }>
-}
-
-export type ExperimentalWindowsListResponse = ExperimentalWindowsListResponses[keyof ExperimentalWindowsListResponses]
-
-export type ExperimentalBindWindowData = {
-  body?: {
-    window_id?: number | string
-    title?: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/bind_window"
-}
-
-export type ExperimentalBindWindowErrors = {
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type ExperimentalBindWindowError = ExperimentalBindWindowErrors[keyof ExperimentalBindWindowErrors]
-
-export type ExperimentalBindWindowResponses = {
-  /**
-   * Window bound
-   */
-  200: {
-    windowId: number
-    matchTitle: string
-    title: string
-    appName: string
-    focused: boolean
-    selectionMode: "window_id" | "title"
-  }
-}
-
-export type ExperimentalBindWindowResponse = ExperimentalBindWindowResponses[keyof ExperimentalBindWindowResponses]
-
-export type ExperimentalMemoryListData = {
-  body?: never
-  path?: never
-  query: {
-    directory?: string
-    projectId: string
-  }
-  url: "/experimental/memory"
-}
-
-export type ExperimentalMemoryListResponses = {
-  /**
-   * Memory file list
-   */
-  200: Array<{
-    id: string
-    title: string
-    source: string
-    timeCreated: number
-  }>
-}
-
-export type ExperimentalMemoryListResponse = ExperimentalMemoryListResponses[keyof ExperimentalMemoryListResponses]
-
-export type ExperimentalMemoryCreateData = {
-  body?: {
-    title: string
-    content: string
-    projectId: string
-    source?: "agent" | "compaction" | "user"
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/memory"
-}
-
-export type ExperimentalMemoryCreateResponses = {
-  /**
-   * Created memory file
-   */
-  200: {
-    id: string
-    title: string
-  }
-}
-
-export type ExperimentalMemoryCreateResponse =
-  ExperimentalMemoryCreateResponses[keyof ExperimentalMemoryCreateResponses]
-
-export type ExperimentalMemorySearchData = {
-  body?: {
-    query: string
-    projectId: string
-    limit?: number
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/memory/search"
-}
-
-export type ExperimentalMemorySearchResponses = {
-  /**
-   * Search results
-   */
-  200: Array<{
-    chunkId: string
-    fileId: string
-    fileTitle: string
-    content: string
-    score: number
-  }>
-}
-
-export type ExperimentalMemorySearchResponse =
-  ExperimentalMemorySearchResponses[keyof ExperimentalMemorySearchResponses]
-
-export type ExperimentalMemoryDeleteData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/memory/{id}"
-}
-
-export type ExperimentalMemoryDeleteResponses = {
-  /**
-   * Deleted
-   */
-  200: {
-    ok: boolean
-  }
-}
-
-export type ExperimentalMemoryDeleteResponse =
-  ExperimentalMemoryDeleteResponses[keyof ExperimentalMemoryDeleteResponses]
 
 export type ExperimentalScheduleListData = {
   body?: never
@@ -3655,72 +3758,6 @@ export type SessionAbortResponses = {
 
 export type SessionAbortResponse = SessionAbortResponses[keyof SessionAbortResponses]
 
-export type SessionUnshareData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/share"
-}
-
-export type SessionUnshareErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type SessionUnshareError = SessionUnshareErrors[keyof SessionUnshareErrors]
-
-export type SessionUnshareResponses = {
-  /**
-   * Successfully unshared session
-   */
-  200: Session
-}
-
-export type SessionUnshareResponse = SessionUnshareResponses[keyof SessionUnshareResponses]
-
-export type SessionShareData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/share"
-}
-
-export type SessionShareErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * Not found
-   */
-  404: NotFoundError
-}
-
-export type SessionShareError = SessionShareErrors[keyof SessionShareErrors]
-
-export type SessionShareResponses = {
-  /**
-   * Successfully shared session
-   */
-  200: Session
-}
-
-export type SessionShareResponse = SessionShareResponses[keyof SessionShareResponses]
-
 export type SessionDiffData = {
   body?: never
   path: {
@@ -3877,6 +3914,9 @@ export type SessionPromptData = {
     format?: OutputFormat
     system?: string
     variant?: string
+    extra?: {
+      [key: string]: unknown
+    }
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -4105,6 +4145,9 @@ export type SessionPromptAsyncData = {
     format?: OutputFormat
     system?: string
     variant?: string
+    extra?: {
+      [key: string]: unknown
+    }
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -4610,6 +4653,46 @@ export type ProviderAuthResponses = {
 
 export type ProviderAuthResponse = ProviderAuthResponses[keyof ProviderAuthResponses]
 
+export type ProviderTestData = {
+  body?: {
+    modelID?: string
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/{providerID}/test"
+}
+
+export type ProviderTestErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderTestError = ProviderTestErrors[keyof ProviderTestErrors]
+
+export type ProviderTestResponses = {
+  /**
+   * Provider test result
+   */
+  200: {
+    ok: boolean
+    status: "connected" | "error"
+    providerID: string
+    modelID: string
+    message: string
+  }
+}
+
+export type ProviderTestResponse = ProviderTestResponses[keyof ProviderTestResponses]
+
 export type ProviderOauthAuthorizeData = {
   body?: {
     /**
@@ -4688,6 +4771,291 @@ export type ProviderOauthCallbackResponses = {
 
 export type ProviderOauthCallbackResponse = ProviderOauthCallbackResponses[keyof ProviderOauthCallbackResponses]
 
+export type AppSkillsData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill"
+}
+
+export type AppSkillsResponses = {
+  /**
+   * List of skills
+   */
+  200: Array<{
+    name: string
+    description: string
+    platforms?: Array<"win32" | "darwin" | "linux">
+    builtin?: boolean
+    location: string
+    content: string
+  }>
+}
+
+export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
+
+export type SkillInstalledData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/installed"
+}
+
+export type SkillInstalledResponses = {
+  /**
+   * Installed skills
+   */
+  200: Array<{
+    name: string
+    description: string
+    platforms?: Array<"win32" | "darwin" | "linux">
+    builtin?: boolean
+    location: string
+    content: string
+    dir?: string
+    source_type: "builtin" | "managed_git" | "config_path" | "config_url" | "external" | "unknown"
+    source?: string
+    trust: "builtin" | "official" | "curated" | "community" | "local" | "external" | "unknown"
+    risk: {
+      level: "low" | "medium" | "high"
+      has_scripts: boolean
+      has_agents: boolean
+      has_references: boolean
+      has_templates: boolean
+    }
+    recommended_policy: PermissionAction
+    policy: PermissionAction
+    managed: boolean
+    writable: boolean
+  }>
+}
+
+export type SkillInstalledResponse = SkillInstalledResponses[keyof SkillInstalledResponses]
+
+export type SkillMarketData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/market"
+}
+
+export type SkillMarketResponses = {
+  /**
+   * Skill market entries
+   */
+  200: Array<{
+    id: string
+    name: string
+    provider: string
+    description: string
+    homepage: string
+    source?: string
+    install_kind: "git" | "url" | "manual"
+    trust: "official" | "curated" | "community"
+    recommended_policy: PermissionAction
+    notes?: string
+  }>
+}
+
+export type SkillMarketResponse = SkillMarketResponses[keyof SkillMarketResponses]
+
+export type SkillDirectoriesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/directories"
+}
+
+export type SkillDirectoriesResponses = {
+  /**
+   * Skill directories
+   */
+  200: {
+    global_config: string
+    managed_skills: string
+    remote_cache: string
+  }
+}
+
+export type SkillDirectoriesResponse = SkillDirectoriesResponses[keyof SkillDirectoriesResponses]
+
+export type SkillInstallData = {
+  body?: {
+    kind: "path" | "url" | "git"
+    value: string
+    policy?: PermissionAction
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/install"
+}
+
+export type SkillInstallResponses = {
+  /**
+   * Installed skill source
+   */
+  200: {
+    source: string
+    path?: string
+    kind: "path" | "url" | "git"
+  }
+}
+
+export type SkillInstallResponse = SkillInstallResponses[keyof SkillInstallResponses]
+
+export type SkillRemoveData = {
+  body?: {
+    source: string
+    kind?: "path" | "url" | "git"
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/remove"
+}
+
+export type SkillRemoveResponses = {
+  /**
+   * Removed skill source
+   */
+  200: boolean
+}
+
+export type SkillRemoveResponse = SkillRemoveResponses[keyof SkillRemoveResponses]
+
+export type SkillPolicyData = {
+  body?: {
+    name: string
+    action: PermissionAction
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/skill/policy"
+}
+
+export type SkillPolicyResponses = {
+  /**
+   * Updated skill policy
+   */
+  200: boolean
+}
+
+export type SkillPolicyResponse = SkillPolicyResponses[keyof SkillPolicyResponses]
+
+export type PanelMessageData = {
+  body?: {
+    surface: "panel" | "slack" | "telegram" | "discord"
+    text: string
+    taskID?: string
+    sessionID?: string
+    executor?: "opencode" | "codex" | "claude-code"
+    channel?: string
+    thread?: string
+    user_id?: string
+    request_id?: string
+    source?: string
+    allow_create?: boolean
+    metadata?: {
+      [key: string]: unknown
+    }
+    intent_hint?: {
+      action: string
+      payload?: {
+        [key: string]: unknown
+      }
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/panel/message"
+}
+
+export type PanelMessageResponses = {
+  /**
+   * Panel message handled
+   */
+  200: {
+    kind: "panel_response" | "created" | "message" | "interaction" | "ignored"
+    message: string
+    task_id?: string
+    interaction_id?: string
+    session_id?: string
+    local_action?:
+      | {
+          type: "set_executor"
+          executor: "opencode" | "codex" | "claude-code"
+        }
+      | {
+          type: "select_task"
+          taskID: string
+        }
+      | {
+          type: "select_session"
+          sessionID: string
+        }
+      | {
+          type: "invalidate_session"
+          sessionID: string
+        }
+  }
+}
+
+export type PanelMessageResponse = PanelMessageResponses[keyof PanelMessageResponses]
+
+export type ControlTimelineData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    taskID?: string
+    sessionID?: string
+    surface?: "panel" | "slack" | "telegram" | "discord"
+  }
+  url: "/control/timeline"
+}
+
+export type ControlTimelineResponses = {
+  /**
+   * Control timeline
+   */
+  200: Array<{
+    info: {
+      id: string
+      role: "user" | "assistant" | "system"
+      source?: string
+      surface: string
+      taskID?: string
+      sessionID?: string
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    parts: Array<{
+      id: string
+      type: "text"
+      text: string
+    }>
+  }>
+}
+
+export type ControlTimelineResponse = ControlTimelineResponses[keyof ControlTimelineResponses]
+
 export type TaskCreateData = {
   body?: {
     project?: string
@@ -4704,10 +5072,10 @@ export type TaskCreateData = {
       maxWallTimeMs?: number
     }
     checks?: {
-      build?: Array<string>
-      test?: Array<string>
-      lint?: Array<string>
-      verify_cmd?: Array<string>
+      build?: Array<string> | false
+      test?: Array<string> | false
+      lint?: Array<string> | false
+      verify_cmd?: Array<string> | false
       startup?: {
         command: string
         ready_url?: string
@@ -4729,6 +5097,23 @@ export type TaskCreateData = {
         url: string
         require_text?: Array<string>
         require_title?: string
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      puppeteer?: {
+        target: "web"
+        url: string
+        browser?: "chrome" | "edge" | "chromium"
+        executable_path?: string
+        wait_for_selector?: string
+        wait_for_text?: string
+        require_text?: Array<string>
+        require_title?: string
+        full_page?: boolean
+        viewport?: {
+          width?: number
+          height?: number
+        }
         timeout_ms?: number
         mode?: "soft" | "strict"
       }
@@ -4763,6 +5148,11 @@ export type TaskCreateData = {
         prompt?: string
         mode?: "soft" | "strict"
       }
+      custom?: {
+        [key: string]: {
+          [key: string]: unknown
+        }
+      }
       timeout_ms?: number
     }
     goals?: Array<{
@@ -4772,6 +5162,18 @@ export type TaskCreateData = {
       metadata?: {
         check_selector?: Array<string>
       }
+    }>
+    milestones?: Array<{
+      title: string
+      description?: string
+      goals: Array<{
+        description: string
+        criteria: string
+        priority?: "blocking" | "advisory"
+        metadata?: {
+          check_selector?: Array<string>
+        }
+      }>
     }>
     channelBinding?: {
       platform: string
@@ -4856,7 +5258,16 @@ export type TaskListResponses = {
         source: string
         title: string
         request: string
-        status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+        status:
+          | "queued"
+          | "planning"
+          | "running"
+          | "blocked"
+          | "evaluating"
+          | "delivering"
+          | "completed"
+          | "failed"
+          | "cancelled"
         priority: "high" | "normal" | "low"
         blockingReason?: string
         error?: string
@@ -4898,7 +5309,7 @@ export type TaskListResponses = {
         sessionID?: string | null
         executor: "opencode" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-        phase: "plan" | "execute" | "evaluate" | "replan"
+        phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
         blockingReason?: string
         error?: string
         retryCount: number
@@ -4977,7 +5388,16 @@ export type TaskGetResponses = {
     source: string
     title: string
     request: string
-    status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+    status:
+      | "queued"
+      | "planning"
+      | "running"
+      | "blocked"
+      | "evaluating"
+      | "delivering"
+      | "completed"
+      | "failed"
+      | "cancelled"
     priority: "high" | "normal" | "low"
     blockingReason?: string
     error?: string
@@ -5036,7 +5456,16 @@ export type TaskProgressResponses = {
       source: string
       title: string
       request: string
-      status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+      status:
+        | "queued"
+        | "planning"
+        | "running"
+        | "blocked"
+        | "evaluating"
+        | "delivering"
+        | "completed"
+        | "failed"
+        | "cancelled"
       priority: "high" | "normal" | "low"
       blockingReason?: string
       error?: string
@@ -5075,6 +5504,7 @@ export type TaskProgressResponses = {
       id: string
       taskID: string
       planVersionID: string
+      milestoneID?: string | null
       description: string
       criteria: string
       priority: "blocking" | "advisory"
@@ -5088,6 +5518,22 @@ export type TaskProgressResponses = {
         updated: number
       }
     }>
+    milestones?: Array<{
+      id: string
+      taskID: string
+      planVersionID: string
+      title: string
+      description: string
+      status: "pending" | "active" | "passed" | "failed"
+      orderIndex: number
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
     run?: {
       id: string
       taskID: string
@@ -5095,7 +5541,7 @@ export type TaskProgressResponses = {
       sessionID?: string | null
       executor: "opencode" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-      phase: "plan" | "execute" | "evaluate" | "replan"
+      phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
       blockingReason?: string
       error?: string
       retryCount: number
@@ -5139,12 +5585,22 @@ export type TaskProgressResponses = {
       id: string
       taskID: string
       runID: string
-      status: "ready"
+      status: "candidate" | "publishing" | "delivered" | "failed"
       summary: string
       result: {
         summary: string
         changedFiles: Array<string>
         diffs: Array<FileDiff>
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        publish?: {
+          [key: string]: unknown
+        }
       }
       time: {
         created: number
@@ -5296,7 +5752,16 @@ export type TaskBoardResponses = {
       source: string
       title: string
       request: string
-      status: "queued" | "planning" | "running" | "blocked" | "evaluating" | "completed" | "failed" | "cancelled"
+      status:
+        | "queued"
+        | "planning"
+        | "running"
+        | "blocked"
+        | "evaluating"
+        | "delivering"
+        | "completed"
+        | "failed"
+        | "cancelled"
       priority: "high" | "normal" | "low"
       blockingReason?: string
       error?: string
@@ -5338,7 +5803,7 @@ export type TaskBoardResponses = {
       sessionID?: string | null
       executor: "opencode" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-      phase: "plan" | "execute" | "evaluate" | "replan"
+      phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
       blockingReason?: string
       error?: string
       retryCount: number
@@ -5360,12 +5825,74 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
-      status: "ready"
+      status: "candidate" | "publishing" | "delivered" | "failed"
       summary: string
       result: {
         summary: string
         changedFiles: Array<string>
         diffs: Array<FileDiff>
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        publish?: {
+          [key: string]: unknown
+        }
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    candidateDelivery?: {
+      id: string
+      taskID: string
+      runID: string
+      status: "candidate" | "publishing" | "delivered" | "failed"
+      summary: string
+      result: {
+        summary: string
+        changedFiles: Array<string>
+        diffs: Array<FileDiff>
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        publish?: {
+          [key: string]: unknown
+        }
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    acceptedDelivery?: {
+      id: string
+      taskID: string
+      runID: string
+      status: "candidate" | "publishing" | "delivered" | "failed"
+      summary: string
+      result: {
+        summary: string
+        changedFiles: Array<string>
+        diffs: Array<FileDiff>
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        publish?: {
+          [key: string]: unknown
+        }
       }
       time: {
         created: number
@@ -5413,12 +5940,25 @@ export type TaskBoardResponses = {
         resolved?: number
       }
     }>
+    channels: Array<{
+      id: string
+      platform: string
+      channel: string
+      thread: string
+      payload?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
     artifacts: Array<{
       id: string
       taskID: string
       runID: string
       deliveryID?: string | null
-      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link"
+      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link" | "git_ref" | "pr"
       label: string
       payload?: {
         [key: string]: unknown
@@ -5441,6 +5981,30 @@ export type TaskBoardResponses = {
         updated: number
       }
     }>
+    overview: {
+      headline: string
+      summary: string
+      currentFailure?: {
+        source: "task" | "run" | "interaction" | "evaluation"
+        title: string
+        summary: string
+        checks?: Array<{
+          name: string
+          status: "passed" | "failed" | "skipped"
+          evidence?: string
+        }>
+      }
+      nextStep: {
+        kind: "resolve_blocker" | "retry" | "replan" | "observe" | "review_delivery" | "message"
+        title: string
+        detail?: string
+      }
+      controls: {
+        canRetry: boolean
+        canReplan: boolean
+        canCancel: boolean
+      }
+    }
     brief: {
       content: string
       updated_at: number
@@ -5496,7 +6060,7 @@ export type TaskRunsResponses = {
     sessionID?: string | null
     executor: "opencode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "replan"
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
     blockingReason?: string
     error?: string
     retryCount: number
@@ -5609,6 +6173,162 @@ export type TaskMessageResponses = {
 
 export type TaskMessageResponse = TaskMessageResponses[keyof TaskMessageResponses]
 
+export type TaskChecksUpdateData = {
+  body?: {
+    checks?: {
+      build?: Array<string> | false
+      test?: Array<string> | false
+      lint?: Array<string> | false
+      verify_cmd?: Array<string> | false
+      startup?: {
+        command: string
+        ready_url?: string
+        ready_text?: string
+        timeout_ms?: number
+        warmup_ms?: number
+        require_exit_zero?: boolean
+        mode?: "soft" | "strict"
+      }
+      artifact?: {
+        require_changed_files?: boolean
+        min_changed_files?: number
+        require_diff?: boolean
+        require_summary?: boolean
+        mode?: "soft" | "strict"
+      }
+      visual?: {
+        target: "web"
+        url: string
+        require_text?: Array<string>
+        require_title?: string
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      puppeteer?: {
+        target: "web"
+        url: string
+        browser?: "chrome" | "edge" | "chromium"
+        executable_path?: string
+        wait_for_selector?: string
+        wait_for_text?: string
+        require_text?: Array<string>
+        require_title?: string
+        full_page?: boolean
+        viewport?: {
+          width?: number
+          height?: number
+        }
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      ui_review?: {
+        target: "web"
+        url?: string
+        prompt?: string
+        focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      code_quality?: {
+        enabled?: boolean
+        prompt?: string
+        max_diffs?: number
+        mode?: "soft" | "strict"
+      }
+      code_review?: {
+        enabled?: boolean
+        prompt?: string
+        max_diffs?: number
+        mode?: "soft" | "strict"
+      }
+      dead_code_review?: {
+        enabled?: boolean
+        prompt?: string
+        max_diffs?: number
+        mode?: "soft" | "strict"
+      }
+      judge?: {
+        enabled?: boolean
+        prompt?: string
+        mode?: "soft" | "strict"
+      }
+      custom?: {
+        [key: string]: {
+          [key: string]: unknown
+        }
+      }
+      timeout_ms?: number
+    }
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/checks"
+}
+
+export type TaskChecksUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskChecksUpdateError = TaskChecksUpdateErrors[keyof TaskChecksUpdateErrors]
+
+export type TaskChecksUpdateResponses = {
+  /**
+   * Task checks updated
+   */
+  200: {
+    id: string
+    projectID: string
+    sessionID?: string | null
+    activePlanVersionID?: string | null
+    activeRunID?: string | null
+    requestID?: string
+    source: string
+    title: string
+    request: string
+    status:
+      | "queued"
+      | "planning"
+      | "running"
+      | "blocked"
+      | "evaluating"
+      | "delivering"
+      | "completed"
+      | "failed"
+      | "cancelled"
+    priority: "high" | "normal" | "low"
+    blockingReason?: string
+    error?: string
+    budget?: {
+      maxRuns?: number
+      maxReplans?: number
+      maxEvaluations?: number
+      maxWallTimeMs?: number
+    }
+    metadata?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskChecksUpdateResponse = TaskChecksUpdateResponses[keyof TaskChecksUpdateResponses]
+
 export type TaskCancelData = {
   body?: never
   path: {
@@ -5669,7 +6389,7 @@ export type TaskRetryResponses = {
     sessionID?: string | null
     executor: "opencode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "replan"
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
     blockingReason?: string
     error?: string
     retryCount: number
@@ -5690,6 +6410,59 @@ export type TaskRetryResponses = {
 }
 
 export type TaskRetryResponse = TaskRetryResponses[keyof TaskRetryResponses]
+
+export type TaskReplanData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/replan"
+}
+
+export type TaskReplanErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskReplanError = TaskReplanErrors[keyof TaskReplanErrors]
+
+export type TaskReplanResponses = {
+  /**
+   * Task replan queued
+   */
+  200: {
+    id: string
+    taskID: string
+    planVersionID?: string | null
+    sessionID?: string | null
+    executor: "opencode" | "codex" | "claude-code"
+    status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+    blockingReason?: string
+    error?: string
+    retryCount: number
+    executorRef?: {
+      sessionID?: string
+      queueTaskID?: string
+    }
+    metadata?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type TaskReplanResponse = TaskReplanResponses[keyof TaskReplanResponses]
 
 export type RunGetData = {
   body?: never
@@ -5722,7 +6495,7 @@ export type RunGetResponses = {
     sessionID?: string | null
     executor: "opencode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "replan"
+    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
     blockingReason?: string
     error?: string
     retryCount: number
@@ -5844,12 +6617,22 @@ export type RunDeliveryResponses = {
     id: string
     taskID: string
     runID: string
-    status: "ready"
+    status: "candidate" | "publishing" | "delivered" | "failed"
     summary: string
     result: {
       summary: string
       changedFiles: Array<string>
       diffs: Array<FileDiff>
+      artifacts?: Array<{
+        kind: string
+        label: string
+        payload?: {
+          [key: string]: unknown
+        }
+      }>
+      publish?: {
+        [key: string]: unknown
+      }
     }
     time: {
       created: number
@@ -5889,7 +6672,7 @@ export type RunArtifactsResponses = {
     taskID: string
     runID: string
     deliveryID?: string | null
-    kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link"
+    kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link" | "git_ref" | "pr"
     label: string
     payload?: {
       [key: string]: unknown
@@ -6715,71 +7498,6 @@ export type TuiRuntimeTaskStatusResponses = {
 
 export type TuiRuntimeTaskStatusResponse = TuiRuntimeTaskStatusResponses[keyof TuiRuntimeTaskStatusResponses]
 
-export type TuiAppendPromptData = {
-  body?: {
-    text: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/append-prompt"
-}
-
-export type TuiAppendPromptErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type TuiAppendPromptError = TuiAppendPromptErrors[keyof TuiAppendPromptErrors]
-
-export type TuiAppendPromptResponses = {
-  /**
-   * Prompt processed successfully
-   */
-  200: boolean
-}
-
-export type TuiAppendPromptResponse = TuiAppendPromptResponses[keyof TuiAppendPromptResponses]
-
-export type TuiSubmitPromptData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/submit-prompt"
-}
-
-export type TuiSubmitPromptResponses = {
-  /**
-   * Prompt submitted successfully
-   */
-  200: boolean
-}
-
-export type TuiSubmitPromptResponse = TuiSubmitPromptResponses[keyof TuiSubmitPromptResponses]
-
-export type TuiClearPromptData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/tui/clear-prompt"
-}
-
-export type TuiClearPromptResponses = {
-  /**
-   * Prompt cleared successfully
-   */
-  200: boolean
-}
-
-export type TuiClearPromptResponse = TuiClearPromptResponses[keyof TuiClearPromptResponses]
-
 export type TuiOpenHelpData = {
   body?: never
   path?: never
@@ -7149,31 +7867,6 @@ export type AppAgentsResponses = {
 }
 
 export type AppAgentsResponse = AppAgentsResponses[keyof AppAgentsResponses]
-
-export type AppSkillsData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/skill"
-}
-
-export type AppSkillsResponses = {
-  /**
-   * List of skills
-   */
-  200: Array<{
-    name: string
-    description: string
-    platforms?: Array<"win32" | "darwin" | "linux">
-    builtin?: boolean
-    location: string
-    content: string
-  }>
-}
-
-export type AppSkillsResponse = AppSkillsResponses[keyof AppSkillsResponses]
 
 export type LspStatusData = {
   body?: never

@@ -2,11 +2,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
+    fs,
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::Mutex,
 };
 
+use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -15,17 +17,94 @@ use tauri::{
 
 struct Server(Mutex<Option<Child>>);
 
-fn server_path() -> Option<PathBuf> {
-    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OverlaySettings {
+    server_url: Option<String>,
+    password: Option<String>,
+    username: Option<String>,
+    executor: Option<String>,
+    always_on_top: Option<bool>,
+}
+
+fn overlay_settings_path() -> Result<PathBuf, String> {
+    std::env::current_dir()
+        .map(|dir| dir.join("overlay.json"))
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn overlay_settings_load() -> Result<OverlaySettings, String> {
+    let path = overlay_settings_path()?;
+    if !path.exists() {
+        return Ok(OverlaySettings::default());
+    }
+    let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
+    serde_json::from_str(&text).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn overlay_settings_save(settings: OverlaySettings) -> Result<bool, String> {
+    let path = overlay_settings_path()?;
+    let text = serde_json::to_string_pretty(&settings).map_err(|err| err.to_string())?;
+    fs::write(path, text).map_err(|err| err.to_string())?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn overlay_open_path(path: String) -> Result<bool, String> {
+    if path.trim().is_empty() {
+        return Ok(false);
+    }
+
+    let mut command = if cfg!(target_os = "windows") {
+        let mut command = Command::new("explorer");
+        command.arg(&path);
+        command
+    } else if cfg!(target_os = "macos") {
+        let mut command = Command::new("open");
+        command.arg(&path);
+        command
+    } else {
+        let mut command = Command::new("xdg-open");
+        command.arg(&path);
+        command
+    };
+
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(|_| true)
+        .map_err(|err| err.to_string())
+}
+
+fn candidate_server_paths<R: Runtime>(app: &AppHandle<R>) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    let dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|p| p.to_path_buf()));
     let names = if cfg!(windows) {
         ["opencorvus-core.exe", "opencorvus.exe"]
     } else {
         ["opencorvus-core", "opencorvus"]
     };
 
-    names
+    if let Some(dir) = dir {
+        result.extend(names.iter().map(|name| dir.join(name)));
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        result.extend(names.iter().map(|name| resource_dir.join(name)));
+    }
+
+    result
+}
+
+fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
+    candidate_server_paths(app)
         .into_iter()
-        .map(|name| dir.join(name))
         .find(|path| path.exists())
 }
 
@@ -39,8 +118,8 @@ fn stop_server<R: Runtime>(app: &AppHandle<R>) {
 }
 
 fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
-    let Some(path) = server_path() else {
-        eprintln!("overlay: bundled opencorvus binary not found next to overlay");
+    let Some(path) = server_path(app) else {
+        eprintln!("overlay: bundled opencorvus binary not found");
         return Ok(());
     };
 
@@ -50,6 +129,9 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error
         .arg("127.0.0.1")
         .arg("--port")
         .arg("7878")
+        .env("OPENCORVUS_VERSION", env!("CARGO_PKG_VERSION"))
+        .env("OPENCORVUS_CHANNEL", "latest")
+        .env("OPENCORVUS_CLIENT", "app")
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -67,6 +149,11 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![
+            overlay_settings_load,
+            overlay_settings_save,
+            overlay_open_path
+        ])
         .setup(|app| {
             app.manage(Server(Mutex::new(None)));
             let handle = app.handle().clone();
@@ -101,7 +188,13 @@ fn main() {
 
             let menu = Menu::with_items(
                 app,
-                &[&show_item, &hide_item, &restart_item, &separator, &quit_item],
+                &[
+                    &show_item,
+                    &hide_item,
+                    &restart_item,
+                    &separator,
+                    &quit_item,
+                ],
             )?;
 
             let icon = create_tray_icon();
@@ -141,7 +234,11 @@ fn main() {
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        ..
+                    } = event
+                    {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
                             if window.is_visible().unwrap_or(false) {
@@ -186,7 +283,11 @@ fn create_tray_icon() -> tauri::image::Image<'static> {
                 rgba[idx + 1] = 0x8d;
                 rgba[idx + 2] = 0xef;
                 let edge = r - dist;
-                rgba[idx + 3] = if edge >= 1.0 { 255 } else { (edge * 255.0) as u8 };
+                rgba[idx + 3] = if edge >= 1.0 {
+                    255
+                } else {
+                    (edge * 255.0) as u8
+                };
             }
         }
     }

@@ -46,7 +46,7 @@ git_cmd() { SSL_CERT_FILE="$SSL_CERT_FILE" git "$@"; }
 
 # ── 1. Trigger ────────────────────────────────────────────────────────────────
 if [[ -z "$RUN_ID" ]]; then
-  echo "▶ Triggering $WORKFLOW on ref=$REF ..."
+  echo "▶ Triggering canonical release workflow $WORKFLOW on ref=$REF ..."
 
   TRIGGER_ARGS=(workflow run "$WORKFLOW" --ref "$REF")
   if [[ -n "$VERSION" ]]; then

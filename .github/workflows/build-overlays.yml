@@ -1,10 +1,9 @@
 name: build-overlays
 
-# Overlay-only CI: compile the Tauri/Rust sidecar on all 5 platforms.
-# Used by release.sh to obtain cross-compiled overlay binaries before
-# running the main Bun packaging step locally.
-#
-# Artifacts are named overlay-<platform> and kept for 3 days.
+# Manual debug workflow for overlay bundles only.
+# Canonical release flow is .github/workflows/build.yml.
+# This workflow still uses the bound overlay build script so the bundled
+# opencorvus sidecar and overlay stay aligned.
 
 on:
   workflow_dispatch:
@@ -40,6 +39,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: ./.github/actions/setup-bun
+
+      - name: Sync repo versions
+        run: bun ./script/sync-version.ts --check
+
+      - name: Resolve repo version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(bun -e 'const pkg = await Bun.file("packages/opencorvus/package.json").json(); console.log(pkg.version)')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
         run: |
@@ -57,13 +68,29 @@ jobs:
         with:
           workspaces: packages/overlay/src-tauri -> target
 
-      - name: Build overlay
-        run: cargo build --release --manifest-path packages/overlay/src-tauri/Cargo.toml
+      - name: Build bound overlay
+        working-directory: packages/overlay
+        run: bun run build
+
+      - name: Stage overlay artifact
+        shell: bash
+        run: |
+          OUT="packages/overlay/dist-artifacts/${{ matrix.platform }}"
+          mkdir -p "$OUT"
+          cp -f packages/overlay/src-tauri/target/release/opencorvus-overlay* "$OUT/" 2>/dev/null || true
+          find packages/overlay/src-tauri/target/release/bundle -type f -exec cp {} "$OUT/" \; 2>/dev/null || true
+
+      - name: Validate overlay assets
+        run: >
+          bun ./script/check-release-assets.ts overlay
+          --dir packages/overlay/dist-artifacts/${{ matrix.platform }}
+          --platform "${{ matrix.platform }}"
+          --version "${{ steps.version.outputs.version }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: overlay-${{ matrix.platform }}
-          path: packages/overlay/src-tauri/target/release/opencorvus-overlay${{ matrix.ext }}
+          path: packages/overlay/dist-artifacts/${{ matrix.platform }}
           if-no-files-found: error
           retention-days: 3

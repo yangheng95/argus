@@ -9,16 +9,13 @@
 <body data-page="overlay">
 
   <!-- Titlebar (draggable) -->
-  <header class="titlebar" data-tauri-drag-region>
-    <div class="titlebar-brand">
-      <span class="brand-dot"></span>
+  <header class="titlebar">
+    <div class="titlebar-brand" data-tauri-drag-region>
+      <img class="brand-logo" src="opencorvus.svg" alt="OpenCorvus logo">
       <span class="brand-name">OpenCorvus</span>
       <span class="conn-badge" id="connBadge" data-status="offline">Offline</span>
     </div>
     <div class="titlebar-actions">
-      <button class="titlebar-btn" id="btnSessions" title="Sessions">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h10M3 12h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-      </button>
       <button class="titlebar-btn" id="btnSettings" title="Settings">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
       </button>
@@ -28,7 +25,7 @@
       <button class="titlebar-btn" id="btnMinimize" title="Minimize">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
-      <button class="titlebar-btn titlebar-close" id="btnClose" title="Hide">
+      <button class="titlebar-btn titlebar-close" id="btnClose" title="Close">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
     </div>
@@ -55,17 +52,17 @@
       </div>
       <div class="task-controls">
         <div class="engine-bar" id="engineBar" role="group" aria-label="Executor">
-          <button type="button" class="engine-chip" data-executor="opencode">Opencode</button>
+          <button type="button" class="engine-chip" data-executor="opencode">OpenCorvus</button>
           <button type="button" class="engine-chip" data-executor="codex">Codex</button>
           <button type="button" class="engine-chip" data-executor="claude-code">Claude Code</button>
         </div>
-        <span class="engine-status" id="engineStatus">New task: opencode</span>
+        <span class="engine-status" id="engineStatus">New task: OpenCorvus</span>
       </div>
       <div class="task-session-bar">
         <span class="task-session-chip" id="taskSessionChip" data-state="idle">Task session unavailable</span>
         <div class="task-session-actions">
           <button type="button" class="btn btn-ghost mini" id="btnManageTaskSession">Manage Session</button>
-          <button type="button" class="btn btn-ghost mini danger" id="btnDeleteTaskSession">Delete Session</button>
+          <button type="button" class="btn btn-ghost mini danger" id="btnDeleteTaskSession">Delete Task Session</button>
         </div>
       </div>
     </section>
@@ -79,11 +76,12 @@
           <span class="chat-title">Session</span>
           <span class="chat-count" id="chatCount"></span>
         </header>
+        <div class="chat-goals-strip" id="chatGoalsStrip"></div>
         <div class="chat-scroll" id="chatScroll">
           <div class="chat-empty" id="chatEmpty">Session messages appear here</div>
         </div>
         <form class="chat-input" id="chatForm">
-          <textarea class="chat-textarea" id="chatTextarea" placeholder="Send a message..." rows="3"></textarea>
+          <textarea class="chat-textarea" id="chatTextarea" placeholder="Send a message..." rows="2"></textarea>
           <button class="chat-send" type="submit" id="chatSend">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l10-5-3 5 3 5z" fill="currentColor"/></svg>
           </button>
@@ -137,45 +135,59 @@
                 <span class="check-mark"></span>
                 <span class="criteria-name">Syntax Check</span>
                 <span class="criteria-status" data-result="pending"></span>
+                <span class="criteria-result">pending</span>
               </label>
               <label class="criteria-item">
-                <input type="checkbox" data-check="build">
+                <input type="checkbox" checked data-check="build">
                 <span class="check-mark"></span>
                 <span class="criteria-name">Build</span>
                 <span class="criteria-status" data-result="pending"></span>
+                <span class="criteria-result">pending</span>
               </label>
               <label class="criteria-item">
-                <input type="checkbox" data-check="test">
+                <input type="checkbox" checked data-check="test">
                 <span class="check-mark"></span>
                 <span class="criteria-name">Unit Tests</span>
                 <span class="criteria-status" data-result="pending"></span>
+                <span class="criteria-result">pending</span>
               </label>
               <label class="criteria-item">
                 <input type="checkbox" data-check="code_quality">
                 <span class="check-mark"></span>
                 <span class="criteria-name">Code Quality</span>
                 <span class="criteria-status" data-result="pending"></span>
+                <span class="criteria-result">pending</span>
               </label>
               <label class="criteria-item">
                 <input type="checkbox" data-check="code_review">
                 <span class="check-mark"></span>
                 <span class="criteria-name">Code Review</span>
                 <span class="criteria-status" data-result="pending"></span>
-              </label>
-              <label class="criteria-item">
-                <input type="checkbox" data-check="puppeteer">
-                <span class="check-mark"></span>
-                <span class="criteria-name">Visual Check</span>
-                <span class="criteria-status" data-result="pending"></span>
+                <span class="criteria-result">pending</span>
               </label>
               <label class="criteria-item">
                 <input type="checkbox" data-check="judge">
                 <span class="check-mark"></span>
                 <span class="criteria-name">LLM Judge</span>
                 <span class="criteria-status" data-result="pending"></span>
+                <span class="criteria-result">pending</span>
               </label>
             </div>
             <div id="evalBody"></div>
+          </div>
+        </details>
+
+        <!-- Files -->
+        <details class="section" open id="changesSection">
+          <summary class="section-head">
+            <span class="section-icon">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h5l3 3V13.5H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 2.5v3h3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8h4M6 10.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            </span>
+            <span class="section-title">Files</span>
+            <span class="section-badge" id="changesBadge"></span>
+          </summary>
+          <div class="section-body" id="changesBody">
+            <p class="empty-hint">No file changes yet</p>
           </div>
         </details>
 
@@ -248,7 +260,12 @@
                 <div class="extension-block">
                   <div class="extension-head">
                     <span class="field-label">Skills</span>
-                    <button type="button" class="btn btn-ghost mini" id="btnAddSkill">Add Skill</button>
+                    <div class="dialog-actions compact">
+                      <button type="button" class="btn btn-ghost mini" id="btnSkillMarket">Market</button>
+                      <button type="button" class="btn btn-ghost mini" id="btnOpenSkillRoot">Open Dir</button>
+                      <button type="button" class="btn btn-ghost mini" id="btnReloadSkills">Reload</button>
+                      <button type="button" class="btn btn-ghost mini" id="btnAddSkill">Add Skill</button>
+                    </div>
                   </div>
                   <div class="extension-list" id="skillList">
                     <div class="empty-hint">No custom skills configured</div>
@@ -324,6 +341,42 @@
     </div>
   </dialog>
 
+  <!-- Diff Dialog -->
+  <dialog class="dialog dialog-wide" id="diffDialog">
+    <div class="dialog-form diff-dialog-form">
+      <div class="dialog-head">
+        <div class="diff-dialog-head">
+          <h3 class="dialog-title" id="diffDialogTitle">File Diff</h3>
+          <div class="diff-dialog-meta" id="diffDialogMeta"></div>
+        </div>
+        <div class="dialog-actions compact">
+          <button type="button" class="btn btn-ghost" id="btnCloseDiff">Close</button>
+        </div>
+      </div>
+      <div class="diff-preview" id="diffDialogBody">
+        <p class="empty-hint">Select a file to inspect its diff.</p>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- App Dialog -->
+  <dialog class="dialog" id="appDialog">
+    <div class="dialog-form">
+      <div class="dialog-head">
+        <h3 class="dialog-title" id="appDialogTitle">Notice</h3>
+      </div>
+      <div class="app-dialog-body" id="appDialogBody"></div>
+      <label class="field hidden" id="appDialogInputField">
+        <span class="field-label" id="appDialogInputLabel">Input</span>
+        <input class="field-input app-dialog-input" id="appDialogInput" type="text">
+      </label>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost" id="btnAppDialogCancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnAppDialogOk">OK</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Skill Dialog -->
   <dialog class="dialog" id="skillDialog">
     <form class="dialog-form" id="skillForm">
@@ -333,17 +386,44 @@
         <select class="field-input" id="skillType" name="type">
           <option value="path">Folder Path</option>
           <option value="url">Remote URL</option>
+          <option value="git">Git Repository</option>
         </select>
       </label>
       <label class="field">
         <span class="field-label">Value <em>*</em></span>
         <input class="field-input" id="skillValue" name="value" required placeholder="C:\skills or https://example.com/.well-known/skills/">
       </label>
+      <div class="dialog-actions compact">
+        <button type="button" class="btn btn-ghost mini" id="btnPickSkillPath">Browse Folder</button>
+      </div>
+      <label class="field">
+        <span class="field-label">Policy</span>
+        <select class="field-input" id="skillPolicy" name="policy">
+          <option value="ask">Ask on use</option>
+          <option value="allow">Allow</option>
+          <option value="deny">Deny</option>
+        </select>
+      </label>
+      <p class="empty-hint">Default recommendation for imported market skills is <strong>Ask on use</strong>.</p>
       <div class="dialog-actions">
         <button type="button" class="btn btn-ghost" id="btnCancelSkill">Cancel</button>
-        <button type="submit" class="btn btn-primary">Add Skill</button>
+        <button type="submit" class="btn btn-primary">Install Skill</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog class="dialog dialog-wide" id="skillMarketDialog">
+    <div class="dialog-form">
+      <div class="dialog-head">
+        <h3 class="dialog-title">Skill Market</h3>
+        <div class="dialog-actions compact">
+          <button type="button" class="btn btn-ghost" id="btnCloseSkillMarket">Close</button>
+        </div>
+      </div>
+      <div class="session-list-panel" id="skillMarketList">
+        <div class="empty-hint">Loading curated skill markets...</div>
+      </div>
+    </div>
   </dialog>
 
   <!-- MCP Dialog -->
@@ -464,6 +544,18 @@
         <span class="field-label">Username</span>
         <input class="field-input" name="username" id="serverUsername" value="opencorvus" placeholder="opencorvus">
       </label>
+      <div class="field">
+        <span class="field-label">Config Root</span>
+        <div class="field-input config-status-box path-box" id="settingsConfigRoot">—</div>
+      </div>
+      <div class="field">
+        <span class="field-label">OpenCorvus Config</span>
+        <div class="field-input config-status-box path-box" id="settingsConfigFile">—</div>
+      </div>
+      <div class="field">
+        <span class="field-label">Overlay Config</span>
+        <div class="field-input config-status-box path-box" id="settingsOverlayFile">—</div>
+      </div>
       <div class="dialog-actions">
         <button type="button" class="btn btn-ghost" id="btnCancelSettings">Cancel</button>
         <button type="submit" class="btn btn-primary">Save Server</button>
