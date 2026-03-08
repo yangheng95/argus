@@ -25,6 +25,7 @@ struct OverlaySettings {
     username: Option<String>,
     executor: Option<String>,
     always_on_top: Option<bool>,
+    theme: Option<String>,
 }
 
 fn overlay_settings_path() -> Result<PathBuf, String> {

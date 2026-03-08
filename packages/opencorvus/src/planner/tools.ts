@@ -25,15 +25,24 @@ const EXA_BASE_URL = "https://mcp.exa.ai"
 /**
  * Creates the full tool set for the PlannerAgent.
  *
+ * @param taskWorkDir — If provided, overrides Instance.directory for codebase tools.
+ *   Critical for eval tasks where the workspace is in a subdirectory.
+ *
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory
  * - 2 memory tools: memory_search, memory_get
  * - 1 preference tool: preference_list
  * - 1 web search tool: web_search
  */
-export function createPlannerTools() {
-  const codebase = createCodebaseTools()
-  const projectId = Instance.project.id
+export function createPlannerTools(taskWorkDir?: string) {
+  const codebase = createCodebaseTools(taskWorkDir)
+  let projectId: string
+  try {
+    projectId = Instance.project.id
+  } catch {
+    projectId = "default"
+    log.warn("planner tools: Instance.project.id unavailable, using 'default'")
+  }
 
   return {
     // --- Codebase exploration (inherited) ---

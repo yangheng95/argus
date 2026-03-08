@@ -20,7 +20,7 @@ export const ControlLocalAction = z.discriminatedUnion("type", [
 ])
 
 export const ControlMessageResult = z.object({
-  kind: z.enum(["panel_response", "created", "message", "interaction"]),
+  kind: z.enum(["panel_response", "created", "message", "interaction", "progress", "task_list", "cancelled"]),
   message: z.string(),
   task_id: z.string().optional(),
   interaction_id: z.string().optional(),

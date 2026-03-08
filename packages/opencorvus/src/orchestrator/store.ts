@@ -5,6 +5,8 @@ import { EvaluationCheck } from "./model"
 import {
   OrchestratorArtifactTable,
   OrchestratorDeliveryTable,
+  OrchestratorExecutorEventTable,
+  OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
@@ -28,6 +30,8 @@ export type DeliveryRow = typeof OrchestratorDeliveryTable.$inferSelect
 export type ArtifactRow = typeof OrchestratorArtifactTable.$inferSelect
 export type EvaluationRow = typeof OrchestratorEvaluationTable.$inferSelect
 export type ProgressRow = typeof OrchestratorProgressSnapshotTable.$inferSelect
+export type ExecutorSessionRow = typeof OrchestratorExecutorSessionTable.$inferSelect
+export type ExecutorEventRow = typeof OrchestratorExecutorEventTable.$inferSelect
 
 export function requireTask(taskID: string) {
   const row = findTask(taskID)
@@ -118,6 +122,27 @@ export function findEvaluationByRun(runID: string) {
       .where(eq(OrchestratorEvaluationTable.run_id, runID))
       .orderBy(desc(OrchestratorEvaluationTable.time_created))
       .get(),
+  )
+}
+
+export function findExecutorSessionByRun(runID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
+      .get(),
+  )
+}
+
+export function listExecutorEvents(executorSessionID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorEventTable)
+      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
+      .orderBy(OrchestratorExecutorEventTable.sequence)
+      .all(),
   )
 }
 
@@ -482,6 +507,48 @@ export function viewSnapshot(row: ProgressRow) {
     time: {
       created: row.time_created,
       updated: row.time_updated,
+    },
+  }
+}
+
+export function viewExecutorSession(row: ExecutorSessionRow) {
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    runID: row.run_id,
+    provider: row.provider,
+    protocol: row.protocol,
+    protocolVersion: row.protocol_version,
+    transport: row.transport,
+    status: row.status,
+    refs: row.refs ?? undefined,
+    capabilities: row.capabilities ?? undefined,
+    settings: row.settings ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+      started: row.time_started ?? undefined,
+      completed: row.time_completed ?? undefined,
+    },
+  }
+}
+
+export function viewExecutorEvent(row: ExecutorEventRow) {
+  return {
+    id: row.id,
+    executorSessionID: row.executor_session_id,
+    taskID: row.task_id,
+    runID: row.run_id,
+    sequence: row.sequence,
+    kind: row.kind,
+    summary: row.summary ?? undefined,
+    refs: row.refs ?? undefined,
+    payload: row.payload ?? undefined,
+    raw: row.raw ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+      observed: row.time_observed,
     },
   }
 }

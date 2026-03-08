@@ -22,5 +22,7 @@ export {
   OrchestratorDeliveryTable,
   OrchestratorEvaluationTable,
   OrchestratorProgressSnapshotTable,
+  OrchestratorExecutorSessionTable,
+  OrchestratorExecutorEventTable,
   OrchestratorChannelBindingTable,
 } from "../orchestrator/orchestrator.sql"

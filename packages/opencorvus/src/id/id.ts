@@ -29,6 +29,8 @@ export namespace Identifier {
     note: "nte",
     brief: "brf",
     milestone: "mst",
+    executor_session: "exs",
+    executor_event: "exe",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

@@ -6,17 +6,23 @@ import { MessageV2 } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
 import { Skill } from "@/skill"
 import { ToolRegistry } from "@/tool/registry"
-import { Database, eq } from "@/storage/db"
+import { Database, eq, inArray } from "@/storage/db"
 import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
+import { OrchestratorService } from "@/orchestrator/service"
+import { WorkbenchService } from "@/workbench/service"
+import { Instance } from "@/project/instance"
 import { ControlMessageInput, ControlMessageResult } from "./message-schema"
 import { ControlTimeline } from "./timeline"
+import { Log } from "@/util/log"
+
+const log = Log.create({ service: "control-message" })
 
 const ResultSchema = {
   type: "object",
   properties: {
     kind: {
       type: "string",
-      enum: ["panel_response", "created", "message", "interaction"],
+      enum: ["panel_response", "created", "message", "interaction", "progress", "task_list", "cancelled"],
     },
     message: {
       type: "string",
@@ -89,6 +95,19 @@ export namespace ControlMessage {
 }
 
 async function run(input: z.infer<typeof ControlMessageInput>) {
+  // Try deterministic handlers first (status, list, cancel, executor, greetings)
+  const directResult = tryDirectQuery(input)
+  if (directResult) return directResult
+
+  // No task bound → create a new task only if it looks like a real request
+  if (!input.taskID && input.allow_create) {
+    if (!looksLikeTaskRequest(input.text)) {
+      // Short/casual/ambiguous — fall through to LLM for proper handling
+      return fallbackLlmOrReject(input)
+    }
+    return createTaskDirect(input)
+  }
+
   const model = await resolveModel()
   if (!model) {
     return ControlMessageResult.parse({
@@ -160,14 +179,6 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
     "Never bypass the panel tool or rely on local UI shortcuts.",
     "Treat metadata as explicit UI context. When metadata provides concrete IDs or target values, prefer those targets over guessing from the text.",
     "",
-    "IMPORTANT: If the user sends a greeting, casual message, or non-command text (e.g. '你好', 'hello', 'hi'),",
-    "respond with kind 'panel_response' and a friendly message that briefly explains what you can do:",
-    "create tasks, view task status, manage sessions, retry/replan tasks, etc.",
-    "Always respond with something helpful.",
-    "",
-    "If the user's message looks like a task request (asking to build, fix, implement something),",
-    "use the panel tool with action 'create_task' to create a new task from their request.",
-    "",
     `Surface: ${input.surface}`,
     input.surface === "panel"
       ? "Local panel actions are allowed."
@@ -231,4 +242,289 @@ function taskSession(taskID?: string) {
       .get(),
   )
   return row?.sessionID ?? undefined
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic handlers — bypass LLM for status/list/cancel/executor/greetings
+// ---------------------------------------------------------------------------
+
+const STATUS_PATTERN = /^(?:status|progress|进度|状态)\s*(?:of\s+)?(.+)?$/i
+const LIST_PATTERN = /^(?:list\s*tasks?|任务列表|tasks?|show\s*tasks?)$/i
+const CANCEL_PATTERN = /^(?:cancel|取消|abort|stop)\s+(.+)$/i
+const EXECUTOR_PATTERN = /^(?:use|switch\s*(?:to)?|切换(?:到)?|用)\s*(?:executor\s+)?(opencode|codex|claude[- ]code)\b/i
+const EXECUTOR_FULL_PATTERN = /^Use executor (opencode|codex|claude-code) for /i
+const GREETING_PATTERN = /^(?:你好|hi|hello|hey|嗨|哈喽|good\s*(?:morning|afternoon|evening)|早上好|下午好|晚上好|what'?s?\s*up|yo|sup)[\s!！.。?？]*$/i
+
+function tryDirectQuery(
+  input: z.infer<typeof ControlMessageInput>,
+): z.infer<typeof ControlMessageResult> | undefined {
+  const text = input.text.trim()
+
+  // Executor selection: "Use executor codex..." / "切换到 claude-code" / "用 opencode"
+  const executorFullMatch = text.match(EXECUTOR_FULL_PATTERN) || text.match(EXECUTOR_PATTERN)
+  if (executorFullMatch) {
+    const raw = executorFullMatch[1].toLowerCase().replace(/\s+/g, "-")
+    const executor = raw === "claude-code" || raw === "claude code" ? "claude-code" : raw as "opencode" | "codex" | "claude-code"
+    if (["opencode", "codex", "claude-code"].includes(executor)) {
+      return ControlMessageResult.parse({
+        kind: "panel_response",
+        message: `Executor set to ${executor}.`,
+        local_action: { type: "set_executor", executor },
+      })
+    }
+  }
+
+  // Greetings: "你好" / "hello" / "hi"
+  if (GREETING_PATTERN.test(text)) {
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: "你好！有什么可以帮你的？可以直接描述你的需求，我会创建任务来处理。",
+    })
+  }
+
+  // "status <taskID>" or "进度 <taskID>"
+  const statusMatch = text.match(STATUS_PATTERN)
+  if (statusMatch) {
+    const taskID = statusMatch[1]?.trim() || input.taskID
+    if (taskID) return queryTaskProgress(taskID)
+  }
+
+  // "list tasks" or "任务列表"
+  if (LIST_PATTERN.test(text)) {
+    return listActiveTasks()
+  }
+
+  // "cancel <taskID>" or "取消 <taskID>"
+  const cancelMatch = text.match(CANCEL_PATTERN)
+  if (cancelMatch) {
+    const taskID = cancelMatch[1]?.trim() || input.taskID
+    if (taskID) return cancelTaskDirect(taskID)
+  }
+
+  // Status query with bound taskID
+  if (input.taskID && /^(?:status|progress|进度|状态|怎么样了|how.?s it going)$/i.test(text)) {
+    return queryTaskProgress(input.taskID)
+  }
+
+  return undefined
+}
+
+// ---------------------------------------------------------------------------
+// Task request heuristic — avoid creating tasks for non-request messages
+// ---------------------------------------------------------------------------
+
+function looksLikeTaskRequest(text: string) {
+  const trimmed = text.trim()
+  // Too short to be a meaningful task request
+  if (trimmed.length < 8) return false
+  // Single word is almost never a task
+  if (!/\s/.test(trimmed)) return false
+  // Known non-task patterns
+  if (GREETING_PATTERN.test(trimmed)) return false
+  if (EXECUTOR_PATTERN.test(trimmed) || EXECUTOR_FULL_PATTERN.test(trimmed)) return false
+  if (STATUS_PATTERN.test(trimmed)) return false
+  if (LIST_PATTERN.test(trimmed)) return false
+  if (CANCEL_PATTERN.test(trimmed)) return false
+  // Help / meta questions
+  if (/^(?:help|帮助|how\s+(?:do|does|to)|what\s+(?:is|are|can)|怎么用|能做什么|支持什么)[\s?？]*$/i.test(trimmed)) return false
+  return true
+}
+
+async function fallbackLlmOrReject(input: z.infer<typeof ControlMessageInput>) {
+  // Try LLM path for non-task messages (e.g., ambiguous questions)
+  const model = await resolveModel()
+  if (!model) {
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: "请描述具体的任务需求，我会为你创建任务。",
+    })
+  }
+  const session = await Session.create({ title: `Panel control (${input.surface})` })
+  try {
+    const result = await SessionPrompt.prompt({
+      sessionID: session.id,
+      agent: await Agent.defaultAgent(),
+      system: await systemPrompt(input),
+      parts: [{ type: "text", text: buildUserPrompt(input) }],
+      tools: await panelTools(),
+      format: {
+        type: "json_schema",
+        schema: ResultSchema as unknown as Record<string, any>,
+        retryCount: 1,
+      },
+      extra: {
+        surface: input.surface,
+        source: input.source ?? defaultSource(input.surface),
+      },
+    })
+    if (result.info.role === "assistant" && result.info.structured) {
+      return ControlMessageResult.parse(result.info.structured)
+    }
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: textFromMessage(result),
+    })
+  } catch (error) {
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: `请描述具体的任务需求。`,
+    })
+  } finally {
+    await Session.remove(session.id).catch(() => undefined)
+  }
+}
+
+function queryTaskProgress(taskID: string): z.infer<typeof ControlMessageResult> {
+  try {
+    const board = WorkbenchService.compileBoard({ taskID })
+    const lines = [
+      `**Task**: ${board.task.title}`,
+      `**Status**: ${board.task.status}`,
+    ]
+    if (board.run) {
+      lines.push(`**Run**: ${board.run.status} (phase: ${board.run.phase ?? "—"}, retries: ${board.run.retryCount ?? 0})`)
+    }
+    if (board.evaluation) {
+      lines.push(`**Evaluation**: ${board.evaluation.verdict ?? board.evaluation.status}`)
+    }
+    if (board.lanes && board.lanes.length > 0) {
+      const goalLane = board.lanes.find((lane) => lane.id === "goals")
+      if (goalLane && goalLane.cards.length > 0) {
+        const goalLines = goalLane.cards.map(
+          (card) => `- [${card.status}] ${card.title}`,
+        )
+        lines.push("**Goals**:", ...goalLines)
+      }
+    }
+    if (board.task.error) {
+      lines.push(`**Error**: ${board.task.error}`)
+    }
+    return ControlMessageResult.parse({
+      kind: "progress",
+      message: lines.join("\n"),
+      task_id: taskID,
+    })
+  } catch {
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: `Task not found: \`${taskID}\``,
+    })
+  }
+}
+
+function listActiveTasks(): z.infer<typeof ControlMessageResult> {
+  try {
+    const rows = Database.use((db) =>
+      db
+        .select({
+          id: OrchestratorTaskTable.id,
+          title: OrchestratorTaskTable.title,
+          status: OrchestratorTaskTable.status,
+          time_created: OrchestratorTaskTable.time_created,
+        })
+        .from(OrchestratorTaskTable)
+        .where(eq(OrchestratorTaskTable.project_id, Instance.project.id))
+        .all(),
+    )
+    if (rows.length === 0) {
+      return ControlMessageResult.parse({
+        kind: "task_list",
+        message: "No tasks found.",
+      })
+    }
+    const active = rows.filter((t) => !["completed", "failed", "cancelled"].includes(t.status))
+    const lines = [
+      `**Total**: ${rows.length} tasks (${active.length} active)`,
+      "",
+    ]
+    // Show active first, then recent completed/failed (up to 10 total)
+    const sorted = [...active, ...rows.filter((t) => !active.includes(t))].slice(0, 10)
+    for (const t of sorted) {
+      lines.push(`- \`${t.id}\` [${t.status}] ${t.title}`)
+    }
+    return ControlMessageResult.parse({
+      kind: "task_list",
+      message: lines.join("\n"),
+    })
+  } catch (err) {
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: `Failed to list tasks: ${err instanceof Error ? err.message : String(err)}`,
+    })
+  }
+}
+
+function cancelTaskDirect(taskID: string): z.infer<typeof ControlMessageResult> {
+  try {
+    // Synchronous check first
+    const task = Database.use((db) =>
+      db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+    )
+    if (!task) {
+      return ControlMessageResult.parse({
+        kind: "panel_response",
+        message: `Task not found: \`${taskID}\``,
+      })
+    }
+    if (["completed", "failed", "cancelled"].includes(task.status)) {
+      return ControlMessageResult.parse({
+        kind: "panel_response",
+        message: `Task \`${taskID}\` is already ${task.status}.`,
+      })
+    }
+    // Fire-and-forget the async cancel
+    OrchestratorService.cancelTask(taskID).catch((err) =>
+      log.error("cancel task failed", { taskID, error: String(err) }),
+    )
+    return ControlMessageResult.parse({
+      kind: "cancelled",
+      message: `Task \`${taskID}\` cancel requested.`,
+      task_id: taskID,
+    })
+  } catch (err) {
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: `Failed to cancel task: ${err instanceof Error ? err.message : String(err)}`,
+    })
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic task creation — bypass LLM for new task requests
+// ---------------------------------------------------------------------------
+
+async function createTaskDirect(
+  input: z.infer<typeof ControlMessageInput>,
+): Promise<z.infer<typeof ControlMessageResult>> {
+  try {
+    const channelBinding =
+      input.surface !== "panel" && input.channel && input.thread
+        ? {
+            platform: input.surface as "slack" | "telegram" | "discord",
+            channel: input.channel,
+            thread: input.thread,
+            payload: input.metadata ?? {},
+          }
+        : undefined
+    const taskID = await OrchestratorService.createTask({
+      requestID: input.request_id,
+      request: input.text,
+      executor: input.executor,
+      source: input.source ?? defaultSource(input.surface),
+      ...(channelBinding ? { channelBinding } : {}),
+      metadata: input.metadata,
+    })
+    log.info("task created directly", { taskID, surface: input.surface })
+    return ControlMessageResult.parse({
+      kind: "created",
+      message: `Task accepted: \`${taskID}\``,
+      task_id: taskID,
+    })
+  } catch (error) {
+    log.error("direct task creation failed", { error })
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: `Failed to create task: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
 }

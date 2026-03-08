@@ -80,13 +80,6 @@ export namespace EvaluatorService {
           status: "failed",
           evidence: clip(result.output) || `${command} failed`,
         })
-        return {
-          status: "failed" as const,
-          verdict: "rejected" as const,
-          summary: `Evaluation failed at ${label}.`,
-          checks: results,
-          artifacts,
-        }
       }
     }
 
@@ -138,17 +131,24 @@ export namespace EvaluatorService {
       }
     }
 
-    const failed = optional.find((item) => item.outcome === "failed")
     for (const item of optional) {
       results.push(...item.checks)
       artifacts.push(...item.artifacts)
     }
 
-    if (failed) {
+    // Aggregate all failures (core commands + optional checks)
+    const coreFailures = results.filter((item) => item.status === "failed")
+    const optionalFailed = optional.find((item) => item.outcome === "failed")
+    if (coreFailures.length > 0 || optionalFailed) {
+      const failedNames = coreFailures.map((item) => `${item.name} (${item.status})`)
+      const passedNames = results.filter((item) => item.status === "passed").map((item) => item.name)
+      const summaryParts = []
+      if (failedNames.length > 0) summaryParts.push(`Failed: ${failedNames.join(", ")}`)
+      if (passedNames.length > 0) summaryParts.push(`Passed: ${passedNames.join(", ")}`)
       const output = {
         status: "failed" as const,
         verdict: "rejected" as const,
-        summary: failed.summary,
+        summary: summaryParts.join(". ") + ".",
         checks: results,
         artifacts,
       }

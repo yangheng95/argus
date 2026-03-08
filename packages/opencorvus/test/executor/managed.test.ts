@@ -93,6 +93,49 @@ describe("managed coding executor", () => {
     expect(seen).toEqual([undefined])
   })
 
+  test("registerCoding forwards declared tools to the provider", async () => {
+    const seen: unknown[] = []
+    const provider = {
+      ...CodexExecutor.create({
+        responses: {
+          create(input: Record<string, unknown>) {
+            seen.push(input.tools)
+            return feed([
+              { type: "response.completed", response: { id: "resp_tools", output_text: "ok" } },
+            ])
+          },
+        },
+      }),
+    }
+
+    const executor = ExecutorRegistry.registerCoding("codex", provider, {
+      cwd: "/repo",
+      tools: [
+        { type: "function", name: "shell_command", description: "run shell", inputSchema: { type: "object" } },
+      ],
+    })
+
+    const submitted = await executor.submit({
+      sessionID: "session_tools",
+      prompt: "hello",
+    })
+    let status = await executor.status(submitted.queueTaskID)
+    for (let index = 0; index < 10 && status.status !== "completed"; index++) {
+      await Bun.sleep(10)
+      status = await executor.status(submitted.queueTaskID)
+    }
+
+    expect(status.status).toBe("completed")
+    expect(seen).toEqual([[
+      {
+        type: "function",
+        name: "shell_command",
+        description: "run shell",
+        parameters: { type: "object" },
+      },
+    ]])
+  })
+
   test("registerCoding adapts claude provider and supports abort", async () => {
     const stopped: string[] = []
     const provider = ClaudeCodeExecutor.create(() =>
