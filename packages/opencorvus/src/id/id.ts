@@ -28,6 +28,7 @@ export namespace Identifier {
     preference: "prf",
     note: "nte",
     brief: "brf",
+    milestone: "mst",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

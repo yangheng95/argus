@@ -23,9 +23,11 @@ export type OrchestratorTaskStatus =
   | "cancelled"
 
 export type OrchestratorTaskPriority = "high" | "normal" | "low"
+export type OrchestratorExecutor = "opencode" | "codex" | "claude-code"
 export type OrchestratorPlanStatus = "active" | "superseded"
 export type OrchestratorGoalPriority = "blocking" | "advisory"
 export type OrchestratorGoalStatus = "pending" | "passed" | "failed"
+export type OrchestratorMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type OrchestratorRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
 export type OrchestratorRunPhase = "plan" | "execute" | "evaluate" | "replan"
 export type OrchestratorInteractionType = "permission" | "question"
@@ -105,6 +107,29 @@ export const OrchestratorPlanVersionTable = sqliteTable(
   ],
 )
 
+export const OrchestratorMilestoneTable = sqliteTable(
+  "orchestrator_milestone",
+  {
+    id: text().primaryKey(),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    plan_version_id: text()
+      .notNull()
+      .references(() => OrchestratorPlanVersionTable.id, { onDelete: "cascade" }),
+    title: text().notNull(),
+    description: text().notNull().default(""),
+    status: text().notNull().$type<OrchestratorMilestoneStatus>().default("pending"),
+    order_index: integer().notNull().default(0),
+    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_milestone_task_idx").on(table.task_id),
+    index("orchestrator_milestone_plan_idx").on(table.plan_version_id),
+  ],
+)
+
 export const OrchestratorGoalTable = sqliteTable(
   "orchestrator_goal",
   {
@@ -115,6 +140,7 @@ export const OrchestratorGoalTable = sqliteTable(
     plan_version_id: text()
       .notNull()
       .references(() => OrchestratorPlanVersionTable.id, { onDelete: "cascade" }),
+    milestone_id: text().references(() => OrchestratorMilestoneTable.id, { onDelete: "set null" }),
     description: text().notNull(),
     criteria: text().notNull(),
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
@@ -126,6 +152,7 @@ export const OrchestratorGoalTable = sqliteTable(
   (table) => [
     index("orchestrator_goal_task_idx").on(table.task_id),
     index("orchestrator_goal_plan_idx").on(table.plan_version_id),
+    index("orchestrator_goal_milestone_idx").on(table.milestone_id),
   ],
 )
 
@@ -138,7 +165,7 @@ export const OrchestratorRunTable = sqliteTable(
       .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
     plan_version_id: text().references(() => OrchestratorPlanVersionTable.id, { onDelete: "set null" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
-    executor: text().notNull().default("opencode"),
+    executor: text().notNull().$type<OrchestratorExecutor>().default("opencode"),
     status: text().notNull().$type<OrchestratorRunStatus>().default("queued"),
     phase: text().notNull().$type<OrchestratorRunPhase>().default("execute"),
     blocking_reason: text(),

@@ -231,6 +231,7 @@ describe("workbench.service", () => {
         })
         const board = WorkbenchService.compileBoard({ taskID })
         expect(board.lanes.find((lane) => lane.id === "preferences")?.cards.length).toBeGreaterThan(0)
+        expect(board.lanes.find((lane) => lane.id === "staging")?.cards.length).toBeGreaterThan(0)
         expect(board.lanes.find((lane) => lane.id === "notes")?.cards.length).toBeGreaterThan(0)
         expect(board.brief.content).toContain("User preferences:")
       },

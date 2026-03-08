@@ -1,6 +1,5 @@
 import { BusEvent } from "@/bus/bus-event"
 import { Bus } from "@/bus"
-import { type IPty } from "bun-pty"
 import z from "zod"
 import { Identifier } from "../id/id"
 import { Log } from "../util/log"
@@ -15,6 +14,17 @@ export namespace Pty {
   const BUFFER_LIMIT = 1024 * 1024 * 2
   const BUFFER_CHUNK = 64 * 1024
   const encoder = new TextEncoder()
+
+  interface Proc {
+    pid: number
+    write(data: string): void
+    resize(cols: number, rows: number): void
+    kill(signal?: string): void
+    onData(listener: (data: string) => void): { dispose(): void }
+    onExit(listener: (event: { exitCode: number }) => void): { dispose(): void }
+  }
+
+  type Spawn = (command: string, args: string[], input: { name: string; cwd: string; env: Record<string, string> }) => Proc
 
   type Socket = {
     readyState: number
@@ -34,9 +44,98 @@ export namespace Pty {
   }
 
   const pty = lazy(async () => {
-    const { spawn } = await import("bun-pty")
-    return spawn
+    try {
+      const { spawn } = await import("bun-pty")
+      return spawn as Spawn
+    } catch (error) {
+      log.warn("bun-pty unavailable, using pipe fallback", { error })
+      return fallback
+    }
   })
+
+  const fallback: Spawn = (command, args, input) => {
+    const proc = Bun.spawn([command, ...args], {
+      cwd: input.cwd,
+      env: input.env,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+    const data = new Set<(chunk: string) => void>()
+    const exit = new Set<(info: { exitCode: number }) => void>()
+    let buffer = ""
+    let code: number | undefined
+
+    const push = (chunk: string) => {
+      if (!chunk) return
+      if (data.size === 0) {
+        buffer += chunk
+        return
+      }
+      for (const item of data) item(chunk)
+    }
+
+    const stream = async (source: ReadableStream<Uint8Array> | null | undefined) => {
+      if (!source) return
+      const decoder = new TextDecoder()
+      const reader = source.getReader()
+      while (true) {
+        const result = await reader.read()
+        if (result.done) break
+        push(decoder.decode(result.value, { stream: true }))
+      }
+      push(decoder.decode())
+    }
+
+    void Promise.all([stream(proc.stdout), stream(proc.stderr), proc.exited])
+      .then(([, , status]) => {
+        code = status ?? 0
+      })
+      .catch(() => {
+        code = 1
+      })
+      .finally(() => {
+        if (code === undefined) code = 1
+        for (const item of exit) item({ exitCode: code })
+      })
+
+    return {
+      pid: proc.pid,
+      write(value) {
+        proc.stdin?.write(value)
+      },
+      resize() {},
+      kill() {
+        proc.kill()
+      },
+      onData(fn) {
+        data.add(fn)
+        if (buffer) {
+          fn(buffer)
+          buffer = ""
+        }
+        return {
+          dispose() {
+            data.delete(fn)
+          },
+        }
+      },
+      onExit(fn) {
+        if (code !== undefined) {
+          fn({ exitCode: code })
+          return {
+            dispose() {},
+          }
+        }
+        exit.add(fn)
+        return {
+          dispose() {
+            exit.delete(fn)
+          },
+        }
+      },
+    }
+  }
 
   export const Info = z
     .object({
@@ -83,12 +182,25 @@ export namespace Pty {
 
   interface ActiveSession {
     info: Info
-    process: IPty
+    process: Proc
     buffer: string
     bufferCursor: number
     cursor: number
-    subscribers: Map<unknown, Socket>
+    subscribers: Map<symbol, Subscriber>
   }
+
+  interface Subscriber {
+    ws: Socket
+    data: unknown
+    send: Socket["send"]
+    close: Socket["close"]
+  }
+
+  const current = (sub: Subscriber) =>
+    sub.ws.readyState === 1 &&
+    Object.is(sub.ws.data, sub.data) &&
+    sub.ws.send === sub.send &&
+    sub.ws.close === sub.close
 
   const state = Instance.state(
     () => new Map<string, ActiveSession>(),
@@ -97,9 +209,13 @@ export namespace Pty {
         try {
           session.process.kill()
         } catch {}
-        for (const [key, ws] of session.subscribers.entries()) {
+        for (const [key, sub] of session.subscribers.entries()) {
+          if (!current(sub)) {
+            session.subscribers.delete(key)
+            continue
+          }
           try {
-            if (ws.data === key) ws.close()
+            sub.ws.close()
           } catch {
             // ignore
           }
@@ -172,19 +288,14 @@ export namespace Pty {
     ptyProcess.onData((chunk) => {
       session.cursor += chunk.length
 
-      for (const [key, ws] of session.subscribers.entries()) {
-        if (ws.readyState !== 1) {
-          session.subscribers.delete(key)
-          continue
-        }
-
-        if (ws.data !== key) {
+      for (const [key, sub] of session.subscribers.entries()) {
+        if (!current(sub)) {
           session.subscribers.delete(key)
           continue
         }
 
         try {
-          ws.send(chunk)
+          sub.ws.send(chunk)
         } catch {
           session.subscribers.delete(key)
         }
@@ -199,9 +310,13 @@ export namespace Pty {
     ptyProcess.onExit(({ exitCode }) => {
       log.info("session exited", { id, exitCode })
       session.info.status = "exited"
-      for (const [key, ws] of session.subscribers.entries()) {
+      for (const [key, sub] of session.subscribers.entries()) {
+        if (!current(sub)) {
+          session.subscribers.delete(key)
+          continue
+        }
         try {
-          if (ws.data === key) ws.close()
+          sub.ws.close()
         } catch {
           // ignore
         }
@@ -234,9 +349,13 @@ export namespace Pty {
     try {
       session.process.kill()
     } catch {}
-    for (const [key, ws] of session.subscribers.entries()) {
+    for (const [key, sub] of session.subscribers.entries()) {
+      if (!current(sub)) {
+        session.subscribers.delete(key)
+        continue
+      }
       try {
-        if (ws.data === key) ws.close()
+        sub.ws.close()
       } catch {
         // ignore
       }
@@ -268,16 +387,23 @@ export namespace Pty {
     }
     log.info("client connected to session", { id })
 
-    // Use ws.data as the unique key for this connection lifecycle.
-    // If ws.data is undefined, fallback to ws object.
-    const connectionKey = ws.data && typeof ws.data === "object" ? ws.data : ws
+    for (const other of state().values()) {
+      for (const [key, sub] of other.subscribers.entries()) {
+        if (sub.ws !== ws) continue
+        other.subscribers.delete(key)
+      }
+    }
 
-    // Optionally cleanup if the key somehow exists
-    session.subscribers.delete(connectionKey)
-    session.subscribers.set(connectionKey, ws)
+    const key = Symbol(id)
+    session.subscribers.set(key, {
+      ws,
+      data: ws.data,
+      send: ws.send,
+      close: ws.close,
+    })
 
     const cleanup = () => {
-      session.subscribers.delete(connectionKey)
+      session.subscribers.delete(key)
     }
 
     const start = session.bufferCursor

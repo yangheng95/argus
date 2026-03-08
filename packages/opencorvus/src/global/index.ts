@@ -5,6 +5,7 @@ import os from "os"
 import { Filesystem } from "../util/filesystem"
 
 const app = "opencorvus"
+const portableRoot = process.env.OPENCORVUS_HOME?.trim()
 
 function resolveHome() {
   if (process.env.OPENCORVUS_TEST_HOME) return process.env.OPENCORVUS_TEST_HOME
@@ -20,10 +21,18 @@ const isWin = process.platform === "win32"
 const winLocal = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local")
 const winRoaming = process.env.APPDATA || path.join(home, "AppData", "Roaming")
 
-const data = path.join(xdgData || (isWin ? winLocal : path.join(home, ".local", "share")), app)
-const cache = path.join(xdgCache || (isWin ? winLocal : path.join(home, ".cache")), app)
-const config = path.join(xdgConfig || (isWin ? winRoaming : path.join(home, ".config")), app)
-const state = path.join(xdgState || (isWin ? winLocal : path.join(home, ".local", "state")), app)
+const data = portableRoot
+  ? path.join(portableRoot, "data")
+  : path.join(xdgData || (isWin ? winLocal : path.join(home, ".local", "share")), app)
+const cache = portableRoot
+  ? path.join(portableRoot, "cache")
+  : path.join(xdgCache || (isWin ? winLocal : path.join(home, ".cache")), app)
+const config = portableRoot
+  ? path.join(portableRoot, "config")
+  : path.join(xdgConfig || (isWin ? winRoaming : path.join(home, ".config")), app)
+const state = portableRoot
+  ? path.join(portableRoot, "state")
+  : path.join(xdgState || (isWin ? winLocal : path.join(home, ".local", "state")), app)
 
 export namespace Global {
   export const Path = {

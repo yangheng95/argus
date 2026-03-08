@@ -5,6 +5,7 @@ import { findTask } from "@/orchestrator/store"
 import { Database, and, eq } from "@/storage/db"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { slackConfig } from "./slack-config"
 
 const log = Log.create({ service: "channel.slack-mirror" })
 
@@ -13,8 +14,9 @@ export namespace SlackMirror {
     booted: false,
   }))
 
-  export function init() {
-    if (!process.env.SLACK_BOT_TOKEN) return
+  export async function init() {
+    const slack = await slackConfig()
+    if (!slack.enabled || !slack.botToken) return
     const current = state()
     if (current.booted) return
     current.booted = true
@@ -26,7 +28,9 @@ function subscribe() {
   const defs = [
     OrchestratorEvent.TaskCreated,
     OrchestratorEvent.TaskUpdated,
+    OrchestratorEvent.PlanCreated,
     OrchestratorEvent.PlanActivated,
+    OrchestratorEvent.RunCreated,
     OrchestratorEvent.RunUpdated,
     OrchestratorEvent.InteractionRequested,
     OrchestratorEvent.InteractionResolved,
@@ -113,16 +117,25 @@ function eventText(taskID: string, event: { type: string; properties: Record<str
   if (event.type === OrchestratorEvent.DeliveryReady.type) {
     return `Delivery ready: ${String(event.properties.summary ?? "")}`.trim()
   }
-  if (event.type === OrchestratorEvent.GoalPassed.type || event.type === OrchestratorEvent.GoalFailed.type) {
-    return String(event.properties.summary ?? event.type)
+  if (event.type === OrchestratorEvent.GoalPassed.type) {
+    return `Goal passed: ${String(event.properties.summary ?? "")}`.trim()
+  }
+  if (event.type === OrchestratorEvent.GoalFailed.type) {
+    return `Goal failed: ${String(event.properties.summary ?? "")}`.trim()
   }
   if (event.type === OrchestratorEvent.RunUpdated.type) {
     const status = String(event.properties.status ?? "")
     if (!["blocked", "failed", "completed", "aborted"].includes(status)) return ""
     return `Run ${status}: ${String(event.properties.summary ?? "")}`.trim()
   }
+  if (event.type === OrchestratorEvent.PlanCreated.type) {
+    return `Plan created: ${String(event.properties.summary ?? "")}`.trim()
+  }
   if (event.type === OrchestratorEvent.PlanActivated.type) {
     return `Plan updated: ${String(event.properties.summary ?? "")}`.trim()
+  }
+  if (event.type === OrchestratorEvent.RunCreated.type) {
+    return `Run started: ${String(event.properties.summary ?? "")}`.trim()
   }
   if (event.type === OrchestratorEvent.TaskUpdated.type) {
     const status = String(event.properties.status ?? "")
@@ -133,7 +146,7 @@ function eventText(taskID: string, event: { type: string; properties: Record<str
 }
 
 async function postMessage(input: { channel: string; text: string; thread?: string }) {
-  const token = process.env.SLACK_BOT_TOKEN
+  const token = (await slackConfig()).botToken
   if (!token) return
   const response = await fetch("https://slack.com/api/chat.postMessage", {
     method: "POST",

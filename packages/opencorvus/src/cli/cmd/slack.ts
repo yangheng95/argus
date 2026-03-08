@@ -1,4 +1,5 @@
 import { SlackGateway } from "@/channel/slack"
+import { slackConfig } from "@/channel/slack-config"
 import { cmd } from "./cmd"
 
 export const SlackCommand = cmd({
@@ -19,12 +20,13 @@ export const SlackCommand = cmd({
         describe: "Slack signing secret (defaults to SLACK_SIGNING_SECRET)",
       }),
   handler: async (args) => {
-    const token = args.botToken ?? process.env.SLACK_BOT_TOKEN
-    const appToken = args.appToken ?? process.env.SLACK_APP_TOKEN
-    const signingSecret = args.signingSecret ?? process.env.SLACK_SIGNING_SECRET
+    const slack = await slackConfig()
+    const token = args.botToken ?? slack.botToken
+    const appToken = args.appToken ?? slack.appToken
+    const signingSecret = args.signingSecret ?? slack.signingSecret
 
-    if (!token) throw new Error("SLACK_BOT_TOKEN is required")
-    if (!appToken) throw new Error("SLACK_APP_TOKEN is required")
+    if (!token) throw new Error("Slack bot token is required")
+    if (!appToken) throw new Error("Slack app token is required")
 
     const gateway = new SlackGateway({
       directory: process.cwd(),

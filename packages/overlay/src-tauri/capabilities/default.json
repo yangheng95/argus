@@ -1,22 +1,19 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capabilities for OpenCorvus overlay windows",
-  "windows": ["overlay", "window-highlight", "confirm", "console"],
+  "description": "Default capability for the overlay panel",
+  "windows": ["main"],
   "permissions": [
+    "core:default",
     "core:window:default",
     "core:window:allow-show",
     "core:window:allow-hide",
-    "core:window:allow-set-position",
-    "core:window:allow-set-size",
-    "core:window:allow-set-focus",
     "core:window:allow-close",
-    "core:event:default",
-    "core:event:allow-listen",
-    "core:event:allow-emit",
-    "core:event:allow-emit-to",
-    "core:webview:default",
-    "core:app:default",
-    "core:tray:default"
+    "core:window:allow-minimize",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-visible",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-always-on-top",
+    "dialog:default",
+    "shell:default"
   ]
 }

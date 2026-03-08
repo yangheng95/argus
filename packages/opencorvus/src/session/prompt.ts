@@ -40,7 +40,6 @@ import { PermissionNext } from "@/permission/next"
 import { SessionStatus } from "./status"
 import { LLM } from "./llm"
 import { iife } from "@/util/iife"
-import { GuiState } from "@/tool/gui-state"
 import { Shell } from "@/shell/shell"
 import { Truncate } from "@/tool/truncation"
 import { MemoryInjection } from "@/memory/injection"
@@ -692,27 +691,6 @@ export namespace SessionPrompt {
 
     await Plugin.trigger("experimental.chat.messages.transform", {}, { messages: input.msgs })
 
-    if (GuiState.get().isGuiSession) {
-      GuiState.setStep(input.step)
-      const actionSummary = GuiState.buildActionSummary()
-      const repetitionAlert = GuiState.checkRepetition()
-      const verificationAlert = GuiState.verificationAlert()
-      if (actionSummary || repetitionAlert || verificationAlert) {
-        const match = input.msgs.findLast((m) => m.info.role === "user")
-        if (match) {
-          const guiContext = [actionSummary, repetitionAlert, verificationAlert].filter(Boolean).join("\n\n")
-          match.parts.push({
-            id: Identifier.ascending("part"),
-            messageID: match.info.id,
-            sessionID: match.info.sessionID,
-            type: "text",
-            text: guiContext,
-            synthetic: true,
-          } as MessageV2.TextPart)
-        }
-      }
-    }
-
     const system = [...(await SystemPrompt.environment(input.model)), ...(await InstructionPrompt.system())]
     const format = input.lastUser.format ?? { type: "text" }
     if (format.type === "json_schema") {
@@ -785,20 +763,6 @@ export namespace SessionPrompt {
         totalTokensEst: systemTokensEst + contentTokensEst + imageTokensEst,
       })
 
-      const guiS = GuiState.get()
-      if (guiS.isGuiSession) {
-        log.info("gui-context-diagnostics", {
-          step: input.step,
-          isGuiSession: true,
-          actionCount: guiS.actions.length,
-          screenshotCount: guiS.screenshots.size,
-          descriptionsStored: Array.from(guiS.screenshots.values()).filter((s) => s.description).length,
-          lastScreenshotHash: guiS.lastScreenshotHash?.substring(0, 8) ?? "none",
-          consecutiveNoChange: guiS.repetition.consecutiveNoChange,
-          recentClickCoords: guiS.repetition.recentClickCoords.length,
-          currentStep: guiS.currentStep,
-        })
-      }
     }
 
     const result = await processor.process({
@@ -889,7 +853,6 @@ export namespace SessionPrompt {
             })
             if (abort.aborted) break
 
-            GuiState.markNewTask()
             step = 0
             continue
           }

@@ -15,7 +15,6 @@ import { Config } from "@/config/config"
 import { SessionCompaction } from "./compaction"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
-import { GuiState } from "@/tool/gui-state"
 
 export namespace SessionProcessor {
   const DOOM_LOOP_THRESHOLD = 3
@@ -152,11 +151,7 @@ export namespace SessionProcessor {
                     const parts = await MessageV2.parts(input.assistantMessage.id)
                     const lastThree = parts.slice(-DOOM_LOOP_THRESHOLD)
 
-                    const guiSession = GuiState.get().isGuiSession
-                    const guiTool =
-                      value.toolName === "screen" || value.toolName === "input" || value.toolName === "vision_analyze"
                     const exactMatch =
-                      (!guiSession || !guiTool) &&
                       lastThree.length === DOOM_LOOP_THRESHOLD &&
                       lastThree.every(
                         (p) =>
@@ -166,9 +161,7 @@ export namespace SessionProcessor {
                           JSON.stringify(p.state.input) === JSON.stringify(value.input),
                       )
 
-                    const guiRepetition = guiSession && GuiState.checkRepetition()
-
-                    if (exactMatch || guiRepetition) {
+                    if (exactMatch) {
                       const agent = await Agent.get(input.assistantMessage.agent)
                       await PermissionNext.ask({
                         permission: "doom_loop",
@@ -177,7 +170,6 @@ export namespace SessionProcessor {
                         metadata: {
                           tool: value.toolName,
                           input: value.input,
-                          ...(guiRepetition ? { guiRepetition: true } : {}),
                         },
                         always: [value.toolName],
                         ruleset: agent.permission,
@@ -340,15 +332,6 @@ export namespace SessionProcessor {
                       end: Date.now(),
                     }
                     if (value.providerMetadata) currentText.metadata = value.providerMetadata
-
-                    // Capture GUI screenshot description
-                    const guiS = GuiState.get()
-                    if (guiS.isGuiSession && guiS.lastScreenshotHash) {
-                      const trimmed = currentText.text.trim()
-                      if (trimmed.length > 30) {
-                        GuiState.captureDescription(guiS.lastScreenshotHash, trimmed)
-                      }
-                    }
 
                     await Session.updatePart(currentText)
                   }

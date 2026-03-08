@@ -1,7 +1,8 @@
 import z from "zod"
 import { Bus } from "@/bus"
 import { EvaluatorService } from "@/evaluator/service"
-import { OpencodeExecutor } from "@/executor/opencode"
+import { ExecutorNotConfiguredError } from "@/executor/compat"
+import { ExecutorRegistry } from "@/executor/registry"
 import { PermissionNext } from "@/permission/next"
 import { PlannerService } from "@/planner/service"
 import { Instance } from "@/project/instance"
@@ -19,6 +20,7 @@ import {
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
+  OrchestratorMilestoneTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
   OrchestratorRunTable,
@@ -32,6 +34,8 @@ import {
   RejectInteractionInput,
   ReplyInteractionInput,
   TaskMessageInput,
+  UpdateGoalInput,
+  UpdatePreferenceInput,
 } from "./model"
 import {
   DEFAULT_MAX_REPLANS,
@@ -66,6 +70,8 @@ import {
   listGoals,
   listGoalsByPlan,
   listInteractions,
+  listMilestones,
+  listMilestonesByPlan,
   listSnapshots,
   requireInteraction,
   requireRun,
@@ -75,6 +81,7 @@ import {
   viewEvaluation,
   viewGoal,
   viewInteraction,
+  viewMilestone,
   viewPlan,
   viewRun,
   viewSnapshot,
@@ -115,7 +122,9 @@ export namespace OrchestratorService {
       if (existing) return existing.id
     }
     const title = input.title?.trim() || deriveTitle(input.request)
-    const planDraft = PlannerService.initial({
+    const executor = input.executor ?? "opencode"
+    ExecutorRegistry.require(executor)
+    const planDraft = await PlannerService.initial({
       title,
       request: input.request,
       goals: input.goals,
@@ -167,18 +176,82 @@ export namespace OrchestratorService {
             time_updated: now,
           })
           .run()
+        const milestones = input.milestones ?? []
+        let goalIndex = 0
+        for (const [msIndex, ms] of milestones.entries()) {
+          const msID = Identifier.ascending("milestone")
+          db.insert(OrchestratorMilestoneTable)
+            .values({
+              id: msID,
+              task_id: taskID,
+              plan_version_id: planID,
+              title: ms.title,
+              description: ms.description ?? "",
+              status: "pending",
+              order_index: msIndex,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          for (const goal of ms.goals) {
+            db.insert(OrchestratorGoalTable)
+              .values({
+                id: Identifier.ascending("goal"),
+                task_id: taskID,
+                plan_version_id: planID,
+                milestone_id: msID,
+                description: goal.description,
+                criteria: goal.criteria,
+                metadata: goal.metadata ?? inferGoalMetadata(goal.description, goal.criteria),
+                priority: goal.priority ?? "blocking",
+                status: "pending",
+                order_index: goalIndex++,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          }
+        }
+        // Create milestones from agent output if available
+        const agentMilestones = (planDraft.metadata as Record<string, unknown>).milestones as
+          | Array<{ title: string; description?: string; goal_indices: number[] }>
+          | undefined
+        const goalToMilestoneID = new Map<number, string>()
+        if (agentMilestones && agentMilestones.length > 0 && milestones.length === 0) {
+          for (const [msIdx, ms] of agentMilestones.entries()) {
+            const msID = Identifier.ascending("milestone")
+            db.insert(OrchestratorMilestoneTable)
+              .values({
+                id: msID,
+                task_id: taskID,
+                plan_version_id: planID,
+                title: ms.title,
+                description: ms.description ?? "",
+                status: "pending",
+                order_index: msIdx,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+            for (const goalIdx of ms.goal_indices) {
+              goalToMilestoneID.set(goalIdx, msID)
+            }
+          }
+        }
+
         for (const [index, goal] of planDraft.goals.entries()) {
           db.insert(OrchestratorGoalTable)
             .values({
               id: Identifier.ascending("goal"),
               task_id: taskID,
               plan_version_id: planID,
+              milestone_id: goalToMilestoneID.get(index) ?? null,
               description: goal.description,
               criteria: goal.criteria,
               metadata: goal.metadata ?? inferGoalMetadata(goal.description, goal.criteria),
               priority: goal.priority ?? "blocking",
               status: "pending",
-              order_index: index,
+              order_index: milestones.length > 0 ? goalIndex + index : index,
               time_created: now,
               time_updated: now,
             })
@@ -190,7 +263,7 @@ export namespace OrchestratorService {
             task_id: taskID,
             plan_version_id: planID,
             session_id: session.id,
-            executor: "opencode",
+            executor,
             status: "queued",
             phase: "execute",
             retry_count: 0,
@@ -257,10 +330,12 @@ export namespace OrchestratorService {
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     const delivery = run ? findDeliveryByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
+    const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
     return {
       task: viewTask(task),
       plan: plan ? viewPlan(plan) : undefined,
       goals: (plan ? listGoalsByPlan(plan.id) : listGoals(taskID)).map(viewGoal),
+      milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
       run: run ? viewRun(run) : undefined,
       pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),
       delivery: delivery ? viewDelivery(delivery) : undefined,
@@ -368,6 +443,53 @@ export namespace OrchestratorService {
     requireTask(taskID)
     return listInteractions(taskID).map(viewInteraction)
   }
+
+  export async function updatePreference(preferenceID: string, input: z.input<typeof UpdatePreferenceInput>) {
+    const body = UpdatePreferenceInput.parse(input)
+    WorkbenchService.updatePreference({
+      preferenceID,
+      key: body.key,
+      value: body.value,
+    })
+    return true
+  }
+
+  export async function deletePreference(preferenceID: string) {
+    WorkbenchService.deletePreference(preferenceID)
+    return true
+  }
+
+  export async function updateGoal(goalID: string, input: z.input<typeof UpdateGoalInput>) {
+    const body = UpdateGoalInput.parse(input)
+    const row = Database.use((db) =>
+      db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).get(),
+    )
+    if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
+    Database.use((db) =>
+      db
+        .update(OrchestratorGoalTable)
+        .set({
+          description: body.description,
+          criteria: body.criteria,
+          metadata: inferGoalMetadata(body.description, body.criteria),
+          time_updated: Date.now(),
+        })
+        .where(eq(OrchestratorGoalTable.id, goalID))
+        .run(),
+    )
+    return true
+  }
+
+  export async function deleteGoal(goalID: string) {
+    const row = Database.use((db) =>
+      db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).get(),
+    )
+    if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
+    Database.use((db) =>
+      db.delete(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).run(),
+    )
+    return true
+  }
 }
 
 function recoverTaskByRequest(requestID: string, error: unknown) {
@@ -420,7 +542,7 @@ export namespace OrchestratorService {
     const task = requireTask(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     if (run) {
-      await OpencodeExecutor.abort({
+      await ExecutorRegistry.require(run.executor).abort({
         sessionID: run.session_id ?? undefined,
         queueTaskID: run.executor_ref?.queue_task_id,
       })
@@ -448,6 +570,30 @@ export namespace OrchestratorService {
       "Task cancelled",
     )
     return true
+  }
+
+  export async function retryTask(taskID: string) {
+    const task = requireTask(taskID)
+    if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
+      throw new Error(`task ${taskID} is already active`)
+    }
+    const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
+    if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
+    const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Retry requested by operator."
+    const nextRunID = await OrchestratorRuntime.queueRetry(task, run, summary, hooks())
+    return viewRun(requireRun(nextRunID))
+  }
+
+  export async function replanTask(taskID: string) {
+    const task = requireTask(taskID)
+    if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
+      throw new Error(`task ${taskID} is already active`)
+    }
+    const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
+    if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
+    const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Replan requested by operator."
+    const nextRunID = await OrchestratorRuntime.queueReplan(task, run, summary, hooks())
+    return viewRun(requireRun(nextRunID))
   }
 
   export async function recordOperatorNote(taskID: string, note: string) {
@@ -514,7 +660,7 @@ export namespace OrchestratorService {
 
   export async function abortRun(runID: string) {
     const run = requireRun(runID)
-    await OpencodeExecutor.abort({
+    await ExecutorRegistry.require(run.executor).abort({
       sessionID: run.session_id ?? undefined,
       queueTaskID: run.executor_ref?.queue_task_id,
     })
@@ -536,6 +682,8 @@ export namespace OrchestratorService {
   }
 }
 
+export { ExecutorNotConfiguredError }
+
 function slackUser(metadata: Record<string, unknown>) {
   const slack = metadata.slack
   if (!slack || typeof slack !== "object") return undefined
@@ -551,6 +699,11 @@ function inferGoalMetadata(description: string, criteria: string) {
   if (text.includes("test")) selectors.add("test")
   if (text.includes("lint")) selectors.add("lint")
   if (text.includes("verify")) selectors.add("verify_cmd")
+  if (/(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(text)) selectors.add("ui_review")
+  if (/(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(text)) selectors.add("code_quality")
+  if (/\bcr\b|code review|审查|代码评审|review finding|review comment/.test(text)) selectors.add("code_review")
+  if (/(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(text)) selectors.add("dead_code_review")
+  if (/(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(text)) selectors.add("startup")
   if (selectors.size === 0) return undefined
   return {
     check_selector: [...selectors],

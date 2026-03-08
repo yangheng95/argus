@@ -14,6 +14,7 @@ export { WorkbenchPreferenceTable, WorkbenchTaskNoteTable, WorkbenchBriefSnapsho
 export {
   OrchestratorTaskTable,
   OrchestratorPlanVersionTable,
+  OrchestratorMilestoneTable,
   OrchestratorGoalTable,
   OrchestratorRunTable,
   OrchestratorInteractionRequestTable,

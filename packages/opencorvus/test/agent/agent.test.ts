@@ -39,6 +39,8 @@ test("build agent has correct default properties", async () => {
       expect(build?.native).toBe(true)
       expect(evalPerm(build, "edit")).toBe("allow")
       expect(evalPerm(build, "bash")).toBe("allow")
+      expect(evalPerm(build, "todoread")).toBe("allow")
+      expect(evalPerm(build, "todowrite")).toBe("allow")
     },
   })
 })

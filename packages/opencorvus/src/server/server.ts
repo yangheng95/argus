@@ -17,6 +17,7 @@ import { AuthRoutes } from "./routes/auth"
 import { AppDocumentation, AppRoutes } from "./routes/app"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
+import { OverlayUI } from "./overlay-ui"
 
 // @ts-ignore This global is needed to prevent ai-sdk from logging warnings to stdout https://github.com/vercel/ai/blob/2dc67e0ef538307f21368db32d5a12345d98831b/packages/ai/src/logger/log-warnings.ts#L85
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -32,11 +33,22 @@ export namespace Server {
   }
 
   function decodeDirectory(raw: string) {
+    let dir: string
     try {
-      return decodeURIComponent(raw)
+      dir = decodeURIComponent(raw)
     } catch {
-      return raw
+      dir = raw
     }
+    // Convert MINGW/MSYS-style paths to Windows paths.
+    // MINGW shells set paths like /d/foo/bar which Node's path.resolve
+    // misinterprets as D:\d\foo\bar (relative to drive root) instead of D:\foo\bar.
+    if (process.platform === "win32") {
+      const m = dir.match(/^\/([a-zA-Z])(\/.*)?$/)
+      if (m) {
+        dir = `${m[1].toUpperCase()}:${m[2] || "\\"}`
+      }
+    }
+    return dir
   }
 
   const app = new Hono()
@@ -107,6 +119,8 @@ export namespace Server {
             },
           }),
         )
+        .route("/ui", OverlayUI.routes())
+        .get("/", (c) => c.redirect("/ui/"))
         .route("/global", GlobalRoutes())
         .route("/auth", AuthRoutes())
         .use(async (c, next) => {

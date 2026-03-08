@@ -15,10 +15,6 @@ process.chdir(dir)
 import { Script } from "@opencorvus-ai/script"
 import pkg from "../package.json"
 
-const protocol = path.resolve(dir, "..", "..", "scripts", "generate-overlay-protocol.ts")
-await $`${process.execPath} ${protocol}`
-console.log("Generated overlay protocol")
-
 const modelsUrl = process.env.OPENCORVUS_MODELS_URL || "https://models.dev"
 // Fetch and generate models.dev snapshot
 const modelsData = process.env.MODELS_DEV_API_JSON
@@ -108,7 +104,7 @@ if (Object.keys(embeddedEnv).length > 0) {
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
 if (onefileFlag) {
-  console.log("onefile mode enabled: embedding overlay sidecar into main binary")
+  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/bin/ui/")
 }
 
 const allTargets: {
@@ -182,117 +178,18 @@ const runtimeName = (item: (typeof allTargets)[number]) =>
     .join("-")
 type Target = (typeof allTargets)[number]
 
-const overlayRequired = process.env.OPENCORVUS_OVERLAY_REQUIRED !== "0"
-const overlayDir = process.env.OPENCORVUS_OVERLAY_BIN_DIR?.trim()
-const overlayGlobal = process.env.OPENCORVUS_OVERLAY_BIN?.trim()
-const overlayManifest = path.resolve(dir, "..", "overlay", "src-tauri", "Cargo.toml")
-let overlayBuildAttempted = false
-
-function overlayOS(item: Target) {
-  return item.os === "win32" ? "windows" : item.os
-}
-
-function overlayExt(item: Target) {
-  return item.os === "win32" ? ".exe" : ""
-}
-
-function overlayBaseName(item: Target) {
-  return `opencorvus-overlay${overlayExt(item)}`
-}
-
-function overlayLabel(item: Target) {
-  return [overlayOS(item), item.arch, item.abi].filter(Boolean).join("-")
-}
-
-function overlayEnvKey(item: Target) {
-  return `OPENCORVUS_OVERLAY_BIN_${[overlayOS(item), item.arch, item.abi].filter(Boolean).join("_").toUpperCase()}`
-}
-
-function overlayNames(item: Target) {
-  const ext = overlayExt(item)
-  const os = overlayOS(item)
-  return [
-    ...new Set([
-      `opencorvus-overlay-${os}-${item.arch}${item.abi ? `-${item.abi}` : ""}${ext}`,
-      `opencorvus-overlay-${os}-${item.arch}${ext}`,
-      overlayBaseName(item),
-    ]),
-  ]
-}
-
-function localOverlay(item: Target) {
-  if (item.os !== process.platform || item.arch !== process.arch) return false
-  if (item.abi !== undefined) return false
-  return true
-}
-
-async function ensureOverlayBuilt() {
-  if (overlayBuildAttempted) return
-  overlayBuildAttempted = true
-  const cargo = Bun.which("cargo")
-  if (!cargo) return
-  console.log("building local overlay sidecar")
-  await $`${cargo} build --release --manifest-path ${overlayManifest}`
-}
-
-async function resolveOverlay(item: Target) {
-  const key = overlayEnvKey(item)
-  const exact = process.env[key]?.trim()
-  if (exact) {
-    if (!fs.existsSync(exact)) {
-      throw new Error(`Overlay sidecar from ${key} does not exist: ${exact}`)
-    }
-    return exact
-  }
-
-  if (overlayGlobal) {
-    if (!fs.existsSync(overlayGlobal)) {
-      throw new Error(`Overlay sidecar from OPENCORVUS_OVERLAY_BIN does not exist: ${overlayGlobal}`)
-    }
-    return overlayGlobal
-  }
-
-  if (overlayDir) {
-    for (const name of overlayNames(item)) {
-      const candidate = path.resolve(overlayDir, name)
-      if (fs.existsSync(candidate)) return candidate
-    }
-  }
-
-  if (!localOverlay(item)) return null
-
-  const ext = overlayExt(item)
-  const release = path.resolve(dir, "..", "overlay", "src-tauri", "target", "release", `opencorvus-overlay${ext}`)
-  const debug = path.resolve(dir, "..", "overlay", "src-tauri", "target", "debug", `opencorvus-overlay${ext}`)
-  if (fs.existsSync(release)) return release
-  if (fs.existsSync(debug)) return debug
-
-  await ensureOverlayBuilt()
-  if (fs.existsSync(release)) return release
-  if (fs.existsSync(debug)) return debug
-  return null
-}
-
-async function installOverlay(item: Target, name: string) {
-  const from = await resolveOverlay(item)
-  if (!from) {
-    const key = overlayEnvKey(item)
-    const hint = [
-      `missing overlay sidecar for target ${overlayLabel(item)}`,
-      `set ${key}=<path> or set OPENCORVUS_OVERLAY_BIN_DIR=<dir> with one of: ${overlayNames(item).join(", ")}`,
-      `or disable strict mode with OPENCORVUS_OVERLAY_REQUIRED=0`,
-    ].join(" | ")
-    if (overlayRequired) throw new Error(hint)
-    console.warn(hint)
+async function installOverlay(_item: Target, name: string) {
+  const overlayDir = path.resolve(dir, "../overlay/src")
+  const destDir = path.join(dir, "dist", name, "bin", "ui")
+  const files = ["index.html", "app.js", "styles.css"]
+  const exists = files.every((f) => fs.existsSync(path.join(overlayDir, f)))
+  if (!exists) {
+    console.log(`  overlay: skipping (no frontend assets in ${overlayDir})`)
     return
   }
-
-  const file = path.join(dir, "dist", name, "bin", overlayBaseName(item))
-  await fs.promises.copyFile(from, file)
-  if (item.os !== "win32") {
-    await fs.promises.chmod(file, 0o755)
-  }
-  console.log(`embedded overlay ${path.basename(from)} -> dist/${name}/bin/${overlayBaseName(item)}`)
+  await fs.promises.mkdir(destDir, { recursive: true })
+  await Promise.all(files.map((f) => fs.promises.copyFile(path.join(overlayDir, f), path.join(destDir, f))))
+  console.log(`  overlay: installed ${files.length} UI files`)
 }
 
 // Dev and CI builds only need a native binary; full matrix is for release packaging.
@@ -364,18 +261,6 @@ for (const item of targets) {
   }
   if (executablePath) compile.executablePath = executablePath
 
-  const overlaySource = onefileFlag ? await resolveOverlay(item) : null
-  if (onefileFlag && !overlaySource) {
-    throw new Error(`onefile mode requires overlay sidecar for target ${overlayLabel(item)}`)
-  }
-  const overlayBytes = overlaySource ? await Bun.file(overlaySource).bytes() : undefined
-  const embeddedOverlayDefine = overlayBytes
-    ? JSON.stringify(Buffer.from(overlayBytes).toString("base64"))
-    : "undefined"
-  const embeddedOverlayHashDefine = overlayBytes
-    ? JSON.stringify(Bun.hash.xxHash32(overlayBytes).toString(16).padStart(8, "0"))
-    : "undefined"
-
   await Bun.build({
     conditions: ["browser"],
     tsconfig: "./tsconfig.json",
@@ -391,13 +276,11 @@ for (const item of targets) {
       OPENCORVUS_CHANNEL: `'${Script.channel}'`,
       OPENCORVUS_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
       OPENCORVUS_EMBEDDED_ENV: embeddedEnvDefine,
-      OPENCORVUS_EMBEDDED_OVERLAY_B64: embeddedOverlayDefine,
-      OPENCORVUS_EMBEDDED_OVERLAY_HASH: embeddedOverlayHashDefine,
     },
   })
 
   await $`rm -rf ./dist/${name}/bin/tui`
-  if (!onefileFlag) await installOverlay(item, name)
+  await installOverlay(item, name)
   if (binaryOnly) {
     const files = await fs.promises.readdir(path.join(dir, "dist", name, "bin"))
     await Promise.all(
@@ -429,7 +312,14 @@ if (Script.release) {
       await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
     }
   }
-  await $`gh release upload v${Script.version} ./dist/*.zip ./dist/*.tar.gz --clobber --repo ${process.env.GH_REPO}`
+  const files = [
+    ...new Bun.Glob("dist/*.zip").scanSync("."),
+    ...new Bun.Glob("dist/*.tar.gz").scanSync("."),
+  ]
+  if (files.length === 0) {
+    throw new Error("No release archives found in dist/")
+  }
+  await $`gh release upload v${Script.version} ${files} --clobber --repo ${process.env.GH_REPO}`
 }
 
 export { binaries }

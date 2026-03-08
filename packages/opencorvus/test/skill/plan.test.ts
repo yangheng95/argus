@@ -77,7 +77,6 @@ test("plan skill appears in Skill.all() builtin list", async () => {
       const names = builtins.map((s) => s.name)
       expect(names).toContain("plan")
       expect(names).toContain("coding")
-      expect(names).toContain("desktop")
     },
   })
 })

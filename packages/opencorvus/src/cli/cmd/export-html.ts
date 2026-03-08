@@ -1,6 +1,5 @@
 import type { MessageV2 } from "../../session/message"
 import type { CallRecord } from "../../session/llm-trace"
-import { ScreenshotStore } from "../../session/screenshot-store"
 
 type SessionLike = {
   id: string
@@ -280,10 +279,7 @@ async function renderAttachment(input: { mime: string; url: string; filename?: s
 }
 
 async function resolveAttachmentUrl(url: string) {
-  if (!ScreenshotStore.isFileUrl(url)) return url
-  const resolved = await ScreenshotStore.resolveBase64(url).catch(() => null)
-  if (!resolved) return url
-  return `data:${resolved.mime};base64,${resolved.data}`
+  return url
 }
 
 function escape(value: string) {

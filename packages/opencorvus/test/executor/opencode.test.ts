@@ -5,6 +5,7 @@ import { Database, eq } from "../../src/storage/db"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message"
+import { SessionSummary } from "../../src/session/summary"
 import { Bus } from "../../src/bus"
 import { PermissionNext } from "../../src/permission/next"
 import { Instance } from "../../src/project/instance"
@@ -101,6 +102,67 @@ describe("executor.opencode", () => {
         expect(item.value?.type).toBe("permission.asked")
         expect(item.value?.summary).toContain("bash")
         await stream.return?.(undefined)
+      },
+    })
+  })
+
+  test("delivery only includes messages since the current run start", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const old = Date.now() - 10_000
+    const now = Date.now()
+    const spy = spyOn(SessionSummary, "computeDiff").mockResolvedValue([])
+    spyOn(Session, "messages").mockResolvedValue([
+      {
+        info: {
+          id: "msg_old",
+          sessionID: "ses_test",
+          role: "assistant",
+          time: {
+            created: old,
+          },
+        } as MessageV2.Assistant,
+        parts: [
+          {
+            id: "prt_old",
+            sessionID: "ses_test",
+            messageID: "msg_old",
+            type: "text",
+            text: "old summary",
+          } as MessageV2.TextPart,
+        ],
+      },
+      {
+        info: {
+          id: "msg_new",
+          sessionID: "ses_test",
+          role: "assistant",
+          time: {
+            created: now,
+          },
+        } as MessageV2.Assistant,
+        parts: [
+          {
+            id: "prt_new",
+            sessionID: "ses_test",
+            messageID: "msg_new",
+            type: "text",
+            text: "new summary",
+          } as MessageV2.TextPart,
+        ],
+      },
+    ] as MessageV2.WithParts[])
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await OpencodeExecutor.delivery({
+          sessionID: "ses_test",
+          since: now - 100,
+        })
+
+        expect(result.summary).toContain("new summary")
+        expect(result.summary).not.toContain("old summary")
+        expect(spy).toHaveBeenCalled()
       },
     })
   })

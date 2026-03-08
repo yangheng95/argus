@@ -231,4 +231,60 @@ export interface Hooks {
    * Modify tool definitions (description and parameters) sent to LLM
    */
   "tool.definition"?: (input: { toolID: string }, output: { description: string; parameters: any }) => Promise<void>
+  /**
+   * Register custom evaluation checks. Plugin pushes checks into `output.checks`.
+   */
+  "evaluation.checks"?: (
+    input: {
+      taskID?: string
+      runID?: string
+      request?: string
+      config: Record<string, unknown>
+    },
+    output: {
+      checks: Array<{
+        name: string
+        mode: "soft" | "strict"
+        run: (ctx: {
+          request?: string
+          delivery: { summary: string; diffs?: any[] }
+        }) => Promise<{
+          status: "passed" | "failed" | "skipped"
+          evidence: string
+          artifacts?: Array<{ kind: string; label: string; payload: Record<string, any> }>
+        }>
+      }>
+    },
+  ) => Promise<void>
+  /**
+   * Post-process evaluation results (e.g. send notifications, persist to external systems).
+   */
+  "evaluation.result"?: (
+    input: {
+      taskID?: string
+      runID?: string
+      request?: string
+    },
+    output: {
+      status: string
+      verdict: string
+      summary: string
+      checks: any[]
+      artifacts: any[]
+    },
+  ) => Promise<void>
+  /**
+   * Called after delivery is persisted. Plugins can trigger deployment, doc generation, etc.
+   */
+  "delivery.ready"?: (
+    input: {
+      taskID: string
+      runID: string
+      deliveryID: string
+      delivery: { summary: string; changedFiles: string[]; diffs: any[] }
+    },
+    output: {
+      actions: Array<{ name: string; status: string; summary: string; artifacts?: any[] }>
+    },
+  ) => Promise<void>
 }

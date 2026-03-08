@@ -20,13 +20,19 @@ const disposal = {
 
 export const Instance = {
   async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
-    let existing = cache.get(input.directory)
+    // Normalize MINGW-style paths on Windows (/d/foo → D:\foo)
+    let directory = input.directory
+    if (process.platform === "win32") {
+      const m = directory.match(/^\/([a-zA-Z])(\/.*)?$/)
+      if (m) directory = `${m[1].toUpperCase()}:${m[2] || "\\"}`
+    }
+    let existing = cache.get(directory)
     if (!existing) {
-      Log.Default.info("creating instance", { directory: input.directory })
+      Log.Default.info("creating instance", { directory })
       existing = iife(async () => {
-        const { project, sandbox } = await Project.fromDirectory(input.directory)
+        const { project, sandbox } = await Project.fromDirectory(directory)
         const ctx = {
-          directory: input.directory,
+          directory,
           worktree: sandbox,
           project,
         }
@@ -37,9 +43,9 @@ export const Instance = {
       })
       // Remove rejected promises from cache so they can be retried on the next call.
       existing.catch(() => {
-        if (cache.get(input.directory) === existing) cache.delete(input.directory)
+        if (cache.get(directory) === existing) cache.delete(directory)
       })
-      cache.set(input.directory, existing)
+      cache.set(directory, existing)
     }
     const ctx = await existing
     return context.provide(ctx, async () => {
