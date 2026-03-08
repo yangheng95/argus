@@ -44,6 +44,7 @@ export const PreferenceTool = Tool.define("preference", {
   ]),
   async execute(params, ctx) {
     const projectID = Instance.project.id
+    const planMode = ctx.extra?.planMode === true || ctx.agent === "plan"
 
     await ctx.ask({
       permission: "preference",
@@ -77,6 +78,9 @@ export const PreferenceTool = Tool.define("preference", {
       }
 
       case "write": {
+        if (planMode) {
+          throw new Error("preference.write is disabled in plan mode. Only read-only preference actions are allowed.")
+        }
         const scope = params.scope ?? "global"
         const row = Preference.set({
           projectID,
@@ -101,6 +105,9 @@ export const PreferenceTool = Tool.define("preference", {
       }
 
       case "delete": {
+        if (planMode) {
+          throw new Error("preference.delete is disabled in plan mode. Only read-only preference actions are allowed.")
+        }
         const scope = params.scope ?? "global"
         const row = Preference.list({
           projectID,

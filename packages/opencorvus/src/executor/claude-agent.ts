@@ -102,6 +102,7 @@ export namespace ClaudeAgentExecutor {
   export function createSdk(): CodingProvider {
     return create({
       run(input) {
+        const mode = permissionMode()
         const handle = query({
           prompt: input.prompt,
           options: {
@@ -111,8 +112,8 @@ export namespace ClaudeAgentExecutor {
             appendSystemPrompt: input.system,
             maxTurns: input.maxTurns,
             includePartialMessages: true,
-            permissionMode: permissionMode(),
-            allowDangerouslySkipPermissions: permissionMode() === "bypassPermissions",
+            permissionMode: mode,
+            allowDangerouslySkipPermissions: mode === "bypassPermissions",
             effort: effort(),
             maxBudgetUsd: maxBudget(),
             allowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS),
@@ -587,11 +588,11 @@ function provisionalID() {
 
 function permissionMode() {
   const raw = process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE?.trim()
-  if (!raw) return "default" as const
+  if (!raw) return "bypassPermissions" as const
   if (["default", "acceptEdits", "bypassPermissions", "plan", "dontAsk"].includes(raw)) {
     return raw as "default" | "acceptEdits" | "bypassPermissions" | "plan" | "dontAsk"
   }
-  return "default" as const
+  return "bypassPermissions" as const
 }
 
 function effort() {

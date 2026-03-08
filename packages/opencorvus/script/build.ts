@@ -29,7 +29,6 @@ console.log("Generated models-snapshot.ts")
 const singleFlag = process.argv.includes("--single")
 const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
-const skipInstall = process.argv.includes("--skip-install")
 const binaryOnly = process.argv.includes("--binary-only")
 const onefileFlag = process.argv.includes("--onefile") || process.env.OPENCORVUS_ONEFILE === "1"
 
@@ -188,10 +187,6 @@ const targets = single
 await $`rm -rf dist`.nothrow()
 
 const binaries: Record<string, string> = {}
-if (!skipInstall) {
-  await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
-  await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
-}
 for (const item of targets) {
   const name = [
     pkg.name,

@@ -5,6 +5,7 @@ import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Provider } from "@/provider/provider"
 import { Snapshot } from "@/snapshot"
+import { GoalService } from "@/orchestrator/goal-service"
 import {
   OrchestratorArtifactTable,
   OrchestratorChannelBindingTable,
@@ -137,10 +138,62 @@ export namespace WorkbenchService {
       }
     }
 
-    const interpreted = await interpretWithLLM(input).then((result) =>
-      result.success ? result.intent : fallbackIntent(text),
-    )
-    const resolved = interpreted.kind === "note" ? enrichIntent(text, interpreted) : interpreted
+    const goal = parseCommand(text, "/goal")
+    if (goal) {
+      GoalService.addOperatorGoal({
+        taskID: input.taskID,
+        description: goal,
+      })
+      recordNote({
+        taskID: input.taskID,
+        kind: "goal_update",
+        content: goal,
+        source: input.source,
+        userID: input.userID,
+      })
+      return {
+        kind: "goal" as const,
+        message: `Added goal: ${goal}`,
+        should_resume: true,
+      }
+    }
+
+    const plan = parseCommand(text, "/plan")
+    if (plan) {
+      appendPlanHint({
+        taskID: input.taskID,
+        hint: plan,
+      })
+      recordNote({
+        taskID: input.taskID,
+        kind: "plan_hint",
+        content: plan,
+        source: input.source,
+        userID: input.userID,
+      })
+      return {
+        kind: "plan" as const,
+        message: "Plan hint recorded.",
+        should_resume: true,
+      }
+    }
+
+    const interpreted = await interpretWithLLM(input)
+    if (!interpreted.success) {
+      recordNote({
+        taskID: input.taskID,
+        kind: "operator_note",
+        content: text,
+        source: input.source,
+        userID: input.userID,
+      })
+      return {
+        kind: "note" as const,
+        message: "Intent analysis failed; recorded as operator note without changing goals, plans, or preferences.",
+        should_resume: false,
+      }
+    }
+    const resolved = interpreted.intent
 
     if (resolved.kind === "preference" && resolved.preferences.length > 0) {
       const scope = inferPreferenceScope(text)
@@ -162,7 +215,7 @@ export namespace WorkbenchService {
 
     if (resolved.kind === "goal" && resolved.goals.length > 0) {
       for (const goal of resolved.goals) {
-        addGoal({
+        GoalService.addOperatorGoal({
           taskID: input.taskID,
           description: goal,
         })
@@ -217,6 +270,27 @@ export namespace WorkbenchService {
     }
   }
 
+  /** Simple cache key for brief snapshots — avoids regenerating when inputs haven't changed. */
+  function briefSignature(input: {
+    task: { id: string; request: string }
+    plan: { id: string; summary?: string | null } | undefined
+    runID?: string
+    goals: Array<{ id: string; status: string }>
+    prefs: Array<{ key: string; value: string }>
+    notes: Array<{ id: string }>
+  }): string {
+    const parts = [
+      input.task.id,
+      input.task.request.slice(0, 64),
+      input.plan?.id ?? "no-plan",
+      input.runID ?? "no-run",
+      input.goals.map((g) => `${g.id}:${g.status}`).join(","),
+      input.prefs.length.toString(),
+      input.notes.length.toString(),
+    ]
+    return parts.join("|")
+  }
+
   export function compileBrief(input: {
     taskID: string
     runID?: string
@@ -244,9 +318,42 @@ export namespace WorkbenchService {
       sessionID: task.session_id ?? input.sessionID,
     })
     const notes = taskNotes(task.id)
-    const memory = recallMemory(task)
     const globalPrefs = prefs.filter((item) => item.scope === "global")
     const sessionPrefs = prefs.filter((item) => item.scope === "session")
+    const signature = briefSignature({
+      task,
+      plan,
+      runID: input.runID,
+      goals,
+      prefs,
+      notes,
+    })
+    const snapshot = Database.use((db) =>
+      db
+        .select()
+        .from(WorkbenchBriefSnapshotTable)
+        .where(eq(WorkbenchBriefSnapshotTable.task_id, task.id))
+        .orderBy(WorkbenchBriefSnapshotTable.time_created)
+        .all()
+        .at(-1),
+    )
+    if (snapshot?.inputs?.signature === signature) {
+      return {
+        content: snapshot.content,
+        updatedAt: snapshot.time_created,
+        preferences: Preference.merged({
+          projectID: task.project_id,
+          sessionID: task.session_id ?? input.sessionID,
+        }).map((item) => ({
+          key: item.key,
+          value: item.value,
+        })),
+        notes,
+        goals,
+      }
+    }
+
+    const memory = recallMemory(task)
     const content = [
       "<assistant-brief>",
       `Task: ${task.title}`,
@@ -301,6 +408,7 @@ export namespace WorkbenchService {
           run_id: input.runID ?? null,
           content,
           inputs: {
+            signature,
             notes: notes.length,
             globalPreferences: globalPrefs.length,
             sessionPreferences: sessionPrefs.length,
@@ -314,6 +422,7 @@ export namespace WorkbenchService {
 
     return {
       content,
+      updatedAt: now,
       preferences: Preference.merged({
         projectID: task.project_id,
         sessionID: task.session_id ?? input.sessionID,
@@ -353,26 +462,17 @@ export namespace WorkbenchService {
         .orderBy(OrchestratorInteractionRequestTable.time_created)
         .all(),
     )
+    const prefs = preferences({
+      projectID: task.project_id,
+      sessionID: task.session_id ?? undefined,
+    })
+    const notes = taskNotes(task.id, 12)
     const brief = compileBrief({
       taskID: task.id,
       runID: run?.id ?? undefined,
       planVersionID: plan?.id ?? undefined,
       sessionID: task.session_id ?? undefined,
     })
-    const snapshot = Database.use((db) =>
-      db
-        .select()
-        .from(WorkbenchBriefSnapshotTable)
-        .where(eq(WorkbenchBriefSnapshotTable.task_id, task.id))
-        .orderBy(WorkbenchBriefSnapshotTable.time_created)
-        .all()
-        .at(-1),
-    )
-    const prefs = preferences({
-      projectID: task.project_id,
-      sessionID: task.session_id ?? undefined,
-    })
-    const notes = taskNotes(task.id, 12)
     const staging = notes.filter((note) =>
       ["plan_hint", "goal_update", "operator_note", "constraint", "decision"].includes(note.kind),
     )
@@ -595,7 +695,7 @@ export namespace WorkbenchService {
       overview,
       brief: {
         content: brief.content,
-        updated_at: snapshot?.time_created ?? Date.now(),
+        updated_at: brief.updatedAt ?? Date.now(),
       },
       lanes: [
         {
@@ -709,6 +809,32 @@ export namespace WorkbenchService {
   }
 }
 
+function briefSignature(input: {
+  task: typeof OrchestratorTaskTable.$inferSelect
+  plan?: typeof OrchestratorPlanVersionTable.$inferSelect
+  runID?: string
+  goals: Array<typeof OrchestratorGoalTable.$inferSelect>
+  prefs: Array<{ timeUpdated: number }>
+  notes: Array<{ time_updated: number }>
+}) {
+  const noteUpdated = input.notes.at(-1)?.time_updated ?? 0
+  const prefUpdated = input.prefs.reduce((max, item) => Math.max(max, item.timeUpdated), 0)
+  const goalUpdated = input.goals.reduce((max, item) => Math.max(max, item.time_updated), 0)
+  return [
+    input.task.id,
+    input.task.time_updated,
+    input.plan?.id ?? "",
+    input.plan?.time_updated ?? 0,
+    input.runID ?? "",
+    input.goals.length,
+    goalUpdated,
+    input.prefs.length,
+    prefUpdated,
+    input.notes.length,
+    noteUpdated,
+  ].join("|")
+}
+
 async function interpretWithLLM(input: z.infer<typeof MessageInput>) {
   if (process.env.OPENCORVUS_WORKBENCH_LLM === "0") {
     return { success: false as const }
@@ -752,94 +878,10 @@ Rules:
   }
 }
 
-function fallbackIntent(text: string) {
-  const pref = parsePreference(text)
-  if (pref) {
-    return WorkbenchIntent.parse({
-      kind: "preference",
-      preferences: [pref],
-      should_resume: false,
-    })
-  }
-  const goal = parseCommand(text, "/goal")
-  if (goal) {
-    return WorkbenchIntent.parse({
-      kind: "goal",
-      goals: [goal],
-      should_resume: true,
-    })
-  }
-  const plan = parseCommand(text, "/plan")
-  if (plan) {
-    return WorkbenchIntent.parse({
-      kind: "plan",
-      plan_hints: [plan],
-      should_resume: true,
-    })
-  }
-  return WorkbenchIntent.parse({
-    kind: "note",
-    note: text,
-    should_resume: true,
-  })
-}
-
 async function workbenchModel() {
-  if (process.env.MOONSHOT_API_KEY) {
-    return (
-      (await Provider.getModel("moonshotai-cn", "kimi-k2.5").catch(() => undefined)) ??
-      (await Provider.getModel("moonshotai", "kimi-k2.5").catch(() => undefined))
-    )
-  }
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) return undefined
   return Provider.getModel(def.providerID, def.modelID).catch(() => undefined)
-}
-
-function enrichIntent(text: string, intent: z.infer<typeof WorkbenchIntent>) {
-  const goal = inferGoals(text)
-  if (goal.length > 0) {
-    return WorkbenchIntent.parse({
-      ...intent,
-      kind: "goal",
-      goals: goal,
-      should_resume: true,
-    })
-  }
-  const hint = inferPlanHints(text)
-  if (hint.length > 0) {
-    return WorkbenchIntent.parse({
-      ...intent,
-      kind: "plan",
-      plan_hints: hint,
-      should_resume: true,
-    })
-  }
-  const preference = inferPreferences(text)
-  if (preference.length > 0) {
-    return WorkbenchIntent.parse({
-      ...intent,
-      kind: "preference",
-      preferences: preference,
-      should_resume: false,
-    })
-  }
-  return intent
-}
-
-function inferPreferences(text: string) {
-  const lower = text.toLowerCase()
-  const prefs: Array<{ key: string; value: string }> = []
-  if (/\bconcise\b|\bbrief\b|简洁|精简/.test(lower)) {
-    prefs.push({ key: "style", value: "concise" })
-  }
-  if (/lockfile/.test(lower) && /avoid|don't|do not|unless absolutely necessary|unless necessary|不要|别改/.test(lower)) {
-    prefs.push({ key: "lockfile_policy", value: "avoid_changes" })
-  }
-  if (/small diff|minimal diff|minimal changes|keep the diff small|小改动/.test(lower)) {
-    prefs.push({ key: "change_style", value: "minimal_diff" })
-  }
-  return prefs
 }
 
 function inferPreferenceScope(text: string): Preference.Scope {
@@ -850,42 +892,6 @@ function inferPreferenceScope(text: string): Preference.Scope {
   return "global"
 }
 
-function inferGoals(text: string) {
-  const lower = text.toLowerCase()
-  const goals: string[] = []
-  if (/(make sure|ensure|before.*done|must include|请确保|务必)/.test(lower) && /(regression|coverage|test|tests)/.test(lower)) {
-    goals.push(text.trim())
-  }
-  return goals
-}
-
-function inferPlanHints(text: string) {
-  const lower = text.toLowerCase()
-  if (/(start by|first,|first |keep the diff small|incremental|分步骤|先)/.test(lower)) {
-    return [text.trim()]
-  }
-  return []
-}
-
-function inferGoalMetadata(text: string) {
-  const lower = text.toLowerCase()
-  const selectors = [
-    lower.includes("build") ? "build" : undefined,
-    lower.includes("test") ? "test" : undefined,
-    lower.includes("lint") ? "lint" : undefined,
-    lower.includes("verify") ? "verify_cmd" : undefined,
-    lower.includes("regression") || lower.includes("coverage") ? "test" : undefined,
-    /(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(lower) ? "ui_review" : undefined,
-    /(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(lower) ? "code_quality" : undefined,
-    /\bcr\b|code review|审查|代码评审|review finding|review comment/.test(lower) ? "code_review" : undefined,
-    /(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(lower) ? "dead_code_review" : undefined,
-    /(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(lower) ? "startup" : undefined,
-  ].filter((item): item is string => Boolean(item))
-  if (selectors.length === 0) return undefined
-  return {
-    check_selector: [...new Set(selectors)],
-  }
-}
 
 function clipBoard(input: string) {
   if (input.length <= BOARD_SUMMARY_LIMIT) return input
@@ -1187,54 +1193,6 @@ function setPreference(input: {
     source: "user_message",
     confidence: 100,
   })
-}
-
-function addGoal(input: { taskID: string; description: string }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
-  const planVersionID = task?.active_plan_version_id
-  if (!task || !planVersionID) return
-  const now = Date.now()
-  const count = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorGoalTable)
-      .where(eq(OrchestratorGoalTable.plan_version_id, planVersionID))
-      .all().length,
-  )
-  Database.use((db) =>
-    db
-      .insert(OrchestratorGoalTable)
-      .values({
-        id: Identifier.ascending("goal"),
-        task_id: task.id,
-        plan_version_id: planVersionID,
-        description: input.description,
-        criteria: "This user-provided goal is satisfied and acceptance checks still pass.",
-        metadata: inferGoalMetadata(input.description),
-        priority: "blocking",
-        status: "pending",
-        order_index: count,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
-  Database.use((db) =>
-    db
-      .insert(OrchestratorProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: task.id,
-        status: "running",
-        summary: "Goal added from user message",
-        payload: {
-          description: input.description,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
 }
 
 function appendPlanHint(input: { taskID: string; hint: string }) {

@@ -1272,6 +1272,8 @@ test("permission config preserves key order", async () => {
             read: "allow",
             todowrite: "allow",
             todoread: "allow",
+            plan_enter: "allow",
+            plan_exit: "allow",
             "thoughts_*": "allow",
             "reasoning_model_*": "allow",
             "tools_*": "allow",
@@ -1287,14 +1289,16 @@ test("permission config preserves key order", async () => {
       const config = await Config.get()
       // Zod z.object().catchall() outputs known schema keys first (in definition order),
       // then catchall keys in input order. "read", "edit", "external_directory",
-      // "todowrite", "todoread" are defined in the Permission schema; "*", "write",
-      // and wildcard keys fall through to catchall.
+      // "todowrite", "todoread", "plan_enter", "plan_exit" are defined in the
+      // Permission schema; "*", "write", and wildcard keys fall through to catchall.
       expect(Object.keys(config.permission!)).toEqual([
         "read",
         "edit",
         "external_directory",
         "todowrite",
         "todoread",
+        "plan_enter",
+        "plan_exit",
         "*",
         "write",
         "thoughts_*",

@@ -18,6 +18,7 @@ import { Log } from "../util/log"
 import { MessageV2 } from "./message"
 import { Instance } from "../project/instance"
 import { SessionPrompt } from "./prompt"
+import path from "path"
 import { fn } from "@/util/fn"
 import { Command } from "../command"
 import { Snapshot } from "@/snapshot"
@@ -317,6 +318,10 @@ export namespace Session {
       info: result,
     })
     return result
+  }
+
+  export function plan(input: { slug: string; time: { created: number } }) {
+    return path.join(Instance.worktree, ".opencorvus", "plans", [input.time.created, input.slug].join("-") + ".md")
   }
 
   export const get = fn(Identifier.schema("session"), async (id) => {

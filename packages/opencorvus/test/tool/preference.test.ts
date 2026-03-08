@@ -94,4 +94,41 @@ describe("tool.preference", () => {
       },
     })
   })
+
+  test("blocks mutating preference actions in plan mode", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await PreferenceTool.init()
+        const planCtx = {
+          ...ctx("ses_plan_preference"),
+          agent: "plan",
+          extra: { planMode: true },
+        }
+
+        await expect(
+          tool.execute(
+            {
+              action: "write",
+              key: "style",
+              value: "verbose",
+            },
+            planCtx,
+          ),
+        ).rejects.toThrow("preference.write is disabled in plan mode")
+
+        await expect(
+          tool.execute(
+            {
+              action: "delete",
+              key: "style",
+            },
+            planCtx,
+          ),
+        ).rejects.toThrow("preference.delete is disabled in plan mode")
+      },
+    })
+  })
 })

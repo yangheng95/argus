@@ -1,9 +1,10 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { PlannerService } from "@/planner/service"
+import { PlannerAgent } from "@/planner/agent"
 
-// These test cases exercise the planner with various spec quality levels.
-// When OPENCORVUS_PLANNER_LLM=0, it falls back to template-based planning.
-// When an LLM is available, it runs spec analysis.
+afterEach(() => {
+  mock.restore()
+})
 
 const SPECS = {
   vague: {
@@ -38,81 +39,46 @@ Files affected:
   },
 }
 
-describe("PlannerService.initial — template fallback", () => {
-  // Force template fallback
-  const originalEnv = process.env.OPENCORVUS_PLANNER_LLM
-  process.env.OPENCORVUS_PLANNER_LLM = "0"
-
-  test("vague spec → single generic goal", async () => {
-    const plan = await PlannerService.initial({
-      title: SPECS.vague.title,
-      request: SPECS.vague.request,
-    })
-
-    console.log("\n=== TEMPLATE: Vague Spec ===")
-    console.log("Summary:", plan.summary)
-    console.log("Goals:", plan.goals.length)
-    for (const g of plan.goals) {
-      console.log(`  - ${g.description}`)
-      console.log(`    Criteria: ${g.criteria}`)
-    }
-    console.log("Prompt length:", plan.prompt.length, "chars")
-
-    // Template produces exactly 1 generic goal
-    expect(plan.goals).toHaveLength(1)
-    expect(plan.goals[0].criteria).toBe(
-      "The requested change is implemented and acceptance checks pass.",
-    )
+describe("PlannerService.initial — explicit failure", () => {
+  test("vague spec surfaces planner failure", async () => {
+    spyOn(PlannerAgent, "plan").mockRejectedValue(new Error("no llm"))
+    await expect(
+      PlannerService.initial({
+        title: SPECS.vague.title,
+        request: SPECS.vague.request,
+      }),
+    ).rejects.toThrow("planner agent failed")
   })
 
-  test("medium spec → still single generic goal", async () => {
-    const plan = await PlannerService.initial({
-      title: SPECS.medium.title,
-      request: SPECS.medium.request,
-    })
-
-    console.log("\n=== TEMPLATE: Medium Spec ===")
-    console.log("Summary:", plan.summary)
-    console.log("Goals:", plan.goals.length)
-    for (const g of plan.goals) {
-      console.log(`  - ${g.description}`)
-      console.log(`    Criteria: ${g.criteria}`)
-    }
-
-    // Template still produces 1 generic goal — doesn't analyze the spec
-    expect(plan.goals).toHaveLength(1)
+  test("detailed spec also surfaces planner failure", async () => {
+    spyOn(PlannerAgent, "plan").mockRejectedValue(new Error("no llm"))
+    await expect(
+      PlannerService.initial({
+        title: SPECS.detailed.title,
+        request: SPECS.detailed.request,
+      }),
+    ).rejects.toThrow("planner agent failed")
   })
-
-  test("detailed spec → still single generic goal", async () => {
-    const plan = await PlannerService.initial({
-      title: SPECS.detailed.title,
-      request: SPECS.detailed.request,
-    })
-
-    console.log("\n=== TEMPLATE: Detailed Spec ===")
-    console.log("Summary:", plan.summary)
-    console.log("Goals:", plan.goals.length)
-    for (const g of plan.goals) {
-      console.log(`  - ${g.description}`)
-      console.log(`    Criteria: ${g.criteria}`)
-    }
-
-    // Template produces 1 generic goal even for a highly detailed spec
-    expect(plan.goals).toHaveLength(1)
-    // The prompt includes the request verbatim but no expansion
-    expect(plan.prompt).toContain(SPECS.detailed.request.trim())
-  })
-
-  // Restore env
-  if (originalEnv !== undefined) {
-    process.env.OPENCORVUS_PLANNER_LLM = originalEnv
-  } else {
-    delete process.env.OPENCORVUS_PLANNER_LLM
-  }
 })
 
 describe("PlannerService.initial — with user-provided goals", () => {
   test("user goals skip spec analysis", async () => {
+    spyOn(PlannerAgent, "plan").mockResolvedValue({
+      prd: "Expanded",
+      summary: "Summary",
+      goals: [
+        {
+          description: "Internal",
+          criteria: "Internal",
+          priority: "blocking",
+          check_selector: ["build"],
+        },
+      ],
+      subtasks: [
+        { title: "Inspect", description: "Inspect", order: 1 },
+      ],
+      risks: [],
+    } as any)
     const plan = await PlannerService.initial({
       title: "Test task",
       request: "Some request",
@@ -125,7 +91,7 @@ describe("PlannerService.initial — with user-provided goals", () => {
     expect(plan.goals).toHaveLength(2)
     expect(plan.goals[0].description).toBe("Goal A")
     expect(plan.goals[1].description).toBe("Goal B")
-    // When explicit goals are provided, template plan is used (no agent)
+    expect(plan.metadata.planner?.quality).toBe("compiled")
     expect(plan.metadata.strategy).toBe("initial")
   })
 })

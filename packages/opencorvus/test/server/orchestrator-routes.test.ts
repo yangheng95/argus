@@ -1,11 +1,14 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
 import { type ExecutorAdapter } from "../../src/executor/compat"
+import { EvaluatorService } from "../../src/evaluator/service"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { PlannerFailureError } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
+import { PlannerService } from "../../src/planner/service"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -13,7 +16,75 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+function mockLLM() {
+  spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
+    const allPassed = input.checkResults.every((c) => c.status === "passed")
+    return {
+      verdict: allPassed ? "accepted" : "rejected",
+      classification: allPassed ? "none" : "evaluation",
+      summary: allPassed ? "All checks passed" : "Some checks failed",
+      goal_statuses: input.goals.map((_, i) => ({
+        goal_index: i,
+        status: allPassed ? ("passed" as const) : ("failed" as const),
+        evidence: allPassed ? "Checks passed" : "Checks failed",
+        reasoning: allPassed ? "All checks passed" : "Some checks failed",
+      })),
+      replan_guidance: allPassed ? null : {
+        root_cause: "Checks failed",
+        what_failed: "Automated verification",
+        suggested_strategy: "Fix the failing checks",
+        avoid_approaches: [],
+      },
+    }
+  })
+  spyOn(PlannerService, "initial").mockImplementation(async (input) => ({
+    summary: `Plan: ${input.title}`,
+    prompt: `Execute: ${input.request}`,
+    goals: (input.goals ?? [{ description: input.request, criteria: "Task completed successfully", priority: "blocking" as const }]).map((g) => ({
+      description: g.description,
+      criteria: g.criteria,
+      priority: g.priority ?? ("blocking" as const),
+      metadata: {},
+    })),
+    metadata: {
+      strategy: "initial" as const,
+      steps: ["1. Execute the task"],
+      planner: {
+        role: "headless_compiler" as const,
+        quality: "compiled" as const,
+        source: "planner_agent" as const,
+        clarification_source: "none" as const,
+      },
+    },
+  }))
+  spyOn(PlannerService, "replan").mockImplementation(async (input) => ({
+    summary: `Replan: ${input.title}`,
+    prompt: `Retry: ${input.request}\n\nPrevious failure: ${input.failureSummary}`,
+    goals: input.goals.map((g) => ({
+      description: g.description,
+      criteria: g.criteria,
+      priority: g.priority ?? ("blocking" as const),
+      metadata: {},
+    })),
+    metadata: {
+      strategy: "replan" as const,
+      steps: ["1. Retry the task"],
+      failure_summary: input.failureSummary,
+      previous_plan_id: input.previousPlanID,
+      planner: {
+        role: "headless_compiler" as const,
+        quality: "compiled" as const,
+        source: "planner_agent" as const,
+        clarification_source: "none" as const,
+      },
+    },
+  }))
+}
+
 describe("orchestrator routes", () => {
+  beforeEach(() => {
+    mockLLM()
+  })
   afterEach(async () => {
     mock.restore()
     ExecutorRegistry.reset()
@@ -254,7 +325,7 @@ describe("orchestrator routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
-            text: "Please keep updates concise and avoid changing lockfiles unless absolutely necessary.",
+            text: "/pref lockfile_policy=avoid_changes",
             source: "slack",
             user_id: "U123",
           }),
@@ -275,7 +346,7 @@ describe("orchestrator routes", () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
-  test("POST /task/:id/message accepts free-form preference text", async () => {
+  test("POST /task/:id/message records free-form preference text as a note", async () => {
     await using tmp = await tmpdir({ git: true })
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
@@ -317,8 +388,9 @@ describe("orchestrator routes", () => {
           }),
         })
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string }
-        expect(body.kind).toBe("preference")
+        const body = (await response.json()) as { kind: string; message: string }
+        expect(body.kind).toBe("note")
+        expect(body.message).toContain("Intent analysis failed")
         const brief = await app.request(`/task/${task_id}/brief`, {
           method: "GET",
           headers: {
@@ -326,8 +398,9 @@ describe("orchestrator routes", () => {
           },
         })
         const briefBody = (await brief.json()) as { content: string }
-        expect(briefBody.content).toContain("style: concise")
-        expect(briefBody.content).toContain("lockfile_policy: avoid_changes")
+        expect(briefBody.content).not.toContain("style: concise")
+        expect(briefBody.content).not.toContain("lockfile_policy: avoid_changes")
+        expect(briefBody.content).toContain("Please keep updates concise")
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
@@ -384,8 +457,8 @@ describe("orchestrator routes", () => {
         })
         expect(response.status).toBe(200)
         const body = (await response.json()) as { lanes: Array<{ id: string; cards: unknown[] }>; brief: { content: string } }
-        expect(body.lanes.some((lane) => lane.id === "preferences" && lane.cards.length > 0)).toBe(true)
-        expect(body.brief.content).toContain("lockfile_policy: avoid_changes")
+        expect(body.lanes.some((lane) => lane.id === "preferences" && lane.cards.length > 0)).toBe(false)
+        expect(body.brief.content).not.toContain("lockfile_policy: avoid_changes")
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
@@ -437,8 +510,8 @@ describe("orchestrator routes", () => {
         })
         expect(response.status).toBe(200)
         const body = (await response.json()) as { lanes: Array<{ id: string; cards: Array<{ title: string }> }>; brief: { content: string } }
-        expect(body.lanes.some((lane) => lane.id === "preferences" && lane.cards.some((card) => card.title === "style"))).toBe(true)
-        expect(body.brief.content).toContain("lockfile_policy: avoid_changes")
+        expect(body.lanes.some((lane) => lane.id === "preferences" && lane.cards.some((card) => card.title === "style"))).toBe(false)
+        expect(body.brief.content).not.toContain("lockfile_policy: avoid_changes")
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
@@ -869,6 +942,12 @@ describe("orchestrator routes", () => {
 
   test("POST /task returns 400 when executor is not registered", async () => {
     await using tmp = await tmpdir({ git: true })
+    // Prevent auto-discovery from finding real executors on this machine
+    const { ExecutorBootstrap } = await import("../../src/executor/bootstrap")
+    spyOn(ExecutorBootstrap, "autoRegister").mockResolvedValue({
+      codex: { available: false },
+      "claude-code": { available: false },
+    } as never)
 
     await Instance.provide({
       directory: tmp.path,
@@ -889,6 +968,46 @@ describe("orchestrator routes", () => {
 
         expect(response.status).toBe(400)
         expect(await response.text()).toContain("executor not configured: codex")
+      },
+    })
+  })
+
+  test("POST /task returns 503 when planner compilation fails", async () => {
+    await using tmp = await tmpdir({ git: true })
+    mock.restore()
+    spyOn(PlannerService, "initial").mockRejectedValue(new PlannerFailureError("planner agent failed"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "implement feature x",
+          }),
+        })
+
+        expect(response.status).toBe(503)
+        expect(await response.text()).toContain("planner agent failed")
+
+        const task = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorTaskTable)
+            .where(eq(OrchestratorTaskTable.request, "implement feature x"))
+            .orderBy(OrchestratorTaskTable.time_created)
+            .all()
+            .filter((item) => item.status === "failed")
+            .at(-1),
+        )
+        expect(task?.status).toBe("failed")
+        expect(task?.error).toContain("planner agent failed")
       },
     })
   })

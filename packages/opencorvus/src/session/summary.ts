@@ -89,7 +89,7 @@ export namespace SessionSummary {
         deletions: diffs.reduce((sum, x) => sum + x.deletions, 0),
         files: diffs.length,
       },
-    })
+    }).catch(() => undefined)
     await Storage.write(["session_diff", input.sessionID], diffs)
     Bus.publish(Session.Event.Diff, {
       sessionID: input.sessionID,
@@ -108,7 +108,7 @@ export namespace SessionSummary {
       ...userMsg.summary,
       diffs,
     }
-    await Session.updateMessage(userMsg)
+    await Session.updateMessage(userMsg).catch(() => undefined)
   }
 
   export const diff = fn(

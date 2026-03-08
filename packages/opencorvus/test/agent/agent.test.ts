@@ -45,6 +45,24 @@ test("build agent has correct default properties", async () => {
   })
 })
 
+test("plan agent is read-only except for plan files", async () => {
+  await using tmp = await tmpdir()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const plan = await Agent.get("plan")
+      expect(plan).toBeDefined()
+      expect(plan?.mode).toBe("primary")
+      expect(plan?.native).toBe(true)
+      expect(evalPerm(plan, "bash")).toBe("deny")
+      expect(evalPerm(plan, "question")).toBe("allow")
+      expect(evalPerm(plan, "plan_exit")).toBe("allow")
+      expect(PermissionNext.evaluate("edit", ".opencorvus/plans/demo.md", plan!.permission).action).toBe("allow")
+      expect(PermissionNext.evaluate("edit", "src/demo.ts", plan!.permission).action).toBe("deny")
+    },
+  })
+})
+
 test("explore agent denies edit and write", async () => {
   await using tmp = await tmpdir()
   await Instance.provide({
@@ -636,13 +654,14 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
     config: {
       agent: {
         build: { disable: true },
+        plan: { disable: true },
       },
     },
   })
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // build is disabled, no primary-capable agents remain
+      // build and plan are disabled, no primary-capable agents remain
       await expect(Agent.defaultAgent()).rejects.toThrow("no primary visible agent found")
     },
   })

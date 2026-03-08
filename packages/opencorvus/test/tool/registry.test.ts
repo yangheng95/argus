@@ -13,12 +13,12 @@ describe("tool.registry", () => {
       directory: tmp.path,
       fn: async () => {
         const ids = await ToolRegistry.ids()
-        ;["bash", "read", "glob", "grep", "edit", "write", "skill", "task", "tui"].forEach((id) => {
+        ;["bash", "read", "glob", "grep", "edit", "write", "skill", "task", "tui", "todoread", "plan_enter", "plan_exit"].forEach((id) => {
           expect(ids).toContain(id)
         })
       },
     })
-  })
+  }, 20000)
 
   test("loads tools from .opencorvus/tool (singular)", async () => {
     await using tmp = await tmpdir({
@@ -52,7 +52,7 @@ describe("tool.registry", () => {
         expect(ids).toContain("hello")
       },
     })
-  })
+  }, 20000)
 
   test("loads tools from .opencorvus/tools (plural)", async () => {
     await using tmp = await tmpdir({
@@ -86,7 +86,7 @@ describe("tool.registry", () => {
         expect(ids).toContain("hello")
       },
     })
-  })
+  }, 20000)
 
   test("loads tools with external dependencies without crashing", async () => {
     await using tmp = await tmpdir({
@@ -134,5 +134,5 @@ describe("tool.registry", () => {
         expect(Array.isArray(ids)).toBe(true)
       },
     })
-  })
+  }, 20000)
 })

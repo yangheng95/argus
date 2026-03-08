@@ -58,6 +58,7 @@ export const MemoryTool = Tool.define("memory", {
   ]),
   async execute(params, ctx) {
     const projectId = Instance.project.id
+    const planMode = ctx.extra?.planMode === true || ctx.agent === "plan"
 
     await ctx.ask({
       permission: "memory",
@@ -125,6 +126,9 @@ export const MemoryTool = Tool.define("memory", {
       }
 
       case "write": {
+        if (planMode) {
+          throw new Error("memory.write is disabled in plan mode. Only read-only memory actions are allowed.")
+        }
         const scope = params.scope ?? "global"
         const file = Memory.createFile({
           title: params.title,
@@ -169,6 +173,9 @@ export const MemoryTool = Tool.define("memory", {
       }
 
       case "delete": {
+        if (planMode) {
+          throw new Error("memory.delete is disabled in plan mode. Only read-only memory actions are allowed.")
+        }
         const file = Memory.getFile(params.fileId)
         if (!file) {
           return {

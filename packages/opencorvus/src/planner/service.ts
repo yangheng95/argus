@@ -8,7 +8,7 @@ import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agen
 
 const log = Log.create({ service: "planner" })
 
-/** Max time to wait for PlannerAgent before falling back to template plan.
+/** Max time to wait for PlannerAgent before surfacing a planner failure.
  *  Override via OPENCORVUS_PLANNER_TIMEOUT_MS env var (useful for tests). */
 function plannerTimeoutMs() {
   return Number(process.env.OPENCORVUS_PLANNER_TIMEOUT_MS) || 120_000
@@ -53,8 +53,30 @@ const Clarification = z.object({
 })
 type ClarificationResult = z.infer<typeof Clarification>
 
+function plannerMeta(input: {
+  quality: "compiled"
+  source: "planner_agent"
+  clarificationSource: "model" | "heuristic" | "suppressed" | "none"
+}) {
+  return {
+    role: "headless_compiler" as const,
+    quality: input.quality,
+    source: input.source,
+    clarification_source: input.clarificationSource,
+  }
+}
+
+export class PlannerFailureError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = "PlannerFailureError"
+  }
+}
+
 /**
- * PlannerService — generates execution prompts with LLM-powered spec analysis.
+ * HeadlessPlannerService — orchestrator-facing planning stage.
+ *
+ * Generates execution prompts with LLM-powered spec analysis.
  *
  * New flow:
  *   1. Analyze the spec with an LLM to expand, decompose, and identify ambiguities
@@ -62,9 +84,9 @@ type ClarificationResult = z.infer<typeof Clarification>
  *   3. If confidence is low and questions exist, return them for orchestrator to ask
  *   4. Build a detailed execution prompt incorporating the expanded spec
  *
- * Falls back to template-based planning if LLM is unavailable.
+ * Planning is mandatory. If the planner agent fails, surface the error.
  */
-export namespace PlannerService {
+export namespace HeadlessPlannerService {
   export async function initial(input: {
     title: string
     request: string
@@ -74,7 +96,7 @@ export namespace PlannerService {
     const hasUserGoals = input.goals && input.goals.length > 0
 
     // Pre-analyze the request: extract file references, requirements, entities.
-    // This is fast (sync disk reads) and benefits both the agent and the template fallback.
+    // This is fast (sync disk reads) and gives planner failures useful context.
     const analysis = preAnalyzeRequest(input.request)
     if (analysis.files.length > 0) {
       log.info("pre-analysis found referenced files", {
@@ -105,28 +127,15 @@ export namespace PlannerService {
           : undefined,
         signal: controller.signal,
       }).catch((error) => {
-        log.warn("planner agent failed, falling back to template", { error: error?.message ?? String(error) })
-        return undefined as PlannerOutputType | undefined
+        throw new PlannerFailureError("planner agent failed", { cause: error })
       }),
-      new Promise<undefined>((resolve) => setTimeout(resolve, timeoutMs)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new PlannerFailureError(`planner timed out after ${timeoutMs}ms`)), timeoutMs),
+      ),
     ]).finally(() => {
       clearTimeout(timer)
       controller.abort()
     })
-
-    if (!agentResult) {
-      log.warn("planner agent returned no result — using template fallback", {
-        preAnalysis: {
-          filesFound: analysis.files.length,
-          fileRefs: analysis.files.map((f) => f.ref),
-          requirements: analysis.requirements.length,
-          entities: analysis.entities,
-          workDir: analysis.workDir,
-        },
-      })
-      const goals = hasUserGoals ? input.goals! : normalizeGoals(input.request)
-      return templatePlan(input.title, input.request, goals, input.allowClarification !== false, analysis)
-    }
 
     // When user provided explicit goals, use them (they have the correct check_selectors
     // and metadata). The agent's PRD, subtasks, risks provide the codebase context.
@@ -178,36 +187,14 @@ export namespace PlannerService {
       request: input.request,
       replanContext: replanCtx,
     }).catch((error) => {
-      log.warn("planner agent replan failed, falling back to template", { error: error?.message ?? String(error) })
-      return undefined
+      throw new PlannerFailureError("planner agent replan failed", { cause: error })
     })
-
-    if (agentResult) {
-      return agentOutputToDraft(input.title, input.request, agentResult, "replan", input.previousPlanID, input.failureSummary)
-    }
-
-    // Fallback: template-based replan
-    const goals = normalizeGoals(input.request, input.goals)
-    const steps = [...PLAN_MODE_STEPS, `Correct the previously failed outcome: ${input.failureSummary}`]
-    return {
-      summary: summarize(`${input.request}\n\nReplan reason: ${input.failureSummary}`),
-      prompt: renderReplanPrompt({
-        title: input.title,
-        request: input.request,
-        goals,
-        previousPrompt: input.previousPrompt,
-        failureSummary: input.failureSummary,
-      }),
-      goals,
-      metadata: {
-        strategy: "replan" as const,
-        steps,
-        failure_summary: input.failureSummary,
-        previous_plan_id: input.previousPlanID,
-      },
-    }
+    return agentOutputToDraft(input.title, input.request, agentResult, "replan", input.previousPlanID, input.failureSummary)
   }
 }
+
+// Backwards-compatible alias during the architecture transition.
+export import PlannerService = HeadlessPlannerService
 
 // ---------------------------------------------------------------------------
 // Agent output → PlanDraft conversion
@@ -260,6 +247,14 @@ function agentOutputToDraft(
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((s, i) => `${s.order ?? i + 1}. ${s.title}: ${s.description}`)
   const clarification = allowClarification ? deriveClarification(request, output) : undefined
+  const clarificationSource =
+    !allowClarification
+      ? "suppressed"
+      : Array.isArray(output.clarifications) && output.clarifications.length > 0
+        ? "model"
+        : clarification
+          ? "heuristic"
+          : "none"
 
   return {
     summary: output.summary,
@@ -272,6 +267,11 @@ function agentOutputToDraft(
       previous_plan_id: previousPlanID,
       milestones: output.milestones,
       risks: output.risks,
+      planner: plannerMeta({
+        quality: "compiled",
+        source: "planner_agent",
+        clarificationSource,
+      }),
       clarification,
       spec_analysis: {
         expanded_spec: output.prd,
@@ -473,145 +473,6 @@ function readFileSafe(absPath: string, maxLen = 6000): string | null {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Template-based plan (fallback) — now task-aware via pre-analysis
-// ---------------------------------------------------------------------------
-
-function templatePlan(
-  title: string,
-  request: string,
-  goals: z.infer<typeof GoalInput>[],
-  allowClarification = true,
-  analysis?: RequestAnalysis,
-) {
-  const clarification = allowClarification ? heuristicClarification(request) : undefined
-  const steps = buildSmartSteps(request, analysis)
-
-  return {
-    summary: summarize(request),
-    prompt: renderPlanModePrompt({ title, request, goals, analysis }),
-    goals,
-    metadata: {
-      strategy: "initial" as const,
-      steps,
-      clarification,
-      spec_analysis:
-        clarification
-          ? {
-              expanded_spec: request,
-              ambiguities: clarification.questions.map((item) => item.question),
-              questions: clarification.questions.map((item) => ({
-                question: item.question,
-                context: item.context ?? clarification.reason,
-                default_assumption: item.default_assumption ?? "",
-              })),
-              goals: goals.map((goal) => ({
-                description: goal.description,
-                criteria: goal.criteria,
-                priority: goal.priority ?? "blocking",
-              })),
-              risk_areas: [],
-              confidence: 0.2,
-            }
-          : undefined as SpecAnalysisResult | undefined,
-    },
-  }
-}
-
-/**
- * Generate task-specific plan steps from pre-analysis.
- * Falls back to generic steps only when no file refs or requirements are found.
- */
-function buildSmartSteps(request: string, analysis?: RequestAnalysis): string[] {
-  if (!analysis || (analysis.files.length === 0 && analysis.requirements.length === 0)) {
-    log.warn("buildSmartSteps: no analysis data, using generic PLAN_MODE_STEPS", {
-      hasAnalysis: !!analysis,
-      filesCount: analysis?.files.length ?? 0,
-      requirementsCount: analysis?.requirements.length ?? 0,
-    })
-    return PLAN_MODE_STEPS
-  }
-
-  const steps: string[] = []
-
-  // Step: analyze referenced files
-  if (analysis.files.length > 0) {
-    steps.push(`Analyze source files: ${analysis.files.map((f) => f.ref).join(", ")}`)
-  }
-
-  // Steps from structured requirements
-  if (analysis.requirements.length > 0) {
-    for (const req of analysis.requirements) {
-      steps.push(req)
-    }
-  } else {
-    steps.push("Plan and implement the requested changes based on the source analysis.")
-  }
-
-  // Step: verify
-  steps.push("Run acceptance checks (build, test, lint) and verify all goals pass.")
-  return steps
-}
-
-// ---------------------------------------------------------------------------
-// Plan-mode workflow steps (last-resort fallback when no analysis is available)
-// ---------------------------------------------------------------------------
-
-const PLAN_MODE_STEPS = [
-  "Explore the codebase to understand architecture, conventions, and affected areas.",
-  "Use the planner tool to decompose the task into a hierarchical subtask tree.",
-  "Execute each subtask in order, updating planner status as you go.",
-  "Run acceptance checks and verify the requested outcome.",
-]
-
-// ---------------------------------------------------------------------------
-// Prompt generation — enhanced with spec analysis
-// ---------------------------------------------------------------------------
-
-function renderPlanModePrompt(input: {
-  title: string
-  request: string
-  goals: z.infer<typeof GoalInput>[]
-  analysis?: RequestAnalysis
-}) {
-  const sections = [
-    `You are executing a headless coding task inside OpenCorvus.
-
-Task: ${input.title}
-
-Request:
-${input.request.trim()}
-
-Goals:
-${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"}] ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n\n")}`,
-  ]
-
-  // Inject pre-read file contents so the executor starts with full code context
-  if (input.analysis?.files && input.analysis.files.length > 0) {
-    const fileSections = input.analysis.files.map(
-      (f) => `### ${f.ref}\n\`\`\`\n${f.content}\n\`\`\``,
-    )
-    sections.push(`## Source Files (Pre-read)\n\nThese files were referenced in the task and pre-read for your convenience.\n\n${fileSections.join("\n\n")}`)
-  }
-
-  // Inject extracted entities as search hints
-  if (input.analysis?.entities && input.analysis.entities.length > 0) {
-    sections.push(`## Key Entities\n\nMentioned in the request: ${input.analysis.entities.map((e) => `\`${e}\``).join(", ")}`)
-  }
-
-  sections.push(`## Execution Steps
-
-1. **Recall**: Search memory and check preferences before starting.
-2. **Explore**: Read relevant files, understand existing patterns and conventions. Identify exact file paths to create/modify.
-3. **Plan**: Use the planner tool to decompose the task into subtasks. Each subtask should have a clear verification step.
-4. **Execute**: Work through subtasks in order. Verify each step immediately (typecheck, test).
-5. **Verify**: Run ALL acceptance checks from the Goals section. Confirm every blocking goal is met.
-
-**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), goal (acceptance criteria), task (parallel sub-agents), websearch/webfetch (external docs).`)
-
-  return sections.join("\n\n")
-}
-
 function buildWorkflowSection(input: {
   taskType: "initial" | "replan" | "retry"
   hasRelevantMemory: boolean
@@ -722,11 +583,11 @@ function normalizeGoals(request: string, goals?: z.infer<typeof GoalInput>[]) {
 
 function deriveClarification(request: string, output: PlannerOutputType): ClarificationResult | undefined {
   if (Array.isArray(output.clarifications) && output.clarifications.length > 0) {
-    const [first] = output.clarifications
-    if (!first) return undefined
+    const questions = output.clarifications.filter((item) => item.question?.trim())
+    if (questions.length === 0) return undefined
     return {
-      reason: first.context ?? "Critical ambiguity requires user clarification before execution.",
-      questions: [first],
+      reason: questions[0]?.context ?? "Critical ambiguities require user clarification before execution.",
+      questions,
     }
   }
   return heuristicClarification(request)

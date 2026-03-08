@@ -5,6 +5,7 @@ import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import {
+  OrchestratorInteractionRequestTable,
   OrchestratorEvaluationTable,
   OrchestratorPlanVersionTable,
   OrchestratorRunTable,
@@ -12,14 +13,63 @@ import {
 } from "../../src/orchestrator/orchestrator.sql"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
+import { PlannerService } from "../../src/planner/service"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
-// Force PlannerAgent to fail fast — orchestrator tests focus on orchestrator logic, not planning
-process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = "100"
+function stubPlanner() {
+  spyOn(PlannerService, "initial").mockResolvedValue({
+    summary: "Compiled plan",
+    prompt: "Execute the compiled plan",
+    goals: [
+      {
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+      },
+    ],
+    metadata: {
+      strategy: "initial",
+      steps: ["Explore", "Plan", "Verify"],
+      planner: {
+        role: "headless_compiler",
+        quality: "compiled",
+        source: "planner_agent",
+        clarification_source: "none",
+      },
+      clarification: undefined,
+      spec_analysis: undefined,
+    },
+  } as any)
+  spyOn(PlannerService, "replan").mockResolvedValue({
+    summary: "Compiled replan",
+    prompt: "Execute the replanned approach",
+    goals: [
+      {
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+      },
+    ],
+    metadata: {
+      strategy: "replan",
+      steps: ["Re-evaluate", "Re-implement", "Verify"],
+      planner: {
+        role: "headless_compiler",
+        quality: "compiled",
+        source: "planner_agent",
+        clarification_source: "none",
+      },
+      previous_plan_id: "pln_previous",
+      failure_summary: "previous run failed",
+      clarification: undefined,
+      spec_analysis: undefined,
+    },
+  } as any)
+}
 
 describe("orchestrator.service", () => {
   afterEach(async () => {
@@ -30,6 +80,7 @@ describe("orchestrator.service", () => {
 
   test("retries same plan after first evaluation failure", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -77,8 +128,70 @@ describe("orchestrator.service", () => {
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
+  test("preserves all planner clarification questions in blocked interactions", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(PlannerService, "initial").mockResolvedValue({
+      summary: "Need answers",
+      prompt: "Ask before executing",
+      goals: [
+        {
+          description: "Clarify",
+          criteria: "Clarify the request",
+          priority: "blocking",
+        },
+      ],
+      metadata: {
+        strategy: "initial",
+        steps: ["Clarify"],
+        planner: {
+          role: "headless_compiler",
+          quality: "compiled",
+          source: "planner_agent",
+          clarification_source: "model",
+        },
+        clarification: {
+          reason: "Need more detail",
+          questions: [
+            {
+              header: "Scope",
+              question: "Which package should change?",
+            },
+            {
+              header: "Compatibility",
+              question: "Should old behavior remain?",
+            },
+          ],
+        },
+      },
+    } as any)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "Refactor this subsystem",
+        })
+
+        const interaction = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorInteractionRequestTable)
+            .where(eq(OrchestratorInteractionRequestTable.task_id, taskID))
+            .get(),
+        )
+
+        expect(interaction?.status).toBe("pending")
+        expect(Array.isArray(interaction?.payload?.questions)).toBe(true)
+        expect(interaction?.payload?.questions).toHaveLength(2)
+        expect(interaction?.body).toContain("Which package should change?")
+        expect(interaction?.body).toContain("Should old behavior remain?")
+      },
+    })
+  })
+
   test("replans after second evaluation failure", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -132,6 +245,7 @@ describe("orchestrator.service", () => {
 
   test("marks task failed when retry and replan budgets are exhausted", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -171,6 +285,7 @@ describe("orchestrator.service", () => {
 
   test("records operator note and queues a follow-up run when task is not actively running", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -226,6 +341,7 @@ describe("orchestrator.service", () => {
 
   test("retryTask queues a deterministic retry run without task-message NLP", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -266,6 +382,7 @@ describe("orchestrator.service", () => {
 
   test("replanTask queues a new plan version without task-message NLP", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -318,6 +435,7 @@ describe("orchestrator.service", () => {
 
   test("only marks goals passed when evaluation checks match goal selectors", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -376,6 +494,7 @@ describe("orchestrator.service", () => {
 
   test("completes task when evaluation passes and all blocking goals are satisfied", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -432,6 +551,7 @@ describe("orchestrator.service", () => {
 
   test("dispatches with the configured executor when registered", async () => {
     await using tmp = await tmpdir({ git: true })
+    stubPlanner()
     const calls: Array<{ sessionID: string; prompt: string; priority?: "high" | "normal" | "low" }> = []
     const codex: ExecutorAdapter = {
       capabilities() {

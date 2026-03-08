@@ -7,6 +7,7 @@ import { WorkbenchService } from "../../src/workbench/service"
 import { Instance } from "../../src/project/instance"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
+import { PlannerService } from "../../src/planner/service"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -16,6 +17,28 @@ describe("workbench.service", () => {
   beforeEach(() => {
     llm = process.env.OPENCORVUS_WORKBENCH_LLM
     process.env.OPENCORVUS_WORKBENCH_LLM = "0"
+    spyOn(PlannerService, "initial").mockResolvedValue({
+      summary: "Compiled plan",
+      prompt: "Execute the compiled plan",
+      goals: [
+        {
+          description: "Implement feature",
+          criteria: "Task completed successfully",
+          priority: "blocking",
+          metadata: {},
+        },
+      ],
+      metadata: {
+        strategy: "initial",
+        steps: ["Execute the task"],
+        planner: {
+          role: "headless_compiler",
+          quality: "compiled",
+          source: "planner_agent",
+          clarification_source: "none",
+        },
+      },
+    } as any)
   })
 
   afterEach(async () => {
@@ -57,7 +80,7 @@ describe("workbench.service", () => {
     })
   })
 
-  test("stores free-form preference without command syntax", async () => {
+  test("records free-form preference text as an operator note when intent analysis is unavailable", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
       sessionID: input.sessionID,
@@ -80,13 +103,15 @@ describe("workbench.service", () => {
           source: "slack",
           user_id: "U-NAT",
         })
-        expect(result.kind).toBe("preference")
+        expect(result.kind).toBe("note")
         const prefs = Database.use((db) =>
           db.select().from(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.user_id, "U-NAT")).all(),
         )
-        expect(prefs.some((item) => item.key === "style" && item.value === "concise")).toBe(true)
-        expect(prefs.some((item) => item.key === "lockfile_policy" && item.value === "avoid_changes")).toBe(true)
-        expect(prefs.every((item) => item.scope === "global")).toBe(true)
+        const notes = Database.use((db) =>
+          db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all(),
+        )
+        expect(prefs).toHaveLength(0)
+        expect(notes.some((item) => item.kind === "operator_note")).toBe(true)
       },
     })
   })
@@ -159,7 +184,7 @@ describe("workbench.service", () => {
     })
   })
 
-  test("stores free-form plan hint without command syntax", async () => {
+  test("records free-form plan text as an operator note when intent analysis is unavailable", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
       sessionID: input.sessionID,
@@ -176,11 +201,9 @@ describe("workbench.service", () => {
           text: "Let's keep the diff small and do this incrementally.",
           source: "slack",
         })
-        expect(result.kind).toBe("plan")
-        const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get())!
         const notes = Database.use((db) => db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all())
-        expect(notes.some((item) => item.kind === "plan_hint")).toBe(true)
-        expect(task.active_plan_version_id).toBeTruthy()
+        expect(result.kind).toBe("note")
+        expect(notes.some((item) => item.kind === "operator_note")).toBe(true)
       },
     })
   })
@@ -209,7 +232,7 @@ describe("workbench.service", () => {
           user_id: "U2",
         })
         await OrchestratorService.handleTaskMessage(taskID, {
-          text: "Remember to avoid lockfile changes",
+          text: "/pref lockfile_policy=avoid_changes",
           source: "slack",
           user_id: "U2",
         })
@@ -256,12 +279,12 @@ describe("workbench.service", () => {
           },
         })
         await OrchestratorService.handleTaskMessage(taskID, {
-          text: "Please keep updates concise and avoid changing lockfiles unless absolutely necessary.",
+          text: "/pref style=concise",
           source: "slack",
           user_id: "U3",
         })
         await OrchestratorService.handleTaskMessage(taskID, {
-          text: "Let's keep the diff small and do this incrementally.",
+          text: "/plan keep the diff small",
           source: "slack",
           user_id: "U3",
         })
@@ -274,7 +297,7 @@ describe("workbench.service", () => {
     })
   })
 
-  test("compiles board with api user-scoped preferences without slack metadata", async () => {
+  test("does not infer free-form api preferences when intent analysis is unavailable", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
       sessionID: input.sessionID,
@@ -293,8 +316,8 @@ describe("workbench.service", () => {
           user_id: "U-API",
         })
         const board = WorkbenchService.compileBoard({ taskID })
-        expect(board.lanes.find((lane) => lane.id === "preferences")?.cards.some((card) => card.title === "style")).toBe(true)
-        expect(board.brief.content).toContain("lockfile_policy: avoid_changes")
+        expect(board.lanes.find((lane) => lane.id === "preferences")?.cards.some((card) => card.title === "style")).toBe(false)
+        expect((board.lanes.find((lane) => lane.id === "notes")?.cards.length ?? 0)).toBeGreaterThan(0)
       },
     })
   })

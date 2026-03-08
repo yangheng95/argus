@@ -175,6 +175,7 @@ export namespace OrchestratorRuntime {
     const run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
     const task = requireTask(run.task_id)
+    const delivery = findDeliveryByRun(run.id)
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
       if (run.status !== "blocked") {
@@ -183,6 +184,15 @@ export namespace OrchestratorRuntime {
       if (task.status !== "blocked") {
         await hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input")
       }
+      return
+    }
+
+    if (run.status === "completed" && delivery) {
+      await completeRun(run, hooks)
+      return
+    }
+
+    if (run.status === "failed" || run.status === "aborted") {
       return
     }
 
@@ -430,7 +440,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   // Phase 2: Independent-context EvaluatorAgent analysis
   // Analyzes check results, investigates failures, assesses each goal, classifies failure type
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  let analysis: EvaluatorAnalysisType | undefined
+  let analysis: EvaluatorAnalysisType
   try {
     analysis = await EvaluatorService.analyzeDelivery({
       task: { title: task.title, request: task.request },
@@ -452,15 +462,80 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       })),
     })
   } catch (err) {
-    log.warn("evaluator agent analysis failed, using automated results only", { error: String(err) })
+    const message = err instanceof Error ? err.message : String(err)
+    log.error("evaluator agent analysis failed", { error: message })
+    Database.transaction((db) => {
+      db.insert(OrchestratorEvaluationTable)
+        .values({
+          id: evaluationID,
+          task_id: task.id,
+          run_id: run.id,
+          delivery_id: deliveryID,
+          status: "failed",
+          verdict: "inconclusive",
+          summary: `Evaluator failure: ${message}`,
+          checks: result.checks,
+          time_completed: Date.now(),
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      for (const artifact of result.artifacts) {
+        db.insert(OrchestratorArtifactTable)
+          .values({
+            id: Identifier.ascending("artifact"),
+            task_id: task.id,
+            run_id: run.id,
+            delivery_id: deliveryID,
+            kind: artifact.kind,
+            label: artifact.label,
+            payload: artifact.payload,
+            time_created: Date.now(),
+            time_updated: Date.now(),
+          })
+          .run()
+      }
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: task.id,
+          run_id: run.id,
+          delivery_id: deliveryID,
+          kind: "report",
+          label: "evaluator-agent-error",
+          payload: { error: message },
+          time_created: Date.now(),
+          time_updated: Date.now(),
+        })
+        .run()
+      Database.effect(() =>
+        Bus.publish(Event.EvaluationCompleted, {
+          taskID: task.id,
+          runID: run.id,
+          evaluationID,
+          status: "failed",
+          verdict: "inconclusive",
+          summary: `Evaluator failure: ${message}`,
+        }),
+      )
+    })
+    await hooks.updateTask(
+      task,
+      {
+        status: "failed",
+        blocking_reason: null,
+        error: `Evaluator failure: ${message}`,
+        time_completed: Date.now(),
+      },
+      `Evaluator failure: ${message}`,
+    )
+    return
   }
 
-  // Use agent verdict when available, fall back to automated results
-  const finalVerdict = analysis?.verdict ?? result.verdict
-  const finalStatus = analysis
-    ? (analysis.verdict === "accepted" ? "passed" : analysis.verdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-    : result.status
-  const finalSummary = analysis?.summary ?? result.summary
+  const finalVerdict = analysis.verdict
+  const finalStatus =
+    (analysis.verdict === "accepted" ? "passed" : analysis.verdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
+  const finalSummary = analysis.summary
 
   Database.transaction((db) => {
     db.insert(OrchestratorEvaluationTable)
@@ -493,24 +568,21 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
         })
         .run()
     }
-    // Store agent analysis as artifact for traceability
-    if (analysis) {
-      db.insert(OrchestratorArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: deliveryID,
-          kind: "report",
-          label: "evaluator-agent-analysis",
-          payload: analysis as unknown as Record<string, unknown>,
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        })
-        .run()
-    }
+    db.insert(OrchestratorArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: task.id,
+        run_id: run.id,
+        delivery_id: deliveryID,
+        kind: "report",
+        label: "evaluator-agent-analysis",
+        payload: analysis as unknown as Record<string, unknown>,
+        time_created: Date.now(),
+        time_updated: Date.now(),
+      })
+      .run()
     // Update individual goal statuses from agent analysis (per-goal, not batch)
-    if (analysis && goals.length > 0) {
+    if (goals.length > 0) {
       const now2 = Date.now()
       for (const gs of analysis.goal_statuses) {
         const goal = goals[gs.goal_index]
@@ -545,24 +617,6 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       if (run.plan_version_id) {
         deriveMilestoneStatuses(db, task.id, run.plan_version_id, now2)
       }
-    } else if (finalStatus === "passed") {
-      // Fallback: batch goal update when agent analysis is unavailable
-      const now2 = Date.now()
-      const matched = goals.filter((goal) => goalMatchesChecks(goal, result.checks))
-      for (const goal of matched) {
-        db.update(OrchestratorGoalTable)
-          .set({ status: "passed", time_updated: now2 })
-          .where(eq(OrchestratorGoalTable.id, goal.id))
-          .run()
-      }
-      for (const goal of matched) {
-        Database.effect(() =>
-          Bus.publish(Event.GoalPassed, { taskID: task.id, goalID: goal.id, summary: goal.description }),
-        )
-      }
-      if (run.plan_version_id) {
-        deriveMilestoneStatuses(db, task.id, run.plan_version_id, now2)
-      }
     }
     Database.effect(() =>
       Bus.publish(Event.EvaluationCompleted, {
@@ -577,6 +631,11 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   })
 
   if (finalStatus === "passed" || finalStatus === "inconclusive") {
+    // "passed" = full LLM investigation confirmed acceptance
+    // "inconclusive" = synthesis fallback or shallow investigation
+    // In both cases, check individual goal statuses — goals with check_selectors
+    // may have been verified mechanistically even without LLM investigation.
+    // Only goals that were actually verified (status !== "pending") count.
     const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
 
@@ -590,7 +649,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       return
     }
     const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    await handleEvaluationFailure(requireTask(task.id), run, `Evaluation passed but blocking goals still pending: ${remaining}`, hooks, analysis)
+    await handleEvaluationFailure(requireTask(task.id), run, `Evaluation ${finalStatus} but blocking goals still pending: ${remaining}`, hooks, analysis)
     return
   }
 
@@ -741,7 +800,21 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
     classification: analysis?.classification ?? undefined,
   }
 
-  const next = await retryOrReplan(task, run, summary, hooks, analysis, retryContext)
+  const next = await retryOrReplan(task, run, summary, hooks, analysis, retryContext).catch(async (error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    log.error("retry/replan failed", { taskID: task.id, runID: run.id, error: message })
+    await hooks.updateTask(
+      task,
+      {
+        status: "failed",
+        blocking_reason: null,
+        error: `Planner failure: ${message}`,
+        time_completed: Date.now(),
+      },
+      `Planner failure: ${message}`,
+    )
+    return false
+  })
   if (next) return
   await failGoals(run, summary)
   // Flush failure learnings (fire-and-forget)
@@ -859,12 +932,6 @@ function deriveMilestoneStatus(goals: GoalRow[]): OrchestratorMilestoneStatus {
   if (blocking.every((g) => g.status === "passed")) return "passed"
   if (goals.some((g) => g.status === "passed")) return "active"
   return "pending"
-}
-
-function goalMatchesChecks(goal: { description: string; criteria: string; metadata: unknown }, checks: Array<{ name: string; status: string }>) {
-  const selectors = selectorList(goal.metadata)
-  if (selectors.length === 0) return true
-  return selectorsSatisfied(selectors, checks)
 }
 
 function selectorList(metadata: unknown) {

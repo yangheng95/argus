@@ -1,15 +1,10 @@
 <p align="center">
   <a href="https://opencorvus.ai">
-    <img src="packages/overlay/src/opencorvus.svg" width="64" height="64" alt="OpenCorvus logo">
+    <img src="assets/readme-head.png"  alt="OpenCorvus logo">
   </a>
 </p>
-<p align="center">The open source AI development operator for delegated software work.</p>
-<p align="center">Runs in your repo. Works from API, Slack, and local sessions. Plans, executes, evaluates, retries.</p>
-<p align="center">
-  <a href="https://www.npmjs.com/package/opencorvus-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencorvus-ai?style=flat-square" /></a>
-  <a href="https://github.com/yangheng95/opencorvus/actions/workflows/test.yml"><img alt="Tests" src="https://img.shields.io/github/actions/workflow/status/yangheng95/opencorvus/test.yml?style=flat-square&branch=dev&label=tests" /></a>
-  <a href="https://github.com/yangheng95/opencorvus/actions/workflows/typecheck.yml"><img alt="Typecheck" src="https://img.shields.io/github/actions/workflow/status/yangheng95/opencorvus/typecheck.yml?style=flat-square&branch=dev&label=typecheck" /></a>
-</p>
+
+<p align="center">slogan: TBD</p>
 
 OpenCorvus sits between human requests and coding agents. You hand it a task. It expands the request into an executable spec, turns that into goals and a plan, dispatches an executor, evaluates the delivery, and either completes, retries, or replans.
 
@@ -165,7 +160,7 @@ No. The core orchestration loop is implemented, but the product surface is still
 
 ### Docs and Contributing
 
-- Docs: https://opencorvus.ai/docs
+- Docs: <https://opencorvus.ai/docs>
 - GitHub Action: [`github/README.md`](./github/README.md)
 - Contributing: [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 

@@ -193,7 +193,7 @@ describe("evaluator.service", () => {
     }
   })
 
-  test("judge check soft-skips when no model is available", async () => {
+  test("judge check fails when no model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -214,8 +214,8 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
-        expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "judge")?.status).toBe("skipped")
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "judge")?.status).toBe("failed")
       },
     })
   })
@@ -295,7 +295,7 @@ describe("evaluator.service", () => {
         expect(result.checks.find((item) => item.name === "startup")?.status).toBe("failed")
       },
     })
-  })
+  }, 30000)
 
   test("puppeteer check stays non-blocking when browser executable is missing", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -341,7 +341,7 @@ describe("evaluator.service", () => {
     }
   })
 
-  test("ui review soft-skips when no review model is available", async () => {
+  test("ui review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -362,13 +362,13 @@ describe("evaluator.service", () => {
           },
           { summary: "Updated the dashboard layout.", changedFiles: ["ui.tsx"], diffs: [] },
         )
-        expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "ui_review")?.status).toBe("skipped")
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "ui_review")?.status).toBe("failed")
       },
     })
   })
 
-  test("code quality review soft-skips when no review model is available", async () => {
+  test("code quality review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -402,13 +402,13 @@ describe("evaluator.service", () => {
             ],
           },
         )
-        expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "code_quality")?.status).toBe("skipped")
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "code_quality")?.status).toBe("failed")
       },
     })
   })
 
-  test("code review soft-skips when no review model is available", async () => {
+  test("code review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -442,13 +442,13 @@ describe("evaluator.service", () => {
             ],
           },
         )
-        expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "code_review")?.status).toBe("skipped")
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "code_review")?.status).toBe("failed")
       },
     })
   })
 
-  test("dead code review soft-skips when no review model is available", async () => {
+  test("dead code review fails when no review model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -482,8 +482,8 @@ describe("evaluator.service", () => {
             ],
           },
         )
-        expect(result.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("skipped")
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("failed")
       },
     })
   })

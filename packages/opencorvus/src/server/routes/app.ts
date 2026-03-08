@@ -30,6 +30,7 @@ import { TuiRoutes } from "./tui"
 import { ExportRoutes } from "./export"
 import { OrchestratorRoutes } from "./orchestrator"
 import { PanelRoutes } from "./panel"
+import { PanelKnowledgeRoutes } from "./panel-knowledge"
 import { ControlRoutes } from "./control"
 
 const log = Log.create({ service: "server" })
@@ -64,6 +65,7 @@ export function AppRoutes(root: Hono) {
     .route("/provider", ProviderRoutes())
     .route("/skill", SkillRoutes())
     .route("/panel", PanelRoutes())
+    .route("/panel/knowledge", PanelKnowledgeRoutes())
     .route("/control", ControlRoutes())
     .route("/", OrchestratorRoutes())
     .route("/export", ExportRoutes())

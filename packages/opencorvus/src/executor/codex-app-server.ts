@@ -177,10 +177,23 @@ async function* stream(client: CodexAppServerClient, threadID: string, turnID: s
   for await (const item of client.events({ signal })) {
     if (item.type === "notification") {
       yield* notification(threadID, turnID, item.method, item.params)
+      if (terminal(threadID, turnID, item.method, item.params)) return
       continue
     }
     yield* request(item)
   }
+}
+
+function terminal(threadID: string, turnID: string, method: string, params?: Record<string, unknown>) {
+  const data = params ?? {}
+  const currentThread = typeof data.threadId === "string" ? data.threadId : threadID
+  const currentTurn = typeof data.turnId === "string"
+    ? data.turnId
+    : typeof record(data.turn)?.id === "string"
+      ? String(record(data.turn)?.id)
+      : turnID
+  if (currentThread !== threadID || currentTurn !== turnID) return false
+  return method === "turn/completed" || method === "error"
 }
 
 function* notification(threadID: string, turnID: string, method: string, params?: Record<string, unknown>): Generator<CodingEventInfo> {

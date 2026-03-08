@@ -100,10 +100,12 @@ async function run(input: z.infer<typeof ControlMessageInput>) {
   if (directResult) return directResult
 
   // No task bound → create a new task only if it looks like a real request
-  if (!input.taskID && input.allow_create) {
+  if (!input.taskID && input.allow_create && !shouldUseControlPlane(input)) {
     if (!looksLikeTaskRequest(input.text)) {
-      // Short/casual/ambiguous — fall through to LLM for proper handling
-      return fallbackLlmOrReject(input)
+      return ControlMessageResult.parse({
+        kind: "panel_response",
+        message: "This message is not a concrete task request. Describe a specific implementation task, or use status/list/cancel/executor controls.",
+      })
     }
     return createTaskDirect(input)
   }
@@ -223,6 +225,12 @@ function defaultSource(surface: z.infer<typeof ControlMessageInput>["surface"]) 
   return `channel:${surface}`
 }
 
+function shouldUseControlPlane(input: z.infer<typeof ControlMessageInput>) {
+  if (input.surface !== "panel") return false
+  const ui = input.metadata?.ui_context
+  return typeof ui === "string" && ["session_manager", "task_toolbar", "engine_bar"].includes(ui)
+}
+
 function scope(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {
   const taskID = result.task_id ?? input.taskID
   const sessionID = result.session_id ?? input.sessionID ?? taskSession(taskID)
@@ -260,10 +268,23 @@ function tryDirectQuery(
 ): z.infer<typeof ControlMessageResult> | undefined {
   const text = input.text.trim()
 
+  if (input.executor && /(switch|use|executor|切换|用)/i.test(text)) {
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: `Executor set to ${input.executor}.`,
+      local_action: { type: "set_executor", executor: input.executor },
+    })
+  }
+
   // Executor selection: "Use executor codex..." / "切换到 claude-code" / "用 opencode"
-  const executorFullMatch = text.match(EXECUTOR_FULL_PATTERN) || text.match(EXECUTOR_PATTERN)
-  if (executorFullMatch) {
-    const raw = executorFullMatch[1].toLowerCase().replace(/\s+/g, "-")
+  const executorFullMatch = text.match(EXECUTOR_FULL_PATTERN)
+  const executorLooseMatch =
+    EXECUTOR_PATTERN.test(text)
+      ? text.match(/\b(opencode|codex|claude[- ]code)\b/i)
+      : undefined
+  const executorMatch = executorFullMatch ?? executorLooseMatch
+  if (executorMatch) {
+    const raw = executorMatch[1].toLowerCase().replace(/\s+/g, "-")
     const executor = raw === "claude-code" || raw === "claude code" ? "claude-code" : raw as "opencode" | "codex" | "claude-code"
     if (["opencode", "codex", "claude-code"].includes(executor)) {
       return ControlMessageResult.parse({
@@ -328,50 +349,6 @@ function looksLikeTaskRequest(text: string) {
   // Help / meta questions
   if (/^(?:help|帮助|how\s+(?:do|does|to)|what\s+(?:is|are|can)|怎么用|能做什么|支持什么)[\s?？]*$/i.test(trimmed)) return false
   return true
-}
-
-async function fallbackLlmOrReject(input: z.infer<typeof ControlMessageInput>) {
-  // Try LLM path for non-task messages (e.g., ambiguous questions)
-  const model = await resolveModel()
-  if (!model) {
-    return ControlMessageResult.parse({
-      kind: "panel_response",
-      message: "请描述具体的任务需求，我会为你创建任务。",
-    })
-  }
-  const session = await Session.create({ title: `Panel control (${input.surface})` })
-  try {
-    const result = await SessionPrompt.prompt({
-      sessionID: session.id,
-      agent: await Agent.defaultAgent(),
-      system: await systemPrompt(input),
-      parts: [{ type: "text", text: buildUserPrompt(input) }],
-      tools: await panelTools(),
-      format: {
-        type: "json_schema",
-        schema: ResultSchema as unknown as Record<string, any>,
-        retryCount: 1,
-      },
-      extra: {
-        surface: input.surface,
-        source: input.source ?? defaultSource(input.surface),
-      },
-    })
-    if (result.info.role === "assistant" && result.info.structured) {
-      return ControlMessageResult.parse(result.info.structured)
-    }
-    return ControlMessageResult.parse({
-      kind: "panel_response",
-      message: textFromMessage(result),
-    })
-  } catch (error) {
-    return ControlMessageResult.parse({
-      kind: "panel_response",
-      message: `请描述具体的任务需求。`,
-    })
-  } finally {
-    await Session.remove(session.id).catch(() => undefined)
-  }
 }
 
 function queryTaskProgress(taskID: string): z.infer<typeof ControlMessageResult> {
