@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { PlannerService } from "../../src/planner/service"
 
 describe("planner.service", () => {
-  test("builds an initial plan with plan-mode workflow prompt", async () => {
+  test("builds an initial plan with execution prompt", async () => {
     const plan = await PlannerService.initial({
       title: "Update landing page",
       request: "Update the landing page hero copy and make sure tests pass.",
@@ -12,11 +12,10 @@ describe("planner.service", () => {
     expect(plan.goals.length).toBeGreaterThanOrEqual(1)
     expect(plan.metadata.strategy).toBe("initial")
     expect(plan.metadata.steps.length).toBeGreaterThan(2)
-    // Plan-mode workflow prompt should contain upstream-style phases
-    expect(plan.prompt).toContain("Phase 1: Explore")
-    expect(plan.prompt).toContain("Phase 2: Plan with the Planner Tool")
+    // Execution prompt should contain key workflow elements
+    expect(plan.prompt).toContain("Explore")
     expect(plan.prompt).toContain("planner")
-    expect(plan.prompt).toContain("add_task")
+    expect(plan.prompt).toContain("Verify")
   })
 
   test("builds a replan with failure context and replan section", async () => {
