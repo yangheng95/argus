@@ -1,98 +1,195 @@
+// Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod commands;
-mod events;
-mod manager;
-mod overlay;
-mod tray;
+use std::{
+    path::PathBuf,
+    process::{Child, Command, Stdio},
+    sync::Mutex,
+};
 
-use tauri::Manager;
-use tauri::RunEvent;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    AppHandle, Manager, Runtime,
+};
+
+struct Server(Mutex<Option<Child>>);
+
+fn server_path() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let names = if cfg!(windows) {
+        ["opencorvus-core.exe", "opencorvus.exe"]
+    } else {
+        ["opencorvus-core", "opencorvus"]
+    };
+
+    names
+        .into_iter()
+        .map(|name| dir.join(name))
+        .find(|path| path.exists())
+}
+
+fn stop_server<R: Runtime>(app: &AppHandle<R>) {
+    let state = app.state::<Server>();
+    let mut lock = state.0.lock().unwrap();
+    if let Some(mut child) = lock.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(path) = server_path() else {
+        eprintln!("overlay: bundled opencorvus binary not found next to overlay");
+        return Ok(());
+    };
+
+    let mut cmd = Command::new(path);
+    cmd.arg("serve")
+        .arg("--hostname")
+        .arg("127.0.0.1")
+        .arg("--port")
+        .arg("7878")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    *app.state::<Server>().0.lock().unwrap() = Some(cmd.spawn()?);
+    Ok(())
+}
+
+fn restart_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
+    stop_server(app);
+    start_server(app)
+}
 
 fn main() {
-    let shared = manager::new_shared();
-    let sidecar = std::env::var("OPENCORVUS_OVERLAY_MODE")
-        .ok()
-        .map(|item| item == "sidecar")
-        .unwrap_or(false);
-
     tauri::Builder::default()
-        .manage(shared)
-        .invoke_handler(tauri::generate_handler![
-            commands::position_window,
-            commands::hide_window,
-            commands::confirm_reply,
-            commands::manager_open,
-            commands::manager_get,
-            commands::manager_start,
-            commands::manager_stop,
-            commands::manager_clear_logs,
-            commands::manager_reveal_log_path,
-            commands::manager_save,
-            commands::manager_apply_channel_env,
-            commands::manager_send,
-            commands::manager_open_mcp_config,
-            commands::manager_open_skill_dir,
-            commands::manager_add_mcp,
-            commands::manager_create_skill,
-            commands::manager_list_sessions,
-            commands::manager_use_session,
-            commands::manager_delete_session,
-            commands::manager_export_session_html
-        ])
-        .setup(move |app| {
-            let state = app.state::<manager::Shared>();
-            manager::init(state.inner(), &app.handle());
-            if !sidecar {
-                if let Err(error) = manager::start_bot(state.inner(), &app.handle()) {
-                    manager::push_log(
-                        state.inner(),
-                        &app.handle(),
-                        format!("auto-start failed: {error}"),
-                    );
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init())
+        .setup(|app| {
+            app.manage(Server(Mutex::new(None)));
+            let handle = app.handle().clone();
+            let _ = restart_server(&handle);
+
+            // Adapt window size & position to primary monitor
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(Some(monitor)) = window.primary_monitor() {
+                    let screen = monitor.size();
+                    let scale = monitor.scale_factor();
+                    let logical_w = screen.width as f64 / scale;
+                    let logical_h = screen.height as f64 / scale;
+
+                    // Panel: ~50% width (clamped 640..1100), ~72% height (clamped 480..920)
+                    let w = (logical_w * 0.50).clamp(640.0, 1100.0);
+                    let h = (logical_h * 0.72).clamp(480.0, 920.0);
+                    // Position: bottom-right with 24px margin
+                    let x = logical_w - w - 24.0;
+                    let y = logical_h - h - 64.0; // leave room for taskbar
+
+                    let _ = window.set_size(tauri::LogicalSize::new(w, h));
+                    let _ = window.set_position(tauri::LogicalPosition::new(x, y));
                 }
-                if let Err(error) = tray::setup(&app.handle()) {
-                    manager::push_log(
-                        state.inner(),
-                        &app.handle(),
-                        format!("tray setup failed: {error}"),
-                    );
-                }
-                manager::show_console(&app.handle());
             }
-            overlay::apply_overlay_window_style(app);
-            overlay::start_stdin_bridge(app);
+
+            // Build tray menu
+            let show_item = MenuItem::with_id(app, "show", "Show Panel", true, None::<&str>)?;
+            let hide_item = MenuItem::with_id(app, "hide", "Hide Panel", true, None::<&str>)?;
+            let restart_item = MenuItem::with_id(app, "restart", "Restart", true, None::<&str>)?;
+            let separator = MenuItem::with_id(app, "sep", "────────", false, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+
+            let menu = Menu::with_items(
+                app,
+                &[&show_item, &hide_item, &restart_item, &separator, &quit_item],
+            )?;
+
+            let icon = create_tray_icon();
+
+            let _tray = TrayIconBuilder::new()
+                .icon(icon)
+                .tooltip("OpenCorvus")
+                .menu(&menu)
+                .on_menu_event(move |app, event| {
+                    let id = event.id().as_ref();
+                    match id {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "hide" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.hide();
+                            }
+                        }
+                        "restart" => {
+                            let _ = restart_server(app);
+                            if let Some(window) = app.get_webview_window("main") {
+                                // Reload the frontend
+                                let _ = window.eval("location.reload()");
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            stop_server(app);
+                            app.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                        let app = tray.app_handle();
+                        if let Some(window) = app.get_webview_window("main") {
+                            if window.is_visible().unwrap_or(false) {
+                                let _ = window.hide();
+                            } else {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+
             Ok(())
         })
         .build(tauri::generate_context!())
-        .unwrap()
-        .run(move |app, event| {
-            let stop_once = || {
-                let state = app.state::<manager::Shared>();
-                let snapshot = manager::snapshot(state.inner());
-                if !snapshot.running && !snapshot.channel_running {
-                    return;
-                }
-                if let Err(error) = manager::stop_bot(state.inner(), app) {
-                    manager::push_log(state.inner(), app, format!("shutdown stop failed: {error}"));
-                }
-            };
-
-            match event {
-                RunEvent::WindowEvent { label, event, .. } => {
-                    if sidecar || label != events::WINDOW_CONSOLE {
-                        return;
-                    }
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        api.prevent_close();
-                        stop_once();
-                        app.exit(0);
-                    }
-                }
-                RunEvent::ExitRequested { .. } | RunEvent::Exit => {
-                    stop_once();
-                }
-                _ => {}
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                stop_server(app);
             }
-        });
+        })
+}
+
+/// Create a simple 32x32 RGBA icon (blue circle on transparent background)
+fn create_tray_icon() -> tauri::image::Image<'static> {
+    let size: u32 = 32;
+    let mut rgba = vec![0u8; (size * size * 4) as usize];
+    let cx = size as f64 / 2.0;
+    let cy = size as f64 / 2.0;
+    let r = 12.0;
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f64 - cx;
+            let dy = y as f64 - cy;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let idx = ((y * size + x) * 4) as usize;
+
+            if dist <= r {
+                rgba[idx] = 0x5b;
+                rgba[idx + 1] = 0x8d;
+                rgba[idx + 2] = 0xef;
+                let edge = r - dist;
+                rgba[idx + 3] = if edge >= 1.0 { 255 } else { (edge * 255.0) as u8 };
+            }
+        }
+    }
+
+    tauri::image::Image::new_owned(rgba, size, size)
 }
