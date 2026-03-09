@@ -26,13 +26,6 @@ type Account = {
   token_uri?: string
 }
 
-type SendPayload = {
-  text: string
-  thread?: {
-    name: string
-  }
-}
-
 function b64(raw: string) {
   return Buffer.from(raw).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
 }
@@ -101,7 +94,30 @@ export class GoogleChatAdapter implements BotAdapter {
     await this.sendMessage(channel, thread, text)
   }
 
-  private async send(channel: string, payload: SendPayload) {
+  async uploadImageUrl(channel: string, thread: string, url: string, filename: string, title?: string): Promise<void> {
+    await this.send(channel, {
+      text: title ?? filename,
+      thread: thread ? { name: thread } : undefined,
+      cardsV2: [{
+        cardId: "screenshot",
+        card: {
+          sections: [{
+            widgets: [
+              ...(title ? [{ textParagraph: { text: title } }] : []),
+              {
+                image: {
+                  imageUrl: url,
+                  altText: filename,
+                },
+              },
+            ],
+          }],
+        },
+      }],
+    })
+  }
+
+  private async send(channel: string, payload: Record<string, unknown>) {
     const token = await this.auth()
     const res = await fetch(`https://chat.googleapis.com/v1/${channel}/messages`, {
       method: "POST",

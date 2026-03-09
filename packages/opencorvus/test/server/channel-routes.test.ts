@@ -49,6 +49,8 @@ describe("channel routes", () => {
   afterEach(async () => {
     mock.restore()
     delete process.env.OPENCORVUS_WORKBENCH_LLM
+    delete process.env.OPENCORVUS_PUBLIC_URL
+    delete process.env.OPENCORVUS_PUBLIC_URL_SECRET
     await resetDatabase()
   })
 
@@ -105,7 +107,8 @@ describe("channel routes", () => {
         expect(binding?.platform).toBe("discord")
         expect(binding?.channel).toBe("room-1")
         expect(binding?.thread).toBe("thread-1")
-        expect(binding?.payload?.channel?.user_id).toBe("user-1")
+        const channel = binding?.payload?.channel as { user_id?: string } | undefined
+        expect(channel?.user_id).toBe("user-1")
       },
     })
   })
@@ -274,6 +277,101 @@ describe("channel routes", () => {
         } finally {
           unsub()
         }
+      },
+    })
+  })
+
+  test("POST /channel/message accepts mainstream non-legacy channel platforms", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stub()
+    installControlModel()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/channel/message", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            platform: "feishu",
+            channel: "chat-9",
+            thread: "root-9",
+            text: "Create a task to wire channel screenshots into the control plane.",
+            user_id: "ou_xxx",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { kind: string; task_id: string }
+        expect(body.kind).toBe("created")
+
+        const binding = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorChannelBindingTable)
+            .where(eq(OrchestratorChannelBindingTable.task_id, body.task_id))
+            .get(),
+        )
+        expect(binding?.platform).toBe("feishu")
+        expect(binding?.channel).toBe("chat-9")
+        expect(binding?.thread).toBe("root-9")
+      },
+    })
+  })
+
+  test("POST /channel/attachment publishes signed URLs for remote screenshot delivery", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_PUBLIC_URL = "https://public.opencorvus.dev"
+    process.env.OPENCORVUS_PUBLIC_URL_SECRET = "secret-key"
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/channel/attachment", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            mime: "image/png",
+            filename: "overlay.png",
+            data: Buffer.from("hello").toString("base64"),
+          }),
+        })
+
+        expect(created.status).toBe(200)
+        const body = (await created.json()) as {
+          id: string
+          url: string
+          filename: string
+          mime: string
+          expires_at: number
+        }
+        expect(body.id.startsWith("att_")).toBe(true)
+        expect(body.url.startsWith("https://public.opencorvus.dev/channel/attachment/")).toBe(true)
+        expect(body.filename).toBe("overlay.png")
+        expect(body.mime).toBe("image/png")
+        expect(body.expires_at).toBeGreaterThan(Date.now())
+
+        const signed = new URL(body.url)
+        const fetched = await app.request(`${signed.pathname}${signed.search}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(fetched.status).toBe(200)
+        expect(fetched.headers.get("content-type")).toBe("image/png")
+        expect(await fetched.text()).toBe("hello")
       },
     })
   })

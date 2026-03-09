@@ -122,7 +122,9 @@ export namespace OpencodeExecutor {
     }
   }
 
-  export async function* events(input: { sessionID: string; signal?: AbortSignal }) {
+  export async function* events(input: { sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
+    if (!input.sessionID) return
+    const sessionID = input.sessionID
     const queue: Array<z.infer<typeof EventResult>> = []
     let done = false
     let wake: (() => void) | undefined
@@ -131,7 +133,7 @@ export namespace OpencodeExecutor {
       wake?.()
     }
     const unsub = Bus.subscribeAll((event) => {
-      const next = mapEvent(event, input.sessionID)
+      const next = mapEvent(event, sessionID)
       if (!next) return
       push(next)
     })

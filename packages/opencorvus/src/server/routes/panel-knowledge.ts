@@ -29,6 +29,10 @@ export function PanelKnowledgeRoutes() {
                       title: z.string(),
                       scope: z.string(),
                       source: z.string(),
+                      kind: z.string(),
+                      key: z.string().optional(),
+                      importance: z.number(),
+                      confidence: z.number(),
                       timeCreated: z.number(),
                       timeUpdated: z.number(),
                     }),
@@ -39,8 +43,10 @@ export function PanelKnowledgeRoutes() {
           },
         },
       }),
+      validator("query", z.object({ sessionID: z.string().optional() })),
       async (c) => {
-        const files = Memory.listFiles({ projectId: projectId() })
+        const { sessionID } = c.req.valid("query")
+        const files = Memory.listFiles({ projectId: projectId(), sessionID })
         return c.json(files)
       },
     )
@@ -61,6 +67,10 @@ export function PanelKnowledgeRoutes() {
                       title: z.string(),
                       scope: z.string(),
                       source: z.string(),
+                      kind: z.string(),
+                      key: z.string().optional(),
+                      importance: z.number(),
+                      confidence: z.number(),
                       timeCreated: z.number(),
                       timeUpdated: z.number(),
                     }),
@@ -98,6 +108,12 @@ export function PanelKnowledgeRoutes() {
                       fileId: z.string(),
                       fileTitle: z.string(),
                       content: z.string(),
+                      scope: z.string(),
+                      source: z.string(),
+                      kind: z.string(),
+                      key: z.string().optional(),
+                      importance: z.number(),
+                      confidence: z.number(),
                       score: z.number(),
                     }),
                   ),
@@ -111,12 +127,13 @@ export function PanelKnowledgeRoutes() {
         "json",
         z.object({
           query: z.string(),
+          sessionID: z.string().optional(),
           limit: z.number().int().min(1).max(50).optional(),
         }),
       ),
       async (c) => {
-        const { query, limit } = c.req.valid("json")
-        const results = Memory.search({ query, projectId: projectId(), limit })
+        const { query, sessionID, limit } = c.req.valid("json")
+        const results = Memory.search({ query, projectId: projectId(), sessionID, limit })
         return c.json(results)
       },
     )
@@ -142,11 +159,11 @@ export function PanelKnowledgeRoutes() {
     .get(
       "/preference",
       describeRoute({
-        summary: "List merged preferences for current project",
+        summary: "List manageable preferences for current project",
         operationId: "panel.knowledge.preference.list",
         responses: {
           200: {
-            description: "Preference list (merged: defaults → global → session)",
+            description: "Preference list (project-local cwd + custom overrides)",
             content: {
               "application/json": {
                 schema: resolver(
@@ -168,7 +185,7 @@ export function PanelKnowledgeRoutes() {
         },
       }),
       async (c) => {
-        const prefs = Preference.merged({ projectID: projectId() })
+        const prefs = Preference.manageable({ projectID: projectId() })
         return c.json(prefs)
       },
     )
@@ -207,6 +224,32 @@ export function PanelKnowledgeRoutes() {
         return c.json(entry)
       },
     )
+    .patch(
+      "/preference/:id",
+      describeRoute({
+        summary: "Update a preference",
+        operationId: "panel.knowledge.preference.update",
+        responses: {
+          200: {
+            description: "Updated",
+            content: { "application/json": { schema: resolver(z.object({ ok: z.boolean() })) } },
+          },
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          key: z.string(),
+          value: z.string(),
+        }),
+      ),
+      async (c) => {
+        const id = c.req.param("id")
+        const { key, value } = c.req.valid("json")
+        Preference.update({ preferenceID: id, key, value })
+        return c.json({ ok: true })
+      },
+    )
     .delete(
       "/preference/:id",
       describeRoute({
@@ -221,10 +264,6 @@ export function PanelKnowledgeRoutes() {
       }),
       async (c) => {
         const id = c.req.param("id")
-        // Don't allow deleting built-in defaults
-        if (id.startsWith("default:")) {
-          return c.json({ error: "Cannot delete built-in default preference" }, 400)
-        }
         Preference.remove(id)
         return c.json({ ok: true })
       },

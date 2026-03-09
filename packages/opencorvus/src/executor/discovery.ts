@@ -3,6 +3,7 @@ import path from "path"
 import fs from "fs"
 import { Process } from "@/util/process"
 import type { ExecutorNameInfo } from "./compat"
+import { which } from "@/util/which"
 
 type Found = {
   name: ExecutorNameInfo
@@ -73,7 +74,7 @@ function findInRoots(names: string[]) {
 
 function findOnPath(names: string[]) {
   for (const name of names) {
-    const value = Bun.which(name)
+    const value = which(name)
     if (!value) continue
     return {
       path: value,

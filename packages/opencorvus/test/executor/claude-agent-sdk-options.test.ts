@@ -51,6 +51,15 @@ describe("claude agent sdk options", () => {
     expect(options?.permissionMode).toBe("default")
     expect(options?.allowDangerouslySkipPermissions).toBe(false)
   })
+
+  test("forces read-only planning mode when tools are disabled", async () => {
+    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "plan", toolMode: "none", sandbox: "read-only" }))
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    expect(options?.permissionMode).toBe("plan")
+    expect(options?.allowDangerouslySkipPermissions).toBe(false)
+    expect(options?.allowedTools).toEqual([])
+  })
 })
 
 async function collect(input: AsyncIterable<unknown>) {

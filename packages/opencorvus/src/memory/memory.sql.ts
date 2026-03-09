@@ -3,6 +3,8 @@ import { ProjectTable } from "../project/project.sql"
 import { Timestamps } from "@/storage/schema.sql"
 
 export type MemoryScope = "global" | "session"
+export type MemoryKind = "note" | "episode" | "fact" | "lesson" | "profile"
+export type MemorySource = "agent" | "compaction" | "user" | "reflection"
 
 export const MemoryFileTable = sqliteTable(
   "memory_file",
@@ -14,10 +16,20 @@ export const MemoryFileTable = sqliteTable(
     session_id: text(),
     scope: text().notNull().$type<MemoryScope>().default("global"),
     title: text().notNull(),
-    source: text().notNull().$type<"agent" | "compaction" | "user">(),
+    source: text().notNull().$type<MemorySource>(),
+    kind: text().notNull().$type<MemoryKind>().default("note"),
+    key: text(),
+    importance: integer().notNull().default(60),
+    confidence: integer().notNull().default(75),
     ...Timestamps,
   },
-  (table) => [index("memory_file_project_idx").on(table.project_id)],
+  (table) => [
+    index("memory_file_project_idx").on(table.project_id),
+    index("memory_file_scope_idx").on(table.scope),
+    index("memory_file_session_idx").on(table.session_id),
+    index("memory_file_kind_idx").on(table.kind),
+    index("memory_file_key_idx").on(table.key),
+  ],
 )
 
 export const MemoryChunkTable = sqliteTable(

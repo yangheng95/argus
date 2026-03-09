@@ -27,7 +27,7 @@ export namespace ClaudeCodeExecutor {
 
   export function request(raw: Parameters<typeof CodingRunInput.parse>[0]) {
     const input = CodingRunInput.parse(raw)
-    const tools = builtins(input.tools ?? [])
+    const tools = input.toolMode === "none" ? [] : builtins(input.tools ?? [])
     return {
       prompt: input.prompt,
       options: {
@@ -46,7 +46,9 @@ export namespace ClaudeCodeExecutor {
               preset: "claude_code",
             },
         tools:
-          tools.length > 0
+          input.toolMode === "none"
+            ? []
+            : tools.length > 0
             ? tools
             : {
                 type: "preset",

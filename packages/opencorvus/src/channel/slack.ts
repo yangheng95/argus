@@ -1,7 +1,11 @@
 import { App } from "@slack/bolt"
+import { Bus } from "@/bus"
 import { ChannelIngress } from "@/channel/ingress"
+import { Event as OrchestratorEvent } from "@/orchestrator/model"
+import { OrchestratorChannelBindingTable } from "@/orchestrator/orchestrator.sql"
 import { Instance } from "@/project/instance"
 import { InstanceBootstrap } from "@/project/bootstrap"
+import { Database, and, eq } from "@/storage/db"
 import { Log } from "@/util/log"
 
 const log = Log.create({ service: "channel.slack" })
@@ -12,6 +16,7 @@ export class SlackGateway {
   private botUserId?: string
   private processed = new Set<string>()
   private startedAt = (Date.now() / 1000).toString()
+  private unsub?: () => void
 
   constructor(input: { directory: string; token: string; appToken: string; signingSecret?: string }) {
     this.directory = input.directory
@@ -26,6 +31,7 @@ export class SlackGateway {
   async start() {
     const auth = await this.app.client.auth.test()
     this.botUserId = auth.user_id
+    this.subscribeEvents()
     this.app.message(async ({ message }) => {
       await this.handleMessage(message as any).catch((error) => {
         log.error("slack message handler failed", { error })
@@ -36,7 +42,41 @@ export class SlackGateway {
   }
 
   async stop() {
+    this.unsub?.()
+    this.unsub = undefined
     await this.app.stop()
+  }
+
+  private subscribeEvents() {
+    this.unsub?.()
+    this.unsub = Bus.subscribe(OrchestratorEvent.EvaluationCompleted, async (event) => {
+      await this.withInstance(async () => {
+        const binding = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorChannelBindingTable)
+            .where(
+              and(
+                eq(OrchestratorChannelBindingTable.task_id, event.properties.taskID),
+                eq(OrchestratorChannelBindingTable.platform, "slack"),
+              ),
+            )
+            .get(),
+        )
+        if (!binding) return
+        await this.sendThread(
+          binding.channel,
+          binding.thread,
+          `Evaluation ${event.properties.verdict}: ${event.properties.summary}`,
+        )
+      }).catch((error) => {
+        log.error("slack event publish failed", {
+          error,
+          event: event.type,
+          taskID: event.properties.taskID,
+        })
+      })
+    })
   }
 
   private async handleMessage(message: {
@@ -72,15 +112,29 @@ export class SlackGateway {
         source: "slack",
         allow_create: thread === message.ts,
       })
-      await this.sendThread(channel, thread, result.message)
+      await this.sendThread(channel, thread, result.message, result.attachments)
     })
   }
 
-  private async sendThread(channel: string, thread: string, text: string) {
-    await this.app.client.chat.postMessage({
-      channel,
+  private async sendThread(
+    channel: string,
+    thread: string,
+    text: string,
+    attachments?: Array<{ mime: string; url: string; filename?: string }>,
+  ) {
+    if (text.trim()) {
+      await this.app.client.chat.postMessage({
+        channel,
+        thread_ts: thread,
+        text,
+      })
+    }
+    const uploads = (attachments ?? []).map(fileUpload).filter((item): item is NonNullable<typeof item> => Boolean(item))
+    if (uploads.length === 0) return
+    await this.app.client.files.uploadV2({
+      channel_id: channel,
       thread_ts: thread,
-      text,
+      file_uploads: uploads,
     })
   }
 
@@ -91,4 +145,20 @@ export class SlackGateway {
       fn,
     })
   }
+}
+
+function fileUpload(input: { mime: string; url: string; filename?: string }) {
+  if (!input.url.startsWith("data:") || !input.url.includes(",")) return
+  const [head, data] = input.url.split(",", 2)
+  const mime = input.mime || head.match(/^data:([^;]+)/)?.[1] || "application/octet-stream"
+  return {
+    file: Buffer.from(data, "base64"),
+    filename: input.filename ?? defaultFileName(mime),
+  }
+}
+
+function defaultFileName(mime: string) {
+  if (mime === "image/png") return "opencorvus-gui.png"
+  if (mime === "image/jpeg") return "opencorvus-gui.jpg"
+  return "opencorvus-gui.bin"
 }

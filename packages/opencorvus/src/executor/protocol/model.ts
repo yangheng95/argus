@@ -52,6 +52,8 @@ export const ProtocolCapabilities = z.object({
   mcp: z.boolean().default(false),
   usage: z.boolean().default(false),
   realtime: z.boolean().default(false),
+  spec_generation: z.boolean().default(false),
+  plan_generation: z.boolean().default(false),
   tool_kinds: ProtocolToolKind.array().default([]),
 })
 export type ProtocolCapabilitiesInfo = z.infer<typeof ProtocolCapabilities>
@@ -130,6 +132,8 @@ export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
         mcp: appServer,
         usage: appServer,
         realtime: appServer,
+        spec_generation: true,
+        plan_generation: true,
         tool_kinds: appServer
           ? ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output"]
           : ["builtin", "shell", "patch", "read", "unknown"],
@@ -157,6 +161,8 @@ export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
         mcp: sdk,
         usage: true,
         realtime: false,
+        spec_generation: true,
+        plan_generation: true,
         tool_kinds: sdk
           ? ["builtin", "approval", "input", "mcp", "shell", "patch", "read", "review", "structured_output", "unknown"]
           : ["builtin", "shell", "patch", "read", "unknown"],
@@ -182,6 +188,8 @@ export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
       mcp: true,
       usage: false,
       realtime: false,
+      spec_generation: false,
+      plan_generation: false,
       tool_kinds: ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output"],
     },
   })

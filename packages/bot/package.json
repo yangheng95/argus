@@ -4,6 +4,7 @@
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
+    "@opencorvus-ai/channel-config": "workspace:*",
     "@opencorvus-ai/sdk": "workspace:*",
     "@slack/bolt": "4.6.0",
     "discord.js": "14.23.2",

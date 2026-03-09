@@ -14,6 +14,8 @@ import {
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
   OrchestratorRunTable,
+  OrchestratorSpecItemTable,
+  OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
   type OrchestratorBudget,
   type OrchestratorExecutorRef,
@@ -32,6 +34,8 @@ export type EvaluationRow = typeof OrchestratorEvaluationTable.$inferSelect
 export type ProgressRow = typeof OrchestratorProgressSnapshotTable.$inferSelect
 export type ExecutorSessionRow = typeof OrchestratorExecutorSessionTable.$inferSelect
 export type ExecutorEventRow = typeof OrchestratorExecutorEventTable.$inferSelect
+export type SpecSnapshotRow = typeof OrchestratorSpecSnapshotTable.$inferSelect
+export type SpecItemRow = typeof OrchestratorSpecItemTable.$inferSelect
 
 export function requireTask(taskID: string) {
   const row = findTask(taskID)
@@ -81,6 +85,87 @@ export function findPlans(taskID: string) {
       .all(),
   )
 }
+
+// ---------------------------------------------------------------------------
+// Spec store functions
+// ---------------------------------------------------------------------------
+
+export function findSpecSnapshot(specID: string) {
+  return Database.use((db) =>
+    db.select().from(OrchestratorSpecSnapshotTable).where(eq(OrchestratorSpecSnapshotTable.id, specID)).get(),
+  )
+}
+
+export function findSpecSnapshots(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorSpecSnapshotTable)
+      .where(eq(OrchestratorSpecSnapshotTable.task_id, taskID))
+      .orderBy(desc(OrchestratorSpecSnapshotTable.version))
+      .all(),
+  )
+}
+
+export function findSpecItems(specSnapshotID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorSpecItemTable)
+      .where(eq(OrchestratorSpecItemTable.spec_snapshot_id, specSnapshotID))
+      .all(),
+  )
+}
+
+export function findSpecItemsByTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorSpecItemTable)
+      .where(eq(OrchestratorSpecItemTable.task_id, taskID))
+      .all(),
+  )
+}
+
+export function viewSpecSnapshot(row: SpecSnapshotRow) {
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    version: row.version,
+    status: row.status,
+    summary: row.summary,
+    content: row.content,
+    scope: row.scope,
+    outOfScope: row.out_of_scope ?? undefined,
+    evidence: row.evidence ?? undefined,
+    metadata: row.metadata ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+    },
+  }
+}
+
+export function viewSpecItem(row: SpecItemRow) {
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    specSnapshotID: row.spec_snapshot_id,
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    priority: row.priority,
+    checkSelector: row.check_selector ?? undefined,
+    evidence: row.evidence ?? undefined,
+    metadata: row.metadata ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 export function findRun(runID: string) {
   return Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get())
@@ -321,6 +406,7 @@ export function viewTask(row: TaskRow) {
     id: row.id,
     projectID: row.project_id,
     sessionID: row.session_id ?? undefined,
+    activeSpecVersionID: row.active_spec_version_id ?? undefined,
     activePlanVersionID: row.active_plan_version_id ?? undefined,
     activeRunID: row.active_run_id ?? undefined,
     requestID: row.request_id ?? undefined,

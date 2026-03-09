@@ -4,8 +4,11 @@ import { EvaluatorService } from "@/evaluator/service"
 import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
+import { writeSpec } from "@/orchestrator/spec"
 import { PermissionNext } from "@/permission/next"
+import { type ReplanContext } from "@/planner/agent"
 import { PlannerFailureError, PlannerService } from "@/planner/service"
+import { SpecFailureError } from "@/spec/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
@@ -22,10 +25,10 @@ import {
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
-  OrchestratorMilestoneTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
   OrchestratorRunTable,
+  OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
   type OrchestratorInteractionStatus,
   type OrchestratorMetadata,
@@ -33,6 +36,7 @@ import {
 import {
   CreateTaskInput,
   Event,
+  GoalInput,
   RejectInteractionInput,
   ReplyInteractionInput,
   TaskMessageInput,
@@ -52,10 +56,19 @@ import {
   orchestratorState,
   progressStatus,
 } from "./helpers"
+import { mergeTaskChecks, writeTaskChecks } from "./checks"
 import { GoalService } from "./goal-service"
 import { OrchestratorInteraction } from "./interaction"
 import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
+import {
+  compileTransition,
+  insertPlanItems,
+  insertSpecItems,
+  persistInitialTransition,
+  persistInitialTransitionFailure,
+  specDraftFromFailure,
+} from "./transition"
 import {
   activeRunBySession,
   findArtifacts,
@@ -98,12 +111,21 @@ import {
   type GoalRow,
   type PlanRow,
   type RunRow,
-  type TaskRow,
   type InteractionRow,
 } from "./store"
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator" })
+
+async function prepareProject(project?: string) {
+  if (Instance.project.vcs !== "git") {
+    await Project.initGit(Instance.directory)
+    await Instance.refresh()
+  }
+  if (!project) return
+  if (project === Instance.project.id) return
+  throw new Error(`project mismatch: expected ${Instance.project.id}, got ${project}`)
+}
 
 export namespace OrchestratorService {
   export function init() {
@@ -122,9 +144,7 @@ export namespace OrchestratorService {
 
   export async function createTask(raw: z.input<typeof CreateTaskInput>) {
     const input = CreateTaskInput.parse(raw)
-    if (input.project && input.project !== Instance.project.id) {
-      throw new Error(`project mismatch: expected ${Instance.project.id}, got ${input.project}`)
-    }
+    await prepareProject(input.project)
     const requestID = input.requestID?.trim() || undefined
     if (requestID) {
       const existing = findTaskByRequest(Instance.project.id, requestID)
@@ -142,97 +162,58 @@ export namespace OrchestratorService {
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
     const runID = Identifier.ascending("run")
-    const interactionID = Identifier.ascending("interaction")
-    const questionID = Identifier.ascending("question")
     const metadata = {
       ...(input.metadata ?? {}),
+      ...(input.routing ? { routing: input.routing } : {}),
       ...(Object.keys(resolvedChecks).length > 0 ? { checks: resolvedChecks } : {}),
     }
-    // Orchestrator-dispatched tasks run headless — auto-approve all tool permissions
+    // Orchestrator-dispatched tasks: auto-approve common tools, ask for external/dangerous operations.
+    // When a tool requires "ask" permission, an interaction popup is created for the user.
+    // The user can click "Always Allow", "Allow Once", or "Reject" in the overlay.
     await Session.setPermission({
       sessionID: session.id,
-      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+      permission: [
+        // Default: allow all standard tools (task execution needs to be smooth)
+        { permission: "*", pattern: "*", action: "allow" },
+        // Ask for external/potentially dangerous operations (popup interaction)
+        { permission: "skill", pattern: "*", action: "ask" },
+        { permission: "external_directory", pattern: "*", action: "ask" },
+        { permission: "webfetch", pattern: "*", action: "ask" },
+        { permission: "websearch", pattern: "*", action: "ask" },
+        { permission: "task", pattern: "*", action: "ask" },
+        { permission: "schedule", pattern: "*", action: "ask" },
+      ],
     })
-    const planDraft = await PlannerService.initial({
-      title,
-      request: input.request,
-      goals: input.goals,
-    }).catch(async (error) => {
+    const compiled = await compileTransition({
+        mode: "initial",
+        taskID,
+        now,
+        title,
+        request: input.request,
+        goals: input.goals,
+        executor,
+        routing: input.routing,
+        metadata,
+      }).catch(async (error) => {
       if (!(error instanceof PlannerFailureError)) throw error
       try {
-        Database.transaction((db) => {
-          db.insert(OrchestratorTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              session_id: session.id,
-              active_run_id: runID,
-              request_id: requestID,
-              source: input.source ?? "api",
-              title,
-              request: input.request,
-              status: "failed",
-              priority: input.priority ?? "normal",
-              budget: budgetRow(input.budget),
-              metadata: {
-                ...metadata,
-                planner_failure: true,
-              },
-              error: error.message,
-              time_created: now,
-              time_updated: now,
-              time_completed: now,
-            })
-            .run()
-          db.insert(OrchestratorRunTable)
-            .values({
-              id: runID,
-              task_id: taskID,
-              session_id: session.id,
-              executor,
-              status: "failed",
-              phase: "plan",
-              retry_count: 0,
-              error: error.message,
-              metadata: {
-                strategy: "planning_failed",
-              },
-              time_created: now,
-              time_updated: now,
-              time_completed: now,
-            })
-            .run()
-          if (input.channelBinding) {
-            db.insert(OrchestratorChannelBindingTable)
-              .values({
-                id: Identifier.ascending("binding"),
-                task_id: taskID,
-                platform: input.channelBinding.platform,
-                channel: input.channelBinding.channel,
-                thread: input.channelBinding.thread,
-                payload: input.channelBinding.payload ?? {},
-                time_created: now,
-                time_updated: now,
-              })
-              .run()
-          }
-          db.insert(OrchestratorProgressSnapshotTable)
-            .values({
-              id: Identifier.ascending("progress"),
-              task_id: taskID,
-              status: "failed",
-              summary: "Planning failed before execution",
-              payload: {
-                error: error.message,
-                sessionID: session.id,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          Database.effect(() => Bus.publish(Event.TaskCreated, { taskID, status: "failed", summary: "Task created" }))
-          Database.effect(() => Bus.publish(Event.RunCreated, { taskID, runID, status: "failed", summary: "Planning failed" }))
-          Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID, status: "failed", summary: "Planning failed before execution" }))
+        persistInitialTransitionFailure({
+          taskID,
+          runID,
+          sessionID: session.id,
+          now,
+          executor,
+          title,
+          request: input.request,
+          requestID,
+          source: input.source,
+          priority: input.priority,
+          budget: input.budget,
+          metadata,
+          channelBinding: input.channelBinding,
+          projectID: Instance.project.id,
+          error,
+          specDraft: specDraftFromFailure(error),
         })
       } catch {
         // Best effort: planner failure should still surface even if persistence also fails.
@@ -245,221 +226,26 @@ export namespace OrchestratorService {
       })
       throw error
     })
-    const clarification = plannerClarification(planDraft)
-
-    if (clarification) {
-      try {
-        Database.transaction((db) => {
-          db.insert(OrchestratorTaskTable)
-            .values({
-              id: taskID,
-              project_id: Instance.project.id,
-              session_id: session.id,
-              active_run_id: runID,
-              request_id: requestID,
-              source: input.source ?? "api",
-              title,
-              request: input.request,
-              status: "blocked",
-              priority: input.priority ?? "normal",
-              budget: budgetRow(input.budget),
-              metadata: {
-                ...metadata,
-                planner_clarification: true,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          db.insert(OrchestratorRunTable)
-            .values({
-              id: runID,
-              task_id: taskID,
-              session_id: session.id,
-              executor,
-              status: "blocked",
-              phase: "plan",
-              retry_count: 0,
-              blocking_reason: "clarification",
-              metadata: {
-                strategy: "clarification",
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          db.insert(OrchestratorInteractionRequestTable)
-            .values({
-              id: interactionID,
-              task_id: taskID,
-              run_id: runID,
-              session_id: session.id,
-              external_id: questionID,
-              request_type: "question",
-              status: "pending",
-              title: clarification.questions[0]?.header || "Clarification required",
-              body: clarification.questions
-                .map((item) => [item.question, item.context].filter(Boolean).join("\n\n"))
-                .join("\n\n"),
-              payload: {
-                planner_clarification: true,
-                reason: clarification.reason,
-                questions: clarification.questions,
-                provisional_plan: {
-                  summary: planDraft.summary,
-                  goals: planDraft.goals,
-                  metadata: planDraft.metadata,
-                },
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          if (input.channelBinding) {
-            db.insert(OrchestratorChannelBindingTable)
-              .values({
-                id: Identifier.ascending("binding"),
-                task_id: taskID,
-                platform: input.channelBinding.platform,
-                channel: input.channelBinding.channel,
-                thread: input.channelBinding.thread,
-                payload: input.channelBinding.payload ?? {},
-                time_created: now,
-                time_updated: now,
-              })
-              .run()
-          }
-          db.insert(OrchestratorProgressSnapshotTable)
-            .values({
-              id: Identifier.ascending("progress"),
-              task_id: taskID,
-              status: "blocked",
-              summary: "Clarification requested before planning",
-              payload: {
-                sessionID: session.id,
-                reason: clarification.reason,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          Database.effect(() => Bus.publish(Event.TaskCreated, { taskID, status: "blocked", summary: "Task created" }))
-          Database.effect(() => Bus.publish(Event.RunCreated, { taskID, runID, status: "blocked", summary: "Planning is waiting on clarification" }))
-          Database.effect(() =>
-            Bus.publish(Event.InteractionRequested, {
-              taskID,
-              runID,
-              interactionID,
-              requestType: "question",
-              summary: clarification.questions[0]?.header || "Clarification required",
-            }),
-          )
-          Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID, status: "blocked", summary: "Clarification required before planning" }))
-        })
-      } catch (error) {
-        const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
-        if (existing) return existing
-        const bound = recoverTaskByChannelBinding(input.channelBinding, error)
-        if (bound) return bound
-        throw error
-      }
-      WorkbenchService.recordTaskRequest({
-        taskID,
-        content: input.request,
-        source: input.source ?? "api",
-        userID: slackUser(metadata),
-      })
-      return taskID
-    }
 
     try {
-      Database.transaction((db) => {
-        db.insert(OrchestratorTaskTable)
-          .values({
-            id: taskID,
-            project_id: Instance.project.id,
-            session_id: session.id,
-            active_plan_version_id: planID,
-            active_run_id: runID,
-            request_id: requestID,
-            source: input.source ?? "api",
-            title,
-            request: input.request,
-            status: "queued",
-            priority: input.priority ?? "normal",
-            budget: budgetRow(input.budget),
-            metadata,
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-        db.insert(OrchestratorPlanVersionTable)
-          .values({
-            id: planID,
-            task_id: taskID,
-            version: 1,
-            status: "active",
-            summary: planDraft.summary,
-            prompt: planDraft.prompt,
-            metadata: {
-              ...metadata,
-              ...planDraft.metadata,
-            },
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-        insertPlanItems(db, {
-          taskID,
-          planID,
-          planDraft,
-          now,
-          milestones: input.milestones ?? [],
-        })
-        db.insert(OrchestratorRunTable)
-          .values({
-            id: runID,
-            task_id: taskID,
-            plan_version_id: planID,
-            session_id: session.id,
-            executor,
-            status: "queued",
-            phase: "execute",
-            retry_count: 0,
-            metadata: {},
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-        if (input.channelBinding) {
-          db.insert(OrchestratorChannelBindingTable)
-            .values({
-              id: Identifier.ascending("binding"),
-              task_id: taskID,
-              platform: input.channelBinding.platform,
-              channel: input.channelBinding.channel,
-              thread: input.channelBinding.thread,
-              payload: input.channelBinding.payload ?? {},
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-        }
-        db.insert(OrchestratorProgressSnapshotTable)
-          .values({
-            id: Identifier.ascending("progress"),
-            task_id: taskID,
-            status: "created",
-            summary: "Task created",
-            payload: { sessionID: session.id },
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-        Database.effect(() => Bus.publish(Event.TaskCreated, { taskID, status: "queued", summary: "Task created" }))
-        Database.effect(() => Bus.publish(Event.PlanCreated, { taskID, planID, summary: planDraft.summary }))
-        Database.effect(() => Bus.publish(Event.PlanActivated, { taskID, planID, summary: "Initial plan activated" }))
-        Database.effect(() => Bus.publish(Event.RunCreated, { taskID, runID, status: "queued", summary: "Run queued" }))
+      persistInitialTransition({
+        taskID,
+        planID,
+        runID,
+        sessionID: session.id,
+        now,
+        executor,
+        title,
+        request: input.request,
+        requestID,
+        source: input.source,
+        priority: input.priority,
+        budget: input.budget,
+        metadata,
+        channelBinding: input.channelBinding,
+        milestones: input.milestones,
+        compiled,
+        projectID: Instance.project.id,
       })
     } catch (error) {
       const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
@@ -1027,77 +813,6 @@ export namespace OrchestratorService {
 
 export { ExecutorNotConfiguredError, PlannerFailureError }
 
-function writeTaskChecks(task: TaskRow, checks: Record<string, unknown> | undefined) {
-  const metadata = {
-    ...(task.metadata ?? {}),
-    ...(checks ? { checks } : {}),
-  }
-  if (!checks) delete metadata.checks
-  Database.use((db) =>
-    db
-      .update(OrchestratorTaskTable)
-      .set({
-        metadata,
-        time_updated: Date.now(),
-      })
-      .where(eq(OrchestratorTaskTable.id, task.id))
-      .run(),
-  )
-  return viewTask(requireTask(task.id))
-}
-
-function mergeTaskChecks(
-  raw: unknown,
-  selection: Record<string, boolean>,
-) {
-  const checks =
-    raw && typeof raw === "object" && !Array.isArray(raw)
-      ? structuredClone(raw as Record<string, unknown>)
-      : {}
-
-  const named =
-    checks.named && typeof checks.named === "object" && !Array.isArray(checks.named)
-      ? structuredClone(checks.named as Record<string, unknown>)
-      : {}
-
-  for (const [key, enabled] of Object.entries(selection)) {
-    if (key.startsWith("named:")) {
-      const name = key.slice("named:".length)
-      const current = named[name]
-      if (!name || !current || typeof current !== "object" || Array.isArray(current)) continue
-      named[name] = {
-        ...current,
-        enabled,
-      }
-      continue
-    }
-
-    if (["lint", "build", "test", "verify_cmd"].includes(key)) {
-      if (enabled) {
-        if (checks[key] === false) delete checks[key]
-        continue
-      }
-      checks[key] = false
-      continue
-    }
-
-    if (enabled) {
-      const current = checks[key]
-      checks[key] =
-        current && typeof current === "object" && !Array.isArray(current)
-          ? { ...current, enabled: true }
-          : { enabled: true }
-      continue
-    }
-    delete checks[key]
-  }
-
-  if (Object.keys(named).length > 0) checks.named = named
-  else delete checks.named
-
-  return Object.keys(checks).length > 0 ? checks : undefined
-}
-
 function slackUser(metadata: Record<string, unknown>) {
   const channel = metadata.channel
   if (channel && typeof channel === "object") {
@@ -1109,146 +824,6 @@ function slackUser(metadata: Record<string, unknown>) {
   const user = (slack as Record<string, unknown>).user
   if (typeof user !== "string" || !user) return undefined
   return user
-}
-
-function plannerClarification(planDraft: {
-  metadata?: Record<string, unknown>
-}) {
-  const clarification = planDraft.metadata?.clarification
-  if (!clarification || typeof clarification !== "object") return
-  const meta = clarification as Record<string, unknown>
-  const reason = typeof meta.reason === "string" ? meta.reason : "Clarification required before planning."
-  const raw = meta.questions
-  const questions = Array.isArray(raw)
-    ? raw.flatMap((item: unknown) => {
-        if (!item || typeof item !== "object") return []
-        const row = item as Record<string, unknown>
-        if (typeof row.question !== "string" || !row.question.trim()) return []
-        return [{
-          header: typeof row.header === "string" && row.header.trim() ? row.header : "Clarification",
-          question: row.question,
-          context: typeof row.context === "string" && row.context.trim() ? row.context : undefined,
-          default_assumption:
-            typeof row.default_assumption === "string" && row.default_assumption.trim()
-              ? row.default_assumption
-              : undefined,
-        }]
-      })
-    : []
-  if (questions.length === 0) return
-  return {
-    reason,
-    questions,
-  }
-}
-
-function insertPlanItems(
-  db: Database.TxOrDb,
-  input: {
-    taskID: string
-    planID: string
-    planDraft: {
-      goals: Array<{
-        description: string
-        criteria: string
-        priority?: "blocking" | "advisory"
-        metadata?: Record<string, unknown>
-      }>
-      metadata?: Record<string, unknown>
-    }
-    now: number
-    milestones: Array<{
-      title: string
-      description?: string
-      goals: Array<{
-        description: string
-        criteria: string
-        priority?: "blocking" | "advisory"
-        metadata?: Record<string, unknown>
-      }>
-    }>
-  },
-) {
-  const milestones = input.milestones
-  let goalIndex = 0
-  for (const [msIndex, ms] of milestones.entries()) {
-    const msID = Identifier.ascending("milestone")
-    db.insert(OrchestratorMilestoneTable)
-      .values({
-        id: msID,
-        task_id: input.taskID,
-        plan_version_id: input.planID,
-        title: ms.title,
-        description: ms.description ?? "",
-        status: "pending",
-        order_index: msIndex,
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
-    for (const goal of ms.goals) {
-      db.insert(OrchestratorGoalTable)
-        .values({
-          id: Identifier.ascending("goal"),
-          task_id: input.taskID,
-          plan_version_id: input.planID,
-          milestone_id: msID,
-          description: goal.description,
-          criteria: goal.criteria,
-          metadata: goal.metadata ?? inferGoalMetadata(goal.description, goal.criteria),
-          priority: goal.priority ?? "blocking",
-          status: "pending",
-          order_index: goalIndex++,
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-    }
-  }
-  const agentMilestones = input.planDraft.metadata?.milestones as
-    | Array<{ title: string; description?: string; goal_indices: number[] }>
-    | undefined
-  const goalToMilestoneID = new Map<number, string>()
-  if (agentMilestones && agentMilestones.length > 0 && milestones.length === 0) {
-    for (const [msIdx, ms] of agentMilestones.entries()) {
-      const msID = Identifier.ascending("milestone")
-      db.insert(OrchestratorMilestoneTable)
-        .values({
-          id: msID,
-          task_id: input.taskID,
-          plan_version_id: input.planID,
-          title: ms.title,
-          description: ms.description ?? "",
-          status: "pending",
-          order_index: msIdx,
-          time_created: input.now,
-          time_updated: input.now,
-        })
-        .run()
-      for (const goalIdx of ms.goal_indices) {
-        goalToMilestoneID.set(goalIdx, msID)
-      }
-    }
-  }
-
-  for (const [index, goal] of input.planDraft.goals.entries()) {
-    db.insert(OrchestratorGoalTable)
-      .values({
-        id: Identifier.ascending("goal"),
-        task_id: input.taskID,
-        plan_version_id: input.planID,
-        milestone_id: goalToMilestoneID.get(index) ?? null,
-        description: goal.description,
-        criteria: goal.criteria,
-        metadata: goal.metadata ?? inferGoalMetadata(goal.description, goal.criteria),
-        priority: goal.priority ?? "blocking",
-        status: "pending",
-        order_index: milestones.length > 0 ? goalIndex + index : index,
-        time_created: input.now,
-        time_updated: input.now,
-      })
-      .run()
-  }
 }
 
 function answersFromMessage(message?: string) {
@@ -1379,13 +954,126 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
   const task = requireTask(row.task_id)
   const run = requireRun(row.run_id)
   const clarifiedRequest = appendClarification(task.request, row.payload?.questions, answers)
-  const planDraft = await PlannerService.initial({
-    title: task.title,
-    request: clarifiedRequest,
-    allowClarification: false,
-  })
+  const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+    ? row.payload as Record<string, unknown>
+    : {}
+  const provisional = payload.provisional_plan && typeof payload.provisional_plan === "object" && !Array.isArray(payload.provisional_plan)
+    ? payload.provisional_plan as Record<string, unknown>
+    : {}
+  const provisionalMeta = provisional.metadata && typeof provisional.metadata === "object" && !Array.isArray(provisional.metadata)
+    ? provisional.metadata as Record<string, unknown>
+    : {}
+  const routing =
+    task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
+      ? task.metadata.routing as z.infer<typeof CreateTaskInput>["routing"]
+      : undefined
+  const parsedGoals = GoalInput.array().safeParse(provisional.goals)
+  const isReplan = run.phase === "replan" || provisionalMeta.strategy === "replan"
+  const previousPlanID = task.active_plan_version_id ?? run.plan_version_id
+  const previousPlan = isReplan && previousPlanID ? findPlan(previousPlanID) : undefined
+  if (isReplan && !previousPlan) throw new Error(`Previous plan not found for task ${task.id}`)
+  const goals =
+    parsedGoals.success && parsedGoals.data.length > 0
+      ? parsedGoals.data
+      : previousPlan
+        ? listGoalsByPlan(previousPlan.id).map((goal) => ({
+            description: goal.description,
+            criteria: goal.criteria,
+            priority: goal.priority,
+            metadata: goal.metadata ?? undefined,
+          }))
+        : undefined
+  const replanContext =
+    provisionalMeta.replan_context && typeof provisionalMeta.replan_context === "object" && !Array.isArray(provisionalMeta.replan_context)
+      ? provisionalMeta.replan_context as ReplanContext
+      : run.metadata?.replan_context && typeof run.metadata.replan_context === "object" && !Array.isArray(run.metadata.replan_context)
+        ? run.metadata.replan_context as ReplanContext
+        : undefined
+  const failureSummary =
+    typeof provisionalMeta.failure_summary === "string"
+      ? provisionalMeta.failure_summary
+      : typeof run.metadata?.failure_summary === "string"
+        ? run.metadata.failure_summary
+        : task.error ?? "Replan requested after clarification."
+  const planDraft = isReplan
+    ? await (() => {
+        if (!previousPlan) {
+          throw new Error(`Previous plan missing for replan request on task ${task.id}`)
+        }
+        return PlannerService.replan({
+          title: task.title,
+          request: clarifiedRequest,
+          goals: goals ?? [],
+          previousPrompt: previousPlan.prompt,
+          previousPlanID: previousPlan.id,
+          failureSummary,
+          replanContext,
+          allowClarification: false,
+          executor: run.executor,
+          routing,
+        })
+      })()
+    : await PlannerService.initial({
+        title: task.title,
+        request: clarifiedRequest,
+        goals,
+        allowClarification: false,
+        executor: run.executor,
+        routing,
+      })
   const planID = Identifier.ascending("plan")
   const now = Date.now()
+  const specContent = (planDraft.metadata as Record<string, any>)?.spec_analysis?.expanded_spec
+  const specSummary = typeof planDraft.metadata?.spec?.summary === "string" ? planDraft.metadata.spec.summary : planDraft.summary
+  const specVersion = isReplan && previousPlan ? previousPlan.version + 1 : 1
+  const specItems =
+    planDraft.metadata?.spec &&
+      typeof planDraft.metadata.spec === "object" &&
+      !Array.isArray(planDraft.metadata.spec) &&
+      Array.isArray((planDraft.metadata.spec as Record<string, unknown>).spec_items)
+      ? (planDraft.metadata.spec as Record<string, unknown>).spec_items as unknown[]
+      : []
+  const specMeta = typeof specContent === "string"
+    ? writeSpec({
+        taskID: task.id,
+        title: task.title,
+        content: specContent,
+        summary: specSummary,
+        source:
+          planDraft.metadata?.spec?.source && typeof planDraft.metadata.spec.source === "object"
+            ? planDraft.metadata.spec.source as Record<string, unknown>
+            : undefined,
+        createdAt: now,
+      })
+    : undefined
+  // Create a DB spec snapshot so the evaluator's spec_check can find it
+  const specSnapshotID = typeof specContent === "string" && specContent.trim()
+    ? Identifier.ascending("spec")
+    : undefined
+  const taskMetadata = {
+    ...(task.metadata ?? {}),
+    ...(planDraft.metadata?.stage_sources ? { stage_sources: planDraft.metadata.stage_sources } : {}),
+    ...(specMeta ? { spec: specMeta } : {}),
+    planner_clarification: false,
+    clarified_request: clarifiedRequest,
+  }
+  const previousRunID =
+    typeof run.metadata?.previous_run_id === "string"
+      ? run.metadata.previous_run_id
+      : run.id
+  const planMetadata = {
+    ...(isReplan ? { previous_run_id: previousRunID } : task.metadata ?? {}),
+    ...planDraft.metadata,
+    clarified_request: clarifiedRequest,
+    ...(specMeta
+      ? {
+          spec: {
+            ...specMeta,
+            source: specMeta.source ?? planDraft.metadata?.spec?.source,
+          },
+        }
+      : {}),
+  }
   Database.transaction((db) => {
     db.update(OrchestratorInteractionRequestTable)
       .set({
@@ -1399,19 +1087,49 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       })
       .where(eq(OrchestratorInteractionRequestTable.id, row.id))
       .run()
+    if (isReplan) {
+      if (!previousPlan) {
+        throw new Error(`Previous plan missing for replan request on task ${task.id}`)
+      }
+      db.update(OrchestratorPlanVersionTable)
+        .set({
+          status: "superseded",
+          time_updated: now,
+        })
+        .where(eq(OrchestratorPlanVersionTable.id, previousPlan.id))
+        .run()
+    }
+    // Persist spec snapshot in DB so spec_check evaluator can find it
+    if (specSnapshotID && typeof specContent === "string") {
+      db.insert(OrchestratorSpecSnapshotTable)
+        .values({
+          id: specSnapshotID,
+          task_id: task.id,
+          version: specVersion,
+          status: "ready",
+          summary: specSummary,
+          content: specContent,
+          scope: "",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      insertSpecItems(db, {
+        taskID: task.id,
+        specSnapshotID,
+        specItems,
+        now,
+      })
+    }
     db.insert(OrchestratorPlanVersionTable)
       .values({
         id: planID,
         task_id: task.id,
-        version: 1,
+        version: isReplan && previousPlan ? previousPlan.version + 1 : 1,
         status: "active",
         summary: planDraft.summary,
         prompt: planDraft.prompt,
-        metadata: {
-          ...(task.metadata ?? {}),
-          ...planDraft.metadata,
-          clarified_request: clarifiedRequest,
-        },
+        metadata: planMetadata,
         time_created: now,
         time_updated: now,
       })
@@ -1427,11 +1145,13 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       .set({
         plan_version_id: planID,
         status: "queued",
-        phase: "execute",
+        phase: isReplan ? "replan" : "execute",
         blocking_reason: null,
         metadata: {
           ...(run.metadata ?? {}),
           strategy: "clarification_resolved",
+          ...(planDraft.metadata?.stage_sources ? { stage_sources: planDraft.metadata.stage_sources } : {}),
+          ...(planDraft.metadata?.spec_analysis ? { spec_analysis: planDraft.metadata.spec_analysis } : {}),
           clarified_request: clarifiedRequest,
           clarification_answers: answers,
         },
@@ -1442,13 +1162,12 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
     db.update(OrchestratorTaskTable)
       .set({
         active_plan_version_id: planID,
+        active_run_id: run.id,
+        active_spec_version_id: specSnapshotID ?? task.active_spec_version_id,
         status: "queued",
         blocking_reason: null,
         error: null,
-        metadata: {
-          ...(task.metadata ?? {}),
-          clarified_request: clarifiedRequest,
-        },
+        metadata: taskMetadata,
         time_updated: now,
       })
       .where(eq(OrchestratorTaskTable.id, task.id))
@@ -1458,7 +1177,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
         id: Identifier.ascending("progress"),
         task_id: task.id,
         status: "running",
-        summary: "Clarification answered; planning resumed",
+        summary: isReplan ? "Clarification answered; replanning resumed" : "Clarification answered; planning resumed",
         payload: {
           clarified_request: clarifiedRequest,
           answers,
@@ -1477,9 +1196,28 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       }),
     )
     Database.effect(() => Bus.publish(Event.PlanCreated, { taskID: task.id, planID, summary: planDraft.summary }))
-    Database.effect(() => Bus.publish(Event.PlanActivated, { taskID: task.id, planID, summary: "Plan activated after clarification" }))
-    Database.effect(() => Bus.publish(Event.RunUpdated, { taskID: task.id, runID: run.id, status: "queued", summary: "Run queued after clarification" }))
-    Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID: task.id, status: "queued", summary: "Clarification resolved; task queued" }))
+    Database.effect(() =>
+      Bus.publish(Event.PlanActivated, {
+        taskID: task.id,
+        planID,
+        summary: isReplan ? "Replanned version activated after clarification" : "Plan activated after clarification",
+      }),
+    )
+    Database.effect(() =>
+      Bus.publish(Event.RunUpdated, {
+        taskID: task.id,
+        runID: run.id,
+        status: "queued",
+        summary: isReplan ? "Replanned run queued after clarification" : "Run queued after clarification",
+      }),
+    )
+    Database.effect(() =>
+      Bus.publish(Event.TaskUpdated, {
+        taskID: task.id,
+        status: "queued",
+        summary: isReplan ? "Clarification resolved; replanned task queued" : "Clarification resolved; task queued",
+      }),
+    )
   })
   await OrchestratorRuntime.dispatch(run.id, hooks())
 }
@@ -1577,22 +1315,4 @@ async function sessionTree(sessionID: string): Promise<string[]> {
   const children = await Session.children(sessionID)
   const nested = await Promise.all(children.map((item) => sessionTree(item.id)))
   return [sessionID, ...nested.flat()]
-}
-
-function inferGoalMetadata(description: string, criteria: string) {
-  const text = `${description} ${criteria}`.toLowerCase()
-  const selectors = new Set<string>()
-  if (text.includes("build")) selectors.add("build")
-  if (text.includes("test")) selectors.add("test")
-  if (text.includes("lint")) selectors.add("lint")
-  if (text.includes("verify")) selectors.add("verify_cmd")
-  if (/(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(text)) selectors.add("ui_review")
-  if (/(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(text)) selectors.add("code_quality")
-  if (/\bcr\b|code review|审查|代码评审|review finding|review comment/.test(text)) selectors.add("code_review")
-  if (/(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(text)) selectors.add("dead_code_review")
-  if (/(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(text)) selectors.add("startup")
-  if (selectors.size === 0) return undefined
-  return {
-    check_selector: [...selectors],
-  }
 }

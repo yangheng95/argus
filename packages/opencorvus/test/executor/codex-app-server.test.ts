@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import type { CodingEventInfo } from "../../src/executor/compat"
 import { CodexAppServerExecutor, type CodexAppServerClient } from "../../src/executor/codex-app-server"
 
 describe("codex app server executor", () => {
@@ -89,20 +90,21 @@ describe("codex app server executor", () => {
     ])
     expect(result[0]?.type).toBe("status")
     if (result[0]?.type === "status") {
-      expect(result[0].meta?.thread_id).toBe("thr_1")
-      expect(result[0].meta?.turn_id).toBe("turn_1")
+      expect(result[0].meta?.["thread_id"]).toBe("thr_1")
+      expect(result[0].meta?.["turn_id"]).toBe("turn_1")
     }
-    const tool = result.find((item) => item.type === "tool_call")
-    expect(tool?.meta?.adapter).toBe("shell")
-    expect(tool?.meta?.tool_kind).toBe("shell")
-    expect(result.at(-1)?.type).toBe("done")
-    if (result.at(-1)?.type === "done") {
-      expect(result.at(-1)?.sessionID).toBe("thr_1:turn_1")
+    const tool = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
+    expect(tool?.meta?.["adapter"]).toBe("shell")
+    expect(tool?.meta?.["tool_kind"]).toBe("shell")
+    const last = result.at(-1)
+    expect(last?.type).toBe("done")
+    if (last?.type === "done") {
+      expect(last.sessionID).toBe("thr_1:turn_1")
     }
   })
 
   test("uses writable sandbox defaults for coding tasks", async () => {
-    let started = null
+    let started: Record<string, unknown> | null = null
     const provider = CodexAppServerExecutor.create({
       async initialize() {
         return {}
@@ -150,8 +152,69 @@ describe("codex app server executor", () => {
     })
 
     await collect(provider.run({ prompt: "test", cwd: "/repo" }))
-    expect(started?.approvalPolicy).toBe("never")
-    expect(started?.sandbox).toBe("workspace-write")
+    expect(started?.["approvalPolicy"] as string | undefined).toBe("never")
+    expect(started?.["sandbox"] as string | undefined).toBe("workspace-write")
+  })
+
+  test("honors read-only sandbox overrides for planning runs", async () => {
+    let started: Record<string, unknown> | null = null
+    let turn: Record<string, unknown> | null = null
+    const provider = CodexAppServerExecutor.create({
+      async initialize() {
+        return {}
+      },
+      async threadStart(input) {
+        started = input
+        return {
+          thread: {
+            id: "thr_plan",
+          },
+        }
+      },
+      async threadResume() {
+        return {
+          thread: {
+            id: "thr_plan",
+          },
+        }
+      },
+      async turnStart(input) {
+        turn = input
+        return {
+          turn: {
+            id: "turn_plan",
+          },
+        }
+      },
+      async turnInterrupt() {
+        return true
+      },
+      async *events() {
+        yield {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_plan",
+            turn: {
+              id: "turn_plan",
+              items: [],
+              status: "completed",
+              error: null,
+            },
+          },
+        }
+      },
+    })
+
+    await collect(provider.run({ prompt: "test", cwd: "/repo", sandbox: "read-only" }))
+    expect(started?.["sandbox"] as string | undefined).toBe("read-only")
+    expect(turn?.["sandboxPolicy"]).toMatchObject({
+      type: "readOnly",
+      access: {
+        type: "fullAccess",
+      },
+      networkAccess: true,
+    })
   })
 
   test("maps server requests to approval and input events", async () => {
@@ -330,10 +393,10 @@ function client(events: Array<{
   }
 }
 
-async function collect(input: AsyncIterable<unknown>) {
-  const result: unknown[] = []
+async function collect(input: AsyncIterable<CodingEventInfo>) {
+  const result: CodingEventInfo[] = []
   for await (const item of input) result.push(item)
-  return result as Array<{ type: string; [key: string]: unknown }>
+  return result
 }
 
 function feed<T>(items: T[]): AsyncIterable<T> {

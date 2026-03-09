@@ -6,7 +6,9 @@ import { OpencodeExecutor } from "../../src/executor/opencode"
 import { EvaluatorService } from "../../src/evaluator/service"
 import { Identifier } from "../../src/id/id"
 import { Instance } from "../../src/project/instance"
+import { OrchestratorService } from "../../src/orchestrator/service"
 import { PlannerService } from "../../src/planner/service"
+import { SpecService } from "../../src/spec/service"
 import { Server } from "../../src/server/server"
 import { Database, eq } from "../../src/storage/db"
 import { OrchestratorRunTable, OrchestratorGoalTable } from "../../src/orchestrator/orchestrator.sql"
@@ -16,13 +18,15 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
-/** Mock planner + evaluator agent so tests don't require an LLM. */
+/** Mock planner + evaluator + spec agents so tests don't require an LLM. */
 function mockPlanner() {
+  spyOn(SpecService, "initial").mockResolvedValue(undefined as any)
+  spyOn(SpecService, "rewrite").mockResolvedValue(undefined as any)
   spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
     const allPassed = input.checkResults.every((c) => c.status === "passed")
     return {
       verdict: allPassed ? "accepted" : "rejected",
-      classification: allPassed ? "none" : "evaluation",
+      classification: "evaluation",
       summary: allPassed ? "All checks passed" : "Some checks failed",
       goal_statuses: input.goals.map((_, i) => ({
         goal_index: i,
@@ -161,6 +165,17 @@ const passCmd = () => `"${process.execPath}" -e "process.exit(0)"`
 /** A verify_cmd that always fails. */
 const failCmd = () => `"${process.execPath}" -e "process.exit(1)"`
 
+/** Wrapper that provides Instance with orchestrator runtime initialized. */
+async function withInstance(tmpPath: string, fn: () => Promise<void>) {
+  return Instance.provide({
+    directory: tmpPath,
+    init: async () => {
+      OrchestratorService.init()
+    },
+    fn,
+  })
+}
+
 function mockOpencode(delivery = "opencode delivery") {
   spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
     sessionID,
@@ -245,9 +260,7 @@ describe("executor e2e", () => {
     await using tmp = await tmpdir({ git: true })
     mockOpencode()
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "complete task via opencode",
@@ -258,7 +271,6 @@ describe("executor e2e", () => {
         expect(progress.task.status).toBe("completed")
         expect(progress.run?.executor).toBe("opencode")
         expect(progress.delivery).toBeTruthy()
-      },
     })
   })
 
@@ -268,9 +280,7 @@ describe("executor e2e", () => {
     await using tmp = await tmpdir({ git: true })
     registerCodex(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "complete task via codex",
@@ -286,7 +296,6 @@ describe("executor e2e", () => {
         expect(progress.run?.executor).toBe("codex")
         expect(progress.delivery).toBeTruthy()
         expect(run?.executor_ref?.queue_task_id).toBeTruthy()
-      },
     })
   })
 
@@ -296,9 +305,7 @@ describe("executor e2e", () => {
     await using tmp = await tmpdir({ git: true })
     registerClaude(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "complete task via claude code",
@@ -310,7 +317,6 @@ describe("executor e2e", () => {
         expect(progress.task.status).toBe("completed")
         expect(progress.run?.executor).toBe("claude-code")
         expect(progress.delivery).toBeTruthy()
-      },
     })
   })
 
@@ -319,9 +325,7 @@ describe("executor e2e", () => {
     mockOpencode()
     spyOn(EvaluatorService, "analyzeDelivery").mockRejectedValue(new Error("evaluator unavailable"))
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "fail when evaluator is unavailable",
@@ -332,7 +336,6 @@ describe("executor e2e", () => {
         expect(progress.task.status).toBe("failed")
         expect(progress.task.error).toContain("Evaluator failure")
         expect(progress.evaluation?.status).toBe("failed")
-      },
     })
   })
 })
@@ -369,9 +372,7 @@ describe("executor e2e — retry on evaluation failure", () => {
       diffs: [],
     })
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         // First run fails verify, second passes
         const taskID = await createTask(app, tmp.path, {
@@ -388,7 +389,6 @@ describe("executor e2e — retry on evaluation failure", () => {
         // At least 2 runs created (initial + retry)
         expect(runs.length).toBeGreaterThanOrEqual(2)
         expect(progress.run?.executor).toBe("opencode")
-      },
     })
   })
 
@@ -413,9 +413,7 @@ describe("executor e2e — retry on evaluation failure", () => {
       { model: "gpt-5.2-codex", cwd: tmp.path },
     )
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "codex task that fails verify",
@@ -431,7 +429,6 @@ describe("executor e2e — retry on evaluation failure", () => {
         expect(runs.length).toBeGreaterThanOrEqual(2)
         // Eventually fails after max retries
         expect(progress.task.status).toBe("failed")
-      },
     })
   })
 
@@ -457,9 +454,7 @@ describe("executor e2e — retry on evaluation failure", () => {
       { model: "claude-sonnet-4-6", cwd: tmp.path },
     )
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "claude task that fails verify",
@@ -473,7 +468,6 @@ describe("executor e2e — retry on evaluation failure", () => {
 
         expect(runs.length).toBeGreaterThanOrEqual(2)
         expect(progress.task.status).toBe("failed")
-      },
     })
   })
 })
@@ -498,9 +492,7 @@ describe("executor e2e — executor selection", () => {
     registerCodex(tmp.path, "codex out")
     registerClaude(tmp.path, "claude out")
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
 
         // Submit one task per executor
@@ -534,7 +526,6 @@ describe("executor e2e — executor selection", () => {
 
         expect(claudeResult.run?.executor).toBe("claude-code")
         expect(claudeResult.delivery).toBeTruthy()
-      },
     })
   })
 
@@ -542,9 +533,7 @@ describe("executor e2e — executor selection", () => {
     await using tmp = await tmpdir({ git: true })
     mockOpencode()
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "no executor specified",
@@ -553,7 +542,6 @@ describe("executor e2e — executor selection", () => {
         const progress = await waitForCompleted(app, tmp.path, taskID)
 
         expect(progress.run?.executor).toBe("opencode")
-      },
     })
   })
 })
@@ -576,9 +564,7 @@ describe("executor e2e — goal tracking", () => {
     await using tmp = await tmpdir({ git: true })
     mockOpencode()
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "task with goals",
@@ -595,7 +581,6 @@ describe("executor e2e — goal tracking", () => {
         for (const g of blocking) {
           expect(g.status).toBe("passed")
         }
-      },
     })
   })
 
@@ -603,9 +588,7 @@ describe("executor e2e — goal tracking", () => {
     await using tmp = await tmpdir({ git: true })
     registerClaude(tmp.path)
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "claude task with failing goals",
@@ -615,7 +598,6 @@ describe("executor e2e — goal tracking", () => {
         const progress = await waitForFinal(app, tmp.path, taskID)
 
         expect(progress.task.status).toBe("failed")
-      },
     })
   })
 })
@@ -671,9 +653,7 @@ describe("executor e2e — claude-code streaming", () => {
       { model: "claude-sonnet-4-6", cwd: tmp.path },
     )
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "claude streaming test",
@@ -684,7 +664,6 @@ describe("executor e2e — claude-code streaming", () => {
 
         expect(progress.task.status).toBe("completed")
         expect(progress.delivery).toBeTruthy()
-      },
     })
   })
 
@@ -706,9 +685,7 @@ describe("executor e2e — claude-code streaming", () => {
       { model: "claude-sonnet-4-6", cwd: tmp.path },
     )
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "claude error test",
@@ -719,7 +696,6 @@ describe("executor e2e — claude-code streaming", () => {
 
         // Task should eventually fail after retries exhaust
         expect(["failed", "completed"]).toContain(progress.task.status)
-      },
     })
   })
 })
@@ -763,9 +739,7 @@ describe("executor e2e — codex protocol", () => {
       { model: "gpt-5.2-codex", cwd: tmp.path },
     )
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "codex cancel test",
@@ -782,7 +756,6 @@ describe("executor e2e — codex protocol", () => {
           headers: { "x-opencorvus-directory": tmp.path },
         })
         expect(cancelRes.status).toBe(200)
-      },
     })
   })
 
@@ -824,9 +797,7 @@ describe("executor e2e — codex protocol", () => {
       { model: "gpt-5.2-codex", cwd: tmp.path },
     )
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "codex with tool calls",
@@ -837,7 +808,6 @@ describe("executor e2e — codex protocol", () => {
 
         expect(progress.task.status).toBe("completed")
         expect(progress.delivery).toBeTruthy()
-      },
     })
   })
 })
@@ -860,9 +830,7 @@ describe("executor e2e — multiple checks", () => {
     await using tmp = await tmpdir({ git: true })
     mockOpencode()
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "multi-check pass",
@@ -875,7 +843,6 @@ describe("executor e2e — multiple checks", () => {
         const progress = await waitForCompleted(app, tmp.path, taskID)
 
         expect(progress.task.status).toBe("completed")
-      },
     })
   })
 
@@ -883,9 +850,7 @@ describe("executor e2e — multiple checks", () => {
     await using tmp = await tmpdir({ git: true })
     mockOpencode()
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
+    await withInstance(tmp.path, async () => {
         const app = Server.App()
         const taskID = await createTask(app, tmp.path, {
           request: "multi-check fail",
@@ -898,7 +863,6 @@ describe("executor e2e — multiple checks", () => {
         const progress = await waitForFinal(app, tmp.path, taskID)
 
         expect(progress.task.status).toBe("failed")
-      },
     })
   })
 })

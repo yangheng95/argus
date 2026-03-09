@@ -160,6 +160,9 @@ export type UserMessage = {
     [key: string]: boolean
   }
   variant?: string
+  extra?: {
+    [key: string]: unknown
+  }
 }
 
 export type ProviderAuthError = {
@@ -734,30 +737,6 @@ export type EventTaskPlanUpdated = {
   }
 }
 
-export type EventGoalUpdated = {
-  type: "goal.updated"
-  properties: {
-    goal: {
-      id: string
-      sessionID: string
-      description: string
-      status: string
-    }
-  }
-}
-
-export type EventGoalDeadlock = {
-  type: "goal.deadlock"
-  properties: {
-    goal: {
-      id: string
-      sessionID: string
-      description: string
-      attempts: number
-    }
-  }
-}
-
 export type EventOrchestratorTaskCreated = {
   type: "orchestrator.task.created"
   properties: {
@@ -927,6 +906,39 @@ export type EventOrchestratorTaskMessage = {
     taskID: string
     kind: "preference" | "goal" | "plan" | "note"
     source: string
+    text: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorRunProgress = {
+  type: "orchestrator.run.progress"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    summary: string
+    payload?: {
+      [key: string]: unknown
+    }
+  }
+}
+
+export type EventOrchestratorRunOutput = {
+  type: "orchestrator.run.output"
+  properties: {
+    taskID: string
+    runID: string
+    type: string
+    text: string
+  }
+}
+
+export type EventOrchestratorMessageInjected = {
+  type: "orchestrator.message.injected"
+  properties: {
+    taskID: string
+    runID: string
     text: string
     summary: string
   }
@@ -1210,8 +1222,6 @@ export type Event =
   | EventFileWatcherUpdated
   | EventTodoUpdated
   | EventTaskPlanUpdated
-  | EventGoalUpdated
-  | EventGoalDeadlock
   | EventOrchestratorTaskCreated
   | EventOrchestratorTaskUpdated
   | EventOrchestratorPlanCreated
@@ -1228,6 +1238,9 @@ export type Event =
   | EventOrchestratorDeliveryReady
   | EventOrchestratorEvaluationCompleted
   | EventOrchestratorTaskMessage
+  | EventOrchestratorRunProgress
+  | EventOrchestratorRunOutput
+  | EventOrchestratorMessageInjected
   | EventVcsBranchUpdated
   | EventTuiPromptAppend
   | EventTuiCommandExecute
@@ -1273,6 +1286,10 @@ export type ServerConfig = {
    * Hostname to listen on
    */
   hostname?: string
+  /**
+   * Public base URL used for externally visible attachment links
+   */
+  publicUrl?: string
   /**
    * Enable mDNS service discovery
    */
@@ -1328,6 +1345,268 @@ export type DiscordChannelConfig = {
   token?: string
 }
 
+export type FeishuChannelConfig = {
+  /**
+   * Enable Feishu or Lark channel integration
+   */
+  enabled?: boolean
+  /**
+   * Feishu or Lark app ID
+   */
+  appId?: string
+  /**
+   * Feishu or Lark app secret
+   */
+  appSecret?: string
+  /**
+   * Optional Feishu or Lark webhook verification token
+   */
+  verificationToken?: string
+  /**
+   * Optional Feishu or Lark webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Feishu or Lark webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional Feishu or Lark webhook path
+   */
+  webhookPath?: string
+}
+
+export type WhatsappChannelConfig = {
+  /**
+   * Enable WhatsApp channel integration
+   */
+  enabled?: boolean
+  /**
+   * WhatsApp Cloud API access token
+   */
+  token?: string
+  /**
+   * WhatsApp Cloud API phone number ID
+   */
+  numberId?: string
+  /**
+   * Optional WhatsApp webhook verification token
+   */
+  verifyToken?: string
+  /**
+   * Optional WhatsApp webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional WhatsApp webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional WhatsApp webhook path
+   */
+  webhookPath?: string
+}
+
+export type GoogleChatChannelConfig = {
+  /**
+   * Enable Google Chat integration
+   */
+  enabled?: boolean
+  /**
+   * Google Chat service account JSON or path
+   */
+  serviceAccount?: string
+  /**
+   * Optional Google Chat webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Google Chat webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional Google Chat webhook path
+   */
+  webhookPath?: string
+}
+
+export type MsTeamsChannelConfig = {
+  /**
+   * Enable Microsoft Teams integration
+   */
+  enabled?: boolean
+  /**
+   * Microsoft Teams bot app ID
+   */
+  appId?: string
+  /**
+   * Microsoft Teams bot app secret
+   */
+  appSecret?: string
+  /**
+   * Optional Microsoft Teams webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Microsoft Teams webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional Microsoft Teams webhook path
+   */
+  webhookPath?: string
+}
+
+export type LineChannelConfig = {
+  /**
+   * Enable LINE integration
+   */
+  enabled?: boolean
+  /**
+   * LINE channel access token
+   */
+  token?: string
+  /**
+   * Optional LINE channel secret for webhook verification
+   */
+  secret?: string
+  /**
+   * Optional LINE webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional LINE webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional LINE webhook path
+   */
+  webhookPath?: string
+}
+
+export type MatrixChannelConfig = {
+  /**
+   * Enable Matrix integration
+   */
+  enabled?: boolean
+  /**
+   * Matrix homeserver URL
+   */
+  homeserver?: string
+  /**
+   * Matrix access token
+   */
+  token?: string
+  /**
+   * Optional Matrix sync token
+   */
+  since?: string
+}
+
+export type MattermostChannelConfig = {
+  /**
+   * Enable Mattermost integration
+   */
+  enabled?: boolean
+  /**
+   * Mattermost server URL
+   */
+  url?: string
+  /**
+   * Mattermost bot token
+   */
+  token?: string
+  /**
+   * Optional Mattermost webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional Mattermost webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional Mattermost webhook path
+   */
+  webhookPath?: string
+}
+
+export type SignalChannelConfig = {
+  /**
+   * Enable Signal integration
+   */
+  enabled?: boolean
+  /**
+   * Signal service URL
+   */
+  service?: string
+  /**
+   * Signal sender account or number
+   */
+  account?: string
+}
+
+export type WeComChannelConfig = {
+  /**
+   * Enable WeCom integration
+   */
+  enabled?: boolean
+  /**
+   * WeCom corp ID
+   */
+  corpId?: string
+  /**
+   * WeCom app secret
+   */
+  secret?: string
+  /**
+   * WeCom agent ID
+   */
+  agentId?: string
+  /**
+   * Optional WeCom webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional WeCom webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional WeCom webhook path
+   */
+  webhookPath?: string
+}
+
+export type DingTalkChannelConfig = {
+  /**
+   * Enable DingTalk integration
+   */
+  enabled?: boolean
+  /**
+   * DingTalk app key
+   */
+  appKey?: string
+  /**
+   * DingTalk app secret
+   */
+  appSecret?: string
+  /**
+   * Optional DingTalk default session webhook
+   */
+  defaultWebhook?: string
+  /**
+   * Optional DingTalk webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional DingTalk webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional DingTalk webhook path
+   */
+  webhookPath?: string
+}
+
 /**
  * Channel integration configuration
  */
@@ -1335,6 +1614,16 @@ export type ChannelConfig = {
   slack?: SlackChannelConfig
   telegram?: TelegramChannelConfig
   discord?: DiscordChannelConfig
+  feishu?: FeishuChannelConfig
+  whatsapp?: WhatsappChannelConfig
+  googlechat?: GoogleChatChannelConfig
+  msteams?: MsTeamsChannelConfig
+  line?: LineChannelConfig
+  matrix?: MatrixChannelConfig
+  mattermost?: MattermostChannelConfig
+  signal?: SignalChannelConfig
+  wecom?: WeComChannelConfig
+  dingtalk?: DingTalkChannelConfig
 }
 
 export type PermissionActionConfig = "ask" | "allow" | "deny"
@@ -1358,6 +1647,10 @@ export type PermissionConfig =
       todowrite?: PermissionActionConfig
       todoread?: PermissionActionConfig
       question?: PermissionActionConfig
+      plan_enter?: PermissionActionConfig
+      plan_exit?: PermissionActionConfig
+      spec_enter?: PermissionActionConfig
+      spec_exit?: PermissionActionConfig
       webfetch?: PermissionActionConfig
       websearch?: PermissionActionConfig
       codesearch?: PermissionActionConfig
@@ -1836,6 +2129,11 @@ export type WellKnownAuth = {
 }
 
 export type Auth = OAuth | ApiAuth | WellKnownAuth
+
+export type ProjectInitGitResult = {
+  created: boolean
+  project: Project
+}
 
 export type NotFoundError = {
   name: "NotFoundError"
@@ -2407,6 +2705,37 @@ export type ProjectCurrentResponses = {
 
 export type ProjectCurrentResponse = ProjectCurrentResponses[keyof ProjectCurrentResponses]
 
+export type ProjectCurrentInitGitData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/project/current/init-git"
+}
+
+export type ProjectCurrentInitGitErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ProjectCurrentInitGitError = ProjectCurrentInitGitErrors[keyof ProjectCurrentInitGitErrors]
+
+export type ProjectCurrentInitGitResponses = {
+  /**
+   * Git initialized
+   */
+  200: ProjectInitGitResult
+}
+
+export type ProjectCurrentInitGitResponse = ProjectCurrentInitGitResponses[keyof ProjectCurrentInitGitResponses]
+
 export type ProjectUpdateData = {
   body?: {
     name?: string
@@ -2727,9 +3056,88 @@ export type ChannelListResponses = {
 
 export type ChannelListResponse = ChannelListResponses[keyof ChannelListResponses]
 
+export type ChannelAttachmentCreateData = {
+  body?: {
+    filename: string
+    mime: string
+    data: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/channel/attachment"
+}
+
+export type ChannelAttachmentCreateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ChannelAttachmentCreateError = ChannelAttachmentCreateErrors[keyof ChannelAttachmentCreateErrors]
+
+export type ChannelAttachmentCreateResponses = {
+  /**
+   * Attachment created
+   */
+  200: {
+    id: string
+    url: string
+    mime: string
+    filename: string
+    expires_at: number
+  }
+}
+
+export type ChannelAttachmentCreateResponse = ChannelAttachmentCreateResponses[keyof ChannelAttachmentCreateResponses]
+
+export type ChannelAttachmentGetData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/channel/attachment/{id}"
+}
+
+export type ChannelAttachmentGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ChannelAttachmentGetError = ChannelAttachmentGetErrors[keyof ChannelAttachmentGetErrors]
+
+export type ChannelAttachmentGetResponses = {
+  /**
+   * Attachment content
+   */
+  200: Blob | File
+}
+
+export type ChannelAttachmentGetResponse = ChannelAttachmentGetResponses[keyof ChannelAttachmentGetResponses]
+
 export type ChannelMessageData = {
   body?: {
-    platform: "slack" | "telegram" | "discord"
+    platform:
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
     channel: string
     thread: string
     text: string
@@ -2740,12 +3148,6 @@ export type ChannelMessageData = {
     allow_create?: boolean
     metadata?: {
       [key: string]: unknown
-    }
-    intent_hint?: {
-      action: string
-      payload?: {
-        [key: string]: unknown
-      }
     }
   }
   path?: never
@@ -2760,7 +3162,7 @@ export type ChannelMessageResponses = {
    * Message handled
    */
   200: {
-    kind: "panel_response" | "created" | "message" | "interaction" | "ignored"
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
     message: string
     task_id?: string
     interaction_id?: string
@@ -2782,6 +3184,11 @@ export type ChannelMessageResponses = {
           type: "invalidate_session"
           sessionID: string
         }
+    attachments?: Array<{
+      mime: string
+      url: string
+      filename?: string
+    }>
   }
 }
 
@@ -2854,6 +3261,22 @@ export type ExecutorListResponses = {
     registered: boolean
     discovered: boolean
     selectable: boolean
+    protocol: string
+    protocolVersion: string
+    transport: "inproc" | "stdio" | "ws" | "http"
+    features: {
+      [key: string]: unknown
+    }
+    tools: Array<{
+      name: string
+      description: string
+      inputSchema?: {
+        [key: string]: unknown
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+    }>
     detail: string
     version?: string
   }>
@@ -3497,6 +3920,7 @@ export type SessionDeleteData = {
   }
   query?: {
     directory?: string
+    deleteTasks?: boolean
   }
   url: "/session/{sessionID}"
 }
@@ -4955,9 +5379,114 @@ export type SkillPolicyResponses = {
 
 export type SkillPolicyResponse = SkillPolicyResponses[keyof SkillPolicyResponses]
 
+export type PanelCapabilitiesData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    surface?:
+      | "panel"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+  }
+  url: "/panel/capabilities"
+}
+
+export type PanelCapabilitiesResponses = {
+  /**
+   * Panel capabilities
+   */
+  200: {
+    surface:
+      | "panel"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+    actions: Array<{
+      action: string
+      description: string
+      kind: "query" | "mutation"
+      surfaces: Array<
+        | "panel"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+      >
+      local_only: boolean
+      local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
+      local_action_surfaces?: Array<
+        | "panel"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+      >
+      schema: {
+        [key: string]: unknown
+      }
+    }>
+  }
+}
+
+export type PanelCapabilitiesResponse = PanelCapabilitiesResponses[keyof PanelCapabilitiesResponses]
+
 export type PanelMessageData = {
   body?: {
-    surface: "panel" | "slack" | "telegram" | "discord"
+    surface:
+      | "panel"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
     text: string
     taskID?: string
     sessionID?: string
@@ -4970,12 +5499,6 @@ export type PanelMessageData = {
     allow_create?: boolean
     metadata?: {
       [key: string]: unknown
-    }
-    intent_hint?: {
-      action: string
-      payload?: {
-        [key: string]: unknown
-      }
     }
   }
   path?: never
@@ -4990,7 +5513,7 @@ export type PanelMessageResponses = {
    * Panel message handled
    */
   200: {
-    kind: "panel_response" | "created" | "message" | "interaction" | "ignored"
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
     message: string
     task_id?: string
     interaction_id?: string
@@ -5012,10 +5535,315 @@ export type PanelMessageResponses = {
           type: "invalidate_session"
           sessionID: string
         }
+    attachments?: Array<{
+      mime: string
+      url: string
+      filename?: string
+    }>
   }
 }
 
 export type PanelMessageResponse = PanelMessageResponses[keyof PanelMessageResponses]
+
+export type PanelMessageStreamData = {
+  body?: {
+    surface:
+      | "panel"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
+    text: string
+    taskID?: string
+    sessionID?: string
+    executor?: "opencode" | "codex" | "claude-code"
+    channel?: string
+    thread?: string
+    user_id?: string
+    request_id?: string
+    source?: string
+    allow_create?: boolean
+    metadata?: {
+      [key: string]: unknown
+    }
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/panel/message/stream"
+}
+
+export type PanelMessageStreamResponses = {
+  /**
+   * Streaming panel message events
+   */
+  200: {
+    kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+    message: string
+    task_id?: string
+    interaction_id?: string
+    session_id?: string
+    local_action?:
+      | {
+          type: "set_executor"
+          executor: "opencode" | "codex" | "claude-code"
+        }
+      | {
+          type: "select_task"
+          taskID: string
+        }
+      | {
+          type: "select_session"
+          sessionID: string
+        }
+      | {
+          type: "invalidate_session"
+          sessionID: string
+        }
+    attachments?: Array<{
+      mime: string
+      url: string
+      filename?: string
+    }>
+  }
+}
+
+export type PanelMessageStreamResponse = PanelMessageStreamResponses[keyof PanelMessageStreamResponses]
+
+export type PanelKnowledgeMemoryListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    sessionID?: string
+  }
+  url: "/panel/knowledge/memory"
+}
+
+export type PanelKnowledgeMemoryListResponses = {
+  /**
+   * Memory file list
+   */
+  200: Array<{
+    id: string
+    title: string
+    scope: string
+    source: string
+    kind: string
+    key?: string
+    importance: number
+    confidence: number
+    timeCreated: number
+    timeUpdated: number
+  }>
+}
+
+export type PanelKnowledgeMemoryListResponse =
+  PanelKnowledgeMemoryListResponses[keyof PanelKnowledgeMemoryListResponses]
+
+export type PanelKnowledgeMemoryDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/panel/knowledge/memory/{id}"
+}
+
+export type PanelKnowledgeMemoryDeleteResponses = {
+  /**
+   * Deleted
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type PanelKnowledgeMemoryDeleteResponse =
+  PanelKnowledgeMemoryDeleteResponses[keyof PanelKnowledgeMemoryDeleteResponses]
+
+export type PanelKnowledgeMemoryGetData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/panel/knowledge/memory/{id}"
+}
+
+export type PanelKnowledgeMemoryGetResponses = {
+  /**
+   * Memory file with chunks
+   */
+  200: {
+    file: {
+      id: string
+      title: string
+      scope: string
+      source: string
+      kind: string
+      key?: string
+      importance: number
+      confidence: number
+      timeCreated: number
+      timeUpdated: number
+    }
+    content: string
+  }
+}
+
+export type PanelKnowledgeMemoryGetResponse = PanelKnowledgeMemoryGetResponses[keyof PanelKnowledgeMemoryGetResponses]
+
+export type PanelKnowledgeMemorySearchData = {
+  body?: {
+    query: string
+    sessionID?: string
+    limit?: number
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/panel/knowledge/memory/search"
+}
+
+export type PanelKnowledgeMemorySearchResponses = {
+  /**
+   * Search results
+   */
+  200: Array<{
+    chunkId: string
+    fileId: string
+    fileTitle: string
+    content: string
+    scope: string
+    source: string
+    kind: string
+    key?: string
+    importance: number
+    confidence: number
+    score: number
+  }>
+}
+
+export type PanelKnowledgeMemorySearchResponse =
+  PanelKnowledgeMemorySearchResponses[keyof PanelKnowledgeMemorySearchResponses]
+
+export type PanelKnowledgePreferenceListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/panel/knowledge/preference"
+}
+
+export type PanelKnowledgePreferenceListResponses = {
+  /**
+   * Preference list (project-local cwd + custom overrides)
+   */
+  200: Array<{
+    id: string
+    key: string
+    value: string
+    scope: string
+    source: string
+    confidence: number
+    timeUpdated: number
+  }>
+}
+
+export type PanelKnowledgePreferenceListResponse =
+  PanelKnowledgePreferenceListResponses[keyof PanelKnowledgePreferenceListResponses]
+
+export type PanelKnowledgePreferenceSetData = {
+  body?: {
+    key: string
+    value: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/panel/knowledge/preference"
+}
+
+export type PanelKnowledgePreferenceSetResponses = {
+  /**
+   * Preference entry
+   */
+  200: {
+    id: string
+    key: string
+    value: string
+  }
+}
+
+export type PanelKnowledgePreferenceSetResponse =
+  PanelKnowledgePreferenceSetResponses[keyof PanelKnowledgePreferenceSetResponses]
+
+export type PanelKnowledgePreferenceDeleteData = {
+  body?: never
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/panel/knowledge/preference/{id}"
+}
+
+export type PanelKnowledgePreferenceDeleteResponses = {
+  /**
+   * Deleted
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type PanelKnowledgePreferenceDeleteResponse =
+  PanelKnowledgePreferenceDeleteResponses[keyof PanelKnowledgePreferenceDeleteResponses]
+
+export type PanelKnowledgePreferenceUpdateData = {
+  body?: {
+    key: string
+    value: string
+  }
+  path: {
+    id: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/panel/knowledge/preference/{id}"
+}
+
+export type PanelKnowledgePreferenceUpdateResponses = {
+  /**
+   * Updated
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type PanelKnowledgePreferenceUpdateResponse =
+  PanelKnowledgePreferenceUpdateResponses[keyof PanelKnowledgePreferenceUpdateResponses]
 
 export type ControlTimelineData = {
   body?: never
@@ -5024,7 +5852,21 @@ export type ControlTimelineData = {
     directory?: string
     taskID?: string
     sessionID?: string
-    surface?: "panel" | "slack" | "telegram" | "discord"
+    surface?:
+      | "panel"
+      | "slack"
+      | "telegram"
+      | "discord"
+      | "feishu"
+      | "whatsapp"
+      | "googlechat"
+      | "msteams"
+      | "line"
+      | "matrix"
+      | "mattermost"
+      | "signal"
+      | "wecom"
+      | "dingtalk"
   }
   url: "/control/timeline"
 }
@@ -5046,11 +5888,20 @@ export type ControlTimelineResponses = {
         updated: number
       }
     }
-    parts: Array<{
-      id: string
-      type: "text"
-      text: string
-    }>
+    parts: Array<
+      | {
+          id: string
+          type: "text"
+          text: string
+        }
+      | {
+          id: string
+          type: "file"
+          mime: string
+          url: string
+          filename?: string
+        }
+    >
   }>
 }
 
@@ -5076,6 +5927,15 @@ export type TaskCreateData = {
       test?: Array<string> | false
       lint?: Array<string> | false
       verify_cmd?: Array<string> | false
+      named?: {
+        [key: string]: {
+          label?: string
+          family?: "build" | "test" | "lint" | "verify_cmd"
+          commands: Array<string>
+          enabled?: boolean
+          cwd?: string
+        }
+      }
       startup?: {
         command: string
         ready_url?: string
@@ -5148,12 +6008,22 @@ export type TaskCreateData = {
         prompt?: string
         mode?: "soft" | "strict"
       }
+      spec_check?: {
+        enabled?: boolean
+        prompt?: string
+        mode?: "soft" | "strict"
+      }
       custom?: {
         [key: string]: {
           [key: string]: unknown
         }
       }
       timeout_ms?: number
+    }
+    routing?: {
+      spec?: "opencorvus" | "executor"
+      plan?: "opencorvus" | "executor"
+      evaluation?: "opencorvus" | "hybrid"
     }
     goals?: Array<{
       description: string
@@ -5337,6 +6207,8 @@ export type TaskListResponses = {
         summary: string
         checks: Array<{
           name: string
+          label?: string
+          family?: string
           status: "passed" | "failed" | "skipped"
           evidence?: string
         }>
@@ -5617,6 +6489,8 @@ export type TaskProgressResponses = {
       summary: string
       checks: Array<{
         name: string
+        label?: string
+        family?: string
         status: "passed" | "failed" | "skipped"
         evidence?: string
       }>
@@ -5781,6 +6655,16 @@ export type TaskBoardResponses = {
         completed?: number
       }
     }
+    spec?: {
+      content: string
+      file?: string
+      source?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+      }
+    }
     plan?: {
       id: string
       taskID: string
@@ -5909,6 +6793,8 @@ export type TaskBoardResponses = {
       summary: string
       checks: Array<{
         name: string
+        label?: string
+        family?: string
         status: "passed" | "failed" | "skipped"
         evidence?: string
       }>
@@ -5990,6 +6876,8 @@ export type TaskBoardResponses = {
         summary: string
         checks?: Array<{
           name: string
+          label?: string
+          family?: string
           status: "passed" | "failed" | "skipped"
           evidence?: string
         }>
@@ -6173,6 +7061,44 @@ export type TaskMessageResponses = {
 
 export type TaskMessageResponse = TaskMessageResponses[keyof TaskMessageResponses]
 
+export type TaskInjectData = {
+  body?: {
+    message: string
+  }
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/task/{taskID}/inject"
+}
+
+export type TaskInjectErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type TaskInjectError = TaskInjectErrors[keyof TaskInjectErrors]
+
+export type TaskInjectResponses = {
+  /**
+   * Message injected
+   */
+  200: {
+    resumed: boolean
+    status: string
+  }
+}
+
+export type TaskInjectResponse = TaskInjectResponses[keyof TaskInjectResponses]
+
 export type TaskChecksUpdateData = {
   body?: {
     checks?: {
@@ -6180,6 +7106,15 @@ export type TaskChecksUpdateData = {
       test?: Array<string> | false
       lint?: Array<string> | false
       verify_cmd?: Array<string> | false
+      named?: {
+        [key: string]: {
+          label?: string
+          family?: "build" | "test" | "lint" | "verify_cmd"
+          commands: Array<string>
+          enabled?: boolean
+          cwd?: string
+        }
+      }
       startup?: {
         command: string
         ready_url?: string
@@ -6248,6 +7183,11 @@ export type TaskChecksUpdateData = {
         mode?: "soft" | "strict"
       }
       judge?: {
+        enabled?: boolean
+        prompt?: string
+        mode?: "soft" | "strict"
+      }
+      spec_check?: {
         enabled?: boolean
         prompt?: string
         mode?: "soft" | "strict"
@@ -6517,6 +7457,159 @@ export type RunGetResponses = {
 
 export type RunGetResponse = RunGetResponses[keyof RunGetResponses]
 
+export type RunExecutorSessionData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}/executor"
+}
+
+export type RunExecutorSessionErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunExecutorSessionError = RunExecutorSessionErrors[keyof RunExecutorSessionErrors]
+
+export type RunExecutorSessionResponses = {
+  /**
+   * Executor session
+   */
+  200: {
+    id: string
+    taskID: string
+    runID: string
+    provider: "opencode" | "codex" | "claude-code"
+    protocol: string
+    protocolVersion: string
+    transport: "inproc" | "stdio" | "ws" | "http"
+    status: "active" | "completed" | "failed" | "aborted"
+    refs?: {
+      provider_session_id?: string
+      thread_id?: string
+      turn_id?: string
+      item_id?: string
+      response_id?: string
+      conversation_id?: string
+      queue_task_id?: string
+      call_id?: string
+    }
+    capabilities?: {
+      stream?: boolean
+      resume?: boolean
+      interrupt?: boolean
+      builtin_tools?: boolean
+      custom_tools?: boolean
+      structured_output?: boolean
+      approvals?: Array<string>
+      reasoning?: boolean
+      plan_updates?: boolean
+      diff_updates?: boolean
+      mcp?: boolean
+      usage?: boolean
+      realtime?: boolean
+      spec_generation?: boolean
+      plan_generation?: boolean
+      tool_kinds?: Array<
+        | "builtin"
+        | "dynamic"
+        | "approval"
+        | "input"
+        | "mcp"
+        | "shell"
+        | "patch"
+        | "read"
+        | "review"
+        | "plan"
+        | "structured_output"
+        | "unknown"
+      >
+    }
+    settings?: {
+      model?: string
+      cwd?: string
+      system?: string
+      max_turns?: number
+      profile?: string
+      metadata?: {
+        [key: string]: unknown
+      }
+    }
+    time: {
+      created: number
+      updated: number
+      started?: number
+      completed?: number
+    }
+  }
+}
+
+export type RunExecutorSessionResponse = RunExecutorSessionResponses[keyof RunExecutorSessionResponses]
+
+export type RunExecutorEventsData = {
+  body?: never
+  path: {
+    runID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/run/{runID}/executor-events"
+}
+
+export type RunExecutorEventsErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type RunExecutorEventsError = RunExecutorEventsErrors[keyof RunExecutorEventsErrors]
+
+export type RunExecutorEventsResponses = {
+  /**
+   * Executor events
+   */
+  200: Array<{
+    id: string
+    executorSessionID: string
+    taskID: string
+    runID: string
+    sequence: number
+    kind: string
+    summary?: string
+    refs?: {
+      provider_session_id?: string
+      thread_id?: string
+      turn_id?: string
+      item_id?: string
+      response_id?: string
+      conversation_id?: string
+      queue_task_id?: string
+      call_id?: string
+    }
+    payload?: {
+      [key: string]: unknown
+    }
+    raw?: {
+      [key: string]: unknown
+    }
+    time: {
+      created: number
+      updated: number
+      observed: number
+    }
+  }>
+}
+
+export type RunExecutorEventsResponse = RunExecutorEventsResponses[keyof RunExecutorEventsResponses]
+
 export type RunBriefData = {
   body?: never
   path: {
@@ -6720,6 +7813,8 @@ export type RunEvaluationsResponses = {
     summary: string
     checks: Array<{
       name: string
+      label?: string
+      family?: string
       status: "passed" | "failed" | "skipped"
       evidence?: string
     }>
@@ -6912,6 +8007,79 @@ export type PatchGoalGoalIdData = {
 export type PatchGoalGoalIdResponses = {
   200: unknown
 }
+
+export type ExportTaskData = {
+  body?: never
+  path: {
+    taskID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/export/task/{taskID}"
+}
+
+export type ExportTaskErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ExportTaskError = ExportTaskErrors[keyof ExportTaskErrors]
+
+export type ExportTaskResponses = {
+  /**
+   * Complete task export including plan, runs, evaluations, goals, milestones, interactions, snapshots, and artifacts
+   */
+  200: {
+    task: unknown
+    plan?: unknown
+    goals: Array<unknown>
+    milestones: Array<unknown>
+    runs: Array<unknown>
+    interactions: Array<unknown>
+    snapshots: Array<unknown>
+    deliveries: Array<unknown>
+    evaluations: Array<unknown>
+    artifacts: Array<unknown>
+  }
+}
+
+export type ExportTaskResponse = ExportTaskResponses[keyof ExportTaskResponses]
+
+export type ExportSessionData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/export/session/{sessionID}"
+}
+
+export type ExportSessionErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type ExportSessionError = ExportSessionErrors[keyof ExportSessionErrors]
+
+export type ExportSessionResponses = {
+  /**
+   * Session metadata and messages
+   */
+  200: {
+    session: unknown
+    messages: Array<unknown>
+    llm_calls: number
+  }
+}
+
+export type ExportSessionResponse = ExportSessionResponses[keyof ExportSessionResponses]
 
 export type FindTextData = {
   body?: never
@@ -7804,6 +8972,37 @@ export type CommandListResponses = {
 
 export type CommandListResponse = CommandListResponses[keyof CommandListResponses]
 
+export type PathOpenData = {
+  body?: {
+    path: string
+  }
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/path/open"
+}
+
+export type PathOpenErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type PathOpenError = PathOpenErrors[keyof PathOpenErrors]
+
+export type PathOpenResponses = {
+  /**
+   * Path opened
+   */
+  200: {
+    opened: boolean
+  }
+}
+
+export type PathOpenResponse = PathOpenResponses[keyof PathOpenResponses]
+
 export type AppLogData = {
   body?: {
     /**
@@ -7849,6 +9048,28 @@ export type AppLogResponses = {
 }
 
 export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
+
+export type LogTailData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    n?: number
+  }
+  url: "/log/tail"
+}
+
+export type LogTailResponses = {
+  /**
+   * Log lines
+   */
+  200: {
+    path: string
+    lines: Array<string>
+  }
+}
+
+export type LogTailResponse = LogTailResponses[keyof LogTailResponses]
 
 export type AppAgentsData = {
   body?: never
@@ -7921,3 +9142,23 @@ export type EventSubscribeResponses = {
 }
 
 export type EventSubscribeResponse = EventSubscribeResponses[keyof EventSubscribeResponses]
+
+export type ServerRestartData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+  }
+  url: "/restart"
+}
+
+export type ServerRestartResponses = {
+  /**
+   * Restart initiated
+   */
+  200: {
+    ok: boolean
+  }
+}
+
+export type ServerRestartResponse = ServerRestartResponses[keyof ServerRestartResponses]

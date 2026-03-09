@@ -7,9 +7,13 @@ process.chdir(dir)
 import { $ } from "bun"
 import path from "path"
 
+const openapi = path.join(dir, "openapi.json")
+const rootOpenapi = path.join(dir, "..", "openapi.json")
+
 import { createClient } from "@hey-api/openapi-ts"
 
-await $`bun dev generate > ${dir}/openapi.json`.cwd(path.resolve(dir, "../../opencorvus"))
+await $`bun dev generate > ${openapi}`.cwd(path.resolve(dir, "../../opencorvus"))
+await Bun.write(rootOpenapi, await Bun.file(openapi).text())
 
 const generate = async (output: string) =>
   createClient({
@@ -26,10 +30,14 @@ const generate = async (output: string) =>
       },
       {
         name: "@hey-api/sdk",
-        instance: "OpencodeClient",
         exportFromIndex: false,
         auth: false,
         paramsStructure: "flat",
+        operations: {
+          strategy: "single",
+          containerName: "OpencodeClient",
+          methods: "instance",
+        },
       },
       {
         name: "@hey-api/client-fetch",

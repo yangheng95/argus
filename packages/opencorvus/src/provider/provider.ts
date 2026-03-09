@@ -94,7 +94,7 @@ export namespace Provider {
   }
 
   async function dashscopeKey(env: Record<string, string | undefined>) {
-    const direct = env["DASHSCOPE_API_KEY"]?.trim()
+    const direct = env["CODING_DASHSCOPE_API_KEY"]?.trim() || env["DASHSCOPE_API_KEY"]?.trim()
     if (direct) return direct
 
     const key = process.env.OPENCORVUS_EMBEDDED_DASHSCOPE_KEY?.trim()
@@ -266,16 +266,10 @@ export namespace Provider {
       const profile = configProfile ?? envProfile
 
       const awsAccessKeyId = Env.get("AWS_ACCESS_KEY_ID")
-
-      // TODO: Using process.env directly because Env.set only updates a process.env shallow copy,
-      // until the scope of the Env API is clarified (test only or runtime?)
       const awsBearerToken = iife(() => {
-        const envToken = process.env.AWS_BEARER_TOKEN_BEDROCK
+        const envToken = Env.get("AWS_BEARER_TOKEN_BEDROCK")?.trim()
         if (envToken) return envToken
-        if (auth?.type === "api") {
-          process.env.AWS_BEARER_TOKEN_BEDROCK = auth.key
-          return auth.key
-        }
+        if (auth?.type === "api") return auth.key.trim() || undefined
         return undefined
       })
 
@@ -290,6 +284,7 @@ export namespace Provider {
 
       const providerOptions: AmazonBedrockProviderSettings = {
         region: defaultRegion,
+        apiKey: awsBearerToken,
       }
 
       // Only use credential chain if no bearer token exists
@@ -472,23 +467,18 @@ export namespace Provider {
     },
     "sap-ai-core": async () => {
       const auth = await Auth.get("sap-ai-core")
-      // TODO: Using process.env directly because Env.set only updates a shallow copy (not process.env),
-      // until the scope of the Env API is clarified (test only or runtime?)
       const envServiceKey = iife(() => {
-        const envAICoreServiceKey = process.env.AICORE_SERVICE_KEY
+        const envAICoreServiceKey = Env.get("AICORE_SERVICE_KEY")?.trim()
         if (envAICoreServiceKey) return envAICoreServiceKey
-        if (auth?.type === "api") {
-          process.env.AICORE_SERVICE_KEY = auth.key
-          return auth.key
-        }
+        if (auth?.type === "api") return auth.key.trim() || undefined
         return undefined
       })
-      const deploymentId = process.env.AICORE_DEPLOYMENT_ID
-      const resourceGroup = process.env.AICORE_RESOURCE_GROUP
+      const deploymentId = Env.get("AICORE_DEPLOYMENT_ID")
+      const resourceGroup = Env.get("AICORE_RESOURCE_GROUP")
 
       return {
         autoload: !!envServiceKey,
-        options: envServiceKey ? { deploymentId, resourceGroup } : {},
+        options: envServiceKey ? { apiKey: envServiceKey, deploymentId, resourceGroup } : {},
         async getModel(sdk: any, modelID: string) {
           return sdk(modelID)
         },

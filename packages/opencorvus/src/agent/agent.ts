@@ -82,6 +82,8 @@ export namespace Agent {
       question: "deny",
       plan_enter: "deny",
       plan_exit: "deny",
+      spec_enter: "deny",
+      spec_exit: "deny",
       // mirrors github.com/github/gitignore Node.gitignore pattern for .env files
       read: {
         "*": "allow",
@@ -102,6 +104,29 @@ export namespace Agent {
           PermissionNext.fromConfig({
             question: "allow",
             plan_enter: "allow",
+            spec_enter: "allow",
+          }),
+          user,
+        ),
+        mode: "primary",
+        native: true,
+      },
+      spec: {
+        name: "spec",
+        description: "Read-only specification agent. Explores codebase, asks questions, and writes the specification file before planning.",
+        options: {},
+        permission: PermissionNext.merge(
+          defaults,
+          PermissionNext.fromConfig({
+            question: "allow",
+            spec_exit: "allow",
+            bash: "deny",
+            schedule: "deny",
+            apply_patch: "deny",
+            edit: {
+              "*": "deny",
+              ".opencorvus/specs/*.md": "allow",
+            },
           }),
           user,
         ),

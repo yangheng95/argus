@@ -14,9 +14,8 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
-import codingMd from "./builtin/coding.md" with { type: "text" }
+import { botBundles } from "./builtin/bot"
 import panelMd from "./builtin/panel.md" with { type: "text" }
-import planMd from "./builtin/plan.md" with { type: "text" }
 
 export namespace Skill {
   const log = Log.create({ service: "skill" })
@@ -60,14 +59,7 @@ export namespace Skill {
   const BUILTIN_PATH = path.join(Global.Path.cache, "builtin-skills")
 
   const builtins = [
-    {
-      skill: codingMd,
-      files: {},
-    },
-    {
-      skill: planMd,
-      files: {},
-    },
+    ...botBundles,
     {
       skill: panelMd,
       files: {},

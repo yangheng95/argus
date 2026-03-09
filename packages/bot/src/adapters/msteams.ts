@@ -88,7 +88,34 @@ export class MSTeamsAdapter implements BotAdapter {
     await this.sendMessage(channel, thread, text)
   }
 
+  async uploadImageUrl(channel: string, thread: string, url: string, filename: string, title?: string): Promise<void> {
+    await this.post(channel, {
+      type: "message",
+      from: { id: this.appId },
+      conversation: { id: this.session.get(channel)?.conversationId ?? channel },
+      ...(thread ? { replyToId: thread } : {}),
+      ...(title ? { text: title } : {}),
+      attachments: [{
+        contentType: "application/vnd.microsoft.card.hero",
+        content: {
+          title: title ?? filename,
+          images: [{ url }],
+        },
+      }],
+    })
+  }
+
   private async send(channel: string, text: string, thread?: string) {
+    return this.post(channel, {
+      type: "message",
+      from: { id: this.appId },
+      conversation: { id: this.session.get(channel)?.conversationId ?? channel },
+      text,
+      ...(thread ? { replyToId: thread } : {}),
+    })
+  }
+
+  private async post(channel: string, payload: Record<string, unknown>) {
     const session = this.session.get(channel)
     if (!session) throw new Error(`MS Teams channel not initialized: ${channel}`)
     const token = await this.auth()
@@ -100,13 +127,7 @@ export class MSTeamsAdapter implements BotAdapter {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          type: "message",
-          from: { id: this.appId },
-          conversation: { id: session.conversationId },
-          text,
-          replyToId: thread || undefined,
-        }),
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(30_000),
       },
     )

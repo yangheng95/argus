@@ -33,7 +33,16 @@ test(
           check_selector: ["verify_cmd"],
         },
       }],
-      metadata: {},
+      metadata: {
+        strategy: "initial",
+        steps: ["Execute the task"],
+        planner: {
+          role: "headless_compiler",
+          quality: "compiled",
+          source: "planner_agent",
+          clarification_source: "none",
+        },
+      },
     })
     spyOn(EvaluatorService, "analyzeDelivery").mockRejectedValue(new Error("ProviderModelNotFoundError"))
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({

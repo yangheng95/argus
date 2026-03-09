@@ -60,4 +60,63 @@ describe("session routes", () => {
       },
     })
   })
+
+  test("DELETE /session/:id keeps the task visible in /tasks when deleteTasks is omitted", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await Session.create({ title: "keep-task" })
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) =>
+          db.insert(OrchestratorTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: session.id,
+            source: "panel",
+            title: "keep bound task",
+            request: "keep bound task",
+            status: "completed",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+
+        const removed = await app.request(`/session/${session.id}`, {
+          method: "DELETE",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(removed.status).toBe(200)
+        expect(Database.use((db) =>
+          db.select().from(SessionTable).where(eq(SessionTable.id, session.id)).get(),
+        )).toBeUndefined()
+
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )
+        expect(task?.session_id).toBeNull()
+
+        const listed = await app.request("/tasks", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(listed.status).toBe(200)
+        const body = await listed.json() as {
+          tasks: Array<{ task: { id: string; sessionID?: string | null } }>
+        }
+        expect(body.tasks).toHaveLength(1)
+        expect(body.tasks[0]?.task.id).toBe(taskID)
+        expect(body.tasks[0]?.task.sessionID).toBeUndefined()
+      },
+    })
+  })
 })

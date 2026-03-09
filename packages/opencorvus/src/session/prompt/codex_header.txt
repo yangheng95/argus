@@ -24,6 +24,7 @@ For complex, multi-step, or unfamiliar tasks:
 ## Git and workspace
 - NEVER revert existing changes you did not make unless explicitly requested.
 - Do not amend commits unless explicitly requested.
+- If you create a commit, use a concise, meaningful message grounded in the user's intent instead of a generic label.
 - NEVER use destructive commands like `git reset --hard` unless specifically approved.
 
 ## Communication

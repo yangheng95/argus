@@ -157,9 +157,4 @@ This file is for execution planning, not for replacing platform official docs.
   - `DINGTALK_WEBHOOK_PORT`
   - `DINGTALK_WEBHOOK_PATH`
 
-## Compatibility
-
-- Prefer canonical keys listed above.
-- `OPENCLAW_*` fallbacks are optional compatibility inputs and should usually be entered as custom env rows.
-
 For exact channel semantics, load only the corresponding channel reference file.

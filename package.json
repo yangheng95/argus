@@ -9,7 +9,7 @@
     "dev": "bun run --cwd packages/opencorvus dev",
     "dev:overlay": "cd packages/overlay/src-tauri && cargo run --release",
     "check:sdk-imports": "bun run scripts/check-sdk-imports.ts",
-    "typecheck": "bun run check:sdk-imports && bun run --cwd packages/opencorvus db:check && bunx turbo run typecheck",
+    "typecheck": "bun run check:sdk-imports && bunx turbo run typecheck",
     "prepare": "husky",
     "test": "echo 'do not run tests from root' && exit 1"
   },
@@ -45,7 +45,6 @@
       "luxon": "3.6.1",
       "marked": "17.0.1",
       "marked-shiki": "1.2.1",
-      "@playwright/test": "1.51.0",
       "typescript": "5.8.2",
       "@typescript/native-preview": "7.0.0-dev.20251207.1",
       "zod": "4.1.8",

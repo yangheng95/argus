@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import type { CodingEventInfo } from "../../src/executor/compat"
 import type { ClaudeAgentClient, ClaudeAgentHandle } from "../../src/executor/claude-agent"
 import { ClaudeAgentExecutor } from "../../src/executor/claude-agent"
 import { ManagedCodingExecutor } from "../../src/executor/managed"
@@ -47,10 +48,10 @@ describe("claude agent executor", () => {
 
     const events = await collect(provider.run({ prompt: "test" }))
     expect(events.some((item) => item.type === "text_delta")).toBe(true)
-    const tool = events.find((item) => item.type === "tool_call")
+    const tool = events.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
     expect(tool?.type).toBe("tool_call")
-    expect(tool?.meta?.adapter).toBe("shell")
-    expect(tool?.meta?.tool_kind).toBe("shell")
+    expect(tool?.meta?.["adapter"]).toBe("shell")
+    expect(tool?.meta?.["tool_kind"]).toBe("shell")
     expect(events.some((item) => item.type === "reasoning_delta")).toBe(true)
     expect(events.some((item) => item.type === "usage")).toBe(true)
     expect(events.at(-1)?.type).toBe("done")
@@ -99,16 +100,16 @@ describe("claude agent executor", () => {
       sessionID: "oc_session",
       prompt: "test",
     })
-    const stream = adapter.events({ queueTaskID: submit.queueTaskID })
-    const first = await stream.next()
-    expect(first.value?.type).toBe("executor.status")
+    let firstType = ""
     let approval
-    for await (const event of stream) {
+    for await (const event of adapter.events({ queueTaskID: submit.queueTaskID })) {
+      if (!firstType) firstType = event.type
       if (event.type === "approval.request") {
         approval = event
         break
       }
     }
+    expect(firstType).toBe("executor.status")
     expect(approval?.type).toBe("approval.request")
     const resolved = await adapter.resolve?.({
       queueTaskID: submit.queueTaskID,
@@ -138,10 +139,10 @@ function handle(stream: AsyncIterable<Record<string, unknown>>): ClaudeAgentHand
   }
 }
 
-async function collect(input: AsyncIterable<unknown>) {
-  const result: unknown[] = []
+async function collect(input: AsyncIterable<CodingEventInfo>) {
+  const result: CodingEventInfo[] = []
   for await (const item of input) result.push(item)
-  return result as Array<{ type: string; [key: string]: unknown }>
+  return result
 }
 
 function feed<T>(items: T[]): AsyncIterable<T> {

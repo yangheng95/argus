@@ -3,6 +3,8 @@ import { Tool } from "./tool"
 import { Memory } from "@/memory"
 import { Instance } from "@/project/instance"
 
+const MemoryKinds = ["note", "episode", "fact", "lesson", "profile"] as const
+
 const DESCRIPTION = `Scoped memory store for project knowledge.
 
 **Mandatory recall**: Before answering about prior work, decisions, dates, preferences, or project history, ALWAYS recall memory and preferences first.
@@ -10,7 +12,7 @@ const DESCRIPTION = `Scoped memory store for project knowledge.
 Actions:
 - **search**: Search session memory, global memory, or both. Use BEFORE answering from memory.
 - **get**: Retrieve full content of a memory file by ID. Use after search to read detailed content.
-- **write**: Save important knowledge. Defaults to global so it survives across all sessions in this project.
+- **write**: Save important knowledge. Prefer typed memory: lesson, fact, episode, or profile.
 - **list**: Browse saved memory files by scope.
 - **delete**: Remove outdated or incorrect memory by file ID.`
 
@@ -39,6 +41,10 @@ export const MemoryTool = Tool.define("memory", {
       action: z.literal("write"),
       title: z.string().describe("Short descriptive title (e.g. 'Project architecture decisions')"),
       content: z.string().describe("Markdown content to save. Use ## headings to organize sections."),
+      kind: z
+        .enum(MemoryKinds)
+        .optional()
+        .describe("Memory kind (default: note). Use lesson/fact/profile for atomic long-term memory and episode for summaries."),
       scope: z
         .enum(["global", "session"])
         .optional()
@@ -89,6 +95,10 @@ export const MemoryTool = Tool.define("memory", {
           fileId: r.fileId,
           fileTitle: r.fileTitle,
           scope: r.scope,
+          kind: r.kind,
+          source: r.source,
+          importance: r.importance,
+          confidence: r.confidence,
           score: Number(r.score.toFixed(4)),
           snippet: r.content.slice(0, 700),
           citation: `memory:${r.fileId}`,
@@ -119,6 +129,10 @@ export const MemoryTool = Tool.define("memory", {
             source: file.source,
             scope: file.scope,
             sessionID: file.sessionID,
+            kind: file.kind,
+            key: file.key,
+            importance: file.importance,
+            confidence: file.confidence,
             text,
           }),
           metadata: {},
@@ -130,14 +144,15 @@ export const MemoryTool = Tool.define("memory", {
           throw new Error("memory.write is disabled in plan mode. Only read-only memory actions are allowed.")
         }
         const scope = params.scope ?? "global"
-        const file = Memory.createFile({
+        const file = Memory.writeFile({
           title: params.title,
+          content: params.content,
           source: "agent",
           projectId,
           scope,
           sessionID: scope === "session" ? ctx.sessionID : undefined,
+          kind: params.kind,
         })
-        const chunks = Memory.writeChunks(file.id, projectId, params.content)
         return {
           title: `Saved: ${params.title}`,
           output: JSON.stringify({
@@ -145,7 +160,10 @@ export const MemoryTool = Tool.define("memory", {
             title: params.title,
             scope,
             sessionID: file.sessionID,
-            chunks: chunks.length,
+            kind: file.kind,
+            key: file.key,
+            importance: file.importance,
+            confidence: file.confidence,
           }),
           metadata: {},
         }
@@ -163,6 +181,10 @@ export const MemoryTool = Tool.define("memory", {
           source: f.source,
           scope: f.scope,
           sessionID: f.sessionID,
+          kind: f.kind,
+          key: f.key,
+          importance: f.importance,
+          confidence: f.confidence,
           created: new Date(f.timeCreated).toISOString(),
         }))
         return {

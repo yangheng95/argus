@@ -1,4 +1,5 @@
 import { Instance } from "@/project/instance"
+import { findSpecSnapshot, findSpecItems } from "@/orchestrator/store"
 import { Plugin } from "@/plugin"
 import { Provider } from "@/provider/provider"
 import { Shell } from "@/shell/shell"
@@ -7,13 +8,14 @@ import { Snapshot } from "@/snapshot"
 import { Filesystem } from "@/util/filesystem"
 import { spawn } from "child_process"
 import fs from "fs/promises"
-import { generateObject } from "ai"
+import { generateObject, generateText } from "ai"
 import path from "path"
 import puppeteer from "puppeteer-core"
 import z from "zod"
 import { CheckConfig, EvaluationCheck, NamedCheckConfig, NamedCheckFamily } from "@/orchestrator/model"
 import { EvaluatorAgent, type EvaluatorAnalysisType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
+import { which } from "@/util/which"
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT = 12000
@@ -23,6 +25,16 @@ const JudgeResult = z.object({
   rationale: z.string(),
   strengths: z.array(z.string()).optional(),
   concerns: z.array(z.string()).optional(),
+})
+
+const SpecCheckResult = z.object({
+  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
+  rationale: z.string(),
+  criteria: z.array(z.object({
+    criterion: z.string(),
+    status: z.enum(["passed", "failed", "inconclusive"]),
+    evidence: z.string(),
+  })),
 })
 
 const ReviewResult = z.object({
@@ -44,6 +56,96 @@ type CommandGroup = {
   commands: EvaluatorCommand[]
 }
 
+type EvaluationTask = {
+  taskID?: string
+  activeSpecVersionID?: string
+  request?: string
+  metadata?: Record<string, unknown>
+}
+
+type EvaluationDelivery = {
+  summary: string
+  diffs?: Snapshot.FileDiff[]
+  changedFiles?: string[]
+}
+
+type EvaluationArtifact = {
+  kind: "log" | "report" | "image"
+  label: string
+  payload: Record<string, unknown>
+}
+
+type EvaluationOutcome = {
+  outcome: "passed" | "failed" | "skipped"
+  summary: string
+  checks: z.infer<typeof EvaluationCheck>[]
+  artifacts: EvaluationArtifact[]
+}
+
+type EvaluationOutput = {
+  status: "passed" | "failed" | "inconclusive"
+  verdict: "accepted" | "rejected" | "inconclusive"
+  summary: string
+  checks: z.infer<typeof EvaluationCheck>[]
+  artifacts: EvaluationArtifact[]
+}
+
+type PluginCheck = {
+  name: string
+  mode: "soft" | "strict"
+  run: (ctx: {
+    request?: string
+    delivery: EvaluationDelivery
+  }) => Promise<{
+    status: "passed" | "failed" | "skipped"
+    evidence: string
+    artifacts?: Array<{ kind: string; label: string; payload: Record<string, unknown> }>
+  }>
+}
+
+type CheckDef = {
+  name: string
+  label: string
+  family?: string
+}
+
+type OptionalCheckDef = CheckDef & {
+  run: (config: z.infer<typeof CheckConfig>, task: EvaluationTask, delivery: EvaluationDelivery) => Promise<EvaluationOutcome>
+}
+
+const CORE_CHECK_DEFS = [
+  { name: "build", label: "Build", family: "build" },
+  { name: "test", label: "Unit Tests", family: "test" },
+  { name: "lint", label: "Lint", family: "lint" },
+  { name: "verify_cmd", label: "Verify Command", family: "verify_cmd" },
+] as const satisfies CheckDef[]
+
+const OPTIONAL_CHECK_DEFS = [
+  { name: "startup", label: "Startup", family: "runtime", run: (config) => startupResult(config.startup) },
+  { name: "artifact", label: "Artifacts", family: "artifact", run: (config, _task, delivery) => artifactResult(config.artifact, delivery) },
+  { name: "visual", label: "Visual Check", family: "runtime", run: (config) => visualResult(config.visual) },
+  { name: "puppeteer", label: "Puppeteer", family: "runtime", run: (config) => puppeteerResult(config.puppeteer) },
+  { name: "ui_review", label: "UI Review", family: "review", run: (config, task, delivery) => uiReviewResult(config.ui_review, task.request, delivery) },
+  { name: "code_quality", label: "Code Quality", family: "review", run: (config, task, delivery) => codeQualityResult(config.code_quality, task.request, delivery) },
+  { name: "code_review", label: "Code Review", family: "review", run: (config, task, delivery) => codeReviewResult(config.code_review, task.request, delivery) },
+  { name: "dead_code_review", label: "Dead Code Review", family: "review", run: (config, task, delivery) => deadCodeReviewResult(config.dead_code_review, task.request, delivery) },
+  { name: "judge", label: "LLM Judge", family: "acceptance", run: (config, task, delivery) => judgeResult(config.judge, task.request, delivery) },
+  { name: "spec_check", label: "Spec Check", family: "acceptance", run: (config, task, delivery) => specCheckResult(config.spec_check, task.request, task.activeSpecVersionID, delivery) },
+] as const satisfies OptionalCheckDef[]
+
+const BUILTIN_CHECK_DEFS = [...CORE_CHECK_DEFS, ...OPTIONAL_CHECK_DEFS]
+
+const BUILTIN_CHECK_INDEX = new Map<string, { label: string; family?: string; order: number }>(
+  BUILTIN_CHECK_DEFS.map((item, index) => [
+    item.name,
+    {
+      label: item.label,
+      family: item.family,
+      order: index,
+    },
+  ]),
+)
+
 export namespace EvaluatorService {
   export async function resolveChecks(metadata?: Record<string, unknown>, changedFiles?: unknown) {
     const config = await resolveConfig(metadata)
@@ -52,173 +154,21 @@ export namespace EvaluatorService {
   }
 
   export async function evaluate(
-    task: { request?: string; metadata?: Record<string, unknown> },
-    delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
+    task: EvaluationTask,
+    delivery: EvaluationDelivery,
   ) {
-    const config = await resolveConfig(task.metadata)
+    const rawConfig = await resolveConfig(task.metadata)
+    const config = { ...rawConfig, ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}) } as typeof rawConfig
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
     const commands = commandGroups(config, discovered)
-
-    const results: z.infer<typeof EvaluationCheck>[] = []
-    const artifacts: Array<{ kind: "log" | "report" | "image"; label: string; payload: Record<string, unknown> }> = []
-
-    for (const group of commands) {
-      for (const [index, command] of group.commands.entries()) {
-        const label = group.commands.length === 1 ? group.name : `${group.name}#${index + 1}`
-        const result = await commandResult(command, config.timeout_ms ?? DEFAULT_TIMEOUT_MS)
-        artifacts.push({
-          kind: "log",
-          label: `evaluation:${label}`,
-          payload: {
-            command: result.command,
-            cwd: result.cwd,
-            code: result.code,
-            output: clip(result.output),
-          },
-        })
-        if (result.code === 0) {
-          results.push({
-            name: label,
-            label: group.label,
-            family: group.family,
-            status: "passed",
-            evidence: clip(result.output) || `${command} passed`,
-          })
-          continue
-        }
-        results.push({
-          name: label,
-          label: group.label,
-          family: group.family,
-          status: "failed",
-          evidence: clip(result.output) || `${command} failed`,
-        })
-      }
+    const core = await commandChecks(commands, config.timeout_ms ?? DEFAULT_TIMEOUT_MS, delivery)
+    if (core.checks.some((item) => item.status === "failed")) {
+      return publishResult(task, finalizeEvaluation(commands, core.checks, core.artifacts, []))
     }
-
-    if (commands.length === 0) {
-      results.push({
-        name: "evaluation_config",
-        status: "skipped",
-        evidence: delivery.summary,
-      })
-    }
-
-    const optional = await Promise.all([
-      startupResult(config.startup),
-      artifactResult(config.artifact, delivery),
-      visualResult(config.visual),
-      puppeteerResult(config.puppeteer),
-      uiReviewResult(config.ui_review, task.request, delivery),
-      codeQualityResult(config.code_quality, task.request, delivery),
-      codeReviewResult(config.code_review, task.request, delivery),
-      deadCodeReviewResult(config.dead_code_review, task.request, delivery),
-      judgeResult(config.judge, task.request, delivery),
-    ])
-
-    const pluginChecksOutput = { checks: [] as Array<{ name: string; mode: "soft" | "strict"; run: (ctx: { request?: string; delivery: { summary: string; diffs?: any[] } }) => Promise<{ status: "passed" | "failed" | "skipped"; evidence: string; artifacts?: Array<{ kind: string; label: string; payload: Record<string, any> }> }> }> }
-    await Plugin.trigger("evaluation.checks", {
-      taskID: (task.metadata as Record<string, unknown>)?.taskID as string | undefined,
-      runID: (task.metadata as Record<string, unknown>)?.runID as string | undefined,
-      request: task.request,
-      config: (config as Record<string, unknown>).custom as Record<string, unknown> ?? {},
-    }, pluginChecksOutput).catch(() => undefined)
-
-    const pluginResults = await Promise.all(
-      pluginChecksOutput.checks.map(async (pluginCheck) => {
-        const checkResult = await pluginCheck.run({ request: task.request, delivery }).catch(() => ({
-          status: "skipped" as const,
-          evidence: `Plugin check ${pluginCheck.name} threw an error.`,
-        }))
-        return {
-          outcome: softOrStrict({
-            mode: pluginCheck.mode,
-            name: pluginCheck.name,
-            summary: checkResult.status === "passed" ? `${pluginCheck.name} passed.` : `${pluginCheck.name} ${checkResult.status}.`,
-            evidence: checkResult.evidence,
-            payload: {},
-          }),
-          artifacts: "artifacts" in checkResult && checkResult.artifacts
-            ? checkResult.artifacts.map((art) => ({
-                kind: art.kind as "log" | "report" | "image",
-                label: art.label,
-                payload: art.payload,
-              }))
-            : [],
-        }
-      }),
-    )
-
-    for (const item of pluginResults) {
-      optional.push(item.outcome)
-      artifacts.push(...item.artifacts)
-    }
-
-    for (const item of optional) {
-      results.push(...item.checks)
-      artifacts.push(...item.artifacts)
-    }
-
-    // Aggregate all failures (core commands + optional checks)
-    const coreFailures = results.filter((item) => item.status === "failed")
-    const optionalFailed = optional.find((item) => item.outcome === "failed")
-    if (coreFailures.length > 0 || optionalFailed) {
-      const failedNames = coreFailures.map((item) => `${item.name} (${item.status})`)
-      const passedNames = results.filter((item) => item.status === "passed").map((item) => item.name)
-      const summaryParts = []
-      if (failedNames.length > 0) summaryParts.push(`Failed: ${failedNames.join(", ")}`)
-      if (passedNames.length > 0) summaryParts.push(`Passed: ${passedNames.join(", ")}`)
-      const output = {
-        status: "failed" as const,
-        verdict: "rejected" as const,
-        summary: summaryParts.join(". ") + ".",
-        checks: results,
-        artifacts,
-      }
-      await Plugin.trigger("evaluation.result", {
-        taskID: (task.metadata as Record<string, unknown>)?.taskID as string | undefined,
-        runID: (task.metadata as Record<string, unknown>)?.runID as string | undefined,
-        request: task.request,
-      }, output).catch(() => undefined)
-      return output
-    }
-
-    const skipped = optional.filter((item) => item.outcome === "skipped")
-    const optionalChecks = results.filter((item) => item.name !== "evaluation_config")
-    if (commands.length === 0 && optionalChecks.length === 0 && results.every((item) => item.status === "skipped")) {
-      const output = {
-        status: "inconclusive" as const,
-        verdict: "inconclusive" as const,
-        summary: "No blocking evaluator checks ran.",
-        checks: results,
-        artifacts,
-      }
-      await Plugin.trigger("evaluation.result", {
-        taskID: (task.metadata as Record<string, unknown>)?.taskID as string | undefined,
-        runID: (task.metadata as Record<string, unknown>)?.runID as string | undefined,
-        request: task.request,
-      }, output).catch(() => undefined)
-      return output
-    }
-
-    const output = {
-      status: "passed" as const,
-      verdict: "accepted" as const,
-      summary:
-        skipped.length > 0
-          ? commands.length === 0
-            ? "Optional evaluator checks ran in soft mode without blocking the flow."
-            : "Core evaluator checks passed; optional checks were skipped."
-          : "All evaluator checks passed.",
-      checks: results,
-      artifacts,
-    }
-    await Plugin.trigger("evaluation.result", {
-      taskID: (task.metadata as Record<string, unknown>)?.taskID as string | undefined,
-      runID: (task.metadata as Record<string, unknown>)?.runID as string | undefined,
-      request: task.request,
-    }, output).catch(() => undefined)
-    return output
+    const optional = await optionalChecks(config, task, delivery)
+    const checks = [...core.checks, ...optional.flatMap((item) => Array.isArray(item.checks) ? item.checks : [])]
+    const artifacts = [...core.artifacts, ...optional.flatMap((item) => Array.isArray(item.artifacts) ? item.artifacts : [])]
+    return publishResult(task, finalizeEvaluation(commands, checks, artifacts, optional))
   }
 
   /**
@@ -230,7 +180,7 @@ export namespace EvaluatorService {
    * the agent analysis is an optional enrichment step.
    */
   export async function analyzeDelivery(input: {
-    task: { title: string; request: string }
+    task: { title: string; request: string; sessionID?: string }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
@@ -241,9 +191,238 @@ export namespace EvaluatorService {
 
 const evaluatorLog = Log.create({ service: "evaluator" })
 
+function taskRefs(task: EvaluationTask) {
+  return {
+    taskID: task.metadata?.taskID as string | undefined,
+    runID: task.metadata?.runID as string | undefined,
+    request: task.request,
+  }
+}
+
+async function publishResult(task: EvaluationTask, output: EvaluationOutput) {
+  await Plugin.trigger("evaluation.result", taskRefs(task), output).catch(() => undefined)
+  return output
+}
+
+async function commandChecks(
+  commands: CommandGroup[],
+  timeout: number,
+  delivery: EvaluationDelivery,
+) {
+  const checks: z.infer<typeof EvaluationCheck>[] = []
+  const artifacts: EvaluationArtifact[] = []
+
+  for (const group of commands) {
+    for (const [index, command] of group.commands.entries()) {
+      const name = group.commands.length === 1 ? group.name : `${group.name}#${index + 1}`
+      const result = await commandResult(command, timeout)
+      artifacts.push({
+        kind: "log",
+        label: `evaluation:${name}`,
+        payload: {
+          command: result.command,
+          cwd: result.cwd,
+          code: result.code,
+          output: clip(result.output),
+        },
+      })
+      checks.push({
+        ...checkResult({
+          name,
+          label: group.label,
+          family: group.family,
+          status: result.code === 0 ? "passed" : "failed",
+          evidence: clip(result.output) || `${command} ${result.code === 0 ? "passed" : "failed"}`,
+        }),
+      })
+    }
+  }
+
+  if (commands.length === 0) {
+    checks.push(checkResult({
+      name: "evaluation_config",
+      status: "skipped",
+      evidence: delivery.summary,
+    }))
+  }
+
+  return { checks, artifacts }
+}
+
+async function optionalChecks(
+  config: z.infer<typeof CheckConfig>,
+  task: EvaluationTask,
+  delivery: EvaluationDelivery,
+) {
+  const builtin = await Promise.all(OPTIONAL_CHECK_DEFS.map((item) => item.run(config, task, delivery)))
+  const plugins = await pluginChecks(config, task, delivery)
+  return [...builtin, ...plugins].map((item) => ({
+    ...item,
+    checks: item.checks.map(checkResult),
+  }))
+}
+
+async function pluginChecks(
+  config: z.infer<typeof CheckConfig>,
+  task: EvaluationTask,
+  delivery: EvaluationDelivery,
+) {
+  const output = { checks: [] as PluginCheck[] }
+  await Plugin.trigger("evaluation.checks", {
+    ...taskRefs(task),
+    config: (config.custom as Record<string, unknown>) ?? {},
+  }, output).catch(() => undefined)
+  return Promise.all(output.checks.map((item) => pluginCheck(item, task, delivery)))
+}
+
+async function pluginCheck(
+  input: PluginCheck,
+  task: EvaluationTask,
+  delivery: EvaluationDelivery,
+): Promise<EvaluationOutcome> {
+  const result = await input.run({ request: task.request, delivery }).catch(() => pluginFallback(input.name))
+  const artifacts = [
+    {
+      kind: "report" as const,
+      label: `evaluation:${input.name}`,
+      payload: { mode: input.mode, status: result.status },
+    },
+    ...normalizeArtifacts(result.artifacts),
+  ]
+
+  if (result.status === "passed") {
+    return {
+      outcome: "passed",
+      summary: `${input.name} passed.`,
+      checks: [checkResult({
+        name: input.name,
+        status: "passed",
+        evidence: result.evidence,
+      })],
+      artifacts,
+    }
+  }
+
+  const output = softOrStrict({
+    mode: input.mode,
+    name: input.name,
+    summary: `${input.name} ${result.status}.`,
+    evidence: result.evidence,
+    payload: { mode: input.mode, status: result.status },
+  })
+
+  return {
+    ...output,
+    artifacts,
+  }
+}
+
+function normalizeArtifacts(input?: Array<{ kind: string; label: string; payload: Record<string, unknown> }>) {
+  return (input ?? []).map((item) => ({
+    kind: item.kind as EvaluationArtifact["kind"],
+    label: item.label,
+    payload: item.payload,
+  }))
+}
+
+function checkBase(name: string) {
+  return name.replace(/#\d+$/, "")
+}
+
+function checkResult(input: z.infer<typeof EvaluationCheck>) {
+  const meta = BUILTIN_CHECK_INDEX.get(checkBase(input.name))
+  return {
+    ...input,
+    label: input.label ?? meta?.label,
+    family: input.family ?? meta?.family,
+  }
+}
+
+function orderChecks(input: z.infer<typeof EvaluationCheck>[]) {
+  const rank = (name: string) => BUILTIN_CHECK_INDEX.get(checkBase(name))?.order ?? BUILTIN_CHECK_INDEX.size + 100
+  const suffix = (name: string) => Number(name.match(/#(\d+)$/)?.[1] ?? 0)
+  return [...input].sort((a, b) =>
+    rank(a.name) - rank(b.name) ||
+    suffix(a.name) - suffix(b.name) ||
+    a.name.localeCompare(b.name),
+  )
+}
+
+function finalizeEvaluation(
+  commands: CommandGroup[],
+  checks: z.infer<typeof EvaluationCheck>[],
+  artifacts: EvaluationArtifact[],
+  optional: EvaluationOutcome[],
+): EvaluationOutput {
+  const ordered = orderChecks(checks)
+  const failed = ordered.filter((item) => item.status === "failed")
+  if (failed.length > 0 || optional.some((item) => item.outcome === "failed")) {
+    const summary = [
+      failed.length > 0 ? `Failed: ${failed.map((item) => `${item.name} (${item.status})`).join(", ")}` : "",
+      ordered.some((item) => item.status === "passed")
+        ? `Passed: ${ordered.filter((item) => item.status === "passed").map((item) => item.name).join(", ")}`
+        : "",
+    ].filter(Boolean).join(". ")
+    return {
+      status: "failed",
+      verdict: "rejected",
+      summary: summary ? `${summary}.` : "Evaluator checks failed.",
+      checks: ordered,
+      artifacts,
+    }
+  }
+
+  const optionalChecks = ordered.filter((item) => item.name !== "evaluation_config")
+  if (commands.length === 0 && optionalChecks.length === 0 && ordered.every((item) => item.status === "skipped")) {
+    return {
+      status: "inconclusive",
+      verdict: "inconclusive",
+      summary: "No blocking evaluator checks ran.",
+      checks: ordered,
+      artifacts,
+    }
+  }
+
+  return {
+    status: "passed",
+    verdict: "accepted",
+    summary: optional.some((item) => item.outcome === "skipped")
+      ? commands.length === 0
+        ? "Optional evaluator checks ran in soft mode without blocking the flow."
+        : "Core evaluator checks passed; optional checks were skipped."
+      : "All evaluator checks passed.",
+    checks: ordered,
+    artifacts,
+  }
+}
+
+function pluginFallback(name: string) {
+  return {
+    status: "skipped" as const,
+    evidence: `Plugin check ${name} threw an error.`,
+    artifacts: undefined as Array<{ kind: string; label: string; payload: Record<string, unknown> }> | undefined,
+  }
+}
+
 async function resolveConfig(metadata?: Record<string, unknown>) {
   const configured = CheckConfig.safeParse(metadata?.checks)
   return CheckConfig.parse(configured.success ? configured.data : {})
+}
+
+function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
+  // Per design doc: spec_check defaults to enabled whenever a spec exists.
+  // Priority: DB spec snapshot > legacy filesystem spec files.
+  if (task?.activeSpecVersionID) {
+    return { spec_check: { enabled: true, mode: "strict" } }
+  }
+  try {
+    const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
+    const specFiles = require("fs").readdirSync(specsDir) as string[]
+    if (specFiles.some((f: string) => f.endsWith(".md"))) {
+      return { spec_check: { enabled: true, mode: "strict" } }
+    }
+  } catch {}
+  return {}
 }
 
 function commandSpecs(configured?: string[] | false, discovered: EvaluatorCommand[] = []) {
@@ -259,10 +438,21 @@ function commandGroups(
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
 ) {
   return [
-    group("build", config.build, discovered.build, "Build", "build"),
-    group("test", config.test, discovered.test, "Unit Tests", "test"),
-    group("lint", config.lint, discovered.lint, "Lint", "lint"),
-    group("verify_cmd", config.verify_cmd, [], "Verify Command", "verify_cmd"),
+    ...CORE_CHECK_DEFS.map((item) =>
+      group(
+        item.name,
+        config[item.name],
+        item.name === "build"
+          ? discovered.build
+          : item.name === "test"
+            ? discovered.test
+            : item.name === "lint"
+              ? discovered.lint
+              : [],
+        item.label,
+        item.family,
+      ),
+    ),
     ...namedGroups(config.named, discovered.named),
   ].flatMap((item) => item ?? [])
 }
@@ -330,6 +520,7 @@ function resolvedChecks(
     ...(config.code_review ? { code_review: config.code_review } : {}),
     ...(config.dead_code_review ? { dead_code_review: config.dead_code_review } : {}),
     ...(config.judge ? { judge: config.judge } : {}),
+    ...(config.spec_check ? { spec_check: config.spec_check } : autoSpecCheck()),
     ...(config.custom ? { custom: config.custom } : {}),
     ...(config.timeout_ms ? { timeout_ms: config.timeout_ms } : {}),
   } as Record<string, unknown>
@@ -394,11 +585,9 @@ async function discoverChecks(changedFiles?: unknown) {
   }
   return {
     build: scripts.build ? run("build") : [],
-    test: tests.playwright.length > 0
-      ? [{ command: `bunx playwright test ${tests.playwright.map(quote).join(" ")}`, cwd }]
-      : tests.bun.length > 0
-        ? [{ command: `bun test ${tests.bun.map(quote).join(" ")}`, cwd }]
-        : scripts.test ? run("test") : [],
+    test: tests.bun.length > 0
+      ? [{ command: `bun test ${tests.bun.map(quote).join(" ")}`, cwd }]
+      : scripts.test ? run("test") : [],
     lint: scripts.lint ? run("lint") : [],
     named,
   }
@@ -473,13 +662,13 @@ async function hasPythonTopLevel(cwd: string) {
 }
 
 function pythonLauncher() {
-  return ["python", "python3", "py"].find((item) => Bun.which(item))
+  return ["python", "python3", "py"].find((item) => which(item))
 }
 
 function pythonToolCommand(module: string, fallback: string) {
   const python = pythonLauncher()
   if (python) return `${python} -m ${module}`
-  if (Bun.which(fallback)) return fallback
+  if (which(fallback)) return fallback
 }
 
 function checkLabel(key: string) {
@@ -647,12 +836,6 @@ async function classifyTests(files: string[], cwd: string) {
     })),
   )
   return {
-    playwright: items
-      .filter((item) => !/["']bun:test["']/.test(item.text))
-      .filter((item) =>
-        /from ["']@playwright\/test["']|from ["']playwright\/test["']|require\(["']@playwright\/test["']\)|require\(["']playwright\/test["']\)/.test(item.text),
-      )
-      .map((item) => item.file),
     bun: items
       .filter((item) => /["']bun:test["']/.test(item.text))
       .map((item) => item.file),
@@ -730,10 +913,11 @@ async function discoverPackageRoot(changedFiles?: unknown) {
     .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]![0]
 }
 
-function clip(input: string) {
+function clip(input: string, maxLength?: number) {
   const value = input.trim()
-  if (value.length <= MAX_OUTPUT) return value
-  return value.slice(0, MAX_OUTPUT) + "\n...[truncated]"
+  const limit = maxLength ?? MAX_OUTPUT
+  if (value.length <= limit) return value
+  return value.slice(0, limit) + "\n...[truncated]"
 }
 
 function quote(input: string) {
@@ -1559,6 +1743,220 @@ async function judgeResult(
   })
 }
 
+async function specCheckResult(
+  config: z.infer<typeof CheckConfig>["spec_check"],
+  request: string | undefined,
+  activeSpecVersionID: string | undefined,
+  delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
+) {
+  if (!config?.enabled) return emptyOptional()
+  const mode = config.mode ?? "strict"
+
+  // Read spec content and required spec items from DB (source of truth)
+  let specContent = ""
+  let specItemsSection = ""
+  if (activeSpecVersionID) {
+    try {
+      const snapshot = findSpecSnapshot(activeSpecVersionID)
+      if (snapshot?.content) specContent = snapshot.content
+    } catch {}
+    try {
+      const items = findSpecItems(activeSpecVersionID)
+      if (items.length > 0) {
+        specItemsSection = "\n\n## Required Spec Items (each MUST be verified)\n\n" +
+          items.map((item, i) =>
+            `${i + 1}. [${item.priority}] ${item.title}\n   ${item.description}`,
+          ).join("\n")
+      }
+    } catch {}
+  }
+  if (!specContent.trim()) {
+    return softOrStrict({
+      mode,
+      name: "spec_check",
+      summary: "No spec found in database.",
+      evidence: "Cannot verify delivery against spec: no spec exists.",
+      payload: { available: false },
+    })
+  }
+
+  const model = await judgeModel()
+  if (!model) {
+    return {
+      outcome: "failed" as const,
+      summary: "Spec check unavailable because no model is configured.",
+      checks: [
+        {
+          name: "spec_check",
+          status: "failed" as const,
+          evidence: "No evaluator model available for spec check.",
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:spec_check",
+          payload: { mode, available: false },
+        },
+      ],
+    }
+  }
+
+  const language = await Provider.getLanguage(model).catch(() => undefined)
+  if (!language) {
+    return {
+      outcome: "failed" as const,
+      summary: "Spec check unavailable because the language model could not be loaded.",
+      checks: [
+        {
+          name: "spec_check",
+          status: "failed" as const,
+          evidence: "Could not load evaluator model for spec check.",
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:spec_check",
+          payload: { mode, available: false, specID: activeSpecVersionID },
+        },
+      ],
+    }
+  }
+
+  // Build file diffs section for LLM verification.
+  // Use a generous per-file limit so single-file projects (like a game in index.html)
+  // don't get falsely marked as truncated.
+  const fileCount = delivery.diffs?.length ?? 0
+  const perFileLimit = fileCount <= 1 ? 60000 : fileCount <= 3 ? 20000 : 8000
+  const diffsSection = delivery.diffs?.length
+    ? delivery.diffs.map((d) => {
+        const content = d.status === "deleted"
+          ? `[DELETED] ${d.file}`
+          : `--- ${d.file} ---\n${clip(d.after, perFileLimit)}`
+        return content
+      }).join("\n\n")
+    : "(no diffs available)"
+
+  const specCheckMessages = [
+    {
+      role: "system" as const,
+      content:
+        "Evaluate whether the delivery satisfies ALL acceptance criteria in the specification. " +
+        "You are provided with the actual file contents after changes. Use them to verify each criterion. " +
+        "For each criterion in the spec, determine pass/fail with evidence from the code. " +
+        "Pay special attention to the 'Required Spec Items' section — each item marked [blocking] " +
+        "MUST be individually verified as passed for acceptance. " +
+        "ALL criteria must pass for acceptance. Be thorough and precise. " +
+        "Respond with a JSON object: {\"verdict\":\"accepted\"|\"rejected\"|\"inconclusive\",\"rationale\":\"...\",\"criteria\":[{\"criterion\":\"...\",\"status\":\"passed\"|\"failed\"|\"inconclusive\",\"evidence\":\"...\"}]}",
+    },
+    {
+      role: "user" as const,
+      content: [
+        config.prompt ? `Additional instruction: ${config.prompt}` : "",
+        `Specification (source of truth):\n${specContent}${specItemsSection}`,
+        request ? `Task request:\n${request}` : "",
+        `Delivery summary:\n${delivery.summary}`,
+        `File contents after changes:\n${diffsSection}`,
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    },
+  ]
+
+  // Try generateObject first, fallback to generateText + JSON parse
+  let result: { object: z.infer<typeof SpecCheckResult> } | undefined
+  result = await generateObject({
+    model: language,
+    temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
+    messages: specCheckMessages,
+    schema: SpecCheckResult,
+  }).catch(() => undefined)
+
+  if (!result) {
+    // Fallback: use generateText and parse JSON from response
+    const textResult = await generateText({
+      model: language,
+      temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
+      messages: specCheckMessages,
+    }).catch((err) => {
+      evaluatorLog.warn("spec_check text fallback failed", { error: String(err), model: `${model.providerID}/${model.id}` })
+      return undefined
+    })
+    if (textResult?.text) {
+      try {
+        const jsonMatch = textResult.text.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          const parsed = SpecCheckResult.parse(JSON.parse(jsonMatch[0]))
+          result = { object: parsed }
+        }
+      } catch {
+        evaluatorLog.warn("spec_check JSON parse failed", { text: textResult.text.substring(0, 200) })
+      }
+    }
+  }
+
+  if (!result) {
+    return {
+      outcome: "failed" as const,
+      summary: "Spec check failed to execute.",
+      checks: [
+        {
+          name: "spec_check",
+          status: "failed" as const,
+          evidence: "Spec check model call failed.",
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:spec_check",
+          payload: { mode, available: true, specID: activeSpecVersionID },
+        },
+      ],
+    }
+  }
+
+  const allPassed = result.object.criteria.every((c) => c.status === "passed")
+  if (allPassed && result.object.verdict === "accepted") {
+    return {
+      outcome: "passed" as const,
+      summary: "Spec check: all criteria passed.",
+      checks: [
+        {
+          name: "spec_check",
+          status: "passed" as const,
+          evidence: clip(result.object.rationale),
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:spec_check",
+          payload: {
+            specID: activeSpecVersionID,
+            ...result.object,
+          },
+        },
+      ],
+    }
+  }
+
+  const failedCriteria = result.object.criteria.filter((c) => c.status !== "passed")
+  return softOrStrict({
+    mode,
+    name: "spec_check",
+    summary: `Spec check: ${failedCriteria.length} criteria not passed.`,
+    evidence: clip(
+      failedCriteria.map((c) => `[${c.status}] ${c.criterion}: ${c.evidence}`).join("\n"),
+    ),
+    payload: {
+      specID: activeSpecVersionID,
+      ...result.object,
+    },
+  })
+}
+
 async function webPage(url: string, timeoutMs: number) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), timeoutMs)
@@ -1610,7 +2008,7 @@ async function resolvePuppeteerExecutable(config: z.infer<typeof CheckConfig>["p
           : ["google-chrome-stable", "google-chrome", "chromium", "chromium-browser", "microsoft-edge", "msedge"]
 
   for (const name of names) {
-    const found = Bun.which(name)
+    const found = which(name)
     if (found) return found
   }
 

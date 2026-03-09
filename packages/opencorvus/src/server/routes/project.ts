@@ -52,6 +52,32 @@ export const ProjectRoutes = lazy(() =>
         return c.json(Instance.project)
       },
     )
+    .post(
+      "/current/init-git",
+      describeRoute({
+        summary: "Initialize git in current directory",
+        description: "Run git init in the current working directory and refresh the active project context.",
+        operationId: "project.current.initGit",
+        responses: {
+          200: {
+            description: "Git initialized",
+            content: {
+              "application/json": {
+                schema: resolver(Project.InitGitResult),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      async (c) => {
+        const result = await Project.initGit(Instance.directory)
+        if (result.created) {
+          await Instance.dispose()
+        }
+        return c.json(result)
+      },
+    )
     .patch(
       "/:projectID",
       describeRoute({

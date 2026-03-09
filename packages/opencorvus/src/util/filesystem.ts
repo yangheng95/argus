@@ -2,7 +2,7 @@ import { access, chmod, mkdir, readFile, stat as statAsync, writeFile } from "fs
 import { createWriteStream, existsSync, statSync } from "fs"
 import { lookup } from "mime-types"
 import { realpathSync } from "fs"
-import { dirname, isAbsolute, join, parse, relative, resolve, normalize } from "path"
+import { dirname, isAbsolute, join, parse, relative, resolve as pathResolve, normalize } from "path"
 import { Readable } from "stream"
 import { pipeline } from "stream/promises"
 import { Glob } from "./glob"
@@ -121,6 +121,10 @@ export namespace Filesystem {
     }
   }
 
+  export function resolve(p: string): string {
+    return normalizePath(pathResolve(windowsPath(p)))
+  }
+
   export function windowsPath(p: string): string {
     if (process.platform !== "win32") return p
     // UNC paths may come through as //server/share on POSIX-style tools.
@@ -158,7 +162,7 @@ export namespace Filesystem {
   }
 
   function normalizeForCompare(p: string) {
-    let value = trimTrailingSeparators(normalize(resolve(p)))
+    let value = trimTrailingSeparators(normalize(pathResolve(p)))
     if (process.platform === "win32") value = value.toLowerCase()
     return value
   }

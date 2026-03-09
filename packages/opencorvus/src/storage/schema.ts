@@ -11,6 +11,8 @@ export { ScratchpadTable } from "../memory/scratchpad.sql"
 export { TaskPlanTable } from "../memory/task-plan.sql"
 export { WorkbenchPreferenceTable, WorkbenchTaskNoteTable, WorkbenchBriefSnapshotTable } from "../workbench/workbench.sql"
 export {
+  OrchestratorSpecSnapshotTable,
+  OrchestratorSpecItemTable,
   OrchestratorTaskTable,
   OrchestratorPlanVersionTable,
   OrchestratorMilestoneTable,

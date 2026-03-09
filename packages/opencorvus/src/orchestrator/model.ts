@@ -27,6 +27,15 @@ export const ChannelBinding = z.object({
   payload: z.record(z.string(), z.any()).optional(),
 })
 
+export const PlanningProvider = z.enum(["opencorvus", "executor"])
+export const EvaluationProvider = z.enum(["opencorvus", "hybrid"])
+
+export const StageRouting = z.object({
+  spec: PlanningProvider.optional(),
+  plan: PlanningProvider.optional(),
+  evaluation: EvaluationProvider.optional(),
+})
+
 export const GoalInput = z.object({
   description: z.string(),
   criteria: z.string(),
@@ -152,6 +161,13 @@ export const CheckConfig = z.object({
       mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
+  spec_check: z
+    .object({
+      enabled: z.boolean().optional(),
+      prompt: z.string().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
   custom: z.record(z.string(), z.record(z.string(), z.any())).optional(),
   timeout_ms: z.number().int().positive().optional(),
 })
@@ -166,6 +182,7 @@ export const CreateTaskInput = z.object({
   priority: z.enum(["high", "normal", "low"]).optional(),
   budget: Budget.optional(),
   checks: CheckConfig.optional(),
+  routing: StageRouting.optional(),
   goals: GoalInput.array().optional(),
   milestones: MilestoneInput.array().optional(),
   channelBinding: ChannelBinding.optional(),
@@ -537,8 +554,18 @@ export const TaskBoardOverview = z.object({
   }),
 })
 
+export const SpecSnapshot = z.object({
+  content: z.string(),
+  file: z.string().optional(),
+  source: z.record(z.string(), z.any()).optional(),
+  time: z.object({
+    created: z.number(),
+  }),
+})
+
 export const TaskBoard = z.object({
   task: Task,
+  spec: SpecSnapshot.optional(),
   plan: PlanVersion.optional(),
   run: Run.optional(),
   delivery: Delivery.optional(),
@@ -598,6 +625,9 @@ export const TaskEvent = z.object({
 export const Event = {
   TaskCreated: BusEvent.define("orchestrator.task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("orchestrator.task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
+  SpecCreated: BusEvent.define("orchestrator.spec.created", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
+  SpecUpdated: BusEvent.define("orchestrator.spec.updated", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), status: z.string(), summary: z.string() })),
+  SpecApproved: BusEvent.define("orchestrator.spec.approved", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
   PlanCreated: BusEvent.define("orchestrator.plan.created", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   PlanActivated: BusEvent.define("orchestrator.plan.activated", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   GoalPassed: BusEvent.define("orchestrator.goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),

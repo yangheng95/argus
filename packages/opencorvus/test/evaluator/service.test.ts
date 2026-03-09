@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
 import { BunProc } from "../../src/bun"
 import { EvaluatorService } from "../../src/evaluator/service"
+import { Plugin } from "../../src/plugin"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Log } from "../../src/util/log"
@@ -555,12 +556,125 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("prefers changed playwright spec files over root test script discovery", async () => {
+  test("passes strict plugin checks when the plugin reports success", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
+      if (name !== "evaluation.checks") return output
+      const next = output as {
+        checks: Array<{
+          name: string
+          mode: "soft" | "strict"
+          run: () => Promise<{
+            status: "passed" | "failed" | "skipped"
+            evidence: string
+            artifacts?: Array<{ kind: string; label: string; payload: Record<string, unknown> }>
+          }>
+        }>
+      }
+      next.checks.push({
+        name: "plugin_gate",
+        mode: "strict",
+        run: async () => ({
+          status: "passed",
+          evidence: "Plugin validated delivery.",
+        }),
+      })
+      return output
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("passed")
+      },
+    })
+  })
+
+  test("keeps soft plugin checks non-blocking when the plugin reports failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
+      if (name !== "evaluation.checks") return output
+      const next = output as {
+        checks: Array<{
+          name: string
+          mode: "soft" | "strict"
+          run: () => Promise<{
+            status: "passed" | "failed" | "skipped"
+            evidence: string
+            artifacts?: Array<{ kind: string; label: string; payload: Record<string, unknown> }>
+          }>
+        }>
+      }
+      next.checks.push({
+        name: "plugin_gate",
+        mode: "soft",
+        run: async () => ({
+          status: "failed",
+          evidence: "Plugin could not verify the delivery.",
+        }),
+      })
+      return output
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
+        expect(result.status).toBe("passed")
+        expect(result.summary).toBe("Optional evaluator checks ran in soft mode without blocking the flow.")
+        expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("skipped")
+      },
+    })
+  })
+
+  test("annotates builtin optional checks with stable labels and families", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "review the delivery",
+            metadata: {
+              checks: {
+                artifact: {
+                  require_changed_files: true,
+                  mode: "soft",
+                },
+                judge: {
+                  enabled: true,
+                  mode: "soft",
+                },
+              },
+            },
+          },
+          { summary: "delivery ready", changedFiles: [], diffs: [] },
+        )
+
+        expect(result.checks.find((item) => item.name === "artifact")).toMatchObject({
+          label: "Artifacts",
+          family: "artifact",
+          status: "skipped",
+        })
+        expect(result.checks.find((item) => item.name === "judge")).toMatchObject({
+          label: "LLM Judge",
+          family: "acceptance",
+          status: "failed",
+        })
+      },
+    })
+  })
+
+  test("prefers changed puppeteer-core bun specs over root test script discovery", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
       JSON.stringify({
-        name: "evaluator-playwright-test",
+        name: "evaluator-puppeteer-test",
         scripts: {
           test: "bun -e \"process.exit(1)\"",
         },
@@ -569,14 +683,16 @@ describe("evaluator.service", () => {
     await Bun.write(
       path.join(tmp.path, "sample.spec.ts"),
       `
-        import { test, expect } from "@playwright/test"
-        test("sample", async ({ page }) => {
-          await page.setContent("<h1>ok</h1>")
-          await expect(page.getByText("ok")).toBeVisible()
+        import { describe, expect, test } from "bun:test"
+        import puppeteer from "puppeteer-core"
+        describe("sample", () => {
+          test("loads puppeteer-core", () => {
+            expect(typeof puppeteer.launch).toBe("function")
+          })
         })
       `,
     )
-    await Bun.spawn(["bun", "add", "-d", "@playwright/test@1.51.0"], {
+    await Bun.spawn(["bun", "add", "-d", "puppeteer-core@24.38.0"], {
       cwd: tmp.path,
       stdout: "ignore",
       stderr: "ignore",
@@ -587,7 +703,7 @@ describe("evaluator.service", () => {
       fn: async () => {
         const result = await EvaluatorService.evaluate(
           {
-            request: "run playwright test",
+            request: "run browser test",
             metadata: {
               delivery_changed_files: ["sample.spec.ts"],
             },
@@ -598,9 +714,9 @@ describe("evaluator.service", () => {
         expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
       },
     })
-  })
+  }, 30000)
 
-  test("ignores bun:test files when selecting changed playwright specs", async () => {
+  test("runs changed bun specs even when another test embeds puppeteer-core text", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -614,10 +730,12 @@ describe("evaluator.service", () => {
     await Bun.write(
       path.join(tmp.path, "sample.spec.ts"),
       `
-        import { test, expect } from "@playwright/test"
-        test("sample", async ({ page }) => {
-          await page.setContent("<h1>ok</h1>")
-          await expect(page.getByText("ok")).toBeVisible()
+        import { describe, expect, test } from "bun:test"
+        import puppeteer from "puppeteer-core"
+        describe("sample", () => {
+          test("loads puppeteer-core", () => {
+            expect(typeof puppeteer.connect).toBe("function")
+          })
         })
       `,
     )
@@ -625,16 +743,16 @@ describe("evaluator.service", () => {
       path.join(tmp.path, "unit.test.ts"),
       `
         import { describe, expect, test } from "bun:test"
-        const embedded = 'from "@playwright/test"'
+        const embedded = 'from "puppeteer-core"'
         describe("unit", () => {
           test("works", () => {
-            expect(embedded.includes("@playwright/test")).toBe(true)
+            expect(embedded.includes("puppeteer-core")).toBe(true)
             expect(1 + 1).toBe(2)
           })
         })
       `,
     )
-    await Bun.spawn(["bun", "add", "-d", "@playwright/test@1.51.0"], {
+    await Bun.spawn(["bun", "add", "-d", "puppeteer-core@24.38.0"], {
       cwd: tmp.path,
       stdout: "ignore",
       stderr: "ignore",
@@ -645,7 +763,7 @@ describe("evaluator.service", () => {
       fn: async () => {
         const result = await EvaluatorService.evaluate(
           {
-            request: "run playwright test",
+            request: "run browser test",
             metadata: {
               delivery_changed_files: ["sample.spec.ts", "unit.test.ts"],
             },
@@ -656,7 +774,7 @@ describe("evaluator.service", () => {
         expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
       },
     })
-  })
+  }, 30000)
 
   test("runs changed bun tests before falling back to root scripts", async () => {
     await using tmp = await tmpdir({ git: true })

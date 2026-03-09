@@ -21,7 +21,7 @@ function mockLLM() {
     const allPassed = input.checkResults.every((c) => c.status === "passed")
     return {
       verdict: allPassed ? "accepted" : "rejected",
-      classification: allPassed ? "none" : "evaluation",
+      classification: "evaluation",
       summary: allPassed ? "All checks passed" : "Some checks failed",
       goal_statuses: input.goals.map((_, i) => ({
         goal_index: i,

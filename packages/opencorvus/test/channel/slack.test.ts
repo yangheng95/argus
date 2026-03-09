@@ -44,6 +44,7 @@ function stub() {
 
 const slackMock = {
   postMessage: async (_input: { channel: string; thread_ts: string; text: string }) => ({ ok: true }),
+  uploadV2: async (_input: { channel_id: string; thread_ts: string; file_uploads: Array<{ filename?: string }> }) => ({ ok: true }),
 }
 
 mock.module("@slack/bolt", () => ({
@@ -51,6 +52,10 @@ mock.module("@slack/bolt", () => ({
     client = {
       chat: {
         postMessage: (input: { channel: string; thread_ts: string; text: string }) => slackMock.postMessage(input),
+      },
+      files: {
+        uploadV2: (input: { channel_id: string; thread_ts: string; file_uploads: Array<{ filename?: string }> }) =>
+          slackMock.uploadV2(input),
       },
       auth: {
         test: async () => ({ user_id: "UBOT" }),
@@ -264,7 +269,7 @@ describe("channel.slack", () => {
       },
     })
 
-    expect(posted.at(-1)?.text).toContain("Permission reply recorded")
+    expect(posted.at(-1)?.text).toContain("Permission granted")
   })
 
   test("publishes orchestrator events to bound Slack thread", async () => {
@@ -330,5 +335,52 @@ describe("channel.slack", () => {
     expect(posted.at(-1)?.text).toContain("Evaluation accepted")
 
     await gateway.stop()
+  })
+
+  test("uploads screenshot attachments to the Slack thread", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { SlackGateway } = await import("../../src/channel/slack")
+
+    const posted: Array<{ channel: string; thread_ts: string; text: string }> = []
+    const uploads: Array<{ channel_id: string; thread_ts: string; file_uploads: Array<{ filename?: string }> }> = []
+    slackMock.postMessage = async (input) => {
+      posted.push(input)
+      return { ok: true }
+    }
+    slackMock.uploadV2 = async (input) => {
+      uploads.push(input)
+      return { ok: true }
+    }
+    spyOn(ControlMessage, "handle").mockResolvedValue({
+      kind: "panel_response",
+      message: "Captured OpenCorvus GUI.",
+      attachments: [{
+        mime: "image/png",
+        filename: "opencorvus-gui.png",
+        url: "data:image/png;base64,aGVsbG8=",
+      }],
+    })
+
+    const gateway = new SlackGateway({
+      directory: tmp.path,
+      token: "xoxb-test",
+      appToken: "xapp-test",
+    })
+    ;(gateway as any).startedAt = "0"
+
+    await (gateway as any).handleMessage({
+      channel: "C4",
+      ts: "4.01",
+      thread_ts: undefined,
+      user: "U4",
+      text: "send me an OpenCorvus screenshot",
+    })
+
+    expect(posted).toHaveLength(1)
+    expect(posted[0]?.text).toBe("Captured OpenCorvus GUI.")
+    expect(uploads).toHaveLength(1)
+    expect(uploads[0]?.channel_id).toBe("C4")
+    expect(uploads[0]?.thread_ts).toBe("4.01")
+    expect(uploads[0]?.file_uploads[0]?.filename).toBe("opencorvus-gui.png")
   })
 })

@@ -7,6 +7,13 @@ export namespace MemorySearch {
 
   const HALF_LIFE_DAYS = 30
   const LAMBDA = Math.LN2 / HALF_LIFE_DAYS
+  const KIND_WEIGHT: Record<Memory.Kind, number> = {
+    profile: 1.45,
+    lesson: 1.25,
+    fact: 1.1,
+    note: 0.95,
+    episode: 0.8,
+  }
 
   export function search(input: {
     query: string
@@ -16,6 +23,8 @@ export namespace MemorySearch {
     limit?: number
     minScore?: number
     temporalDecay?: boolean
+    kinds?: Memory.Kind[]
+    sources?: Memory.Source[]
   }) {
     const limit = input.limit ?? 6
     const minScore = input.minScore ?? 0.1
@@ -40,6 +49,8 @@ export namespace MemorySearch {
         limit,
         minScore,
         temporalDecay: input.temporalDecay ?? false,
+        kinds: input.kinds,
+        sources: input.sources,
       })
     } catch (err) {
       log.warn("FTS search failed, falling back to LIKE", { err })
@@ -49,6 +60,8 @@ export namespace MemorySearch {
         sessionID: input.sessionID,
         scope,
         limit,
+        kinds: input.kinds,
+        sources: input.sources,
       })
     }
   }
@@ -61,10 +74,11 @@ export namespace MemorySearch {
     limit: number
     minScore: number
     temporalDecay: boolean
+    kinds?: Memory.Kind[]
+    sources?: Memory.Source[]
   }) {
     const nowMs = Date.now()
-    const candidates = Math.min(200, input.limit * 4)
-
+    const candidates = Math.min(200, input.limit * 6)
     const rows = Database.use((db) =>
       db.all<{
         chunk_id: string
@@ -73,6 +87,11 @@ export namespace MemorySearch {
         content: string
         scope: Memory.Scope
         session_id: string | null
+        source: Memory.Source
+        kind: Memory.Kind
+        key: string | null
+        importance: number
+        confidence: number
         time_created: number
         rank: number
       }>(sql`
@@ -83,6 +102,11 @@ export namespace MemorySearch {
           mc.content,
           mf.scope,
           mf.session_id,
+          mf.source,
+          mf.kind,
+          mf.key,
+          mf.importance,
+          mf.confidence,
           mc.time_created,
           memory_fts.rank as rank
         FROM memory_fts
@@ -98,8 +122,13 @@ export namespace MemorySearch {
     const results: Memory.SearchResult[] = []
     for (const row of rows) {
       if (!matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID)) continue
+      if (!matchesKinds(row.kind, input.kinds)) continue
+      if (!matchesSources(row.source, input.sources)) continue
 
       let score = bm25RankToScore(row.rank)
+      score *= KIND_WEIGHT[row.kind]
+      score *= 0.8 + clampScore(row.importance, 60) / 200
+      score *= 0.85 + clampScore(row.confidence, 75) / 250
       if (input.temporalDecay) {
         const ageDays = (nowMs - row.time_created) / (1000 * 60 * 60 * 24)
         score *= Math.exp(-LAMBDA * ageDays)
@@ -113,30 +142,27 @@ export namespace MemorySearch {
         content: row.content,
         scope: row.scope,
         sessionID: row.session_id ?? undefined,
+        source: row.source,
+        kind: row.kind,
+        key: row.key ?? undefined,
+        importance: clampScore(row.importance, 60),
+        confidence: clampScore(row.confidence, 75),
         score,
         timeCreated: row.time_created,
       })
     }
 
-    results.sort((a, b) => {
-      if (a.scope !== b.scope) return a.scope === "session" ? -1 : 1
-      return b.score - a.score
-    })
-
+    results.sort(compareResults)
     const final = results.slice(0, input.limit)
     log.info("FTS search", {
       query: input.query,
       projectId: input.projectId,
       scope: input.scope,
+      kinds: input.kinds?.join(","),
       found: final.length,
       candidates: rows.length,
     })
     return final
-  }
-
-  function bm25RankToScore(rank: number) {
-    const x = Math.abs(rank)
-    return 1 / (1 + Math.exp(-(x - 1.0) * 1.5))
   }
 
   function searchLike(input: {
@@ -145,6 +171,8 @@ export namespace MemorySearch {
     sessionID?: string
     scope: Memory.QueryScope
     limit: number
+    kinds?: Memory.Kind[]
+    sources?: Memory.Source[]
   }) {
     const pattern = `%${input.query}%`
     const rows = Database.use((db) =>
@@ -155,6 +183,11 @@ export namespace MemorySearch {
         content: string
         scope: Memory.Scope
         session_id: string | null
+        source: Memory.Source
+        kind: Memory.Kind
+        key: string | null
+        importance: number
+        confidence: number
         time_created: number
       }>(sql`
         SELECT
@@ -164,19 +197,25 @@ export namespace MemorySearch {
           mc.content,
           mf.scope,
           mf.session_id,
+          mf.source,
+          mf.kind,
+          mf.key,
+          mf.importance,
+          mf.confidence,
           mc.time_created
         FROM memory_chunk mc
         JOIN memory_file mf ON mf.id = mc.file_id
         WHERE mc.content LIKE ${pattern}
           AND mc.project_id = ${input.projectId}
         ORDER BY mc.time_created DESC
-        LIMIT ${Math.max(input.limit * 4, 20)}
+        LIMIT ${Math.max(input.limit * 6, 24)}
       `),
     )
 
     return rows
       .filter((row) => matchesScope(row.scope, row.session_id ?? undefined, input.scope, input.sessionID))
-      .slice(0, input.limit)
+      .filter((row) => matchesKinds(row.kind, input.kinds))
+      .filter((row) => matchesSources(row.source, input.sources))
       .map((row, idx) => ({
         chunkId: row.chunk_id,
         fileId: row.file_id,
@@ -184,9 +223,47 @@ export namespace MemorySearch {
         content: row.content,
         scope: row.scope,
         sessionID: row.session_id ?? undefined,
-        score: 1 - idx * 0.05,
+        source: row.source,
+        kind: row.kind,
+        key: row.key ?? undefined,
+        importance: clampScore(row.importance, 60),
+        confidence: clampScore(row.confidence, 75),
+        score:
+          (1 - idx * 0.04) *
+          KIND_WEIGHT[row.kind] *
+          (0.8 + clampScore(row.importance, 60) / 200) *
+          (0.85 + clampScore(row.confidence, 75) / 250),
         timeCreated: row.time_created,
       }))
+      .sort(compareResults)
+      .slice(0, input.limit)
+  }
+
+  function compareResults(a: Memory.SearchResult, b: Memory.SearchResult) {
+    if (a.scope !== b.scope) return a.scope === "session" ? -1 : 1
+    if (a.kind !== b.kind) return KIND_WEIGHT[b.kind] - KIND_WEIGHT[a.kind]
+    if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score
+    return b.timeCreated - a.timeCreated
+  }
+
+  function matchesKinds(kind: Memory.Kind, kinds: Memory.Kind[] | undefined) {
+    if (!kinds || kinds.length === 0) return true
+    return kinds.includes(kind)
+  }
+
+  function matchesSources(source: Memory.Source, sources: Memory.Source[] | undefined) {
+    if (!sources || sources.length === 0) return true
+    return sources.includes(source)
+  }
+
+  function clampScore(value: number | undefined, fallback: number) {
+    if (typeof value !== "number" || Number.isNaN(value)) return fallback
+    return Math.max(0, Math.min(100, Math.round(value)))
+  }
+
+  function bm25RankToScore(rank: number) {
+    const x = Math.abs(rank)
+    return 1 / (1 + Math.exp(-(x - 1.0) * 1.5))
   }
 
   function matchesScope(

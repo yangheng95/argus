@@ -5,8 +5,6 @@ import { TuiActionDialogRoutes } from "./tui-action-dialog"
 import { TuiActionEventRoutes } from "./tui-action-event"
 import { TuiControlRoutes } from "./tui-control"
 
-export { callTui } from "./tui-control"
-
 export const TuiRoutes = lazy(() =>
   new Hono()
     .route("/", TuiRuntimeRoutes())

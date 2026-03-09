@@ -1,9 +1,12 @@
+import fs from "fs"
+import path from "path"
 import { Identifier } from "@/id/id"
+import { Instance } from "@/project/instance"
 import { Database, desc, eq } from "@/storage/db"
 import { WorkbenchPreferenceTable, type WorkbenchPreferenceScope } from "@/workbench/workbench.sql"
 
 export namespace Preference {
-  export type Scope = "global" | "session"
+  export type Scope = "cwd" | "global" | "session"
   export type QueryScope = Scope | "all"
 
   export interface Entry {
@@ -21,47 +24,113 @@ export namespace Preference {
     timeUpdated: number
   }
 
-  /**
-   * 内置默认偏好列表。
-   * 当用户未对同名 key 设置自定义偏好时，这些默认值会自动生效。
-   * 用户通过 preference tool 写入同名 key 即可覆盖。
-   */
-  export const DEFAULTS: ReadonlyArray<{ key: string; value: string }> = [
-    {
-      key: "problem_solving_approach",
-      value: "不要使用补丁或临时方案解决问题，必须从根因和代码上层架构层面彻底解决",
-    },
-    {
-      key: "code_design_principle",
-      value: "生成的代码要遵循高内聚低耦合原则：相关逻辑集中在一起，模块间依赖最小化",
-    },
-    {
-      key: "code_comments",
-      value: "生成的代码必须附带详细注释，说明意图、逻辑和非显而易见的设计决策",
-    },
-    {
-      key: "readme_policy",
-      value: "每个新模块或重要功能变更都要编写 README，内容简洁且信息充分 (concise and informative)",
-    },
-  ]
+  const defaults = {
+    template: undefined as Array<{ key: string; value: string }> | undefined,
+  }
 
-  function normalizeScope(scope: WorkbenchPreferenceScope | null | undefined): Scope {
+  function normalizeScope(scope: WorkbenchPreferenceScope | null | undefined): Exclude<Scope, "cwd"> {
     return scope === "session" ? "session" : "global"
   }
 
-  /** 将内置默认偏好转换为 Entry 结构，source 标记为 "builtin_default" */
-  function defaultToEntry(def: { key: string; value: string }, projectID: string): Entry {
-    return {
-      id: `default:${def.key}`,
-      projectID,
-      scope: "global",
-      key: def.key,
-      value: def.value,
-      source: "builtin_default",
-      confidence: 100,
-      timeCreated: 0,
-      timeUpdated: 0,
+  function cwdId(key: string) {
+    return `cwd:${encodeURIComponent(key)}`
+  }
+
+  function currentProjectID() {
+    try {
+      return Instance.project.id
+    } catch {
+      return undefined
     }
+  }
+
+  function currentDirectory() {
+    try {
+      return Instance.directory
+    } catch {
+      return undefined
+    }
+  }
+
+  function cwdFile() {
+    return path.join(Instance.directory, ".opencorvus", "preferences.json")
+  }
+
+  function loadTemplate() {
+    if (defaults.template) return defaults.template
+    const file = path.join(import.meta.dir, "defaults.json")
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as unknown
+      defaults.template = Array.isArray(parsed)
+        ? parsed.flatMap((item) => normalizeItem(item))
+        : []
+    } catch {
+      defaults.template = []
+    }
+    return defaults.template
+  }
+
+  function ensureCwdFile() {
+    const dir = currentDirectory()
+    if (!dir) return undefined
+    const file = cwdFile()
+    if (fs.existsSync(file)) return file
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, JSON.stringify(loadTemplate(), null, 2) + "\n")
+    return file
+  }
+
+  function normalizeItem(input: unknown) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return []
+    const row = input as Record<string, unknown>
+    const key = typeof row.key === "string" ? row.key.trim() : ""
+    const value = typeof row.value === "string" ? row.value.trim() : ""
+    if (!key || !value) return []
+    return [{ key, value }]
+  }
+
+  function readCwd(projectID: string): Entry[] {
+    const file = ensureCwdFile()
+    if (!file) return []
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(fs.readFileSync(file, "utf8"))
+    } catch {
+      return []
+    }
+    const stat = fs.statSync(file)
+    const rows = new Map<string, { key: string; value: string }>()
+    for (const item of Array.isArray(parsed) ? parsed : []) {
+      for (const next of normalizeItem(item)) rows.set(next.key, next)
+    }
+    return [...rows.values()]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((item): Entry => ({
+        id: cwdId(item.key),
+        projectID,
+        taskID: undefined,
+        sessionID: undefined,
+        userID: undefined,
+        scope: "cwd" as const,
+        key: item.key,
+        value: item.value,
+        source: "cwd_default",
+        confidence: 100,
+        timeCreated: Math.round(stat.birthtimeMs || stat.ctimeMs),
+        timeUpdated: Math.round(stat.mtimeMs),
+      }))
+  }
+
+  function writeCwd(projectID: string, input: Array<{ key: string; value: string }>) {
+    const file = ensureCwdFile()
+    if (!file) throw new Error("Preference cwd is unavailable")
+    const rows = new Map<string, { key: string; value: string }>()
+    for (const item of input) {
+      for (const next of normalizeItem(item)) rows.set(next.key, next)
+    }
+    const next = [...rows.values()].sort((a, b) => a.key.localeCompare(b.key))
+    fs.writeFileSync(file, JSON.stringify(next, null, 2) + "\n")
+    return readCwd(projectID)
   }
 
   function fromRow(row: typeof WorkbenchPreferenceTable.$inferSelect): Entry {
@@ -82,6 +151,11 @@ export namespace Preference {
   }
 
   export function get(preferenceID: string) {
+    if (preferenceID.startsWith("cwd:")) {
+      const projectID = currentProjectID()
+      if (!projectID) return null
+      return readCwd(projectID).find((row) => row.id === preferenceID) ?? null
+    }
     const row = Database.use((db) =>
       db.select().from(WorkbenchPreferenceTable).where(eq(WorkbenchPreferenceTable.id, preferenceID)).get(),
     )
@@ -90,6 +164,7 @@ export namespace Preference {
   }
 
   export function list(input: { projectID: string; sessionID?: string; scope?: QueryScope }) {
+    if (input.scope === "cwd") return readCwd(input.projectID)
     const scope = input.scope ?? "all"
     const rows = Database.use((db) =>
       db
@@ -113,6 +188,16 @@ export namespace Preference {
       })
   }
 
+  export function manageable(input: { projectID: string; sessionID?: string }) {
+    const order = {
+      cwd: 0,
+      global: 1,
+      session: 2,
+    } as const
+    return [...readCwd(input.projectID), ...list(input)]
+      .sort((a, b) => order[a.scope] - order[b.scope] || a.key.localeCompare(b.key) || b.timeUpdated - a.timeUpdated)
+  }
+
   export function merged(input: { projectID: string; sessionID?: string }) {
     const global = list({
       projectID: input.projectID,
@@ -125,17 +210,10 @@ export namespace Preference {
           scope: "session",
         })
       : []
-    // 先用默认偏好填充，再用用户设置的 global/session 覆盖
     const merged = new Map<string, Entry>()
-    for (const def of DEFAULTS) {
-      merged.set(def.key, defaultToEntry(def, input.projectID))
-    }
-    for (const item of global) {
-      merged.set(item.key, item)
-    }
-    for (const item of session) {
-      merged.set(item.key, item)
-    }
+    for (const item of readCwd(input.projectID)) merged.set(item.key, item)
+    for (const item of global) merged.set(item.key, item)
+    for (const item of session) merged.set(item.key, item)
     return [...merged.values()].sort((a, b) => a.key.localeCompare(b.key))
   }
 
@@ -146,7 +224,7 @@ export namespace Preference {
     userID?: string
     key: string
     value: string
-    scope?: Scope
+    scope?: Exclude<Scope, "cwd">
     source?: string
     confidence?: number
   }) {
@@ -214,6 +292,19 @@ export namespace Preference {
   }
 
   export function update(input: { preferenceID: string; key: string; value: string }) {
+    if (input.preferenceID.startsWith("cwd:")) {
+      const projectID = currentProjectID()
+      if (!projectID) throw new Error("Preference cwd is unavailable")
+      const existing = readCwd(projectID).find((row) => row.id === input.preferenceID)
+      if (!existing) throw new Error(`Preference not found: ${input.preferenceID}`)
+      writeCwd(projectID, [
+        ...readCwd(projectID)
+          .filter((row) => row.id !== input.preferenceID)
+          .map((row) => ({ key: row.key, value: row.value })),
+        { key: input.key, value: input.value },
+      ])
+      return true
+    }
     const row = get(input.preferenceID)
     if (!row) throw new Error(`Preference not found: ${input.preferenceID}`)
     Database.use((db) =>
@@ -231,6 +322,19 @@ export namespace Preference {
   }
 
   export function remove(preferenceID: string) {
+    if (preferenceID.startsWith("cwd:")) {
+      const projectID = currentProjectID()
+      if (!projectID) throw new Error("Preference cwd is unavailable")
+      const existing = readCwd(projectID).find((row) => row.id === preferenceID)
+      if (!existing) throw new Error(`Preference not found: ${preferenceID}`)
+      writeCwd(
+        projectID,
+        readCwd(projectID)
+          .filter((row) => row.id !== preferenceID)
+          .map((row) => ({ key: row.key, value: row.value })),
+      )
+      return true
+    }
     const row = get(preferenceID)
     if (!row) throw new Error(`Preference not found: ${preferenceID}`)
     Database.use((db) =>
@@ -240,6 +344,7 @@ export namespace Preference {
   }
 
   export function systemPromptSection(input: { projectID: string; sessionID: string }) {
+    const cwd = readCwd(input.projectID)
     const global = list({
       projectID: input.projectID,
       scope: "global",
@@ -249,31 +354,29 @@ export namespace Preference {
       sessionID: input.sessionID,
       scope: "session",
     })
-
-    // 合并默认偏好：用户设置的 global/session 同名 key 会覆盖默认值
     const userKeys = new Set([...global.map((item) => item.key), ...session.map((item) => item.key)])
-    const activeDefaults = DEFAULTS.filter((def) => !userKeys.has(def.key))
+    const activeCwd = cwd.filter((item) => !userKeys.has(item.key))
 
-    if (global.length === 0 && session.length === 0 && activeDefaults.length === 0) return null
+    if (activeCwd.length === 0 && global.length === 0 && session.length === 0) return null
 
     const lines = ["<preferences>"]
-    if (activeDefaults.length > 0) {
-      lines.push("Built-in default preferences (can be overridden by global or session preferences):")
-      lines.push(...activeDefaults.map((def) => `- ${def.key}: ${def.value}`))
+    if (activeCwd.length > 0) {
+      lines.push("Project-local preferences (managed in .opencorvus/preferences.json):")
+      lines.push(...activeCwd.map((item) => `- ${item.key}: ${item.value}`))
     }
     if (global.length > 0) {
-      if (activeDefaults.length > 0) lines.push("")
+      if (activeCwd.length > 0) lines.push("")
       lines.push("Global preferences (default across all sessions in this project):")
       lines.push(...global.map((item) => `- ${item.key}: ${item.value}`))
     }
     if (session.length > 0) {
-      if (global.length > 0 || activeDefaults.length > 0) lines.push("")
+      if (global.length > 0 || activeCwd.length > 0) lines.push("")
       lines.push("Session preferences (override global preferences for this session only):")
       lines.push(...session.map((item) => `- ${item.key}: ${item.value}`))
     }
     lines.push("</preferences>")
     lines.push("")
-    lines.push("The preferences above are binding. Session preferences override global preferences on the same key. Global preferences override built-in defaults on the same key.")
+    lines.push("The preferences above are binding. Session preferences override global preferences on the same key. Global preferences override project-local preferences on the same key.")
     return lines.join("\n")
   }
 }

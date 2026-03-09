@@ -21,6 +21,7 @@ export namespace Identifier {
     run: "run",
     interaction: "int",
     artifact: "art",
+    attachment: "att",
     delivery: "dlv",
     evaluation: "evl",
     binding: "bnd",
@@ -31,6 +32,8 @@ export namespace Identifier {
     milestone: "mst",
     executor_session: "exs",
     executor_event: "exe",
+    spec: "spc",
+    specitem: "spi",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

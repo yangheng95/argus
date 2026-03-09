@@ -8,11 +8,11 @@ const DESCRIPTION = `Scoped preference store for durable instructions and conven
 Preferences are concise key-value instructions such as style, lockfile policy, naming conventions, or review preferences.
 
 Actions:
-- **list**: Read current global preferences, session preferences, or both.
+- **list**: Read current active preferences, including project-local cwd defaults plus global/session overrides.
 - **write**: Save or update a preference. Defaults to global so it applies across all sessions in this project.
 - **delete**: Remove an outdated preference by key and scope.
 
-Session preferences override global preferences on the same key for the current session only.`
+Session preferences override global preferences on the same key for the current session only. Global preferences override project-local cwd preferences on the same key.`
 
 export const PreferenceTool = Tool.define("preference", {
   description: DESCRIPTION,

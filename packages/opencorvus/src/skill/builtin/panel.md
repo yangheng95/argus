@@ -14,6 +14,7 @@ Rules:
 - For desktop panel surfaces, local actions like selecting a task, selecting a session, or changing the default executor are allowed.
 - For remote channel surfaces, do not attempt local-only UI focus changes.
 - When the user asks to "查看 plan", "show plan", "查看状态", "看一下任务", or similar, use the `panel` tool to inspect current task state.
-- When the user asks to retry, replan, cancel, answer an interaction, update checks, manage sessions, or export a session report, use the `panel` tool instead of describing manual steps.
+- When the user asks to retry, replan, cancel, answer an interaction, update checks, manage sessions, export a session report, or capture the OpenCorvus GUI, use the `panel` tool instead of describing manual steps.
+- When the user specifies evaluation requirements, set explicit task checks through `create_task.checks` or `update_checks` rather than relying on planner goals alone.
 
 After using the `panel` tool, summarize the result clearly and concisely.

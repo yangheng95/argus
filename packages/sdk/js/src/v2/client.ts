@@ -25,13 +25,16 @@ export function createOpenCorvusClient(config?: Config & { directory?: string })
     // These paths cause path.resolve to produce incorrect results (e.g. C:\c\foo\bar).
     if (typeof process !== "undefined" && process.platform === "win32") {
       const m = dir.match(/^\/([a-zA-Z])(\/.*)?$/)
-      if (m) dir = `${m[1].toUpperCase()}:${(m[2] || "\\").replace(/\//g, "\\")}`
+      if (m?.[1]) dir = `${m[1].toUpperCase()}:${(m[2] || "\\").replace(/\//g, "\\")}`
     }
     const isNonASCII = /[^\x00-\x7F]/.test(dir)
     const encodedDirectory = isNonASCII ? encodeURIComponent(dir) : dir
-    config.headers = {
-      ...config.headers,
-      "x-opencorvus-directory": encodedDirectory,
+    config = {
+      ...config,
+      headers: {
+        ...(config.headers ?? {}),
+        "x-opencorvus-directory": encodedDirectory,
+      },
     }
   }
 

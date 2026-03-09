@@ -6,109 +6,14 @@ import { Filesystem } from "@/util/filesystem"
 import { Global } from "@/global"
 import { LLMTrace } from "@/session/llm-trace"
 import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
+import { captureWindowScreenshot } from "@/gui/screenshot"
+import { PanelActionSchema } from "@/panel/capability"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
-const CheckSelection = z.record(z.string(), z.boolean())
 
 export const PanelTool = Tool.define("panel", {
   description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
-  parameters: z.discriminatedUnion("action", [
-    z.object({
-      action: z.literal("view_plan"),
-      taskID: z.string(),
-    }),
-    z.object({
-      action: z.literal("view_board"),
-      taskID: z.string().optional(),
-    }),
-    z.object({
-      action: z.literal("view_tasks"),
-    }),
-    z.object({
-      action: z.literal("create_task"),
-      request: z.string(),
-      request_id: z.string().optional(),
-      executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
-      channel: z.string().optional(),
-      thread: z.string().optional(),
-      platform: z.enum(["slack", "telegram", "discord"]).optional(),
-      metadata: z.record(z.string(), z.any()).optional(),
-      source: z.string().optional(),
-      allow_create: z.boolean().optional(),
-    }),
-    z.object({
-      action: z.literal("send_task_message"),
-      taskID: z.string(),
-      text: z.string(),
-      source: z.string().optional(),
-      user_id: z.string().optional(),
-    }),
-    z.object({
-      action: z.literal("reply_interaction"),
-      interactionID: z.string(),
-      reply: z.enum(["once", "always"]).optional(),
-      message: z.string().optional(),
-    }),
-    z.object({
-      action: z.literal("reject_interaction"),
-      interactionID: z.string(),
-      message: z.string().optional(),
-    }),
-    z.object({
-      action: z.literal("retry_task"),
-      taskID: z.string(),
-    }),
-    z.object({
-      action: z.literal("replan_task"),
-      taskID: z.string(),
-    }),
-    z.object({
-      action: z.literal("cancel_task"),
-      taskID: z.string(),
-    }),
-    z.object({
-      action: z.literal("update_checks"),
-      taskID: z.string(),
-      selection: CheckSelection.optional(),
-    }),
-    z.object({
-      action: z.literal("set_executor"),
-      executor: z.enum(["opencode", "codex", "claude-code"]),
-    }),
-    z.object({
-      action: z.literal("select_task"),
-      taskID: z.string(),
-    }),
-    z.object({
-      action: z.literal("select_session"),
-      sessionID: z.string(),
-    }),
-    z.object({
-      action: z.literal("create_session"),
-    }),
-    z.object({
-      action: z.literal("fork_session"),
-      sessionID: z.string(),
-    }),
-    z.object({
-      action: z.literal("delete_session"),
-      sessionID: z.string(),
-    }),
-    z.object({
-      action: z.literal("export_session_html"),
-      sessionID: z.string(),
-    }),
-    z.object({
-      action: z.literal("update_goal"),
-      goalID: z.string(),
-      description: z.string(),
-      criteria: z.string(),
-    }),
-    z.object({
-      action: z.literal("delete_goal"),
-      goalID: z.string(),
-    }),
-  ]),
+  parameters: PanelActionSchema,
   async execute(params, ctx) {
     switch (params.action) {
       case "view_plan": {
@@ -172,6 +77,8 @@ export const PanelTool = Tool.define("panel", {
           requestID: params.request_id,
           request: params.request,
           executor: params.executor,
+          checks: params.checks,
+          routing: params.routing,
           source: params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"),
           ...(params.platform && params.channel && params.thread
             ? {
@@ -240,8 +147,38 @@ export const PanelTool = Tool.define("panel", {
         await OrchestratorService.cancelTask(params.taskID)
         return { title: "Task cancelled", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task cancelled." }), metadata: {} }
       case "update_checks":
-        await OrchestratorService.selectTaskChecks(params.taskID, params.selection ?? {})
+        if (params.checks) {
+          await OrchestratorService.updateTaskChecks(params.taskID, { checks: params.checks })
+        } else {
+          await OrchestratorService.selectTaskChecks(params.taskID, params.selection ?? {})
+        }
         return { title: "Checks updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task checks updated." }), metadata: {} }
+      case "capture_overlay_screenshot":
+        try {
+          const shot = await captureWindowScreenshot(params.match)
+          return {
+            title: "Screenshot captured",
+            output: JSON.stringify({
+              kind: "panel_response",
+              message: `Captured OpenCorvus GUI: ${shot.title} (${shot.width}x${shot.height}).`,
+              attachments: [{
+                mime: shot.mime,
+                url: shot.url,
+                filename: shot.filename,
+              }],
+            }),
+            metadata: {},
+          }
+        } catch (error) {
+          return {
+            title: "Screenshot unavailable",
+            output: JSON.stringify({
+              kind: "panel_response",
+              message: `Failed to capture OpenCorvus GUI: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+            metadata: {},
+          }
+        }
       case "set_executor":
         if (!localOnly(ctx)) throw new Error("Executor selection is only available in the desktop panel.")
         return {

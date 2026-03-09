@@ -3,7 +3,10 @@ import type { BotAdapter, MessageHandler } from "../src/adapter"
 import { registerAdapters, READY_CHANNELS } from "../src/registry"
 
 class Fake implements BotAdapter {
-  constructor(readonly platform: string) {}
+  constructor(
+    readonly platform: string,
+    readonly options?: unknown,
+  ) {}
   async start() {}
   async stop() {}
   async sendMessage(_channel: string, _thread: string, _text: string) {}
@@ -24,19 +27,19 @@ function bot() {
 
 function factory() {
   return {
-    slack: () => new Fake("slack"),
-    telegram: () => new Fake("telegram"),
-    discord: () => new Fake("discord"),
-    feishu: () => new Fake("feishu"),
-    whatsapp: () => new Fake("whatsapp"),
-    googlechat: () => new Fake("googlechat"),
-    msteams: () => new Fake("msteams"),
-    line: () => new Fake("line"),
-    matrix: () => new Fake("matrix"),
-    mattermost: () => new Fake("mattermost"),
-    signal: () => new Fake("signal"),
-    wecom: () => new Fake("wecom"),
-    dingtalk: () => new Fake("dingtalk"),
+    slack: (options: unknown) => new Fake("slack", options),
+    telegram: (options: unknown) => new Fake("telegram", options),
+    discord: (options: unknown) => new Fake("discord", options),
+    feishu: (options: unknown) => new Fake("feishu", options),
+    whatsapp: (options: unknown) => new Fake("whatsapp", options),
+    googlechat: (options: unknown) => new Fake("googlechat", options),
+    msteams: (options: unknown) => new Fake("msteams", options),
+    line: (options: unknown) => new Fake("line", options),
+    matrix: (options: unknown) => new Fake("matrix", options),
+    mattermost: (options: unknown) => new Fake("mattermost", options),
+    signal: (options: unknown) => new Fake("signal", options),
+    wecom: (options: unknown) => new Fake("wecom", options),
+    dingtalk: (options: unknown) => new Fake("dingtalk", options),
   }
 }
 
@@ -59,23 +62,6 @@ describe("channel registry", () => {
     expect(result.warns).toHaveLength(0)
     expect(result.names).toEqual(["slack", "telegram", "discord", "feishu"])
     expect(app.list.map((item) => item.platform)).toEqual(["slack", "telegram", "discord", "feishu"])
-  })
-
-  test("supports openclaw fallback env keys", () => {
-    const app = bot()
-    const result = registerAdapters(
-      app,
-      {
-        OPENCLAW_SLACK_BOT_TOKEN: "xoxb-a",
-        OPENCLAW_SLACK_APP_TOKEN: "xapp-a",
-        OPENCLAW_TELEGRAM_BOT_TOKEN: "tg-a",
-      },
-      factory(),
-    )
-
-    expect(result.warns).toHaveLength(0)
-    expect(result.names).toEqual(["slack", "telegram"])
-    expect(app.list.map((item) => item.platform)).toEqual(["slack", "telegram"])
   })
 
   test("warns and skips slack when app token is missing", () => {
@@ -107,6 +93,33 @@ describe("channel registry", () => {
     expect(result.warns).toEqual([])
     expect(result.names).toEqual(["dingtalk"])
     expect(app.list.map((item) => item.platform)).toEqual(["dingtalk"])
+  })
+
+  test("forwards optional webhook settings from shared channel definitions", () => {
+    const app = bot()
+    const result = registerAdapters(
+      app,
+      {
+        FEISHU_APP_ID: "cli_a",
+        FEISHU_APP_SECRET: "sec_a",
+        FEISHU_VERIFICATION_TOKEN: "verify_a",
+        FEISHU_WEBHOOK_HOST: "0.0.0.0",
+        FEISHU_WEBHOOK_PORT: "16666",
+        FEISHU_WEBHOOK_PATH: "/feishu",
+      },
+      factory(),
+    )
+
+    expect(result.warns).toHaveLength(0)
+    expect(result.names).toEqual(["feishu"])
+    expect((app.list[0] as Fake).options).toEqual({
+      appId: "cli_a",
+      appSecret: "sec_a",
+      host: "0.0.0.0",
+      port: 16666,
+      path: "/feishu",
+      verificationToken: "verify_a",
+    })
   })
 
   test("no planned channels remain", () => {

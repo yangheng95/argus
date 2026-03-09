@@ -43,20 +43,24 @@ export namespace MemoryFlush {
         return
       }
 
-      // Create a memory file for this compaction
       const projectId = Instance.project.id
       const session = await Session.get(sessionID)
       const title = `Compaction: ${session.title} (${new Date().toISOString().slice(0, 10)})`
-
-      const file = Memory.createFile({
+      const result = Memory.captureEpisode({
         title,
+        content: summaryText,
         source: "compaction",
         projectId,
-        scope: "global",
+        scope: "session",
+        sessionID,
+        promoteScope: "global",
       })
-
-      Memory.writeChunks(file.id, projectId, summaryText)
-      log.info("flushed compaction to memory", { sessionID, fileId: file.id, title })
+      log.info("flushed compaction to memory", {
+        sessionID,
+        fileId: result.episode.id,
+        derived: result.derived.length,
+        title,
+      })
     } catch (err) {
       log.warn("memory flush failed", { sessionID, err })
     }

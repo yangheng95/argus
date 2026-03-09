@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import { existsSync, readFileSync } from "fs"
+import path from "path"
 import { Instance } from "../../src/project/instance"
 import { Preference } from "../../src/preference"
 import { PreferenceTool } from "../../src/tool/preference"
@@ -128,6 +130,39 @@ describe("tool.preference", () => {
             planCtx,
           ),
         ).rejects.toThrow("preference.delete is disabled in plan mode")
+      },
+    })
+  })
+
+  test("materializes cwd preferences locally and allows editing or deleting them", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const file = path.join(tmp.path, ".opencorvus", "preferences.json")
+        const rows = Preference.manageable({ projectID: Instance.project.id })
+        const cwd = rows.filter((item) => item.scope === "cwd")
+
+        expect(existsSync(file)).toBe(true)
+        expect(cwd.length).toBeGreaterThan(0)
+
+        const first = cwd[0]!
+        expect(readFileSync(file, "utf8")).toContain(first.key)
+
+        Preference.update({
+          preferenceID: first.id,
+          key: "cwd_style",
+          value: "keep the diff minimal",
+        })
+
+        const updated = Preference.manageable({ projectID: Instance.project.id }).find((item) => item.key === "cwd_style")
+        expect(updated?.scope).toBe("cwd")
+        expect(readFileSync(file, "utf8")).toContain("cwd_style")
+
+        Preference.remove(updated!.id)
+        expect(Preference.manageable({ projectID: Instance.project.id }).some((item) => item.id === updated!.id)).toBe(false)
+        expect(readFileSync(file, "utf8")).not.toContain("cwd_style")
       },
     })
   })

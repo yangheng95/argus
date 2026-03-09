@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
-import { OrchestratorGoalTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { OrchestratorGoalTable, OrchestratorPlanVersionTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { WorkbenchBriefSnapshotTable, WorkbenchPreferenceTable, WorkbenchTaskNoteTable } from "../../src/workbench/workbench.sql"
 import { WorkbenchService } from "../../src/workbench/service"
@@ -8,6 +8,8 @@ import { Instance } from "../../src/project/instance"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { PlannerService } from "../../src/planner/service"
+import { Session } from "../../src/session/index"
+import { SpecService } from "../../src/spec/service"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -17,6 +19,23 @@ describe("workbench.service", () => {
   beforeEach(() => {
     llm = process.env.OPENCORVUS_WORKBENCH_LLM
     process.env.OPENCORVUS_WORKBENCH_LLM = "0"
+    spyOn(SpecService, "initial").mockResolvedValue({
+      summary: "Compiled spec",
+      content: "# Scope\n\nImplement feature",
+      scope: "Implement feature",
+      assumptions: [],
+      risks: [],
+      spec_items: [
+        {
+          title: "Implement feature",
+          description: "Task completed successfully",
+          priority: "blocking",
+          check_selector: [],
+        },
+      ],
+      evidence_sources: [],
+      unresolved_questions: [],
+    } as any)
     spyOn(PlannerService, "initial").mockResolvedValue({
       summary: "Compiled plan",
       prompt: "Execute the compiled plan",
@@ -210,42 +229,99 @@ describe("workbench.service", () => {
 
   test("compiles assistant brief snapshot", async () => {
     await using tmp = await tmpdir({ git: true })
-    spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
-      sessionID: input.sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "implement feature",
-          metadata: {
-            slack: {
-              user: "U2",
-            },
-          },
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const planID = Identifier.ascending("plan")
+        const session = await Session.create({ title: "implement feature" })
+        Database.transaction((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              active_plan_version_id: planID,
+              source: "api",
+              title: "implement feature",
+              request: "implement feature",
+              status: "queued",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorPlanVersionTable)
+            .values({
+              id: planID,
+              task_id: taskID,
+              version: 1,
+              status: "active",
+              summary: "Compiled plan",
+              prompt: "Execute the compiled plan",
+              metadata: {
+                strategy: "initial",
+                steps: ["Execute the task"],
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorGoalTable)
+            .values({
+              id: Identifier.ascending("goal"),
+              task_id: taskID,
+              plan_version_id: planID,
+              description: "Implement feature",
+              criteria: "Task completed successfully",
+              priority: "blocking",
+              status: "pending",
+              order_index: 0,
+              metadata: {},
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(WorkbenchPreferenceTable)
+            .values({
+              id: Identifier.ascending("pref"),
+              project_id: Instance.project.id,
+              task_id: taskID,
+              session_id: session.id,
+              user_id: "U2",
+              scope: "global",
+              key: "lockfile_policy",
+              value: "avoid_changes",
+              source: "slack",
+              confidence: 100,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(WorkbenchTaskNoteTable)
+            .values({
+              id: Identifier.ascending("note"),
+              task_id: taskID,
+              kind: "operator_note",
+              source: "slack",
+              user_id: "U2",
+              content: "Keep updates concise.",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
         })
-        await OrchestratorService.handleTaskMessage(taskID, {
-          text: "/pref style=concise",
-          source: "slack",
-          user_id: "U2",
-        })
-        await OrchestratorService.handleTaskMessage(taskID, {
-          text: "/pref lockfile_policy=avoid_changes",
-          source: "slack",
-          user_id: "U2",
-        })
-        const run = Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).get())!
-        const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get())!
         const brief = WorkbenchService.compileBrief({
           taskID,
-          runID: run.id,
-          planVersionID: task.active_plan_version_id!,
-          sessionID: task.session_id!,
+          planVersionID: planID,
+          sessionID: session.id,
         })
         expect(brief.content).toContain("Global preferences:")
         expect(brief.content).toContain("Recent task notes:")
+        expect(brief.content).toContain("A startup checkpoint is captured before the first execution run.")
+        expect(brief.content).toContain("The orchestrator may record internal checkpoint commits automatically.")
+        expect(brief.content).toContain("use a concise, meaningful message grounded in the task request and plan")
         const snapshot = Database.use((db) =>
           db
             .select()

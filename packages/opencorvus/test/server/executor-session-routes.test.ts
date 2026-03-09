@@ -93,6 +93,8 @@ describe("executor session routes", () => {
               mcp: false,
               usage: false,
               realtime: false,
+              spec_generation: false,
+              plan_generation: false,
               tool_kinds: ["builtin"],
             },
             settings: {

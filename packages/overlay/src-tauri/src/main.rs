@@ -14,6 +14,8 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Manager, Runtime,
 };
+use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::OpenerExt;
 
 struct Server(Mutex<Option<Child>>);
 
@@ -24,61 +26,111 @@ struct OverlaySettings {
     password: Option<String>,
     username: Option<String>,
     executor: Option<String>,
+    init_git: Option<bool>,
     always_on_top: Option<bool>,
+    sidebar_width: Option<u32>,
+    sections_width: Option<u32>,
     theme: Option<String>,
+    locale: Option<String>,
+    directory: Option<String>,
 }
 
-fn overlay_settings_path() -> Result<PathBuf, String> {
+fn overlay_directory(directory: Option<String>) -> Option<PathBuf> {
+    directory.and_then(|item| {
+        let item = item.trim();
+        (!item.is_empty()).then(|| PathBuf::from(item))
+    })
+}
+
+fn overlay_settings_path(directory: Option<String>) -> Result<PathBuf, String> {
+    overlay_directory(directory)
+        .map(|dir| Ok(dir.join(".opencorvus").join("overlay.json")))
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .map(|dir| dir.join(".opencorvus").join("overlay.json"))
+                .map_err(|err| err.to_string())
+        })
+}
+
+fn legacy_overlay_settings_path() -> Result<PathBuf, String> {
     std::env::current_dir()
         .map(|dir| dir.join("overlay.json"))
         .map_err(|err| err.to_string())
 }
 
 #[tauri::command]
-fn overlay_settings_load() -> Result<OverlaySettings, String> {
-    let path = overlay_settings_path()?;
-    if !path.exists() {
+fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, String> {
+    let path = overlay_settings_path(directory)?;
+    if path.exists() {
+        let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
+        return serde_json::from_str(&text).map_err(|err| err.to_string());
+    }
+
+    let legacy = legacy_overlay_settings_path()?;
+    if !legacy.exists() {
         return Ok(OverlaySettings::default());
     }
-    let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
-    serde_json::from_str(&text).map_err(|err| err.to_string())
+
+    let text = fs::read_to_string(&legacy).map_err(|err| err.to_string())?;
+    let settings: OverlaySettings = serde_json::from_str(&text).map_err(|err| err.to_string())?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    fs::write(&path, text).map_err(|err| err.to_string())?;
+    let _ = fs::remove_file(legacy);
+    Ok(settings)
 }
 
 #[tauri::command]
-fn overlay_settings_save(settings: OverlaySettings) -> Result<bool, String> {
-    let path = overlay_settings_path()?;
+fn overlay_settings_save(settings: OverlaySettings, directory: Option<String>) -> Result<bool, String> {
+    let path = overlay_settings_path(directory.or_else(|| settings.directory.clone()))?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
     let text = serde_json::to_string_pretty(&settings).map_err(|err| err.to_string())?;
-    fs::write(path, text).map_err(|err| err.to_string())?;
+    fs::write(&path, text).map_err(|err| err.to_string())?;
+    if let Ok(legacy) = legacy_overlay_settings_path() {
+        if legacy != path {
+            let _ = fs::remove_file(legacy);
+        }
+    }
     Ok(true)
 }
 
 #[tauri::command]
-fn overlay_open_path(path: String) -> Result<bool, String> {
+fn overlay_open_path<R: Runtime>(app: AppHandle<R>, path: String) -> Result<bool, String> {
     if path.trim().is_empty() {
         return Ok(false);
     }
 
-    let mut command = if cfg!(target_os = "windows") {
-        let mut command = Command::new("explorer");
-        command.arg(&path);
-        command
-    } else if cfg!(target_os = "macos") {
-        let mut command = Command::new("open");
-        command.arg(&path);
-        command
-    } else {
-        let mut command = Command::new("xdg-open");
-        command.arg(&path);
-        command
-    };
-
-    command
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
+    app.opener()
+        .open_path(path, None::<&str>)
         .map(|_| true)
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn overlay_create_dir(path: String) -> Result<bool, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Ok(false);
+    }
+    fs::create_dir_all(path).map_err(|err| err.to_string())?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Result<Option<String>, String> {
+    let dialog = if let Some(start) = start.map(|item| item.trim().to_string()).filter(|item| !item.is_empty()) {
+        app.dialog().file().set_directory(start)
+    } else {
+        app.dialog().file()
+    };
+
+    Ok(dialog
+        .blocking_pick_folder()
+        .and_then(|item| item.into_path().ok())
+        .map(|item| item.to_string_lossy().to_string()))
 }
 
 fn candidate_server_paths<R: Runtime>(app: &AppHandle<R>) -> Vec<PathBuf> {
@@ -166,11 +218,13 @@ fn set_window_icon<R: Runtime>(window: &tauri::WebviewWindow<R>) {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             overlay_settings_load,
             overlay_settings_save,
-            overlay_open_path
+            overlay_open_path,
+            overlay_create_dir,
+            overlay_pick_dir
         ])
         .setup(|app| {
             app.manage(Server(Mutex::new(None)));

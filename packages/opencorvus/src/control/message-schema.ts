@@ -1,4 +1,5 @@
 import z from "zod"
+import { ChannelSurface } from "@/channel/catalog"
 
 export const ControlLocalAction = z.discriminatedUnion("type", [
   z.object({
@@ -19,6 +20,12 @@ export const ControlLocalAction = z.discriminatedUnion("type", [
   }),
 ])
 
+export const ControlAttachment = z.object({
+  mime: z.string(),
+  url: z.string(),
+  filename: z.string().optional(),
+})
+
 export const ControlMessageResult = z.object({
   kind: z.enum(["panel_response", "created", "message", "interaction", "progress", "task_list", "cancelled"]),
   message: z.string(),
@@ -26,10 +33,11 @@ export const ControlMessageResult = z.object({
   interaction_id: z.string().optional(),
   session_id: z.string().optional(),
   local_action: ControlLocalAction.optional(),
+  attachments: ControlAttachment.array().optional(),
 })
 
 export const ControlMessageInput = z.object({
-  surface: z.enum(["panel", "slack", "telegram", "discord"]),
+  surface: ChannelSurface,
   text: z.string(),
   taskID: z.string().optional(),
   sessionID: z.string().optional(),

@@ -18,6 +18,8 @@ export type ClaudeAgentClient = {
     system?: string
     maxTurns?: number
     sessionID?: string
+    toolMode?: z.infer<typeof CodingRunInput>["toolMode"]
+    sandbox?: z.infer<typeof CodingRunInput>["sandbox"]
     signal?: AbortSignal
     onApproval?(input: {
       id: string
@@ -102,24 +104,39 @@ export namespace ClaudeAgentExecutor {
   export function createSdk(): CodingProvider {
     return create({
       run(input) {
-        const mode = permissionMode()
+        const mode = input.sandbox === "read-only" || input.toolMode === "none" ? "plan" : permissionMode()
+        const allowed = input.toolMode === "none"
+          ? []
+          : split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS)
         const handle = query({
           prompt: input.prompt,
           options: {
             cwd: input.cwd,
             model: input.model,
             resume: input.sessionID,
-            appendSystemPrompt: input.system,
+            systemPrompt: input.system
+              ? {
+                  type: "preset",
+                  preset: "claude_code",
+                  append: input.system,
+                }
+              : undefined,
             maxTurns: input.maxTurns,
             includePartialMessages: true,
             permissionMode: mode,
             allowDangerouslySkipPermissions: mode === "bypassPermissions",
             effort: effort(),
             maxBudgetUsd: maxBudget(),
-            allowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_ALLOWED_TOOLS),
+            allowedTools: allowed,
             disallowedTools: split(process.env.OPENCORVUS_EXECUTOR_CLAUDE_DISALLOWED_TOOLS),
             abortController: abortController(input.signal),
             canUseTool: async (toolName, toolInput, options) => {
+              if (input.toolMode === "none") {
+                return {
+                  behavior: "deny",
+                  message: "Planning runs are read-only and cannot execute tools.",
+                } satisfies PermissionResult
+              }
               if (!input.onApproval) {
                 return {
                   behavior: "allow",
@@ -203,6 +220,8 @@ async function* execute(
     system: input.system,
     maxTurns: input.maxTurns,
     sessionID: "sessionID" in input ? input.sessionID : undefined,
+    toolMode: input.toolMode,
+    sandbox: input.sandbox,
     signal,
     onApproval: async (item) => {
       const deferred = createDeferred<PermissionResult>()
@@ -265,7 +284,7 @@ async function* execute(
   }
 }
 
-function mapMessage(current: SessionState, message: Record<string, unknown>) {
+function mapMessage(current: SessionState, message: Record<string, unknown>): CodingEventInfo[] {
   const type = typeof message.type === "string" ? message.type : ""
   const sessionID = typeof message.session_id === "string" ? message.session_id : current.actualID ?? current.logicalID
 
@@ -284,7 +303,6 @@ function mapMessage(current: SessionState, message: Record<string, unknown>) {
       outputTokens: number(record(message.usage)?.output_tokens),
       totalTokens: totalTokens(record(message.usage)),
       costUSD: number(message.total_cost_usd),
-      modelUsage: record(message.modelUsage),
     }
     if (message.subtype === "success") {
       return [{
@@ -355,7 +373,7 @@ function mapMessage(current: SessionState, message: Record<string, unknown>) {
   return []
 }
 
-function fromAssistant(sessionID: string, message?: Record<string, unknown>) {
+function fromAssistant(sessionID: string, message?: Record<string, unknown>): CodingEventInfo[] {
   if (!message || !Array.isArray(message.content)) return []
   const out: CodingEventInfo[] = []
   for (const part of message.content) {
@@ -396,7 +414,7 @@ function fromAssistant(sessionID: string, message?: Record<string, unknown>) {
   return out
 }
 
-function fromUser(sessionID: string, message?: Record<string, unknown>, toolUseResult?: unknown) {
+function fromUser(sessionID: string, message?: Record<string, unknown>, toolUseResult?: unknown): CodingEventInfo[] {
   const out: CodingEventInfo[] = []
   if (toolUseResult !== undefined) {
     out.push({
@@ -423,7 +441,7 @@ function fromUser(sessionID: string, message?: Record<string, unknown>, toolUseR
   return out
 }
 
-function fromStreamEvent(sessionID: string, event?: Record<string, unknown>) {
+function fromStreamEvent(sessionID: string, event?: Record<string, unknown>): CodingEventInfo[] {
   if (!event) return []
   const type = typeof event.type === "string" ? event.type : ""
   if (type === "content_block_delta") {

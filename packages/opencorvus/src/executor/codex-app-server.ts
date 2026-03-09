@@ -468,7 +468,7 @@ function threadStart(input: z.input<typeof CodingRunInput>) {
     model: next.model,
     cwd: next.cwd,
     approvalPolicy: approvalPolicy(),
-    sandbox: sandboxMode(),
+    sandbox: next.sandbox ?? sandboxMode(),
     developerInstructions: next.system,
     experimentalRawEvents: true,
     persistExtendedHistory: true,
@@ -482,7 +482,7 @@ function threadResume(threadID: string, input: z.input<typeof CodingResumeInput>
     cwd: next.cwd,
     model: next.model,
     approvalPolicy: approvalPolicy(),
-    sandbox: sandboxMode(),
+    sandbox: next.sandbox ?? sandboxMode(),
     developerInstructions: next.system,
     persistExtendedHistory: true,
   }
@@ -501,7 +501,7 @@ function turnStart(threadID: string, input: z.input<typeof CodingRunInput>) {
     ],
     cwd: next.cwd,
     approvalPolicy: approvalPolicy(),
-    sandboxPolicy: sandboxPolicy(next.cwd),
+    sandboxPolicy: sandboxPolicy(next.cwd, next.sandbox),
     model: next.model,
   }
 }
@@ -535,8 +535,8 @@ function sandboxMode() {
   return "workspace-write"
 }
 
-function sandboxPolicy(cwd?: string) {
-  const mode = sandboxMode()
+function sandboxPolicy(cwd?: string, sandbox?: z.infer<typeof CodingRunInput>["sandbox"]) {
+  const mode = sandbox ?? sandboxMode()
   if (mode === "danger-full-access") {
     return {
       type: "dangerFullAccess",

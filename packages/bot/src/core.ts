@@ -56,12 +56,40 @@ type PermissionAsked = {
   permission: string
   patterns: string[]
 }
+const controlPlatforms = [
+  "slack",
+  "telegram",
+  "discord",
+  "feishu",
+  "whatsapp",
+  "googlechat",
+  "msteams",
+  "line",
+  "matrix",
+  "mattermost",
+  "signal",
+  "wecom",
+  "dingtalk",
+] as const
+type ControlPlatform = (typeof controlPlatforms)[number]
+type ChannelAttachment = {
+  mime: string
+  url: string
+  filename?: string
+}
+type ChannelResult = {
+  kind: "panel_response" | "created" | "message" | "interaction" | "progress" | "task_list" | "cancelled"
+  message: string
+  task_id?: string
+  attachments?: ChannelAttachment[]
+}
 type EventPermissionAsked = Extract<Event, { type: "permission.asked" }>
 type EventSessionIdle = Extract<Event, { type: "session.idle" }>
 type EventSessionError = Extract<Event, { type: "session.error" }>
 type EventSessionStatus = Extract<Event, { type: "session.status" }>
 type EventMessageUpdated = Extract<Event, { type: "message.updated" }>
 type EventMessagePartUpdated = Extract<Event, { type: "message.part.updated" }>
+type EventOrchestratorEvaluationCompleted = Extract<Event, { type: "orchestrator.evaluation.completed" }>
 const MIRROR_PREFIX = "[opencorvus-mirror]"
 type PendingTask = {
   taskId: string
@@ -99,6 +127,8 @@ export class BotCore {
   /** Active bot-aware coding jobs keyed by sessionID */
   private jobs = new Map<string, Job>()
   private pending = new Map<string, PendingTask>()
+  private taskBindings = new Map<string, SessionEntry[]>()
+  private taskByThread = new Map<string, string>()
   private pendingWatch: ReturnType<typeof setInterval> | null = null
 
   constructor(private options?: BotCoreOptions) {}
@@ -173,6 +203,8 @@ export class BotCore {
     this.runtimeSession = undefined
     this.stopPendingWatch()
     this.pending.clear()
+    this.taskBindings.clear()
+    this.taskByThread.clear()
     for (const adapter of this.adapters) {
       await adapter.stop()
     }
@@ -216,6 +248,11 @@ export class BotCore {
     }
 
     if (!text) return
+
+    if (this.channelProtocol(msg.platform)) {
+      await this.handleChannelMessage(msg as IncomingMessage & { platform: ControlPlatform }, adapter, text)
+      return
+    }
 
     let session = this.session.get(threadKey)
 
@@ -520,7 +557,44 @@ export class BotCore {
       "- `task_report(status='done', summary='...', artifacts=[...])` — task fully complete",
       "- `task_report(status='failed', summary='...', error='...')` — unrecoverable error",
       "Never end a turn without calling task_report. It is the bot's signal to continue or wait.",
-    ].join("\n")
+      ].join("\n")
+  }
+
+  private channelProtocol(platform: string): platform is ControlPlatform {
+    return process.env.OPENCORVUS_BOT_CHANNEL_PROTOCOL === "1" &&
+      controlPlatforms.includes(platform as ControlPlatform)
+  }
+
+  private async handleChannelMessage(msg: IncomingMessage & { platform: ControlPlatform }, adapter: BotAdapter, text: string) {
+    const result = await this.client.channel.message({
+      platform: msg.platform as ControlPlatform,
+      channel: msg.channel,
+      thread: msg.thread,
+      text,
+      user_id: msg.user,
+      source: msg.platform,
+      allow_create: true,
+    })
+    if (result.error) {
+      const notice = "Failed to handle message."
+      this.mirror("system", notice, {
+        platform: msg.platform,
+        channel: msg.channel,
+        thread: msg.thread,
+      })
+      await adapter.sendMessage(msg.channel, msg.thread, notice)
+      return
+    }
+    const data = result.data as ChannelResult
+    if (data.task_id) {
+      this.bindTask(data.task_id, {
+        sessionId: data.task_id,
+        adapter,
+        channel: msg.channel,
+        thread: msg.thread,
+      })
+    }
+    await this.sendChannelResult(adapter, msg.channel, msg.thread, data)
   }
 
   private polish(text: string): string {
@@ -529,6 +603,65 @@ export class BotCore {
 
   private split(text: string, limit = BOT_MESSAGE_LIMIT): string[] {
     return splitText(text, limit)
+  }
+
+  private bindTask(taskID: string, entry: SessionEntry) {
+    const key = `${entry.adapter.platform}:${entry.channel}:${entry.thread}`
+    const previous = this.taskByThread.get(key)
+    if (previous && previous !== taskID) {
+      const next = (this.taskBindings.get(previous) ?? []).filter((item) => !sameEntry(item, entry))
+      if (next.length > 0) this.taskBindings.set(previous, next)
+      else this.taskBindings.delete(previous)
+    }
+    this.taskByThread.set(key, taskID)
+    const current = this.taskBindings.get(taskID) ?? []
+    if (current.some((item) => sameEntry(item, entry))) return
+    this.taskBindings.set(taskID, [...current, entry])
+  }
+
+  private findTaskBindings(taskID: string) {
+    return this.taskBindings.get(taskID) ?? []
+  }
+
+  private async sendChannelResult(adapter: BotAdapter, channel: string, thread: string, result: ChannelResult) {
+    if (result.message.trim()) {
+      await adapter.sendMessage(channel, thread, result.message)
+    }
+    for (const item of result.attachments ?? []) {
+      const image = imageAttachment(item)
+      if (!image) continue
+      if (adapter.uploadImageUrl) {
+        try {
+          const url = await this.publishChannelAttachment(item.mime, image.buffer, image.filename)
+          await adapter.uploadImageUrl(channel, thread, url, image.filename, result.message || image.filename)
+          continue
+        } catch (error) {
+          console.warn("[BotCore] uploadImageUrl fallback:", error)
+        }
+      }
+      await adapter.uploadImage(channel, thread, image.buffer, image.filename, result.message || image.filename)
+    }
+  }
+
+  private async publishChannelAttachment(mime: string, buffer: Buffer, filename: string) {
+    const res = await fetch(`${this.serverUrl.replace(/\/+$/, "")}/channel/attachment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        mime,
+        filename,
+        data: buffer.toString("base64"),
+      }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) {
+      throw new Error(`channel attachment publish failed: ${res.status} ${await res.text()}`)
+    }
+    const data = (await res.json()) as { url?: string }
+    if (!data.url) throw new Error("channel attachment publish failed: missing url")
+    return data.url
   }
 
   private mirror(
@@ -952,6 +1085,17 @@ export class BotCore {
   }
 
   private async handleEvent(event: Event): Promise<void> {
+    if (event.type === "orchestrator.evaluation.completed") {
+      const info = (event as EventOrchestratorEvaluationCompleted).properties
+      const sessions = this.findTaskBindings(info.taskID)
+      if (sessions.length === 0) return
+      const msg = `Evaluation ${info.verdict}: ${info.summary}`
+      for (const session of sessions) {
+        await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
+      }
+      return
+    }
+
     if (event.type === "session.status") {
       const info = (event as EventSessionStatus).properties
       if (!info.sessionID) return
@@ -1244,4 +1388,22 @@ export class BotCore {
     }
     reconnect().catch((err) => console.error("[BotCore] fatal reconnect error:", err))
   }
+}
+
+function imageAttachment(input: ChannelAttachment) {
+  if (!input.mime.startsWith("image/")) return
+  const match = input.url.match(/^data:[^;]+;base64,(.+)$/)
+  if (!match) return
+  const buffer = Buffer.from(match[1], "base64")
+  const fallback = input.mime === "image/png" ? "opencorvus-gui.png" : "opencorvus-gui.jpg"
+  return {
+    buffer,
+    filename: input.filename ?? fallback,
+  }
+}
+
+function sameEntry(left: SessionEntry, right: SessionEntry) {
+  return left.adapter.platform === right.adapter.platform &&
+    left.channel === right.channel &&
+    left.thread === right.thread
 }

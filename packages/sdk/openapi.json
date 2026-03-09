@@ -329,6 +329,60 @@
         ]
       }
     },
+    "/project/current/init-git": {
+      "post": {
+        "operationId": "project.current.initGit",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Initialize git in current directory",
+        "description": "Run git init in the current working directory and refresh the active project context.",
+        "responses": {
+          "200": {
+            "description": "Git initialized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectInitGitResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.project.current.initGit({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/project/{projectID}": {
       "patch": {
         "operationId": "project.update",
@@ -1025,6 +1079,154 @@
         ]
       }
     },
+    "/channel/attachment": {
+      "post": {
+        "operationId": "channel.attachment.create",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Create a temporary channel attachment URL",
+        "description": "Store a temporary attachment and return a signed public URL for channels that require remote image URLs.",
+        "responses": {
+          "200": {
+            "description": "Attachment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "mime": {
+                      "type": "string"
+                    },
+                    "filename": {
+                      "type": "string"
+                    },
+                    "expires_at": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "mime",
+                    "filename",
+                    "expires_at"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "mime": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "data": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "filename",
+                  "mime",
+                  "data"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.attachment.create({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/channel/attachment/{id}": {
+      "get": {
+        "operationId": "channel.attachment.get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "summary": "Read a temporary channel attachment",
+        "description": "Read a previously created temporary channel attachment by signed URL.",
+        "responses": {
+          "200": {
+            "description": "Attachment content",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.channel.attachment.get({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/channel/message": {
       "post": {
         "operationId": "channel.message",
@@ -1054,7 +1256,9 @@
                         "created",
                         "message",
                         "interaction",
-                        "ignored"
+                        "progress",
+                        "task_list",
+                        "cancelled"
                       ]
                     },
                     "message": {
@@ -1123,8 +1327,45 @@
                             "type",
                             "sessionID"
                           ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "invalidate_session"
+                            },
+                            "sessionID": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "sessionID"
+                          ]
                         }
                       ]
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mime": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "filename": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "mime",
+                          "url"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -1147,7 +1388,17 @@
                     "enum": [
                       "slack",
                       "telegram",
-                      "discord"
+                      "discord",
+                      "feishu",
+                      "whatsapp",
+                      "googlechat",
+                      "msteams",
+                      "line",
+                      "matrix",
+                      "mattermost",
+                      "signal",
+                      "wecom",
+                      "dingtalk"
                     ]
                   },
                   "channel": {
@@ -1188,24 +1439,6 @@
                       "type": "string"
                     },
                     "additionalProperties": {}
-                  },
-                  "intent_hint": {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string"
-                      },
-                      "payload": {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string"
-                        },
-                        "additionalProperties": {}
-                      }
-                    },
-                    "required": [
-                      "action"
-                    ]
                   }
                 },
                 "required": [
@@ -1239,7 +1472,7 @@
           }
         ],
         "summary": "Get managed channel runtime",
-        "description": "Get managed bot runtime status for Telegram and Discord channels.",
+        "description": "Get managed bot runtime status for configured channel integrations.",
         "responses": {
           "200": {
             "description": "Channel runtime status",
@@ -1319,7 +1552,7 @@
           }
         ],
         "summary": "Restart managed channel runtime",
-        "description": "Restart the managed Telegram and Discord bot runtime with the current config.",
+        "description": "Restart the managed channel bot runtime with the current config.",
         "responses": {
           "200": {
             "description": "Restarted channel runtime",
@@ -1430,6 +1663,60 @@
                       "selectable": {
                         "type": "boolean"
                       },
+                      "protocol": {
+                        "type": "string"
+                      },
+                      "protocolVersion": {
+                        "type": "string"
+                      },
+                      "transport": {
+                        "type": "string",
+                        "enum": [
+                          "inproc",
+                          "stdio",
+                          "ws",
+                          "http"
+                        ]
+                      },
+                      "features": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "tools": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "inputSchema": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "metadata": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "description"
+                          ]
+                        }
+                      },
                       "detail": {
                         "type": "string"
                       },
@@ -1443,6 +1730,11 @@
                       "registered",
                       "discovered",
                       "selectable",
+                      "protocol",
+                      "protocolVersion",
+                      "transport",
+                      "features",
+                      "tools",
                       "detail"
                     ]
                   }
@@ -2979,6 +3271,13 @@
               "pattern": "^ses.*"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "deleteTasks",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "summary": "Delete session",
@@ -3882,6 +4181,13 @@
                   "variant": {
                     "type": "string"
                   },
+                  "extra": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
                   "parts": {
                     "type": "array",
                     "items": {
@@ -4353,6 +4659,13 @@
                   },
                   "variant": {
                     "type": "string"
+                  },
+                  "extra": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
                   },
                   "parts": {
                     "type": "array",
@@ -5834,6 +6147,750 @@
         ]
       }
     },
+    "/skill": {
+      "get": {
+        "operationId": "app.skills",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List skills",
+        "description": "Get a list of all available skills in the OpenCorvus system.",
+        "responses": {
+          "200": {
+            "description": "List of skills",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "platforms": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "win32",
+                            "darwin",
+                            "linux"
+                          ]
+                        }
+                      },
+                      "builtin": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "description",
+                      "location",
+                      "content"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.app.skills({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/installed": {
+      "get": {
+        "operationId": "skill.installed",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List installed skills",
+        "description": "Get installed skills with source classification and effective permission policy.",
+        "responses": {
+          "200": {
+            "description": "Installed skills",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "platforms": {
+                        "default": [],
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "win32",
+                            "darwin",
+                            "linux"
+                          ]
+                        }
+                      },
+                      "builtin": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "location": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "dir": {
+                        "type": "string"
+                      },
+                      "source_type": {
+                        "type": "string",
+                        "enum": [
+                          "builtin",
+                          "managed_git",
+                          "config_path",
+                          "config_url",
+                          "external",
+                          "unknown"
+                        ]
+                      },
+                      "source": {
+                        "type": "string"
+                      },
+                      "trust": {
+                        "type": "string",
+                        "enum": [
+                          "builtin",
+                          "official",
+                          "curated",
+                          "community",
+                          "local",
+                          "external",
+                          "unknown"
+                        ]
+                      },
+                      "risk": {
+                        "type": "object",
+                        "properties": {
+                          "level": {
+                            "type": "string",
+                            "enum": [
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          "has_scripts": {
+                            "type": "boolean"
+                          },
+                          "has_agents": {
+                            "type": "boolean"
+                          },
+                          "has_references": {
+                            "type": "boolean"
+                          },
+                          "has_templates": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "level",
+                          "has_scripts",
+                          "has_agents",
+                          "has_references",
+                          "has_templates"
+                        ]
+                      },
+                      "recommended_policy": {
+                        "$ref": "#/components/schemas/PermissionAction"
+                      },
+                      "policy": {
+                        "$ref": "#/components/schemas/PermissionAction"
+                      },
+                      "managed": {
+                        "type": "boolean"
+                      },
+                      "writable": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "description",
+                      "location",
+                      "content",
+                      "source_type",
+                      "trust",
+                      "risk",
+                      "recommended_policy",
+                      "policy",
+                      "managed",
+                      "writable"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.installed({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/market": {
+      "get": {
+        "operationId": "skill.market",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List skill markets",
+        "description": "Get curated skill marketplaces and official registries relevant to OpenCorvus imports.",
+        "responses": {
+          "200": {
+            "description": "Skill market entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "description": {
+                        "type": "string"
+                      },
+                      "homepage": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "source": {
+                        "type": "string"
+                      },
+                      "install_kind": {
+                        "type": "string",
+                        "enum": [
+                          "git",
+                          "url",
+                          "manual"
+                        ]
+                      },
+                      "trust": {
+                        "type": "string",
+                        "enum": [
+                          "official",
+                          "curated",
+                          "community"
+                        ]
+                      },
+                      "recommended_policy": {
+                        "$ref": "#/components/schemas/PermissionAction"
+                      },
+                      "notes": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "provider",
+                      "description",
+                      "homepage",
+                      "install_kind",
+                      "trust",
+                      "recommended_policy"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.market({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/directories": {
+      "get": {
+        "operationId": "skill.directories",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Get skill directories",
+        "description": "Get global config, managed skill install, and remote cache directories.",
+        "responses": {
+          "200": {
+            "description": "Skill directories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "global_config": {
+                      "type": "string"
+                    },
+                    "managed_skills": {
+                      "type": "string"
+                    },
+                    "remote_cache": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "global_config",
+                    "managed_skills",
+                    "remote_cache"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.directories({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/install": {
+      "post": {
+        "operationId": "skill.install",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Install or import a skill source",
+        "description": "Install a skill source from a local path, remote URL, or git repository into the global skill config.",
+        "responses": {
+          "200": {
+            "description": "Installed skill source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "path",
+                        "url",
+                        "git"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "kind"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "path",
+                      "url",
+                      "git"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "policy": {
+                    "$ref": "#/components/schemas/PermissionAction"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.install({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/remove": {
+      "post": {
+        "operationId": "skill.remove",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Remove a skill source",
+        "description": "Remove a configured skill source from global config and delete managed installs when applicable.",
+        "responses": {
+          "200": {
+            "description": "Removed skill source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "path",
+                      "url",
+                      "git"
+                    ]
+                  }
+                },
+                "required": [
+                  "source"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.remove({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/skill/policy": {
+      "post": {
+        "operationId": "skill.policy",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Set skill permission policy",
+        "description": "Set the global allow, ask, or deny policy for a named skill.",
+        "responses": {
+          "200": {
+            "description": "Updated skill policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "action": {
+                    "$ref": "#/components/schemas/PermissionAction"
+                  }
+                },
+                "required": [
+                  "name",
+                  "action"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.skill.policy({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/panel/capabilities": {
+      "get": {
+        "operationId": "panel.capabilities",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "surface",
+            "schema": {
+              "default": "panel",
+              "type": "string",
+              "enum": [
+                "panel",
+                "slack",
+                "telegram",
+                "discord",
+                "feishu",
+                "whatsapp",
+                "googlechat",
+                "msteams",
+                "line",
+                "matrix",
+                "mattermost",
+                "signal",
+                "wecom",
+                "dingtalk"
+              ]
+            }
+          }
+        ],
+        "summary": "List panel capabilities",
+        "description": "Return the panel tool actions available on a given surface, including local-action metadata and input schemas.",
+        "responses": {
+          "200": {
+            "description": "Panel capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "surface": {
+                      "type": "string",
+                      "enum": [
+                        "panel",
+                        "slack",
+                        "telegram",
+                        "discord",
+                        "feishu",
+                        "whatsapp",
+                        "googlechat",
+                        "msteams",
+                        "line",
+                        "matrix",
+                        "mattermost",
+                        "signal",
+                        "wecom",
+                        "dingtalk"
+                      ]
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "query",
+                              "mutation"
+                            ]
+                          },
+                          "surfaces": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "panel",
+                                "slack",
+                                "telegram",
+                                "discord",
+                                "feishu",
+                                "whatsapp",
+                                "googlechat",
+                                "msteams",
+                                "line",
+                                "matrix",
+                                "mattermost",
+                                "signal",
+                                "wecom",
+                                "dingtalk"
+                              ]
+                            }
+                          },
+                          "local_only": {
+                            "type": "boolean"
+                          },
+                          "local_action_types": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "set_executor",
+                                "select_task",
+                                "select_session",
+                                "invalidate_session"
+                              ]
+                            }
+                          },
+                          "local_action_surfaces": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "panel",
+                                "slack",
+                                "telegram",
+                                "discord",
+                                "feishu",
+                                "whatsapp",
+                                "googlechat",
+                                "msteams",
+                                "line",
+                                "matrix",
+                                "mattermost",
+                                "signal",
+                                "wecom",
+                                "dingtalk"
+                              ]
+                            }
+                          },
+                          "schema": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "description",
+                          "kind",
+                          "surfaces",
+                          "local_only",
+                          "schema"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "surface",
+                    "actions"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.capabilities({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/panel/message": {
       "post": {
         "operationId": "panel.message",
@@ -5847,7 +6904,7 @@
           }
         ],
         "summary": "Handle desktop panel message",
-        "description": "Route a desktop panel chat or button intent through PanelAgent.",
+        "description": "Route a desktop panel chat or button intent through the control message service.",
         "responses": {
           "200": {
             "description": "Panel message handled",
@@ -5863,7 +6920,9 @@
                         "created",
                         "message",
                         "interaction",
-                        "ignored"
+                        "progress",
+                        "task_list",
+                        "cancelled"
                       ]
                     },
                     "message": {
@@ -5932,8 +6991,45 @@
                             "type",
                             "sessionID"
                           ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "invalidate_session"
+                            },
+                            "sessionID": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "sessionID"
+                          ]
                         }
                       ]
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mime": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "filename": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "mime",
+                          "url"
+                        ]
+                      }
                     }
                   },
                   "required": [
@@ -5957,7 +7053,17 @@
                       "panel",
                       "slack",
                       "telegram",
-                      "discord"
+                      "discord",
+                      "feishu",
+                      "whatsapp",
+                      "googlechat",
+                      "msteams",
+                      "line",
+                      "matrix",
+                      "mattermost",
+                      "signal",
+                      "wecom",
+                      "dingtalk"
                     ]
                   },
                   "text": {
@@ -5989,6 +7095,9 @@
                   "request_id": {
                     "type": "string"
                   },
+                  "source": {
+                    "type": "string"
+                  },
                   "allow_create": {
                     "default": true,
                     "type": "boolean"
@@ -5999,24 +7108,6 @@
                       "type": "string"
                     },
                     "additionalProperties": {}
-                  },
-                  "intent_hint": {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string"
-                      },
-                      "payload": {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string"
-                        },
-                        "additionalProperties": {}
-                      }
-                    },
-                    "required": [
-                      "action"
-                    ]
                   }
                 },
                 "required": [
@@ -6031,6 +7122,1014 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.message({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/panel/message/stream": {
+      "post": {
+        "operationId": "panel.message.stream",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Handle desktop panel message with streaming",
+        "description": "Route a desktop panel message through the control message service, streaming deltas via SSE.",
+        "responses": {
+          "200": {
+            "description": "Streaming panel message events",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "panel_response",
+                        "created",
+                        "message",
+                        "interaction",
+                        "progress",
+                        "task_list",
+                        "cancelled"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "task_id": {
+                      "type": "string"
+                    },
+                    "interaction_id": {
+                      "type": "string"
+                    },
+                    "session_id": {
+                      "type": "string"
+                    },
+                    "local_action": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "set_executor"
+                            },
+                            "executor": {
+                              "type": "string",
+                              "enum": [
+                                "opencode",
+                                "codex",
+                                "claude-code"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "executor"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "select_task"
+                            },
+                            "taskID": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "taskID"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "select_session"
+                            },
+                            "sessionID": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "sessionID"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "invalidate_session"
+                            },
+                            "sessionID": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "type",
+                            "sessionID"
+                          ]
+                        }
+                      ]
+                    },
+                    "attachments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mime": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "filename": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "mime",
+                          "url"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "surface": {
+                    "type": "string",
+                    "enum": [
+                      "panel",
+                      "slack",
+                      "telegram",
+                      "discord",
+                      "feishu",
+                      "whatsapp",
+                      "googlechat",
+                      "msteams",
+                      "line",
+                      "matrix",
+                      "mattermost",
+                      "signal",
+                      "wecom",
+                      "dingtalk"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "taskID": {
+                    "type": "string"
+                  },
+                  "sessionID": {
+                    "type": "string"
+                  },
+                  "executor": {
+                    "type": "string",
+                    "enum": [
+                      "opencode",
+                      "codex",
+                      "claude-code"
+                    ]
+                  },
+                  "channel": {
+                    "type": "string"
+                  },
+                  "thread": {
+                    "type": "string"
+                  },
+                  "user_id": {
+                    "type": "string"
+                  },
+                  "request_id": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "allow_create": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "surface",
+                  "text"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.message.stream({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/panel/knowledge/memory": {
+      "get": {
+        "operationId": "panel.knowledge.memory.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List memory files for current project",
+        "responses": {
+          "200": {
+            "description": "Memory file list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "key": {
+                        "type": "string"
+                      },
+                      "importance": {
+                        "type": "number"
+                      },
+                      "confidence": {
+                        "type": "number"
+                      },
+                      "timeCreated": {
+                        "type": "number"
+                      },
+                      "timeUpdated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title",
+                      "scope",
+                      "source",
+                      "kind",
+                      "importance",
+                      "confidence",
+                      "timeCreated",
+                      "timeUpdated"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/panel/knowledge/memory/{id}": {
+      "get": {
+        "operationId": "panel.knowledge.memory.get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "summary": "Get memory file content (all chunks)",
+        "responses": {
+          "200": {
+            "description": "Memory file with chunks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "file": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "key": {
+                          "type": "string"
+                        },
+                        "importance": {
+                          "type": "number"
+                        },
+                        "confidence": {
+                          "type": "number"
+                        },
+                        "timeCreated": {
+                          "type": "number"
+                        },
+                        "timeUpdated": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "scope",
+                        "source",
+                        "kind",
+                        "importance",
+                        "confidence",
+                        "timeCreated",
+                        "timeUpdated"
+                      ]
+                    },
+                    "content": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "file",
+                    "content"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.get({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "panel.knowledge.memory.delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "summary": "Delete memory file",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/panel/knowledge/memory/search": {
+      "post": {
+        "operationId": "panel.knowledge.memory.search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Search memories",
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "chunkId": {
+                        "type": "string"
+                      },
+                      "fileId": {
+                        "type": "string"
+                      },
+                      "fileTitle": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "key": {
+                        "type": "string"
+                      },
+                      "importance": {
+                        "type": "number"
+                      },
+                      "confidence": {
+                        "type": "number"
+                      },
+                      "score": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "chunkId",
+                      "fileId",
+                      "fileTitle",
+                      "content",
+                      "scope",
+                      "source",
+                      "kind",
+                      "importance",
+                      "confidence",
+                      "score"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string"
+                  },
+                  "sessionID": {
+                    "type": "string"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50
+                  }
+                },
+                "required": [
+                  "query"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.memory.search({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/panel/knowledge/preference": {
+      "get": {
+        "operationId": "panel.knowledge.preference.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "List manageable preferences for current project",
+        "responses": {
+          "200": {
+            "description": "Preference list (project-local cwd + custom overrides)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "key": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "scope": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string"
+                      },
+                      "confidence": {
+                        "type": "number"
+                      },
+                      "timeUpdated": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "key",
+                      "value",
+                      "scope",
+                      "source",
+                      "confidence",
+                      "timeUpdated"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.preference.list({\n  ...\n})"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "panel.knowledge.preference.set",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Create or update a preference",
+        "responses": {
+          "200": {
+            "description": "Preference entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "key",
+                    "value"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.preference.set({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/panel/knowledge/preference/{id}": {
+      "patch": {
+        "operationId": "panel.knowledge.preference.update",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "summary": "Update a preference",
+        "responses": {
+          "200": {
+            "description": "Updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "key",
+                  "value"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.preference.update({\n  ...\n})"
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "panel.knowledge.preference.delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "summary": "Delete a preference",
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.panel.knowledge.preference.delete({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/control/timeline": {
+      "get": {
+        "operationId": "control.timeline",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "taskID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "surface",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "panel",
+                "slack",
+                "telegram",
+                "discord",
+                "feishu",
+                "whatsapp",
+                "googlechat",
+                "msteams",
+                "line",
+                "matrix",
+                "mattermost",
+                "signal",
+                "wecom",
+                "dingtalk"
+              ]
+            }
+          }
+        ],
+        "summary": "Get control timeline",
+        "description": "Retrieve the persisted control-plane conversation for a task, session, or the current surface.",
+        "responses": {
+          "200": {
+            "description": "Control timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "info": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "user",
+                              "assistant",
+                              "system"
+                            ]
+                          },
+                          "source": {
+                            "type": "string"
+                          },
+                          "surface": {
+                            "type": "string"
+                          },
+                          "taskID": {
+                            "type": "string"
+                          },
+                          "sessionID": {
+                            "type": "string"
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "role",
+                          "surface",
+                          "time"
+                        ]
+                      },
+                      "parts": {
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "text"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "const": "file"
+                                },
+                                "mime": {
+                                  "type": "string"
+                                },
+                                "url": {
+                                  "type": "string"
+                                },
+                                "filename": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "mime",
+                                "url"
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "info",
+                      "parts"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.control.timeline({\n  ...\n})"
           }
         ]
       }
@@ -6209,6 +8308,48 @@
                             "const": false
                           }
                         ]
+                      },
+                      "named": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "family": {
+                              "type": "string",
+                              "enum": [
+                                "build",
+                                "test",
+                                "lint",
+                                "verify_cmd"
+                              ]
+                            },
+                            "commands": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "cwd": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "commands"
+                          ]
+                        }
                       },
                       "startup": {
                         "type": "object",
@@ -6518,6 +8659,24 @@
                           }
                         }
                       },
+                      "spec_check": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "prompt": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "soft",
+                              "strict"
+                            ]
+                          }
+                        }
+                      },
                       "custom": {
                         "type": "object",
                         "propertyNames": {
@@ -6535,6 +8694,32 @@
                         "type": "integer",
                         "exclusiveMinimum": 0,
                         "maximum": 9007199254740991
+                      }
+                    }
+                  },
+                  "routing": {
+                    "type": "object",
+                    "properties": {
+                      "spec": {
+                        "type": "string",
+                        "enum": [
+                          "opencorvus",
+                          "executor"
+                        ]
+                      },
+                      "plan": {
+                        "type": "string",
+                        "enum": [
+                          "opencorvus",
+                          "executor"
+                        ]
+                      },
+                      "evaluation": {
+                        "type": "string",
+                        "enum": [
+                          "opencorvus",
+                          "hybrid"
+                        ]
                       }
                     }
                   },
@@ -7163,6 +9348,12 @@
                                   "type": "object",
                                   "properties": {
                                     "name": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "family": {
                                       "type": "string"
                                     },
                                     "status": {
@@ -8238,6 +10429,12 @@
                               "name": {
                                 "type": "string"
                               },
+                              "label": {
+                                "type": "string"
+                              },
+                              "family": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string",
                                 "enum": [
@@ -8746,6 +10943,39 @@
                         "request",
                         "status",
                         "priority",
+                        "time"
+                      ]
+                    },
+                    "spec": {
+                      "type": "object",
+                      "properties": {
+                        "content": {
+                          "type": "string"
+                        },
+                        "file": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "content",
                         "time"
                       ]
                     },
@@ -9321,6 +11551,12 @@
                               "name": {
                                 "type": "string"
                               },
+                              "label": {
+                                "type": "string"
+                              },
+                              "family": {
+                                "type": "string"
+                              },
                               "status": {
                                 "type": "string",
                                 "enum": [
@@ -9688,6 +11924,12 @@
                                 "type": "object",
                                 "properties": {
                                   "name": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  },
+                                  "family": {
                                     "type": "string"
                                   },
                                   "status": {
@@ -10315,6 +12557,98 @@
         ]
       }
     },
+    "/task/{taskID}/inject": {
+      "post": {
+        "operationId": "task.inject",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Inject message into running task",
+        "responses": {
+          "200": {
+            "description": "Message injected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resumed": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "resumed",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "message"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.task.inject({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}/checks": {
       "patch": {
         "operationId": "task.checks.update",
@@ -10578,6 +12912,48 @@
                             "const": false
                           }
                         ]
+                      },
+                      "named": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "family": {
+                              "type": "string",
+                              "enum": [
+                                "build",
+                                "test",
+                                "lint",
+                                "verify_cmd"
+                              ]
+                            },
+                            "commands": {
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "cwd": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "commands"
+                          ]
+                        }
                       },
                       "startup": {
                         "type": "object",
@@ -10870,6 +13246,24 @@
                         }
                       },
                       "judge": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "prompt": {
+                            "type": "string"
+                          },
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "soft",
+                              "strict"
+                            ]
+                          }
+                        }
+                      },
+                      "spec_check": {
                         "type": "object",
                         "properties": {
                           "enabled": {
@@ -11497,6 +13891,435 @@
         ]
       }
     },
+    "/run/{runID}/executor": {
+      "get": {
+        "operationId": "run.executorSession",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runID",
+            "schema": {
+              "type": "string",
+              "pattern": "^run.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Get run executor session",
+        "responses": {
+          "200": {
+            "description": "Executor session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "taskID": {
+                      "type": "string",
+                      "pattern": "^tsk.*"
+                    },
+                    "runID": {
+                      "type": "string",
+                      "pattern": "^run.*"
+                    },
+                    "provider": {
+                      "type": "string",
+                      "enum": [
+                        "opencode",
+                        "codex",
+                        "claude-code"
+                      ]
+                    },
+                    "protocol": {
+                      "type": "string"
+                    },
+                    "protocolVersion": {
+                      "type": "string"
+                    },
+                    "transport": {
+                      "type": "string",
+                      "enum": [
+                        "inproc",
+                        "stdio",
+                        "ws",
+                        "http"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "completed",
+                        "failed",
+                        "aborted"
+                      ]
+                    },
+                    "refs": {
+                      "type": "object",
+                      "properties": {
+                        "provider_session_id": {
+                          "type": "string"
+                        },
+                        "thread_id": {
+                          "type": "string"
+                        },
+                        "turn_id": {
+                          "type": "string"
+                        },
+                        "item_id": {
+                          "type": "string"
+                        },
+                        "response_id": {
+                          "type": "string"
+                        },
+                        "conversation_id": {
+                          "type": "string"
+                        },
+                        "queue_task_id": {
+                          "type": "string"
+                        },
+                        "call_id": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "capabilities": {
+                      "type": "object",
+                      "properties": {
+                        "stream": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "resume": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "interrupt": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "builtin_tools": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "custom_tools": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "structured_output": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "approvals": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "reasoning": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "plan_updates": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "diff_updates": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "mcp": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "usage": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "realtime": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "spec_generation": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "plan_generation": {
+                          "default": false,
+                          "type": "boolean"
+                        },
+                        "tool_kinds": {
+                          "default": [],
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "builtin",
+                              "dynamic",
+                              "approval",
+                              "input",
+                              "mcp",
+                              "shell",
+                              "patch",
+                              "read",
+                              "review",
+                              "plan",
+                              "structured_output",
+                              "unknown"
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "model": {
+                          "type": "string"
+                        },
+                        "cwd": {
+                          "type": "string"
+                        },
+                        "system": {
+                          "type": "string"
+                        },
+                        "max_turns": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "profile": {
+                          "type": "string"
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        }
+                      }
+                    },
+                    "time": {
+                      "type": "object",
+                      "properties": {
+                        "created": {
+                          "type": "number"
+                        },
+                        "updated": {
+                          "type": "number"
+                        },
+                        "started": {
+                          "type": "number"
+                        },
+                        "completed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "created",
+                        "updated"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "taskID",
+                    "runID",
+                    "provider",
+                    "protocol",
+                    "protocolVersion",
+                    "transport",
+                    "status",
+                    "time"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.run.executorSession({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/run/{runID}/executor-events": {
+      "get": {
+        "operationId": "run.executorEvents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runID",
+            "schema": {
+              "type": "string",
+              "pattern": "^run.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "List run executor events",
+        "responses": {
+          "200": {
+            "description": "Executor events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "executorSessionID": {
+                        "type": "string"
+                      },
+                      "taskID": {
+                        "type": "string",
+                        "pattern": "^tsk.*"
+                      },
+                      "runID": {
+                        "type": "string",
+                        "pattern": "^run.*"
+                      },
+                      "sequence": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "summary": {
+                        "type": "string"
+                      },
+                      "refs": {
+                        "type": "object",
+                        "properties": {
+                          "provider_session_id": {
+                            "type": "string"
+                          },
+                          "thread_id": {
+                            "type": "string"
+                          },
+                          "turn_id": {
+                            "type": "string"
+                          },
+                          "item_id": {
+                            "type": "string"
+                          },
+                          "response_id": {
+                            "type": "string"
+                          },
+                          "conversation_id": {
+                            "type": "string"
+                          },
+                          "queue_task_id": {
+                            "type": "string"
+                          },
+                          "call_id": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "payload": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "raw": {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string"
+                        },
+                        "additionalProperties": {}
+                      },
+                      "time": {
+                        "type": "object",
+                        "properties": {
+                          "created": {
+                            "type": "number"
+                          },
+                          "updated": {
+                            "type": "number"
+                          },
+                          "observed": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "created",
+                          "updated",
+                          "observed"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "executorSessionID",
+                      "taskID",
+                      "runID",
+                      "sequence",
+                      "kind",
+                      "time"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.run.executorEvents({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/run/{runID}/brief": {
       "get": {
         "operationId": "run.brief",
@@ -12034,6 +14857,12 @@
                           "type": "object",
                           "properties": {
                             "name": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            },
+                            "family": {
                               "type": "string"
                             },
                             "status": {
@@ -12621,6 +15450,173 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.deleteGoal:goalID({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/export/task/{taskID}": {
+      "get": {
+        "operationId": "export.task",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "taskID",
+            "schema": {
+              "type": "string",
+              "pattern": "^tsk.*"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Export full task data",
+        "responses": {
+          "200": {
+            "description": "Complete task export including plan, runs, evaluations, goals, milestones, interactions, snapshots, and artifacts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "task": {},
+                    "plan": {},
+                    "goals": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "milestones": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "runs": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "interactions": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "snapshots": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "deliveries": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "evaluations": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "artifacts": {
+                      "type": "array",
+                      "items": {}
+                    }
+                  },
+                  "required": [
+                    "task",
+                    "goals",
+                    "milestones",
+                    "runs",
+                    "interactions",
+                    "snapshots",
+                    "deliveries",
+                    "evaluations",
+                    "artifacts"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.export.task({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/export/session/{sessionID}": {
+      "get": {
+        "operationId": "export.session",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sessionID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "summary": "Export session messages",
+        "responses": {
+          "200": {
+            "description": "Session metadata and messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "session": {},
+                    "messages": {
+                      "type": "array",
+                      "items": {}
+                    },
+                    "llm_calls": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "session",
+                    "messages",
+                    "llm_calls"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.export.session({\n  ...\n})"
           }
         ]
       }
@@ -14732,6 +17728,76 @@
         ]
       }
     },
+    "/path/open": {
+      "post": {
+        "operationId": "path.open",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Open a local path",
+        "description": "Open a local file or directory using the host operating system.",
+        "responses": {
+          "200": {
+            "description": "Path opened",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "opened": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "opened"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "path"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.path.open({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/log": {
       "post": {
         "operationId": "app.log",
@@ -14818,6 +17884,65 @@
         ]
       }
     },
+    "/log/tail": {
+      "get": {
+        "operationId": "log.tail",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "n",
+            "schema": {
+              "default": 500,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            }
+          }
+        ],
+        "summary": "Read recent logs",
+        "description": "Read the last N lines from the current server log file.",
+        "responses": {
+          "200": {
+            "description": "Log lines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string"
+                    },
+                    "lines": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "lines"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.log.tail({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/agent": {
       "get": {
         "operationId": "app.agents",
@@ -14851,79 +17976,6 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.app.agents({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/skill": {
-      "get": {
-        "operationId": "app.skills",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "summary": "List skills",
-        "description": "Get a list of all available skills in the OpenCorvus system.",
-        "responses": {
-          "200": {
-            "description": "List of skills",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "name": {
-                        "type": "string"
-                      },
-                      "description": {
-                        "type": "string"
-                      },
-                      "platforms": {
-                        "default": [],
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "win32",
-                            "darwin",
-                            "linux"
-                          ]
-                        }
-                      },
-                      "builtin": {
-                        "default": false,
-                        "type": "boolean"
-                      },
-                      "location": {
-                        "type": "string"
-                      },
-                      "content": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "name",
-                      "description",
-                      "location",
-                      "content"
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.app.skills({\n  ...\n})"
           }
         ]
       }
@@ -15032,6 +18084,48 @@
           {
             "lang": "js",
             "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.event.subscribe({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/restart": {
+      "post": {
+        "operationId": "server.restart",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "summary": "Restart the server",
+        "description": "Spawn a new server process with the same arguments, then exit.",
+        "responses": {
+          "200": {
+            "description": "Restart initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.server.restart({\n  ...\n})"
           }
         ]
       }
@@ -15553,6 +18647,13 @@
           },
           "variant": {
             "type": "string"
+          },
+          "extra": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
           }
         },
         "required": [
@@ -17480,942 +20581,6 @@
           "properties"
         ]
       },
-      "Event.goal.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "goal": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "sessionID": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "id",
-                  "sessionID",
-                  "description",
-                  "status"
-                ]
-              }
-            },
-            "required": [
-              "goal"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.goal.deadlock": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "goal.deadlock"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "goal": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string"
-                  },
-                  "sessionID": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "attempts": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "id",
-                  "sessionID",
-                  "description",
-                  "attempts"
-                ]
-              }
-            },
-            "required": [
-              "goal"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.tui.prompt.append": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.prompt.append"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "text"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.tui.command.execute": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.command.execute"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "command": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "enum": [
-                      "session.list",
-                      "session.new",
-                      "session.interrupt",
-                      "session.compact",
-                      "session.page.up",
-                      "session.page.down",
-                      "session.line.up",
-                      "session.line.down",
-                      "session.half.page.up",
-                      "session.half.page.down",
-                      "session.first",
-                      "session.last",
-                      "prompt.clear",
-                      "prompt.submit",
-                      "agent.cycle"
-                    ]
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "command"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.tui.toast.show": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.toast.show"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "title": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              },
-              "variant": {
-                "type": "string",
-                "enum": [
-                  "info",
-                  "success",
-                  "warning",
-                  "error"
-                ]
-              },
-              "duration": {
-                "description": "Duration in milliseconds",
-                "default": 5000,
-                "type": "number"
-              }
-            },
-            "required": [
-              "message",
-              "variant"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.tui.session.select": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.session.select"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "description": "Session ID to navigate to",
-                "type": "string",
-                "pattern": "^ses"
-              }
-            },
-            "required": [
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.task.report": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "task.report"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "status": {
-                "type": "string",
-                "enum": [
-                  "progress",
-                  "need_input",
-                  "done",
-                  "failed"
-                ]
-              },
-              "summary": {
-                "type": "string"
-              },
-              "question": {
-                "type": "string"
-              },
-              "next_plan": {
-                "type": "string"
-              },
-              "artifacts": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "error": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "sessionID",
-              "status",
-              "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.tools.changed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.tools.changed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "server": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "server"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.browser.open.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.browser.open.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "mcpName": {
-                "type": "string"
-              },
-              "url": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "mcpName",
-              "url"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.command.executed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "command.executed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "sessionID": {
-                "type": "string",
-                "pattern": "^ses.*"
-              },
-              "arguments": {
-                "type": "string"
-              },
-              "messageID": {
-                "type": "string",
-                "pattern": "^msg.*"
-              }
-            },
-            "required": [
-              "name",
-              "sessionID",
-              "arguments",
-              "messageID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "PermissionAction": {
-        "type": "string",
-        "enum": [
-          "allow",
-          "deny",
-          "ask"
-        ]
-      },
-      "PermissionRule": {
-        "type": "object",
-        "properties": {
-          "permission": {
-            "type": "string"
-          },
-          "pattern": {
-            "type": "string"
-          },
-          "action": {
-            "$ref": "#/components/schemas/PermissionAction"
-          }
-        },
-        "required": [
-          "permission",
-          "pattern",
-          "action"
-        ]
-      },
-      "PermissionRuleset": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/PermissionRule"
-        }
-      },
-      "Session": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^ses.*"
-          },
-          "slug": {
-            "type": "string"
-          },
-          "projectID": {
-            "type": "string"
-          },
-          "directory": {
-            "type": "string"
-          },
-          "parentID": {
-            "type": "string",
-            "pattern": "^ses.*"
-          },
-          "summary": {
-            "type": "object",
-            "properties": {
-              "additions": {
-                "type": "number"
-              },
-              "deletions": {
-                "type": "number"
-              },
-              "files": {
-                "type": "number"
-              },
-              "diffs": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
-              }
-            },
-            "required": [
-              "additions",
-              "deletions",
-              "files"
-            ]
-          },
-          "share": {
-            "type": "object",
-            "properties": {
-              "url": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "url"
-            ]
-          },
-          "title": {
-            "type": "string"
-          },
-          "version": {
-            "type": "string"
-          },
-          "time": {
-            "type": "object",
-            "properties": {
-              "created": {
-                "type": "number"
-              },
-              "updated": {
-                "type": "number"
-              },
-              "compacting": {
-                "type": "number"
-              },
-              "archived": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "created",
-              "updated"
-            ]
-          },
-          "permission": {
-            "$ref": "#/components/schemas/PermissionRuleset"
-          },
-          "revert": {
-            "type": "object",
-            "properties": {
-              "messageID": {
-                "type": "string"
-              },
-              "partID": {
-                "type": "string"
-              },
-              "snapshot": {
-                "type": "string"
-              },
-              "diff": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "messageID"
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "slug",
-          "projectID",
-          "directory",
-          "title",
-          "version",
-          "time"
-        ]
-      },
-      "Event.session.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "info": {
-                "$ref": "#/components/schemas/Session"
-              }
-            },
-            "required": [
-              "info"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "info": {
-                "$ref": "#/components/schemas/Session"
-              }
-            },
-            "required": [
-              "info"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.deleted": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.deleted"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "info": {
-                "$ref": "#/components/schemas/Session"
-              }
-            },
-            "required": [
-              "info"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.diff": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.diff"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "diff": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/FileDiff"
-                }
-              }
-            },
-            "required": [
-              "sessionID",
-              "diff"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.session.error": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "session.error"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "type": "string"
-              },
-              "error": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/ProviderAuthError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/UnknownError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MessageOutputLengthError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/MessageAbortedError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StructuredOutputError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContextOverflowError"
-                  },
-                  {
-                    "$ref": "#/components/schemas/APIError"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.vcs.branch.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "vcs.branch.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "branch": {
-                "type": "string"
-              }
-            }
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Pty": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^pty.*"
-          },
-          "title": {
-            "type": "string"
-          },
-          "command": {
-            "type": "string"
-          },
-          "args": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "cwd": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "running",
-              "exited"
-            ]
-          },
-          "pid": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "command",
-          "args",
-          "cwd",
-          "status",
-          "pid"
-        ]
-      },
-      "Event.pty.created": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "pty.created"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "info": {
-                "$ref": "#/components/schemas/Pty"
-              }
-            },
-            "required": [
-              "info"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.pty.updated": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "pty.updated"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "info": {
-                "$ref": "#/components/schemas/Pty"
-              }
-            },
-            "required": [
-              "info"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.pty.exited": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "pty.exited"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^pty.*"
-              },
-              "exitCode": {
-                "type": "number"
-              }
-            },
-            "required": [
-              "id",
-              "exitCode"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.pty.deleted": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "pty.deleted"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^pty.*"
-              }
-            },
-            "required": [
-              "id"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.worktree.ready": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "worktree.ready"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "branch": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name",
-              "branch"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.worktree.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "worktree.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workspace.ready": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workspace.ready"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.workspace.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "workspace.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.orchestrator.task.created": {
         "type": "object",
         "properties": {
@@ -19073,6 +21238,975 @@
           "properties"
         ]
       },
+      "Event.orchestrator.run.progress": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "orchestrator.run.progress"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "type": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "type",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.orchestrator.run.output": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "orchestrator.run.output"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "type": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "type",
+              "text"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.orchestrator.message.injected": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "orchestrator.message.injected"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "runID": {
+                "type": "string",
+                "pattern": "^run.*"
+              },
+              "text": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "runID",
+              "text",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.vcs.branch.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "vcs.branch.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "branch": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.tui.prompt.append": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.prompt.append"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.tui.command.execute": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.command.execute"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "session.list",
+                      "session.new",
+                      "session.interrupt",
+                      "session.compact",
+                      "session.page.up",
+                      "session.page.down",
+                      "session.line.up",
+                      "session.line.down",
+                      "session.half.page.up",
+                      "session.half.page.down",
+                      "session.first",
+                      "session.last",
+                      "prompt.clear",
+                      "prompt.submit",
+                      "agent.cycle"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "command"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.tui.toast.show": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.toast.show"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "success",
+                  "warning",
+                  "error"
+                ]
+              },
+              "duration": {
+                "description": "Duration in milliseconds",
+                "default": 5000,
+                "type": "number"
+              }
+            },
+            "required": [
+              "message",
+              "variant"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.tui.session.select": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.session.select"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "description": "Session ID to navigate to",
+                "type": "string",
+                "pattern": "^ses"
+              }
+            },
+            "required": [
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.task.report": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "task.report"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "progress",
+                  "need_input",
+                  "done",
+                  "failed"
+                ]
+              },
+              "summary": {
+                "type": "string"
+              },
+              "question": {
+                "type": "string"
+              },
+              "next_plan": {
+                "type": "string"
+              },
+              "artifacts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sessionID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.tools.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.tools.changed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "server"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.browser.open.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.browser.open.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "mcpName": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "mcpName",
+              "url"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.command.executed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "command.executed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "sessionID": {
+                "type": "string",
+                "pattern": "^ses.*"
+              },
+              "arguments": {
+                "type": "string"
+              },
+              "messageID": {
+                "type": "string",
+                "pattern": "^msg.*"
+              }
+            },
+            "required": [
+              "name",
+              "sessionID",
+              "arguments",
+              "messageID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "PermissionAction": {
+        "type": "string",
+        "enum": [
+          "allow",
+          "deny",
+          "ask"
+        ]
+      },
+      "PermissionRule": {
+        "type": "object",
+        "properties": {
+          "permission": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "action": {
+            "$ref": "#/components/schemas/PermissionAction"
+          }
+        },
+        "required": [
+          "permission",
+          "pattern",
+          "action"
+        ]
+      },
+      "PermissionRuleset": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PermissionRule"
+        }
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^ses.*"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "projectID": {
+            "type": "string"
+          },
+          "directory": {
+            "type": "string"
+          },
+          "parentID": {
+            "type": "string",
+            "pattern": "^ses.*"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "additions": {
+                "type": "number"
+              },
+              "deletions": {
+                "type": "number"
+              },
+              "files": {
+                "type": "number"
+              },
+              "diffs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            },
+            "required": [
+              "additions",
+              "deletions",
+              "files"
+            ]
+          },
+          "share": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "url"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "time": {
+            "type": "object",
+            "properties": {
+              "created": {
+                "type": "number"
+              },
+              "updated": {
+                "type": "number"
+              },
+              "compacting": {
+                "type": "number"
+              },
+              "archived": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "created",
+              "updated"
+            ]
+          },
+          "permission": {
+            "$ref": "#/components/schemas/PermissionRuleset"
+          },
+          "revert": {
+            "type": "object",
+            "properties": {
+              "messageID": {
+                "type": "string"
+              },
+              "partID": {
+                "type": "string"
+              },
+              "snapshot": {
+                "type": "string"
+              },
+              "diff": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "messageID"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "projectID",
+          "directory",
+          "title",
+          "version",
+          "time"
+        ]
+      },
+      "Event.session.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "info": {
+                "$ref": "#/components/schemas/Session"
+              }
+            },
+            "required": [
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "info": {
+                "$ref": "#/components/schemas/Session"
+              }
+            },
+            "required": [
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.deleted": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.deleted"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "info": {
+                "$ref": "#/components/schemas/Session"
+              }
+            },
+            "required": [
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.diff": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.diff"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "diff": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FileDiff"
+                }
+              }
+            },
+            "required": [
+              "sessionID",
+              "diff"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.session.error": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "session.error"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "type": "string"
+              },
+              "error": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ProviderAuthError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/UnknownError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MessageOutputLengthError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MessageAbortedError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StructuredOutputError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ContextOverflowError"
+                  },
+                  {
+                    "$ref": "#/components/schemas/APIError"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Pty": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^pty.*"
+          },
+          "title": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "exited"
+            ]
+          },
+          "pid": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "command",
+          "args",
+          "cwd",
+          "status",
+          "pid"
+        ]
+      },
+      "Event.pty.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "pty.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "info": {
+                "$ref": "#/components/schemas/Pty"
+              }
+            },
+            "required": [
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.pty.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "pty.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "info": {
+                "$ref": "#/components/schemas/Pty"
+              }
+            },
+            "required": [
+              "info"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.pty.exited": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "pty.exited"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^pty.*"
+              },
+              "exitCode": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "exitCode"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.pty.deleted": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "pty.deleted"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^pty.*"
+              }
+            },
+            "required": [
+              "id"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.worktree.ready": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "worktree.ready"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "branch"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.worktree.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "worktree.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workspace.ready": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workspace.ready"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.workspace.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "workspace.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "Event": {
         "anyOf": [
           {
@@ -19151,78 +22285,6 @@
             "$ref": "#/components/schemas/Event.task_plan.updated"
           },
           {
-            "$ref": "#/components/schemas/Event.goal.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.goal.deadlock"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.prompt.append"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.command.execute"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.toast.show"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.session.select"
-          },
-          {
-            "$ref": "#/components/schemas/Event.task.report"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.tools.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.command.executed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.deleted"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.diff"
-          },
-          {
-            "$ref": "#/components/schemas/Event.session.error"
-          },
-          {
-            "$ref": "#/components/schemas/Event.vcs.branch.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.pty.created"
-          },
-          {
-            "$ref": "#/components/schemas/Event.pty.updated"
-          },
-          {
-            "$ref": "#/components/schemas/Event.pty.exited"
-          },
-          {
-            "$ref": "#/components/schemas/Event.pty.deleted"
-          },
-          {
-            "$ref": "#/components/schemas/Event.worktree.ready"
-          },
-          {
-            "$ref": "#/components/schemas/Event.worktree.failed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workspace.ready"
-          },
-          {
-            "$ref": "#/components/schemas/Event.workspace.failed"
-          },
-          {
             "$ref": "#/components/schemas/Event.orchestrator.task.created"
           },
           {
@@ -19269,6 +22331,81 @@
           },
           {
             "$ref": "#/components/schemas/Event.orchestrator.task.message"
+          },
+          {
+            "$ref": "#/components/schemas/Event.orchestrator.run.progress"
+          },
+          {
+            "$ref": "#/components/schemas/Event.orchestrator.run.output"
+          },
+          {
+            "$ref": "#/components/schemas/Event.orchestrator.message.injected"
+          },
+          {
+            "$ref": "#/components/schemas/Event.vcs.branch.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.prompt.append"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.command.execute"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.toast.show"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.session.select"
+          },
+          {
+            "$ref": "#/components/schemas/Event.task.report"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.tools.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.command.executed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.deleted"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.diff"
+          },
+          {
+            "$ref": "#/components/schemas/Event.session.error"
+          },
+          {
+            "$ref": "#/components/schemas/Event.pty.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.pty.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.pty.exited"
+          },
+          {
+            "$ref": "#/components/schemas/Event.pty.deleted"
+          },
+          {
+            "$ref": "#/components/schemas/Event.worktree.ready"
+          },
+          {
+            "$ref": "#/components/schemas/Event.worktree.failed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workspace.ready"
+          },
+          {
+            "$ref": "#/components/schemas/Event.workspace.failed"
           }
         ]
       },
@@ -19309,6 +22446,10 @@
           },
           "hostname": {
             "description": "Hostname to listen on",
+            "type": "string"
+          },
+          "publicUrl": {
+            "description": "Public base URL used for externally visible attachment links",
             "type": "string"
           },
           "mdns": {
@@ -19379,6 +22520,298 @@
         },
         "additionalProperties": false
       },
+      "FeishuChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable Feishu or Lark channel integration",
+            "type": "boolean"
+          },
+          "appId": {
+            "description": "Feishu or Lark app ID",
+            "type": "string"
+          },
+          "appSecret": {
+            "description": "Feishu or Lark app secret",
+            "type": "string"
+          },
+          "verificationToken": {
+            "description": "Optional Feishu or Lark webhook verification token",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional Feishu or Lark webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional Feishu or Lark webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional Feishu or Lark webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WhatsappChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable WhatsApp channel integration",
+            "type": "boolean"
+          },
+          "token": {
+            "description": "WhatsApp Cloud API access token",
+            "type": "string"
+          },
+          "numberId": {
+            "description": "WhatsApp Cloud API phone number ID",
+            "type": "string"
+          },
+          "verifyToken": {
+            "description": "Optional WhatsApp webhook verification token",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional WhatsApp webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional WhatsApp webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional WhatsApp webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GoogleChatChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable Google Chat integration",
+            "type": "boolean"
+          },
+          "serviceAccount": {
+            "description": "Google Chat service account JSON or path",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional Google Chat webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional Google Chat webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional Google Chat webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MSTeamsChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable Microsoft Teams integration",
+            "type": "boolean"
+          },
+          "appId": {
+            "description": "Microsoft Teams bot app ID",
+            "type": "string"
+          },
+          "appSecret": {
+            "description": "Microsoft Teams bot app secret",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional Microsoft Teams webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional Microsoft Teams webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional Microsoft Teams webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "LineChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable LINE integration",
+            "type": "boolean"
+          },
+          "token": {
+            "description": "LINE channel access token",
+            "type": "string"
+          },
+          "secret": {
+            "description": "Optional LINE channel secret for webhook verification",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional LINE webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional LINE webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional LINE webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MatrixChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable Matrix integration",
+            "type": "boolean"
+          },
+          "homeserver": {
+            "description": "Matrix homeserver URL",
+            "type": "string"
+          },
+          "token": {
+            "description": "Matrix access token",
+            "type": "string"
+          },
+          "since": {
+            "description": "Optional Matrix sync token",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "MattermostChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable Mattermost integration",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "Mattermost server URL",
+            "type": "string"
+          },
+          "token": {
+            "description": "Mattermost bot token",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional Mattermost webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional Mattermost webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional Mattermost webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SignalChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable Signal integration",
+            "type": "boolean"
+          },
+          "service": {
+            "description": "Signal service URL",
+            "type": "string"
+          },
+          "account": {
+            "description": "Signal sender account or number",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WeComChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable WeCom integration",
+            "type": "boolean"
+          },
+          "corpId": {
+            "description": "WeCom corp ID",
+            "type": "string"
+          },
+          "secret": {
+            "description": "WeCom app secret",
+            "type": "string"
+          },
+          "agentId": {
+            "description": "WeCom agent ID",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional WeCom webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional WeCom webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional WeCom webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DingTalkChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable DingTalk integration",
+            "type": "boolean"
+          },
+          "appKey": {
+            "description": "DingTalk app key",
+            "type": "string"
+          },
+          "appSecret": {
+            "description": "DingTalk app secret",
+            "type": "string"
+          },
+          "defaultWebhook": {
+            "description": "Optional DingTalk default session webhook",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional DingTalk webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional DingTalk webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional DingTalk webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ChannelConfig": {
         "description": "Channel integration configuration",
         "type": "object",
@@ -19391,6 +22824,36 @@
           },
           "discord": {
             "$ref": "#/components/schemas/DiscordChannelConfig"
+          },
+          "feishu": {
+            "$ref": "#/components/schemas/FeishuChannelConfig"
+          },
+          "whatsapp": {
+            "$ref": "#/components/schemas/WhatsappChannelConfig"
+          },
+          "googlechat": {
+            "$ref": "#/components/schemas/GoogleChatChannelConfig"
+          },
+          "msteams": {
+            "$ref": "#/components/schemas/MSTeamsChannelConfig"
+          },
+          "line": {
+            "$ref": "#/components/schemas/LineChannelConfig"
+          },
+          "matrix": {
+            "$ref": "#/components/schemas/MatrixChannelConfig"
+          },
+          "mattermost": {
+            "$ref": "#/components/schemas/MattermostChannelConfig"
+          },
+          "signal": {
+            "$ref": "#/components/schemas/SignalChannelConfig"
+          },
+          "wecom": {
+            "$ref": "#/components/schemas/WeComChannelConfig"
+          },
+          "dingtalk": {
+            "$ref": "#/components/schemas/DingTalkChannelConfig"
           }
         },
         "additionalProperties": false
@@ -19458,6 +22921,18 @@
                 "$ref": "#/components/schemas/PermissionActionConfig"
               },
               "question": {
+                "$ref": "#/components/schemas/PermissionActionConfig"
+              },
+              "plan_enter": {
+                "$ref": "#/components/schemas/PermissionActionConfig"
+              },
+              "plan_exit": {
+                "$ref": "#/components/schemas/PermissionActionConfig"
+              },
+              "spec_enter": {
+                "$ref": "#/components/schemas/PermissionActionConfig"
+              },
+              "spec_exit": {
                 "$ref": "#/components/schemas/PermissionActionConfig"
               },
               "webfetch": {
@@ -20522,6 +23997,21 @@
           {
             "$ref": "#/components/schemas/WellKnownAuth"
           }
+        ]
+      },
+      "ProjectInitGitResult": {
+        "type": "object",
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          }
+        },
+        "required": [
+          "created",
+          "project"
         ]
       },
       "NotFoundError": {

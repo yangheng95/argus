@@ -25,26 +25,14 @@ target
 .direnv/
 
 # Local dev files
-opencorvus-dev
+.opencorvus/
+/opencorvus.json
+/opencorvus.jsonc
+/.zed/
 logs/
 *.bun-build
 tsconfig.tsbuildinfo
 tmp_slack_msg.json
 overlay.json
-.tmp_image_files.txt
-.opencorvus/staging/
-.tmp_env_vars_all.txt
 *.traineddata
-packages/bot/bot_e2e_rerun.err
-packages/bot/bot_e2e_rerun.out
-packages/opencorvus/tmp-modelcheck.ts
-packages/opencorvus/eval-report-*.json
-packages/opencorvus/opencorvus.jsonc
-packages/overlay/dist-artifacts/
-packages/overlay/src-tauri/resources/
-tmp-api.log
-tmp-api.err.log
-test_plan.md
-tank_game.py
-STATS.md
-%TEMP%/
+packages/overlay/src-tauri/resources/opencorvus.exe
