@@ -50,6 +50,12 @@ export const JsonRpcLineTransport = {
     let wake: (() => void) | undefined
     let nextID = 0
     let closed = false
+    const failAll = (error: unknown) => {
+      for (const item of pending.values()) {
+        item.reject(error)
+      }
+      pending.clear()
+    }
 
     const push = (item: JsonRpcInbound) => {
       queue.push(item)
@@ -115,13 +121,6 @@ export const JsonRpcLineTransport = {
       failAll(new Error(`JSON-RPC process exited with code ${code}: ${input.command.join(" ")}`))
       wake?.()
     })()
-
-    const failAll = (error: unknown) => {
-      for (const item of pending.values()) {
-        item.reject(error)
-      }
-      pending.clear()
-    }
 
     const send = (message: Record<string, unknown>) => {
       if (closed) throw new Error(`JSON-RPC transport closed: ${input.command.join(" ")}`)

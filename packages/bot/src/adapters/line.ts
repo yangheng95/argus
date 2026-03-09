@@ -61,19 +61,7 @@ export class LineAdapter implements BotAdapter {
   }
 
   async sendMessage(channel: string, _thread: string, text: string): Promise<void> {
-    const res = await fetch("https://api.line.me/v2/bot/message/push", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: channel,
-        messages: [{ type: "text", text: text.slice(0, 5000) }],
-      }),
-      signal: AbortSignal.timeout(30_000),
-    })
-    if (!res.ok) throw new Error(`LINE send failed: ${res.status} ${await res.text()}`)
+    await this.push(channel, [{ type: "text", text: text.slice(0, 5000) }])
   }
 
   async startThread(channel: string, text: string): Promise<string> {
@@ -93,6 +81,33 @@ export class LineAdapter implements BotAdapter {
         ? `${title}\n(image upload not supported in LINE text MVP)`
         : `Image "${filename}" generated (upload is not supported in LINE text MVP).`
     await this.sendMessage(channel, thread, text)
+  }
+
+  async uploadImageUrl(channel: string, _thread: string, url: string, filename: string, title?: string): Promise<void> {
+    await this.push(channel, [
+      ...(title ? [{ type: "text", text: title.slice(0, 5000) }] : []),
+      {
+        type: "image",
+        originalContentUrl: url,
+        previewImageUrl: url,
+      },
+    ])
+  }
+
+  private async push(channel: string, messages: Array<Record<string, unknown>>) {
+    const res = await fetch("https://api.line.me/v2/bot/message/push", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to: channel,
+        messages,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) throw new Error(`LINE send failed: ${res.status} ${await res.text()}`)
   }
 
   private async route(req: Request) {

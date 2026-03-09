@@ -2,7 +2,14 @@ import { Config } from "@/config/config"
 
 export async function slackConfig() {
   const config = await Config.get()
-  const slack = config.channel?.slack
+  const slack = config.channel?.slack as
+    | {
+        enabled?: boolean
+        botToken?: string
+        appToken?: string
+        signingSecret?: string
+      }
+    | undefined
   const enabled = slack?.enabled !== false
 
   return {

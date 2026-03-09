@@ -28,6 +28,7 @@
       "name": "@opencorvus-ai/bot",
       "version": "0.0.1",
       "dependencies": {
+        "@opencorvus-ai/channel-config": "workspace:*",
         "@opencorvus-ai/sdk": "workspace:*",
         "@slack/bolt": "4.6.0",
         "discord.js": "14.23.2",
@@ -37,6 +38,17 @@
         "@types/bun": "catalog:",
         "@types/node": "catalog:",
         "@typescript/native-preview": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/channel-config": {
+      "name": "@opencorvus-ai/channel-config",
+      "version": "0.0.1",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -81,6 +93,7 @@
         "@octokit/graphql": "9.0.2",
         "@octokit/rest": "catalog:",
         "@openauthjs/openauth": "catalog:",
+        "@opencorvus-ai/channel-config": "workspace:*",
         "@opencorvus-ai/plugin": "workspace:*",
         "@opencorvus-ai/script": "workspace:*",
         "@opencorvus-ai/sdk": "workspace:*",
@@ -130,6 +143,7 @@
         "ulid": "catalog:",
         "vscode-jsonrpc": "8.2.1",
         "web-tree-sitter": "0.25.10",
+        "which": "2.0.2",
         "xdg-basedir": "5.1.0",
         "yargs": "18.0.0",
         "zod": "catalog:",
@@ -203,6 +217,20 @@
         "typescript": "catalog:",
       },
     },
+    "packages/supervisor": {
+      "name": "@opencorvus-ai/supervisor",
+      "version": "0.0.1",
+      "dependencies": {
+        "@opencorvus-ai/sdk": "workspace:*",
+        "ulid": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
     "packages/util": {
       "name": "@opencorvus-ai/util",
       "version": "0.0.1",
@@ -235,7 +263,6 @@
     "@octokit/rest": "22.0.0",
     "@openauthjs/openauth": "0.0.0-20250322224806",
     "@pierre/diffs": "1.1.0-beta.18",
-    "@playwright/test": "1.51.0",
     "@solid-primitives/storage": "4.3.3",
     "@solidjs/meta": "0.29.4",
     "@solidjs/router": "0.15.4",
@@ -772,6 +799,8 @@
 
     "@opencorvus-ai/bot": ["@opencorvus-ai/bot@workspace:packages/bot"],
 
+    "@opencorvus-ai/channel-config": ["@opencorvus-ai/channel-config@workspace:packages/channel-config"],
+
     "@opencorvus-ai/overlay": ["@opencorvus-ai/overlay@workspace:packages/overlay"],
 
     "@opencorvus-ai/plugin": ["@opencorvus-ai/plugin@workspace:packages/plugin"],
@@ -779,6 +808,8 @@
     "@opencorvus-ai/script": ["@opencorvus-ai/script@workspace:packages/script"],
 
     "@opencorvus-ai/sdk": ["@opencorvus-ai/sdk@workspace:packages/sdk/js"],
+
+    "@opencorvus-ai/supervisor": ["@opencorvus-ai/supervisor@workspace:packages/supervisor"],
 
     "@opencorvus-ai/util": ["@opencorvus-ai/util@workspace:packages/util"],
 

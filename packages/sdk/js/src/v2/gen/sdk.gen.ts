@@ -13,6 +13,10 @@ import type {
   AuthRemoveResponses,
   AuthSetErrors,
   AuthSetResponses,
+  ChannelAttachmentCreateErrors,
+  ChannelAttachmentCreateResponses,
+  ChannelAttachmentGetErrors,
+  ChannelAttachmentGetResponses,
   ChannelListResponses,
   ChannelMessageResponses,
   ChannelRuntimeResponses,
@@ -47,6 +51,10 @@ import type {
   ExperimentalWorkspaceListResponses,
   ExperimentalWorkspaceRemoveErrors,
   ExperimentalWorkspaceRemoveResponses,
+  ExportSessionErrors,
+  ExportSessionResponses,
+  ExportTaskErrors,
+  ExportTaskResponses,
   FileListResponses,
   FilePartInput,
   FilePartSource,
@@ -67,6 +75,7 @@ import type {
   InteractionRejectResponses,
   InteractionReplyErrors,
   InteractionReplyResponses,
+  LogTailResponses,
   LspStatusResponses,
   McpAddErrors,
   McpAddResponses,
@@ -84,7 +93,17 @@ import type {
   McpRemoteConfig,
   McpStatusResponses,
   OutputFormat,
+  PanelCapabilitiesResponses,
+  PanelKnowledgeMemoryDeleteResponses,
+  PanelKnowledgeMemoryGetResponses,
+  PanelKnowledgeMemoryListResponses,
+  PanelKnowledgeMemorySearchResponses,
+  PanelKnowledgePreferenceDeleteResponses,
+  PanelKnowledgePreferenceListResponses,
+  PanelKnowledgePreferenceSetResponses,
+  PanelKnowledgePreferenceUpdateResponses,
   PanelMessageResponses,
+  PanelMessageStreamResponses,
   Part as Part2,
   PartDeleteErrors,
   PartDeleteResponses,
@@ -93,11 +112,15 @@ import type {
   PatchGoalGoalIdResponses,
   PatchPreferencePreferenceIdResponses,
   PathGetResponses,
+  PathOpenErrors,
+  PathOpenResponses,
   PermissionAction,
   PermissionListResponses,
   PermissionReplyErrors,
   PermissionReplyResponses,
   PermissionRuleset,
+  ProjectCurrentInitGitErrors,
+  ProjectCurrentInitGitResponses,
   ProjectCurrentResponses,
   ProjectListResponses,
   ProjectUpdateErrors,
@@ -137,8 +160,13 @@ import type {
   RunDeliveryResponses,
   RunEvaluationsErrors,
   RunEvaluationsResponses,
+  RunExecutorEventsErrors,
+  RunExecutorEventsResponses,
+  RunExecutorSessionErrors,
+  RunExecutorSessionResponses,
   RunGetErrors,
   RunGetResponses,
+  ServerRestartResponses,
   SessionAbortErrors,
   SessionAbortResponses,
   SessionChildrenErrors,
@@ -204,6 +232,8 @@ import type {
   TaskEventsResponses,
   TaskGetErrors,
   TaskGetResponses,
+  TaskInjectErrors,
+  TaskInjectResponses,
   TaskInteractionsErrors,
   TaskInteractionsResponses,
   TaskListResponses,
@@ -439,6 +469,31 @@ export class Auth extends HeyApiClient {
   }
 }
 
+export class Current extends HeyApiClient {
+  /**
+   * Initialize git in current directory
+   *
+   * Run git init in the current working directory and refresh the active project context.
+   */
+  public initGit<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<
+      ProjectCurrentInitGitResponses,
+      ProjectCurrentInitGitErrors,
+      ThrowOnError
+    >({
+      url: "/project/current/init-git",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Project extends HeyApiClient {
   /**
    * List all projects
@@ -526,6 +581,11 @@ export class Project extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _current?: Current
+  get current2(): Current {
+    return (this._current ??= new Current({ client: this.client }))
   }
 }
 
@@ -802,11 +862,90 @@ export class Config2 extends HeyApiClient {
   }
 }
 
+export class Attachment extends HeyApiClient {
+  /**
+   * Create a temporary channel attachment URL
+   *
+   * Store a temporary attachment and return a signed public URL for channels that require remote image URLs.
+   */
+  public create<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      filename?: string
+      mime?: string
+      data?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "filename" },
+            { in: "body", key: "mime" },
+            { in: "body", key: "data" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ChannelAttachmentCreateResponses,
+      ChannelAttachmentCreateErrors,
+      ThrowOnError
+    >({
+      url: "/channel/attachment",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Read a temporary channel attachment
+   *
+   * Read a previously created temporary channel attachment by signed URL.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ChannelAttachmentGetResponses,
+      ChannelAttachmentGetErrors,
+      ThrowOnError
+    >({
+      url: "/channel/attachment/{id}",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Runtime extends HeyApiClient {
   /**
    * Restart managed channel runtime
    *
-   * Restart the managed Telegram and Discord bot runtime with the current config.
+   * Restart the managed channel bot runtime with the current config.
    */
   public restart<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -851,7 +990,20 @@ export class Channel extends HeyApiClient {
   public message<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      platform?: "slack" | "telegram" | "discord"
+      platform?:
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
       channel?: string
       thread?: string
       text?: string
@@ -862,12 +1014,6 @@ export class Channel extends HeyApiClient {
       allow_create?: boolean
       metadata?: {
         [key: string]: unknown
-      }
-      intent_hint?: {
-        action: string
-        payload?: {
-          [key: string]: unknown
-        }
       }
     },
     options?: Options<never, ThrowOnError>,
@@ -888,7 +1034,6 @@ export class Channel extends HeyApiClient {
             { in: "body", key: "executor" },
             { in: "body", key: "allow_create" },
             { in: "body", key: "metadata" },
-            { in: "body", key: "intent_hint" },
           ],
         },
       ],
@@ -908,7 +1053,7 @@ export class Channel extends HeyApiClient {
   /**
    * Get managed channel runtime
    *
-   * Get managed bot runtime status for Telegram and Discord channels.
+   * Get managed bot runtime status for configured channel integrations.
    */
   public runtime<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -922,6 +1067,11 @@ export class Channel extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _attachment?: Attachment
+  get attachment(): Attachment {
+    return (this._attachment ??= new Attachment({ client: this.client }))
   }
 
   private _runtime?: Runtime
@@ -1707,6 +1857,7 @@ export class Session2 extends HeyApiClient {
     parameters: {
       sessionID: string
       directory?: string
+      deleteTasks?: boolean
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -1717,6 +1868,7 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "query", key: "deleteTasks" },
           ],
         },
       ],
@@ -3151,16 +3303,30 @@ export class Skill extends HeyApiClient {
   }
 }
 
-export class Panel extends HeyApiClient {
+export class Message extends HeyApiClient {
   /**
-   * Handle desktop panel message
+   * Handle desktop panel message with streaming
    *
-   * Route a desktop panel chat or button intent through the control message service.
+   * Route a desktop panel message through the control message service, streaming deltas via SSE.
    */
-  public message<ThrowOnError extends boolean = false>(
+  public stream<ThrowOnError extends boolean = false>(
     parameters?: {
       directory?: string
-      surface?: "panel" | "slack" | "telegram" | "discord"
+      surface?:
+        | "panel"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
       text?: string
       taskID?: string
       sessionID?: string
@@ -3173,12 +3339,6 @@ export class Panel extends HeyApiClient {
       allow_create?: boolean
       metadata?: {
         [key: string]: unknown
-      }
-      intent_hint?: {
-        action: string
-        payload?: {
-          [key: string]: unknown
-        }
       }
     },
     options?: Options<never, ThrowOnError>,
@@ -3201,7 +3361,379 @@ export class Panel extends HeyApiClient {
             { in: "body", key: "source" },
             { in: "body", key: "allow_create" },
             { in: "body", key: "metadata" },
-            { in: "body", key: "intent_hint" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).sse.post<PanelMessageStreamResponses, unknown, ThrowOnError>({
+      url: "/panel/message/stream",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Memory extends HeyApiClient {
+  /**
+   * List memory files for current project
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      sessionID?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "sessionID" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<PanelKnowledgeMemoryListResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/memory",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Delete memory file
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<PanelKnowledgeMemoryDeleteResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/memory/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get memory file content (all chunks)
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<PanelKnowledgeMemoryGetResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/memory/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Search memories
+   */
+  public search<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      query?: string
+      sessionID?: string
+      limit?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "query" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<PanelKnowledgeMemorySearchResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/memory/search",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Preference extends HeyApiClient {
+  /**
+   * List manageable preferences for current project
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<PanelKnowledgePreferenceListResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/preference",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Create or update a preference
+   */
+  public set<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      key?: string
+      value?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "key" },
+            { in: "body", key: "value" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<PanelKnowledgePreferenceSetResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/preference",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Delete a preference
+   */
+  public delete<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).delete<PanelKnowledgePreferenceDeleteResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/preference/{id}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update a preference
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      id: string
+      directory?: string
+      key?: string
+      value?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "id" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "key" },
+            { in: "body", key: "value" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<PanelKnowledgePreferenceUpdateResponses, unknown, ThrowOnError>({
+      url: "/panel/knowledge/preference/{id}",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Knowledge extends HeyApiClient {
+  private _memory?: Memory
+  get memory(): Memory {
+    return (this._memory ??= new Memory({ client: this.client }))
+  }
+
+  private _preference?: Preference
+  get preference(): Preference {
+    return (this._preference ??= new Preference({ client: this.client }))
+  }
+}
+
+export class Panel extends HeyApiClient {
+  /**
+   * List panel capabilities
+   *
+   * Return the panel tool actions available on a given surface, including local-action metadata and input schemas.
+   */
+  public capabilities<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      surface?:
+        | "panel"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "surface" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<PanelCapabilitiesResponses, unknown, ThrowOnError>({
+      url: "/panel/capabilities",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Handle desktop panel message
+   *
+   * Route a desktop panel chat or button intent through the control message service.
+   */
+  public message<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      surface?:
+        | "panel"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
+      text?: string
+      taskID?: string
+      sessionID?: string
+      executor?: "opencode" | "codex" | "claude-code"
+      channel?: string
+      thread?: string
+      user_id?: string
+      request_id?: string
+      source?: string
+      allow_create?: boolean
+      metadata?: {
+        [key: string]: unknown
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "surface" },
+            { in: "body", key: "text" },
+            { in: "body", key: "taskID" },
+            { in: "body", key: "sessionID" },
+            { in: "body", key: "executor" },
+            { in: "body", key: "channel" },
+            { in: "body", key: "thread" },
+            { in: "body", key: "user_id" },
+            { in: "body", key: "request_id" },
+            { in: "body", key: "source" },
+            { in: "body", key: "allow_create" },
+            { in: "body", key: "metadata" },
           ],
         },
       ],
@@ -3217,6 +3749,16 @@ export class Panel extends HeyApiClient {
       },
     })
   }
+
+  private _message?: Message
+  get message2(): Message {
+    return (this._message ??= new Message({ client: this.client }))
+  }
+
+  private _knowledge?: Knowledge
+  get knowledge(): Knowledge {
+    return (this._knowledge ??= new Knowledge({ client: this.client }))
+  }
 }
 
 export class Control extends HeyApiClient {
@@ -3230,7 +3772,21 @@ export class Control extends HeyApiClient {
       directory?: string
       taskID?: string
       sessionID?: string
-      surface?: "panel" | "slack" | "telegram" | "discord"
+      surface?:
+        | "panel"
+        | "slack"
+        | "telegram"
+        | "discord"
+        | "feishu"
+        | "whatsapp"
+        | "googlechat"
+        | "msteams"
+        | "line"
+        | "matrix"
+        | "mattermost"
+        | "signal"
+        | "wecom"
+        | "dingtalk"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3268,6 +3824,15 @@ export class Checks extends HeyApiClient {
         test?: Array<string> | false
         lint?: Array<string> | false
         verify_cmd?: Array<string> | false
+        named?: {
+          [key: string]: {
+            label?: string
+            family?: "build" | "test" | "lint" | "verify_cmd"
+            commands: Array<string>
+            enabled?: boolean
+            cwd?: string
+          }
+        }
         startup?: {
           command: string
           ready_url?: string
@@ -3336,6 +3901,11 @@ export class Checks extends HeyApiClient {
           mode?: "soft" | "strict"
         }
         judge?: {
+          enabled?: boolean
+          prompt?: string
+          mode?: "soft" | "strict"
+        }
+        spec_check?: {
           enabled?: boolean
           prompt?: string
           mode?: "soft" | "strict"
@@ -3400,6 +3970,15 @@ export class Task extends HeyApiClient {
         test?: Array<string> | false
         lint?: Array<string> | false
         verify_cmd?: Array<string> | false
+        named?: {
+          [key: string]: {
+            label?: string
+            family?: "build" | "test" | "lint" | "verify_cmd"
+            commands: Array<string>
+            enabled?: boolean
+            cwd?: string
+          }
+        }
         startup?: {
           command: string
           ready_url?: string
@@ -3472,12 +4051,22 @@ export class Task extends HeyApiClient {
           prompt?: string
           mode?: "soft" | "strict"
         }
+        spec_check?: {
+          enabled?: boolean
+          prompt?: string
+          mode?: "soft" | "strict"
+        }
         custom?: {
           [key: string]: {
             [key: string]: unknown
           }
         }
         timeout_ms?: number
+      }
+      routing?: {
+        spec?: "opencorvus" | "executor"
+        plan?: "opencorvus" | "executor"
+        evaluation?: "opencorvus" | "hybrid"
       }
       goals?: Array<{
         description: string
@@ -3528,6 +4117,7 @@ export class Task extends HeyApiClient {
             { in: "body", key: "priority" },
             { in: "body", key: "budget" },
             { in: "body", key: "checks" },
+            { in: "body", key: "routing" },
             { in: "body", key: "goals" },
             { in: "body", key: "milestones" },
             { in: "body", key: "channelBinding" },
@@ -3801,6 +4391,41 @@ export class Task extends HeyApiClient {
   }
 
   /**
+   * Inject message into running task
+   */
+  public inject<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+      message?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "message" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<TaskInjectResponses, TaskInjectErrors, ThrowOnError>({
+      url: "/task/{taskID}/inject",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
    * Cancel task
    */
   public cancel<ThrowOnError extends boolean = false>(
@@ -3914,6 +4539,62 @@ export class Run extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<RunGetResponses, RunGetErrors, ThrowOnError>({
       url: "/run/{runID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get run executor session
+   */
+  public executorSession<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunExecutorSessionResponses, RunExecutorSessionErrors, ThrowOnError>({
+      url: "/run/{runID}/executor",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List run executor events
+   */
+  public executorEvents<ThrowOnError extends boolean = false>(
+    parameters: {
+      runID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "runID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<RunExecutorEventsResponses, RunExecutorEventsErrors, ThrowOnError>({
+      url: "/run/{runID}/executor-events",
       ...options,
       ...params,
     })
@@ -4132,6 +4813,64 @@ export class Interaction extends HeyApiClient {
         ...options?.headers,
         ...params.headers,
       },
+    })
+  }
+}
+
+export class Export extends HeyApiClient {
+  /**
+   * Export full task data
+   */
+  public task<ThrowOnError extends boolean = false>(
+    parameters: {
+      taskID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "taskID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExportTaskResponses, ExportTaskErrors, ThrowOnError>({
+      url: "/export/task/{taskID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Export session messages
+   */
+  public session<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<ExportSessionResponses, ExportSessionErrors, ThrowOnError>({
+      url: "/export/session/{sessionID}",
+      ...options,
+      ...params,
     })
   }
 }
@@ -5146,6 +5885,41 @@ export class Path extends HeyApiClient {
       ...params,
     })
   }
+
+  /**
+   * Open a local path
+   *
+   * Open a local file or directory using the host operating system.
+   */
+  public open<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      path?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "body", key: "path" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<PathOpenResponses, PathOpenErrors, ThrowOnError>({
+      url: "/path/open",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
 }
 
 export class Vcs extends HeyApiClient {
@@ -5184,6 +5958,38 @@ export class Command extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).get<CommandListResponses, unknown, ThrowOnError>({
       url: "/command",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Log extends HeyApiClient {
+  /**
+   * Read recent logs
+   *
+   * Read the last N lines from the current server log file.
+   */
+  public tail<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      n?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "n" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<LogTailResponses, unknown, ThrowOnError>({
+      url: "/log/tail",
       ...options,
       ...params,
     })
@@ -5247,6 +6053,27 @@ export class Event extends HeyApiClient {
     const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
     return (options?.client ?? this.client).sse.get<EventSubscribeResponses, unknown, ThrowOnError>({
       url: "/event",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Server extends HeyApiClient {
+  /**
+   * Restart the server
+   *
+   * Spawn a new server process with the same arguments, then exit.
+   */
+  public restart<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).post<ServerRestartResponses, unknown, ThrowOnError>({
+      url: "/restart",
       ...options,
       ...params,
     })
@@ -5489,6 +6316,11 @@ export class OpencodeClient extends HeyApiClient {
     return (this._interaction ??= new Interaction({ client: this.client }))
   }
 
+  private _export?: Export
+  get export(): Export {
+    return (this._export ??= new Export({ client: this.client }))
+  }
+
   private _find?: Find
   get find(): Find {
     return (this._find ??= new Find({ client: this.client }))
@@ -5529,6 +6361,11 @@ export class OpencodeClient extends HeyApiClient {
     return (this._command ??= new Command({ client: this.client }))
   }
 
+  private _log?: Log
+  get log(): Log {
+    return (this._log ??= new Log({ client: this.client }))
+  }
+
   private _lsp?: Lsp
   get lsp(): Lsp {
     return (this._lsp ??= new Lsp({ client: this.client }))
@@ -5542,5 +6379,10 @@ export class OpencodeClient extends HeyApiClient {
   private _event?: Event
   get event(): Event {
     return (this._event ??= new Event({ client: this.client }))
+  }
+
+  private _server?: Server
+  get server(): Server {
+    return (this._server ??= new Server({ client: this.client }))
   }
 }

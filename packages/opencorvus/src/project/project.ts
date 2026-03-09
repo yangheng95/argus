@@ -15,6 +15,7 @@ import { GlobalBus } from "@/bus/global"
 import { existsSync } from "fs"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
+import { which } from "@/util/which"
 
 export namespace Project {
   const log = Log.create({ service: "project" })
@@ -26,9 +27,7 @@ export namespace Project {
     if (!name) return cwd
 
     name = Filesystem.windowsPath(name)
-
-    if (path.isAbsolute(name)) return path.normalize(name)
-    return path.resolve(cwd, name)
+    return Filesystem.resolve(path.isAbsolute(name) ? name : path.join(cwd, name))
   }
 
   function marker(dir: string) {
@@ -58,7 +57,7 @@ export namespace Project {
       .toSorted()
   }
 
-  async function init(directory: string) {
+  async function initRepo(directory: string) {
     const result = await git(["init"], { cwd: directory }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return false
     return Filesystem.exists(path.join(directory, ".git"))
@@ -104,6 +103,14 @@ export namespace Project {
       ref: "Project",
     })
   export type Info = z.infer<typeof Info>
+  export const InitGitResult = z
+    .object({
+      created: z.boolean(),
+      project: Info,
+    })
+    .meta({
+      ref: "ProjectInitGitResult",
+    })
 
   export const Event = {
     Updated: BusEvent.define("project.updated", Info),
@@ -136,7 +143,7 @@ export namespace Project {
     log.info("fromDirectory", { directory })
 
     const data = await iife(async () => {
-      const gitBinary = Bun.which("git")
+      const gitBinary = which("git")
       const dotgit = path.join(directory, ".git")
       const local = await Filesystem.exists(dotgit)
 
@@ -164,8 +171,8 @@ export namespace Project {
       }
 
       const inherited = local ? undefined : await text(["rev-parse", "--show-toplevel"], directory)
-      const root = inherited ? path.resolve(gitpath(directory, inherited)) : undefined
-      const hasLocalGit = local || (!!root && root !== path.resolve(directory) && (await init(directory)))
+      const root = inherited ? gitpath(directory, inherited) : undefined
+      const hasLocalGit = local || (!!root && root !== Filesystem.resolve(directory) && (await initRepo(directory)))
 
       if (hasLocalGit) {
         let sandbox = directory
@@ -336,6 +343,32 @@ export namespace Project {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) return undefined
     return fromRow(row)
+  }
+
+  export async function initGit(directory: string) {
+    const current = await fromDirectory(directory)
+    if (current.project.vcs === "git") {
+      return InitGitResult.parse({
+        created: false,
+        project: current.project,
+      })
+    }
+    if (!which("git")) {
+      throw new Error("git is not installed")
+    }
+    const result = await git(["init"], { cwd: directory })
+    if (result.exitCode !== 0) {
+      const detail = result.stderr.toString().trim() || result.text().trim() || "git init failed"
+      throw new Error(detail)
+    }
+    if (!(await Filesystem.exists(path.join(directory, ".git")))) {
+      throw new Error("git init completed without creating .git")
+    }
+    const next = await fromDirectory(directory)
+    return InitGitResult.parse({
+      created: true,
+      project: next.project,
+    })
   }
 
   export const update = fn(

@@ -3,11 +3,18 @@ import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Database, and, asc, eq } from "@/storage/db"
 import { ControlMessageTable } from "./control.sql"
+import { ChannelSurface } from "@/channel/catalog"
+
+const TimelineAttachment = z.object({
+  mime: z.string(),
+  url: z.string(),
+  filename: z.string().optional(),
+})
 
 export const TimelineQuery = z.object({
   taskID: z.string().optional(),
   sessionID: z.string().optional(),
-  surface: z.enum(["panel", "slack", "telegram", "discord"]).optional(),
+  surface: ChannelSurface.optional(),
 })
 
 export const TimelineMessage = z.object({
@@ -23,13 +30,20 @@ export const TimelineMessage = z.object({
       updated: z.number(),
     }),
   }),
-  parts: z.array(
+  parts: z.array(z.discriminatedUnion("type", [
     z.object({
       id: z.string(),
       type: z.literal("text"),
       text: z.string(),
     }),
-  ),
+    z.object({
+      id: z.string(),
+      type: z.literal("file"),
+      mime: z.string(),
+      url: z.string(),
+      filename: z.string().optional(),
+    }),
+  ])),
 })
 
 const AppendInput = z.object({
@@ -112,6 +126,11 @@ export namespace ControlTimeline {
 }
 
 function view(row: typeof ControlMessageTable.$inferSelect) {
+  const metadata =
+    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? row.metadata
+      : undefined
+  const attachments = TimelineAttachment.array().safeParse(metadata?.attachments).data ?? []
   return {
     info: {
       id: row.id,
@@ -131,6 +150,13 @@ function view(row: typeof ControlMessageTable.$inferSelect) {
         type: "text" as const,
         text: row.text,
       },
+      ...attachments.map((item, index) => ({
+        id: `${row.id}_file_${index + 1}`,
+        type: "file" as const,
+        mime: item.mime,
+        url: item.url,
+        ...(item.filename ? { filename: item.filename } : {}),
+      })),
     ],
   }
 }

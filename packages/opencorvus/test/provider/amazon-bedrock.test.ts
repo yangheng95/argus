@@ -8,6 +8,7 @@ import { Provider } from "../../src/provider/provider"
 import { Env } from "../../src/env"
 import { Global } from "../../src/global"
 import { Filesystem } from "../../src/util/filesystem"
+import { Auth } from "../../src/auth"
 
 test("Bedrock: config region takes precedence over AWS_REGION env var", async () => {
   await using tmp = await tmpdir({
@@ -131,6 +132,55 @@ test("Bedrock: loads when bearer token from auth.json is present", async () => {
         // Ignore errors if file doesn't exist
       }
     }
+  }
+})
+
+test("Bedrock: auth loader does not leak bearer token into process.env", async () => {
+  const previousAuth = await Auth.get("amazon-bedrock")
+  const previousBearer = process.env.AWS_BEARER_TOKEN_BEDROCK
+  delete process.env.AWS_BEARER_TOKEN_BEDROCK
+  await Auth.set("amazon-bedrock", {
+    type: "api",
+    key: "test-bearer-token",
+  })
+
+  try {
+    await using tmp = await tmpdir({
+      init: async (dir) => {
+        await Filesystem.write(
+          path.join(dir, "opencorvus.json"),
+          JSON.stringify({
+            $schema: "https://opencorvus.ai/config.json",
+            provider: {
+              "amazon-bedrock": {
+                options: {
+                  region: "us-east-1",
+                },
+              },
+            },
+          }),
+        )
+      },
+    })
+    await Instance.provide({
+      directory: tmp.path,
+      init: async () => {
+        Env.remove("AWS_BEARER_TOKEN_BEDROCK")
+        Env.set("AWS_PROFILE", "")
+        Env.set("AWS_ACCESS_KEY_ID", "")
+      },
+      fn: async () => {
+        const providers = await Provider.list()
+        expect(providers["amazon-bedrock"]).toBeDefined()
+        expect(providers["amazon-bedrock"].key).toBe("test-bearer-token")
+        expect(process.env.AWS_BEARER_TOKEN_BEDROCK).toBeUndefined()
+      },
+    })
+  } finally {
+    if (previousAuth) await Auth.set("amazon-bedrock", previousAuth)
+    else await Auth.remove("amazon-bedrock")
+    if (previousBearer === undefined) delete process.env.AWS_BEARER_TOKEN_BEDROCK
+    else process.env.AWS_BEARER_TOKEN_BEDROCK = previousBearer
   }
 })
 

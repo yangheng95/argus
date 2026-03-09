@@ -8,8 +8,10 @@ import { upgrade } from "@/cli/upgrade"
 import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { createOpenCorvusClient, type Event } from "@opencorvus-ai/sdk/v2"
-import type { BunWebSocketData } from "hono/bun"
-import { Flag } from "@/flag/flag"
+import { IN_PROCESS_BASE_URL, createInProcessFetch, fetchInProcessServer } from "@/server/in-process-client"
+import { installRuntimeShims } from "@/runtime/shims"
+
+installRuntimeShims()
 
 await Log.init({
   print: process.argv.includes("--print-logs"),
@@ -37,7 +39,7 @@ GlobalBus.on("event", (event) => {
   Rpc.emit("global.event", event)
 })
 
-let server: Bun.Server<BunWebSocketData> | undefined
+let server: ReturnType<typeof Server.listen> | undefined
 
 const eventStream = {
   abort: undefined as AbortController | undefined,
@@ -49,17 +51,10 @@ const startEventStream = (directory: string) => {
   eventStream.abort = abort
   const signal = abort.signal
 
-  const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = new Request(input, init)
-    const auth = getAuthorizationHeader()
-    if (auth) request.headers.set("Authorization", auth)
-    return Server.App().fetch(request)
-  }) as typeof globalThis.fetch
-
   const sdk = createOpenCorvusClient({
-    baseUrl: "http://opencorvus.internal",
+    baseUrl: IN_PROCESS_BASE_URL,
     directory,
-    fetch: fetchFn,
+    fetch: createInProcessFetch(),
     signal,
   })
 
@@ -98,23 +93,7 @@ startEventStream(process.cwd())
 
 export const rpc = {
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
-    const headers = { ...input.headers }
-    const auth = getAuthorizationHeader()
-    if (auth && !headers["authorization"] && !headers["Authorization"]) {
-      headers["Authorization"] = auth
-    }
-    const request = new Request(input.url, {
-      method: input.method,
-      headers,
-      body: input.body,
-    })
-    const response = await Server.App().fetch(request)
-    const body = await response.text()
-    return {
-      status: response.status,
-      headers: Object.fromEntries(response.headers.entries()),
-      body,
-    }
+    return fetchInProcessServer(input)
   },
   async server(input: { port: number; hostname: string; mdns?: boolean; cors?: string[] }) {
     if (server) await server.stop(true)
@@ -148,10 +127,3 @@ export const rpc = {
 }
 
 Rpc.listen(rpc)
-
-function getAuthorizationHeader(): string | undefined {
-  const password = Flag.OPENCORVUS_SERVER_PASSWORD
-  if (!password) return undefined
-  const username = Flag.OPENCORVUS_SERVER_USERNAME ?? "opencorvus"
-  return `Basic ${btoa(`${username}:${password}`)}`
-}

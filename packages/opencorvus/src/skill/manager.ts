@@ -11,8 +11,20 @@ import { Glob } from "@/util/glob"
 import { Process } from "@/util/process"
 import { Discovery } from "./discovery"
 import { Skill } from "./skill"
+import { which } from "@/util/which"
 
 const MANIFEST = ".opencorvus-skill-source.json"
+const SkillInfo = z.object({
+  name: z.string(),
+  description: z.string(),
+  platforms: z
+    .array(z.enum(["win32", "darwin", "linux"]))
+    .optional()
+    .default([]),
+  builtin: z.boolean().optional().default(false),
+  location: z.string(),
+  content: z.string(),
+})
 
 export namespace SkillManager {
   export const Policy = PermissionNext.Action
@@ -25,7 +37,8 @@ export namespace SkillManager {
     has_templates: z.boolean(),
   })
 
-  export const Installed = Skill.Info.extend({
+  // Mirror Skill.Info locally to avoid a circular route-loading dependency on the Skill namespace.
+  export const Installed = SkillInfo.extend({
     dir: z.string().optional(),
     source_type: z.enum(["builtin", "managed_git", "config_path", "config_url", "external", "unknown"]),
     source: z.string().optional(),
@@ -357,7 +370,7 @@ function slug(value: string) {
 }
 
 async function ensureManagedRepo(source: string, dest: string) {
-  const git = Bun.which("git")
+  const git = which("git")
   if (!git) throw new Error("git is required to install skills from repositories")
   await Filesystem.write(path.join(dest, ".keep"), "").catch(() => undefined)
   await rm(path.join(dest, ".keep"), { force: true }).catch(() => undefined)
@@ -429,7 +442,7 @@ function sourceTypeFor(dir: string, configuredPaths: string[], cache: string, ki
   return "unknown"
 }
 
-function trustFor(skill: z.infer<typeof Skill.Info>, source?: string) {
+function trustFor(skill: z.infer<typeof SkillInfo>, source?: string) {
   if (skill.builtin) return "builtin" as const
   if (source?.includes("github.com/openai/skills")) return "official" as const
   if (source?.includes("github.com/anthropics/skills")) return "official" as const

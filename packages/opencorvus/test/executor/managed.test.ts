@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test"
 import { ClaudeCodeExecutor } from "../../src/executor/claude-code"
 import { CodexExecutor } from "../../src/executor/codex"
+import type { CodingEventInfo, CodingProvider } from "../../src/executor/compat"
 import { ExecutorRegistry } from "../../src/executor/registry"
 
 function feed(items: unknown[], wait = 0): AsyncIterable<unknown> {
@@ -171,5 +172,82 @@ describe("managed coding executor", () => {
     expect(status.status).toBe("failed")
     expect(status.error).toBe("task cancelled")
     expect(stopped).toEqual(["session_2"])
+  })
+
+  test("registerCoding exposes planning generation on the adapted executor", async () => {
+    const provider = CodexExecutor.create({
+      responses: {
+        create() {
+          return feed([
+            { type: "response.output_text.delta", delta: "{\"summary\":\"ok\"" },
+            { type: "response.completed", response: { id: "resp_plan", output_text: "{\"summary\":\"ok\"}" } },
+          ])
+        },
+      },
+    })
+
+    const executor = ExecutorRegistry.registerCoding("codex", provider, {
+      cwd: "/repo",
+      system: "system",
+    })
+
+    expect(executor.planningCapabilities?.()).toEqual({
+      spec: true,
+      plan: true,
+    })
+
+    const result = await executor.generatePlanning?.({
+      stage: "spec",
+      prompt: "spec",
+    })
+
+    expect(result?.output).toBe("{\"summary\":\"ok\"}")
+  })
+
+  test("planning generation keeps read-only sandbox without forcing no-tool mode", async () => {
+    const seen: Record<string, unknown>[] = []
+    const provider: CodingProvider = {
+      name: "codex" as const,
+      capabilities() {
+        return {
+          builtinTools: true,
+          customTools: true,
+          stream: true,
+          resume: true,
+          interrupt: true,
+          cwd: true,
+          system: true,
+        }
+      },
+      async *run(input) {
+        seen.push(input)
+        yield {
+          type: "done",
+          output: "ok",
+        } satisfies CodingEventInfo
+      },
+      async *resume() {},
+      async interrupt() {
+        return true
+      },
+    }
+
+    const executor = ExecutorRegistry.registerCoding("codex", provider, {
+      cwd: "/repo",
+      tools: [
+        { type: "function", name: "shell_command", description: "run shell", inputSchema: { type: "object" } },
+      ],
+    })
+
+    await executor.generatePlanning?.({
+      stage: "spec",
+      prompt: "spec",
+    })
+
+    expect(seen[0]).toMatchObject({
+      sandbox: "read-only",
+    })
+    expect(seen[0]?.["toolMode"]).toBeUndefined()
+    expect(seen[0]?.["tools"]).toBeUndefined()
   })
 })

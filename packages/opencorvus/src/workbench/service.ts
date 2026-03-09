@@ -1,11 +1,13 @@
 import z from "zod"
 import { generateObject } from "ai"
 import { Identifier } from "@/id/id"
+import { Instance } from "@/project/instance"
 import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Provider } from "@/provider/provider"
 import { Snapshot } from "@/snapshot"
 import { GoalService } from "@/orchestrator/goal-service"
+import { findSpecSnapshot, viewSpecSnapshot } from "@/orchestrator/store"
 import {
   OrchestratorArtifactTable,
   OrchestratorChannelBindingTable,
@@ -49,6 +51,7 @@ const WorkbenchIntent = z.object({
 const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
 const BOARD_SUMMARY_LIMIT = 4000
+const BRIEF_VERSION = "brief-v2"
 const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
 
 export namespace WorkbenchService {
@@ -197,7 +200,7 @@ export namespace WorkbenchService {
     }
     const resolved = interpreted.intent
 
-    if (resolved.kind === "preference" && resolved.preferences.length > 0) {
+    if (resolved.kind === "preference" && Array.isArray(resolved.preferences) && resolved.preferences.length > 0) {
       const scope = inferPreferenceScope(text)
       for (const pref of resolved.preferences) {
         setPreference({
@@ -215,7 +218,7 @@ export namespace WorkbenchService {
       }
     }
 
-    if (resolved.kind === "goal" && resolved.goals.length > 0) {
+    if (resolved.kind === "goal" && Array.isArray(resolved.goals) && resolved.goals.length > 0) {
       for (const goal of resolved.goals) {
         GoalService.addOperatorGoal({
           taskID: input.taskID,
@@ -236,7 +239,7 @@ export namespace WorkbenchService {
       }
     }
 
-    if (resolved.kind === "plan" && resolved.plan_hints.length > 0) {
+    if (resolved.kind === "plan" && Array.isArray(resolved.plan_hints) && resolved.plan_hints.length > 0) {
       for (const hint of resolved.plan_hints) {
         appendPlanHint({
           taskID: input.taskID,
@@ -282,6 +285,7 @@ export namespace WorkbenchService {
     notes: Array<{ id: string }>
   }): string {
     const parts = [
+      BRIEF_VERSION,
       input.task.id,
       input.task.request.slice(0, 64),
       input.plan?.id ?? "no-plan",
@@ -361,6 +365,14 @@ export namespace WorkbenchService {
       `Task: ${task.title}`,
       `Request: ${task.request}`,
       plan ? `Plan summary: ${plan.summary}` : "",
+      [
+        "Git workflow:",
+        "- The workspace is auto-managed with git when needed.",
+        "- A startup checkpoint is captured before the first execution run.",
+        "- The orchestrator may record internal checkpoint commits automatically.",
+        "- Do not create extra user-facing commits unless explicitly requested.",
+        "- If you do create a commit, use a concise, meaningful message grounded in the task request and plan.",
+      ].join("\n"),
       planHints(plan?.metadata).length > 0
         ? "Plan hints:\n" + planHints(plan?.metadata).map((item) => `- ${item}`).join("\n")
         : "",
@@ -411,6 +423,7 @@ export namespace WorkbenchService {
           content,
           inputs: {
             signature,
+            template: BRIEF_VERSION,
             notes: notes.length,
             globalPreferences: globalPrefs.length,
             sessionPreferences: sessionPrefs.length,
@@ -580,7 +593,11 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
     currentFailure,
   })
 
+  const specRow = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
+  const specSnapshot = specRow ? viewSpecSnapshot(specRow) : undefined
+
   return {
+      spec: specSnapshot,
       task: {
         id: task.id,
         projectID: task.project_id,
@@ -1027,7 +1044,7 @@ async function workbenchModel() {
   return Provider.getModel(def.providerID, def.modelID).catch(() => undefined)
 }
 
-function inferPreferenceScope(text: string): Preference.Scope {
+function inferPreferenceScope(text: string): Exclude<Preference.Scope, "cwd"> {
   const lower = text.toLowerCase()
   if (/(this session|for this session|only for now|temporarily|temporary|暂时|这次会话|本次会话|仅本次)/.test(lower)) {
     return "session"
@@ -1067,12 +1084,22 @@ function compactSnapshotPayload(input: unknown) {
   if (!input || typeof input !== "object") return undefined
   const item = input as Record<string, unknown>
   return {
+    kind: typeof item.kind === "string" ? item.kind : undefined,
+    stage: typeof item.stage === "string" ? item.stage : undefined,
+    mode: typeof item.mode === "string" ? item.mode : undefined,
+    branch: typeof item.branch === "string" ? item.branch : undefined,
+    commit: typeof item.commit === "string" ? item.commit : undefined,
+    message: typeof item.message === "string" ? clipBoard(item.message) : undefined,
+    snapshot: typeof item.snapshot === "string" ? item.snapshot : undefined,
     note: typeof item.note === "string" ? clipBoard(item.note) : undefined,
     description: typeof item.description === "string" ? clipBoard(item.description) : undefined,
     status: typeof item.status === "string" ? item.status : undefined,
     blockingReason: typeof item.blockingReason === "string" ? clipBoard(item.blockingReason) : undefined,
     error: typeof item.error === "string" ? clipBoard(item.error) : undefined,
     activeRunID: typeof item.activeRunID === "string" ? item.activeRunID : undefined,
+    conflicts: typeof item.conflicts === "number" ? item.conflicts : undefined,
+    dirty: typeof item.dirty === "boolean" ? item.dirty : undefined,
+    deliveryID: typeof item.deliveryID === "string" ? item.deliveryID : undefined,
   }
 }
 
@@ -1321,7 +1348,7 @@ function setPreference(input: {
   userID?: string
   key: string
   value: string
-  scope?: Preference.Scope
+  scope?: Exclude<Preference.Scope, "cwd">
 }) {
   const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
   if (!task) throw new Error(`Task not found: ${input.taskID}`)
@@ -1420,7 +1447,7 @@ function recallMemory(task: typeof OrchestratorTaskTable.$inferSelect) {
     .join(" ")
   if (!query) return []
   try {
-    const primary = Memory.search({
+    const primary = Memory.recall({
       query,
       projectId: task.project_id,
       sessionID: task.session_id ?? undefined,
@@ -1430,7 +1457,7 @@ function recallMemory(task: typeof OrchestratorTaskTable.$inferSelect) {
     // Secondary search using first line of request for broader recall
     const requestLine = task.request.split("\n").find(Boolean)?.trim()
     if (!requestLine || requestLine === query) return primary
-    const secondary = Memory.search({
+    const secondary = Memory.recall({
       query: requestLine.slice(0, 120),
       projectId: task.project_id,
       sessionID: task.session_id ?? undefined,
@@ -1471,7 +1498,7 @@ function parsePreference(text: string) {
   const scoped = pref.match(/^(global|session)\s+([a-zA-Z0-9._-]+)\s*[:=]\s*(.+)$/i)
   if (scoped) {
     return {
-      scope: scoped[1].toLowerCase() as Preference.Scope,
+      scope: scoped[1].toLowerCase() as Exclude<Preference.Scope, "cwd">,
       key: scoped[2],
       value: scoped[3].trim(),
     }

@@ -3,8 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "check:i18n": "bun run script/check-panel-i18n.ts",
     "dev": "tauri dev",
-    "build": "bun run script/build.ts",
+    "build": "bun run check:i18n && bun run script/build.ts",
     "tauri": "tauri"
   },
   "devDependencies": {

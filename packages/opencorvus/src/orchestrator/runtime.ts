@@ -1,16 +1,18 @@
 import { Bus } from "@/bus"
 import { EvaluatorService } from "@/evaluator/service"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
-import { type ReplanContext } from "@/planner/agent"
 import { ExecutorRegistry } from "@/executor/registry"
-import { PlannerService } from "@/planner/service"
+import { PlannerFailureError } from "@/planner/service"
 import { Plugin } from "@/plugin"
 import { Instance } from "@/project/instance"
+import { Project } from "@/project/project"
 import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
+import { installRuntimeShims } from "@/runtime/shims"
 import { Database, and, desc, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
+import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import {
   OrchestratorArtifactTable,
@@ -21,11 +23,11 @@ import {
   OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
   OrchestratorMilestoneTable,
-  OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
   OrchestratorRunTable,
+  OrchestratorSpecItemTable,
+  OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
-  type OrchestratorMetadata,
   type OrchestratorMilestoneStatus,
 } from "./orchestrator.sql"
 import { Event } from "./model"
@@ -41,6 +43,12 @@ import {
   type RetryContext,
 } from "./helpers"
 import {
+  buildReplanContext,
+  compileTransition,
+  persistReplanTransition,
+  persistReplanTransitionFailure,
+} from "./transition"
+import {
   findDeliveryByRun,
   findEvaluationByRun,
   findInteractionByExternal,
@@ -49,6 +57,7 @@ import {
   findPlans,
   findRun,
   findRuns,
+  findSpecItems,
   findTask,
   listGoalsByPlan,
   listMilestonesByPlan,
@@ -63,6 +72,22 @@ import {
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator-runtime" })
+
+async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
+  if (Instance.project.vcs !== "git") {
+    await Project.initGit(Instance.directory)
+    await Instance.refresh()
+  }
+  if (task.time_started) return task
+  const prepared = await OrchestratorGit.prepare(task, plan)
+  if (!prepared.error) return prepared.task
+  const now = Date.now()
+  await hooks.updateRun(run, { status: "failed", error: prepared.error, blocking_reason: null, time_completed: now }, prepared.error)
+  if (task.active_run_id === run.id) {
+    await hooks.updateTask(task, { status: "failed", error: prepared.error, blocking_reason: null, time_completed: now }, prepared.error)
+  }
+  return
+}
 
 export namespace OrchestratorRuntime {
   export async function poll(hooks: RuntimeHooks) {
@@ -92,9 +117,10 @@ export namespace OrchestratorRuntime {
   }
 
   export async function dispatch(runID: string, hooks: RuntimeHooks) {
+    installRuntimeShims()
     const run = requireRun(runID)
     if (run.status !== "queued") return
-    const task = requireTask(run.task_id)
+    let task = requireTask(run.task_id)
     const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
     if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
     if (!plan) throw new Error(`Task ${task.id} has no plan`)
@@ -109,9 +135,14 @@ export namespace OrchestratorRuntime {
     const strategy = run.metadata?.strategy as string | undefined
     const source: "planner" | "scheduler" | "system" =
       strategy === "operator_note" ? "system" : strategy === "retry_same_plan" ? "scheduler" : "planner"
+    const prepared = await prepareRun(task, run, plan, hooks)
+    if (!prepared) return
+    task = prepared
+    const sessionID = task.session_id
+    if (!sessionID) throw new Error(`Task ${task.id} has no session`)
     const executor = ExecutorRegistry.require(run.executor)
     const submission = await executor.submit({
-      sessionID: task.session_id,
+      sessionID,
       prompt,
       priority: task.priority,
       source,
@@ -161,7 +192,7 @@ export namespace OrchestratorRuntime {
       },
     })
     // Start executor event bridge (fire-and-forget background coroutine)
-    consumeExecutorEvents(task.id, run.id, run.executor, task.session_id, session.id)
+    consumeExecutorEvents(task.id, run.id, run.executor, sessionID, session.id)
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -295,13 +326,15 @@ export namespace OrchestratorRuntime {
     if (!planID) throw new Error(`Task ${task.id} has no plan to replan`)
     const plan = findPlan(planID)
     if (!plan) throw new Error(`Plan not found: ${planID}`)
-    const nextRunID = await createReplanRun(task, plan, run, summary)
-    await dispatch(nextRunID, hooks)
-    return nextRunID
+    const next = await createReplanRun(task, plan, run, summary)
+    if (!next.queued || !next.runID) throw new PlannerFailureError(next.error ?? "replan failed")
+    await dispatch(next.runID, hooks)
+    return next.runID
   }
 }
 
 async function completeRun(run: RunRow, hooks: RuntimeHooks) {
+  installRuntimeShims()
   updateExecutorSessionStatus(run.id, "completed")
   const existingDelivery = findDeliveryByRun(run.id)
   if (existingDelivery) {
@@ -317,8 +350,8 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       return
     }
     if (task.active_run_id !== run.id) return
-    if (evaluation.status === "passed" && existingDelivery.status === "delivered" && task.status !== "completed") {
-      await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+    if (evaluation.status === "passed" && existingDelivery.status === "delivered") {
+      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
       return
     }
     if (evaluation.status === "passed" && existingDelivery.status !== "delivered") {
@@ -424,6 +457,8 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   // Phase 1: Automated checks (build/test/lint)
   const result = await EvaluatorService.evaluate(
     {
+      taskID: task.id,
+      activeSpecVersionID: task.active_spec_version_id ?? undefined,
       request: task.request,
       metadata: {
         ...(task.metadata ?? {}),
@@ -444,7 +479,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   let analysisError: string | undefined
   try {
     analysis = await EvaluatorService.analyzeDelivery({
-      task: { title: task.title, request: task.request },
+      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
       goals: goals.map((g) => ({
         description: g.description,
         criteria: g.criteria,
@@ -468,10 +503,15 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
-  const finalVerdict = analysis.verdict
+  // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
+  // do not let Phase 2 EvaluatorAgent override the verdict
+  const phase1Failed = result.status === "failed"
+  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
   const finalStatus =
-    (analysis.verdict === "accepted" ? "passed" : analysis.verdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = analysis.summary
+    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
+  const finalSummary = phase1Failed && analysis.verdict === "accepted"
+    ? `Rejected: automated checks failed. ${result.summary}`
+    : analysis.summary
 
   Database.transaction((db) => {
     db.insert(OrchestratorEvaluationTable)
@@ -535,7 +575,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     // Update individual goal statuses from agent analysis (per-goal, not batch)
     if (goals.length > 0) {
       const now2 = Date.now()
-      for (const gs of analysis.goal_statuses) {
+      for (const gs of (Array.isArray(analysis.goal_statuses) ? analysis.goal_statuses : [])) {
         const goal = goals[gs.goal_index]
         if (!goal) continue
         let goalStatus = gs.status === "passed" ? "passed" as const : gs.status === "failed" ? "failed" as const : undefined
@@ -567,6 +607,29 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       }
       if (run.plan_version_id) {
         deriveMilestoneStatuses(db, task.id, run.plan_version_id, now2)
+      }
+    }
+    // Update spec_item statuses based on evaluation outcome
+    if (task.active_spec_version_id) {
+      const specItems = findSpecItems(task.active_spec_version_id)
+      const specCheckVerdict = result.checks.find((c) => c.name === "spec_check")
+      const now3 = Date.now()
+      if (specItems.length > 0) {
+        const itemStatus = finalVerdict === "accepted" ? "done" as const : "failed" as const
+        for (const item of specItems) {
+          if (item.status === itemStatus) continue
+          db.update(OrchestratorSpecItemTable)
+            .set({ status: itemStatus, evidence: specCheckVerdict?.evidence ?? finalSummary, time_updated: now3 })
+            .where(eq(OrchestratorSpecItemTable.id, item.id))
+            .run()
+        }
+        // Mark spec snapshot as completed when all items pass
+        if (finalVerdict === "accepted") {
+          db.update(OrchestratorSpecSnapshotTable)
+            .set({ status: "completed", time_updated: now3 })
+            .where(eq(OrchestratorSpecSnapshotTable.id, task.active_spec_version_id))
+            .run()
+        }
       }
     }
     Database.effect(() =>
@@ -645,8 +708,15 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
 async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: DeliveryRow, hooks: RuntimeHooks) {
   if (task.active_run_id !== run.id) return
   if (delivery.status === "delivered") {
+    const current = requireTask(task.id)
+    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    const finalized = await OrchestratorGit.complete(current, plan, delivery)
+    if (finalized.error) {
+      await hooks.updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: Date.now() }, finalized.error)
+      return
+    }
     if (task.status !== "completed") {
-      await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+      await hooks.updateTask(finalized.task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
     }
     return
   }
@@ -717,17 +787,24 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   })
 
   if (result.status === "delivered") {
-    await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
+    const current = requireTask(task.id)
+    const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    const published = findDeliveryByRun(run.id) ?? delivery
+    const finalized = await OrchestratorGit.complete(current, currentPlan, published)
+    if (finalized.error) {
+      await hooks.updateTask(current, { status: "failed", blocking_reason: null, error: finalized.error, time_completed: completed }, finalized.error)
+      return
+    }
+    await hooks.updateTask(finalized.task, { status: "completed", blocking_reason: null, error: null, time_completed: completed }, "Task completed")
     await hooks.updateRun(run, { phase: "deliver" }, "Delivery published")
     // Flush task learnings to memory (fire-and-forget)
     const evaluation = findEvaluationByRun(run.id)
-    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
     OrchestratorMemoryBridge.flushTaskLearnings({
       task,
       run,
       delivery,
       evaluation,
-      plan,
+      plan: currentPlan,
     }).catch((err) => log.warn("failed to flush task learnings", { error: String(err) }))
     return
   }
@@ -806,8 +883,10 @@ async function retryOrReplan(task: TaskRow, run: RunRow, summary: string, hooks:
     if (!currentPlan) return false
     const replans = findPlans(task.id).length - 1
     if (replans >= limits.maxReplans) return false
-    const nextRunID = await createReplanRun(task, currentPlan, run, summary, analysis)
-    await OrchestratorRuntime.dispatch(nextRunID, hooks)
+    const next = await createReplanRun(task, currentPlan, run, summary, analysis)
+    if (!next.queued) return !!next.error
+    if (!next.runID) return false
+    await OrchestratorRuntime.dispatch(next.runID, hooks)
     return true
   }
 
@@ -824,8 +903,10 @@ async function retryOrReplan(task: TaskRow, run: RunRow, summary: string, hooks:
   const replans = findPlans(task.id).length - 1
   if (replans >= limits.maxReplans) return false
   log.info("retries exhausted, replanning", { classification, replans, taskID: task.id })
-  const nextRunID = await createReplanRun(task, currentPlan, run, summary, analysis)
-  await OrchestratorRuntime.dispatch(nextRunID, hooks)
+  const next = await createReplanRun(task, currentPlan, run, summary, analysis)
+  if (!next.queued) return !!next.error
+  if (!next.runID) return false
+  await OrchestratorRuntime.dispatch(next.runID, hooks)
   return true
 }
 
@@ -1018,191 +1099,58 @@ function createRetryRun(task: TaskRow, run: RunRow, summary: string, retryContex
 }
 
 async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow, summary: string, analysis?: EvaluatorAnalysisType) {
-  const nextPlanID = Identifier.ascending("plan")
-  const nextRunID = Identifier.ascending("run")
-  const now = Date.now()
-  const nextVersion = plan.version + 1
   const goals = listGoalsByPlan(plan.id)
-
-  // Build structured ReplanContext from EvaluatorAgent analysis
-  const replanContext: ReplanContext | undefined = analysis ? {
+  const routing =
+    task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
+      ? task.metadata.routing as any
+      : undefined
+  const replanContext = buildReplanContext({
+    analysis,
+    goals,
+    summary,
     previousSummary: plan.summary,
-    failureAnalysis: {
-      classification: analysis.classification,
-      summary: analysis.summary,
-      rootCause: analysis.replan_guidance?.root_cause ?? summary,
-      suggestedStrategy: analysis.replan_guidance?.suggested_strategy ?? "",
-      avoidApproaches: analysis.replan_guidance?.avoid_approaches ?? [],
-    },
-    previousGoalStatuses: analysis.goal_statuses.map((gs) => {
-      const goal = goals[gs.goal_index]
-      return {
-        description: goal?.description ?? `Goal ${gs.goal_index}`,
-        status: gs.status,
-        evidence: gs.evidence,
-      }
-    }),
-  } : undefined
-
-  const nextPlan = await PlannerService.replan({
-    title: task.title,
-    request: task.request,
-    goals: goals.map((goal) => ({
-      description: goal.description,
-      criteria: goal.criteria,
-      priority: goal.priority,
-    })),
-    previousPrompt: plan.prompt,
-    previousPlanID: plan.id,
-    failureSummary: summary,
-    replanContext,
   })
-  Database.transaction((db) => {
-    db.update(OrchestratorPlanVersionTable)
-      .set({
-        status: "superseded",
-        time_updated: now,
-      })
-      .where(eq(OrchestratorPlanVersionTable.id, plan.id))
-      .run()
-    db.insert(OrchestratorPlanVersionTable)
-      .values({
-        id: nextPlanID,
-        task_id: task.id,
-        version: nextVersion,
-        status: "active",
-        summary: nextPlan.summary,
-        prompt: nextPlan.prompt,
-        metadata: {
-          previous_run_id: run.id,
-          ...nextPlan.metadata,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    // Create milestones from agent output if available
-    const agentMilestones = (nextPlan.metadata as Record<string, unknown>).milestones as
-      | Array<{ title: string; description?: string; goal_indices: number[] }>
-      | undefined
-    const goalToMsID = new Map<number, string>()
-    if (agentMilestones && agentMilestones.length > 0) {
-      for (const [msIdx, ms] of agentMilestones.entries()) {
-        const msID = Identifier.ascending("milestone")
-        db.insert(OrchestratorMilestoneTable)
-          .values({
-            id: msID,
-            task_id: task.id,
-            plan_version_id: nextPlanID,
-            title: ms.title,
-            description: ms.description ?? "",
-            status: "pending",
-            order_index: msIdx,
-            time_created: now,
-            time_updated: now,
-          })
-          .run()
-        for (const goalIdx of ms.goal_indices) {
-          goalToMsID.set(goalIdx, msID)
-        }
-      }
-    }
-    for (const [index, goal] of nextPlan.goals.entries()) {
-      db.insert(OrchestratorGoalTable)
-        .values({
-          id: Identifier.ascending("goal"),
-          task_id: task.id,
-          plan_version_id: nextPlanID,
-          milestone_id: goalToMsID.get(index) ?? null,
-          description: goal.description,
-          criteria: goal.criteria,
-          metadata: (goal as { metadata?: OrchestratorMetadata }).metadata ?? null,
-          priority: goal.priority ?? "blocking",
-          status: "pending",
-          order_index: index,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    db.insert(OrchestratorRunTable)
-      .values({
-        id: nextRunID,
-        task_id: task.id,
-        plan_version_id: nextPlanID,
-        session_id: run.session_id,
-        executor: run.executor,
-        status: "queued",
-        phase: "replan",
-        retry_count: 0,
-        metadata: {
-          previous_run_id: run.id,
-          strategy: "replan",
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    db.update(OrchestratorTaskTable)
-      .set({
-        active_plan_version_id: nextPlanID,
-        active_run_id: nextRunID,
-        status: "running",
-        error: null,
-        blocking_reason: null,
-        time_completed: null,
-        time_updated: now,
-      })
-      .where(eq(OrchestratorTaskTable.id, task.id))
-      .run()
-    db.insert(OrchestratorProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: task.id,
-        status: "running",
-        summary: "Replanning after evaluation failure",
-        payload: {
-          previousPlanID: plan.id,
-          nextPlanID,
-          previousRunID: run.id,
-          nextRunID,
-          reason: summary,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    Database.effect(() =>
-      Bus.publish(Event.PlanCreated, {
-        taskID: task.id,
-        planID: nextPlanID,
-        summary: nextPlan.summary,
-      }),
-    )
-    Database.effect(() =>
-      Bus.publish(Event.PlanActivated, {
-        taskID: task.id,
-        planID: nextPlanID,
-        summary: "Replanned version activated",
-      }),
-    )
-    Database.effect(() =>
-      Bus.publish(Event.RunCreated, {
-        taskID: task.id,
-        runID: nextRunID,
-        status: "queued",
-        summary: "Run queued after replan",
-      }),
-    )
-    Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
-        taskID: task.id,
-        status: "running",
-        summary: "Replanning after evaluation failure",
-      }),
-    )
-  })
-  return nextRunID
+  const now = Date.now()
+  try {
+    const compiled = await compileTransition({
+      mode: "replan",
+      taskID: task.id,
+      now,
+      title: task.title,
+      request: task.request,
+      goals: goals.map((goal) => ({
+        description: goal.description,
+        criteria: goal.criteria,
+        priority: goal.priority,
+        metadata: goal.metadata ?? undefined,
+      })),
+      executor: run.executor,
+      routing,
+      task,
+      previousPlan: plan,
+      previousRun: run,
+      failureSummary: summary,
+      replanContext,
+    })
+    return persistReplanTransition({
+      task,
+      previousPlan: plan,
+      previousRun: run,
+      nextPlanID: Identifier.ascending("plan"),
+      nextRunID: Identifier.ascending("run"),
+      now,
+      summary,
+      replanContext,
+      compiled,
+    })
+  } catch (error) {
+    if (!(error instanceof PlannerFailureError)) throw error
+    return persistReplanTransitionFailure({
+      task,
+      now,
+      error: `Planner failure: ${error.message}`,
+    })
+  }
 }
 
 /** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */

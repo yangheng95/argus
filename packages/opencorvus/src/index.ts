@@ -67,6 +67,7 @@ import { Global } from "./global"
 import { JsonMigration } from "./storage/json-migration"
 import { Database } from "./storage/db"
 import { Capability } from "./platform/capability"
+import { installRuntimeShims } from "./runtime/shims"
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
@@ -79,6 +80,8 @@ process.on("uncaughtException", (e) => {
     e: e instanceof Error ? e.message : e,
   })
 })
+
+installRuntimeShims()
 
 let cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })

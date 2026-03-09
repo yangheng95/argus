@@ -8,6 +8,7 @@ import { LSP } from "@/lsp"
 import { Command } from "@/command"
 import { Format } from "@/format"
 import { Log } from "@/util/log"
+import { Process } from "@/util/process"
 import { Hono } from "hono"
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
@@ -34,6 +35,12 @@ import { PanelKnowledgeRoutes } from "./panel-knowledge"
 import { ControlRoutes } from "./control"
 
 const log = Log.create({ service: "server" })
+
+export function openPathCommand(target: string) {
+  if (process.platform === "win32") return ["cmd", "/c", "start", "", target]
+  if (process.platform === "darwin") return ["open", target]
+  return ["xdg-open", target]
+}
 
 export const AppDocumentation = {
   info: {
@@ -177,6 +184,44 @@ export function AppRoutes(root: Hono) {
       },
     )
     .post(
+      "/path/open",
+      describeRoute({
+        summary: "Open a local path",
+        description: "Open a local file or directory using the host operating system.",
+        operationId: "path.open",
+        responses: {
+          200: {
+            description: "Path opened",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ opened: z.boolean() })),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "json",
+        z.object({
+          path: z.string().trim().min(1),
+        }),
+      ),
+      async (c) => {
+        const target = c.req.valid("json").path
+        const result = await Process.run(openPathCommand(target), {
+          nothrow: true,
+          stdin: "ignore",
+          timeout: 1_000,
+        })
+        if (result.code !== 0) {
+          const detail = result.stderr.toString().trim() || `Failed to open path: ${target}`
+          throw new Error(detail)
+        }
+        return c.json({ opened: true })
+      },
+    )
+    .post(
       "/log",
       describeRoute({
         summary: "Write log",
@@ -226,6 +271,51 @@ export function AppRoutes(root: Hono) {
         }
 
         return c.json(true)
+      },
+    )
+    .get(
+      "/log/tail",
+      describeRoute({
+        summary: "Read recent logs",
+        description: "Read the last N lines from the current server log file.",
+        operationId: "log.tail",
+        responses: {
+          200: {
+            description: "Log lines",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    path: z.string(),
+                    lines: z.string().array(),
+                  }),
+                ),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          directory: z.string().optional(),
+          n: z.coerce.number().int().min(1).max(5000).default(500),
+        }),
+      ),
+      async (c) => {
+        const n = c.req.valid("query").n
+        const logFile = Log.file()
+        if (!logFile) {
+          return c.json({ path: "", lines: [] })
+        }
+        try {
+          const content = await Bun.file(logFile).text()
+          const all = content.split("\n")
+          const lines = all.slice(-n).filter((line) => line.length > 0)
+          return c.json({ path: logFile, lines })
+        } catch {
+          return c.json({ path: logFile, lines: [] })
+        }
       },
     )
     .get(
@@ -347,6 +437,36 @@ export function AppRoutes(root: Hono) {
             })
           })
         })
+      },
+    )
+    .post(
+      "/restart",
+      describeRoute({
+        summary: "Restart the server",
+        description: "Spawn a new server process with the same arguments, then exit.",
+        operationId: "server.restart",
+        responses: {
+          200: {
+            description: "Restart initiated",
+            content: {
+              "application/json": {
+                schema: resolver(z.object({ ok: z.boolean() })),
+              },
+            },
+          },
+        },
+      }),
+      async (c) => {
+        log.info("restart requested, spawning new process")
+        const argv = process.argv
+        const child = Bun.spawn(argv, {
+          cwd: process.cwd(),
+          env: process.env as Record<string, string>,
+          stdio: ["ignore", "ignore", "ignore"],
+        })
+        child.unref()
+        setTimeout(() => process.exit(0), 500)
+        return c.json({ ok: true })
       },
     )
 }

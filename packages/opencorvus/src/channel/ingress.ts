@@ -4,9 +4,10 @@ import { ControlMessage } from "@/control/message"
 import { ControlMessageInput, ControlMessageResult } from "@/control/message-schema"
 import { Database, and, eq } from "@/storage/db"
 import z from "zod"
+import { ChannelId } from "./catalog"
 
 export const MessageInput = z.object({
-  platform: z.enum(["slack", "telegram", "discord"]),
+  platform: ChannelId,
   channel: z.string().min(1),
   thread: z.string().min(1),
   text: z.string(),

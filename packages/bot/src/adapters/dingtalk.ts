@@ -68,20 +68,10 @@ export class DingTalkAdapter implements BotAdapter {
   }
 
   async sendMessage(channel: string, _thread: string, text: string): Promise<void> {
-    const webhook = this.webhooks.get(channel) ?? this.defaultWebhook
-    if (!webhook) throw new Error(`DingTalk conversation not initialized: ${channel}`)
-    const res = await fetch(webhook, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        msgtype: "text",
-        text: { content: text },
-      }),
-      signal: AbortSignal.timeout(30_000),
+    await this.post(channel, {
+      msgtype: "text",
+      text: { content: text },
     })
-    if (!res.ok) throw new Error(`DingTalk send failed: ${res.status} ${await res.text()}`)
   }
 
   async startThread(channel: string, text: string): Promise<string> {
@@ -101,6 +91,31 @@ export class DingTalkAdapter implements BotAdapter {
         ? `${title}\n(image upload not supported in DingTalk text MVP)`
         : `Image "${filename}" generated (upload is not supported in DingTalk text MVP).`
     await this.sendMessage(channel, thread, text)
+  }
+
+  async uploadImageUrl(channel: string, _thread: string, url: string, filename: string, title?: string): Promise<void> {
+    const heading = title ?? filename
+    await this.post(channel, {
+      msgtype: "markdown",
+      markdown: {
+        title: heading,
+        text: `### ${heading}\n\n![](${url})`,
+      },
+    })
+  }
+
+  private async post(channel: string, payload: Record<string, unknown>) {
+    const webhook = this.webhooks.get(channel) ?? this.defaultWebhook
+    if (!webhook) throw new Error(`DingTalk conversation not initialized: ${channel}`)
+    const res = await fetch(webhook, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) throw new Error(`DingTalk send failed: ${res.status} ${await res.text()}`)
   }
 
   private async route(req: Request) {

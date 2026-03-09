@@ -375,6 +375,32 @@ describe("tool.edit", () => {
       })
     })
 
+    test("preserves CRLF when multiline edit input uses LF", async () => {
+      await using tmp = await tmpdir()
+      const filepath = path.join(tmp.path, "file.txt")
+      await fs.writeFile(filepath, "line1\r\nalpha\r\nbeta\r\nline4", "utf-8")
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          FileTime.read(ctx.sessionID, filepath)
+
+          const edit = await EditTool.init()
+          await edit.execute(
+            {
+              filePath: filepath,
+              oldString: "alpha\nbeta",
+              newString: "one\ntwo",
+            },
+            ctx,
+          )
+
+          const content = await fs.readFile(filepath, "utf-8")
+          expect(content).toBe("line1\r\none\r\ntwo\r\nline4")
+        },
+      })
+    })
+
     test("throws error when oldString equals newString", async () => {
       await using tmp = await tmpdir()
       const filepath = path.join(tmp.path, "file.txt")

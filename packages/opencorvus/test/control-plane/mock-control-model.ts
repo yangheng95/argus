@@ -9,6 +9,22 @@ import type {
 } from "@ai-sdk/provider"
 import { Provider } from "../../src/provider/provider"
 
+const channelPlatforms = new Set([
+  "slack",
+  "telegram",
+  "discord",
+  "feishu",
+  "whatsapp",
+  "googlechat",
+  "msteams",
+  "line",
+  "matrix",
+  "mattermost",
+  "signal",
+  "wecom",
+  "dingtalk",
+])
+
 const model = Provider.Model.parse({
   id: "control",
   providerID: "mock-control",
@@ -334,10 +350,10 @@ function text(...values: Array<unknown>) {
 }
 
 function platform(surface?: string, source?: string) {
-  if (surface === "slack" || surface === "telegram" || surface === "discord") return surface
+  if (surface && channelPlatforms.has(surface)) return surface
   if (!source?.startsWith("channel:")) return undefined
   const value = source.slice("channel:".length)
-  return value === "slack" || value === "telegram" || value === "discord" ? value : undefined
+  return channelPlatforms.has(value) ? value : undefined
 }
 
 class TestLanguageModel implements LanguageModelV2 {

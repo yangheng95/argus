@@ -23,6 +23,7 @@ describe("orchestrator.delivery", () => {
             id: "task_1",
             project_id: "project_1",
             session_id: null,
+            active_spec_version_id: null,
             active_plan_version_id: null,
             active_run_id: null,
             request_id: null,

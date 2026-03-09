@@ -174,6 +174,46 @@ describe("mainstream adapters", () => {
     expect(calls.some((item) => item.includes("/v1/spaces/AAA/messages"))).toBe(true)
   })
 
+  test("googlechat sends screenshot cards from a public image URL", async () => {
+    const key = generateKeyPairSync("rsa", { modulusLength: 1024 })
+      .privateKey.export({ type: "pkcs1", format: "pem" })
+      .toString()
+    const adapter = new GoogleChatAdapter({
+      serviceAccount: JSON.stringify({
+        client_email: "bot@example.iam.gserviceaccount.com",
+        private_key: key,
+      }),
+    })
+    const calls: Array<{ url: string; body?: string }> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push({
+        url,
+        body: typeof init?.body === "string" ? init.body : undefined,
+      })
+      if (url.includes("oauth2.googleapis.com/token")) {
+        return Response.json({ access_token: "g_token", expires_in: 3600 })
+      }
+      return Response.json({ name: "spaces/AAA/messages/m2" })
+    }) as typeof globalThis.fetch
+
+    await adapter.uploadImageUrl?.(
+      "spaces/AAA",
+      "spaces/AAA/threads/t-1",
+      "https://public.opencorvus.dev/overlay.png",
+      "overlay.png",
+      "Captured OpenCorvus GUI.",
+    )
+
+    const payload = JSON.parse(calls.at(-1)!.body!) as {
+      thread?: { name?: string }
+      cardsV2?: Array<{ card?: { sections?: Array<{ widgets?: Array<Record<string, unknown>> }> } }>
+    }
+    expect(payload.thread?.name).toBe("spaces/AAA/threads/t-1")
+    const widgets = payload.cardsV2?.[0]?.card?.sections?.[0]?.widgets ?? []
+    expect(widgets.some((item) => "image" in item)).toBe(true)
+  })
+
   test("msteams maps inbound and can reply", async () => {
     const s = stub()
     const adapter = new MSTeamsAdapter({
@@ -223,6 +263,44 @@ describe("mainstream adapters", () => {
     expect(calls.some((item) => item.includes("/v3/conversations/conv-1/activities"))).toBe(true)
   })
 
+  test("msteams sends screenshot hero cards from a public image URL", async () => {
+    const adapter = new MSTeamsAdapter({
+      appId: "bot-app",
+      appSecret: "bot-secret",
+    })
+    ;(adapter as unknown as { session: Map<string, { serviceUrl: string; conversationId: string }> }).session.set("conv-1", {
+      serviceUrl: "https://smba.trafficmanager.net/emea",
+      conversationId: "conv-1",
+    })
+    const calls: Array<{ url: string; body?: string }> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      calls.push({
+        url,
+        body: typeof init?.body === "string" ? init.body : undefined,
+      })
+      if (url.includes("oauth2/v2.0/token")) {
+        return Response.json({ access_token: "ms_token", expires_in: 3600 })
+      }
+      return Response.json({ id: "reply-1" })
+    }) as typeof globalThis.fetch
+
+    await adapter.uploadImageUrl?.(
+      "conv-1",
+      "m-1",
+      "https://public.opencorvus.dev/overlay.png",
+      "overlay.png",
+      "Captured OpenCorvus GUI.",
+    )
+
+    const payload = JSON.parse(calls.at(-1)!.body!) as {
+      replyToId?: string
+      attachments?: Array<{ content?: { images?: Array<{ url?: string }> } }>
+    }
+    expect(payload.replyToId).toBe("m-1")
+    expect(payload.attachments?.[0]?.content?.images?.[0]?.url).toBe("https://public.opencorvus.dev/overlay.png")
+  })
+
   test("line maps inbound and pushes outbound", async () => {
     const s = stub()
     const adapter = new LineAdapter({
@@ -266,6 +344,39 @@ describe("mainstream adapters", () => {
     }) as typeof globalThis.fetch
     await adapter.sendMessage("u-1", "", "done")
     expect(calls[0]).toContain("/v2/bot/message/push")
+  })
+
+  test("line sends screenshot image messages from a public image URL", async () => {
+    const adapter = new LineAdapter({
+      token: "line_token",
+    })
+    const calls: Array<{ url: string; body?: string }> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        body: typeof init?.body === "string" ? init.body : undefined,
+      })
+      return new Response(null, { status: 200 })
+    }) as typeof globalThis.fetch
+
+    await adapter.uploadImageUrl?.(
+      "u-1",
+      "",
+      "https://public.opencorvus.dev/overlay.png",
+      "overlay.png",
+      "Captured OpenCorvus GUI.",
+    )
+
+    const payload = JSON.parse(calls[0]!.body!) as {
+      to: string
+      messages: Array<{ type?: string; originalContentUrl?: string; previewImageUrl?: string }>
+    }
+    expect(payload.to).toBe("u-1")
+    expect(payload.messages.at(-1)).toMatchObject({
+      type: "image",
+      originalContentUrl: "https://public.opencorvus.dev/overlay.png",
+      previewImageUrl: "https://public.opencorvus.dev/overlay.png",
+    })
   })
 
   test("matrix sends message with reply relation", async () => {
@@ -462,5 +573,36 @@ describe("mainstream adapters", () => {
     }) as typeof globalThis.fetch
     await adapter.sendMessage("cid_1", "", "done")
     expect(calls[0]).toContain("oapi.dingtalk.com/robot/send")
+  })
+
+  test("dingtalk sends markdown screenshot links from a public image URL", async () => {
+    const adapter = new DingTalkAdapter({
+      appKey: "ding_key",
+      appSecret: "ding_secret",
+      defaultWebhook: "https://oapi.dingtalk.com/robot/send?access_token=abc",
+    })
+    const calls: Array<{ url: string; body?: string }> = []
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        url: String(input),
+        body: typeof init?.body === "string" ? init.body : undefined,
+      })
+      return Response.json({ errcode: 0, errmsg: "ok" })
+    }) as typeof globalThis.fetch
+
+    await adapter.uploadImageUrl?.(
+      "cid_1",
+      "",
+      "https://public.opencorvus.dev/overlay.png",
+      "overlay.png",
+      "Captured OpenCorvus GUI.",
+    )
+
+    const payload = JSON.parse(calls[0]!.body!) as {
+      msgtype?: string
+      markdown?: { text?: string }
+    }
+    expect(payload.msgtype).toBe("markdown")
+    expect(payload.markdown?.text).toContain("https://public.opencorvus.dev/overlay.png")
   })
 })

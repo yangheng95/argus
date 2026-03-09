@@ -133,84 +133,16 @@ const adapters = registerAdapters(bot, process.env, {
   slack: (opts) => new SlackAdapter(opts),
   telegram: (opts) => new TelegramAdapter(opts),
   discord: (opts) => new DiscordAdapter(opts),
-  feishu: (opts) =>
-    new FeishuAdapter({
-      appId: opts.appId,
-      appSecret: opts.appSecret,
-      host: process.env.FEISHU_WEBHOOK_HOST,
-      port: process.env.FEISHU_WEBHOOK_PORT ? Number(process.env.FEISHU_WEBHOOK_PORT) : undefined,
-      path: process.env.FEISHU_WEBHOOK_PATH,
-      verificationToken: process.env.FEISHU_VERIFICATION_TOKEN,
-    }),
-  whatsapp: (opts) =>
-    new WhatsappAdapter({
-      token: opts.token,
-      numberId: opts.numberId,
-      host: process.env.WHATSAPP_WEBHOOK_HOST,
-      port: process.env.WHATSAPP_WEBHOOK_PORT ? Number(process.env.WHATSAPP_WEBHOOK_PORT) : undefined,
-      path: process.env.WHATSAPP_WEBHOOK_PATH,
-      verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
-    }),
-  googlechat: (opts) =>
-    new GoogleChatAdapter({
-      serviceAccount: opts.serviceAccount,
-      host: process.env.GOOGLECHAT_WEBHOOK_HOST,
-      port: process.env.GOOGLECHAT_WEBHOOK_PORT ? Number(process.env.GOOGLECHAT_WEBHOOK_PORT) : undefined,
-      path: process.env.GOOGLECHAT_WEBHOOK_PATH,
-    }),
-  msteams: (opts) =>
-    new MSTeamsAdapter({
-      appId: opts.appId,
-      appSecret: opts.appSecret,
-      host: process.env.MSTEAMS_WEBHOOK_HOST,
-      port: process.env.MSTEAMS_WEBHOOK_PORT ? Number(process.env.MSTEAMS_WEBHOOK_PORT) : undefined,
-      path: process.env.MSTEAMS_WEBHOOK_PATH,
-    }),
-  line: (opts) =>
-    new LineAdapter({
-      token: opts.token,
-      host: process.env.LINE_WEBHOOK_HOST,
-      port: process.env.LINE_WEBHOOK_PORT ? Number(process.env.LINE_WEBHOOK_PORT) : undefined,
-      path: process.env.LINE_WEBHOOK_PATH,
-      secret: process.env.LINE_CHANNEL_SECRET,
-    }),
-  matrix: (opts) =>
-    new MatrixAdapter({
-      homeserver: opts.homeserver,
-      token: opts.token,
-      since: process.env.MATRIX_SINCE_TOKEN,
-    }),
-  mattermost: (opts) =>
-    new MattermostAdapter({
-      url: opts.url,
-      token: opts.token,
-      host: process.env.MATTERMOST_WEBHOOK_HOST,
-      port: process.env.MATTERMOST_WEBHOOK_PORT ? Number(process.env.MATTERMOST_WEBHOOK_PORT) : undefined,
-      path: process.env.MATTERMOST_WEBHOOK_PATH,
-    }),
-  signal: (opts) =>
-    new SignalAdapter({
-      service: opts.service,
-      account: opts.account,
-    }),
-  wecom: (opts) =>
-    new WeComAdapter({
-      corpId: opts.corpId,
-      secret: opts.secret,
-      agentId: opts.agentId,
-      host: process.env.WECOM_WEBHOOK_HOST,
-      port: process.env.WECOM_WEBHOOK_PORT ? Number(process.env.WECOM_WEBHOOK_PORT) : undefined,
-      path: process.env.WECOM_WEBHOOK_PATH,
-    }),
-  dingtalk: (opts) =>
-    new DingTalkAdapter({
-      appKey: opts.appKey,
-      appSecret: opts.appSecret,
-      host: process.env.DINGTALK_WEBHOOK_HOST,
-      port: process.env.DINGTALK_WEBHOOK_PORT ? Number(process.env.DINGTALK_WEBHOOK_PORT) : undefined,
-      path: process.env.DINGTALK_WEBHOOK_PATH,
-      defaultWebhook: process.env.DINGTALK_DEFAULT_WEBHOOK,
-    }),
+  feishu: (opts) => new FeishuAdapter(opts),
+  whatsapp: (opts) => new WhatsappAdapter(opts),
+  googlechat: (opts) => new GoogleChatAdapter(opts),
+  msteams: (opts) => new MSTeamsAdapter(opts),
+  line: (opts) => new LineAdapter(opts),
+  matrix: (opts) => new MatrixAdapter(opts),
+  mattermost: (opts) => new MattermostAdapter(opts),
+  signal: (opts) => new SignalAdapter(opts),
+  wecom: (opts) => new WeComAdapter(opts),
+  dingtalk: (opts) => new DingTalkAdapter(opts),
 })
 for (const warn of adapters.warns) {
   console.warn(`[Bot] ${warn}`)

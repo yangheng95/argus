@@ -1,9 +1,9 @@
 import { Identifier } from "@/id/id"
 import { Snapshot } from "@/snapshot"
-import { type CodingEventInfo, type CodingProvider } from "./compat"
+import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./compat"
 import type { ExecutorAdapter } from "./compat"
 
-type Status = "queued" | "retrying" | "running" | "completed" | "failed"
+type Status = Exclude<ExecutorStatusInfo, "blocked">
 type Notify = {
   type: string
   summary?: string
@@ -31,7 +31,7 @@ export const ManagedCodingExecutor = {
       cwd?: string | (() => string | undefined)
       system?: string | (() => string | undefined)
       maxTurns?: number | (() => number | undefined)
-      tools?: unknown[] | (() => unknown[] | undefined)
+      tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
     },
   ): ExecutorAdapter {
     const tasks = new Map<string, State>()
@@ -214,6 +214,43 @@ export const ManagedCodingExecutor = {
           }
         } finally {
           input.signal?.removeEventListener("abort", abort)
+        }
+      },
+      planningCapabilities() {
+        return PlanningCapabilities.parse({
+          spec: true,
+          plan: true,
+        })
+      },
+      async generatePlanning(input) {
+        const stream = provider.run({
+          model: value(options.model),
+          prompt: input.prompt,
+          cwd: input.cwd ?? value(options.cwd),
+          system: input.system ?? value(options.system),
+          maxTurns: input.maxTurns ?? value(options.maxTurns) ?? 4,
+          sandbox: input.sandbox ?? "read-only",
+          ...(input.toolMode ? { toolMode: input.toolMode } : {}),
+          ...(input.toolMode === "none" ? { tools: [] } : {}),
+          signal: input.signal,
+        })
+        let text = ""
+        for await (const event of stream) {
+          if (event.type === "text_delta") {
+            text += event.text
+            continue
+          }
+          if (event.type === "done") {
+            return {
+              output: event.output ?? text,
+            }
+          }
+          if (event.type === "error") {
+            throw new Error(event.message)
+          }
+        }
+        return {
+          output: text,
         }
       },
     }

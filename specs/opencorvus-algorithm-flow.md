@@ -1,6 +1,6 @@
 # OpenCorvus 算法流程文档
 
-> 版本：2026-03-08 · 基于 `feature/opencorvus-headless-v1` 分支
+> 版本：2026-03-09 · spec-first 编排草案
 
 ---
 
@@ -42,6 +42,12 @@
 │  └─────────────────────────────────────┘                 │
 └─────────────────────────────────────────────────────────┘
 ```
+
+说明：
+
+- `spec agent` 与 `plan agent` 是并列的一等 agent，`spec` 不再作为 builtin skill 从属存在。
+- 目标调度顺序固定为 `spec -> plan -> execute -> spec check -> delivery`。
+- 对于中大型或信息不完备的任务，系统应被鼓励主动调用 `spec agent`，先补完 spec，再开始 plan。
 
 ---
 
@@ -106,7 +112,7 @@
 
 ## 3. 完整任务生命周期
 
-### 3.1 Phase 1: 任务创建
+### 3.1 Phase 1: 任务创建与 spec 启动
 
 ```
 POST /task { request, title?, executor?, goals?, checks?, budget?, channelBinding? }
@@ -118,24 +124,35 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │
          ├─ 2. 验证: 解析输入、校验 executor 已注册
          │
-         ├─ 3. PlannerService.initial() ─────────────────────────┐
+         ├─ 3. SpecAgent.initial() ──────────────────────────────┐
          │      │                                                 │
-         │      ├─ normalizeGoals(): 无显式目标时推断默认目标       │
-         │      │   └─ inferSelectors(): 从 request 文本推断       │
-         │      │      check_selector (build/test/lint/ui_review   │
-         │      │      /code_quality/startup 等)                   │
+         │      ├─ 读取 request / notes / memory / preference      │
+         │      ├─ 识别事实缺口、外部依赖、边界条件与验收范围        │
+         │      ├─ 鼓励主动调用 WebSearch / WebFetch / Read / Grep │
+         │      │  / Agent(Explore) 补齐 spec 所需信息             │
+         │      └─ 输出可执行 spec 与 required spec items           │
+         │                                                 │
+         ├─ 4. PlanAgent.initial(spec) ────────────────────────────┤
+         │      │                                                 │
+         │      ├─ normalizeGoals(): 基于 spec 推断默认目标         │
+         │      │   └─ inferSelectors(): 从 spec 推断              │
+         │      │      check_selector (build/test/lint/spec_check  │
+         │      │      /ui_review/code_quality/startup 等)         │
          │      │                                                 │
          │      └─ renderPlanModePrompt(): 生成执行提示词           │
-         │         └─ 包含 4 阶段工作流:                            │
+         │         └─ 包含 5 阶段工作流:                            │
          │            Phase 1: 探索代码库 (read/glob/grep/agent)   │
-         │            Phase 2: 用 planner 工具分解任务              │
-         │            Phase 3: 逐步执行子任务                       │
-         │            Phase 4: 运行验收检查                         │
+         │            Phase 2: 编写/补完 spec                      │
+         │            Phase 3: 用 plan agent / planner 工具分解任务 │
+         │            Phase 4: 逐步执行子任务                       │
+         │            Phase 5: 运行 spec-driven 验收检查            │
          │                                                 ◄──────┘
-         ├─ 4. Session.create({ title })
+         ├─ 5. Session.create({ title })
          │
-         ├─ 5. Database.transaction() 原子写入:
+         ├─ 6. Database.transaction() 原子写入:
          │      ├─ OrchestratorTaskTable       (status: "queued")
+         │      ├─ OrchestratorSpecSnapshotTable (status: "ready")
+         │      ├─ OrchestratorSpecItemTable[] (status: "pending")
          │      ├─ OrchestratorPlanVersionTable (version: 1, status: "active")
          │      ├─ OrchestratorGoalTable[]     (status: "pending")
          │      ├─ OrchestratorMilestoneTable[] (如有)
@@ -143,32 +160,58 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │      ├─ OrchestratorChannelBindingTable (如有 Slack 绑定)
          │      └─ OrchestratorProgressSnapshotTable ("Task created")
          │
-         ├─ 6. 发布事件: TaskCreated, PlanCreated, PlanActivated, RunCreated
+         ├─ 7. 发布事件: TaskCreated, SpecCreated, SpecUpdated, PlanCreated, PlanActivated, RunCreated
          │
-         ├─ 7. WorkbenchService.recordTaskRequest()
+         ├─ 8. WorkbenchService.recordTaskRequest()
          │
-         └─ 8. OrchestratorRuntime.dispatch(runID)
+         └─ 9. OrchestratorRuntime.dispatch(runID)
                 │
                 └─► 进入 Phase 2
 ```
 
-### 3.2 Phase 2: 运行派发 (dispatch)
+### 3.2 Phase 2: spec 编制与确认
+
+```
+  SpecAgent.run(task)
+         │
+         ├─ 1. 汇总 request / notes / memory / preference / channel 上下文
+         │
+         ├─ 2. 主动补齐上下文:
+         │      ├─ 仓库内探索: Read / Grep / Glob / Agent(Explore)
+         │      ├─ 外部资料: WebSearch / WebFetch
+         │      └─ 缺口仍然阻断? → 通过 Question / Permission 进入 blocked
+         │
+         ├─ 3. 输出并持久化 spec:
+         │      ├─ 范围 / 非目标
+         │      ├─ 功能与行为要求
+         │      ├─ 边界条件 / 失败模式 / 约束
+         │      ├─ required spec items
+         │      ├─ 证据来源 / 未决问题
+         │      └─ spec.status = "ready" | "blocked"
+         │
+         └─ 4. spec.status = "ready"
+                └─► 进入 Phase 3
+```
+
+### 3.3 Phase 3: plan 生成与运行派发 (dispatch)
 
 ```
   OrchestratorRuntime.dispatch(runID)
          │
          ├─ 1. 获取 run (验证 status === "queued")
          │
-         ├─ 2. 编译执行提示词:
+         ├─ 2. PlanAgent 基于当前 spec 生成 / 确认 active plan:
          │      ├─ base = plan.prompt (或 run.metadata.prompt_override)
+         │      ├─ spec = current spec snapshot
          │      ├─ brief = WorkbenchService.compileBrief()
          │      │    ├─ 任务请求原文
+         │      │    ├─ 当前 spec 摘要 + required spec items
          │      │    ├─ 全局偏好 + 会话偏好 (session overrides global)
          │      │    ├─ 操作员笔记 (notes)
          │      │    ├─ 目标概要 (goals)
          │      │    ├─ 全局记忆 + 会话记忆召回结果
-         │      │    └─ 前次运行上下文 (如 replan)
-         │      └─ prompt = brief + "\n\n" + base
+         │      │    └─ 前次运行上下文 (如 retry / replan)
+         │      └─ prompt = brief + "\n\n" + spec + "\n\n" + base
          │
          ├─ 3. executor.submit({ sessionID, prompt, priority })
          │      │
@@ -183,7 +226,7 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          └─ 5. task.status = "running"
 ```
 
-### 3.3 Phase 3: 执行期 (Session 内部)
+### 3.4 Phase 4: 执行期 (Session 内部)
 
 ```
   Session 执行期 (内置执行内核)
@@ -194,13 +237,14 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │    ├─ Preference.systemPromptSection() ← 全局/会话偏好直接注入
          │    ├─ MemoryInjection.systemPromptSection() ← 先检索记忆/偏好再规划
          │    ├─ Scratchpad 内容
+         │    ├─ Spec.toMarkdown()     ← 当前 spec 与 required spec items
          │    ├─ TaskPlan.toMarkdown() ← planner 工具产出的任务树
          │    └─ Goal.toMarkdown()     ← session-level 目标
          │
          ├─ 可用工具 (tool/registry.ts):
          │    ├─ 文件操作: Read, Edit, Write, Glob, Grep, LS
          │    ├─ 执行: Bash, Task (子进程管理)
-         │    ├─ 代理: Agent (Explore/Plan 子代理)
+         │    ├─ 代理: Agent (Explore / Spec / Plan 子代理)
          │    ├─ 规划: PlannerTool (add_task/update_task/list_tasks)
          │    │         └─ TaskPlan 持久化到 task_plan 表
          │    │         └─ toMarkdown() 注入后续系统提示
@@ -211,20 +255,22 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │    ├─ 其他: ApplyPatch, TodoWrite, Skill, Schedule
          │    └─ 实验性: LSP, Batch
          │
-         ├─ LLM 按照 plan-mode 提示词执行:
+         ├─ LLM 按照 spec-first 提示词执行:
          │    ├─ Phase 1: 探索代码库
          │    │    └─ 调用 Read/Grep/Glob/Agent(Explore) 了解架构
-         │    ├─ Phase 2: 用 planner 工具建立任务树
+         │    ├─ Phase 2: 主动调用 spec agent 编写/补完 spec
+         │    │    └─ spec 未完成时不得跳过进入 plan
+         │    ├─ Phase 3: 用 plan agent / planner 工具建立任务树
          │    │    └─ planner({ action: "add_task", goal: "..." })
-         │    ├─ Phase 3: 逐步执行
+         │    ├─ Phase 4: 逐步执行
          │    │    ├─ planner({ action: "update_task", taskId, status: "in_progress" })
          │    │    ├─ 执行代码修改 (Edit/Write/Bash)
          │    │    ├─ 记忆写入默认 `scope=global`
          │    │    ├─ 偏好写入默认 `scope=global`
-         │    │    └─ 仅临时指令才写入 `scope=session`
+         │    │    ├─ 仅临时指令才写入 `scope=session`
          │    │    └─ planner({ action: "update_task", taskId, status: "completed" })
-         │    └─ Phase 4: 验证
-         │         └─ 运行 build/test/lint
+         │    └─ Phase 5: 验证并沉淀 spec evidence
+         │         └─ 运行 build/test/lint 并准备 spec_check 所需证据
          │
          └─ 交互点:
               ├─ Permission 请求 → PermissionNext.Event.Asked
@@ -233,7 +279,7 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
                    └─ Interaction 创建 → Run blocked → 等待用户回复
 ```
 
-### 3.4 Phase 4: 轮询与同步 (poll)
+### 3.5 Phase 5: 轮询与同步 (poll)
 
 ```
   Scheduler: 每 1500ms 调用 OrchestratorRuntime.poll()
@@ -261,10 +307,10 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
               │    └─ failRun(): 创建失败 evaluation → task.status = "failed"
               │
               └─ status = "completed"
-                   └─ completeRun() → 进入 Phase 5
+                   └─ completeRun() → 进入 Phase 6
 ```
 
-### 3.5 Phase 5: 交付与评估
+### 3.6 Phase 6: 交付与评估
 
 ```
   completeRun(run)
@@ -279,7 +325,7 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │
          ├─ 3. 触发 Plugin "delivery.ready"
          │
-         ├─ 4. EvaluatorService.evaluate(task, delivery)
+         ├─ 4. EvaluatorService.evaluate(task, delivery, spec)
          │      │
          │      ├─ 解析 CheckConfig (从 task.metadata.checks)
          │      │
@@ -298,35 +344,37 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
          │      │   ├─ code_quality → LLM 代码质量评审
          │      │   ├─ code_review  → LLM 代码审查
          │      │   ├─ dead_code    → LLM 死代码检测
-         │      │   └─ judge        → LLM 最终判定
+         │      │   └─ spec_check   → 对照 spec 与 required spec items 做最终核验 (默认 enabled)
          │      │
          │      ├─ Plugin 检查 ("evaluation.checks" hook)
          │      │
          │      └─ 汇总判决:
          │           ├─ 任一 strict 检查失败 → FAILED / rejected
+         │           ├─ spec_check 发现遗漏、错误或未完成项 → FAILED / rejected
          │           ├─ 所有检查跳过 → INCONCLUSIVE
-         │           └─ 阻断命令通过 → PASSED / accepted
+         │           └─ 阻断命令通过 + spec_check 确认 required spec 全部准确完备实现 → PASSED / accepted
          │
          ├─ 5. 创建 Evaluation 记录
          │
-         ├─ 6. 标记通过的 Goal:
+         ├─ 6. 标记通过的 Goal / SpecItem:
          │      ├─ 匹配: goal.metadata.check_selector ∩ evaluation.checks
          │      ├─ 更新匹配 goal.status = "passed"
+         │      ├─ 更新 required spec items.status = "done"
          │      └─ 推导 Milestone 状态
          │
          └─ 7. 后续决策:
               │
-              ├─ PASSED + 所有 blocking goals 通过
+              ├─ PASSED + 所有 required spec items 完成 + 所有 blocking goals 通过
               │    └─ task.status = "completed" ✅
               │
-              ├─ PASSED 但仍有 pending blocking goals
-              │    └─ handleEvaluationFailure() → 进入 Phase 6
+              ├─ PASSED 但仍有 pending spec items 或 blocking goals
+              │    └─ handleEvaluationFailure() → 进入 Phase 7
               │
               └─ FAILED
-                   └─ handleEvaluationFailure() → 进入 Phase 6
+                   └─ handleEvaluationFailure() → 进入 Phase 7
 ```
 
-### 3.6 Phase 6: 重试 / 重规划决策
+### 3.7 Phase 7: 重试 / 重规划决策
 
 ```
   handleEvaluationFailure(task, run, summary)
@@ -350,15 +398,18 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
               │              │   strategy: "retry_same_plan"
               │              │
               │              └─ dispatch(nextRunID)
-              │                 └─ 回到 Phase 2 (同一 plan, 同一 session)
+              │                 └─ 回到 Phase 3 (同一 spec, 同一 plan, 同一 session)
               │
               └─ 重规划判断:
                   replans = findPlans(task.id).length - 1
                   replans < maxReplans (默认 1)?
                     └─ YES → createReplanRun()
                              │
-                             ├─ PlannerService.replan()
-                             │   └─ 生成新提示词 (含失败分析 + 新策略)
+                             ├─ SpecAgent.rewrite()
+                             │   └─ 基于失败分析修订 spec
+                             │
+                             ├─ PlanAgent.replan()
+                             │   └─ 基于新 spec 生成新提示词 (含失败分析 + 新策略)
                              │
                              ├─ 旧 plan.status = "superseded"
                              │
@@ -374,7 +425,7 @@ POST /task { request, title?, executor?, goals?, checks?, budget?, channelBindin
                              │   strategy: "replan"
                              │
                              └─ dispatch(nextRunID)
-                                └─ 回到 Phase 2 (新 plan, 同一 session)
+                                └─ 回到 Phase 2 (先修订 spec，再生成新 plan, 同一 session)
 ```
 
 ---
@@ -471,6 +522,9 @@ Run 3: 重规划执行 (plan v2, retry 0)
 |----------|------|
 | `task.created` | taskID, status, summary |
 | `task.updated` | taskID, status, summary |
+| `spec.created` | taskID, specID, summary |
+| `spec.updated` | taskID, specID, status, summary |
+| `spec.approved` | taskID, specID, summary |
 | `plan.created` | taskID, planID, summary |
 | `plan.activated` | taskID, planID, summary |
 | `run.created` | taskID, runID, status, summary |
@@ -488,6 +542,8 @@ Run 3: 重规划执行 (plan v2, retry 0)
 ---
 
 ## 8. 评估检查清单
+
+`spec_check` 默认勾选，并作为最终验收门。只要 required spec 仍有遗漏、歧义或未完成项，任务就不能被标记为验收通过。
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -508,10 +564,10 @@ Run 3: 重规划执行 (plan v2, retry 0)
 │  │ ui_review │  │code_quality│  │code_review│  │dead_code│  │
 │  │LLM UI审查 │  │LLM质量评审  │  │LLM代码审查 │  │LLM死代码 │  │
 │  └───────────┘  └────────────┘  └───────────┘  └─────────┘  │
-│  ┌─────────┐  ┌──────────┐                                   │
-│  │  judge  │  │  custom  │                                   │
-│  │LLM判决  │  │ 插件检查  │                                   │
-│  └─────────┘  └──────────┘                                   │
+│  ┌────────────┐  ┌──────────┐                                │
+│  │ spec_check │  │  custom  │                                │
+│  │按 spec 验收│  │ 插件检查  │                                │
+│  └────────────┘  └──────────┘                                │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -522,7 +578,11 @@ Run 3: 重规划执行 (plan v2, retry 0)
 ```
   Task (1)
     │
-    ├── PlanVersion (1..N)     ← active_plan_version_id 指向当前
+    ├── SpecVersion (1..N)     ← active_spec_version_id 指向当前
+    │     │
+    │     └── SpecItem (1..N)  ← required acceptance items
+    │
+    ├── PlanVersion (1..N)     ← 基于当前 spec 生成
     │     │
     │     ├── Goal (1..N)      ← 每个 plan 版本有独立的 goals
     │     │
@@ -576,7 +636,7 @@ Run 3: 重规划执行 (plan v2, retry 0)
 
 ---
 
-## 11. Overlay / Console 创建任务
+## 11. Overlay / Console 创建任务与查看状态
 
 ```
   Overlay 表单提交
@@ -586,6 +646,8 @@ Run 3: 重规划执行 (plan v2, retry 0)
     │    ├─ title (可选)
     │    ├─ executor: "opencode" | "claude-code" | "codex"
     │    ├─ priority: "normal" | "high" | "low"
+    │    ├─ 右侧控件区: spec / plan / goals / checks / evaluation / delivery
+    │    │   └─ spec 位于 plan 之前，展示当前 spec 与 required spec items
     │    └─ checks: 复选框映射
     │         ├─ c_lint      → { lint: [] }
     │         ├─ c_build     → { build: [] }
@@ -593,7 +655,7 @@ Run 3: 重规划执行 (plan v2, retry 0)
     │         ├─ c_code_quality → { code_quality: { enabled: true } }
     │         ├─ c_code_review  → { code_review: { enabled: true } }
     │         ├─ c_puppeteer    → { puppeteer: { target: "web", url: "..." } }
-    │         └─ c_judge        → { judge: { enabled: true } }
+    │         └─ c_spec_check   → { spec_check: { enabled: true, strict: true } }  (默认勾选)
     │
     ├─ POST /task  (带 Basic Auth)
     │

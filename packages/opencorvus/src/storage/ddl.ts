@@ -179,11 +179,19 @@ CREATE TABLE IF NOT EXISTS memory_file (
   scope        text NOT NULL DEFAULT 'global',
   title        text NOT NULL,
   source       text NOT NULL,
+  kind         text NOT NULL DEFAULT 'note',
+  key          text,
+  importance   integer NOT NULL DEFAULT 60,
+  confidence   integer NOT NULL DEFAULT 75,
   time_created integer NOT NULL,
   time_updated integer NOT NULL,
   FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS memory_file_project_idx ON memory_file (project_id);
+CREATE INDEX IF NOT EXISTS memory_file_session_idx ON memory_file (session_id);
+CREATE INDEX IF NOT EXISTS memory_file_scope_idx ON memory_file (scope);
+CREATE INDEX IF NOT EXISTS memory_file_kind_idx ON memory_file (kind);
+CREATE INDEX IF NOT EXISTS memory_file_key_idx ON memory_file (key);
 
 CREATE TABLE IF NOT EXISTS memory_chunk (
   id           text PRIMARY KEY,
@@ -337,6 +345,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_task (
   id                     text PRIMARY KEY,
   project_id             text NOT NULL,
   session_id             text,
+  active_spec_version_id text,
   active_plan_version_id text,
   active_run_id          text,
   request_id             text,
@@ -360,6 +369,42 @@ CREATE INDEX IF NOT EXISTS orchestrator_task_project_idx ON orchestrator_task (p
 CREATE INDEX IF NOT EXISTS orchestrator_task_status_idx  ON orchestrator_task (status);
 CREATE UNIQUE INDEX IF NOT EXISTS orchestrator_task_project_request_idx
   ON orchestrator_task (project_id, request_id);
+
+CREATE TABLE IF NOT EXISTS orchestrator_spec_snapshot (
+  id           text PRIMARY KEY,
+  task_id      text NOT NULL,
+  version      integer NOT NULL DEFAULT 1,
+  status       text NOT NULL DEFAULT 'ready',
+  summary      text NOT NULL,
+  content      text NOT NULL,
+  scope        text NOT NULL DEFAULT '',
+  out_of_scope text,
+  evidence     text,
+  metadata     text,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS orchestrator_spec_snapshot_task_idx ON orchestrator_spec_snapshot (task_id);
+
+CREATE TABLE IF NOT EXISTS orchestrator_spec_item (
+  id               text PRIMARY KEY,
+  task_id          text NOT NULL,
+  spec_snapshot_id text NOT NULL,
+  title            text NOT NULL,
+  description      text NOT NULL,
+  status           text NOT NULL DEFAULT 'pending',
+  priority         text NOT NULL DEFAULT 'blocking',
+  check_selector   text,
+  evidence         text,
+  metadata         text,
+  time_created     integer NOT NULL,
+  time_updated     integer NOT NULL,
+  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
+  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS orchestrator_spec_item_task_idx     ON orchestrator_spec_item (task_id);
+CREATE INDEX IF NOT EXISTS orchestrator_spec_item_snapshot_idx ON orchestrator_spec_item (spec_snapshot_id);
 
 CREATE TABLE IF NOT EXISTS orchestrator_plan_version (
   id           text PRIMARY KEY,

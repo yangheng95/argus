@@ -110,6 +110,20 @@ describe("executor compatibility", () => {
     })
   })
 
+  test("claude request disables tools for planning runs", () => {
+    const req = ClaudeCodeExecutor.request({
+      prompt: "draft a plan",
+      toolMode: "none",
+    })
+
+    expect(req).toMatchObject({
+      prompt: "draft a plan",
+      options: {
+        tools: [],
+      },
+    })
+  })
+
   test("claude provider normalizes agent sdk messages without duplicate assistant replay", async () => {
     const provider = ClaudeCodeExecutor.create(() =>
       feed([

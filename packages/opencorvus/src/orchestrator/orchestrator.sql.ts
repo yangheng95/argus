@@ -31,9 +31,53 @@ export type OrchestratorGoalPriority = "blocking" | "advisory"
 export type OrchestratorGoalStatus = "pending" | "passed" | "failed"
 export type OrchestratorMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type OrchestratorRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-export type OrchestratorRunPhase = "plan" | "execute" | "evaluate" | "deliver" | "replan"
+export type OrchestratorRunPhase = "plan" | "spec" | "execute" | "evaluate" | "deliver" | "replan"
 export type OrchestratorInteractionType = "permission" | "question"
 export type OrchestratorInteractionStatus = "pending" | "answered" | "rejected" | "expired"
+
+export type OrchestratorSpecSnapshotStatus = "ready" | "blocked" | "completed"
+export type OrchestratorSpecItemStatus = "pending" | "done" | "failed"
+
+export const OrchestratorSpecSnapshotTable = sqliteTable(
+  "orchestrator_spec_snapshot",
+  {
+    id: text().primaryKey(),
+    task_id: text().notNull(),
+    version: integer().notNull().default(1),
+    status: text().notNull().$type<OrchestratorSpecSnapshotStatus>().default("ready"),
+    summary: text().notNull(),
+    content: text().notNull(),
+    scope: text().notNull().default(""),
+    out_of_scope: text(),
+    evidence: text({ mode: "json" }).$type<string[]>(),
+    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_spec_snapshot_task_idx").on(table.task_id),
+  ],
+)
+
+export const OrchestratorSpecItemTable = sqliteTable(
+  "orchestrator_spec_item",
+  {
+    id: text().primaryKey(),
+    task_id: text().notNull(),
+    spec_snapshot_id: text().notNull(),
+    title: text().notNull(),
+    description: text().notNull(),
+    status: text().notNull().$type<OrchestratorSpecItemStatus>().default("pending"),
+    priority: text().notNull().$type<OrchestratorGoalPriority>().default("blocking"),
+    check_selector: text({ mode: "json" }).$type<string[]>(),
+    evidence: text(),
+    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_spec_item_task_idx").on(table.task_id),
+    index("orchestrator_spec_item_snapshot_idx").on(table.spec_snapshot_id),
+  ],
+)
 export type OrchestratorArtifactKind =
   | "patch"
   | "changed_file"
@@ -75,6 +119,7 @@ export const OrchestratorTaskTable = sqliteTable(
       .notNull()
       .references(() => ProjectTable.id, { onDelete: "cascade" }),
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
+    active_spec_version_id: text(),
     active_plan_version_id: text(),
     active_run_id: text(),
     request_id: text(),

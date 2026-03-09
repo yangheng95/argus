@@ -72,7 +72,7 @@ export function createPlannerTools(taskWorkDir?: string) {
           return results
             .map(
               (r, i) =>
-                `[${i + 1}] ${r.fileTitle} (${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
+                `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)}, id: ${r.fileId})\n${r.content.slice(0, 600)}`,
             )
             .join("\n\n---\n\n")
         } catch (err) {
@@ -95,7 +95,7 @@ export function createPlannerTools(taskWorkDir?: string) {
           if (!file) return `Memory file ${file_id} not found.`
           const chunks = Memory.getChunks(file_id)
           const text = chunks.map((c) => c.content).join("\n\n")
-          return `# ${file.title}\nScope: ${file.scope} | Source: ${file.source}\n\n${text}`
+          return `# ${file.title}\nKind: ${file.kind} | Scope: ${file.scope} | Source: ${file.source}\n\n${text}`
         } catch (err) {
           log.warn("memory get failed in planner", { file_id, err })
           return "Failed to read memory file."
@@ -107,7 +107,7 @@ export function createPlannerTools(taskWorkDir?: string) {
     preference_list: tool({
       description:
         "List all active project preferences and conventions. " +
-        "Returns merged view: built-in defaults → global overrides → session overrides. " +
+        "Returns merged view: project-local cwd defaults → global overrides → session overrides. " +
         "Preferences are BINDING — your plan must respect them.",
       inputSchema: z.object({
         scope: z.enum(["all", "global"]).optional().describe("Which scope to list (default: all, merged view)"),
@@ -197,25 +197,18 @@ export function prefetchContext(taskTitle: string, taskRequest: string): string 
   // 1. Auto-recall memory with task keywords
   try {
     const keywords = extractKeywords(`${taskTitle} ${taskRequest}`)
-    if (keywords) {
-      const results = Memory.search({
-        query: keywords,
-        projectId,
-        scope: "all",
-        limit: 5,
-        minScore: 0.15,
-      })
-      if (results.length > 0) {
-        const items = results
-          .map((r) => `- **${r.fileTitle}** [${r.scope}, id: ${r.fileId}]: ${r.content.slice(0, 400)}`)
-          .join("\n")
-        sections.push(
-          `## Auto-Recalled Memory\n\n` +
-            `Found ${results.length} relevant memories for task keywords:\n\n${items}\n\n` +
-            `Use memory_search with different keywords if you need more context. Use memory_get to read full content.`,
-        )
-      }
-    }
+    const recalled = keywords
+      ? Memory.promptSection({
+          query: keywords,
+          projectId,
+          scope: "all",
+          limit: 5,
+          minScore: 0.15,
+          heading: "Auto-Recalled Memory",
+          includeEpisodes: true,
+        })
+      : null
+    if (recalled) sections.push(recalled)
   } catch {
     // best-effort
   }

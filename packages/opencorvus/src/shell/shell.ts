@@ -3,6 +3,7 @@ import { lazy } from "@/util/lazy"
 import { Filesystem } from "@/util/filesystem"
 import path from "path"
 import { spawn, type ChildProcess } from "child_process"
+import { which } from "@/util/which"
 
 const SIGKILL_TIMEOUT_MS = 200
 
@@ -16,7 +17,7 @@ export namespace Shell {
 
   function gitBashCandidates() {
     const fromGit = (() => {
-      const git = Bun.which("git")
+      const git = which("git")
       if (!git) return []
       const gitDir = path.dirname(git)
       return [path.resolve(gitDir, "..", "bin", "bash.exe"), path.resolve(gitDir, "..", "usr", "bin", "bash.exe")]
@@ -35,7 +36,7 @@ export namespace Shell {
       path.join(root, "Git", "usr", "bin", "bash.exe"),
     ])
 
-    const genericBash = [Bun.which("bash.exe"), Bun.which("bash")].filter((item): item is string => {
+    const genericBash = [which("bash.exe"), which("bash")].filter((item): item is string => {
       if (!item) return false
       return !item.toLowerCase().endsWith("\\windows\\system32\\bash.exe")
     })
@@ -86,13 +87,13 @@ export namespace Shell {
       return process.env.COMSPEC || "cmd.exe"
     }
     if (process.platform === "darwin") {
-      const zsh = Bun.which("zsh")
+      const zsh = which("zsh")
       if (zsh) return zsh
       return "/bin/zsh"
     }
-    const bash = Bun.which("bash")
+    const bash = which("bash")
     if (bash) return bash
-    const sh = Bun.which("sh")
+    const sh = which("sh")
     if (sh) return sh
     return "/bin/sh"
   }

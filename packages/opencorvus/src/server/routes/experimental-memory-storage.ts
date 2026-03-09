@@ -21,6 +21,10 @@ export function ExperimentalMemoryStorageRoutes() {
                       id: z.string(),
                       title: z.string(),
                       source: z.string(),
+                      kind: z.string(),
+                      key: z.string().optional(),
+                      importance: z.number(),
+                      confidence: z.number(),
                       timeCreated: z.number(),
                     }),
                   ),
@@ -54,6 +58,12 @@ export function ExperimentalMemoryStorageRoutes() {
                       fileId: z.string(),
                       fileTitle: z.string(),
                       content: z.string(),
+                      scope: z.string(),
+                      source: z.string(),
+                      kind: z.string(),
+                      key: z.string().optional(),
+                      importance: z.number(),
+                      confidence: z.number(),
                       score: z.number(),
                     }),
                   ),
@@ -99,13 +109,13 @@ export function ExperimentalMemoryStorageRoutes() {
           title: z.string(),
           content: z.string(),
           projectId: z.string(),
-          source: z.enum(["agent", "compaction", "user"]).optional(),
+          source: z.enum(["agent", "compaction", "user", "reflection"]).optional(),
+          kind: z.enum(["note", "episode", "fact", "lesson", "profile"]).optional(),
         }),
       ),
       async (c) => {
-        const { title, content, projectId, source } = c.req.valid("json")
-        const file = Memory.createFile({ title, source: source ?? "user", projectId })
-        Memory.writeChunks(file.id, projectId, content)
+        const { title, content, projectId, source, kind } = c.req.valid("json")
+        const file = Memory.writeFile({ title, content, source: source ?? "user", projectId, kind })
         return c.json({ id: file.id, title: file.title })
       },
     )

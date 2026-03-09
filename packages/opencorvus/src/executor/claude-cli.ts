@@ -31,7 +31,12 @@ export namespace ClaudeCLIExecutor {
             ...(info.cwd ? ["--add-dir", info.cwd] : []),
             ...(info.model ? ["--model", info.model] : []),
             ...(info.system ? ["--append-system-prompt", info.system] : []),
-            ...tools(info.tools?.flatMap((item) => (item.type === "builtin" ? [item.name] : [])) ?? []),
+            ...(info.toolMode === "none" || info.sandbox === "read-only" ? ["--permission-mode", "plan"] : []),
+            ...tools(
+              info.toolMode === "none"
+                ? [""]
+                : info.tools?.flatMap((item) => (item.type === "builtin" ? [item.name] : [])) ?? [],
+            ),
           ],
           cwd: info.cwd,
           stdin: info.prompt,
@@ -55,7 +60,12 @@ export namespace ClaudeCLIExecutor {
             ...(info.cwd ? ["--add-dir", info.cwd] : []),
             ...(info.model ? ["--model", info.model] : []),
             ...(info.system ? ["--append-system-prompt", info.system] : []),
-            ...tools(info.tools?.flatMap((item) => (item.type === "builtin" ? [item.name] : [])) ?? []),
+            ...(info.toolMode === "none" || info.sandbox === "read-only" ? ["--permission-mode", "plan"] : []),
+            ...tools(
+              info.toolMode === "none"
+                ? [""]
+                : info.tools?.flatMap((item) => (item.type === "builtin" ? [item.name] : [])) ?? [],
+            ),
           ],
           cwd: info.cwd,
           stdin: info.prompt,

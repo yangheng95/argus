@@ -13,6 +13,8 @@ describe("executor protocol info", () => {
     expect(info.version).toBe("v2")
     expect(info.capabilities.custom_tools).toBe(true)
     expect(info.capabilities.realtime).toBe(true)
+    expect(info.capabilities.spec_generation).toBe(true)
+    expect(info.capabilities.plan_generation).toBe(true)
   })
 
   test("reports codex cli capabilities when forced", () => {
@@ -37,5 +39,6 @@ describe("executor protocol info", () => {
     expect(info.transport.kind).toBe("inproc")
     expect(info.capabilities.structured_output).toBe(true)
     expect(info.capabilities.approvals).toEqual(["permission", "elicitation"])
+    expect(info.capabilities.plan_generation).toBe(true)
   })
 })

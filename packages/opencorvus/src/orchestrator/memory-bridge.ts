@@ -81,14 +81,18 @@ export namespace OrchestratorMemoryBridge {
       }
 
       const markdown = sections.join("\n")
-      const file = Memory.createFile({
+      const result = Memory.captureEpisode({
         title: `Task: ${task.title.slice(0, 80)}`,
+        content: markdown,
         source: "compaction",
         projectId: task.project_id,
         scope: "global",
       })
-      Memory.writeChunks(file.id, task.project_id, markdown)
-      log.info("flushed task learnings to memory", { taskID: task.id, fileID: file.id })
+      log.info("flushed task learnings to memory", {
+        taskID: task.id,
+        fileID: result.episode.id,
+        derived: result.derived.length,
+      })
     } catch (err) {
       log.warn("failed to flush task learnings", { taskID: task.id, error: String(err) })
     }
@@ -134,14 +138,18 @@ export namespace OrchestratorMemoryBridge {
       sections.push("", "## Lessons", `This task exhausted ${run.retry_count + 1} attempts. Future tasks with similar scope should account for the root cause above.`)
 
       const markdown = sections.join("\n")
-      const file = Memory.createFile({
+      const result = Memory.captureEpisode({
         title: `Failed: ${task.title.slice(0, 80)}`,
+        content: markdown,
         source: "compaction",
         projectId: task.project_id,
         scope: "global",
       })
-      Memory.writeChunks(file.id, task.project_id, markdown)
-      log.info("flushed failure learnings to memory", { taskID: task.id, fileID: file.id })
+      log.info("flushed failure learnings to memory", {
+        taskID: task.id,
+        fileID: result.episode.id,
+        derived: result.derived.length,
+      })
     } catch (err) {
       log.warn("failed to flush failure learnings", { taskID: task.id, error: String(err) })
     }

@@ -34,6 +34,7 @@ import { proxied } from "@/util/proxied"
 import { iife } from "@/util/iife"
 import { ConfigPaths } from "./paths"
 import { Filesystem } from "@/util/filesystem"
+import { buildChannelSchema } from "@/channel/catalog"
 
 export namespace Config {
   const ModelId = z.string().meta({ $ref: "https://models.dev/model-schema.json#/$defs/Model" })
@@ -631,6 +632,8 @@ export namespace Config {
           question: PermissionAction.optional(),
           plan_enter: PermissionAction.optional(),
           plan_exit: PermissionAction.optional(),
+          spec_enter: PermissionAction.optional(),
+          spec_exit: PermissionAction.optional(),
           webfetch: PermissionAction.optional(),
           websearch: PermissionAction.optional(),
           codesearch: PermissionAction.optional(),
@@ -916,6 +919,7 @@ export namespace Config {
     .object({
       port: z.number().int().positive().optional().describe("Port to listen on"),
       hostname: z.string().optional().describe("Hostname to listen on"),
+      publicUrl: z.string().optional().describe("Public base URL used for externally visible attachment links"),
       mdns: z.boolean().optional().describe("Enable mDNS service discovery"),
       mdnsDomain: z.string().optional().describe("Custom domain name for mDNS service (default: opencorvus.local)"),
       cors: z.array(z.string()).optional().describe("Additional domains to allow for CORS"),
@@ -925,43 +929,35 @@ export namespace Config {
       ref: "ServerConfig",
     })
 
-  export const SlackChannel = z
-    .object({
-      enabled: z.boolean().optional().describe("Enable Slack channel integration"),
-      botToken: z.string().optional().describe("Slack bot token"),
-      appToken: z.string().optional().describe("Slack app token for Socket Mode"),
-      signingSecret: z.string().optional().describe("Slack signing secret"),
-    })
-    .strict()
-    .meta({
-      ref: "SlackChannelConfig",
-    })
-
-  export const TelegramChannel = z
-    .object({
-      enabled: z.boolean().optional().describe("Enable Telegram channel integration"),
-      token: z.string().optional().describe("Telegram bot token"),
-    })
-    .strict()
-    .meta({
-      ref: "TelegramChannelConfig",
-    })
-
-  export const DiscordChannel = z
-    .object({
-      enabled: z.boolean().optional().describe("Enable Discord channel integration"),
-      token: z.string().optional().describe("Discord bot token"),
-    })
-    .strict()
-    .meta({
-      ref: "DiscordChannelConfig",
-    })
+  export const SlackChannel = buildChannelSchema("slack", "SlackChannelConfig")
+  export const TelegramChannel = buildChannelSchema("telegram", "TelegramChannelConfig")
+  export const DiscordChannel = buildChannelSchema("discord", "DiscordChannelConfig")
+  export const FeishuChannel = buildChannelSchema("feishu", "FeishuChannelConfig")
+  export const WhatsappChannel = buildChannelSchema("whatsapp", "WhatsappChannelConfig")
+  export const GoogleChatChannel = buildChannelSchema("googlechat", "GoogleChatChannelConfig")
+  export const MSTeamsChannel = buildChannelSchema("msteams", "MSTeamsChannelConfig")
+  export const LineChannel = buildChannelSchema("line", "LineChannelConfig")
+  export const MatrixChannel = buildChannelSchema("matrix", "MatrixChannelConfig")
+  export const MattermostChannel = buildChannelSchema("mattermost", "MattermostChannelConfig")
+  export const SignalChannel = buildChannelSchema("signal", "SignalChannelConfig")
+  export const WeComChannel = buildChannelSchema("wecom", "WeComChannelConfig")
+  export const DingTalkChannel = buildChannelSchema("dingtalk", "DingTalkChannelConfig")
 
   export const Channel = z
     .object({
       slack: SlackChannel.optional(),
       telegram: TelegramChannel.optional(),
       discord: DiscordChannel.optional(),
+      feishu: FeishuChannel.optional(),
+      whatsapp: WhatsappChannel.optional(),
+      googlechat: GoogleChatChannel.optional(),
+      msteams: MSTeamsChannel.optional(),
+      line: LineChannel.optional(),
+      matrix: MatrixChannel.optional(),
+      mattermost: MattermostChannel.optional(),
+      signal: SignalChannel.optional(),
+      wecom: WeComChannel.optional(),
+      dingtalk: DingTalkChannel.optional(),
     })
     .strict()
     .meta({
@@ -1343,8 +1339,23 @@ export namespace Config {
     return global()
   }
 
+  export function projectConfigDirectory() {
+    return path.join(Instance.directory, ".opencorvus")
+  }
+
+  export function projectConfigFile() {
+    const candidates = ["opencorvus.jsonc", "opencorvus.json"].map((file) =>
+      path.join(projectConfigDirectory(), file),
+    )
+    for (const file of candidates) {
+      if (existsSync(file)) return file
+    }
+    return candidates[0]
+  }
+
   export async function update(config: Info) {
-    await updateGlobal(config)
+    await fs.mkdir(projectConfigDirectory(), { recursive: true })
+    await writeConfigFile(projectConfigFile(), config)
     await Instance.dispose()
   }
 
@@ -1413,26 +1424,30 @@ export namespace Config {
     })
   }
 
-  export async function updateGlobal(config: Info) {
-    const filepath = globalConfigFile()
-    const before = await Filesystem.readText(filepath).catch((err: any) => {
+  async function writeConfigFile(filepath: string, config: Info) {
+    const before = await Filesystem.readText(filepath).catch((err: NodeJS.ErrnoException) => {
       if (err.code === "ENOENT") return "{}"
       throw new JsonError({ path: filepath }, { cause: err })
     })
 
-    const next = await (async () => {
-      if (!filepath.endsWith(".jsonc")) {
-        const existing = parseConfig(before, filepath)
-        const merged = mergeDeep(existing, config)
-        await Filesystem.writeJson(filepath, merged)
-        return merged
-      }
+    return filepath.endsWith(".jsonc")
+      ? (async () => {
+          const updated = patchJsonc(before, config)
+          const merged = parseConfig(updated, filepath)
+          await Filesystem.write(filepath, updated)
+          return merged
+        })()
+      : (async () => {
+          const existing = parseConfig(before, filepath)
+          const merged = mergeDeep(existing, config)
+          await Filesystem.writeJson(filepath, merged)
+          return merged
+        })()
+  }
 
-      const updated = patchJsonc(before, config)
-      const merged = parseConfig(updated, filepath)
-      await Filesystem.write(filepath, updated)
-      return merged
-    })()
+  export async function updateGlobal(config: Info) {
+    const filepath = globalConfigFile()
+    const next = await writeConfigFile(filepath, config)
 
     global.reset()
 

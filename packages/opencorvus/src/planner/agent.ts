@@ -11,7 +11,8 @@
  * 5. Structured output — PRD, goals, milestones, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
-import { generateText, stepCountIs, type LanguageModelV2 } from "ai"
+import { generateText, stepCountIs, tool } from "ai"
+import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "./tools"
@@ -112,6 +113,7 @@ export namespace HeadlessPlannerAgent {
     request: string
     /** User-provided goals -- planner should refine/expand, not discard */
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
+    spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
     /** External abort signal (overrides internal timeout when provided) */
     signal?: AbortSignal
@@ -132,7 +134,28 @@ export namespace HeadlessPlannerAgent {
     // Create tools with the correct working directory for the task.
     // Without this, the codebase tools use Instance.directory (project root)
     // instead of the task's working directory (e.g., eval workspace).
-    const tools = createPlannerTools(taskWorkDir)
+    const explorationTools = createPlannerTools(taskWorkDir)
+
+    // -----------------------------------------------------------------------
+    // submit_plan tool — the model calls this to deliver structured plan data.
+    // Tool-call arguments are parsed by the provider API, guaranteeing valid
+    // JSON without any manual sanitize/repair.
+    // -----------------------------------------------------------------------
+    let submittedPlan: PlannerOutputType | undefined
+    const allTools = {
+      ...explorationTools,
+      submit_plan: tool({
+        description:
+          "Submit the final plan after codebase exploration. " +
+          "Call this tool ONCE when you have finished exploring and are ready to deliver the plan. " +
+          "All fields are required except where noted optional.",
+        parameters: PlannerOutput,
+        execute: async (args) => {
+          submittedPlan = args as PlannerOutputType
+          return "Plan submitted successfully."
+        },
+      }),
+    }
 
     const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
@@ -147,6 +170,7 @@ export namespace HeadlessPlannerAgent {
 
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
       if (input.signal?.aborted) throw new Error("planner aborted before attempt " + (attempt + 1))
+      submittedPlan = undefined
 
       const retryContext = attempt > 0 && lastQuality
         ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
@@ -160,33 +184,19 @@ export namespace HeadlessPlannerAgent {
         prefetchedContext: context.length > 0,
         fileRefsFound: fileRefs.length,
         taskWorkDir,
-        toolCount: Object.keys(tools).length,
+        toolCount: Object.keys(allTools).length,
         attempt: attempt + 1,
         retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
 
       const result = await generateText({
-        model: language as LanguageModelV2,
+        model: language,
         stopWhen: stepCountIs(MAX_STEPS),
-        tools,
-        maxTokens: 32768,
+        tools: allTools,
+        maxOutputTokens: 32768,
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
         system: PLANNER_SYSTEM,
         prompt: userPrompt,
-      })
-
-      // Collect text from all steps
-      let allText = result.text?.trim() || ""
-      if (!allText || !allText.includes("{")) {
-        allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
-      }
-
-      log.info("planner agent finished", {
-        steps: result.steps.length,
-        finishReason: result.finishReason,
-        textLength: allText.length,
-        textPreview: allText.slice(0, 200),
-        attempt: attempt + 1,
       })
 
       // Count actual tool calls
@@ -195,10 +205,49 @@ export namespace HeadlessPlannerAgent {
         0,
       )
 
-      // Extract JSON from collected text
-      let parsed = extractJSON(allText)
+      // -----------------------------------------------------------------------
+      // Priority 1: extract from submit_plan tool call (guaranteed valid JSON)
+      // Priority 2: fallback to text JSON parsing (legacy / models that ignore tool)
+      // -----------------------------------------------------------------------
+      let parsed: PlannerOutputType
 
-      // If JSON was truncated, synthesize from exploration + request
+      if (submittedPlan) {
+        log.info("planner agent finished via submit_plan tool call", {
+          steps: result.steps.length,
+          goals: submittedPlan.goals?.length ?? 0,
+          subtasks: submittedPlan.subtasks?.length ?? 0,
+          prdLength: submittedPlan.prd?.length ?? 0,
+          attempt: attempt + 1,
+        })
+        // Normalize arrays — tool call args may not have Zod defaults applied
+        parsed = {
+          ...submittedPlan,
+          summary: submittedPlan.summary ?? "",
+          prd: submittedPlan.prd ?? "",
+          goals: Array.isArray(submittedPlan.goals) ? submittedPlan.goals : [],
+          subtasks: Array.isArray(submittedPlan.subtasks) ? submittedPlan.subtasks : [],
+          risks: Array.isArray(submittedPlan.risks) ? submittedPlan.risks : [],
+          assumptions: Array.isArray(submittedPlan.assumptions) ? submittedPlan.assumptions : [],
+        }
+      } else {
+        // Fallback: parse from text output
+        let allText = result.text?.trim() || ""
+        if (!allText || !allText.includes("{")) {
+          allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
+        }
+
+        log.info("planner agent finished via text output (no submit_plan call)", {
+          steps: result.steps.length,
+          finishReason: result.finishReason,
+          textLength: allText.length,
+          textPreview: allText.slice(0, 200),
+          attempt: attempt + 1,
+        })
+
+        parsed = extractJSON(allText)
+      }
+
+      // If plan was truncated, synthesize from exploration + request
       if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
         log.warn("planner: plan seems truncated, synthesizing from exploration", {
           prdLength: parsed.prd.length,
@@ -249,8 +298,8 @@ export namespace HeadlessPlannerAgent {
   }
 }
 
-// Backwards-compatible alias during the architecture transition.
-export import PlannerAgent = HeadlessPlannerAgent
+export { HeadlessPlannerAgent as PlannerAgent }
+export const parsePlannerOutput = extractJSON
 
 // ---------------------------------------------------------------------------
 // Internals
@@ -298,6 +347,10 @@ function extractJSON(text: string): PlannerOutputType {
       if (idx >= 0) raw = raw.slice(idx)
     }
   }
+
+  // Sanitize LLM JSON issues: unescaped backslashes, raw newlines in strings, etc.
+  // Must run BEFORE truncation repair since raw control chars confuse the repairer.
+  raw = sanitizeJSON(raw)
 
   // If no closing brace, the JSON is truncated -- try to repair it
   if (raw.startsWith("{") && !raw.endsWith("}")) {
@@ -381,15 +434,78 @@ function extractJSON(text: string): PlannerOutputType {
       goalsCount: obj.goals?.length,
       subtasksCount: obj.subtasks?.length,
     })
-    // Return a minimal valid plan rather than crashing
+    // Return a minimal valid plan rather than crashing.
+    // Coerce risks to string[] to avoid secondary Zod failure.
+    const safeRisks = Array.isArray(obj.risks)
+      ? obj.risks.filter((r: unknown) => typeof r === "string")
+      : []
     return PlannerOutput.parse({
-      prd: obj.prd || "",
-      summary: obj.summary || "",
+      prd: typeof obj.prd === "string" ? obj.prd : "",
+      summary: typeof obj.summary === "string" ? obj.summary : "",
       goals: [],
       subtasks: [],
-      risks: Array.isArray(obj.risks) ? obj.risks : [],
+      risks: safeRisks,
     })
   }
+}
+
+/**
+ * Sanitize common LLM JSON output issues:
+ * - Unescaped backslashes (e.g., Windows paths: C:\Users)
+ * - Real newlines inside JSON string values
+ * - Markdown code blocks inside string values
+ */
+function sanitizeJSON(raw: string): string {
+  let result = ""
+  let inString = false
+  let i = 0
+  while (i < raw.length) {
+    const ch = raw[i]
+    if (!inString) {
+      if (ch === '"') inString = true
+      result += ch
+      i++
+      continue
+    }
+    // Inside a string
+    if (ch === "\\") {
+      const next = raw[i + 1]
+      // Valid JSON escapes: " \ / b f n r t u
+      if (next && '"\\\/bfnrtu'.includes(next)) {
+        result += ch + next
+        i += 2
+        continue
+      }
+      // Invalid escape: double the backslash to make it valid
+      result += "\\\\"
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inString = false
+      result += ch
+      i++
+      continue
+    }
+    if (ch === "\n") {
+      result += "\\n"
+      i++
+      continue
+    }
+    if (ch === "\r") {
+      result += "\\r"
+      i++
+      continue
+    }
+    if (ch === "\t") {
+      result += "\\t"
+      i++
+      continue
+    }
+    result += ch
+    i++
+  }
+  return result
 }
 
 function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
@@ -838,6 +954,7 @@ function buildUserPrompt(
     title: string
     request: string
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
+    spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
   },
   fileRefs?: Array<{ ref: string; path: string; content: string }>,
@@ -882,6 +999,12 @@ function buildUserPrompt(
       `# User-Provided Goals\n\nThe user specified these goals. Incorporate them into your plan, refine their criteria to be more specific, and add any missing goals discovered during codebase exploration.\n\n${input.userGoals
         .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
         .join("\n")}`,
+    )
+  }
+
+  if (input.spec?.content) {
+    sections.push(
+      `# Approved Specification\n\n${input.spec.summary ? `Summary: ${input.spec.summary}\n\n` : ""}${input.spec.content}`,
     )
   }
 
@@ -938,11 +1061,11 @@ function buildUserPrompt(
     sections.push(
       "Pre-read files are provided above — analyze them before making tool calls. " +
         "Then use tools to explore related files, dependencies, test patterns, and build/test commands. " +
-        "Produce your plan as a JSON object.",
+        "Produce your plan by calling the submit_plan tool.",
     )
   } else {
     sections.push(
-      "Now recall memory, check preferences, explore the codebase thoroughly, then produce your plan as a JSON object.",
+      "Now recall memory, check preferences, explore the codebase thoroughly, then produce your plan by calling the submit_plan tool.",
     )
   }
   return sections.join("\n\n")
@@ -966,6 +1089,7 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. 
 - **search_code**: Search file contents with regex (ripgrep)
 - **list_directory**: List files and directories at a path
 - **web_search**: Search the web for external documentation (use only when needed)
+- **submit_plan**: Submit the final plan (call ONCE after exploration is complete)
 
 ## Your Process
 
@@ -1031,59 +1155,35 @@ Think: "Could an executor implement this plan without asking me any questions?" 
 
 **PRD** -- Bullet-point spec: files to modify, changes, patterns to follow, verification commands.
 
-### Phase 3: OUTPUT as JSON
+### Phase 3: OUTPUT — Call submit_plan tool
 
-Respond with ONLY a JSON object. **CRITICAL**: Output fields in EXACTLY this order — summary and goals FIRST, prd LAST. This protects critical fields from truncation.
+When you have finished exploring and are ready to deliver the plan, call the **submit_plan** tool with all the required fields. Do NOT output raw JSON text — use the tool call instead.
 
 Keep PRD concise (bullet points, ≤ 2000 chars). Goals and subtasks should be DETAILED — do not sacrifice clarity for brevity.
 
-{
-  "summary": "One-line summary of the plan",
-  "goals": [
-    {
-      "description": "Detailed description of what to achieve — explain the specific outcome, not just a command",
-      "criteria": "Exact command + expected outcome (e.g., 'bun test src/foo.test.ts 通过所有断言')",
-      "priority": "blocking",
-      "check_selector": ["build", "test"]
-    }
-  ],
-  "subtasks": [
-    {
-      "title": "Short title",
-      "description": "Implementation details: which file to modify, what to add/change, which pattern to follow, how to verify",
-      "order": 1
-    }
-  ],
-  "risks": ["Specific risk with mitigation"],
-  "milestones": [
-    {
-      "title": "Milestone name",
-      "goal_indices": [0, 1]
-    }
-  ],
-  "assumptions": [
-    {
-      "question": "Ambiguous aspect",
-      "assumption": "What we will assume"
-    }
-  ],
-  "prd": "Technical spec with bullet points: files to modify, exact changes, patterns to follow, verification commands. ≤ 2000 chars."
-}
+The submit_plan tool accepts these fields:
+- **summary**: One-line summary of the plan
+- **goals**: Array of {description, criteria (exact command + expected outcome), priority, check_selector}
+- **subtasks**: Array of {title, description (file paths + changes + patterns), order}
+- **risks**: Array of specific risks with mitigation
+- **milestones** (optional): Array of {title, goal_indices}
+- **assumptions** (optional): Array of {question, assumption}
+- **prd**: Technical spec with bullet points: files to modify, exact changes, patterns, verification commands. ≤ 2000 chars.
 
 ## Rules
 
 - ALWAYS explore the codebase before planning. No exceptions. Plans without tool calls score 0.
 - Every file path in your plan MUST come from actual tool results or pre-read files -- never guess paths.
 - goals.criteria must be executable commands with expected outcomes, not vague statements.
-- goals.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, judge
+- goals.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
 - Every blocking goal MUST have at least one check_selector.
 - subtask descriptions must reference specific files, functions, and patterns discovered during exploration.
 - Write in the same language as the request (Chinese request -> Chinese plan).
 - If replanning: your new plan MUST differ from the previous failed approach.
 - The prd field must be detailed enough that an executor agent can implement everything without further exploration.
-- After finishing tool calls, output JSON immediately. Do NOT add commentary outside the JSON.
+- After finishing exploration, call submit_plan with your plan. Do NOT output raw JSON text.
+- If submit_plan is unavailable, output JSON as a fallback.
 - Do NOT produce generic advice like "follow best practices" or "handle edge cases" -- be specific about WHICH practices and WHICH edge cases.
-- Do NOT output markdown headings or prose before the JSON -- the output must be parseable JSON.
 
 ## Quality Self-Check (MANDATORY)
 
@@ -1102,5 +1202,5 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 - PRD: Use bullet points, keep under 2000 chars.
 - Goals: Be DETAILED in description and criteria. Goals are the most important output.
 - Subtasks: Include file paths and verification steps.
-- Output fields in the order shown above (summary -> goals -> subtasks -> ... -> prd).
-- Output ONLY the JSON object. No markdown, no commentary, no headers.`
+- Call submit_plan exactly once after exploration is complete.
+- Do NOT output raw JSON. Use the submit_plan tool call.`

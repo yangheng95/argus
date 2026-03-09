@@ -6,7 +6,7 @@
 
 <p align="center">slogan: TBD</p>
 
-OpenCorvus sits between human requests and coding agents. You hand it a task. It expands the request into an executable spec, turns that into goals and a plan, dispatches an executor, evaluates the delivery, and either completes, retries, or replans.
+OpenCorvus sits between human requests and coding agents. You hand it a task. It promotes the request into an executable spec through a first-class `spec` agent, hands that spec to a `plan` agent, dispatches an executor, runs delivery evaluation with `spec check`, and either completes, retries, or replans.
 
 ### Why OpenCorvus
 
@@ -15,17 +15,18 @@ OpenCorvus sits between human requests and coding agents. You hand it a task. It
 - Scoped project knowledge: session memory plus global memory and preferences shared across sessions
 - Built-in `opencode` execution path, with optional `codex` and `claude-code` executors when those CLIs are present
 - Human-in-the-loop permission and question handling
-- Evaluator-driven loops for `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, and LLM review checks
+- Evaluator-driven loops for `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks, and a default-on `spec check` acceptance gate
 - Local TUI, headless server, overlay UI, and Slack gateway in the same repo
 - A separate bot package with adapters for Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk
 
 ### How It Works
 
 1. Accept a task from API, Slack, or a local session.
-2. Expand the request into a concrete PRD, goals, and subtasks.
-3. Dispatch an executor against the repo.
-4. Capture delivery artifacts and run evaluator checks.
-5. Retry the same plan or create a new plan version until the task passes or the budget is exhausted.
+2. Use the `spec` agent to research, clarify, and write or complete the spec.
+3. Use the `plan` agent to turn the spec into goals and subtasks.
+4. Dispatch an executor against the repo.
+5. Capture delivery artifacts and run evaluator checks with `spec check` enabled by default.
+6. Accept the task only when required spec items are satisfied accurately and completely; otherwise retry the same plan or create a new plan version until the budget is exhausted.
 
 ### Installation
 
@@ -91,7 +92,7 @@ opencorvus slack
 What the Slack gateway does today:
 
 - Starts a task from the first message in a thread
-- Mirrors plan, run, delivery, and evaluation updates back into the thread
+- Mirrors spec, plan, run, delivery, and evaluation updates back into the thread
 - Accepts permission replies like `allow`, `always`, and `reject`
 - Accepts follow-up operator messages and routes them into the task loop
 
@@ -143,7 +144,7 @@ bun ./packages/sdk/js/script/build.ts
 
 #### How is this different from a direct coding agent?
 
-OpenCorvus is built for delegated development workflows. It adds durable task orchestration, goal tracking, evaluator-driven retries, remote channels, and operator feedback loops on top of direct coding-agent execution.
+OpenCorvus is built for delegated development workflows. It adds durable task orchestration, spec-first planning, goal tracking, evaluator-driven retries, remote channels, and operator feedback loops on top of direct coding-agent execution.
 
 #### Is OpenCorvus only a Slack bot?
 

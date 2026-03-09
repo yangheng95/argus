@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { ControlTimeline } from "../../src/control/timeline"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -126,6 +127,54 @@ describe("control routes", () => {
         expect(body[0]?.parts[0]?.text).toBe("Create a task to implement feature x.")
         expect(body[1]?.info.role).toBe("assistant")
         expect(body[1]?.parts[0]?.text).toContain("Task accepted:")
+      },
+    })
+  })
+
+  test("GET /control/timeline includes screenshot attachments as file parts", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ControlTimeline.append({
+          surface: "panel",
+          source: "panel",
+          entries: [
+            {
+              role: "assistant",
+              text: "Captured OpenCorvus GUI.",
+              metadata: {
+                attachments: [
+                  {
+                    mime: "image/png",
+                    filename: "opencorvus-gui.png",
+                    url: "data:image/png;base64,aGVsbG8=",
+                  },
+                ],
+              },
+            },
+          ],
+        })
+
+        const app = Server.App()
+        const res = await app.request("/control/timeline?surface=panel", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(res.status).toBe(200)
+        const body = await res.json() as Array<{
+          info: { role: string }
+          parts: Array<{ type: string; text?: string; mime?: string; filename?: string }>
+        }>
+        const message = body.find((item) => item.parts[0]?.text === "Captured OpenCorvus GUI.")
+        expect(message).toBeDefined()
+        expect(message?.parts[1]).toMatchObject({
+          type: "file",
+          mime: "image/png",
+          filename: "opencorvus-gui.png",
+        })
       },
     })
   })

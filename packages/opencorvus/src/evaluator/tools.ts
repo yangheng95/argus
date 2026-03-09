@@ -22,7 +22,7 @@ const log = Log.create({ service: "evaluator-tools" })
  * - 1 memory tool: memory_search (for checking historical failure patterns)
  * - 1 preference tool: preference_list (for checking convention compliance)
  */
-export function createEvaluatorTools() {
+export function createEvaluatorTools(input?: { sessionID?: string }) {
   const codebase = createCodebaseTools()
   const projectId = Instance.project.id
 
@@ -44,6 +44,7 @@ export function createEvaluatorTools() {
           const results = Memory.search({
             query,
             projectId,
+            sessionID: input?.sessionID,
             scope: "all",
             limit: max_results ?? 5,
             minScore: 0.1,
@@ -52,7 +53,7 @@ export function createEvaluatorTools() {
           return results
             .map(
               (r, i) =>
-                `[${i + 1}] ${r.fileTitle} (${r.scope}, score: ${r.score.toFixed(2)})\n${r.content.slice(0, 500)}`,
+                `[${i + 1}] ${r.fileTitle} (${r.kind}/${r.scope}, score: ${r.score.toFixed(2)})\n${r.content.slice(0, 500)}`,
             )
             .join("\n\n---\n\n")
         } catch (err) {
@@ -66,7 +67,7 @@ export function createEvaluatorTools() {
     preference_list: tool({
       description:
         "List active project preferences and conventions. " +
-        "Use when checking if the delivered code follows established project standards.",
+        "Use when checking if the delivered code follows project-local cwd preferences and user-defined standards.",
       inputSchema: z.object({
         scope: z.enum(["all", "global"]).optional().describe("Which scope to list (default: all)"),
       }),

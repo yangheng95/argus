@@ -3,6 +3,7 @@ import { Instance } from "@/project/instance"
 import { Installation } from "@/installation"
 import { Process } from "@/util/process"
 import { Log } from "@/util/log"
+import { ChannelCatalog, channelEnv } from "./catalog"
 
 const log = Log.create({ service: "channel.supervisor" })
 
@@ -93,31 +94,17 @@ function desired(config?: Record<string, unknown>) {
   const env: Record<string, string> = {}
   const channels: string[] = []
 
-  if (
-    channel.slack?.enabled !== false &&
-    text(channel.slack?.botToken, process.env.SLACK_BOT_TOKEN) &&
-    text(channel.slack?.appToken, process.env.SLACK_APP_TOKEN)
-  ) {
-    env.SLACK_BOT_TOKEN = text(channel.slack?.botToken, process.env.SLACK_BOT_TOKEN)!
-    env.SLACK_APP_TOKEN = text(channel.slack?.appToken, process.env.SLACK_APP_TOKEN)!
-    if (text(channel.slack?.signingSecret, process.env.SLACK_SIGNING_SECRET)) {
-      env.SLACK_SIGNING_SECRET = text(channel.slack?.signingSecret, process.env.SLACK_SIGNING_SECRET)!
-    }
-    channels.push("slack")
-  }
-  if (channel.telegram?.enabled !== false && text(channel.telegram?.token, process.env.TELEGRAM_BOT_TOKEN, process.env.OPENCLAW_TELEGRAM_BOT_TOKEN)) {
-    env.TELEGRAM_BOT_TOKEN = text(channel.telegram?.token, process.env.TELEGRAM_BOT_TOKEN, process.env.OPENCLAW_TELEGRAM_BOT_TOKEN)!
-    channels.push("telegram")
-  }
-  if (channel.discord?.enabled !== false && text(channel.discord?.token, process.env.DISCORD_BOT_TOKEN)) {
-    env.DISCORD_BOT_TOKEN = text(channel.discord?.token, process.env.DISCORD_BOT_TOKEN)!
-    channels.push("discord")
+  for (const item of ChannelCatalog) {
+    const next = channelEnv(item.id, channel[item.id], process.env)
+    if (!next) continue
+    Object.assign(env, next)
+    channels.push(item.id)
   }
 
   if (channels.length === 0) {
     return {
       status: "disabled" as const,
-      detail: "No managed Slack, Telegram, or Discord runtime configured.",
+      detail: "No managed channel runtime configured.",
       env: undefined,
       signature: "",
       channels,
@@ -125,6 +112,7 @@ function desired(config?: Record<string, unknown>) {
   }
 
   env.OPENCORVUS_BOT_SERVER_URL = process.env.OPENCORVUS_SERVER_URL || "http://127.0.0.1:7878"
+  env.OPENCORVUS_BOT_CHANNEL_PROTOCOL = "1"
   env.OPENCORVUS_PROJECT_DIR = Instance.directory
   env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(config ?? {})
 
@@ -213,11 +201,4 @@ function snapshot(current: State) {
     logs: [...current.logs],
     running: !!current.child && current.status === "running",
   }
-}
-
-function text(...values: Array<unknown>) {
-  for (const value of values) {
-    if (typeof value === "string" && value.trim()) return value.trim()
-  }
-  return undefined
 }

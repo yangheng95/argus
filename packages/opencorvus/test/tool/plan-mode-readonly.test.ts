@@ -48,7 +48,7 @@ describe("plan mode read-only enforcement", () => {
         await Session.updateMessage(assistant)
 
         const captured: Array<{ sessionID: string; extra?: Record<string, any> }> = []
-        spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+        const prompt = Object.assign(async (input: Parameters<typeof SessionPrompt.prompt>[0]) => {
           captured.push({ sessionID: input.sessionID, extra: input.extra })
           return {
             info: {
@@ -76,7 +76,11 @@ describe("plan mode read-only enforcement", () => {
               } satisfies MessageV2.TextPart,
             ],
           }
+        }, {
+          force: async (input: Parameters<typeof SessionPrompt.prompt>[0]) => prompt(input),
+          schema: SessionPrompt.PromptInput,
         })
+        spyOn(SessionPrompt, "prompt").mockImplementation(prompt)
 
         const task = await TaskTool.init({ agent: await import("../../src/agent/agent").then((m) => m.Agent.get("plan")) as any })
         const result = await task.execute(

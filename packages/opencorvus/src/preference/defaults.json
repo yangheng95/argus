@@ -1,0 +1,18 @@
+[
+  {
+    "key": "problem_solving_approach",
+    "value": "Do not rely on patches or temporary workarounds. Resolve problems thoroughly at the root-cause and architectural level."
+  },
+  {
+    "key": "code_design_principle",
+    "value": "Keep generated code highly cohesive and loosely coupled: related logic should stay together and cross-module dependencies should be minimized."
+  },
+  {
+    "key": "code_comments",
+    "value": "Add clear comments where needed to explain intent, important logic, and non-obvious design decisions."
+  },
+  {
+    "key": "readme_policy",
+    "value": "Add or update a README for every new module or major feature change. Keep it concise but informative."
+  }
+]

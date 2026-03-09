@@ -20,12 +20,8 @@ const disposal = {
 
 export const Instance = {
   async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
-    // Normalize MINGW-style paths on Windows (/d/foo → D:\foo)
-    let directory = input.directory
-    if (process.platform === "win32") {
-      const m = directory.match(/^\/([a-zA-Z])(\/.*)?$/)
-      if (m) directory = `${m[1].toUpperCase()}:${m[2] || "\\"}`
-    }
+    // Normalize project directories once so cache keys and boundary checks stay stable.
+    const directory = Filesystem.resolve(input.directory)
     let existing = cache.get(directory)
     if (!existing) {
       Log.Default.info("creating instance", { directory })
@@ -60,6 +56,26 @@ export const Instance = {
   },
   get project() {
     return context.use().project
+  },
+  async refresh(directory = Instance.directory) {
+    const key = Filesystem.resolve(directory)
+    const next = await Project.fromDirectory(key)
+    const existing = cache.get(key)
+    if (!existing) {
+      const ctx = {
+        directory: key,
+        worktree: next.sandbox,
+        project: next.project,
+      }
+      cache.set(key, Promise.resolve(ctx))
+      return ctx
+    }
+    const ctx = await existing
+    ctx.directory = key
+    ctx.worktree = next.sandbox
+    ctx.project = next.project
+    cache.set(key, Promise.resolve(ctx))
+    return ctx
   },
   /**
    * Check if a path is within the project boundary.

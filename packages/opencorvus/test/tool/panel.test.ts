@@ -17,7 +17,7 @@ describe("panel tool", () => {
     await resetDatabase()
   })
 
-  test("delete_session cancels every linked task", async () => {
+  test("delete_session deletes every linked task", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -78,9 +78,7 @@ describe("panel tool", () => {
         )
         const current = tasks.filter((item) => item.title.startsWith(prefix))
 
-        expect(current).toHaveLength(101)
-        expect(current.every((item) => item.status === "cancelled")).toBe(true)
-        expect(current.every((item) => item.session_id === null)).toBe(true)
+        expect(current).toHaveLength(0)
         expect(output.session_id).toBe(session.id)
         expect(output.local_action).toEqual({
           type: "invalidate_session",
@@ -139,8 +137,11 @@ describe("panel tool", () => {
               lint: true,
               build: true,
               test: false,
+              artifact: true,
+              ui_review: true,
               code_quality: true,
               code_review: true,
+              spec_check: true,
               judge: false,
             },
           },
@@ -168,6 +169,7 @@ describe("panel tool", () => {
 
         expect(row?.metadata?.checks).toEqual({
           test: false,
+          artifact: {},
           code_quality: {
             enabled: true,
             prompt: "preserve me",
@@ -175,9 +177,15 @@ describe("panel tool", () => {
           code_review: {
             enabled: true,
           },
+          ui_review: {
+            target: "web",
+          },
           visual: {
             target: "web",
             url: "https://example.com/review",
+          },
+          spec_check: {
+            enabled: true,
           },
           lint: ["bun", "run", "lint"],
         })

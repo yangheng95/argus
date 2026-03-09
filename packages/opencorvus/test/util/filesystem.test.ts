@@ -343,6 +343,31 @@ describe("filesystem", () => {
     })
   })
 
+  describe("resolve()", () => {
+    test("normalizes relative paths to absolute paths", async () => {
+      await using tmp = await tmpdir()
+      const original = process.cwd()
+
+      try {
+        process.chdir(tmp.path)
+        expect(Filesystem.resolve(path.join("nested", "..", "file.txt"))).toBe(
+          Filesystem.normalizePath(path.resolve("file.txt")),
+        )
+      } finally {
+        process.chdir(original)
+      }
+    })
+
+    test("converts Git Bash paths at the boundary", () => {
+      if (process.platform === "win32") {
+        expect(Filesystem.resolve("/c/Users/test")).toBe(Filesystem.normalizePath(path.resolve("C:/Users/test")))
+        return
+      }
+
+      expect(Filesystem.resolve("/c/Users/test")).toBe(path.resolve("/c/Users/test"))
+    })
+  })
+
   describe("writeStream()", () => {
     test("writes from Web ReadableStream", async () => {
       await using tmp = await tmpdir()

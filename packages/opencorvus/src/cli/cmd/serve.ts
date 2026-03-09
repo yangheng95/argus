@@ -71,7 +71,11 @@ async function killOldProcess(port: number) {
 
 export const ServeCommand = cmd({
   command: "serve",
-  builder: (yargs) => withNetworkOptions(yargs),
+  builder: (yargs) =>
+    withNetworkOptions(yargs).option("project-dir", {
+      type: "string",
+      describe: "default project directory for all task operations (sandbox)",
+    }),
   describe: "starts a headless opencorvus server",
   handler: async (args) => {
     // When launched as default entry (double-click), hide console window
@@ -84,6 +88,13 @@ export const ServeCommand = cmd({
       console.log("Warning: OPENCORVUS_SERVER_PASSWORD is not set; server is unsecured.")
     }
     const opts = await resolveNetworkOptions(args)
+
+    // Resolve --project-dir: CLI arg > env var > process.cwd()
+    const projectDir = (args as any)["project-dir"] || process.env.OPENCORVUS_PROJECT_DIR || undefined
+    if (projectDir) {
+      const resolved = require("path").resolve(projectDir)
+      console.log(`Project directory (sandbox): ${resolved}`)
+    }
 
     // Kill old process if port is occupied, then wait for release with retries
     if (opts.port > 0 && (await isPortInUse(opts.port, opts.hostname))) {
@@ -102,7 +113,10 @@ export const ServeCommand = cmd({
       console.error("[serve] unhandledRejection:", err)
     })
 
-    const server = Server.listen(opts)
+    const server = Server.listen({
+      ...opts,
+      projectDir: projectDir ? require("path").resolve(projectDir) : undefined,
+    })
     console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
     console.log(`overlay UI available at http://${server.hostname}:${server.port}/ui/`)
 

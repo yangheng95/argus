@@ -26,7 +26,7 @@ test(
       const allPassed = input.checkResults.every((c) => c.status === "passed")
       return {
         verdict: allPassed ? "accepted" : "rejected",
-        classification: allPassed ? "none" : "evaluation",
+        classification: "evaluation",
         summary: allPassed ? "All checks passed" : "Some checks failed",
         goal_statuses: input.goals.map((_, i) => ({
           goal_index: i,
@@ -57,7 +57,16 @@ test(
           check_selector: ["verify_cmd"],
         },
       }],
-      metadata: {},
+      metadata: {
+        strategy: "initial",
+        steps: ["Execute the task"],
+        planner: {
+          role: "headless_compiler",
+          quality: "compiled",
+          source: "planner_agent",
+          clarification_source: "none",
+        },
+      },
     })
     const status = spyOn(OpencodeExecutor, "status").mockResolvedValue({
       queueTaskID: Identifier.ascending("task"),

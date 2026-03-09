@@ -20,6 +20,7 @@ import { InstructionPrompt } from "./instruction"
 import { Plugin } from "../plugin"
 import MAX_STEPS from "../session/prompt/max-steps.txt"
 import PLAN_REMINDER from "../session/prompt/plan-reminder-anthropic.txt"
+import SPEC_REMINDER from "../session/prompt/spec-reminder-anthropic.txt"
 import { defer } from "../util/defer"
 import { ToolRegistry } from "../tool/registry"
 import { MCP } from "../mcp"
@@ -48,9 +49,7 @@ import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
 import { Preference } from "@/preference"
 import { messageControlOnly, textForBoth } from "./part-visibility"
-
-// @ts-ignore
-globalThis.AI_SDK_LOG_WARNINGS = false
+import { installRuntimeShims } from "@/runtime/shims"
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
 
@@ -65,6 +64,12 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 const BUILD_SWITCH = `<system-reminder>
 Plan mode has ended. Read the implementation plan at {{plan}} before making edits.
 Use that file as the execution source of truth unless the user overrides it.
+</system-reminder>`
+
+const PLAN_SWITCH_FROM_SPEC = `<system-reminder>
+Spec mode has ended. Read the specification at {{spec}} before creating the implementation plan.
+Use that file as the requirements source of truth unless the user overrides it.
+All acceptance criteria in the spec must be fulfilled for the task to be accepted.
 </system-reminder>`
 
 export namespace SessionPrompt {
@@ -164,6 +169,7 @@ export namespace SessionPrompt {
   export type PromptInput = z.infer<typeof PromptInput>
 
   export const prompt = fn(PromptInput, async (input) => {
+    installRuntimeShims()
     const session = await Session.get(input.sessionID)
     await SessionRevert.cleanup(session)
 
@@ -554,6 +560,7 @@ export namespace SessionPrompt {
       processor,
       bypassAgentCheck,
       messages: input.msgs,
+      extra: input.lastUser.extra,
     })
     if (input.lastUser.format?.type === "json_schema") {
       tools["StructuredOutput"] = createStructuredOutputTool({
@@ -602,7 +609,16 @@ export namespace SessionPrompt {
       sessionID: input.sessionID,
     })
     if (preferenceSection) system.push(preferenceSection)
-    const memoryInstruction = await MemoryInjection.systemPromptSection()
+    const memoryQuery = (lastUserMsg?.parts ?? [])
+      .filter((part): part is MessageV2.TextPart => part.type === "text" && textForBoth(part))
+      .map((part) => part.text)
+      .join(" ")
+      .trim()
+    const memoryInstruction = await MemoryInjection.systemPromptSection({
+      projectID: Instance.project.id,
+      sessionID: input.sessionID,
+      query: memoryQuery || input.session.title || input.lastUser.id,
+    })
     if (memoryInstruction) system.push(memoryInstruction)
     const scratchpadSection = Scratchpad.systemPromptSection(input.sessionID)
     if (scratchpadSection) system.push(scratchpadSection)
@@ -677,7 +693,6 @@ export namespace SessionPrompt {
       messages: modelMessages,
       tools,
       model: input.model,
-      toolChoice: format.type === "json_schema" ? "required" : undefined,
     })
 
     if (structured !== undefined) {
@@ -688,12 +703,7 @@ export namespace SessionPrompt {
     }
 
     const modelFinished = processor.message.finish && !["tool-calls", "unknown"].includes(processor.message.finish)
-    if (modelFinished && !processor.message.error && format.type === "json_schema") {
-      processor.message.error = new MessageV2.StructuredOutputError({
-        message: "Model did not produce structured output",
-        retries: 0,
-      }).toObject()
-      await Session.updateMessage(processor.message)
+    if (modelFinished && format.type === "json_schema") {
       return "stop" as const
     }
 
@@ -714,6 +724,7 @@ export namespace SessionPrompt {
     resume_existing: z.boolean().optional(),
   })
   export const loop = fn(LoopInput, async (input) => {
+    installRuntimeShims()
     const { sessionID, resume_existing } = input
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
@@ -935,7 +946,7 @@ export namespace SessionPrompt {
       extra: {
         model: input.model,
         bypassAgentCheck: input.bypassAgentCheck,
-        ...(input.agent.name === "plan" || input.extra?.planMode === true ? { planMode: true } : {}),
+        ...(input.agent.name === "plan" || input.agent.name === "spec" || input.extra?.planMode === true ? { planMode: true } : {}),
         ...(input.extra ?? {}),
       },
       agent: input.agent.name,
@@ -1163,6 +1174,7 @@ export namespace SessionPrompt {
       system: input.system,
       format: input.format,
       variant,
+      extra: input.extra,
     }
     using _ = defer(() => InstructionPrompt.clear(info.id))
 
@@ -1177,12 +1189,52 @@ export namespace SessionPrompt {
       const msgs = await Session.messages({ sessionID: input.sessionID, limit: 8 })
       const last = msgs.at(-1)?.info
 
+      if (agent.name === "spec") {
+        if (last?.agent === "spec") return []
+        const spec = Session.spec(session)
+        const specExists = await Bun.file(spec).exists()
+        await fs.mkdir(path.dirname(spec), { recursive: true })
+        return [{
+          messageID: info.id,
+          sessionID: input.sessionID,
+          type: "text",
+          synthetic: true,
+          kind: "control",
+          source: "system",
+          text: SPEC_REMINDER.replace(
+            "{{spec_file_info}}",
+            specExists
+              ? `A spec file already exists at \`${spec}\`. You can read it and make incremental edits using the Write or Edit tool.`
+              : `No spec file exists yet. You should create your spec at \`${spec}\` using the Write tool.`,
+          ),
+        }]
+      }
+
       if (agent.name === "plan") {
         if (last?.agent === "plan") return []
+        const parts: Draft<MessageV2.Part>[] = []
+
+        // If transitioning from spec mode, inject spec context
+        if (last?.agent === "spec") {
+          const spec = Session.spec(session)
+          const specExists = await Bun.file(spec).exists()
+          if (specExists) {
+            parts.push({
+              messageID: info.id,
+              sessionID: input.sessionID,
+              type: "text",
+              synthetic: true,
+              kind: "control",
+              source: "system",
+              text: PLAN_SWITCH_FROM_SPEC.replace("{{spec}}", spec),
+            })
+          }
+        }
+
         const plan = Session.plan(session)
         const exists = await Bun.file(plan).exists()
         await fs.mkdir(path.dirname(plan), { recursive: true })
-        return [{
+        parts.push({
           messageID: info.id,
           sessionID: input.sessionID,
           type: "text",
@@ -1195,7 +1247,24 @@ export namespace SessionPrompt {
               ? `A plan file already exists at \`${plan}\`. You can read it and make incremental edits using the Write or Edit tool.`
               : `No plan file exists yet. You should create your plan at \`${plan}\` using the Write tool.`,
           ),
-        }]
+        })
+        return parts
+      }
+
+      if (last?.agent === "spec") {
+        const spec = Session.spec(session)
+        const specExists = await Bun.file(spec).exists()
+        if (specExists) {
+          return [{
+            messageID: info.id,
+            sessionID: input.sessionID,
+            type: "text",
+            synthetic: true,
+            kind: "control",
+            source: "system",
+            text: PLAN_SWITCH_FROM_SPEC.replace("{{spec}}", spec),
+          }]
+        }
       }
 
       if (last?.agent !== "plan") return []
@@ -1559,6 +1628,7 @@ export namespace SessionPrompt {
   })
   export type ShellInput = z.infer<typeof ShellInput>
   export async function shell(input: ShellInput) {
+    installRuntimeShims()
     const abort = start(input.sessionID)
     if (!abort) {
       throw new Session.BusyError(input.sessionID)
@@ -1830,6 +1900,7 @@ export namespace SessionPrompt {
    */
 
   export async function command(input: CommandInput) {
+    installRuntimeShims()
     log.info("command", input)
     const command = await Command.get(input.command)
     const agentName = command.agent ?? input.agent ?? (await Agent.defaultAgent())

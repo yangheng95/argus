@@ -1,6 +1,6 @@
 import { OpencodeExecutor } from "./opencode"
 import { ManagedCodingExecutor } from "./managed"
-import type { CodingProvider, ExecutorAdapter, ExecutorNameInfo } from "./compat"
+import type { CodingProvider, CodingToolInfo, ExecutorAdapter, ExecutorNameInfo } from "./compat"
 import { ExecutorNotConfiguredError } from "./compat"
 
 const base = () =>
@@ -13,7 +13,7 @@ const state = {
 }
 
 export namespace ExecutorRegistry {
-  function get(name: ExecutorNameInfo) {
+  function get(name: ExecutorNameInfo): ExecutorAdapter | undefined {
     if (name === "opencode") return state.items.get(name) ?? OpencodeExecutor
     return state.items.get(name)
   }
@@ -40,6 +40,7 @@ export namespace ExecutorRegistry {
       cwd?: string | (() => string | undefined)
       system?: string | (() => string | undefined)
       maxTurns?: number | (() => number | undefined)
+      tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
     },
   ) {
     return register(name, ManagedCodingExecutor.create(provider, options))

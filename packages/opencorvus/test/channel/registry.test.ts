@@ -19,13 +19,22 @@ describe("channel.registry", () => {
       directory: tmp.path,
       fn: async () => {
         const items = await ChannelRegistry.list()
+        const ids = items.map((item) => item.id)
         const telegram = items.find((item) => item.id === "telegram")
         const discord = items.find((item) => item.id === "discord")
+        const feishu = items.find((item) => item.id === "feishu")
+        const whatsapp = items.find((item) => item.id === "whatsapp")
 
+        expect(ids).toContain("feishu")
+        expect(ids).toContain("whatsapp")
+        expect(ids).toContain("signal")
+        expect(ids).toContain("mattermost")
         expect(telegram?.runtime_status).toBeDefined()
         expect(typeof telegram?.runtime_detail).toBe("string")
         expect(discord?.runtime_status).toBeDefined()
         expect(typeof discord?.runtime_detail).toBe("string")
+        expect(feishu?.fields.some((item) => item.key === "appId")).toBe(true)
+        expect(whatsapp?.fields.some((item) => item.key === "numberId")).toBe(true)
       },
     })
   })

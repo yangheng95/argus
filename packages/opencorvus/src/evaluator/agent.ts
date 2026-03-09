@@ -10,7 +10,8 @@
  * 4. Evaluates each goal independently against the delivery
  * 5. Produces targeted replan guidance when needed
  */
-import { generateText, stepCountIs, type LanguageModelV2 } from "ai"
+import { generateText, stepCountIs } from "ai"
+import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createEvaluatorTools } from "./tools"
@@ -91,7 +92,7 @@ const TIMEOUT_MS = 240_000
 
 export namespace EvaluatorAgent {
   export async function analyze(input: {
-    task: { title: string; request: string }
+    task: { title: string; request: string; sessionID?: string }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
@@ -103,7 +104,7 @@ export namespace EvaluatorAgent {
     }
 
     // Full evaluator tool set: codebase exploration + memory + preferences
-    const tools = createEvaluatorTools()
+    const tools = createEvaluatorTools({ sessionID: input.task.sessionID })
 
     // Pre-fetch context: historical failures + preferences (like planner's prefetchContext)
     const context = prefetchEvaluatorContext(input)
@@ -119,10 +120,10 @@ export namespace EvaluatorAgent {
     })
 
     const result = await generateText({
-      model: language as LanguageModelV2,
+      model: language,
       stopWhen: stepCountIs(MAX_STEPS),
       tools,
-      maxTokens: 16384,
+      maxOutputTokens: 16384,
       abortSignal: AbortSignal.timeout(TIMEOUT_MS),
       system: EVALUATOR_SYSTEM,
       prompt: userPrompt,
@@ -373,7 +374,7 @@ async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
 // ---------------------------------------------------------------------------
 
 function prefetchEvaluatorContext(input: {
-  task: { title: string; request: string }
+  task: { title: string; request: string; sessionID?: string }
   checkResults: CheckResult[]
   delivery: DeliveryInfo
 }): string {
@@ -385,23 +386,17 @@ function prefetchEvaluatorContext(input: {
     const failedChecks = input.checkResults.filter((c) => c.status === "failed")
     if (failedChecks.length > 0) {
       const query = failedChecks.map((c) => c.name).join(" ") + " failure " + input.task.title
-      const results = Memory.search({
+      const recalled = Memory.promptSection({
         query,
         projectId,
+        sessionID: input.task.sessionID,
         scope: "all",
         limit: 3,
         minScore: 0.15,
+        heading: "Historical Context (Auto-Recalled)",
+        includeEpisodes: true,
       })
-      if (results.length > 0) {
-        const items = results
-          .map((r) => `- **${r.fileTitle}** [score: ${r.score.toFixed(2)}]: ${r.content.slice(0, 300)}`)
-          .join("\n")
-        sections.push(
-          `## Historical Context (Auto-Recalled)\n\n` +
-            `Found ${results.length} possibly related memories:\n\n${items}\n\n` +
-            `Use memory_search with different keywords if you need more history.`,
-        )
-      }
+      if (recalled) sections.push(recalled)
     }
   } catch {
     // best-effort

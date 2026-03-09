@@ -3,7 +3,10 @@ import { describeRoute, resolver, validator } from "hono-openapi"
 import { ChannelIngress, MessageInput, MessageResult } from "@/channel/ingress"
 import { ChannelRegistry } from "@/channel/registry"
 import { ChannelSupervisor } from "@/channel/supervisor"
+import { ChannelAttachment } from "@/channel/attachment"
 import { lazy } from "../../util/lazy"
+import { errors } from "../error"
+import z from "zod"
 
 export const ChannelRoutes = lazy(() =>
   new Hono()
@@ -26,6 +29,67 @@ export const ChannelRoutes = lazy(() =>
       }),
       async (c) => {
         return c.json(await ChannelRegistry.list())
+      },
+    )
+    .post(
+      "/attachment",
+      describeRoute({
+        summary: "Create a temporary channel attachment URL",
+        description: "Store a temporary attachment and return a signed public URL for channels that require remote image URLs.",
+        operationId: "channel.attachment.create",
+        responses: {
+          200: {
+            description: "Attachment created",
+            content: {
+              "application/json": {
+                schema: resolver(
+                  z.object({
+                    id: z.string(),
+                    url: z.string(),
+                    mime: z.string(),
+                    filename: z.string(),
+                    expires_at: z.number(),
+                  }),
+                ),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator("json", ChannelAttachment.Input),
+      async (c) => {
+        return c.json(await ChannelAttachment.create(c.req.valid("json")))
+      },
+    )
+    .get(
+      "/attachment/:id",
+      describeRoute({
+        summary: "Read a temporary channel attachment",
+        description: "Read a previously created temporary channel attachment by signed URL.",
+        operationId: "channel.attachment.get",
+        responses: {
+          200: {
+            description: "Attachment content",
+            content: {
+              "application/octet-stream": {
+                schema: resolver(z.string()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      async (c) => {
+        const file = await ChannelAttachment.get(c.req.param("id"))
+        if (!file) return c.json({ error: "not found" }, 404)
+        return new Response(Bun.file(file.path), {
+          headers: {
+            "content-type": file.mime,
+            "content-disposition": `inline; filename="${file.filename.replace(/"/g, "")}"`,
+            "cache-control": "public, max-age=86400",
+          },
+        })
       },
     )
     .post(
@@ -54,7 +118,7 @@ export const ChannelRoutes = lazy(() =>
       "/runtime",
       describeRoute({
         summary: "Get managed channel runtime",
-        description: "Get managed bot runtime status for Telegram and Discord channels.",
+        description: "Get managed bot runtime status for configured channel integrations.",
         operationId: "channel.runtime",
         responses: {
           200: {
@@ -84,7 +148,7 @@ export const ChannelRoutes = lazy(() =>
       "/runtime/restart",
       describeRoute({
         summary: "Restart managed channel runtime",
-        description: "Restart the managed Telegram and Discord bot runtime with the current config.",
+        description: "Restart the managed channel bot runtime with the current config.",
         operationId: "channel.runtime.restart",
         responses: {
           200: {

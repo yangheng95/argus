@@ -21,6 +21,13 @@ export const CodingTool = z.discriminatedUnion("type", [
   }),
 ])
 export type CodingToolInfo = z.infer<typeof CodingTool>
+export type ExecutorStatusInfo = "queued" | "retrying" | "running" | "blocked" | "completed" | "failed"
+
+export const ToolMode = z.enum(["default", "none"])
+export type ToolModeInfo = z.infer<typeof ToolMode>
+
+export const SandboxMode = z.enum(["read-only", "workspace-write", "danger-full-access"])
+export type SandboxModeInfo = z.infer<typeof SandboxMode>
 
 export const CodingRunInput = z.object({
   model: z.string().optional(),
@@ -29,6 +36,8 @@ export const CodingRunInput = z.object({
   system: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
   tools: CodingTool.array().optional(),
+  toolMode: ToolMode.optional(),
+  sandbox: SandboxMode.optional(),
 })
 
 export const CodingResumeInput = CodingRunInput.extend({
@@ -37,6 +46,26 @@ export const CodingResumeInput = CodingRunInput.extend({
 
 export type CodingRunInfo = z.infer<typeof CodingRunInput> & { signal?: AbortSignal }
 export type CodingResumeInfo = z.infer<typeof CodingResumeInput> & { signal?: AbortSignal }
+
+export const PlanningStage = z.enum(["spec", "plan"])
+export type PlanningStageInfo = z.infer<typeof PlanningStage>
+
+export const PlanningCapabilities = z.object({
+  spec: z.boolean(),
+  plan: z.boolean(),
+})
+export type PlanningCapabilitiesInfo = z.infer<typeof PlanningCapabilities>
+
+export const PlanningInput = z.object({
+  stage: PlanningStage,
+  prompt: z.string(),
+  cwd: z.string().optional(),
+  system: z.string().optional(),
+  maxTurns: z.number().int().positive().optional(),
+  toolMode: ToolMode.optional(),
+  sandbox: SandboxMode.optional(),
+})
+export type PlanningInputInfo = z.infer<typeof PlanningInput> & { signal?: AbortSignal }
 
 export const CodingCapabilities = z.object({
   builtinTools: z.boolean(),
@@ -77,7 +106,7 @@ export type ExecutorAdapter = {
   }>
   status(queueTaskID: string): Promise<{
     queueTaskID: string
-    status: "queued" | "retrying" | "running" | "completed" | "failed"
+    status: ExecutorStatusInfo
     error: string | null
   }>
   abort(input: { sessionID?: string; queueTaskID?: string }): Promise<boolean>
@@ -94,12 +123,17 @@ export type ExecutorAdapter = {
     queueTaskID: string
   }>
   events(input: {
-    sessionID: string
+    sessionID?: string
+    queueTaskID?: string
     signal?: AbortSignal
   }): AsyncIterable<{
     type: string
     summary?: string
     payload?: Record<string, unknown>
+  }>
+  planningCapabilities?(): PlanningCapabilitiesInfo
+  generatePlanning?(input: PlanningInputInfo): Promise<{
+    output: string
   }>
   resolve?(input: {
     sessionID?: string
