@@ -6,6 +6,7 @@
     "check:i18n": "bun run script/check-panel-i18n.ts",
     "dev": "tauri dev",
     "build": "bun run check:i18n && bun run script/build.ts",
+    "test": "bun test --timeout 120000",
     "tauri": "tauri"
   },
   "devDependencies": {
