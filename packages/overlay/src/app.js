@@ -15,7 +15,12 @@ const SESSION_EVENT_DEBOUNCE = 150;
 const ZOOM_STEP = 0.1;
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
+const MIN_WINDOW_OPACITY = 0.3;
 const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
+const BRAND_LOGO = Object.freeze({
+  light: "opencorvus-logo-light.svg",
+  dark: "opencorvus-logo-dark.svg",
+});
 const DEFAULT_LOCALE = sanitizeLocale(
   typeof document !== "undefined"
     ? document.documentElement.lang
@@ -25,14 +30,18 @@ const DEFAULT_LOCALE = sanitizeLocale(
 );
 const DEFAULT_OVERLAY_SETTINGS = {
   serverUrl: DEFAULT_SERVER,
+  autoServer: true,
   password: "",
   username: "opencorvus",
   executor: "opencode",
   initGit: true,
   alwaysOnTop: false,
+  autoPermission: false,
+  autoQuestion: false,
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
+  opacity: 0.3,
   zoom: 1,
   theme: "dark",
   locale: DEFAULT_LOCALE,
@@ -62,14 +71,18 @@ const OPENCLAW_DOCS = Object.freeze({
 
 const state = {
   serverUrl: DEFAULT_OVERLAY_SETTINGS.serverUrl,
+  autoServer: DEFAULT_OVERLAY_SETTINGS.autoServer,
   password: DEFAULT_OVERLAY_SETTINGS.password,
   username: DEFAULT_OVERLAY_SETTINGS.username,
   executor: DEFAULT_OVERLAY_SETTINGS.executor,
   initGit: DEFAULT_OVERLAY_SETTINGS.initGit,
   alwaysOnTop: DEFAULT_OVERLAY_SETTINGS.alwaysOnTop,
+  autoPermission: DEFAULT_OVERLAY_SETTINGS.autoPermission,
+  autoQuestion: DEFAULT_OVERLAY_SETTINGS.autoQuestion,
   sidebarCollapsed: DEFAULT_OVERLAY_SETTINGS.sidebarCollapsed,
   sidebarWidth: DEFAULT_OVERLAY_SETTINGS.sidebarWidth,
   sectionsWidth: DEFAULT_OVERLAY_SETTINGS.sectionsWidth,
+  opacity: DEFAULT_OVERLAY_SETTINGS.opacity,
   zoom: DEFAULT_OVERLAY_SETTINGS.zoom,
   theme: DEFAULT_OVERLAY_SETTINGS.theme,
   locale: DEFAULT_OVERLAY_SETTINGS.locale,
@@ -114,11 +127,14 @@ const state = {
   elapsedTimer: null,
   changeKey: "",
   _renderedGroupKey: "",
+  _renderedMetaKey: "",
+  _executorMeasureKey: "",
   memoryFiles: [],
   memorySearchMode: false,
   preferences: [],
   criteriaSpecs: [],
-  sectionDetail: "",
+  globalView: false,
+  globalTasks: [],
 };
 
 // ── DOM Refs ──
@@ -129,12 +145,26 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const dom = {
   titlebar: $("#titlebar"),
   connBadge: $("#connBadge"),
+  brandLogo: $(".brand-logo"),
   brandVersion: $("#brandVersion"),
   chatVersion: $("#chatVersion"),
   chatAuthor: $("#chatAuthor"),
+  btnTitlebarMenu: $("#btnTitlebarMenu"),
+  titlebarMenu: $("#titlebarMenu"),
   btnLocale: $("#btnLocale"),
   btnLocaleLabel: $("#btnLocaleLabel"),
   btnTheme: $("#btnTheme"),
+  btnThemeValue: $("#btnThemeValue"),
+  btnSettings: $("#btnSettings"),
+  btnPin: $("#btnPin"),
+  btnPinValue: $("#btnPinValue"),
+  chkAutoPermission: $("#chkAutoPermission"),
+  chkAutoQuestion: $("#chkAutoQuestion"),
+  opacityRange: $("#opacityRange"),
+  opacityValue: $("#opacityValue"),
+  btnMinimize: $("#btnMinimize"),
+  btnMaximize: $("#btnMaximize"),
+  btnClose: $("#btnClose"),
   panelBody: $("#panelBody"),
   sidebar: $("#sidebar"),
   btnSidebarToggle: $("#btnSidebarToggle"),
@@ -155,6 +185,12 @@ const dom = {
   configToggleMeta: $("#configToggleMeta"),
   configDialog: $("#configDialog"),
   btnCloseConfigDialog: $("#btnCloseConfigDialog"),
+  overviewSection: $("#overviewSection"),
+  specSection: $("#specSection"),
+  planSection: $("#planSection"),
+  goalsSection: $("#goalsSection"),
+  criteriaSection: $("#criteriaSection"),
+  changesSection: $("#changesSection"),
   channelSection: $("#channelSection"),
   channelConfigBody: $("#channelConfigBody"),
   channelPublicUrl: $("#channelPublicUrl"),
@@ -194,6 +230,7 @@ const dom = {
   chatTextarea: $("#chatTextarea"),
   chatSend: $("#chatSend"),
   sessionListPanel: $("#sessionListPanel"),
+  btnGlobalView: $("#btnGlobalView"),
   btnRefreshSessions: $("#btnRefreshSessions"),
   btnCreateSession: $("#btnCreateSession"),
   skillDialog: $("#skillDialog"),
@@ -229,11 +266,6 @@ const dom = {
   diffDialogMeta: $("#diffDialogMeta"),
   diffDialogBody: $("#diffDialogBody"),
   btnCloseDiff: $("#btnCloseDiff"),
-  sectionDialog: $("#sectionDialog"),
-  sectionDialogTitle: $("#sectionDialogTitle"),
-  sectionDialogMeta: $("#sectionDialogMeta"),
-  sectionDialogBody: $("#sectionDialogBody"),
-  btnCloseSectionDialog: $("#btnCloseSectionDialog"),
   appDialog: $("#appDialog"),
   appDialogTitle: $("#appDialogTitle"),
   appDialogBody: $("#appDialogBody"),
@@ -244,10 +276,12 @@ const dom = {
   btnAppDialogOk: $("#btnAppDialogOk"),
   llmForm: $("#llmForm"),
   llmSection: $("#llmSection"),
+  llmAdvanced: $("#llmAdvanced"),
   llmSummary: $("#llmSummary"),
   llmProvider: $("#llmProvider"),
   llmModel: $("#llmModel"),
   llmApiKey: $("#llmApiKey"),
+  llmApiKeySummary: $("#llmApiKeySummary"),
   btnLlmApiKeyToggle: $("#btnLlmApiKeyToggle"),
   btnLlmApiKeyCopy: $("#btnLlmApiKeyCopy"),
   llmStatus: $("#llmStatus"),
@@ -297,6 +331,41 @@ const dom = {
   prefEditValue: $("#prefEditValue"),
   btnCancelPrefEdit: $("#btnCancelPrefEdit"),
 };
+
+const workspace = window.createOverlayWorkspace?.({
+  state,
+  dom,
+  document,
+  stopPolling,
+  stopSSE,
+  renderManagedSessionList,
+});
+
+if (!workspace) {
+  throw new Error("Overlay workspace helpers failed to initialize");
+}
+
+const {
+  workspaceMode,
+  renderWorkspaceState,
+  hasWorkspaceSelection,
+  clearWorkspaceRuntime,
+  clearProjectScopeData,
+  enterEmptyWorkspace,
+  enterTaskWorkspace,
+  enterSessionWorkspace,
+} = workspace;
+
+Object.assign(window, {
+  workspaceMode,
+  renderWorkspaceState,
+  hasWorkspaceSelection,
+  clearWorkspaceRuntime,
+  clearProjectScopeData,
+  enterEmptyWorkspace,
+  enterTaskWorkspace,
+  enterSessionWorkspace,
+});
 
 let llmSaveTimer;
 let llmNoticeTimer;
@@ -376,6 +445,60 @@ const AppLog = (() => {
     clear() { entries.length = 0; },
   };
 })();
+
+const interactions = window.createOverlayInteractions?.({
+  state,
+  dom,
+  document,
+  record,
+  t,
+  escapeHtml,
+  renderMarkdown,
+  nativePrompt,
+  apiJson,
+  loadBoard,
+  AppLog,
+});
+
+if (!interactions) {
+  throw new Error("Overlay interaction helpers failed to initialize");
+}
+
+const {
+  interactionAlertHtml: interactionAlertHtmlHelper,
+  renderInteractions: renderInteractionsHelper,
+  showInteractionModal: showInteractionModalHelper,
+  dismissInteractionModal: dismissInteractionModalHelper,
+  resolveInteraction: resolveInteractionHelper,
+  rejectInteraction: rejectInteractionHelper,
+  isInteractionBusy,
+} = interactions;
+
+Object.assign(window, {
+  interactionAlertHtml: interactionAlertHtmlHelper,
+  renderInteractions: renderInteractionsHelper,
+  showInteractionModal: showInteractionModalHelper,
+  dismissInteractionModal: dismissInteractionModalHelper,
+  resolveInteraction: resolveInteractionHelper,
+  rejectInteraction: rejectInteractionHelper,
+  isInteractionBusy,
+});
+
+function interactionAlertHtml(interaction) {
+  return interactionAlertHtmlHelper(interaction);
+}
+
+function renderInteractions(interactions) {
+  return renderInteractionsHelper(interactions);
+}
+
+function showInteractionModal(interaction) {
+  return showInteractionModalHelper(interaction);
+}
+
+function dismissInteractionModal() {
+  return dismissInteractionModalHelper();
+}
 
 function sanitizeLocale(value) {
   const text = String(value || "").trim();
@@ -471,8 +594,10 @@ function renderLocale() {
     const title = next === "zh-CN" ? t("settings.switch_to_zh") : t("settings.switch_to_en");
     dom.btnLocale.title = title;
     dom.btnLocale.setAttribute("aria-label", title);
-    dom.btnLocaleLabel.textContent = next === "zh-CN" ? "ZH" : "EN";
+    dom.btnLocaleLabel.textContent = state.locale === "zh-CN" ? t("settings.language.zh_cn") : t("settings.language.en_us");
   }
+  renderTheme();
+  renderTitlebarMenu();
   renderSidebar();
 }
 
@@ -575,6 +700,7 @@ function refreshLocalizedState() {
   if (state.board) {
     renderBoard();
   } else {
+    clearSectionPhases();
     renderOverview(null, null);
     renderSpec(null);
     renderPlan(null);
@@ -582,7 +708,6 @@ function refreshLocalizedState() {
   }
   renderSession();
   if (dom.skillMarketDialog?.open) renderSkillMarket();
-  refreshSectionDetail();
 }
 
 async function setLocale(value, options = {}) {
@@ -601,6 +726,12 @@ async function setLocale(value, options = {}) {
 function sanitizeTheme(value) {
   if (value === "light" || value === "system") return value;
   return "dark";
+}
+
+function sanitizeOpacity(value) {
+  const next = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  if (!Number.isFinite(next)) return DEFAULT_OVERLAY_SETTINGS.opacity;
+  return Math.max(MIN_WINDOW_OPACITY, Math.min(1, Math.round(next * 100) / 100));
 }
 
 const systemThemeMedia =
@@ -628,6 +759,27 @@ function hasTauriRuntime() {
   return typeof window !== "undefined" && typeof window.__TAURI__?.core?.invoke === "function";
 }
 
+function normalizeUrl(value, fallback = DEFAULT_SERVER) {
+  const input = typeof value === "string" && value.trim() ? value.trim() : fallback;
+  return input.replace(/\/+$/, "");
+}
+
+function defaultAutoServer(value) {
+  const input = normalizeUrl(value, DEFAULT_SERVER);
+  return input === normalizeUrl(DEFAULT_SERVER) || input === "http://127.0.0.1:7878";
+}
+
+function sanitizeAutoServer(value, serverUrl) {
+  if (typeof value === "boolean") return value;
+  return defaultAutoServer(serverUrl);
+}
+
+function resolveAutoServer(value, previous = {}) {
+  const next = normalizeUrl(value, DEFAULT_SERVER);
+  if (previous.autoServer && next === normalizeUrl(previous.serverUrl, DEFAULT_SERVER)) return true;
+  return defaultAutoServer(next);
+}
+
 function isManagedLocalServerUrl(value) {
   const input = typeof value === "string" && value.trim() ? value.trim() : DEFAULT_SERVER;
   try {
@@ -642,6 +794,10 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function usesManagedLocalServer() {
+  return state.autoServer && isManagedLocalServerUrl(state.serverUrl);
+}
+
 async function localServerInfo() {
   if (!hasTauriRuntime()) return null;
   const info = await tauriInvoke("overlay_server_info").catch(() => undefined);
@@ -650,21 +806,21 @@ async function localServerInfo() {
 
 async function syncLocalServerUrl(options = {}) {
   if (!hasTauriRuntime()) return null;
-  if (!options.force && !isManagedLocalServerUrl(state.serverUrl)) return null;
+  if (!options.force && !usesManagedLocalServer()) return null;
   const info = await localServerInfo();
   if (!info) return null;
-  const next = info.url.replace(/\/+$/, "");
-  if (state.serverUrl === next) return info;
+  const next = normalizeUrl(info.url);
+  if (normalizeUrl(state.serverUrl) === next) return info;
   state.serverUrl = next;
   await persistOverlaySettings();
   return info;
 }
 
 async function restartLocalServer() {
-  if (!hasTauriRuntime()) return null;
+  if (!hasTauriRuntime() || !usesManagedLocalServer()) return null;
   const info = await tauriInvoke("overlay_server_restart").catch(() => undefined);
   if (!info || typeof info.url !== "string") return null;
-  state.serverUrl = info.url.replace(/\/+$/, "");
+  state.serverUrl = normalizeUrl(info.url);
   await persistOverlaySettings();
   return info;
 }
@@ -764,16 +920,22 @@ function renderPaneLayout() {
 }
 
 function browserOverlaySettings() {
+  const serverUrl = localStorage.getItem("oc_server_url") || DEFAULT_OVERLAY_SETTINGS.serverUrl;
+  const autoServer = localStorage.getItem("oc_auto_server");
   return {
-    serverUrl: localStorage.getItem("oc_server_url") || DEFAULT_OVERLAY_SETTINGS.serverUrl,
+    serverUrl,
+    autoServer: autoServer === null ? defaultAutoServer(serverUrl) : autoServer !== "false",
     password: localStorage.getItem("oc_password") || DEFAULT_OVERLAY_SETTINGS.password,
     username: localStorage.getItem("oc_username") || DEFAULT_OVERLAY_SETTINGS.username,
     executor: localStorage.getItem("oc_executor") || DEFAULT_OVERLAY_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
+    autoPermission: localStorage.getItem("oc_auto_permission") === "true",
+    autoQuestion: localStorage.getItem("oc_auto_question") === "true",
     sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
     sidebarWidth: sanitizePaneWidth(localStorage.getItem("oc_sidebar_width")),
     sectionsWidth: sanitizePaneWidth(localStorage.getItem("oc_sections_width")),
+    opacity: sanitizeOpacity(localStorage.getItem("oc_opacity")),
     zoom: sanitizeZoom(localStorage.getItem("oc_zoom")),
     theme: sanitizeTheme(localStorage.getItem("oc_theme")),
     locale: sanitizeLocale(localStorage.getItem("oc_locale") || DEFAULT_OVERLAY_SETTINGS.locale),
@@ -786,6 +948,7 @@ function applyOverlaySettings(settings) {
     typeof settings?.serverUrl === "string" && settings.serverUrl.trim()
       ? settings.serverUrl.trim()
       : DEFAULT_OVERLAY_SETTINGS.serverUrl;
+  state.autoServer = sanitizeAutoServer(settings?.autoServer, state.serverUrl);
   state.password = typeof settings?.password === "string" ? settings.password : DEFAULT_OVERLAY_SETTINGS.password;
   state.username =
     typeof settings?.username === "string" && settings.username.trim()
@@ -797,9 +960,12 @@ function applyOverlaySettings(settings) {
       : DEFAULT_OVERLAY_SETTINGS.executor;
   state.initGit = true;
   state.alwaysOnTop = settings?.alwaysOnTop === true;
+  state.autoPermission = settings?.autoPermission === true;
+  state.autoQuestion = settings?.autoQuestion === true;
   state.sidebarCollapsed = settings?.sidebarCollapsed === true;
   state.sidebarWidth = sanitizePaneWidth(settings?.sidebarWidth);
   state.sectionsWidth = sanitizePaneWidth(settings?.sectionsWidth);
+  state.opacity = sanitizeOpacity(settings?.opacity);
   state.zoom = sanitizeZoom(settings?.zoom);
   state.theme = sanitizeTheme(settings?.theme);
   state.locale = sanitizeLocale(settings?.locale || DEFAULT_OVERLAY_SETTINGS.locale);
@@ -822,30 +988,38 @@ async function loadOverlaySettings() {
 async function persistOverlaySettings() {
   const settings = {
     serverUrl: state.serverUrl,
+    autoServer: state.autoServer,
     password: state.password,
     username: state.username,
     executor: state.executor,
     initGit: true,
     alwaysOnTop: state.alwaysOnTop,
+    autoPermission: state.autoPermission,
+    autoQuestion: state.autoQuestion,
     sidebarCollapsed: state.sidebarCollapsed,
     sidebarWidth: state.sidebarWidth || undefined,
     sectionsWidth: state.sectionsWidth || undefined,
+    opacity: state.opacity,
     zoom: state.zoom,
     theme: state.theme,
     locale: state.locale,
     directory: state.directory || undefined,
   };
   localStorage.setItem("oc_server_url", settings.serverUrl);
+  localStorage.setItem("oc_auto_server", String(settings.autoServer));
   localStorage.setItem("oc_password", settings.password);
   localStorage.setItem("oc_username", settings.username);
   localStorage.setItem("oc_executor", settings.executor);
   localStorage.removeItem("oc_init_git");
   localStorage.setItem("oc_always_on_top", String(settings.alwaysOnTop));
+  localStorage.setItem("oc_auto_permission", String(settings.autoPermission));
+  localStorage.setItem("oc_auto_question", String(settings.autoQuestion));
   localStorage.setItem("oc_sidebar_collapsed", String(settings.sidebarCollapsed));
   if (settings.sidebarWidth) localStorage.setItem("oc_sidebar_width", String(settings.sidebarWidth));
   else localStorage.removeItem("oc_sidebar_width");
   if (settings.sectionsWidth) localStorage.setItem("oc_sections_width", String(settings.sectionsWidth));
   else localStorage.removeItem("oc_sections_width");
+  localStorage.setItem("oc_opacity", String(settings.opacity));
   localStorage.setItem("oc_zoom", String(settings.zoom));
   localStorage.setItem("oc_theme", settings.theme);
   localStorage.setItem("oc_locale", settings.locale);
@@ -862,15 +1036,72 @@ function renderTheme() {
   const effective = theme === "system" ? resolvedTheme() : theme;
   state.theme = theme;
   document.body.dataset.theme = effective;
+  if (dom.brandLogo) {
+    dom.brandLogo.setAttribute("src", effective === "light" ? BRAND_LOGO.light : BRAND_LOGO.dark);
+  }
   if (dom.btnTheme) {
     dom.btnTheme.dataset.theme = effective;
     dom.btnTheme.dataset.mode = theme;
     dom.btnTheme.title = effective === "light" ? t("titlebar.theme.dark") : t("titlebar.theme.light");
     dom.btnTheme.setAttribute("aria-label", dom.btnTheme.title);
   }
+  if (dom.btnMaximize) {
+    const label = maximizeLabel(dom.btnMaximize.dataset.maximized === "true");
+    dom.btnMaximize.title = label;
+    dom.btnMaximize.setAttribute("aria-label", label);
+  }
   if (dom.themeMode) {
     dom.themeMode.value = theme;
   }
+  renderTitlebarMenu();
+}
+
+function setTitlebarMenu(open) {
+  if (!dom.titlebarMenu || !dom.btnTitlebarMenu) return;
+  const next = !!open;
+  dom.titlebarMenu.hidden = !next;
+  dom.btnTitlebarMenu.setAttribute("aria-expanded", String(next));
+}
+
+function closeTitlebarMenu() {
+  setTitlebarMenu(false);
+}
+
+function renderTitlebarMenu() {
+  if (dom.btnThemeValue) {
+    const theme = sanitizeTheme(state.theme);
+    dom.btnThemeValue.textContent =
+      theme === "light"
+        ? t("settings.theme.light")
+        : theme === "system"
+          ? t("settings.theme.system")
+          : t("settings.theme.dark");
+  }
+  if (dom.btnPinValue) {
+    dom.btnPinValue.textContent = state.alwaysOnTop ? t("common.yes") : t("common.no");
+  }
+  if (dom.chkAutoPermission) {
+    dom.chkAutoPermission.checked = state.autoPermission;
+  }
+  if (dom.chkAutoQuestion) {
+    dom.chkAutoQuestion.checked = state.autoQuestion;
+  }
+  if (dom.opacityRange) {
+    dom.opacityRange.value = String(Math.round(sanitizeOpacity(state.opacity) * 100));
+  }
+  if (dom.opacityValue) {
+    dom.opacityValue.textContent = `${Math.round(sanitizeOpacity(state.opacity) * 100)}%`;
+  }
+}
+
+async function applyWindowOpacity() {
+  state.opacity = sanitizeOpacity(state.opacity);
+  renderTitlebarMenu();
+  document.documentElement.style.setProperty("--ui-window-opacity", String(state.opacity));
+  const win = await currentTauriWindow();
+  if (!win || typeof win.setOpacity !== "function") return false;
+  await win.setOpacity(state.opacity).catch(() => undefined);
+  return true;
 }
 
 function renderScale() {
@@ -883,7 +1114,7 @@ function renderScale() {
   renderPaneLayout();
   fitBrandVersion();
   sizeChat();
-  renderExecutor();
+  renderExecutor({ measure: true });
 }
 
 function setZoom(value) {
@@ -920,13 +1151,15 @@ function handleZoomHotkey(event) {
 
 // ── API Client ──
 
-function apiUrl(path) {
+function apiUrl(path, input = {}) {
   const base = state.serverUrl.replace(/\/+$/, "");
   const next = path.replace(/^\/+/, "");
   const idx = next.indexOf("?");
   const pathname = idx >= 0 ? next.slice(0, idx) : next;
   const params = new URLSearchParams(idx >= 0 ? next.slice(idx + 1) : "");
-  if (state.directory) params.set("directory", state.directory);
+  const dir = input.directory;
+  const current = typeof dir === "string" ? dir : dir === false ? "" : state.directory;
+  if (current) params.set("directory", current);
   const query = params.toString();
   return `${base}/${pathname}${query ? `?${query}` : ""}`;
 }
@@ -939,8 +1172,8 @@ function apiHeaders() {
   return headers;
 }
 
-async function apiFetch(path, opts = {}) {
-  const url = apiUrl(path);
+async function apiFetch(path, opts = {}, input) {
+  const url = apiUrl(path, input);
   const res = await fetch(url, {
     ...opts,
     headers: { ...apiHeaders(), ...opts.headers },
@@ -950,18 +1183,18 @@ async function apiFetch(path, opts = {}) {
   return res;
 }
 
-async function apiJson(path, opts) {
-  const res = await apiFetch(path, opts);
+async function apiJson(path, opts, input) {
+  const res = await apiFetch(path, opts, input);
   return res.json();
 }
 
-async function deleteSessionApi(sessionID, opts = {}) {
+async function deleteSessionApi(sessionID, opts = {}, input) {
   const params = new URLSearchParams();
   if (opts.deleteTasks) params.set("deleteTasks", "true");
   const query = params.toString();
   return apiJson(`session/${encodeURIComponent(sessionID)}${query ? `?${query}` : ""}`, {
     method: "DELETE",
-  });
+  }, input);
 }
 
 function panelRequestBody(text, metadata = {}) {
@@ -999,6 +1232,7 @@ async function applyPanelResult(result) {
   }
   if (result?.local_action?.type === "invalidate_session" && result.local_action.sessionID) {
     state.chatSessionID = state.chatSessionID === result.local_action.sessionID ? "" : state.chatSessionID;
+    renderWorkspaceState();
   }
   if (result?.task_id && state.selectedTaskID !== result.task_id) {
     await loadTasks();
@@ -1165,10 +1399,10 @@ function renderExtensions() {
           </div>
           <div class="extension-row-actions">
             ${skillRemovable(item)
-              ? `<button type="button" class="btn btn-ghost mini danger" data-skill-remove="${escapeHtml(item.source || "")}" data-skill-kind="${escapeHtml(skillRemoveKind(item) || "")}" data-skill-name="${escapeHtml(item.name || "")}">${escapeHtml(t("common.delete"))}</button>`
+              ? `<button type="button" class="btn btn-ghost mini danger" data-skill-remove="${escapeHtml(item.source || "")}" data-skill-kind="${escapeHtml(skillRemoveKind(item) || "")}" data-skill-name="${escapeHtml(item.name || "")}" title="${escapeHtml(t("skill.delete_button_title"))}" aria-label="${escapeHtml(t("skill.delete_button_title"))}">${escapeHtml(t("common.delete"))}</button>`
               : ""}
             ${item.location && item.location !== "builtin"
-              ? `<button type="button" class="btn btn-ghost mini" data-skill-open="${escapeHtml(item.location)}">${escapeHtml(t("common.open"))}</button>`
+              ? `<button type="button" class="btn btn-ghost mini" data-skill-open="${escapeHtml(item.location)}" title="${escapeHtml(t("skill.open_button_title"))}" aria-label="${escapeHtml(t("skill.open_button_title"))}">${escapeHtml(t("common.open"))}</button>`
               : ""}
             <span class="extension-status" data-state="connected">${escapeHtml(t("common.loaded"))}</span>
           </div>
@@ -1319,8 +1553,8 @@ function renderSkillMarket() {
     .map((item) => {
       const installable = !!item.source && item.install_kind !== "manual";
       const action = installable
-        ? `<button type="button" class="btn btn-primary mini" data-market-install="${escapeHtml(item.id)}">${escapeHtml(t("skill.install"))}</button>`
-        : `<button type="button" class="btn btn-ghost mini" data-market-homepage="${escapeHtml(item.homepage)}">${escapeHtml(t("skill.market.open_site"))}</button>`;
+        ? `<button type="button" class="btn btn-primary mini" data-market-install="${escapeHtml(item.id)}" title="${escapeHtml(t("skill.market.install_button_title"))}" aria-label="${escapeHtml(t("skill.market.install_button_title"))}">${escapeHtml(t("skill.install"))}</button>`
+        : `<button type="button" class="btn btn-ghost mini" data-market-homepage="${escapeHtml(item.homepage)}" title="${escapeHtml(t("skill.market.open_site_title"))}" aria-label="${escapeHtml(t("skill.market.open_site_title"))}">${escapeHtml(t("skill.market.open_site"))}</button>`;
       const policy =
         item.recommended_policy === "ask"
           ? t("skill.policy.ask")
@@ -1370,7 +1604,7 @@ function renderChannels() {
         <div class="channel-row-actions">
           <span class="extension-status" data-state="${escapeHtml(item.status)}">${escapeHtml(channelStatusLabel(item.status))}</span>
           ${channelTutorialButton(item.id, true)}
-          <button type="button" class="btn btn-primary mini" data-channel-edit="${escapeHtml(item.id)}">${escapeHtml(t("common.edit"))}</button>
+          <button type="button" class="btn btn-primary mini" data-channel-edit="${escapeHtml(item.id)}" title="${escapeHtml(t("channel.edit_title"))}" aria-label="${escapeHtml(t("channel.edit_title"))}">${escapeHtml(t("common.edit"))}</button>
         </div>
       </div>`,
     )
@@ -1396,7 +1630,7 @@ function channelTutorialCredit() {
 
 function channelTutorialButton(channelID, mini = false) {
   const cls = mini ? "btn btn-ghost mini" : "btn btn-ghost";
-  return `<button type="button" class="${cls}" data-channel-docs="${escapeHtml(channelTutorial(channelID))}">${escapeHtml(t("channel.tutorial"))}</button>`;
+  return `<button type="button" class="${cls}" data-channel-docs="${escapeHtml(channelTutorial(channelID))}" title="${escapeHtml(t("channel.tutorial_hint"))}" aria-label="${escapeHtml(t("channel.tutorial_hint"))}">${escapeHtml(t("channel.tutorial"))}</button>`;
 }
 
 function channelTutorialCard(channelID) {
@@ -1584,6 +1818,12 @@ function renderLlmApiKeyTools() {
   const visible = dom.llmApiKey.type === "text";
   const busy = !!dom.llmApiKey.disabled;
   const hasKey = !!dom.llmApiKey.value.trim();
+  if (dom.llmApiKeySummary) {
+    const text = hasKey ? t("llm.status.configured") : "";
+    dom.llmApiKeySummary.textContent = text;
+    dom.llmApiKeySummary.title = text;
+    dom.llmApiKeySummary.dataset.tone = hasKey ? "good" : "";
+  }
   if (dom.btnLlmApiKeyToggle) {
     dom.btnLlmApiKeyToggle.innerHTML = llmToggleIcon(visible);
     const label = t(visible ? "llm.api_key_hide" : "llm.api_key_show");
@@ -1914,7 +2154,7 @@ async function pickDirectory(start) {
 // ── Connection ──
 
 async function checkConnection() {
-  const managed = isManagedLocalServerUrl(state.serverUrl);
+  const managed = usesManagedLocalServer();
   if (managed) {
     await syncLocalServerUrl();
   }
@@ -1928,6 +2168,7 @@ async function checkConnection() {
       const [health] = await Promise.all([apiJson("global/health"), apiJson("tasks")]);
       setConnStatus("online");
       state.connected = true;
+      renderWorkspaceState();
       AppLog.info("conn", "connected", { version: health?.version, serverUrl: state.serverUrl });
       renderVersions(health?.version || "");
       return true;
@@ -1941,6 +2182,7 @@ async function checkConnection() {
 
   setConnStatus("offline");
   state.connected = false;
+  renderWorkspaceState();
   AppLog.warn("conn", "connection failed", { error: String(error), serverUrl: state.serverUrl });
   renderVersions("");
   return false;
@@ -1983,20 +2225,36 @@ function renderVersions(coreVersion) {
       : configured.length === 1
         ? configured[0].name
         : t("channel.summary_plus", { name: configured[0].name, count: configured.length - 1 });
-  const hint = [
-    configured.length > 0
-      ? t("channel.configured", { names: configured.map((item) => item.name).join(", ") })
-      : t("channel.configured_none"),
-    partial.length > 0 ? t("channel.needs_setup", { names: partial.map((item) => item.name).join(", ") }) : "",
-    missing.length > 0 ? t("channel.available", { names: missing.map((item) => item.name).join(", ") }) : "",
-    disabled.length > 0 ? t("channel.disabled", { names: disabled.map((item) => item.name).join(", ") }) : "",
-    t("channel.open_settings"),
-  ]
-    .filter(Boolean)
-    .join(" | ");
+  const details = [
+    {
+      tone: "configured",
+      text: configured.length > 0
+        ? t("channel.configured", { names: configured.map((item) => item.name).join(", ") })
+        : t("channel.configured_none"),
+    },
+    {
+      tone: "partial",
+      text: partial.length > 0 ? t("channel.needs_setup", { names: partial.map((item) => item.name).join(", ") }) : "",
+    },
+    {
+      tone: "missing",
+      text: missing.length > 0 ? t("channel.available", { names: missing.map((item) => item.name).join(", ") }) : "",
+    },
+    {
+      tone: "disabled",
+      text: disabled.length > 0 ? t("channel.disabled", { names: disabled.map((item) => item.name).join(", ") }) : "",
+    },
+  ].filter((item) => item.text);
+  const hint = [...details.map((item) => item.text), t("channel.open_settings")].join(" | ");
+  const card = details
+    .map(
+      (item) =>
+        `<span class="brand-channel-tip-row" data-tone="${escapeHtml(item.tone)}">${escapeHtml(item.text)}</span>`,
+    )
+    .join("");
   const tone = configured.length > 0 ? "brand-channel brand-channel-summary" : "brand-channel brand-channel-summary brand-channel-empty";
   if (!dom.brandVersion) return;
-  dom.brandVersion.innerHTML = `<button type="button" class="brand-channel-group" data-no-drag="true" data-open-channels="true" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><span class="brand-channel-label">${escapeHtml(t("channel.channels"))}</span><span class="${tone}">${escapeHtml(summary)}</span></button>`;
+  dom.brandVersion.innerHTML = `<button type="button" class="brand-channel-group" data-no-drag="true" data-open-channels="true" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><span class="brand-channel-label">${escapeHtml(t("channel.channels"))}</span><span class="${tone}">${escapeHtml(summary)}</span><span class="brand-channel-tip" aria-hidden="true"><span class="brand-channel-tip-title">${escapeHtml(t("channel.channels"))}</span>${card}<span class="brand-channel-tip-footer">${escapeHtml(t("channel.open_settings"))}</span></span></button>`;
   fitBrandVersion();
 }
 
@@ -2028,14 +2286,23 @@ function executorSelectable(value) {
   return value === "opencode";
 }
 
+function executorSetupHint(value) {
+  if (value === "codex" || value === "claude-code") {
+    return t("executor.manual_install_auth_required");
+  }
+  return "";
+}
+
 function executorTitle(value) {
   const item = executorInfo(value);
-  if (!item) return executorLabel(value);
-  const lines = [item.label];
-  if (item.version) lines.push(t("executor.version", { version: item.version }));
-  lines.push(item.detail);
-  if (!item.selectable) {
-    lines.push(item.discovered ? t("executor.detected_not_selectable") : t("executor.not_detected"));
+  const selectable = executorSelectable(value);
+  const lines = [item?.label || executorLabel(value)];
+  if (item?.version) lines.push(t("executor.version", { version: item.version }));
+  if (item?.detail) lines.push(item.detail);
+  if (!selectable) {
+    lines.push(item ? (item.discovered ? t("executor.detected_not_selectable") : t("executor.not_detected")) : t("executor.not_detected"));
+    const hint = executorSetupHint(value);
+    if (hint) lines.push(hint);
   }
   return lines.filter(Boolean).join("\n");
 }
@@ -2057,8 +2324,9 @@ async function loadExecutors() {
   renderExecutor();
 }
 
-function renderExecutor() {
+function renderExecutor(options = {}) {
   const buttons = dom.engineBar?.querySelectorAll("[data-executor]") || [];
+  const key = [currentUIScale().toFixed(3)];
   for (const button of buttons) {
     const value = button.dataset.executor || "opencode";
     const selectable = executorSelectable(value);
@@ -2066,8 +2334,13 @@ function renderExecutor() {
     button.dataset.available = selectable ? "true" : "false";
     button.disabled = !selectable;
     button.title = executorTitle(value);
+    key.push(button.textContent?.trim() || "");
   }
-  syncExecutorWidth();
+  const next = key.join("|");
+  if (options.measure === true || state._executorMeasureKey !== next) {
+    syncExecutorWidth();
+    state._executorMeasureKey = next;
+  }
 }
 
 function syncExecutorWidth() {
@@ -2205,27 +2478,16 @@ function canInitGit() {
 }
 
 function resetProjectScope() {
-  state.selectedTaskID = "";
-  state.chatSessionID = "";
-  state.tasks = [];
-  state.sessions = [];
-  state.managedSession = null;
-  state.path = null;
-  state.vcs = null;
-  stopPolling();
-  stopSSE();
-  state.board = null;
-  state.boardEtag = "";
-  state.boardUpdatedAt = 0;
-  state.sessionUpdatedAt = 0;
-  state.session = [];
+  enterEmptyWorkspace({ globalView: state.globalView });
+  clearProjectScopeData();
   renderClear();
   renderMeta();
   renderManagedSessionList();
 }
 
 async function reloadProjectScope() {
-  await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+  await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+  await restoreInitialWorkspace();
 }
 
 async function setDirectory(value) {
@@ -2341,6 +2603,11 @@ async function resetDirectory() {
 
 function renderMeta() {
   const dir = activeDirectory();
+  const key = hashText([state.locale, dir, signText(state.vcs)].join("\u001f"));
+  if (state._renderedMetaKey === key) {
+    renderExecutor();
+    return;
+  }
   dom.taskDir.innerHTML = pathBreadcrumb(dir);
   dom.taskDir.title = dir || t("cwd.unavailable");
   dom.taskDir.dataset.empty = dir ? "false" : "true";
@@ -2354,6 +2621,7 @@ function renderMeta() {
   dom.taskGit.dataset.actionable = String(actionable);
   dom.taskGit.disabled = !actionable;
   dom.taskGit.title = gitTitle(state.vcs, dir);
+  state._renderedMetaKey = key;
   renderExecutor();
 }
 
@@ -2444,24 +2712,21 @@ function sessionRow(item, meta = "") {
   </div>`;
 }
 
-function taskIDForSession(sessionID, items = state.tasks) {
-  if (!sessionID) return "";
-  return items.find((item) => item?.task?.sessionID === sessionID)?.task?.id || "";
+function taskItem(taskID, items = state.globalTasks) {
+  if (!taskID) return null;
+  return items.find((item) => item?.task?.id === taskID) || null;
 }
 
-async function resolveTaskIDForSession(sessionID) {
-  const taskID = taskIDForSession(sessionID);
-  if (taskID) return taskID;
-  try {
-    const data = await apiJson("tasks?limit=200");
-    const items = sortedTasks(data);
-    const next = taskIDForSession(sessionID, items);
-    if (!next) return "";
-    state.tasks = items;
-    return next;
-  } catch {
-    return "";
-  }
+function taskItemForSession(sessionID, items = state.globalTasks.length ? state.globalTasks : state.tasks) {
+  if (!sessionID) return null;
+  return items.find((item) => item?.task?.sessionID === sessionID) || null;
+}
+
+async function resolveTaskForSession(sessionID) {
+  const item = taskItemForSession(sessionID);
+  if (item) return item;
+  await loadGlobalTasks();
+  return taskItemForSession(sessionID);
 }
 
 function renderSidebar() {
@@ -2470,6 +2735,9 @@ function renderSidebar() {
   const label = state.sidebarCollapsed ? t("sidebar.open") : t("sidebar.close");
   dom.btnSidebarToggle.title = label;
   dom.btnSidebarToggle.setAttribute("aria-label", label);
+  if (dom.btnGlobalView) {
+    dom.btnGlobalView.dataset.active = state.globalView ? "true" : "false";
+  }
   renderPaneLayout();
 }
 
@@ -2534,6 +2802,7 @@ function startPaneResize(side, event) {
 async function syncManagedSession(sessionID = currentSessionID()) {
   if (!sessionID) {
     state.managedSession = null;
+    renderWorkspaceState();
     renderManagedSessionList();
     return;
   }
@@ -2549,40 +2818,40 @@ async function loadTasks() {
     const data = await apiJson("tasks");
     state.tasks = sortedTasks(data);
     if (state.selectedTaskID && !state.tasks.some((item) => item.task.id === state.selectedTaskID)) {
-      state.selectedTaskID = "";
-      state.board = null;
-      state.chatSessionID = "";
-      state.session = [];
+      enterEmptyWorkspace({ globalView: state.globalView });
       renderClear();
-    }
-    // Auto-select only if there is an active (in-progress) task
-    if (!state.selectedTaskID && !state.chatSessionID && state.tasks.length > 0) {
-      const active = state.tasks.find((t) =>
-        ["running", "planning", "evaluating", "blocked", "queued"].includes(t.task.status)
-      );
-      if (active) selectTask(active.task.id);
     }
   } catch {
     // silent
   }
 }
 
+async function loadGlobalTasks() {
+  try {
+    const data = await apiJson("global/tasks?limit=100", undefined, { directory: false });
+    state.globalTasks = sortedTasks(data);
+    if (state.globalView) renderManagedSessionList();
+    return state.globalTasks;
+  } catch {
+    // silent
+    return [];
+  }
+}
+
 // ── Task Selection ──
 
-async function selectTask(taskID) {
-  if (taskID === state.selectedTaskID && !state.chatSessionID && state.board) return;
-  state.selectedTaskID = taskID;
-  state.chatSessionID = "";
-  stopPolling();
-  stopSSE();
-  state.board = null;
-  state.boardEtag = "";
-  state.boardUpdatedAt = 0;
-  state.sessionUpdatedAt = 0;
-  state.session = [];
+async function selectTask(taskID, options = {}) {
+  const nextTaskID = taskID || "";
+  const nextSessionID = options.sessionID || "";
+  if (nextTaskID === state.selectedTaskID && nextSessionID === state.chatSessionID && state.board) return;
+  if (nextTaskID) {
+    enterTaskWorkspace(nextTaskID, options);
+  } else {
+    enterEmptyWorkspace({ globalView: false });
+  }
   renderClear();
 
-  if (!taskID) {
+  if (!nextTaskID) {
     setTaskStatus("idle", { visible: false });
     state.session = [];
     renderSession();
@@ -2598,7 +2867,7 @@ async function selectTask(taskID) {
   // Start SSE for running tasks
   const status = state.board?.task?.status;
   if (["running", "planning", "evaluating", "blocked", "queued"].includes(status)) {
-    startSSE(taskID);
+    startSSE(nextTaskID);
   }
 }
 
@@ -2614,8 +2883,7 @@ function scheduleBoard(delay = 0) {
 
 async function loadBoard() {
   if (!state.selectedTaskID) return;
-  // Don't reload while an interaction button click is in flight
-  if (typeof _interactionBusy !== "undefined" && _interactionBusy) return;
+  if (isInteractionBusy()) return;
   if (state.boardLoading) {
     state.boardQueued = true;
     return state.boardLoading;
@@ -2909,7 +3177,10 @@ function stopPolling() {
 // ── Rendering: Board ──
 
 function renderBoard() {
-  if (!state.board) return;
+  if (!state.board) {
+    clearSectionPhases();
+    return;
+  }
   const { task, plan, overview, lanes, evaluation, delivery, interactions, spec } = state.board;
 
   // Status
@@ -2934,6 +3205,7 @@ function renderBoard() {
 
   // Evaluation
   renderEvaluation(evaluation, delivery);
+  syncSectionPhases();
 
   // Interactions
   renderInteractions(interactions || []);
@@ -2941,21 +3213,22 @@ function renderBoard() {
 
   // Re-render session to include updated board context (goals, evaluation)
   renderSession();
-  refreshSectionDetail();
 }
 
 function setTaskStatus(status, options = {}) {
   const visible = options.visible ?? true;
+  const next = status || "idle";
   if (dom.taskStatus) dom.taskStatus.hidden = !visible;
-  dom.statusDot.dataset.status = status;
-  dom.statusDot.innerHTML = statusIcon(status);
-  dom.statusLabel.textContent = statusLabel(status);
+  if (dom.taskStatus) dom.taskStatus.dataset.status = next;
+  dom.statusDot.dataset.status = next;
+  dom.statusDot.innerHTML = statusIcon(next);
+  dom.statusLabel.textContent = statusLabel(next);
   if (!visible) {
     dom.taskStatus?.removeAttribute("title");
     dom.taskStatus?.removeAttribute("aria-label");
     return;
   }
-  updateTaskStatusDetail(status);
+  updateTaskStatusDetail(next);
 }
 
 function statusLabel(status) {
@@ -2975,17 +3248,28 @@ function statusLabel(status) {
 
 function statusIcon(status) {
   const map = {
-    idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg>`,
-    queued: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/><path d="M8 5.6v2.8l2 1.2"/></svg>`,
-    planning: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 3.5v9"/><path d="M5 5.5h6"/><path d="M5 10.5h4"/><circle cx="5" cy="3.5" r="1"/><circle cx="11" cy="5.5" r="1"/><circle cx="9" cy="10.5" r="1"/></svg>`,
-    running: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4.8v6.4l4.8-3.2z"/></svg>`,
-    blocked: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 3.6l4.3 7.8H3.7z"/><path d="M8 6.2v2.5"/></svg>`,
-    evaluating: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="3.5"/><path d="M9.8 9.8l2.7 2.7"/></svg>`,
-    completed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4.5 8.3l2.1 2.1 4.9-4.9"/></svg>`,
-    failed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 5l6 6"/><path d="M11 5l-6 6"/></svg>`,
-    cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/><path d="M5.4 10.6l5.2-5.2"/></svg>`,
+    idle: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><circle data-fill="true" cx="8" cy="8" r="1.25"/></svg>`,
+    queued: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M8 5.4v2.8l2.1 1.3"/></svg>`,
+    planning: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-stroke="true" d="M5 3.5v9"/><path data-stroke="true" d="M5 5.5h6"/><path data-stroke="true" d="M5 10.5h4"/><circle data-fill="true" cx="5" cy="3.5" r="1.15"/><circle data-fill="true" cx="11" cy="5.5" r="1.15"/><circle data-fill="true" cx="9" cy="10.5" r="1.15"/></svg>`,
+    running: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M6 4.6L11.3 8 6 11.4Z"/></svg>`,
+    blocked: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path data-fill="true" d="M8 3.1L13 12H3Z"/><path data-stroke="true" d="M8 5.8v2.8"/><circle data-fill="true" cx="8" cy="10.8" r="0.9" style="fill: var(--surface-strong);"/></svg>`,
+    evaluating: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="6.7" cy="6.7" r="3.5"/><path data-stroke="true" d="M9.5 9.5l2.9 2.9"/><circle data-fill="true" cx="6.7" cy="6.7" r="1.2"/></svg>`,
+    completed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.1 8.2l2 2 3.8-3.8"/></svg>`,
+    failed: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.4 5.4l5.2 5.2"/><path data-stroke="true" d="M10.6 5.4l-5.2 5.2"/></svg>`,
+    cancelled: `<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle data-stroke="true" cx="8" cy="8" r="4.5"/><path data-stroke="true" d="M5.2 10.8l5.6-5.6"/></svg>`,
   };
   return map[status] || map.idle;
+}
+
+function maximizeLabel(maximized) {
+  return t(maximized ? "titlebar.restore" : "titlebar.maximize");
+}
+
+function maximizeIcon(maximized) {
+  if (maximized) {
+    return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M5 5.5h6v6H5z" stroke="currentColor" stroke-width="1.2"/><path d="M7 3.5h4.5V8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  return `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1.2" stroke="currentColor" stroke-width="1.2"/></svg>`;
 }
 
 function updateTaskStatusDetail(status = dom.statusDot?.dataset.status || "idle") {
@@ -3022,14 +3306,198 @@ function formatDuration(ms) {
   return t("time.duration.second", { seconds: s });
 }
 
+function phaseSections() {
+  return {
+    overview: dom.overviewSection,
+    spec: dom.specSection,
+    plan: dom.planSection,
+    goals: dom.goalsSection,
+    evaluation: dom.criteriaSection,
+    files: dom.changesSection,
+  };
+}
+
+function clearSectionPhases() {
+  Object.values(phaseSections()).forEach((node) => {
+    if (!node) return;
+    delete node.dataset.phaseState;
+  });
+}
+
+function markSectionPhase(kind, value) {
+  const node = phaseSections()[kind];
+  if (!node) return;
+  if (!value) {
+    delete node.dataset.phaseState;
+    return;
+  }
+  node.dataset.phaseState = value;
+}
+
+function phaseFromAgent(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "";
+  if (text.includes("goal_gate") || text.includes("goal")) return "goals";
+  if (text.includes("scheduler") || text.includes("evaluator") || text.includes("evaluation") || text.includes("evaluate") || text.includes("judge") || text.includes("review")) return "evaluation";
+  if (text.includes("planner") || text.includes("planning") || text.includes("replan") || text === "plan") return "plan";
+  if (text.includes("spec")) return "spec";
+  if (text.includes("deliver") || text.includes("delivery") || text.includes("publish")) return "files";
+  return "";
+}
+
+function phaseFromMessage(message) {
+  if (!message || typeof message !== "object") return "";
+  const info = message.info && typeof message.info === "object" ? message.info : {};
+  const direct = phaseFromAgent(info.agent) || phaseFromAgent(info.role);
+  if (direct) return direct;
+  const parts = Array.isArray(message.parts) ? message.parts : [];
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (!part || typeof part !== "object") continue;
+    if (part.type === "subtask") {
+      const mapped = phaseFromAgent(part.agent) || phaseFromAgent(part.description) || phaseFromAgent(part.prompt);
+      if (mapped) return mapped;
+      continue;
+    }
+    if (part.type === "agent") {
+      const mapped = phaseFromAgent(part.name);
+      if (mapped) return mapped;
+      continue;
+    }
+    if (part.type !== "tool") continue;
+    const state = part.state && typeof part.state === "object" ? part.state : {};
+    const input = state.input && typeof state.input === "object" ? state.input : {};
+    const mapped =
+      phaseFromAgent(input.agent) ||
+      phaseFromAgent(input.name) ||
+      phaseFromAgent(input.description) ||
+      phaseFromAgent(state.title) ||
+      phaseFromAgent(part.tool);
+    if (mapped) return mapped;
+  }
+  return "";
+}
+
+function liveSessionPhase(messages = state.session) {
+  const list = Array.isArray(messages) ? messages : [];
+  for (let index = list.length - 1; index >= 0; index -= 1) {
+    const message = list[index];
+    const parts = Array.isArray(message?.parts) ? message.parts : [];
+    const running = parts.some((part) => part?.type === "tool" && ["running", "pending"].includes(part?.state?.status || ""));
+    const incomplete = message?.info?.role === "assistant" && !message?.info?.time?.completed;
+    if (!running && !incomplete) continue;
+    return phaseFromMessage(message);
+  }
+  return "";
+}
+
+function relatePhase(kind, related, board, goals) {
+  if (!kind) return;
+  if (kind === "plan") {
+    if (board?.spec) related.push("spec");
+    return;
+  }
+  if (kind === "goals") {
+    if (board?.plan) related.push("plan");
+    if (state.changes.length > 0) related.push("files");
+    return;
+  }
+  if (kind === "evaluation") {
+    if (goals.length > 0) related.push("goals");
+    if (state.changes.length > 0) related.push("files");
+    return;
+  }
+  if (kind === "files") {
+    if (board?.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+    return;
+  }
+  if (kind === "overview") {
+    if (board?.plan) related.push("plan");
+    if (goals.length > 0) related.push("goals");
+  }
+}
+
+function syncSectionPhases(board = state.board) {
+  clearSectionPhases();
+  const live = liveSessionPhase();
+  if (!board?.task && !live) return;
+
+  const goals = (board?.lanes || []).find((lane) => lane.id === "goals")?.cards || [];
+  const pending = (board?.interactions || []).some((item) => item.status === "pending");
+  const planning = board?.task ? board.task.status === "planning" || board.run?.phase === "plan" || board.run?.phase === "replan" : false;
+  const active = [];
+  const related = [];
+
+  if (live) {
+    active.push(live);
+    relatePhase(live, related, board, goals);
+  }
+
+  if (board?.task && (pending || board.task.status === "blocked")) {
+    active.length = 0;
+    active.push("overview");
+    if (board.plan) related.push("plan");
+    if (goals.length > 0) related.push("goals");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "queued") {
+    active.push("overview");
+    if (board.spec) related.push("spec");
+    if (board.plan) related.push("plan");
+  }
+
+  if (board?.task && active.length === 0 && planning) {
+    active.push(board.spec ? "plan" : "spec");
+    if (board.spec) related.push("spec");
+    if (board.plan) related.push("plan");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "running") {
+    active.push(goals.length > 0 ? "goals" : board.plan ? "plan" : "overview");
+    if (board.plan) related.push("plan");
+    if (state.changes.length > 0) related.push("files");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "evaluating") {
+    active.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+    if (state.changes.length > 0) related.push("files");
+  }
+
+  if (board?.task && active.length === 0 && (board.task.status === "delivering" || board.task.status === "completed")) {
+    active.push(state.changes.length > 0 ? "files" : "overview");
+    if (board.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "failed") {
+    active.push("overview");
+    if (board.plan) related.push("plan");
+    if (board.evaluation) related.push("evaluation");
+    if (goals.length > 0) related.push("goals");
+  }
+
+  if (board?.task && active.length === 0 && board.task.status === "cancelled") {
+    active.push("overview");
+    if (board.plan) related.push("plan");
+  }
+
+  const current = [...new Set(active.filter(Boolean))];
+  const contextual = [...new Set(related.filter((kind) => kind && !current.includes(kind)))];
+
+  current.forEach((kind) => markSectionPhase(kind, "active"));
+  contextual.forEach((kind) => markSectionPhase(kind, "related"));
+}
+
 // ── Overview Rendering ──
 
 function overviewActionsHtml(controls) {
   if (!controls?.canRetry && !controls?.canReplan && !controls?.canCancel) return "";
   let html = '<div class="section-actions">';
-  if (controls.canRetry) html += `<button type="button" class="btn btn-primary" data-task-action="retry">${escapeHtml(t("task.action.retry"))}</button>`;
-  if (controls.canReplan) html += `<button type="button" class="btn btn-ghost" data-task-action="replan">${escapeHtml(t("task.action.replan"))}</button>`;
-  if (controls.canCancel) html += `<button type="button" class="btn btn-ghost" data-task-action="cancel">${escapeHtml(t("common.cancel"))}</button>`;
+  if (controls.canRetry) html += `<button type="button" class="btn btn-primary" data-task-action="retry" title="${escapeHtml(t("task.action.retry_title"))}" aria-label="${escapeHtml(t("task.action.retry_title"))}">${escapeHtml(t("task.action.retry"))}</button>`;
+  if (controls.canReplan) html += `<button type="button" class="btn btn-ghost" data-task-action="replan" title="${escapeHtml(t("task.action.replan_title"))}" aria-label="${escapeHtml(t("task.action.replan_title"))}">${escapeHtml(t("task.action.replan"))}</button>`;
+  if (controls.canCancel) html += `<button type="button" class="btn btn-ghost" data-task-action="cancel" title="${escapeHtml(t("task.action.cancel_title"))}" aria-label="${escapeHtml(t("task.action.cancel_title"))}">${escapeHtml(t("common.cancel"))}</button>`;
   html += "</div>";
   return html;
 }
@@ -3071,20 +3539,6 @@ function renderOverview(overview, task) {
   `;
 }
 
-function detailMetaHtml(values) {
-  return values
-    .filter(Boolean)
-    .map((value) => `<span class="detail-meta-chip">${escapeHtml(value)}</span>`)
-    .join("");
-}
-
-function detailPre(value, extra = "") {
-  if (extra) {
-    return `<pre class="detail-pre ${extra}">${escapeHtml(value || "")}</pre>`;
-  }
-  return `<div class="detail-md md-content">${renderMarkdown(value || "")}</div>`;
-}
-
 function goalItemsHtml(cards) {
   return cards
     .map(
@@ -3104,42 +3558,14 @@ function goalItemsHtml(cards) {
             data-goal-id=${jsonAttr(card.id)}
             data-goal-title=${jsonAttr(card.title)}
             data-goal-detail=${jsonAttr(card.detail || "")}
+            title="${escapeHtml(t("goal.edit_button_title"))}"
+            aria-label="${escapeHtml(t("goal.edit_button_title"))}"
           >${escapeHtml(t("common.edit"))}</button>
-          <button type="button" class="btn btn-ghost mini danger" data-goal-action="delete" data-goal-id=${jsonAttr(card.id)}>${escapeHtml(t("common.delete"))}</button>
+          <button type="button" class="btn btn-ghost mini danger" data-goal-action="delete" data-goal-id=${jsonAttr(card.id)} title="${escapeHtml(t("goal.delete_button_title"))}" aria-label="${escapeHtml(t("goal.delete_button_title"))}">${escapeHtml(t("common.delete"))}</button>
         </div>
       </div>`,
     )
     .join("");
-}
-
-function interactionAlertHtml(interaction) {
-  const actions =
-    interaction.type === "permission"
-      ? `<button class="btn btn-primary" data-action="always">${escapeHtml(t("interaction.always_allow"))}</button>
-         <button class="btn btn-ghost" data-action="once">${escapeHtml(t("interaction.allow_once"))}</button>
-         <button class="btn btn-ghost" data-action="reject">${escapeHtml(t("interaction.reject"))}</button>`
-      : `<button class="btn btn-primary" data-action="answer">${escapeHtml(t("interaction.answer"))}</button>
-         <button class="btn btn-ghost" data-action="reject">${escapeHtml(t("interaction.skip"))}</button>`;
-  return `<div class="interaction-alert" data-id="${escapeHtml(interaction.id)}">
-    <div class="interaction-title">${interaction.type === "permission" ? "\uD83D\uDD12" : "\u2753"} ${escapeHtml(interaction.title)}</div>
-    <div class="interaction-body md-content">${renderMarkdown(interaction.body)}</div>
-    <div class="interaction-actions">${actions}</div>
-  </div>`;
-}
-
-function bindInteractionActions(root) {
-  root?.querySelectorAll?.(".interaction-alert [data-action]")?.forEach((btn) => {
-    if (btn.dataset.bound === "true") return;
-    btn.dataset.bound = "true";
-    btn.addEventListener("click", () => {
-      const alert = btn.closest(".interaction-alert");
-      const id = alert?.dataset.id;
-      if (!id) return;
-      const action = btn.dataset.action;
-      if (action === "reject") rejectInteraction(id);
-      else resolveInteraction(id, action);
-    });
-  });
 }
 
 function changeRowsHtml(attr = "data-change-index") {
@@ -3173,6 +3599,7 @@ function renderChanges() {
         ? t("files.unavailable")
         : t("files.select_target");
     dom.changesBody.innerHTML = `<p class="empty-hint">${escapeHtml(hint)}</p>`;
+    syncSectionPhases();
     return;
   }
 
@@ -3190,6 +3617,7 @@ function renderChanges() {
     </div>
     <div class="changes-list">${changeRowsHtml()}</div>
   `;
+  syncSectionPhases();
 }
 
 function changeStatusLabel(status) {
@@ -3894,270 +4322,6 @@ function renderDeliveryCard(delivery) {
   </div>`;
 }
 
-function sectionDetail(kind) {
-  if (kind === "spec") return specDetail();
-  if (kind === "plan") return planDetail();
-  if (kind === "goals") return goalsDetail();
-  if (kind === "evaluation") return evaluationDetail();
-  if (kind === "files") return filesDetail();
-  if (kind === "overview") return overviewDetail();
-  return null;
-}
-
-function specDetail() {
-  const spec = state.board?.spec;
-  if (!spec) {
-    return {
-      title: t("section.spec"),
-      meta: "",
-      html: `<p class="empty-hint">${escapeHtml(t("empty.spec"))}</p>`,
-    };
-  }
-  return {
-    title: t("section.spec"),
-    meta: detailMetaHtml([detailStamp(spec.time?.created)]),
-    html: `<div class="detail-stack">
-      <section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.specification"))}</div>
-        ${detailPre(spec.content || t("detail.empty_value"))}
-      </section>
-    </div>`,
-  };
-}
-
-function planDetail() {
-  const plan = state.board?.plan;
-  if (!plan) {
-    return {
-      title: t("section.plan"),
-      meta: "",
-      html: `<p class="empty-hint">${escapeHtml(t("empty.plan"))}</p>`,
-    };
-  }
-  return {
-    title: t("section.plan"),
-    meta: detailMetaHtml([t("plan.version", { version: plan.version }), plan.status, detailStamp(plan.time.created)]),
-    html: `<div class="detail-stack">
-      <section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.summary"))}</div>
-        <div class="plan-summary detail-copy md-content">${renderMarkdown(plan.summary)}</div>
-      </section>
-      ${plan.prompt ? `<section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.planner_prompt"))}</div>
-        ${detailPre(plan.prompt)}
-      </section>` : ""}
-      ${plan.metadata ? `<section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.metadata"))}</div>
-        ${detailPre(JSON.stringify(plan.metadata, null, 2), "detail-pre-json")}
-      </section>` : ""}
-    </div>`,
-  };
-}
-
-function goalsDetail() {
-  const cards = (state.board?.lanes || []).find((lane) => lane.id === "goals")?.cards || [];
-  const pending = (state.board?.interactions || []).filter((item) => item.status === "pending");
-  const passed = cards.filter((card) => card.status === "passed").length;
-  const total = cards.length;
-  return {
-    title: t("section.goals"),
-    meta: detailMetaHtml([
-      total > 0 ? t("detail.goal_progress", { passed, total }) : t("empty.goals"),
-      pending.length > 0 ? tc("detail.pending_interactions_meta", pending.length, { count: pending.length }) : "",
-    ]),
-    html: `<div class="detail-stack">
-      <section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.goal_management"))}</div>
-        ${goalToolbar()}
-        ${total > 0 ? `<div class="goals-list detail-goals-list">${goalItemsHtml(cards)}</div>` : `<p class="empty-hint">${escapeHtml(t("empty.goals"))}</p>`}
-      </section>
-      ${pending.length > 0 ? `<section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.pending_interactions"))}</div>
-        <div class="detail-stack">${pending.map(interactionAlertHtml).join("")}</div>
-      </section>` : ""}
-    </div>`,
-  };
-}
-
-function evaluationDetail() {
-  const evaluation = state.board?.evaluation;
-  const delivery = state.board?.delivery;
-  const specs = state.criteriaSpecs || [];
-  const checks = groupChecks(specs, (spec) => spec.group || "custom")
-    .map((group) => `<section class="detail-card">
-      <div class="detail-group-head">
-        <div class="detail-kicker">${escapeHtml(group.label)}</div>
-        <div class="detail-group-count">${escapeHtml(tc("checks.group_count", group.items.length, { count: group.items.length }))}</div>
-      </div>
-      <div class="detail-stack detail-check-group">
-        ${group.items.map((spec) => {
-          const status = spec.enabled ? aggregateCheckStatus(evaluation?.checks, spec.name) : "off";
-          const note = joinBullet([
-            spec.name,
-            checkFamilyLabel(spec.family || "", spec.name),
-            spec.readOnly ? t("detail.observed") : spec.enabled ? t("detail.enabled") : t("detail.disabled"),
-          ]);
-          return `<div class="detail-check-row">
-            <span class="detail-check-dot" data-result="${status}"></span>
-            <div class="detail-check-main">
-              <div class="detail-check-title">${escapeHtml(spec.label)}</div>
-              <div class="detail-check-note">${escapeHtml(note)}</div>
-            </div>
-            <span class="detail-check-pill" data-result="${status}">${escapeHtml(checkResultLabel(status))}</span>
-          </div>`;
-        }).join("")}
-      </div>
-    </section>`)
-    .join("");
-  const results = groupChecks(evaluation?.checks || [], (check) => checkFamilyKey(check.family || "", check.name || check.label || ""))
-    .map((group) => `<section class="detail-card">
-      <div class="detail-group-head">
-        <div class="detail-kicker">${escapeHtml(group.label)}</div>
-        <div class="detail-group-count">${escapeHtml(tc("checks.group_count", group.items.length, { count: group.items.length }))}</div>
-      </div>
-      <div class="detail-stack detail-check-group">
-        ${group.items.map((check) => `<section class="detail-card detail-card-tight" data-result="${check.status}">
-          <div class="detail-check-head">
-            <div class="detail-check-title">${escapeHtml(check.label || checkLabel(baseCheckName(check.name || check.label)))}</div>
-            <span class="detail-check-pill" data-result="${check.status}">${escapeHtml(checkResultLabel(check.status))}</span>
-          </div>
-          <div class="detail-check-note">${escapeHtml(joinBullet([check.name, checkFamilyLabel(check.family || "", check.name || check.label || "")]))}</div>
-          ${check.evidence ? detailPre(check.evidence, "detail-pre-evidence") : `<div class="detail-copy detail-copy-soft">${escapeHtml(t("detail.no_evidence"))}</div>`}
-        </section>`).join("")}
-      </div>
-    </section>`)
-    .join("");
-  return {
-    title: t("section.evaluation"),
-    meta: detailMetaHtml([
-      evaluation?.verdict ? evaluationVerdictLabel(evaluation.verdict) : t("evaluation.verdict.pending"),
-      evaluation?.status || "",
-      evaluation?.time?.completed ? detailStamp(evaluation.time.completed) : "",
-    ]),
-    html: `<div class="detail-stack">
-      <section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.configured_checks"))}</div>
-        ${checks || `<p class="empty-hint">${escapeHtml(t("empty.checks"))}</p>`}
-      </section>
-      ${evaluation ? `<section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.verdict_summary"))}</div>
-        <div class="detail-copy md-content">${renderMarkdown(evaluation.summary)}</div>
-      </section>` : ""}
-      ${results ? `<div class="detail-stack">${results}</div>` : evaluation ? "" : `<p class="empty-hint">${escapeHtml(t("detail.no_evaluation"))}</p>`}
-      ${delivery ? `<section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.delivery"))}</div>
-        ${renderDeliveryCard(delivery)}
-      </section>` : ""}
-    </div>`,
-  };
-}
-
-function filesDetail() {
-  const files = state.changes;
-  const adds = files.reduce((sum, item) => sum + item.additions, 0);
-  const dels = files.reduce((sum, item) => sum + item.deletions, 0);
-  return {
-    title: t("section.files"),
-    meta: detailMetaHtml([
-      files.length > 0 ? tc("files.changed", files.length, { count: files.length }) : t("detail.no_changes"),
-      files.length > 0 ? `+${adds} / -${dels}` : "",
-    ]),
-    html: files.length === 0
-      ? `<p class="empty-hint">${escapeHtml(t("empty.files"))}</p>`
-      : `<div class="detail-stack">
-          <section class="detail-card">
-            <div class="detail-kicker">${escapeHtml(t("detail.changed_files"))}</div>
-            <div class="changes-list">${changeRowsHtml("data-detail-change-index")}</div>
-          </section>
-        </div>`,
-  };
-}
-
-function overviewDetail() {
-  const overview = state.board?.overview;
-  const task = state.board?.task;
-  const run = state.board?.run;
-  if (!overview) {
-    return {
-      title: t("section.overview"),
-      meta: "",
-      html: `<p class="empty-hint">${escapeHtml(t("empty.overview"))}</p>`,
-    };
-  }
-  return {
-    title: t("section.overview"),
-    meta: detailMetaHtml([
-      task?.status ? statusLabel(task.status) : "",
-      run?.phase || "",
-      task?.time?.updated ? detailStamp(task.time.updated) : "",
-    ]),
-    html: `<div class="detail-stack">
-      <section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.headline"))}</div>
-        <div class="plan-summary detail-copy md-content">${renderMarkdown(overview.headline)}</div>
-        <div class="detail-copy detail-copy-soft md-content">${renderMarkdown(overview.summary)}</div>
-      </section>
-      ${overview.nextStep ? `<section class="detail-card detail-card-accent">
-        <div class="detail-kicker">${escapeHtml(t("detail.next_step"))}</div>
-        <div class="detail-copy md-content">${renderMarkdown(overview.nextStep.title)}</div>
-        ${overview.nextStep.detail ? `<div class="detail-copy detail-copy-soft md-content">${renderMarkdown(overview.nextStep.detail)}</div>` : ""}
-      </section>` : ""}
-      ${overview.currentFailure ? `<section class="detail-card detail-card-danger">
-        <div class="detail-kicker">${escapeHtml(t("detail.current_failure"))}</div>
-        <div class="detail-copy md-content">${renderMarkdown(overview.currentFailure.title)}</div>
-        <div class="detail-copy detail-copy-soft md-content">${renderMarkdown(overview.currentFailure.summary)}</div>
-      </section>` : ""}
-      ${overviewActionsHtml(overview.controls || {}) ? `<section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.task_actions"))}</div>
-        ${overviewActionsHtml(overview.controls || {})}
-      </section>` : ""}
-      ${task ? `<section class="detail-card">
-        <div class="detail-kicker">${escapeHtml(t("detail.task_context"))}</div>
-        <div class="detail-grid">
-          <div class="detail-grid-row"><span>${escapeHtml(t("detail.id"))}</span><strong>${escapeHtml(task.id)}</strong></div>
-          <div class="detail-grid-row"><span>${escapeHtml(t("detail.status"))}</span><strong>${escapeHtml(statusLabel(task.status))}</strong></div>
-          ${run?.executor ? `<div class="detail-grid-row"><span>${escapeHtml(t("detail.executor"))}</span><strong>${escapeHtml(executorLabel(run.executor))}</strong></div>` : ""}
-          ${task.time.created ? `<div class="detail-grid-row"><span>${escapeHtml(t("detail.created"))}</span><strong>${escapeHtml(detailStamp(task.time.created))}</strong></div>` : ""}
-          ${task.time.updated ? `<div class="detail-grid-row"><span>${escapeHtml(t("detail.updated"))}</span><strong>${escapeHtml(detailStamp(task.time.updated))}</strong></div>` : ""}
-        </div>
-      </section>` : ""}
-    </div>`,
-  };
-}
-
-function renderSectionDetail(kind) {
-  const detail = sectionDetail(kind);
-  if (!detail || !dom.sectionDialogTitle || !dom.sectionDialogMeta || !dom.sectionDialogBody) return;
-  dom.sectionDialogTitle.textContent = detail.title;
-  dom.sectionDialogMeta.innerHTML = detail.meta || "";
-  dom.sectionDialogBody.innerHTML = detail.html;
-}
-
-function refreshSectionDetail() {
-  if (!dom.sectionDialog?.open || !state.sectionDetail) return;
-  renderSectionDetail(state.sectionDetail);
-}
-
-function openSectionDetail(kind) {
-  if (!kind || !dom.sectionDialog) return;
-  state.sectionDetail = kind;
-  renderSectionDetail(kind);
-  if (!dom.sectionDialog.open) dom.sectionDialog.showModal();
-  dom.sectionDialogBody?.scrollTo?.({ top: 0 });
-}
-
-function closeSectionDetail() {
-  state.sectionDetail = "";
-  if (dom.sectionDialog?.open) dom.sectionDialog.close();
-}
-
-function shouldOpenSectionDetail(event) {
-  const target = event?.target;
-  if (!(target instanceof Element)) return false;
-  if (window.getSelection?.()?.toString()) return false;
-  return !target.closest("button, input, textarea, select, label, a, summary, [data-action]");
-}
-
 function setCriteriaResult(item, status) {
   const statusDot = item?.querySelector(".criteria-status");
   const text = item?.querySelector(".criteria-result");
@@ -4183,7 +4347,7 @@ function isCriteriaEnabled(item) {
 
 async function loadManagedSessions() {
   try {
-    const data = await apiJson("session?roots=true&limit=80");
+    const data = await apiJson("experimental/session?roots=true&limit=80", undefined, { directory: false });
     state.sessions = Array.isArray(data)
       ? [...data].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0))
       : [];
@@ -4193,31 +4357,77 @@ async function loadManagedSessions() {
   }
 }
 
-async function selectManagedSession(sessionID) {
+async function selectManagedSession(sessionID, input = {}) {
   if (!sessionID) {
     state.managedSession = null;
+    renderWorkspaceState();
     renderManagedSessionList();
     return;
   }
+  const session = input.session || sessionItem(sessionID);
+  const dir =
+    typeof input.directory === "string" && input.directory
+      ? input.directory
+      : session?.directory || state.directory;
   try {
-    state.managedSession = await apiJson(`session/${sessionID}`);
+    state.managedSession = await apiJson(`session/${sessionID}`, undefined, { directory: dir });
+    AppLog.info("session", "Loaded managed session", {
+      sessionID,
+      session: state.managedSession,
+    });
+    renderWorkspaceState();
     renderManagedSessionList();
   } catch (e) {
+    if (session) {
+      state.managedSession = session;
+      renderWorkspaceState();
+      renderManagedSessionList();
+      return;
+    }
     AppLog.error("ui", "Failed to load managed session", { error: String(e) });
   }
 }
 
 function renderManagedSessionList() {
   if (!dom.sessionListPanel) return;
-  const html = !state.sessions.length
-    ? `<div class="empty-hint">${escapeHtml(t("session.none_loaded"))}</div>`
-    : state.sessions
-      .map((item) => sessionRow(item, joinBullet([stamp(item.time?.updated), shortPath(item.directory || "")])))
-      .join("");
+  let html;
+  if (state.globalView) {
+    html = renderGlobalTaskList();
+  } else {
+    html = !state.sessions.length
+      ? `<div class="empty-hint">${escapeHtml(t("session.none_loaded"))}</div>`
+      : state.sessions
+        .map((item) => sessionRow(item, joinBullet([stamp(item.time?.updated), shortPath(item.directory || "")])))
+        .join("");
+  }
   if (dom.sessionListPanel.innerHTML === html) return;
   const top = dom.sessionListPanel.scrollTop;
   dom.sessionListPanel.innerHTML = html;
   dom.sessionListPanel.scrollTop = top;
+}
+
+function renderGlobalTaskList() {
+  const items = state.globalTasks;
+  if (!items.length) return `<div class="empty-hint">${escapeHtml(t("sidebar.global_empty"))}</div>`;
+  return items.map((item) => {
+    const task = item.task || {};
+    const dir = task.directory || item.project?.worktree || "";
+    const dirLabel = shortPath(dir);
+    const statusIcon = task.status || "idle";
+    const title = escapeHtml(clipText(task.title || task.id || "", 60));
+    const meta = joinBullet([stamp(task.time?.updated || item.updated_at), dirLabel]);
+    const isCurrent = dir && dir === activeDirectory();
+    return `<div class="session-row-mini global-task-row" title="${title}" data-status="${escapeHtml(statusIcon)}">
+      <button type="button" class="session-row-main" data-global-task-id="${escapeHtml(task.id || "")}" data-global-task-dir="${escapeHtml(dir)}" title="${title}">
+        <div class="session-row-head">
+          <span class="status-dot" data-status="${escapeHtml(statusIcon)}" aria-hidden="true"></span>
+          <strong>${title}</strong>
+        </div>
+        <small>${escapeHtml(meta)}</small>
+        ${isCurrent ? `<span class="global-task-current">${escapeHtml(t("sidebar.local"))}</span>` : ""}
+      </button>
+    </div>`;
+  }).join("");
 }
 
 async function createManagedSession() {
@@ -4227,8 +4437,8 @@ async function createManagedSession() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    await openManagedSession(session?.id || "");
-    await loadManagedSessions();
+    await openManagedSession(session?.id || "", session || null);
+    await Promise.all([loadManagedSessions(), loadGlobalTasks()]);
   } catch (e) {
     AppLog.error("ui", "Failed to create session", { error: String(e) });
     await nativeMessage(errorText("session.create_failed", e), {
@@ -4248,14 +4458,18 @@ async function deleteManagedSession(sessionID = state.managedSession?.id) {
   });
   if (!accepted) return;
   try {
-    await deleteSessionApi(sessionID, { deleteTasks: true });
-    if (state.chatSessionID === sessionID) state.chatSessionID = "";
+    await deleteSessionApi(sessionID, { deleteTasks: true }, { directory: session?.directory || state.directory });
+    if (state.chatSessionID === sessionID) {
+      state.chatSessionID = "";
+    }
     if (state.managedSession?.id === sessionID) {
       state.managedSession = null;
     }
-    await Promise.all([loadManagedSessions(), loadTasks()]);
+    renderWorkspaceState();
+    await Promise.all([loadManagedSessions(), loadGlobalTasks(), loadTasks()]);
     if (state.chatSessionID) {
-      await Promise.all([loadConversation(), selectManagedSession(state.chatSessionID)]);
+      const next = sessionItem(state.chatSessionID);
+      await Promise.all([loadConversation(), selectManagedSession(state.chatSessionID, { session: next, directory: next?.directory })]);
       return;
     }
     if (state.selectedTaskID) {
@@ -4350,117 +4564,32 @@ function formatSessionTranscript(messages) {
     .join("\n\n---\n\n");
 }
 
-async function openManagedSession(sessionID) {
+async function openManagedSession(sessionID, input) {
   if (!sessionID) return;
-  const taskID = await resolveTaskIDForSession(sessionID);
-  if (taskID) {
-    await selectTask(taskID);
-    state.chatSessionID = sessionID;
-    state.sessionUpdatedAt = 0;
-    state.session = [];
-    renderManagedSessionList();
-    renderSession();
-    await selectManagedSession(sessionID);
-    await Promise.all([loadConversation(), loadMemory()]);
+  const session = input || sessionItem(sessionID);
+  const task = await resolveTaskForSession(sessionID);
+  const dir = task?.task?.directory || session?.directory || "";
+  if (dir && dir !== activeDirectory()) {
+    await setDirectory(dir);
+  }
+  if (task?.task?.id) {
+    await selectTask(task.task.id, { sessionID, managedSession: session });
+    await selectManagedSession(sessionID, { session, directory: dir });
+    await loadMemory();
     return;
   }
-  state.selectedTaskID = "";
-  state.chatSessionID = sessionID;
-  stopPolling();
-  stopSSE();
-  state.board = null;
-  state.boardEtag = "";
-  state.boardUpdatedAt = 0;
-  state.sessionUpdatedAt = 0;
-  state.session = [];
+  enterSessionWorkspace(sessionID, { managedSession: session });
   renderClear();
-  await selectManagedSession(sessionID);
+  await selectManagedSession(sessionID, { session, directory: dir });
   await Promise.all([loadConversation(), loadMemory()]);
 }
 
 // ── Interactions ──
 
-function renderInteractions(interactions) {
-  const pending = interactions.filter((i) => i.status === "pending");
-  const goalsBody = dom.goalsBody;
-
-  // Remove existing inline alerts
-  goalsBody.querySelectorAll(".interaction-alert").forEach((el) => el.remove());
-
-  if (pending.length === 0) {
-    dismissInteractionModal();
-    return;
-  }
-
-  // Inline alerts in goals section
-  goalsBody.insertAdjacentHTML("beforeend", pending.map(interactionAlertHtml).join(""));
-  bindInteractionActions(goalsBody);
-
-  // Show modal popup for the first pending interaction (more prominent)
-  if (!_interactionBusy) {
-    showInteractionModal(pending[0]);
-  }
-}
-
-function showInteractionModal(interaction) {
-  let modal = document.getElementById("interaction-modal");
-  // Don't re-show if already showing for the same interaction
-  if (modal && modal.dataset.interactionId === interaction.id) return;
-  dismissInteractionModal();
-  const actions =
-    interaction.type === "permission"
-      ? `<button class="btn btn-primary" data-action="always">${escapeHtml(t("interaction.always_allow"))}</button>
-         <button class="btn btn-ghost" data-action="once">${escapeHtml(t("interaction.allow_once"))}</button>
-         <button class="btn btn-ghost" data-action="reject">${escapeHtml(t("interaction.reject"))}</button>`
-      : `<button class="btn btn-primary" data-action="answer">${escapeHtml(t("interaction.answer"))}</button>
-         <button class="btn btn-ghost" data-action="reject">${escapeHtml(t("interaction.skip"))}</button>`;
-  const icon = interaction.type === "permission" ? "\uD83D\uDD12" : "\u2753";
-  const html = `<div id="interaction-modal" class="interaction-modal-overlay" data-interaction-id="${escapeHtml(interaction.id)}">
-    <div class="interaction-modal">
-      <div class="interaction-modal-title">${icon} ${escapeHtml(interaction.title)}</div>
-      <div class="interaction-modal-body md-content">${renderMarkdown(interaction.body)}</div>
-      <div class="interaction-modal-actions">${actions}</div>
-    </div>
-  </div>`;
-  document.body.insertAdjacentHTML("beforeend", html);
-  modal = document.getElementById("interaction-modal");
-  modal.querySelectorAll("[data-action]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const action = btn.dataset.action;
-      if (action === "reject") rejectInteraction(interaction.id);
-      else resolveInteraction(interaction.id, action);
-    });
-  });
-}
-
-function dismissInteractionModal() {
-  const modal = document.getElementById("interaction-modal");
-  if (modal) modal.remove();
-}
-
 // ── Interaction Handlers ──
 
-// Guard: while resolving an interaction, suppress board reloads to prevent
-// the DOM from being rebuilt (which would remove the button the user clicked).
-let _interactionBusy = false;
-
-function disableInteractionButtons(id) {
-  document.querySelectorAll(`.interaction-alert button`).forEach((btn) => {
-    btn.disabled = true;
-    btn.style.opacity = "0.5";
-  });
-  // Mark the specific interaction as processing
-  const alert = document.querySelector(`.interaction-alert[data-id="${id}"]`);
-  if (alert) {
-    const title = alert.querySelector(".interaction-title");
-    if (title) title.textContent += t("interaction.processing_suffix");
-  }
-}
-
-async function resolveInteraction(id, action) {
-  if (_interactionBusy) return;
-  _interactionBusy = true;
-  disableInteractionButtons(id);
+async function resolveInteraction(id, action, input = {}) {
+  return resolveInteractionHelper(id, action, input);
   try {
     if (action === "once" || action === "always") {
       // Direct API call — bypasses the panel agent for faster, more reliable resolution
@@ -4471,25 +4600,38 @@ async function resolveInteraction(id, action) {
         signal: AbortSignal.timeout(30000),
       });
     } else {
-      const answer = await nativePrompt(t("interaction.reply_prompt"), {
-        title: t("interaction.reply_title"),
-        okLabel: t("common.submit"),
-        cancelLabel: t("common.cancel"),
-        inputLabel: t("interaction.answer_label"),
-      });
-      if (answer == null) {
-        // User cancelled the prompt
-        _interactionBusy = false;
-        await loadBoard();
-        return;
+      const answers = Array.isArray(input.answers) ? input.answers : null;
+      const message = typeof input.message === "string" && input.message.trim() ? input.message.trim() : "";
+      if (!answers && !message) {
+        const answer = await nativePrompt(t("interaction.reply_prompt"), {
+          title: t("interaction.reply_title"),
+          okLabel: t("common.submit"),
+          cancelLabel: t("common.cancel"),
+          inputLabel: t("interaction.answer_label"),
+        });
+        if (answer == null) {
+          // User cancelled the prompt
+          _interactionBusy = false;
+          await loadBoard();
+          return;
+        }
+        await apiJson(`interaction/${id}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: answer }),
+          signal: AbortSignal.timeout(30000),
+        });
+      } else {
+        await apiJson(`interaction/${id}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            answers: answers || undefined,
+            message: message || undefined,
+          }),
+          signal: AbortSignal.timeout(30000),
+        });
       }
-      // Direct API call for answers too
-      await apiJson(`interaction/${id}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: answer }),
-        signal: AbortSignal.timeout(30000),
-      });
     }
   } catch (e) {
     AppLog.error("ui", "Failed to resolve interaction", { error: String(e) });
@@ -4502,9 +4644,7 @@ async function resolveInteraction(id, action) {
 }
 
 async function rejectInteraction(id) {
-  if (_interactionBusy) return;
-  _interactionBusy = true;
-  disableInteractionButtons(id);
+  return rejectInteractionHelper(id);
   try {
     // Direct API call — bypasses the panel agent for faster, more reliable rejection
     await apiJson(`interaction/${id}/reject`, {
@@ -4597,6 +4737,56 @@ function groupMessagesByRole(sorted) {
 // ── Board Context Messages ──
 // Inject synthetic messages from the board data so the chat shows the full
 // task lifecycle: user request, plan, goal updates, evaluation results.
+
+function hashText(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function signText(value) {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value) || "";
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function signPart(part) {
+  if (!record(part)) return signText(part);
+  if (part.type === "text" || part.kind === "trace") {
+    return ["text", part.kind || "", part.source || "", part.audience?.ui === false ? "0" : "1", part.text || ""].join("\u001f");
+  }
+  if (part.type === "tool") {
+    const st = record(part.state) ? part.state : {};
+    return ["tool", part.tool || "", st.status || "", signText(st.input || {}), signText(st.output || ""), st.title || ""].join("\u001f");
+  }
+  if (part.type === "reasoning") {
+    return ["reasoning", part.text || ""].join("\u001f");
+  }
+  if (part.type === "patch") {
+    return ["patch", ...(Array.isArray(part.files) ? part.files : [])].join("\u001f");
+  }
+  if (part.type === "file") {
+    return ["file", part.filename || "", part.url || "", part.mime || part.mediaType || ""].join("\u001f");
+  }
+  return signText(part);
+}
+
+function signGroup(group) {
+  return hashText(
+    [group.role, ...group.messages.map((message) => [
+      message._synthetic ? "1" : "0",
+      message.info?.time?.created || 0,
+      ...(Array.isArray(message.parts) ? message.parts : []).map(signPart),
+    ].join("\u001e"))].join("\u001d"),
+  );
+}
 
 function boardArtifact(board, label) {
   const list = board?.artifacts || [];
@@ -5168,49 +5358,47 @@ function renderSession() {
     dom.chatScroll.innerHTML = `<div class="chat-empty">${escapeHtml(t("chat.empty"))}</div>`;
     dom.chatCount.textContent = "";
     state._renderedGroupKey = "";
+    syncSectionPhases();
     return;
   }
 
   const groups = groupMessagesByRole(sorted);
+  const sigs = groups.map(signGroup);
   dom.chatCount.textContent = tc("chat.count", sorted.length, { count: sorted.length });
 
   const el = dom.chatScroll;
   const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   const target = conversationTarget();
   const targetKey = conversationTargetKey(target);
-  const boardSuffix = state.board ? `|${state.board.task?.status || ""}:${state.board.evaluation?.verdict || ""}` : "";
-  const groupKey = `${targetKey}:${groups.map((group) => `${group.role}:${group.messages.length}`).join(",")}${boardSuffix}`;
-  const sessionChanged = !state._renderedGroupKey || !state._renderedGroupKey.startsWith(`${targetKey}:`);
-  const sameStructure = state._renderedGroupKey === groupKey;
+  const sessionChanged = state._renderedGroupKey !== targetKey;
 
   if (sessionChanged) {
     const frag = document.createDocumentFragment();
-    for (const group of groups) {
-      const node = renderTurn(group);
+    for (let index = 0; index < groups.length; index += 1) {
+      const node = renderTurn(groups[index], sigs[index]);
       if (node) frag.appendChild(node);
     }
     el.innerHTML = "";
     el.appendChild(frag);
-  } else if (!sameStructure) {
-    const existingTurns = el.querySelectorAll(".turn");
-    const prevCount = existingTurns.length;
-    if (prevCount > 0 && groups.length >= prevCount) {
-      const updatedNode = renderTurn(groups[prevCount - 1]);
-      if (updatedNode) existingTurns[prevCount - 1].replaceWith(updatedNode);
-    }
-    for (let index = prevCount; index < groups.length; index += 1) {
-      const node = renderTurn(groups[index]);
-      if (node) el.appendChild(node);
-    }
   } else {
-    const existingTurns = el.querySelectorAll(".turn");
-    if (existingTurns.length > 0) {
-      const updatedNode = renderTurn(groups[groups.length - 1]);
-      if (updatedNode) existingTurns[existingTurns.length - 1].replaceWith(updatedNode);
+    const turns = [...el.querySelectorAll(".turn")];
+    const limit = Math.min(turns.length, groups.length);
+    for (let index = 0; index < limit; index += 1) {
+      if (turns[index]?.dataset.groupSig === sigs[index]) continue;
+      const node = renderTurn(groups[index], sigs[index]);
+      if (node) turns[index].replaceWith(node);
+    }
+    if (turns.length > groups.length) {
+      turns.slice(groups.length).forEach((node) => node.remove());
+    }
+    for (let index = turns.length; index < groups.length; index += 1) {
+      const node = renderTurn(groups[index], sigs[index]);
+      if (node) el.appendChild(node);
     }
   }
 
-  state._renderedGroupKey = groupKey;
+  state._renderedGroupKey = targetKey;
+  syncSectionPhases();
   if (wasAtBottom) {
     requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight;
@@ -5243,7 +5431,7 @@ async function copyChatConversation() {
   }
 }
 
-function renderTurn(group) {
+function renderTurn(group, sig = "") {
   const { role, messages } = group;
   let bodyHtml = "";
   for (const message of messages) {
@@ -5256,6 +5444,7 @@ function renderTurn(group) {
   const el = document.createElement("article");
   el.className = "turn msg";
   el.dataset.role = role;
+  el.dataset.groupSig = sig;
   const firstTime = messages[0]?.info?.time?.created;
   const timeStr = firstTime ? stamp(firstTime) : "";
 
@@ -5327,6 +5516,9 @@ function renderToolPart(part) {
 function renderClear() {
   renderMeta();
   setTaskStatus("idle", { visible: false });
+  clearSectionPhases();
+  state.session = [];
+  state.sessionUpdatedAt = 0;
   dom.overviewBadge.textContent = "";
   dom.overviewBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.overview"))}</p>`;
   state.changes = [];
@@ -5348,7 +5540,15 @@ function renderClear() {
   dom.elapsed.textContent = "";
   state._renderedGroupKey = "";
   renderExecutor();
-  refreshSectionDetail();
+}
+
+async function ensureTaskSelection() {
+  if (state.globalView || hasWorkspaceSelection()) return false;
+  const dir = activeDirectory();
+  const taskID = state.tasks[0]?.task?.id || (!dir ? state.globalTasks[0]?.task?.id : "") || "";
+  if (!taskID) return false;
+  await selectTask(taskID);
+  return true;
 }
 
 function sizeChat() {
@@ -5417,12 +5617,11 @@ dom.connBadge.addEventListener("dblclick", async () => {
   dom.connBadge.textContent = t("titlebar.connection.restarting");
   dom.connBadge.dataset.status = "connecting";
   try {
-    const restarted = isManagedLocalServerUrl(state.serverUrl) ? await restartLocalServer() : null;
+    const restarted = usesManagedLocalServer() ? await restartLocalServer() : null;
     if (!restarted) {
       await apiFetch("restart", { method: "POST", signal: AbortSignal.timeout(3000) });
     }
   } catch {}
-  // Wait for new process to come up, then reload UI
   setTimeout(() => location.reload(), 2000);
 });
 
@@ -5443,6 +5642,24 @@ dom.rightPaneResizer?.addEventListener("pointerdown", (event) => {
 });
 
 dom.sessionListPanel?.addEventListener("click", async (event) => {
+  // Global view: click to switch directory and select task
+  const globalBtn = eventClosest(event, "[data-global-task-id]");
+  if (globalBtn) {
+    const dir = globalBtn.dataset.globalTaskDir || "";
+    const taskID = globalBtn.dataset.globalTaskId || "";
+    if (dir && dir !== activeDirectory()) {
+      state.globalView = false;
+      renderWorkspaceState();
+      await setDirectory(dir);
+      if (taskID) await selectTask(taskID);
+    } else if (taskID) {
+      state.globalView = false;
+      renderWorkspaceState();
+      renderManagedSessionList();
+      await selectTask(taskID);
+    }
+    return;
+  }
   const remove = eventClosest(event, "[data-session-delete]");
   if (remove) {
     await deleteManagedSession(remove.dataset.sessionDelete || "");
@@ -5508,35 +5725,10 @@ dom.criteriaList?.addEventListener("change", async () => {
   }
 });
 
-$$(".section-body[data-section-detail]").forEach((body) => {
-  body.addEventListener("click", (event) => {
-    if (!shouldOpenSectionDetail(event)) return;
-    openSectionDetail(body.dataset.sectionDetail || "");
-  });
-});
-
 dom.changesBody?.addEventListener("click", (e) => {
   const target = eventClosest(e, "[data-change-index]");
   if (!target) return;
   openDiffDialog(Number(target.dataset.changeIndex));
-});
-
-dom.sectionDialogBody?.addEventListener("click", (event) => {
-  const change = eventClosest(event, "[data-detail-change-index]");
-  if (change) {
-    closeSectionDetail();
-    openDiffDialog(Number(change.dataset.detailChangeIndex));
-    return;
-  }
-
-  const button = eventClosest(event, ".interaction-alert [data-action]");
-  if (!button) return;
-  const alert = button.closest(".interaction-alert");
-  const id = alert?.dataset.id;
-  if (!id) return;
-  const action = button.dataset.action;
-  if (action === "reject") rejectInteraction(id);
-  else resolveInteraction(id, action);
 });
 
 dom.engineBar.addEventListener("click", async (event) => {
@@ -5548,8 +5740,20 @@ dom.engineBar.addEventListener("click", async (event) => {
   await persistOverlaySettings();
 });
 
+dom.btnGlobalView?.addEventListener("click", async () => {
+  state.globalView = !state.globalView;
+  renderWorkspaceState();
+  if (state.globalView) {
+    await loadGlobalTasks();
+  }
+  renderManagedSessionList();
+});
 dom.btnRefreshSessions.addEventListener("click", async () => {
-  await Promise.all([loadTasks(), loadManagedSessions()]);
+  if (state.globalView) {
+    await loadGlobalTasks();
+    return;
+  }
+  await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions()]);
   await syncManagedSession(currentSessionID());
 });
 dom.btnCreateSession.addEventListener("click", () => createManagedSession());
@@ -5619,10 +5823,6 @@ dom.btnCancelSkill.addEventListener("click", () => dom.skillDialog.close());
 dom.btnCancelMcp.addEventListener("click", () => dom.mcpDialog.close());
 dom.btnCloseSkillMarket?.addEventListener("click", () => dom.skillMarketDialog?.close());
 dom.btnCloseDiff?.addEventListener("click", () => dom.diffDialog?.close());
-dom.btnCloseSectionDialog?.addEventListener("click", () => closeSectionDetail());
-dom.sectionDialog?.addEventListener("close", () => {
-  state.sectionDetail = "";
-});
 dom.mcpType.addEventListener("change", toggleMcpFields);
 dom.skillMarketList?.addEventListener("click", async (event) => {
   const install = eventClosest(event, "[data-market-install]");
@@ -5824,8 +6024,6 @@ function openServerSettings() {
   dom.serverUrl.value = state.serverUrl;
   dom.serverPassword.value = state.password;
   dom.serverUsername.value = state.username;
-  if (dom.localeMode) dom.localeMode.value = sanitizeLocale(state.locale);
-  dom.themeMode.value = sanitizeTheme(state.theme);
   dom.settingsDialog.showModal();
 }
 
@@ -5850,14 +6048,66 @@ dom.btnTheme?.addEventListener("click", async () => {
   state.theme = resolvedTheme() === "light" ? "dark" : "light";
   renderTheme();
   await persistOverlaySettings();
+  closeTitlebarMenu();
 });
 
 dom.btnLocale?.addEventListener("click", async () => {
   await setLocale(state.locale === "zh-CN" ? "en-US" : "zh-CN");
+  closeTitlebarMenu();
 });
 
-$("#btnSettings").addEventListener("click", () => {
+dom.btnSettings?.addEventListener("click", () => {
   openServerSettings();
+  closeTitlebarMenu();
+});
+
+dom.btnTitlebarMenu?.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  setTitlebarMenu(dom.titlebarMenu?.hidden);
+});
+
+document.addEventListener("pointerdown", (event) => {
+  if (!dom.titlebarMenu || dom.titlebarMenu.hidden) return;
+  if (!(event.target instanceof Element)) {
+    closeTitlebarMenu();
+    return;
+  }
+  if (event.target.closest("#titlebarMenu, #btnTitlebarMenu")) return;
+  closeTitlebarMenu();
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  closeTitlebarMenu();
+});
+
+dom.chkAutoPermission?.addEventListener("change", async () => {
+  state.autoPermission = dom.chkAutoPermission.checked;
+  renderTitlebarMenu();
+  await persistOverlaySettings();
+  closeTitlebarMenu();
+  if (state.autoPermission) void loadBoard();
+});
+
+dom.chkAutoQuestion?.addEventListener("change", async () => {
+  state.autoQuestion = dom.chkAutoQuestion.checked;
+  renderTitlebarMenu();
+  await persistOverlaySettings();
+  closeTitlebarMenu();
+  if (state.autoQuestion) void loadBoard();
+});
+
+dom.opacityRange?.addEventListener("input", () => {
+  state.opacity = sanitizeOpacity(Number(dom.opacityRange.value) / 100);
+  void applyWindowOpacity();
+});
+
+dom.opacityRange?.addEventListener("change", async () => {
+  state.opacity = sanitizeOpacity(Number(dom.opacityRange.value) / 100);
+  await applyWindowOpacity();
+  await persistOverlaySettings();
+  closeTitlebarMenu();
 });
 
 dom.btnConfigToggle?.addEventListener("click", () => {
@@ -5990,7 +6240,7 @@ dom.channelForm.addEventListener("submit", async (e) => {
     dom.channelDialog.close();
     const ok = await checkConnection();
     if (ok) {
-      await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
+      await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
     }
   } catch (e) {
     AppLog.error("ui", "Failed to save channel settings", { error: String(e) });
@@ -6004,18 +6254,19 @@ dom.channelForm.addEventListener("submit", async (e) => {
 dom.settingsForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(dom.settingsForm);
-  state.serverUrl = fd.get("serverUrl")?.toString().trim() || DEFAULT_SERVER;
+  const serverUrl = fd.get("serverUrl")?.toString().trim() || DEFAULT_SERVER;
+  state.autoServer = resolveAutoServer(serverUrl, {
+    serverUrl: state.serverUrl,
+    autoServer: state.autoServer,
+  });
+  state.serverUrl = serverUrl;
   state.password = fd.get("password")?.toString() || "";
   state.username = fd.get("username")?.toString().trim() || "opencorvus";
-  state.locale = sanitizeLocale(fd.get("localeMode")?.toString().trim());
-  state.theme = sanitizeTheme(fd.get("themeMode")?.toString().trim());
-  renderLocale();
-  renderTheme();
   await persistOverlaySettings();
   dom.settingsDialog.close();
   const ok = await checkConnection();
   if (ok) {
-    await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
+    await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
   }
 });
 
@@ -6035,27 +6286,55 @@ async function setupTauri() {
     win.startDragging?.().catch(() => undefined);
   });
 
-  $("#btnMinimize")?.addEventListener("click", () => win.minimize());
-  $("#btnClose")?.addEventListener("click", () => win.close());
+  dom.btnMinimize?.addEventListener("click", () => win.minimize());
+  const syncMaximize = async () => {
+    if (!dom.btnMaximize) return false;
+    const maximized = await win.isMaximized?.().catch(() => false);
+    const label = maximizeLabel(maximized);
+    dom.btnMaximize.dataset.maximized = String(maximized);
+    dom.btnMaximize.title = label;
+    dom.btnMaximize.setAttribute("aria-label", label);
+    dom.btnMaximize.innerHTML = maximizeIcon(maximized);
+    return maximized;
+  };
+  dom.btnMaximize?.addEventListener("click", async () => {
+    const maximized = await syncMaximize();
+    if (typeof win.toggleMaximize === "function") {
+      await win.toggleMaximize().catch(() => undefined);
+    } else if (maximized) {
+      await win.unmaximize?.().catch(() => undefined);
+    } else {
+      await win.maximize?.().catch(() => undefined);
+    }
+    await syncMaximize();
+  });
+  dom.btnClose?.addEventListener("click", () => win.close());
+  await syncMaximize();
+  if (typeof win.onResized === "function") {
+    await win.onResized(() => {
+      void syncMaximize();
+    }).catch(() => undefined);
+  }
 
   // Always-on-top pin toggle
-  const btnPin = $("#btnPin");
-  if (btnPin) {
+  if (dom.btnPin) {
     const syncPin = async () => {
       const pinned = await win.isAlwaysOnTop().catch(() => false);
-      btnPin.dataset.pinned = String(pinned);
+      dom.btnPin.dataset.pinned = String(pinned);
       state.alwaysOnTop = pinned;
+      renderTitlebarMenu();
       await persistOverlaySettings();
     };
 
     await win.setAlwaysOnTop(state.alwaysOnTop).catch(() => undefined);
     await syncPin();
 
-    btnPin.addEventListener("click", async () => {
-      const current = btnPin.dataset.pinned === "true";
+    dom.btnPin.addEventListener("click", async () => {
+      const current = dom.btnPin.dataset.pinned === "true";
       const next = !current;
       await win.setAlwaysOnTop(next).catch(() => undefined);
       await syncPin();
+      closeTitlebarMenu();
     });
   }
 }
@@ -6193,7 +6472,7 @@ function renderMemory() {
         </div>
         <div class="knowledge-item-actions">
           <span class="knowledge-scope" data-scope="${escapeHtml(f.scope)}">${escapeHtml(f.scope)}</span>
-          <button type="button" class="btn btn-ghost mini danger knowledge-delete" data-action="delete-memory" data-id="${escapeHtml(f.id)}">${escapeHtml(t("common.delete"))}</button>
+          <button type="button" class="btn btn-ghost mini danger knowledge-delete" data-action="delete-memory" data-id="${escapeHtml(f.id)}" title="${escapeHtml(t("memory.delete_button_title"))}" aria-label="${escapeHtml(t("memory.delete_button_title"))}">${escapeHtml(t("common.delete"))}</button>
         </div>
       </div>`;
     })
@@ -6264,7 +6543,7 @@ function renderPreferences() {
 
   dom.preferenceList.innerHTML = prefs
     .map((p) => {
-      const deleteBtn = `<button type="button" class="btn btn-ghost mini danger" data-pref-action="delete" data-pref-id=${jsonAttr(p.id)}>${escapeHtml(t("common.delete"))}</button>`;
+      const deleteBtn = `<button type="button" class="btn btn-ghost mini danger" data-pref-action="delete" data-pref-id=${jsonAttr(p.id)} title="${escapeHtml(t("preference.delete_button_title"))}" aria-label="${escapeHtml(t("preference.delete_button_title"))}">${escapeHtml(t("common.delete"))}</button>`;
       return `<div class="pref-item" data-pref-id=${jsonAttr(p.id)}>
         <div class="pref-item-head">
           <span class="pref-item-key">${escapeHtml(p.key)}</span>
@@ -6410,27 +6689,200 @@ if (dom.btnCancelPrefEdit) {
 // ── Log Viewer ──
 
 let _serverLogLines = [];
+let _serverLogPath = "";
 
 async function loadServerLogs() {
   try {
     const data = await apiJson("log/tail?n=500");
     _serverLogLines = Array.isArray(data?.lines) ? data.lines : [];
+    _serverLogPath = typeof data?.path === "string" ? data.path : "";
     AppLog.info("log", `Loaded ${_serverLogLines.length} server log lines`);
   } catch (e) {
     AppLog.warn("log", "Failed to load server logs", { error: String(e) });
     _serverLogLines = [];
+    _serverLogPath = "";
   }
+}
+
+function stringifyLogValue(value, space = 0) {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, space);
+  } catch {
+    return String(value ?? "");
+  }
+}
+
+function parseLogValue(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  if (text === "true") return true;
+  if (text === "false") return false;
+  if (text === "null") return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
+  if (/^[\[{"]/.test(text)) {
+    try {
+      return JSON.parse(text);
+    } catch {}
+  }
+  return text;
+}
+
+function scanBalancedLogValue(text, start) {
+  if (text[start] === '"') {
+    let escaped = false;
+    for (let index = start + 1; index < text.length; index += 1) {
+      const char = text[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') return index + 1;
+    }
+    return text.length;
+  }
+
+  const pairs = { "{": "}", "[": "]" };
+  const stack = [text[start]];
+  let quoted = false;
+  let escaped = false;
+
+  for (let index = start + 1; index < text.length; index += 1) {
+    const char = text[index];
+    if (quoted) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') quoted = false;
+      continue;
+    }
+    if (char === '"') {
+      quoted = true;
+      continue;
+    }
+    if (char === "{" || char === "[") {
+      stack.push(char);
+      continue;
+    }
+    if (char === "}" || char === "]") {
+      const open = stack[stack.length - 1];
+      if (pairs[open] === char) stack.pop();
+      if (stack.length === 0) return index + 1;
+    }
+  }
+
+  return text.length;
+}
+
+function scanLogValueEnd(text, start) {
+  const first = text[start];
+  if (first === '"' || first === "{" || first === "[") {
+    return scanBalancedLogValue(text, start);
+  }
+
+  let cursor = start;
+  while (cursor < text.length) {
+    const nextSpace = text.indexOf(" ", cursor);
+    if (nextSpace < 0) return text.length;
+    let probe = nextSpace;
+    while (probe < text.length && text[probe] === " ") probe += 1;
+    if (/^[A-Za-z0-9_.-]+=/.test(text.slice(probe))) return nextSpace;
+    cursor = probe;
+  }
+  return text.length;
+}
+
+function parseLeadingLogFields(text) {
+  const fields = {};
+  let index = 0;
+
+  while (index < text.length) {
+    while (text[index] === " ") index += 1;
+    const match = /^([A-Za-z0-9_.-]+)=/.exec(text.slice(index));
+    if (!match) break;
+    const key = match[1];
+    index += match[0].length;
+    const end = scanLogValueEnd(text, index);
+    fields[key] = parseLogValue(text.slice(index, end));
+    index = end;
+  }
+
+  return { fields, end: index };
 }
 
 function parseServerLogLine(raw) {
   // Format: "LEVEL  YYYY-MM-DDTHHMSS +Xms key=value ... message"
   const match = raw.match(/^(DEBUG|INFO|WARN|ERROR)\s+(\S+)\s+(\+\d+ms)\s+(.*)$/);
-  if (!match) return { level: "info", ts: "", service: "", message: raw };
-  const [, level, ts, , rest] = match;
-  const svcMatch = rest.match(/service=(\S+)\s*/);
-  const service = svcMatch ? svcMatch[1] : "";
-  const message = svcMatch ? rest.slice(svcMatch.index + svcMatch[0].length) : rest;
-  return { level: level.toLowerCase(), ts, service, message };
+  if (!match) return { level: "info", ts: "", delta: "", service: "", message: raw, fields: {}, raw };
+  const [, level, ts, delta, rest] = match;
+  const parsed = parseLeadingLogFields(rest);
+  const service = typeof parsed.fields.service === "string" ? parsed.fields.service : "";
+  const message = rest.slice(parsed.end).trim() || rest.trim();
+  return {
+    level: level.toLowerCase(),
+    ts,
+    delta,
+    service,
+    message,
+    fields: parsed.fields,
+    raw,
+  };
+}
+
+function logDetailFields(fields) {
+  if (!record(fields)) return {};
+  return Object.fromEntries(Object.entries(fields).filter(([key]) => key !== "service"));
+}
+
+function logPreviewValue(value) {
+  return clipText(stringifyLogValue(value), 80);
+}
+
+function logSourceLabel(source) {
+  return source === "server" ? t("log.source.server") : t("log.source.client");
+}
+
+function renderLogEntryDetail(entry) {
+  const fields = logDetailFields(entry.fields);
+  const items = Object.entries(fields);
+  const chips = items.length
+    ? `<div class="log-fields">${
+      items
+        .slice(0, 6)
+        .map(([key, value]) => `<span class="log-chip">${escapeHtml(key)}=${escapeHtml(logPreviewValue(value))}</span>`)
+        .join("")
+    }</div>`
+    : "";
+  const blocks = [];
+  if (items.length) {
+    blocks.push(
+      `<div class="log-detail-block">` +
+      `<div class="log-detail-title">${escapeHtml(t("log.fields"))}</div>` +
+      `<pre class="log-detail-pre">${escapeHtml(stringifyLogValue(fields, 2))}</pre>` +
+      `</div>`,
+    );
+  }
+  if (entry.raw) {
+    blocks.push(
+      `<div class="log-detail-block">` +
+      `<div class="log-detail-title">${escapeHtml(t("log.raw"))}</div>` +
+      `<pre class="log-detail-pre">${escapeHtml(entry.raw)}</pre>` +
+      `</div>`,
+    );
+  }
+  const detail = blocks.length
+    ? `<details class="log-detail"><summary>${escapeHtml(t("log.details"))}</summary>${blocks.join("")}</details>`
+    : "";
+  return chips + detail;
 }
 
 function logViewerEntries() {
@@ -6441,7 +6893,10 @@ function logViewerEntries() {
     level: e.level,
     ts: e.ts,
     service: e.service,
-    message: e.extra ? `${e.message} ${JSON.stringify(e.extra)}` : e.message,
+    delta: "",
+    message: e.message,
+    fields: record(e.extra) ? e.extra : e.extra == null ? {} : { extra: e.extra },
+    raw: "",
     source: "client",
   }));
 
@@ -6460,6 +6915,8 @@ function formatLogViewerText(entries) {
       if (e.ts) parts.push(e.ts);
       if (e.service) parts.push(e.service);
       parts.push(e.message || "");
+      const fields = logDetailFields(e.fields);
+      if (Object.keys(fields).length) parts.push(stringifyLogValue(fields));
       return parts.join(" ");
     })
     .join("\n");
@@ -6473,16 +6930,24 @@ function renderLogViewer() {
     return;
   }
 
+  const path = _serverLogPath ? `<div class="log-path">${escapeHtml(t("log.path", { value: _serverLogPath }))}</div>` : "";
   const html = entries
     .map(
       (e) =>
-        `<div class="log-line"><span class="log-level log-level-${e.level}">${e.level.toUpperCase().padEnd(5)}</span>` +
+        `<div class="log-line">` +
+        `<div class="log-line-head">` +
+        `<span class="log-source" data-source="${escapeHtml(e.source || "client")}">${escapeHtml(logSourceLabel(e.source))}</span>` +
+        `<span class="log-level log-level-${e.level}">${e.level.toUpperCase().padEnd(5)}</span>` +
         `<span class="log-ts">${escapeHtml(e.ts)}</span>` +
+        (e.delta ? `<span class="log-delta">${escapeHtml(e.delta)}</span>` : "") +
         (e.service ? `<span class="log-service">${escapeHtml(e.service)}</span>` : "") +
-        `<span class="log-msg">${escapeHtml(e.message)}</span></div>`,
+        `</div>` +
+        `<div class="log-msg">${escapeHtml(e.message || e.raw || "")}</div>` +
+        renderLogEntryDetail(e) +
+        `</div>`,
     )
     .join("");
-  dom.logViewerBody.innerHTML = html;
+  dom.logViewerBody.innerHTML = path + html;
   dom.logViewerBody.scrollTop = dom.logViewerBody.scrollHeight;
 }
 
@@ -6492,7 +6957,10 @@ async function openLogViewer() {
   dom.logDialog?.showModal();
 }
 
-dom.btnLog?.addEventListener("click", () => openLogViewer());
+dom.btnLog?.addEventListener("click", () => {
+  openLogViewer();
+  closeTitlebarMenu();
+});
 dom.btnCloseLog?.addEventListener("click", () => dom.logDialog?.close());
 dom.btnLogRefresh?.addEventListener("click", async () => {
   await loadServerLogs();
@@ -6556,7 +7024,10 @@ async function loadConfigInfo() {
     if (dom.cfgAvailableProviders) {
       const total = Array.isArray(catalog?.all) ? catalog.all.length : 0;
       const connected = Array.isArray(catalog?.connected) ? catalog.connected.length : 0;
-      dom.cfgAvailableProviders.textContent = t("llm.available_count", { total, connected });
+      const text = t("llm.available_count", { total, connected });
+      dom.cfgAvailableProviders.textContent = text;
+      dom.cfgAvailableProviders.title = text;
+      dom.cfgAvailableProviders.dataset.status = connected > 0 ? "active" : total > 0 ? "ready" : "";
     }
 
     renderChannels();
@@ -6566,6 +7037,20 @@ async function loadConfigInfo() {
   } catch (e) { AppLog.warn("config", "loadConfigInfo failed", { error: String(e) }); }
 }
 
+async function restoreInitialWorkspace() {
+  if (state.globalView || hasWorkspaceSelection()) return false;
+  if (await ensureTaskSelection()) return true;
+  const dir = activeDirectory();
+  const session = dir
+    ? state.sessions.find((item) => item.directory === dir)
+    : state.sessions[0];
+  if (session?.id) {
+    await openManagedSession(session.id, session);
+    return true;
+  }
+  return false;
+}
+
 async function init() {
   AppLog.info("init", "OpenCorvus overlay starting", { version: OVERLAY_VERSION });
   await loadOverlaySettings();
@@ -6573,16 +7058,20 @@ async function init() {
   await loadI18n();
   renderLocale();
   renderTheme();
+  renderWorkspaceState();
+  renderTitlebarMenu();
   renderScale();
   renderVersions();
   renderLlmSummary();
   renderLlmApiKeyTools();
   await setupTauri();
+  await applyWindowOpacity();
   renderExecutor();
   const ok = await checkConnection();
   if (ok) {
     AppLog.info("init", "loading initial data");
-    await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+    await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+    await restoreInitialWorkspace();
     AppLog.info("init", "ready");
   } else {
     AppLog.warn("init", "starting offline");
@@ -6594,8 +7083,9 @@ async function init() {
     if (!state.connected) {
       const ok = await checkConnection();
       if (ok) {
-        await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
-        if (state.selectedTaskID) selectTask(state.selectedTaskID);
+        await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+        await restoreInitialWorkspace();
+        if (state.selectedTaskID) await selectTask(state.selectedTaskID);
       }
     }
   }, 10000);

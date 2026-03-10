@@ -18,6 +18,45 @@ describe("session routes", () => {
     await resetDatabase()
   })
 
+  test("GET /session/:id writes full session info to logs", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await Session.create({ title: "log-session" })
+
+        const response = await app.request(`/session/${session.id}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        await Bun.sleep(50)
+
+        const logs = await app.request("/log/tail?n=500", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(logs.status).toBe(200)
+        const body = await logs.json() as { lines: string[] }
+        const line = [...body.lines].reverse().find((item) =>
+          item.includes("service=server") &&
+          item.includes("session.get") &&
+          item.includes(`sessionID=${session.id}`),
+        )
+
+        expect(line).toBeDefined()
+        expect(line).toContain(`sessionID=${session.id}`)
+        expect(line).toContain(`"id":"${session.id}"`)
+        expect(line).toContain(`"title":"log-session"`)
+      },
+    })
+  })
+
   test("DELETE /session/:id?deleteTasks=true removes the bound task too", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -18,6 +18,15 @@ describe("app routes", () => {
     expect(cmd.at(-1)).toBe("C:\\repo")
   })
 
+  test("GET /ui/ serves the overlay shell", async () => {
+    const app = Server.App()
+    const response = await app.request("/ui/")
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get("content-type")).toContain("text/html")
+    expect(await response.text()).toContain('data-page="overlay"')
+  })
+
   test("POST /path/open validates non-empty input", async () => {
     await using tmp = await tmpdir()
     const app = Server.App()

@@ -1,4 +1,4 @@
-import { Hono } from "hono"
+import { Hono, type Context } from "hono"
 import path from "path"
 import fs from "fs"
 
@@ -31,7 +31,7 @@ export namespace OverlayUI {
   export function routes() {
     const app = new Hono()
 
-    app.get("/*", async (c) => {
+    const handle = async (c: Context) => {
       const dir = resolveOverlayDir()
       if (!dir) {
         return c.text("Overlay UI not found. Run build with overlay assets or start in dev mode.", 404)
@@ -62,7 +62,10 @@ export namespace OverlayUI {
       } catch {
         return c.text("Not Found", 404)
       }
-    })
+    }
+
+    app.get("/", handle)
+    app.get("/*", handle)
 
     return app
   }

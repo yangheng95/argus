@@ -85,6 +85,65 @@ describe("panel routes", () => {
     })
   })
 
+  test("POST /panel/message writes structured control logs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    installControlModel()
+    const requestID = `req_panel_log_${Date.now()}`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/panel/message", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            surface: "panel",
+            text: "Use executor codex for desktop panel actions and new tasks.",
+            sessionID: "ses_selected",
+            request_id: requestID,
+            metadata: {
+              executor: "codex",
+              ui_context: "engine_bar",
+            },
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        await Bun.sleep(50)
+
+        const logs = await app.request("/log/tail?n=500", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(logs.status).toBe(200)
+        const body = await logs.json() as { lines: string[] }
+        const requestLine = body.lines.find((line) =>
+          line.includes("service=control-message") &&
+          line.includes("panel request received") &&
+          line.includes(requestID),
+        )
+        const resultLine = body.lines.find((line) =>
+          line.includes("service=control-message") &&
+          line.includes("panel request completed") &&
+          line.includes(requestID),
+        )
+
+        expect(requestLine).toBeDefined()
+        expect(requestLine).toContain(`"request_id":"${requestID}"`)
+        expect(requestLine).toContain(`"sessionID":"ses_selected"`)
+        expect(requestLine).toContain(`"ui_context":"engine_bar"`)
+        expect(resultLine).toBeDefined()
+        expect(resultLine).toContain(`"kind":"panel_response"`)
+        expect(resultLine).toContain(`"local_action":{"type":"set_executor","executor":"codex"}`)
+      },
+    })
+  })
+
   test("panel knowledge memory respects session-aware recall", async () => {
     await using tmp = await tmpdir({ git: true })
 

@@ -633,15 +633,21 @@ export namespace Provider {
 
       const customFetch = options["fetch"]
 
+      // Default fetch timeout: 5 minutes if not configured by model/provider
+      const DEFAULT_FETCH_TIMEOUT_MS = 300_000
       options["fetch"] = async (input: any, init?: BunFetchRequestInit) => {
         // Preserve custom fetch if it exists, wrap it with timeout logic
         const fetchFn = customFetch ?? fetch
         const opts = init ?? {}
 
-        if (options["timeout"] !== undefined && options["timeout"] !== null) {
+        // Always apply a timeout: use configured value, or fall back to default
+        const timeoutValue = (options["timeout"] !== undefined && options["timeout"] !== null)
+          ? options["timeout"]
+          : DEFAULT_FETCH_TIMEOUT_MS
+        if (timeoutValue !== false && typeof timeoutValue === "number" && timeoutValue > 0) {
           const signals: AbortSignal[] = []
           if (opts.signal) signals.push(opts.signal)
-          if (options["timeout"] !== false) signals.push(AbortSignal.timeout(options["timeout"]))
+          signals.push(AbortSignal.timeout(timeoutValue))
 
           const combined = signals.length > 1 ? AbortSignal.any(signals) : signals[0]
 

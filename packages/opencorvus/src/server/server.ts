@@ -18,6 +18,7 @@ import { AppDocumentation, AppRoutes } from "./routes/app"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
 import { muteAISdkWarnings } from "@/runtime/shims"
+import { OverlayUI } from "./overlay-ui"
 
 muteAISdkWarnings()
 
@@ -109,6 +110,7 @@ export namespace Server {
         )
         .route("/global", GlobalRoutes())
         .route("/auth", AuthRoutes())
+        .route("/ui", OverlayUI.routes())
         .use(async (c, next) => {
           if (c.req.path === "/log") return next()
           const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory") || process.cwd()

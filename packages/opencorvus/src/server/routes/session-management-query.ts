@@ -107,8 +107,11 @@ export const SessionManagementQueryRoutes = lazy(() =>
       ),
       async (c) => {
         const sessionID = c.req.valid("param").sessionID
-        log.info("SEARCH", { url: c.req.url })
         const session = await Session.get(sessionID)
+        log.info("session.get", {
+          sessionID,
+          session,
+        })
         return c.json(session)
       },
     )

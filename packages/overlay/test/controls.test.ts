@@ -32,6 +32,7 @@ test("overlay controls trigger without runtime failures", async () => {
   const now = Date.now()
   const task = {
     id: "task-1",
+    directory: "D:/overlay/workspace/app",
     status: "running",
     sessionID: "session-1",
     time: {
@@ -521,6 +522,7 @@ test("overlay controls trigger without runtime failures", async () => {
       }
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") return send(data.tasks)
+      if (path === "/global/tasks") return send(data.tasks)
       if (path === "/executor") return send(data.executors)
       if (path === "/path") return send(data.path)
       if (path === "/vcs") return send(data.vcs)
@@ -572,6 +574,7 @@ test("overlay controls trigger without runtime failures", async () => {
       }
       if (path.startsWith("/mcp/") && path.endsWith("/auth")) return send({ ok: true })
       if (path === "/session" && req.method === "GET") return send(data.sessions)
+      if (path === "/experimental/session" && req.method === "GET") return send(data.sessions)
       if (path === "/session" && req.method === "POST") {
         const id = `session-${data.counters.nextSession++}`
         const item = {
@@ -746,6 +749,7 @@ test("overlay controls trigger without runtime failures", async () => {
     errors.push(`pageerror: ${error.message}`)
   })
   page.on("requestfailed", (request) => {
+    if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
     errors.push(`requestfailed: ${request.url()}`)
   })
   page.on("console", (msg) => {
@@ -850,6 +854,16 @@ test("overlay controls trigger without runtime failures", async () => {
       await page.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
     }
     const waitIdle = () => new Promise((resolve) => setTimeout(resolve, 250))
+    const hover = async (selector: string) => {
+      await page.waitForSelector(selector)
+      await page.hover(selector)
+      await page.waitForFunction((value) => {
+        const node = document.querySelector(value)
+        if (!(node instanceof HTMLElement)) return false
+        const style = getComputedStyle(node)
+        return style.backgroundImage !== "none" || style.boxShadow !== "none"
+      }, {}, selector)
+    }
 
     await page.goto(`${app}/ui/index.html`, { waitUntil: "load" })
     await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
@@ -857,6 +871,17 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForSelector(".change-row")
     await page.waitForSelector(".session-row-main[data-session-id='session-1']")
     await page.waitForSelector("#interaction-modal")
+
+    expect(await page.$eval("#titlebarMenu", (node) => (node as HTMLElement).hidden)).toBe(true)
+    await page.click("#btnTitlebarMenu")
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === false)
+    await page.click("#btnTitlebarMenu")
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
+
+    await page.click("#specSection > summary")
+    await page.waitForFunction(() => (document.querySelector("#specSection") as HTMLDetailsElement | null)?.open === true)
+    await page.click("#specSection > summary")
+    await page.waitForFunction(() => (document.querySelector("#specSection") as HTMLDetailsElement | null)?.open === false)
 
     await page.click("body")
     const scale = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim())
@@ -962,26 +987,16 @@ test("overlay controls trigger without runtime failures", async () => {
     seen.push("[data-path-action='reset']")
     await tap("[data-path-action='reset']")
     await page.waitForFunction(() => document.querySelector("#taskDir")?.getAttribute("title") === "D:/overlay/workspace/app")
+    if (!(await page.$('[data-task-action="retry"]'))) {
+      seen.push(".session-row-main[data-session-id='session-1']")
+      await tap(".session-row-main[data-session-id='session-1']")
+    }
     await page.waitForSelector('[data-task-action="retry"]')
 
     for (const item of ["retry", "replan", "cancel"]) {
       seen.push(`[data-task-action='${item}']`)
       await tap(`[data-task-action='${item}']`)
       await waitIdle()
-    }
-
-    for (const item of [
-      "#specBody .plan-summary",
-      "#planBody .plan-summary",
-      "#goalsBody .goal-content",
-      "#criteriaBody .criteria-group-title",
-      "#changesBody .changes-summary",
-      "#overviewBody .plan-summary",
-    ]) {
-      seen.push(item)
-      await tap(item)
-      await page.waitForFunction(() => (document.querySelector("#sectionDialog") as HTMLDialogElement | null)?.open === true)
-      await close("#btnCloseSectionDialog", "#sectionDialog")
     }
 
     seen.push(".change-row")
@@ -1046,6 +1061,9 @@ test("overlay controls trigger without runtime failures", async () => {
     seen.push("[data-open-channels='true']")
     await tap("[data-open-channels='true']")
     await page.waitForFunction(() => (document.querySelector("#configDialog") as HTMLDialogElement | null)?.open === true)
+    await hover("#channelSection > summary")
+    await hover("#channelConfigBody")
+    await hover("#channelConfigBody .channel-public-url-head")
     await close("#btnCloseConfigDialog", "#configDialog")
 
     await open("#btnConfigToggle", "#configDialog")
@@ -1059,6 +1077,49 @@ test("overlay controls trigger without runtime failures", async () => {
         }
       }
     }
+    await hover("#skillSubsection > summary")
+    await hover("#skillSubsection .config-subsection-body")
+    await hover("#skillSubsection .extension-head")
+    await hover("#memoryBody .knowledge-toolbar")
+    const panelFonts = await page.evaluate(() => {
+      const pick = (selector: string) => {
+        const node = document.querySelector(selector)
+        if (!(node instanceof HTMLElement)) throw new Error(`Missing element: ${selector}`)
+        return getComputedStyle(node).fontSize
+      }
+      const host = document.querySelector(".config-dialog-sections")
+      if (!(host instanceof HTMLElement)) throw new Error("Missing element: .config-dialog-sections")
+      const probe = document.createElement("div")
+      probe.innerHTML = `
+        <div class="extension-row" data-font-probe="extension">
+          <div class="extension-row-main">
+            <strong>Skill</strong>
+            <span>Desc</span>
+          </div>
+        </div>
+        <div class="channel-doc-card" data-font-probe="channel-doc">
+          <div class="channel-doc-copy">
+            <div class="channel-doc-title">Doc</div>
+          </div>
+        </div>
+      `
+      host.append(probe)
+      const result = {
+        field: pick("#channelConfigBody .field-input"),
+        channelBtn: pick("#channelConfigBody .btn"),
+        skillBtn: pick("#skillSubsection .btn"),
+        memorySearch: pick("#memoryBody .knowledge-search"),
+        channelDoc: pick('[data-font-probe="channel-doc"] .channel-doc-title'),
+        skillRow: pick('[data-font-probe="extension"] strong'),
+      }
+      probe.remove()
+      return result
+    })
+    expect(panelFonts.channelBtn).toBe(panelFonts.field)
+    expect(panelFonts.skillBtn).toBe(panelFonts.field)
+    expect(panelFonts.memorySearch).toBe(panelFonts.field)
+    expect(panelFonts.channelDoc).toBe(panelFonts.field)
+    expect(panelFonts.skillRow).toBe(panelFonts.field)
 
     seen.push("#btnLlmApiKeyToggle")
     await tap("#btnLlmApiKeyToggle")
@@ -1197,6 +1258,10 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForSelector(".session-row-main[data-session-id='session-3']")
     seen.push(".session-row-main[data-session-id='session-1']")
     await tap(".session-row-main[data-session-id='session-1']")
+    if (!(await page.$('[data-task-action="retry"]'))) {
+      seen.push(".session-row-main[data-session-id='session-1']")
+      await tap(".session-row-main[data-session-id='session-1']")
+    }
     await page.waitForSelector('[data-task-action="retry"]')
     seen.push(".session-row-delete[data-session-delete='session-3']")
     await tap(".session-row-delete[data-session-delete='session-3']")

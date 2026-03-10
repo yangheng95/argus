@@ -192,6 +192,7 @@ export const CreateTaskInput = z.object({
 export const Task = z.object({
   id: Identifier.schema("task"),
   projectID: z.string(),
+  directory: z.string().optional(),
   sessionID: Identifier.schema("session").nullable().optional(),
   activePlanVersionID: Identifier.schema("plan").nullable().optional(),
   activeRunID: Identifier.schema("run").nullable().optional(),
@@ -584,8 +585,15 @@ export const TaskBoard = z.object({
   lanes: TaskBoardLane.array(),
 })
 
+export const TaskProject = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  worktree: z.string(),
+})
+
 export const ProjectTaskSummary = z.object({
   task: Task,
+  project: TaskProject.nullable().optional(),
   plan: PlanVersion.optional(),
   run: Run.optional(),
   evaluation: Evaluation.optional(),
@@ -593,22 +601,25 @@ export const ProjectTaskSummary = z.object({
   updated_at: z.number(),
 })
 
+export const TaskListSummary = z.object({
+  total_tasks: z.number().int(),
+  open_tasks: z.number().int(),
+  running_tasks: z.number().int(),
+  blocked_tasks: z.number().int(),
+  completed_tasks: z.number().int(),
+  failed_tasks: z.number().int(),
+  cancelled_tasks: z.number().int(),
+  median_completion_ms: z.number().int().optional(),
+})
+
 export const ProjectBoard = z.object({
-  project: z.object({
-    id: z.string(),
-    name: z.string().optional(),
-    worktree: z.string(),
-  }),
-  summary: z.object({
-    total_tasks: z.number().int(),
-    open_tasks: z.number().int(),
-    running_tasks: z.number().int(),
-    blocked_tasks: z.number().int(),
-    completed_tasks: z.number().int(),
-    failed_tasks: z.number().int(),
-    cancelled_tasks: z.number().int(),
-    median_completion_ms: z.number().int().optional(),
-  }),
+  project: TaskProject,
+  summary: TaskListSummary,
+  tasks: ProjectTaskSummary.array(),
+})
+
+export const GlobalTaskBoard = z.object({
+  summary: TaskListSummary,
   tasks: ProjectTaskSummary.array(),
 })
 

@@ -326,6 +326,7 @@ export namespace SessionLoop {
       tools: input.lastUser.tools,
       processor,
       bypassAgentCheck,
+      extra: input.lastUser.extra,
       messages: input.msgs,
     })
     if (input.lastUser.format?.type === "json_schema") {
@@ -667,6 +668,7 @@ export namespace SessionLoop {
     tools?: Record<string, boolean>
     processor: SessionProcessor.Info
     bypassAgentCheck: boolean
+    extra?: Record<string, unknown>
     messages: MessageV2.WithParts[]
   }) {
     using _ = log.time("resolveTools")
@@ -677,7 +679,7 @@ export namespace SessionLoop {
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
-      extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck },
+      extra: { ...(input.extra ?? {}), model: input.model, bypassAgentCheck: input.bypassAgentCheck },
       agent: input.agent.name,
       messages: input.messages,
       metadata: async (val: { title?: string; metadata?: any }) => {

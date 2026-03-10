@@ -12,9 +12,9 @@
       {
         "label": "main",
         "title": "OpenCorvus",
-        "width": 900,
-        "height": 680,
-        "minWidth": 640,
+        "width": 1280,
+        "height": 760,
+        "minWidth": 900,
         "minHeight": 480,
         "resizable": true,
         "decorations": false,

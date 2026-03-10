@@ -84,7 +84,9 @@ import {
   findRuns,
   findTask,
   findTaskByRequest,
+  listGlobalTasks,
   listProjectTasks,
+  listTaskRows,
   searchProjectTasks,
   listGoals,
   listGoalsByPlan,
@@ -109,6 +111,7 @@ import {
   viewSnapshot,
   viewTask,
   type GoalRow,
+  type TaskListRow,
   type PlanRow,
   type RunRow,
   type InteractionRow,
@@ -125,6 +128,45 @@ async function prepareProject(project?: string) {
   if (!project) return
   if (project === Instance.project.id) return
   throw new Error(`project mismatch: expected ${Instance.project.id}, got ${project}`)
+}
+
+function taskSummary(rows: Array<{ time_started: number | null; time_completed: number | null; status: string }>) {
+  const completed = rows
+    .filter((row) => typeof row.time_started === "number" && typeof row.time_completed === "number")
+    .map((row) => (row.time_completed ?? 0) - (row.time_started ?? 0))
+    .filter((value) => value > 0)
+    .sort((a, b) => a - b)
+
+  return {
+    total_tasks: rows.length,
+    open_tasks: rows.filter((row) => !["completed", "failed", "cancelled"].includes(row.status)).length,
+    running_tasks: rows.filter((row) => row.status === "running" || row.status === "evaluating").length,
+    blocked_tasks: rows.filter((row) => row.status === "blocked").length,
+    completed_tasks: rows.filter((row) => row.status === "completed").length,
+    failed_tasks: rows.filter((row) => row.status === "failed").length,
+    cancelled_tasks: rows.filter((row) => row.status === "cancelled").length,
+    median_completion_ms:
+      completed.length === 0 ? undefined : completed[Math.floor((completed.length - 1) / 2)],
+  }
+}
+
+function taskItems(rows: TaskListRow[]) {
+  return rows.map((item) => {
+    const task = item.task
+    const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const evaluation = run ? findEvaluationByRun(run.id) : undefined
+    const pendingInteractions = listInteractions(task.id).filter((entry) => entry.status === "pending").length
+    return {
+      task: viewTask(task, { directory: item.directory }),
+      project: item.project,
+      plan: plan ? viewPlan(plan) : undefined,
+      run: run ? viewRun(run) : undefined,
+      evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
+      pending_interactions: pendingInteractions,
+      updated_at: task.time_updated,
+    }
+  })
 }
 
 export namespace OrchestratorService {
@@ -267,19 +309,22 @@ export namespace OrchestratorService {
 
   export async function getTask(taskID: string) {
     await OrchestratorRuntime.syncTask(taskID, hooks())
-    return viewTask(requireTask(taskID))
+    const task = requireTask(taskID)
+    const item = listTaskRows([task])[0]
+    return viewTask(task, { directory: item?.directory })
   }
 
   export async function getProgress(taskID: string) {
     await OrchestratorRuntime.syncTask(taskID, hooks())
     const task = requireTask(taskID)
+    const item = listTaskRows([task])[0]
     const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     const delivery = run ? findDeliveryByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
     return {
-      task: viewTask(task),
+      task: viewTask(task, { directory: item?.directory }),
       plan: plan ? viewPlan(plan) : undefined,
       goals: (plan ? listGoalsByPlan(plan.id) : listGoals(taskID)).map(viewGoal),
       milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
@@ -337,25 +382,7 @@ export namespace OrchestratorService {
     const rows = (opts?.query || opts?.status)
       ? searchProjectTasks(Instance.project.id, { query: opts.query, status: opts.status, limit })
       : listProjectTasks(Instance.project.id, limit)
-    const tasks = rows.map((task) => {
-      const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
-      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-      const evaluation = run ? findEvaluationByRun(run.id) : undefined
-      const pendingInteractions = listInteractions(task.id).filter((item) => item.status === "pending").length
-      return {
-        task: viewTask(task),
-        plan: plan ? viewPlan(plan) : undefined,
-        run: run ? viewRun(run) : undefined,
-        evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
-        pending_interactions: pendingInteractions,
-        updated_at: task.time_updated,
-      }
-    })
-    const completed = rows
-      .filter((task) => typeof task.time_started === "number" && typeof task.time_completed === "number")
-      .map((task) => (task.time_completed ?? 0) - (task.time_started ?? 0))
-      .filter((value) => value > 0)
-      .sort((a, b) => a - b)
+    const tasks = taskItems(listTaskRows(rows))
 
     return {
       project: {
@@ -363,18 +390,28 @@ export namespace OrchestratorService {
         name: project.name,
         worktree: project.worktree,
       },
-      summary: {
-        total_tasks: rows.length,
-        open_tasks: rows.filter((task) => !["completed", "failed", "cancelled"].includes(task.status)).length,
-        running_tasks: rows.filter((task) => task.status === "running" || task.status === "evaluating").length,
-        blocked_tasks: rows.filter((task) => task.status === "blocked").length,
-        completed_tasks: rows.filter((task) => task.status === "completed").length,
-        failed_tasks: rows.filter((task) => task.status === "failed").length,
-        cancelled_tasks: rows.filter((task) => task.status === "cancelled").length,
-        median_completion_ms:
-          completed.length === 0 ? undefined : completed[Math.floor((completed.length - 1) / 2)],
-      },
+      summary: taskSummary(rows),
       tasks,
+    }
+  }
+
+  export async function getGlobalTaskBoard(opts?: {
+    limit?: number
+    query?: string
+    status?: string
+    directory?: string
+    cursor?: number
+  }) {
+    const rows = listGlobalTasks({
+      directory: opts?.directory,
+      cursor: opts?.cursor,
+      query: opts?.query,
+      status: opts?.status,
+      limit: opts?.limit ?? 100,
+    })
+    return {
+      summary: taskSummary(rows.map((item) => item.task)),
+      tasks: taskItems(rows),
     }
   }
 
