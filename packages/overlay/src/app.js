@@ -2437,23 +2437,26 @@ function pathBreadcrumb(value) {
   const browse = escapeHtml(t("cwd.browse"));
   const create = escapeHtml(t("cwd.new"));
   const reset = escapeHtml(t("cwd.reset"));
+  const tools = `
+    <span class="task-dir-actions">
+      <button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>
+      <button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>
+      ${state.directory
+        ? `<button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button>`
+        : ""}
+    </span>
+  `;
   if (!value) {
     return `
       <span class="task-dir-shell" data-empty="true">
-        <span class="task-dir-actions">
-          <button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>
-          <button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>
-        </span>
         <button type="button" class="task-dir-empty" data-path-action="browse" title="${browse}" aria-label="${browse}">${escapeHtml(t("cwd.unavailable"))}</button>
+        ${tools}
       </span>
     `;
   }
   const items = pathItems(value);
   const open = t("cwd.open");
   const choose = t("cwd.choose_level");
-  const resetTool = state.directory
-    ? `<span class="task-dir-actions"><button type="button" class="task-dir-tool danger" data-path-action="reset" title="${reset}" aria-label="${reset}">${pathIcon("reset")}</button></span>`
-    : "";
   const nodes = items.map((item, index) => {
     const current = index === items.length - 1 ? ' data-current="true"' : "";
     const step = index
@@ -2463,16 +2466,11 @@ function pathBreadcrumb(value) {
   }).join("");
   return `
     <span class="task-dir-shell">
-      <span class="task-dir-actions">
-        <button type="button" class="task-dir-tool" data-path-action="browse" title="${browse}" aria-label="${browse}">${pathIcon("browse")}</button>
-        <button type="button" class="task-dir-tool" data-path-action="create" title="${create}" aria-label="${create}">${pathIcon("new")}</button>
-      </span>
       <span class="task-dir-path">${nodes}</span>
-      ${resetTool}
+      ${tools}
     </span>
   `;
 }
-
 function canInitGit() {
   return !!activeDirectory() && state.connected && !state.vcs?.branch;
 }
