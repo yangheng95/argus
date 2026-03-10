@@ -5,6 +5,9 @@ import { Snapshot } from "@/snapshot"
 import { generateObject, generateText } from "ai"
 import z from "zod"
 import { Log } from "@/util/log"
+import fs from "fs"
+import path from "path"
+import { Instance } from "@/project/instance"
 import {
   type EvaluationDelivery,
   type EvaluationOutcome,
@@ -20,6 +23,38 @@ import {
 
 const evaluatorLog = Log.create({ service: "evaluator" })
 const REVIEW_TIMEOUT_MS = 120_000
+
+async function loadSpecFromFilesystem(): Promise<string> {
+  try {
+    const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
+    
+    // Read all .md files from the specs directory
+    if (!fs.existsSync(specsDir)) {
+      return ""
+    }
+    
+    const files = fs.readdirSync(specsDir).filter((f) => f.endsWith(".md"))
+    if (files.length === 0) {
+      return ""
+    }
+    
+    // Try to load primary spec files in order of preference
+    const preferredFiles = ["MOMENT_DIARY_SOLUTION.md", "SPEC.md", "README.md"]
+    const primaryFile = preferredFiles.find((f) => files.includes(f)) || files[0]
+    
+    if (!primaryFile) {
+      return ""
+    }
+    
+    const filePath = path.join(specsDir, primaryFile)
+    const content = fs.readFileSync(filePath, "utf-8")
+    return content || ""
+  } catch (error) {
+    evaluatorLog.debug("Failed to load spec from filesystem", { error: String(error) })
+    return ""
+  }
+}
+
 
 export async function uiReviewResult(
   config: z.infer<typeof CheckConfig>["ui_review"],
@@ -473,10 +508,14 @@ export async function specCheckResult(
           ).join("\n")
       }
     } catch {}
-  }
-  if (!specContent.trim()) {
-    return softOrStrict({
-      mode,
+   }
+   if (!specContent.trim()) {
+     // Try to load from filesystem as fallback
+     specContent = await loadSpecFromFilesystem()
+   }
+   if (!specContent.trim()) {
+     return softOrStrict({
+       mode,
       name: "spec_check",
       summary: "No spec found in database.",
       evidence: "Cannot verify delivery against spec: no spec exists.",
