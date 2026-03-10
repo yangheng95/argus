@@ -148,7 +148,7 @@ export namespace Config {
       log.debug("loading config from OPENCORVUS_CONFIG_DIR", { path: Flag.OPENCORVUS_CONFIG_DIR })
     }
 
-    const deps = []
+    const deps: Promise<void>[] = []
 
     for (const dir of unique(directories)) {
       if (dir.endsWith(".opencorvus") || dir === Flag.OPENCORVUS_CONFIG_DIR) {
@@ -942,6 +942,7 @@ export namespace Config {
   export const SignalChannel = buildChannelSchema("signal", "SignalChannelConfig")
   export const WeComChannel = buildChannelSchema("wecom", "WeComChannelConfig")
   export const DingTalkChannel = buildChannelSchema("dingtalk", "DingTalkChannelConfig")
+  export const QQChannel = buildChannelSchema("qq", "QQChannelConfig")
 
   export const Channel = z
     .object({
@@ -958,6 +959,7 @@ export namespace Config {
       signal: SignalChannel.optional(),
       wecom: WeComChannel.optional(),
       dingtalk: DingTalkChannel.optional(),
+      qq: QQChannel.optional(),
     })
     .strict()
     .meta({

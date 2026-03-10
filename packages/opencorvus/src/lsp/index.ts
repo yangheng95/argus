@@ -10,6 +10,7 @@ import { Config } from "../config/config"
 import { spawn } from "child_process"
 import { Instance } from "../project/instance"
 import { Flag } from "@/flag/flag"
+import { entries, values as objectValues } from "@/util/object"
 
 export namespace LSP {
   const log = Log.create({ service: "lsp" })
@@ -92,13 +93,13 @@ export namespace LSP {
         }
       }
 
-      for (const server of Object.values(LSPServer)) {
+      for (const server of objectValues(LSPServer as Record<string, LSPServer.Info>)) {
         servers[server.id] = server
       }
 
       filterExperimentalServers(servers)
 
-      for (const [name, item] of Object.entries(cfg.lsp ?? {})) {
+      for (const [name, item] of entries((cfg.lsp ?? {}) as Exclude<NonNullable<Config.Info["lsp"]>, false>)) {
         const existing = servers[name]
         if (item.disabled) {
           log.info(`LSP server ${name} is disabled`)
@@ -126,9 +127,9 @@ export namespace LSP {
       }
 
       log.info("enabled LSP servers", {
-        serverIds: Object.values(servers)
-          .map((server) => server.id)
-          .join(", "),
+          serverIds: objectValues(servers)
+            .map((server) => server.id)
+            .join(", "),
       })
 
       return {
@@ -221,7 +222,7 @@ export namespace LSP {
       return client
     }
 
-    for (const server of Object.values(s.servers)) {
+    for (const server of objectValues(s.servers)) {
       if (server.extensions.length && !server.extensions.includes(extension)) continue
 
       const root = await server.root(file)
@@ -264,7 +265,7 @@ export namespace LSP {
   export async function hasClients(file: string) {
     const s = await state()
     const extension = path.parse(file).ext || file
-    for (const server of Object.values(s.servers)) {
+    for (const server of objectValues(s.servers)) {
       if (server.extensions.length && !server.extensions.includes(extension)) continue
       const root = await server.root(file)
       if (!root) continue

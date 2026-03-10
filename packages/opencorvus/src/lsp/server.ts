@@ -526,7 +526,7 @@ export namespace LSPServer {
     root: NearestRoot(["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "pyrightconfig.json"]),
     async spawn(root) {
       let binary = which("pyright-langserver")
-      const args = []
+      const args: string[] = []
       if (!binary) {
         const js = path.join(Global.Path.bin, "node_modules", "pyright", "dist", "pyright-langserver.js")
         if (!(await Filesystem.exists(js))) {

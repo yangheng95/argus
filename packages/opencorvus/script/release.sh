@@ -21,6 +21,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -z "$VERSION" ]] && { echo "Error: --version is required"; exit 1; }
+VERSION="${VERSION#v}"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]] || {
+  echo "Error: invalid --version '$VERSION' (expected x.y.z, x.y.z-tag, vx.y.z, or vx.y.z-tag)"
+  exit 1
+}
 [[ "$NO_UPLOAD" == "1" || -n "$RELEASE_REPO" ]] || {
   echo "Error: --release-repo is required unless --no-upload is used"
   exit 1

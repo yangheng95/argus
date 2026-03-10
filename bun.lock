@@ -24,8 +24,8 @@
         "turbo": "2.5.6",
       },
     },
-    "packages/bot": {
-      "name": "@opencorvus-ai/bot",
+    "packages/channel-runtime": {
+      "name": "@opencorvus-ai/channel-runtime",
       "version": "0.0.1",
       "dependencies": {
         "@opencorvus-ai/channel-config": "workspace:*",
@@ -797,7 +797,7 @@
 
     "@openauthjs/openauth": ["@openauthjs/openauth@0.0.0-20250322224806", "", { "dependencies": { "@standard-schema/spec": "1.0.0-beta.3", "aws4fetch": "1.0.20", "jose": "5.9.6" }, "peerDependencies": { "arctic": "^2.2.2", "hono": "^4.0.0" } }, "sha512-p5IWSRXvABcwocH2dNI0w8c1QJelIOFulwhKk+aLLFfUbs8u1pr7kQbYe8yCSM2+bcLHiwbogpUQc2ovrGwCuw=="],
 
-    "@opencorvus-ai/bot": ["@opencorvus-ai/bot@workspace:packages/bot"],
+    "@opencorvus-ai/channel-runtime": ["@opencorvus-ai/channel-runtime@workspace:packages/channel-runtime"],
 
     "@opencorvus-ai/channel-config": ["@opencorvus-ai/channel-config@workspace:packages/channel-config"],
 
@@ -2986,3 +2986,4 @@
     "@nut-tree-fork/default-clipboard-provider/clipboardy/execa/cross-spawn/shebang-command/shebang-regex": ["shebang-regex@1.0.0", "", {}, "sha512-wpoSFAxys6b2a2wHZ1XpDSgD7N9iVjg29Ph9uV/uaP9Ex/KXlkTZTeddxDPSYQpgvzKLGJke2UU0AzoGCjNIvQ=="],
   }
 }
+

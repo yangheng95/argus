@@ -149,7 +149,7 @@ export namespace HeadlessPlannerAgent {
           "Submit the final plan after codebase exploration. " +
           "Call this tool ONCE when you have finished exploring and are ready to deliver the plan. " +
           "All fields are required except where noted optional.",
-        parameters: PlannerOutput,
+        inputSchema: PlannerOutput,
         execute: async (args) => {
           submittedPlan = args as PlannerOutputType
           return "Plan submitted successfully."
@@ -212,22 +212,23 @@ export namespace HeadlessPlannerAgent {
       let parsed: PlannerOutputType
 
       if (submittedPlan) {
+        const submitted = submittedPlan as PlannerOutputType
         log.info("planner agent finished via submit_plan tool call", {
           steps: result.steps.length,
-          goals: submittedPlan.goals?.length ?? 0,
-          subtasks: submittedPlan.subtasks?.length ?? 0,
-          prdLength: submittedPlan.prd?.length ?? 0,
+          goals: submitted.goals?.length ?? 0,
+          subtasks: submitted.subtasks?.length ?? 0,
+          prdLength: submitted.prd?.length ?? 0,
           attempt: attempt + 1,
         })
         // Normalize arrays — tool call args may not have Zod defaults applied
         parsed = {
-          ...submittedPlan,
-          summary: submittedPlan.summary ?? "",
-          prd: submittedPlan.prd ?? "",
-          goals: Array.isArray(submittedPlan.goals) ? submittedPlan.goals : [],
-          subtasks: Array.isArray(submittedPlan.subtasks) ? submittedPlan.subtasks : [],
-          risks: Array.isArray(submittedPlan.risks) ? submittedPlan.risks : [],
-          assumptions: Array.isArray(submittedPlan.assumptions) ? submittedPlan.assumptions : [],
+          ...submitted,
+          summary: submitted.summary ?? "",
+          prd: submitted.prd ?? "",
+          goals: Array.isArray(submitted.goals) ? submitted.goals : [],
+          subtasks: Array.isArray(submitted.subtasks) ? submitted.subtasks : [],
+          risks: Array.isArray(submitted.risks) ? submitted.risks : [],
+          assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
         }
       } else {
         // Fallback: parse from text output
@@ -705,7 +706,7 @@ function synthesizeFromExploration(
   // Synthesize subtasks from requirements if missing
   if (result.subtasks.length < 2 && requirements.length > 0) {
     const files = Array.from(fileRefs)
-    const synthSubtasks = []
+    const synthSubtasks: PlannerOutputType["subtasks"] = []
     if (files.length > 0) {
       synthSubtasks.push({
         title: `Analyze ${files.slice(0, 3).join(", ")}`,

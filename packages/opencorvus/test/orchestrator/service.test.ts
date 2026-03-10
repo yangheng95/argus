@@ -296,11 +296,14 @@ describe("orchestrator.service", () => {
           file: "note.txt",
           before: "before\n",
           after: "after\n",
+          additions: 1,
+          deletions: 1,
         },
       ],
     })
     spyOn(EvaluatorService, "evaluate").mockResolvedValue({
       status: "passed",
+      verdict: "accepted",
       summary: "All checks passed.",
       checks: [{ name: "manual", status: "passed", evidence: "verified" }],
       artifacts: [],

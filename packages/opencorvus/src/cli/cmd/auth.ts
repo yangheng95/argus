@@ -13,6 +13,7 @@ import { Instance } from "../../project/instance"
 import type { Hooks } from "@opencorvus-ai/plugin"
 import { Process } from "../../util/process"
 import { text } from "node:stream/consumers"
+import { entries } from "@/util/object"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
 
@@ -293,7 +294,7 @@ export const AuthLoginCommand = cmd({
         const config = await Config.get()
 
         const disabled = new Set(config.disabled_providers ?? [])
-        const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
+        const enabled = config.enabled_providers ? new Set<string>(config.enabled_providers) : undefined
 
         const providers = await ModelsDev.get().then((x) => {
           const filtered: Record<string, (typeof x)[string]> = {}
@@ -319,7 +320,12 @@ export const AuthLoginCommand = cmd({
           existingProviders: providers,
           disabled,
           enabled,
-          providerNames: Object.fromEntries(Object.entries(config.provider ?? {}).map(([id, p]) => [id, p.name])),
+          providerNames: Object.fromEntries(
+            entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>).map(([id, provider]) => [
+              id,
+              provider.name,
+            ]),
+          ) as Record<string, string | undefined>,
         })
         let provider = await prompts.autocomplete({
           message: "Select provider",

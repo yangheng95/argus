@@ -31,7 +31,7 @@ export namespace SessionRevert {
     const patches: Snapshot.Patch[] = []
     for (const msg of all) {
       if (msg.info.role === "user") lastUser = msg.info
-      const remaining = []
+      const remaining: MessageV2.Part[] = []
       for (const part of msg.parts) {
         if (revert) {
           if (part.type === "patch") {

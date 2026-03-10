@@ -1,4 +1,0 @@
-﻿interface:
-  display_name: "OpenCorvus WeCom Bot Config"
-  short_description: "Configure WeCom bot integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-wecom-bot-config to set up or debug WeCom bot integration for OpenCorvus."

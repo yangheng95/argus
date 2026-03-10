@@ -1,19 +1,30 @@
 .DS_Store
 node_modules
+**/node_modules/
 .worktrees
 .sst
 .env
+.env.local
+.env.*.local
 .idea
 .vscode
 .codex
+.claude/
+.husky/_/
 *~
 playground
 tmp
 .tmp
 packages/opencorvus/.*.tmp/
 dist
+**/dist/
 ts-dist
 .turbo
+**/.turbo/
+coverage
+**/coverage/
+out
+**/out/
 **/.serena
 .serena/
 /result
@@ -21,8 +32,11 @@ refs
 Session.vim
 a.out
 target
+**/target/
 .scripts
 .direnv/
+.cache
+.eslintcache
 
 # Local dev files
 .opencorvus/
@@ -30,9 +44,13 @@ target
 /opencorvus.jsonc
 /.zed/
 logs/
+*.log
+*.lcov
 *.bun-build
+*.tgz
 tsconfig.tsbuildinfo
+**/*.tsbuildinfo
 tmp_slack_msg.json
 overlay.json
 *.traineddata
-packages/overlay/src-tauri/resources/opencorvus.exe
+packages/overlay/src-tauri/resources/opencorvus*

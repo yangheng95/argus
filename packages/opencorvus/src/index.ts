@@ -1,33 +1,6 @@
-// Apply embedded env vars (baked in at build time via --embed-env).
-// External env vars take priority so users can still override at runtime.
-declare const OPENCORVUS_EMBEDDED_ENV: Record<string, string> | undefined
+import { installProcessShims } from "@/runtime/shims"
 
-function warn(step: string, error: unknown) {
-  const detail = error instanceof Error ? error.message : String(error)
-  process.stderr.write(`[opencorvus bootstrap] ${step}: ${detail}\n`)
-}
-
-try {
-  if (typeof OPENCORVUS_EMBEDDED_ENV === "object" && OPENCORVUS_EMBEDDED_ENV) {
-    for (const [key, value] of Object.entries(OPENCORVUS_EMBEDDED_ENV)) {
-      if (!(key in process.env) || process.env[key] === undefined) {
-        process.env[key] = value
-      }
-    }
-  }
-} catch (error) {
-  warn("apply embedded env", error)
-}
-
-// Restore original CWD if launched via the self-contained launcher
-// (launcher.ts changes CWD to the binary's directory for native module resolution)
-if (process.env.OPENCORVUS_ORIGINAL_CWD) {
-  try {
-    process.chdir(process.env.OPENCORVUS_ORIGINAL_CWD)
-  } catch (error) {
-    warn("restore original cwd", error)
-  }
-}
+installProcessShims()
 
 import yargs from "yargs"
 import { hideBin } from "yargs/helpers"
@@ -41,7 +14,6 @@ import { UninstallCommand } from "./cli/cmd/uninstall"
 import { ModelsCommand } from "./cli/cmd/models"
 import { UI } from "./cli/ui"
 import { Installation } from "./installation"
-import { ExecutorBootstrap } from "./executor/bootstrap"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { FormatError } from "./cli/error"
 import { ServeCommand } from "./cli/cmd/serve"
@@ -61,13 +33,11 @@ import { EOL } from "os"
 import { PrCommand } from "./cli/cmd/pr"
 import { SessionCommand } from "./cli/cmd/session"
 import { DbCommand } from "./cli/cmd/db"
-import { SlackCommand } from "./cli/cmd/slack"
 import path from "path"
 import { Global } from "./global"
 import { JsonMigration } from "./storage/json-migration"
 import { Database } from "./storage/db"
 import { Capability } from "./platform/capability"
-import { installRuntimeShims } from "./runtime/shims"
 
 process.on("unhandledRejection", (e) => {
   Log.Default.error("rejection", {
@@ -80,8 +50,6 @@ process.on("uncaughtException", (e) => {
     e: e instanceof Error ? e.message : e,
   })
 })
-
-installRuntimeShims()
 
 let cli = yargs(hideBin(process.argv))
   .parserConfiguration({ "populate--": true })
@@ -109,15 +77,6 @@ let cli = yargs(hideBin(process.argv))
         if (Installation.isLocal()) return "DEBUG"
         return "INFO"
       })(),
-    })
-
-    process.env.AGENT = "1"
-    process.env.OPENCORVUS = "1"
-
-    await ExecutorBootstrap.autoRegister().catch((error) => {
-      Log.Default.warn("executor.bootstrap.failed", {
-        error: error instanceof Error ? error.message : String(error),
-      })
     })
 
     Log.Default.info("opencorvus", {
@@ -205,7 +164,6 @@ let cli = yargs(hideBin(process.argv))
   .command(PrCommand)
   .command(SessionCommand)
   .command(DbCommand)
-  .command(SlackCommand)
 
 if (Installation.isLocal()) {
   cli = cli.command(WorkspaceServeCommand)

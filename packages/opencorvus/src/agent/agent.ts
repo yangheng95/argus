@@ -18,6 +18,7 @@ import { mergeDeep, pipe, sortBy, values } from "remeda"
 import path from "path"
 import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
+import { entries, values as objectValues } from "@/util/object"
 
 export namespace Agent {
   export const Info = z
@@ -245,7 +246,7 @@ export namespace Agent {
       },
     }
 
-    for (const [key, value] of Object.entries(cfg.agent ?? {})) {
+    for (const [key, value] of entries((cfg.agent ?? {}) as NonNullable<Config.Info["agent"]>)) {
       if (value.disable) {
         delete result[key]
         continue
@@ -318,7 +319,7 @@ export namespace Agent {
       return agent.name
     }
 
-    const primaryVisible = Object.values(agents).find((a) => a.mode !== "subagent" && a.hidden !== true)
+    const primaryVisible = objectValues(agents).find((a) => a.mode !== "subagent" && a.hidden !== true)
     if (!primaryVisible) throw new Error("no primary visible agent found")
     return primaryVisible.name
   }

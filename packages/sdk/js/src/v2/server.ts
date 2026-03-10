@@ -103,7 +103,7 @@ export async function createOpenCorvusServer(options?: ServerOptions) {
 }
 
 export function createOpenCorvusTui(options?: TuiOptions) {
-  const args = []
+  const args: string[] = []
 
   if (options?.project) {
     args.push(`--project=${options.project}`)

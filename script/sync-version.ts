@@ -6,6 +6,17 @@ const root = path.resolve(import.meta.dir, "..")
 const args = process.argv.slice(2)
 const check = args.includes("--check")
 const input = args.find((item) => item !== "--check")
+const pattern = /^\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?$/
+
+function normalize(input?: string) {
+  const value = input?.trim()
+  if (!value) return value
+  const version = value.replace(/^v(?=\d)/, "")
+  if (!pattern.test(version)) {
+    throw new Error(`Invalid version: ${value}. Use x.y.z, x.y.z-tag, vx.y.z, or vx.y.z-tag.`)
+  }
+  return version
+}
 
 const files = {
   opencorvus: path.join(root, "packages/opencorvus/package.json"),
@@ -15,11 +26,7 @@ const files = {
 }
 
 const opencorvusPkg = await Bun.file(files.opencorvus).json() as { version: string }
-const version = input || opencorvusPkg.version
-
-if (!/^\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?$/.test(version)) {
-  throw new Error(`Invalid version: ${version}`)
-}
+const version = normalize(input || opencorvusPkg.version)
 
 const overlayPkg = await Bun.file(files.overlayPkg).json() as Record<string, unknown>
 const tauriJson = await Bun.file(files.overlayTauri).json() as Record<string, unknown>

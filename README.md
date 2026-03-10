@@ -17,7 +17,7 @@ OpenCorvus sits between human requests and coding agents. You hand it a task. It
 - Human-in-the-loop permission and question handling
 - Evaluator-driven loops for `build`, `test`, `lint`, `startup`, `artifact`, `visual`, `puppeteer`, LLM review checks, and a default-on `spec check` acceptance gate
 - Local TUI, headless server, overlay UI, and Slack gateway in the same repo
-- A separate bot package with adapters for Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk
+- A separate channel runtime package in `packages/channel-runtime` with adapters for Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk
 
 ### How It Works
 
@@ -120,7 +120,7 @@ If `codex` or `claude-code` are not discovered, task creation with that executor
 | Headless HTTP API | Available | `opencorvus serve`, task lifecycle routes, SSE event stream |
 | Overlay UI | Available | Served from `/ui/` by the headless server |
 | Slack gateway | Available | First integrated remote channel for the orchestrator |
-| Multi-channel bot adapters | In repo | `packages/bot` includes Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk |
+| Multi-channel runtime adapters | In repo | `packages/channel-runtime` includes Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, Line, Matrix, Mattermost, Signal, WeCom, and DingTalk |
 | GitHub Action | Available | See [`github/README.md`](./github/README.md) |
 
 ### Development
@@ -133,8 +133,8 @@ bun install
 bun run --cwd packages/opencorvus typecheck
 bun run --cwd packages/opencorvus test
 
-# bot adapters
-bun run --cwd packages/bot test
+# channel runtime adapters
+bun run --cwd packages/channel-runtime test
 
 # regenerate the JavaScript SDK
 bun ./packages/sdk/js/script/build.ts
@@ -148,7 +148,7 @@ OpenCorvus is built for delegated development workflows. It adds durable task or
 
 #### Is OpenCorvus only a Slack bot?
 
-No. The repo includes a local TUI, headless API server, overlay UI, GitHub Action, and a broader multi-channel bot package. Slack is simply the first channel promoted into the headless task orchestration flow.
+No. The repo includes a local TUI, headless API server, overlay UI, GitHub Action, and a broader multi-channel runtime package in `packages/channel-runtime`. Slack is simply the first channel promoted into the headless task orchestration flow.
 
 #### Does it keep state between runs?
 
@@ -172,3 +172,4 @@ OpenCorvus extends direct coding-agent execution toward delegated development, r
 ### License
 
 [MIT](./LICENSE)
+

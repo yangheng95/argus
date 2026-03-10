@@ -40,7 +40,7 @@ export const GrepTool = Tool.define("grep", {
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
 
     const rgPath = await Ripgrep.filepath()
-    const args = ["-nH", "--hidden", "--no-messages", "--field-match-separator=|", "--regexp", params.pattern]
+    const args: string[] = ["-nH", "--hidden", "--no-messages", "--field-match-separator=|", "--regexp", params.pattern]
     if (params.include) {
       args.push("--glob", params.include)
     }
@@ -79,7 +79,7 @@ export const GrepTool = Tool.define("grep", {
 
     // Handle both Unix (\n) and Windows (\r\n) line endings
     const lines = output.trim().split(/\r?\n/)
-    const matches = []
+    const matches: Array<{ path: string; modTime: number; lineNum: number; lineText: string }> = []
 
     for (const line of lines) {
       if (!line) continue
@@ -116,7 +116,7 @@ export const GrepTool = Tool.define("grep", {
     }
 
     const totalMatches = matches.length
-    const outputLines = [`Found ${totalMatches} matches${truncated ? ` (showing first ${limit})` : ""}`]
+    const outputLines: string[] = [`Found ${totalMatches} matches${truncated ? ` (showing first ${limit})` : ""}`]
 
     let currentFile = ""
     for (const match of finalMatches) {

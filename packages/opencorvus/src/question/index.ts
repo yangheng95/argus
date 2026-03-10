@@ -4,6 +4,7 @@ import { Identifier } from "@/id/id"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import z from "zod"
+import { values as objectValues } from "@/util/object"
 
 export namespace Question {
   const log = Log.create({ service: "question" })
@@ -166,6 +167,6 @@ export namespace Question {
   }
 
   export async function list() {
-    return state().then((x) => Object.values(x.pending).map((x) => x.info))
+    return state().then((x) => objectValues(x.pending).map((item) => item.info))
   }
 }

@@ -202,7 +202,7 @@ export namespace Pty {
     sub.ws.send === sub.send &&
     sub.ws.close === sub.close
 
-  const state = Instance.state(
+  const state = Instance.state<Map<string, ActiveSession>>(
     () => new Map<string, ActiveSession>(),
     async (sessions) => {
       for (const session of sessions.values()) {

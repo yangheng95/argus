@@ -111,8 +111,8 @@ function desired(config?: Record<string, unknown>) {
     }
   }
 
-  env.OPENCORVUS_BOT_SERVER_URL = process.env.OPENCORVUS_SERVER_URL || "http://127.0.0.1:7878"
-  env.OPENCORVUS_BOT_CHANNEL_PROTOCOL = "1"
+  env.OPENCORVUS_CHANNEL_SERVER_URL = process.env.OPENCORVUS_SERVER_URL || "http://127.0.0.1:7878"
+  env.OPENCORVUS_CHANNEL_PROTOCOL = "1"
   env.OPENCORVUS_PROJECT_DIR = Instance.directory
   env.OPENCORVUS_CONFIG_CONTENT = JSON.stringify(config ?? {})
 
@@ -134,7 +134,7 @@ async function syncProcess(current: State, next: ReturnType<typeof desired>, for
     current.channels = []
     return
   }
-  const child = spawnBot(next.env)
+  const child = spawnChannelRuntime(next.env)
   current.child = child
   current.status = "starting"
   current.detail = force ? `Restarting managed runtime for ${next.channels.join(", ")}.` : next.detail
@@ -154,11 +154,11 @@ async function stop(current: State) {
   }
 }
 
-function spawnBot(env: Record<string, string>) {
-  const botMain = path.resolve(import.meta.dirname, "../../bot/src/main.ts")
-  const botCwd = path.dirname(botMain)
-  return Process.spawn([process.execPath, botMain], {
-    cwd: botCwd,
+function spawnChannelRuntime(env: Record<string, string>) {
+  const runtimeMain = path.resolve(import.meta.dirname, "../../channel-runtime/src/main.ts")
+  const runtimeCwd = path.dirname(runtimeMain)
+  return Process.spawn([process.execPath, runtimeMain], {
+    cwd: runtimeCwd,
     env,
     stdout: "pipe",
     stderr: "pipe",
@@ -189,7 +189,7 @@ function consume(stream: NodeJS.ReadableStream | null | undefined, current: Stat
     if (!text) return
     current.logs.push(text)
     if (current.logs.length > 20) current.logs.shift()
-    log.info("bot.runtime", { text })
+    log.info("channel.runtime", { text })
   })
 }
 

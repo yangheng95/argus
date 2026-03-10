@@ -1,4 +1,0 @@
-interface:
-  display_name: "OpenCorvus Slack Bot Config"
-  short_description: "Configure Slack bot integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-slack-bot-config to set up or debug Slack bot integration for OpenCorvus."

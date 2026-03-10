@@ -40,7 +40,7 @@ export const ExportCommand = cmd({
           output: process.stderr,
         })
 
-        const sessions = []
+        const sessions: Session.Info[] = []
         for await (const session of Session.list()) {
           sessions.push(session)
         }

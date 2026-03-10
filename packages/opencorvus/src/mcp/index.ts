@@ -23,6 +23,7 @@ import { BusEvent } from "../bus/bus-event"
 import { Bus } from "@/bus"
 import { TuiEvent } from "@/cli/cmd/tui/event"
 import open from "open"
+import { entries, values as objectValues } from "@/util/object"
 
 export namespace MCP {
   const log = Log.create({ service: "mcp" })
@@ -163,12 +164,12 @@ export namespace MCP {
   const state = Instance.state(
     async () => {
       const cfg = await Config.get()
-      const config = cfg.mcp ?? {}
+      const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
       const clients: Record<string, MCPClient> = {}
       const status: Record<string, Status> = {}
 
       await Promise.all(
-        Object.entries(config).map(async ([key, mcp]) => {
+        entries(config).map(async ([key, mcp]) => {
           if (!isMcpConfigured(mcp)) {
             log.error("Ignoring MCP config entry without type", { key })
             return
@@ -197,7 +198,7 @@ export namespace MCP {
     },
     async (state) => {
       await Promise.all(
-        Object.values(state.clients).map((client) =>
+        objectValues(state.clients).map((client) =>
           client.close().catch((error) => {
             log.error("Failed to close MCP client", {
               error,
@@ -496,11 +497,11 @@ export namespace MCP {
   export async function status() {
     const s = await state()
     const cfg = await Config.get()
-    const config = cfg.mcp ?? {}
+    const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
     const result: Record<string, Status> = {}
 
     // Include all configured MCPs from config, not just connected ones
-    for (const [key, mcp] of Object.entries(config)) {
+    for (const [key, mcp] of entries(config)) {
       if (!isMcpConfigured(mcp)) continue
       result[key] = s.status[key] ?? { status: "disabled" }
     }
@@ -514,7 +515,7 @@ export namespace MCP {
 
   export async function connect(name: string) {
     const cfg = await Config.get()
-    const config = cfg.mcp ?? {}
+    const config = (cfg.mcp ?? {}) as NonNullable<Config.Info["mcp"]>
     const mcp = config[name]
     if (!mcp) {
       log.error("MCP config not found", { name })
@@ -571,7 +572,7 @@ export namespace MCP {
     const clientsSnapshot = await clients()
     const defaultTimeout = cfg.experimental?.mcp_timeout
 
-    const connectedClients = Object.entries(clientsSnapshot).filter(
+    const connectedClients = entries(clientsSnapshot).filter(
       ([clientName]) => s.status[clientName]?.status === "connected",
     )
 
@@ -609,19 +610,19 @@ export namespace MCP {
     const s = await state()
     const clientsSnapshot = await clients()
 
-    const prompts = Object.fromEntries<PromptInfo & { client: string }>(
+    const prompts = Object.fromEntries(
       (
         await Promise.all(
-          Object.entries(clientsSnapshot).map(async ([clientName, client]) => {
+          entries(clientsSnapshot).map(async ([clientName, client]) => {
             if (s.status[clientName]?.status !== "connected") {
               return []
             }
 
-            return Object.entries((await fetchPromptsForClient(clientName, client)) ?? {})
+            return entries((await fetchPromptsForClient(clientName, client)) ?? {})
           }),
         )
       ).flat(),
-    )
+    ) as Record<string, PromptInfo & { client: string }>
 
     return prompts
   }
@@ -630,19 +631,19 @@ export namespace MCP {
     const s = await state()
     const clientsSnapshot = await clients()
 
-    const result = Object.fromEntries<ResourceInfo & { client: string }>(
+    const result = Object.fromEntries(
       (
         await Promise.all(
-          Object.entries(clientsSnapshot).map(async ([clientName, client]) => {
+          entries(clientsSnapshot).map(async ([clientName, client]) => {
             if (s.status[clientName]?.status !== "connected") {
               return []
             }
 
-            return Object.entries((await fetchResourcesForClient(clientName, client)) ?? {})
+            return entries((await fetchResourcesForClient(clientName, client)) ?? {})
           }),
         )
       ).flat(),
-    )
+    ) as Record<string, ResourceInfo & { client: string }>
 
     return result
   }

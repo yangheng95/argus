@@ -580,6 +580,74 @@ export type EventMessagePartRemoved = {
   }
 }
 
+export type EventTuiPromptAppend = {
+  type: "tui.prompt.append"
+  properties: {
+    text: string
+  }
+}
+
+export type EventTuiCommandExecute = {
+  type: "tui.command.execute"
+  properties: {
+    command:
+      | "session.list"
+      | "session.new"
+      | "session.interrupt"
+      | "session.compact"
+      | "session.page.up"
+      | "session.page.down"
+      | "session.line.up"
+      | "session.line.down"
+      | "session.half.page.up"
+      | "session.half.page.down"
+      | "session.first"
+      | "session.last"
+      | "prompt.clear"
+      | "prompt.submit"
+      | "agent.cycle"
+      | string
+  }
+}
+
+export type EventTuiToastShow = {
+  type: "tui.toast.show"
+  properties: {
+    title?: string
+    message: string
+    variant: "info" | "success" | "warning" | "error"
+    /**
+     * Duration in milliseconds
+     */
+    duration?: number
+  }
+}
+
+export type EventTuiSessionSelect = {
+  type: "tui.session.select"
+  properties: {
+    /**
+     * Session ID to navigate to
+     */
+    sessionID: string
+  }
+}
+
+export type EventMcpToolsChanged = {
+  type: "mcp.tools.changed"
+  properties: {
+    server: string
+  }
+}
+
+export type EventMcpBrowserOpenFailed = {
+  type: "mcp.browser.open.failed"
+  properties: {
+    mcpName: string
+    url: string
+  }
+}
+
 export type SessionStatus =
   | {
       type: "idle"
@@ -773,6 +841,34 @@ export type EventOrchestratorTaskUpdated = {
   }
 }
 
+export type EventOrchestratorSpecCreated = {
+  type: "orchestrator.spec.created"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorSpecUpdated = {
+  type: "orchestrator.spec.updated"
+  properties: {
+    taskID: string
+    specID: string
+    status: string
+    summary: string
+  }
+}
+
+export type EventOrchestratorSpecApproved = {
+  type: "orchestrator.spec.approved"
+  properties: {
+    taskID: string
+    specID: string
+    summary: string
+  }
+}
+
 export type EventOrchestratorPlanCreated = {
   type: "orchestrator.plan.created"
   properties: {
@@ -951,59 +1047,6 @@ export type EventVcsBranchUpdated = {
   }
 }
 
-export type EventTuiPromptAppend = {
-  type: "tui.prompt.append"
-  properties: {
-    text: string
-  }
-}
-
-export type EventTuiCommandExecute = {
-  type: "tui.command.execute"
-  properties: {
-    command:
-      | "session.list"
-      | "session.new"
-      | "session.interrupt"
-      | "session.compact"
-      | "session.page.up"
-      | "session.page.down"
-      | "session.line.up"
-      | "session.line.down"
-      | "session.half.page.up"
-      | "session.half.page.down"
-      | "session.first"
-      | "session.last"
-      | "prompt.clear"
-      | "prompt.submit"
-      | "agent.cycle"
-      | string
-  }
-}
-
-export type EventTuiToastShow = {
-  type: "tui.toast.show"
-  properties: {
-    title?: string
-    message: string
-    variant: "info" | "success" | "warning" | "error"
-    /**
-     * Duration in milliseconds
-     */
-    duration?: number
-  }
-}
-
-export type EventTuiSessionSelect = {
-  type: "tui.session.select"
-  properties: {
-    /**
-     * Session ID to navigate to
-     */
-    sessionID: string
-  }
-}
-
 export type EventTaskReport = {
   type: "task.report"
   properties: {
@@ -1014,21 +1057,6 @@ export type EventTaskReport = {
     next_plan?: string
     artifacts?: Array<string>
     error?: string
-  }
-}
-
-export type EventMcpToolsChanged = {
-  type: "mcp.tools.changed"
-  properties: {
-    server: string
-  }
-}
-
-export type EventMcpBrowserOpenFailed = {
-  type: "mcp.browser.open.failed"
-  properties: {
-    mcpName: string
-    url: string
   }
 }
 
@@ -1212,6 +1240,12 @@ export type Event =
   | EventMessagePartUpdated
   | EventMessagePartDelta
   | EventMessagePartRemoved
+  | EventTuiPromptAppend
+  | EventTuiCommandExecute
+  | EventTuiToastShow
+  | EventTuiSessionSelect
+  | EventMcpToolsChanged
+  | EventMcpBrowserOpenFailed
   | EventSessionStatus
   | EventSessionIdle
   | EventQuestionAsked
@@ -1224,6 +1258,9 @@ export type Event =
   | EventTaskPlanUpdated
   | EventOrchestratorTaskCreated
   | EventOrchestratorTaskUpdated
+  | EventOrchestratorSpecCreated
+  | EventOrchestratorSpecUpdated
+  | EventOrchestratorSpecApproved
   | EventOrchestratorPlanCreated
   | EventOrchestratorPlanActivated
   | EventOrchestratorGoalPassed
@@ -1242,13 +1279,7 @@ export type Event =
   | EventOrchestratorRunOutput
   | EventOrchestratorMessageInjected
   | EventVcsBranchUpdated
-  | EventTuiPromptAppend
-  | EventTuiCommandExecute
-  | EventTuiToastShow
-  | EventTuiSessionSelect
   | EventTaskReport
-  | EventMcpToolsChanged
-  | EventMcpBrowserOpenFailed
   | EventCommandExecuted
   | EventSessionCreated
   | EventSessionUpdated
@@ -1607,6 +1638,37 @@ export type DingTalkChannelConfig = {
   webhookPath?: string
 }
 
+export type QqChannelConfig = {
+  /**
+   * Enable QQ Bot channel integration
+   */
+  enabled?: boolean
+  /**
+   * QQ Bot app ID from q.qq.com
+   */
+  appId?: string
+  /**
+   * QQ Bot app secret used for access token and webhook signatures
+   */
+  appSecret?: string
+  /**
+   * Optional sandbox flag, set to 1 or true to use sandbox.api.sgroup.qq.com
+   */
+  sandbox?: string
+  /**
+   * Optional QQ Bot webhook host
+   */
+  webhookHost?: string
+  /**
+   * Optional QQ Bot webhook port
+   */
+  webhookPort?: string
+  /**
+   * Optional QQ Bot webhook path
+   */
+  webhookPath?: string
+}
+
 /**
  * Channel integration configuration
  */
@@ -1624,6 +1686,7 @@ export type ChannelConfig = {
   signal?: SignalChannelConfig
   wecom?: WeComChannelConfig
   dingtalk?: DingTalkChannelConfig
+  qq?: QqChannelConfig
 }
 
 export type PermissionActionConfig = "ask" | "allow" | "deny"
@@ -3138,6 +3201,7 @@ export type ChannelMessageData = {
       | "signal"
       | "wecom"
       | "dingtalk"
+      | "qq"
     channel: string
     thread: string
     text: string
@@ -4338,9 +4402,6 @@ export type SessionPromptData = {
     format?: OutputFormat
     system?: string
     variant?: string
-    extra?: {
-      [key: string]: unknown
-    }
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -4569,9 +4630,6 @@ export type SessionPromptAsyncData = {
     format?: OutputFormat
     system?: string
     variant?: string
-    extra?: {
-      [key: string]: unknown
-    }
     parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
   }
   path: {
@@ -5399,6 +5457,7 @@ export type PanelCapabilitiesData = {
       | "signal"
       | "wecom"
       | "dingtalk"
+      | "qq"
   }
   url: "/panel/capabilities"
 }
@@ -5423,6 +5482,7 @@ export type PanelCapabilitiesResponses = {
       | "signal"
       | "wecom"
       | "dingtalk"
+      | "qq"
     actions: Array<{
       action: string
       description: string
@@ -5442,6 +5502,7 @@ export type PanelCapabilitiesResponses = {
         | "signal"
         | "wecom"
         | "dingtalk"
+        | "qq"
       >
       local_only: boolean
       local_action_types?: Array<"set_executor" | "select_task" | "select_session" | "invalidate_session">
@@ -5460,6 +5521,7 @@ export type PanelCapabilitiesResponses = {
         | "signal"
         | "wecom"
         | "dingtalk"
+        | "qq"
       >
       schema: {
         [key: string]: unknown
@@ -5487,6 +5549,7 @@ export type PanelMessageData = {
       | "signal"
       | "wecom"
       | "dingtalk"
+      | "qq"
     text: string
     taskID?: string
     sessionID?: string
@@ -5562,6 +5625,7 @@ export type PanelMessageStreamData = {
       | "signal"
       | "wecom"
       | "dingtalk"
+      | "qq"
     text: string
     taskID?: string
     sessionID?: string
@@ -5867,6 +5931,7 @@ export type ControlTimelineData = {
       | "signal"
       | "wecom"
       | "dingtalk"
+      | "qq"
   }
   url: "/control/timeline"
 }

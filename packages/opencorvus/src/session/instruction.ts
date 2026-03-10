@@ -14,7 +14,7 @@ const log = Log.create({ service: "instruction" })
 const FILES = ["AGENTS.md", "CLAUDE.md"]
 
 function globalFiles() {
-  const files = []
+  const files: string[] = []
   if (Flag.OPENCORVUS_CONFIG_DIR) {
     files.push(path.join(Flag.OPENCORVUS_CONFIG_DIR, "AGENTS.md"))
   }

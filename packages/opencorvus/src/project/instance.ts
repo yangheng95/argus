@@ -11,6 +11,21 @@ interface Context {
   worktree: string
   project: Project.Info
 }
+
+type StateFactory = <S>(init: () => S, dispose?: (state: Awaited<S>) => Promise<void>) => () => S
+
+type InstanceApi = {
+  provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R>
+  readonly directory: string
+  readonly worktree: string
+  readonly project: Project.Info
+  refresh(directory?: string): Promise<Context>
+  containsPath(filepath: string): boolean
+  state: StateFactory
+  dispose(): Promise<void>
+  disposeAll(): Promise<void>
+}
+
 const context = Context.create<Context>("instance")
 const cache = new Map<string, Promise<Context>>()
 
@@ -18,8 +33,8 @@ const disposal = {
   all: undefined as Promise<void> | undefined,
 }
 
-export const Instance = {
-  async provide<R>(input: { directory: string; init?: () => Promise<any>; fn: () => R }): Promise<R> {
+export const Instance: InstanceApi = {
+  async provide<R>(input: { directory: string; init?: () => Promise<unknown>; fn: () => R }): Promise<R> {
     // Normalize project directories once so cache keys and boundary checks stay stable.
     const directory = Filesystem.resolve(input.directory)
     let existing = cache.get(directory)

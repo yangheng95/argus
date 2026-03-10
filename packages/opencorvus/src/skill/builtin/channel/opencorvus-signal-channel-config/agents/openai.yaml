@@ -1,0 +1,6 @@
+interface:
+  display_name: "OpenCorvus Signal Channel Config"
+  short_description: "Configure Signal channel integration for OpenCorvus"
+  default_prompt: "Use $opencorvus-signal-channel-config to set up or debug Signal channel integration for OpenCorvus."
+
+

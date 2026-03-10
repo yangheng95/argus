@@ -1,4 +1,0 @@
-interface:
-  display_name: "OpenCorvus Feishu Bot Config"
-  short_description: "Configure Feishu or Lark bot integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-feishu-bot-config to set up or debug Feishu or Lark bot integration for OpenCorvus."

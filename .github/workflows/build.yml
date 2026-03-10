@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. 0.0.1). Leave empty for dev snapshot artifact builds."
+        description: "Release version (e.g. 0.0.1 or v0.0.1). Leave empty for dev snapshot artifact builds."
         required: false
         default: ""
 
@@ -34,6 +34,7 @@ jobs:
             RELEASE=1
           elif [[ -n "${{ inputs.version }}" ]]; then
             VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
             RELEASE=1
           else
             VERSION="$(bun -e 'const pkg = await Bun.file("packages/opencorvus/package.json").json(); console.log(pkg.version)')"

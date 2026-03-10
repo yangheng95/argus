@@ -24,7 +24,7 @@ import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 // LLM setup — use qwen3.5-plus via DashScope OpenAI-compatible API
 // ---------------------------------------------------------------------------
 
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY
+const DASHSCOPE_API_KEY = process.env.CODING_DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY
 const HAS_LLM = !!DASHSCOPE_API_KEY
 const TIMEOUT = 120_000
 

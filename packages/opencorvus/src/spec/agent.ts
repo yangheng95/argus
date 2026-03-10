@@ -209,7 +209,7 @@ async function run(input: {
         "Submit the final specification after codebase exploration. " +
         "Call this tool ONCE when you have finished exploring and are ready to deliver the spec. " +
         "All fields are required except where noted optional.",
-      parameters: SpecOutput,
+      inputSchema: SpecOutput,
       execute: async (args) => {
         submittedSpec = args as SpecOutputType
         return "Specification submitted successfully."
@@ -268,23 +268,24 @@ async function run(input: {
     let parsed: SpecOutputType
 
     if (submittedSpec) {
+      const submitted = submittedSpec as SpecOutputType
       log.info("spec agent finished via submit_spec tool call", {
         steps: result.steps.length,
-        specItems: submittedSpec.spec_items?.length ?? 0,
-        contentLength: submittedSpec.content?.length ?? 0,
+        specItems: submitted.spec_items?.length ?? 0,
+        contentLength: submitted.content?.length ?? 0,
         attempt: attempt + 1,
       })
       // Normalize arrays — tool call args may not have Zod defaults applied
       parsed = {
-        ...submittedSpec,
-        summary: submittedSpec.summary ?? "",
-        content: submittedSpec.content ?? "",
-        scope: submittedSpec.scope ?? "",
-        spec_items: Array.isArray(submittedSpec.spec_items) ? submittedSpec.spec_items : [],
-        assumptions: Array.isArray(submittedSpec.assumptions) ? submittedSpec.assumptions : [],
-        risks: Array.isArray(submittedSpec.risks) ? submittedSpec.risks : [],
-        evidence_sources: Array.isArray(submittedSpec.evidence_sources) ? submittedSpec.evidence_sources : [],
-        unresolved_questions: Array.isArray(submittedSpec.unresolved_questions) ? submittedSpec.unresolved_questions : [],
+        ...submitted,
+        summary: submitted.summary ?? "",
+        content: submitted.content ?? "",
+        scope: submitted.scope ?? "",
+        spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
+        assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
+        risks: Array.isArray(submitted.risks) ? submitted.risks : [],
+        evidence_sources: Array.isArray(submitted.evidence_sources) ? submitted.evidence_sources : [],
+        unresolved_questions: Array.isArray(submitted.unresolved_questions) ? submitted.unresolved_questions : [],
       }
     } else {
       // Fallback: parse from text output

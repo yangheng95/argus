@@ -70,6 +70,25 @@ async function copyTree(src: string, dest: string) {
   return true
 }
 
+async function cargoPath() {
+  if (process.platform !== "win32") return process.env.PATH
+  const dir = process.env.USERPROFILE ? path.join(process.env.USERPROFILE, ".cargo", "bin") : ""
+  if (!dir) return process.env.PATH
+  if (!(await exists(path.join(dir, "cargo.exe")))) return process.env.PATH
+  const list = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean)
+  if (list.includes(dir)) return process.env.PATH
+  return [dir, ...list].join(path.delimiter)
+}
+
+async function tauriArgs() {
+  if (process.platform !== "win32") return []
+  const conf = await Bun.file(path.join(tauri, "tauri.conf.json")).json()
+  if (typeof conf.version !== "string" || !conf.version.includes("-")) return []
+  const version = conf.version.split("-", 1)[0]
+  console.warn(`overlay build: using Windows bundle version ${version} for prerelease ${conf.version}`)
+  return ["--config", JSON.stringify({ version })]
+}
+
 await $`bun run build`.cwd(opencorvus)
 
 if (!(await exists(distServer))) {
@@ -80,8 +99,9 @@ await fs.mkdir(resources, { recursive: true })
 await copyFile(distServer, stagedServer, { required: true })
 await fs.rm(buildTarget, { recursive: true, force: true }).catch(() => undefined)
 
-await $`tauri build`.cwd(dir).env({
+await $`tauri build ${await tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: buildTarget,
+  PATH: await cargoPath(),
 })
 
 await copyFile(distServer, builtServer)

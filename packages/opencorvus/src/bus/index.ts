@@ -51,7 +51,7 @@ export namespace Bus {
     log.info("publishing", {
       type: def.type,
     })
-    const pending = []
+    const pending: Array<ReturnType<Subscription>> = []
     let index = 0
     for (const key of [def.type, "*"]) {
       const match = state().subscriptions.get(key)

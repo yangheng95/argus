@@ -1,8 +1,17 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "d7945938d9201279"
+    "panel_revision": "a1854d6c2fbbe5b5"
   },
+  "brand.guide_kicker": "Overlay Guide",
+  "brand.guide_positioning_body": "This is the local control overlay for OpenCorvus: one place to switch working directories, choose an executor, track task status, and inspect spec, plan, evaluation, and changes.",
+  "brand.guide_positioning_title": "Positioning",
+  "brand.guide_trigger": "OpenCorvus positioning and usage",
+  "brand.guide_usage_1": "Pick an existing session on the left or create a blank one, then confirm the working directory is correct.",
+  "brand.guide_usage_2": "Choose an executor in the center and send requirements, constraints, or follow-ups from the session composer.",
+  "brand.guide_usage_3": "Use the right-side Spec, Plan, Goals, Evaluation, and File Diff sections to keep the task aligned.",
+  "brand.guide_usage_4": "Use Channels, Settings, Logs, and pin-to-top in the titlebar for configuration, debugging, and long-running monitoring.",
+  "brand.guide_usage_title": "How to use",
   "brand.logo_alt": "OpenCorvus logo",
   "channel.available": "Available: {{names}}",
   "channel.channels": "Channels",

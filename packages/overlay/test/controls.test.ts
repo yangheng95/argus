@@ -131,7 +131,7 @@ test("overlay controls trigger without runtime failures", async () => {
         id: "opencode",
         label: "OpenCorvus",
         detail: "Bundled",
-        version: "0.0.1",
+        version: "0.0.1-alpha",
         selectable: true,
         discovered: true,
       },
@@ -754,6 +754,7 @@ test("overlay controls trigger without runtime failures", async () => {
   await page.evaluateOnNewDocument(() => {
     const state = {
       close: 0,
+      drag: 0,
       minimize: 0,
       open: [] as string[],
       copy: [] as string[],
@@ -803,6 +804,9 @@ test("overlay controls trigger without runtime failures", async () => {
           return {
             close: async () => {
               state.close += 1
+            },
+            startDragging: async () => {
+              state.drag += 1
             },
             minimize: async () => {
               state.minimize += 1
@@ -854,9 +858,38 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForSelector(".session-row-main[data-session-id='session-1']")
     await page.waitForSelector("#interaction-modal")
 
+    await page.click("body")
+    const scale = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim())
+    await page.keyboard.down("Control")
+    await page.keyboard.press("Equal")
+    await page.keyboard.up("Control")
+    await page.waitForFunction(
+      (value) => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim() !== value,
+      {},
+      scale,
+    )
+    await page.waitForFunction(() => (window as typeof window & { __overlayTest: { settings: { zoom?: number } } }).__overlayTest.settings.zoom === 1.1)
+    await page.keyboard.down("Control")
+    await page.keyboard.press("Minus")
+    await page.keyboard.up("Control")
+    await page.waitForFunction(
+      (value) => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim() === value,
+      {},
+      scale,
+    )
+    await page.waitForFunction(() => (window as typeof window & { __overlayTest: { settings: { zoom?: number } } }).__overlayTest.settings.zoom === 1)
+
     seen.push("#interaction-modal [data-action='once']")
     await tap("#interaction-modal [data-action='once']")
     await page.waitForFunction(() => !document.querySelector("#interaction-modal"))
+    await page.hover(".brand-guide")
+    await page.waitForFunction(() => {
+      const node = document.querySelector(".brand-guide-card")
+      if (!(node instanceof HTMLElement)) return false
+      const style = getComputedStyle(node)
+      return style.opacity === "1" && style.visibility === "visible"
+    })
+    expect(await page.$eval(".brand-guide-card", (node) => node.querySelectorAll(".brand-guide-step").length)).toBe(4)
 
     const theme = await page.$eval("body", (node) => node.dataset.theme)
     seen.push("#btnTheme")
@@ -877,6 +910,11 @@ test("overlay controls trigger without runtime failures", async () => {
     await tap("#btnMinimize")
     seen.push("#btnClose")
     await tap("#btnClose")
+    await page.waitForFunction(() => ((window as typeof window & { __overlayTest: { drag: number } }).__overlayTest.drag || 0) === 0)
+    await page.$eval("#titlebar", (node) => {
+      node.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerId: 1 }))
+    })
+    await page.waitForFunction(() => ((window as typeof window & { __overlayTest: { drag: number } }).__overlayTest.drag || 0) === 1)
 
     for (const item of ["#specSection", "#planSection", "#goalsSection", "#criteriaSection", "#changesSection", "#overviewSection", "#llmSection"]) {
       seen.push(`${item} > summary`)
@@ -1176,6 +1214,7 @@ test("overlay controls trigger without runtime failures", async () => {
     expect((stub.open as string[]).length).toBeGreaterThan(3)
     expect((stub.copy as string[]).length).toBeGreaterThan(2)
     expect((stub.created as string[])).toContain("D:/overlay/picked/child")
+    expect(stub.drag).toBe(1)
     expect(stub.minimize).toBe(1)
     expect(stub.close).toBe(1)
     expect(errors).toEqual([])

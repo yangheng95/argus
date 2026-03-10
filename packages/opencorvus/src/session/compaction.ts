@@ -63,7 +63,7 @@ export namespace SessionCompaction {
     const msgs = await Session.messages({ sessionID: input.sessionID })
     let total = 0
     let pruned = 0
-    const toPrune = []
+    const toPrune: MessageV2.ToolPart[] = []
     let turns = 0
 
     loop: for (let msgIndex = msgs.length - 1; msgIndex >= 0; msgIndex--) {

@@ -66,7 +66,7 @@ export namespace LLM {
     ])
     const isCodex = provider.id === "openai" && auth?.type === "oauth"
 
-    const system = []
+    const system: string[] = []
     system.push(
       [
         // use agent prompt otherwise provider prompt

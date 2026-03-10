@@ -165,7 +165,7 @@ async function ensure(client: CodexAppServerClient) {
   await client.initialize({
     clientInfo: {
       name: "opencorvus",
-      version: "0.0.1",
+      version: "0.0.1-alpha",
     },
     capabilities: {
       experimentalApi: true,

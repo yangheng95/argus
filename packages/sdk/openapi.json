@@ -3,7 +3,7 @@
   "info": {
     "title": "opencorvus",
     "description": "opencorvus api",
-    "version": "0.0.1"
+    "version": "0.0.1-alpha"
   },
   "paths": {
     "/global/health": {
@@ -1398,7 +1398,8 @@
                       "mattermost",
                       "signal",
                       "wecom",
-                      "dingtalk"
+                      "dingtalk",
+                      "qq"
                     ]
                   },
                   "channel": {
@@ -1472,7 +1473,7 @@
           }
         ],
         "summary": "Get managed channel runtime",
-        "description": "Get managed bot runtime status for configured channel integrations.",
+        "description": "Get managed channel runtime status for configured channel integrations.",
         "responses": {
           "200": {
             "description": "Channel runtime status",
@@ -1552,7 +1553,7 @@
           }
         ],
         "summary": "Restart managed channel runtime",
-        "description": "Restart the managed channel bot runtime with the current config.",
+        "description": "Restart the managed channel runtime with the current config.",
         "responses": {
           "200": {
             "description": "Restarted channel runtime",
@@ -4181,13 +4182,6 @@
                   "variant": {
                     "type": "string"
                   },
-                  "extra": {
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {}
-                  },
                   "parts": {
                     "type": "array",
                     "items": {
@@ -4659,13 +4653,6 @@
                   },
                   "variant": {
                     "type": "string"
-                  },
-                  "extra": {
-                    "type": "object",
-                    "propertyNames": {
-                      "type": "string"
-                    },
-                    "additionalProperties": {}
                   },
                   "parts": {
                     "type": "array",
@@ -6744,7 +6731,8 @@
                 "mattermost",
                 "signal",
                 "wecom",
-                "dingtalk"
+                "dingtalk",
+                "qq"
               ]
             }
           }
@@ -6775,7 +6763,8 @@
                         "mattermost",
                         "signal",
                         "wecom",
-                        "dingtalk"
+                        "dingtalk",
+                        "qq"
                       ]
                     },
                     "actions": {
@@ -6814,7 +6803,8 @@
                                 "mattermost",
                                 "signal",
                                 "wecom",
-                                "dingtalk"
+                                "dingtalk",
+                                "qq"
                               ]
                             }
                           },
@@ -6851,7 +6841,8 @@
                                 "mattermost",
                                 "signal",
                                 "wecom",
-                                "dingtalk"
+                                "dingtalk",
+                                "qq"
                               ]
                             }
                           },
@@ -7063,7 +7054,8 @@
                       "mattermost",
                       "signal",
                       "wecom",
-                      "dingtalk"
+                      "dingtalk",
+                      "qq"
                     ]
                   },
                   "text": {
@@ -7298,7 +7290,8 @@
                       "mattermost",
                       "signal",
                       "wecom",
-                      "dingtalk"
+                      "dingtalk",
+                      "qq"
                     ]
                   },
                   "text": {
@@ -7995,7 +7988,8 @@
                 "mattermost",
                 "signal",
                 "wecom",
-                "dingtalk"
+                "dingtalk",
+                "qq"
               ]
             }
           }
@@ -20116,6 +20110,198 @@
           "properties"
         ]
       },
+      "Event.tui.prompt.append": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.prompt.append"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.tui.command.execute": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.command.execute"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "session.list",
+                      "session.new",
+                      "session.interrupt",
+                      "session.compact",
+                      "session.page.up",
+                      "session.page.down",
+                      "session.line.up",
+                      "session.line.down",
+                      "session.half.page.up",
+                      "session.half.page.down",
+                      "session.first",
+                      "session.last",
+                      "prompt.clear",
+                      "prompt.submit",
+                      "agent.cycle"
+                    ]
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "command"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.tui.toast.show": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.toast.show"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "variant": {
+                "type": "string",
+                "enum": [
+                  "info",
+                  "success",
+                  "warning",
+                  "error"
+                ]
+              },
+              "duration": {
+                "description": "Duration in milliseconds",
+                "default": 5000,
+                "type": "number"
+              }
+            },
+            "required": [
+              "message",
+              "variant"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.tui.session.select": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "tui.session.select"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "sessionID": {
+                "description": "Session ID to navigate to",
+                "type": "string",
+                "pattern": "^ses"
+              }
+            },
+            "required": [
+              "sessionID"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.tools.changed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.tools.changed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "server": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "server"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.mcp.browser.open.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "mcp.browser.open.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "mcpName": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "mcpName",
+              "url"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
       "SessionStatus": {
         "anyOf": [
           {
@@ -20660,6 +20846,112 @@
             "required": [
               "taskID",
               "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.orchestrator.spec.created": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "orchestrator.spec.created"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.orchestrator.spec.updated": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "orchestrator.spec.updated"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "status": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
+              "status",
+              "summary"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.orchestrator.spec.approved": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "orchestrator.spec.approved"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "taskID": {
+                "type": "string",
+                "pattern": "^tsk.*"
+              },
+              "specID": {
+                "type": "string",
+                "pattern": "^spc.*"
+              },
+              "summary": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "taskID",
+              "specID",
               "summary"
             ]
           }
@@ -21380,146 +21672,6 @@
           "properties"
         ]
       },
-      "Event.tui.prompt.append": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.prompt.append"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "text": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "text"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.tui.command.execute": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.command.execute"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "command": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "enum": [
-                      "session.list",
-                      "session.new",
-                      "session.interrupt",
-                      "session.compact",
-                      "session.page.up",
-                      "session.page.down",
-                      "session.line.up",
-                      "session.line.down",
-                      "session.half.page.up",
-                      "session.half.page.down",
-                      "session.first",
-                      "session.last",
-                      "prompt.clear",
-                      "prompt.submit",
-                      "agent.cycle"
-                    ]
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              }
-            },
-            "required": [
-              "command"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.tui.toast.show": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.toast.show"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "title": {
-                "type": "string"
-              },
-              "message": {
-                "type": "string"
-              },
-              "variant": {
-                "type": "string",
-                "enum": [
-                  "info",
-                  "success",
-                  "warning",
-                  "error"
-                ]
-              },
-              "duration": {
-                "description": "Duration in milliseconds",
-                "default": 5000,
-                "type": "number"
-              }
-            },
-            "required": [
-              "message",
-              "variant"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.tui.session.select": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "tui.session.select"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "sessionID": {
-                "description": "Session ID to navigate to",
-                "type": "string",
-                "pattern": "^ses"
-              }
-            },
-            "required": [
-              "sessionID"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.task.report": {
         "type": "object",
         "properties": {
@@ -21565,58 +21717,6 @@
               "sessionID",
               "status",
               "summary"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.tools.changed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.tools.changed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "server": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "server"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.mcp.browser.open.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "mcp.browser.open.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "mcpName": {
-                "type": "string"
-              },
-              "url": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "mcpName",
-              "url"
             ]
           }
         },
@@ -22255,6 +22355,24 @@
             "$ref": "#/components/schemas/Event.message.part.removed"
           },
           {
+            "$ref": "#/components/schemas/Event.tui.prompt.append"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.command.execute"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.toast.show"
+          },
+          {
+            "$ref": "#/components/schemas/Event.tui.session.select"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.tools.changed"
+          },
+          {
+            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
+          },
+          {
             "$ref": "#/components/schemas/Event.session.status"
           },
           {
@@ -22289,6 +22407,15 @@
           },
           {
             "$ref": "#/components/schemas/Event.orchestrator.task.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.orchestrator.spec.created"
+          },
+          {
+            "$ref": "#/components/schemas/Event.orchestrator.spec.updated"
+          },
+          {
+            "$ref": "#/components/schemas/Event.orchestrator.spec.approved"
           },
           {
             "$ref": "#/components/schemas/Event.orchestrator.plan.created"
@@ -22345,25 +22472,7 @@
             "$ref": "#/components/schemas/Event.vcs.branch.updated"
           },
           {
-            "$ref": "#/components/schemas/Event.tui.prompt.append"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.command.execute"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.toast.show"
-          },
-          {
-            "$ref": "#/components/schemas/Event.tui.session.select"
-          },
-          {
             "$ref": "#/components/schemas/Event.task.report"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.tools.changed"
-          },
-          {
-            "$ref": "#/components/schemas/Event.mcp.browser.open.failed"
           },
           {
             "$ref": "#/components/schemas/Event.command.executed"
@@ -22812,6 +22921,40 @@
         },
         "additionalProperties": false
       },
+      "QQChannelConfig": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Enable QQ Bot channel integration",
+            "type": "boolean"
+          },
+          "appId": {
+            "description": "QQ Bot app ID from q.qq.com",
+            "type": "string"
+          },
+          "appSecret": {
+            "description": "QQ Bot app secret used for access token and webhook signatures",
+            "type": "string"
+          },
+          "sandbox": {
+            "description": "Optional sandbox flag, set to 1 or true to use sandbox.api.sgroup.qq.com",
+            "type": "string"
+          },
+          "webhookHost": {
+            "description": "Optional QQ Bot webhook host",
+            "type": "string"
+          },
+          "webhookPort": {
+            "description": "Optional QQ Bot webhook port",
+            "type": "string"
+          },
+          "webhookPath": {
+            "description": "Optional QQ Bot webhook path",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "ChannelConfig": {
         "description": "Channel integration configuration",
         "type": "object",
@@ -22854,6 +22997,9 @@
           },
           "dingtalk": {
             "$ref": "#/components/schemas/DingTalkChannelConfig"
+          },
+          "qq": {
+            "$ref": "#/components/schemas/QQChannelConfig"
           }
         },
         "additionalProperties": false

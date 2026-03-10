@@ -17,45 +17,32 @@ import { AuthRoutes } from "./routes/auth"
 import { AppDocumentation, AppRoutes } from "./routes/app"
 import { GlobalRoutes } from "./routes/global"
 import { MDNS } from "./mdns"
-import { OverlayUI } from "./overlay-ui"
-import { Filesystem } from "../util/filesystem"
-import { ChannelAttachment } from "@/channel/attachment"
-import { installRuntimeShims } from "@/runtime/shims"
+import { muteAISdkWarnings } from "@/runtime/shims"
+
+muteAISdkWarnings()
 
 export namespace Server {
   const log = Log.create({ service: "server" })
 
   let _url: URL | undefined
   let _corsWhitelist: string[] = []
-  let _projectDir: string | undefined
 
   export function url(): URL {
     return _url ?? new URL("http://localhost:7878")
   }
 
   function decodeDirectory(raw: string) {
-    const dir = (() => {
-      try {
-        return decodeURIComponent(raw)
-      } catch {
-        return raw
-      }
-    })()
-    return Filesystem.resolve(dir)
-  }
-
-  export type Handle = {
-    hostname: string
-    port: number
-    url: URL
-    stop(closeActiveConnections?: boolean): Promise<void>
+    try {
+      return decodeURIComponent(raw)
+    } catch {
+      return raw
+    }
   }
 
   const app = new Hono()
   export const App: () => Hono = lazy(
-    () => {
-      installRuntimeShims()
-      return app
+    () =>
+      app
         .onError((err, c) => {
           log.error("failed", {
             error: err,
@@ -76,16 +63,7 @@ export namespace Server {
         })
         .use((c, next) => {
           if (c.req.method === "OPTIONS") return next()
-          if (
-            c.req.path.startsWith("/channel/attachment/") &&
-            ChannelAttachment.authorize(
-              c.req.path.slice("/channel/attachment/".length),
-              c.req.query("e") ?? null,
-              c.req.query("s") ?? null,
-            )
-          )
-            return next()
-          const password = Flag.OPENCORVUS_SERVER_PASSWORD ?? null
+          const password = Flag.OPENCORVUS_SERVER_PASSWORD
           if (!password) return next()
           const username = Flag.OPENCORVUS_SERVER_USERNAME ?? "opencorvus"
           return basicAuth({ username, password })(c, next)
@@ -129,22 +107,11 @@ export namespace Server {
             },
           }),
         )
-        .use(async (c, next) => {
-          // Enforce UTF-8 charset on all JSON responses to prevent encoding issues
-          // (especially on Windows where terminal encoding may differ)
-          await next()
-          const ct = c.res.headers.get("Content-Type")
-          if (ct && ct.startsWith("application/json") && !ct.includes("charset")) {
-            c.res.headers.set("Content-Type", ct + "; charset=utf-8")
-          }
-        })
-        .route("/ui", OverlayUI.routes())
-        .get("/", (c) => c.redirect("/ui/"))
         .route("/global", GlobalRoutes())
         .route("/auth", AuthRoutes())
         .use(async (c, next) => {
           if (c.req.path === "/log") return next()
-          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory") || _projectDir || process.cwd()
+          const raw = c.req.query("directory") || c.req.header("x-opencorvus-directory") || process.cwd()
           const directory = decodeDirectory(raw)
           return Instance.provide({
             directory,
@@ -154,8 +121,7 @@ export namespace Server {
             },
           })
         })
-        .route("/", AppRoutes(app)) as unknown as Hono
-    },
+        .route("/", AppRoutes(app)) as unknown as Hono,
   )
 
   export async function openapi() {
@@ -171,10 +137,8 @@ export namespace Server {
     mdns?: boolean
     mdnsDomain?: string
     cors?: string[]
-    projectDir?: string
-  }): Handle {
+  }) {
     _corsWhitelist = opts.cors ?? []
-    _projectDir = opts.projectDir
 
     const args = {
       hostname: opts.hostname,
@@ -196,38 +160,27 @@ export namespace Server {
       const detail = failure instanceof Error ? failure.message : failure ? String(failure) : "unknown"
       throw new Error(`Failed to start server on port ${opts.port}: ${detail}`)
     }
-    const hostname = server.hostname ?? server.url.hostname ?? opts.hostname
-    const port = server.port ?? Number(server.url.port || opts.port)
-    if (!hostname) {
-      throw new Error("Server started without a hostname")
-    }
-    if (!Number.isFinite(port) || port <= 0) {
-      throw new Error("Server started without a valid port")
-    }
 
     _url = server.url
-    process.env.OPENCORVUS_SERVER_URL = server.url.origin
 
     const shouldPublishMDNS =
       opts.mdns &&
-      port &&
-      hostname !== "127.0.0.1" &&
-      hostname !== "localhost" &&
-      hostname !== "::1"
+      server.port &&
+      opts.hostname !== "127.0.0.1" &&
+      opts.hostname !== "localhost" &&
+      opts.hostname !== "::1"
     if (shouldPublishMDNS) {
-      MDNS.publish(port, opts.mdnsDomain)
+      MDNS.publish(server.port!, opts.mdnsDomain)
     } else if (opts.mdns) {
       log.warn("mDNS enabled but hostname is loopback; skipping mDNS publish")
     }
 
-    return {
-      hostname,
-      port,
-      url: server.url,
-      async stop(closeActiveConnections?: boolean) {
-        if (shouldPublishMDNS) MDNS.unpublish()
-        await server.stop(closeActiveConnections)
-      },
+    const originalStop = server.stop.bind(server)
+    server.stop = async (closeActiveConnections?: boolean) => {
+      if (shouldPublishMDNS) MDNS.unpublish()
+      return originalStop(closeActiveConnections)
     }
+
+    return server
   }
 }

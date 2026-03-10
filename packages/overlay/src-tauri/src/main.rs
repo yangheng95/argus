@@ -3,6 +3,7 @@
 
 use std::{
     fs,
+    net::TcpListener,
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::Mutex,
@@ -17,7 +18,23 @@ use tauri::{
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
-struct Server(Mutex<Option<Child>>);
+const LOCAL_SERVER_HOST: &str = "127.0.0.1";
+const DEFAULT_SERVER_PORT: u16 = 7878;
+
+#[derive(Default)]
+struct ServerState {
+    child: Option<Child>,
+    port: Option<u16>,
+}
+
+struct Server(Mutex<ServerState>);
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OverlayServerInfo {
+    port: u16,
+    url: String,
+}
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +47,7 @@ struct OverlaySettings {
     always_on_top: Option<bool>,
     sidebar_width: Option<u32>,
     sections_width: Option<u32>,
+    zoom: Option<f64>,
     theme: Option<String>,
     locale: Option<String>,
     directory: Option<String>,
@@ -161,27 +179,60 @@ fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {
         .find(|path| path.exists())
 }
 
-fn stop_server<R: Runtime>(app: &AppHandle<R>) {
-    let state = app.state::<Server>();
-    let mut lock = state.0.lock().unwrap();
-    if let Some(mut child) = lock.take() {
-        let _ = child.kill();
-        let _ = child.wait();
+fn server_info(port: u16) -> OverlayServerInfo {
+    OverlayServerInfo {
+        port,
+        url: format!("http://{LOCAL_SERVER_HOST}:{port}"),
     }
 }
 
-fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
+fn next_server_port() -> Result<u16, String> {
+    if let Ok(listener) = TcpListener::bind((LOCAL_SERVER_HOST, DEFAULT_SERVER_PORT)) {
+        return listener
+            .local_addr()
+            .map(|addr| addr.port())
+            .map_err(|err| err.to_string());
+    }
+
+    for port in (DEFAULT_SERVER_PORT + 1)..=(DEFAULT_SERVER_PORT + 32) {
+        if let Ok(listener) = TcpListener::bind((LOCAL_SERVER_HOST, port)) {
+            return listener
+                .local_addr()
+                .map(|addr| addr.port())
+                .map_err(|err| err.to_string());
+        }
+    }
+
+    TcpListener::bind((LOCAL_SERVER_HOST, 0))
+        .map_err(|err| err.to_string())?
+        .local_addr()
+        .map(|addr| addr.port())
+        .map_err(|err| err.to_string())
+}
+
+fn stop_server<R: Runtime>(app: &AppHandle<R>) {
+    let state = app.state::<Server>();
+    let mut lock = state.0.lock().unwrap();
+    if let Some(mut child) = lock.child.take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    lock.port = None;
+}
+
+fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
     let Some(path) = server_path(app) else {
         eprintln!("overlay: bundled opencorvus binary not found");
-        return Ok(());
+        return Err("Bundled opencorvus binary not found".into());
     };
+    let port = next_server_port()?;
 
     let mut cmd = Command::new(path);
     cmd.arg("serve")
         .arg("--hostname")
-        .arg("127.0.0.1")
+        .arg(LOCAL_SERVER_HOST)
         .arg("--port")
-        .arg("7878")
+        .arg(port.to_string())
         .env("OPENCORVUS_VERSION", env!("CARGO_PKG_VERSION"))
         .env("OPENCORVUS_CHANNEL", "latest")
         .env("OPENCORVUS_CLIENT", "app")
@@ -189,13 +240,49 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
-    *app.state::<Server>().0.lock().unwrap() = Some(cmd.spawn()?);
-    Ok(())
+    let child = cmd.spawn().map_err(|err| err.to_string())?;
+    let info = server_info(port);
+    let mut lock = app.state::<Server>().0.lock().unwrap();
+    lock.child = Some(child);
+    lock.port = Some(port);
+    Ok(info)
 }
 
-fn restart_server<R: Runtime>(app: &AppHandle<R>) -> Result<(), Box<dyn std::error::Error>> {
+fn restart_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
     stop_server(app);
     start_server(app)
+}
+
+fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
+    {
+        let state = app.state::<Server>();
+        let mut lock = state.0.lock().unwrap();
+        if let Some(child) = lock.child.as_mut() {
+            match child.try_wait() {
+                Ok(None) => {
+                    if let Some(port) = lock.port {
+                        return Ok(server_info(port));
+                    }
+                }
+                Ok(Some(_)) | Err(_) => {
+                    lock.child = None;
+                    lock.port = None;
+                }
+            }
+        }
+    }
+
+    start_server(app)
+}
+
+#[tauri::command]
+fn overlay_server_info<R: Runtime>(app: AppHandle<R>) -> Result<OverlayServerInfo, String> {
+    ensure_server(&app)
+}
+
+#[tauri::command]
+fn overlay_server_restart<R: Runtime>(app: AppHandle<R>) -> Result<OverlayServerInfo, String> {
+    restart_server(&app)
 }
 
 /// Embed the window icon at compile time so it works in both dev and prod builds.
@@ -222,12 +309,14 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             overlay_settings_load,
             overlay_settings_save,
+            overlay_server_info,
+            overlay_server_restart,
             overlay_open_path,
             overlay_create_dir,
             overlay_pick_dir
         ])
         .setup(|app| {
-            app.manage(Server(Mutex::new(None)));
+            app.manage(Server(Mutex::new(ServerState::default())));
             let handle = app.handle().clone();
             let _ = restart_server(&handle);
 

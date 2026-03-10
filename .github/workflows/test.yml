@@ -2,8 +2,7 @@ name: test
 
 on:
   push:
-    branches:
-      - dev
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 jobs:
@@ -95,8 +94,8 @@ jobs:
       - name: Run GUI coordinate smoke
         run: bun run ./packages/opencorvus/script/gui-coordinate-smoke.ts
 
-  bot-unit:
-    name: bot-unit
+  channel-runtime-unit:
+    name: channel-runtime-unit
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -105,8 +104,8 @@ jobs:
       - name: Setup Bun
         uses: ./.github/actions/setup-bun
 
-      - name: Run bot tests
-        run: bun run --cwd packages/bot test
+      - name: Run channel runtime tests
+        run: bun run --cwd packages/channel-runtime test
 
   overlay-check:
     name: overlay-check (${{ matrix.settings.name }})
@@ -156,7 +155,7 @@ jobs:
       - unit
       - build-critical
       - gui-coordinate-smoke
-      - bot-unit
+      - channel-runtime-unit
       - overlay-check
     if: always()
     steps:
@@ -166,11 +165,11 @@ jobs:
           echo "unit=${{ needs.unit.result }}"
           echo "build-critical=${{ needs['build-critical'].result }}"
           echo "gui-coordinate-smoke=${{ needs['gui-coordinate-smoke'].result }}"
-          echo "bot-unit=${{ needs['bot-unit'].result }}"
+          echo "channel-runtime-unit=${{ needs['channel-runtime-unit'].result }}"
           echo "overlay-check=${{ needs['overlay-check'].result }}"
           test "${{ needs['version-sync'].result }}" = "success"
           test "${{ needs.unit.result }}" = "success"
           test "${{ needs['build-critical'].result }}" = "success"
           test "${{ needs['gui-coordinate-smoke'].result }}" = "success"
-          test "${{ needs['bot-unit'].result }}" = "success"
+          test "${{ needs['channel-runtime-unit'].result }}" = "success"
           test "${{ needs['overlay-check'].result }}" = "success"

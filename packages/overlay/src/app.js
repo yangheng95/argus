@@ -12,6 +12,9 @@ const SESSION_POLL = 6000;
 const SSE_BACKSTOP = 15000;
 const BOARD_EVENT_DEBOUNCE = 150;
 const SESSION_EVENT_DEBOUNCE = 150;
+const ZOOM_STEP = 0.1;
+const MIN_UI_ZOOM = 0.8;
+const MAX_UI_ZOOM = 1.6;
 const SUPPORTED_LOCALES = ["zh-CN", "en-US"];
 const DEFAULT_LOCALE = sanitizeLocale(
   typeof document !== "undefined"
@@ -30,11 +33,12 @@ const DEFAULT_OVERLAY_SETTINGS = {
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
+  zoom: 1,
   theme: "dark",
   locale: DEFAULT_LOCALE,
   directory: "",
 };
-const OVERLAY_VERSION = "0.0.1";
+const OVERLAY_VERSION = "0.0.1-alpha";
 const OVERLAY_AUTHOR_URL = "https://github.com/yangheng95";
 const OPENCLAW_DOCS = Object.freeze({
   overview: "https://docs.openclaw.ai/channels",
@@ -66,6 +70,7 @@ const state = {
   sidebarCollapsed: DEFAULT_OVERLAY_SETTINGS.sidebarCollapsed,
   sidebarWidth: DEFAULT_OVERLAY_SETTINGS.sidebarWidth,
   sectionsWidth: DEFAULT_OVERLAY_SETTINGS.sectionsWidth,
+  zoom: DEFAULT_OVERLAY_SETTINGS.zoom,
   theme: DEFAULT_OVERLAY_SETTINGS.theme,
   locale: DEFAULT_OVERLAY_SETTINGS.locale,
   directory: DEFAULT_OVERLAY_SETTINGS.directory,
@@ -122,6 +127,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 const dom = {
+  titlebar: $("#titlebar"),
   connBadge: $("#connBadge"),
   brandVersion: $("#brandVersion"),
   chatVersion: $("#chatVersion"),
@@ -618,6 +624,51 @@ async function tauriInvoke(command, args) {
   throw new Error(`Tauri runtime unavailable for ${command}`);
 }
 
+function hasTauriRuntime() {
+  return typeof window !== "undefined" && typeof window.__TAURI__?.core?.invoke === "function";
+}
+
+function isManagedLocalServerUrl(value) {
+  const input = typeof value === "string" && value.trim() ? value.trim() : DEFAULT_SERVER;
+  try {
+    const url = new URL(input);
+    return url.protocol.startsWith("http") && ["127.0.0.1", "localhost"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function localServerInfo() {
+  if (!hasTauriRuntime()) return null;
+  const info = await tauriInvoke("overlay_server_info").catch(() => undefined);
+  return info && typeof info.url === "string" ? info : null;
+}
+
+async function syncLocalServerUrl(options = {}) {
+  if (!hasTauriRuntime()) return null;
+  if (!options.force && !isManagedLocalServerUrl(state.serverUrl)) return null;
+  const info = await localServerInfo();
+  if (!info) return null;
+  const next = info.url.replace(/\/+$/, "");
+  if (state.serverUrl === next) return info;
+  state.serverUrl = next;
+  await persistOverlaySettings();
+  return info;
+}
+
+async function restartLocalServer() {
+  if (!hasTauriRuntime()) return null;
+  const info = await tauriInvoke("overlay_server_restart").catch(() => undefined);
+  if (!info || typeof info.url !== "string") return null;
+  state.serverUrl = info.url.replace(/\/+$/, "");
+  await persistOverlaySettings();
+  return info;
+}
+
 function sanitizePaneWidth(value) {
   const next = Number.parseFloat(String(value ?? ""));
   return Number.isFinite(next) && next > 0 ? Math.round(next) : null;
@@ -625,6 +676,11 @@ function sanitizePaneWidth(value) {
 
 function clampNumber(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function sanitizeZoom(value) {
+  const next = Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(next) ? clampNumber(next, MIN_UI_ZOOM, MAX_UI_ZOOM) : 1;
 }
 
 function currentUIScale() {
@@ -718,6 +774,7 @@ function browserOverlaySettings() {
     sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
     sidebarWidth: sanitizePaneWidth(localStorage.getItem("oc_sidebar_width")),
     sectionsWidth: sanitizePaneWidth(localStorage.getItem("oc_sections_width")),
+    zoom: sanitizeZoom(localStorage.getItem("oc_zoom")),
     theme: sanitizeTheme(localStorage.getItem("oc_theme")),
     locale: sanitizeLocale(localStorage.getItem("oc_locale") || DEFAULT_OVERLAY_SETTINGS.locale),
     directory: localStorage.getItem("oc_directory") || DEFAULT_OVERLAY_SETTINGS.directory,
@@ -743,6 +800,7 @@ function applyOverlaySettings(settings) {
   state.sidebarCollapsed = settings?.sidebarCollapsed === true;
   state.sidebarWidth = sanitizePaneWidth(settings?.sidebarWidth);
   state.sectionsWidth = sanitizePaneWidth(settings?.sectionsWidth);
+  state.zoom = sanitizeZoom(settings?.zoom);
   state.theme = sanitizeTheme(settings?.theme);
   state.locale = sanitizeLocale(settings?.locale || DEFAULT_OVERLAY_SETTINGS.locale);
   state.directory =
@@ -772,6 +830,7 @@ async function persistOverlaySettings() {
     sidebarCollapsed: state.sidebarCollapsed,
     sidebarWidth: state.sidebarWidth || undefined,
     sectionsWidth: state.sectionsWidth || undefined,
+    zoom: state.zoom,
     theme: state.theme,
     locale: state.locale,
     directory: state.directory || undefined,
@@ -787,6 +846,7 @@ async function persistOverlaySettings() {
   else localStorage.removeItem("oc_sidebar_width");
   if (settings.sectionsWidth) localStorage.setItem("oc_sections_width", String(settings.sectionsWidth));
   else localStorage.removeItem("oc_sections_width");
+  localStorage.setItem("oc_zoom", String(settings.zoom));
   localStorage.setItem("oc_theme", settings.theme);
   localStorage.setItem("oc_locale", settings.locale);
   localStorage.setItem("oc_directory", state.directory || "");
@@ -817,12 +877,45 @@ function renderScale() {
   const width = window.visualViewport?.width || window.innerWidth || 900;
   const height = window.visualViewport?.height || window.innerHeight || 760;
   const scale = Math.min(width / 1040, height / 820);
-  const next = Math.max(0.82, Math.min(1.04, scale));
+  const base = Math.max(0.82, Math.min(1.04, scale));
+  const next = base * state.zoom;
   document.documentElement.style.setProperty("--ui-scale", next.toFixed(3));
   renderPaneLayout();
   fitBrandVersion();
   sizeChat();
   renderExecutor();
+}
+
+function setZoom(value) {
+  const next = sanitizeZoom(value);
+  if (Math.abs(next - state.zoom) < 0.001) return;
+  state.zoom = next;
+  renderScale();
+  void persistOverlaySettings();
+}
+
+function stepZoom(delta) {
+  setZoom(Math.round((state.zoom + delta) * 100) / 100);
+}
+
+function handleZoomHotkey(event) {
+  if (!hasTauriRuntime() || event.isComposing || !(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const plus = event.code === "Equal" || event.code === "NumpadAdd" || event.key === "+" || event.key === "=";
+  if (plus) {
+    event.preventDefault();
+    stepZoom(ZOOM_STEP);
+    return;
+  }
+  const minus = event.code === "Minus" || event.code === "NumpadSubtract" || event.key === "-" || event.key === "_";
+  if (minus) {
+    event.preventDefault();
+    stepZoom(-ZOOM_STEP);
+    return;
+  }
+  const reset = event.code === "Digit0" || event.code === "Numpad0" || event.key === "0";
+  if (!reset) return;
+  event.preventDefault();
+  setZoom(1);
 }
 
 // ── API Client ──
@@ -1821,22 +1914,36 @@ async function pickDirectory(start) {
 // ── Connection ──
 
 async function checkConnection() {
+  const managed = isManagedLocalServerUrl(state.serverUrl);
+  if (managed) {
+    await syncLocalServerUrl();
+  }
   setConnStatus("connecting");
   AppLog.debug("conn", "checking connection to " + state.serverUrl);
-  try {
-    const [health] = await Promise.all([apiJson("global/health"), apiJson("tasks")]);
-    setConnStatus("online");
-    state.connected = true;
-    AppLog.info("conn", "connected", { version: health?.version });
-    renderVersions(health?.version || "");
-    return true;
-  } catch (e) {
-    setConnStatus("offline");
-    state.connected = false;
-    AppLog.warn("conn", "connection failed", { error: String(e) });
-    renderVersions("");
-    return false;
+  let error;
+  const attempts = managed ? 8 : 1;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const [health] = await Promise.all([apiJson("global/health"), apiJson("tasks")]);
+      setConnStatus("online");
+      state.connected = true;
+      AppLog.info("conn", "connected", { version: health?.version, serverUrl: state.serverUrl });
+      renderVersions(health?.version || "");
+      return true;
+    } catch (e) {
+      error = e;
+      if (i >= attempts - 1) break;
+      await wait(350);
+      await syncLocalServerUrl();
+    }
   }
+
+  setConnStatus("offline");
+  state.connected = false;
+  AppLog.warn("conn", "connection failed", { error: String(error), serverUrl: state.serverUrl });
+  renderVersions("");
+  return false;
 }
 
 function setConnStatus(status) {
@@ -1889,7 +1996,7 @@ function renderVersions(coreVersion) {
     .join(" | ");
   const tone = configured.length > 0 ? "brand-channel brand-channel-summary" : "brand-channel brand-channel-summary brand-channel-empty";
   if (!dom.brandVersion) return;
-  dom.brandVersion.innerHTML = `<button type="button" class="brand-channel-group" data-open-channels="true" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><span class="brand-channel-label">${escapeHtml(t("channel.channels"))}</span><span class="${tone}">${escapeHtml(summary)}</span></button>`;
+  dom.brandVersion.innerHTML = `<button type="button" class="brand-channel-group" data-no-drag="true" data-open-channels="true" title="${escapeHtml(hint)}" aria-label="${escapeHtml(hint)}"><span class="brand-channel-label">${escapeHtml(t("channel.channels"))}</span><span class="${tone}">${escapeHtml(summary)}</span></button>`;
   fitBrandVersion();
 }
 
@@ -5310,7 +5417,10 @@ dom.connBadge.addEventListener("dblclick", async () => {
   dom.connBadge.textContent = t("titlebar.connection.restarting");
   dom.connBadge.dataset.status = "connecting";
   try {
-    await apiFetch("restart", { method: "POST", signal: AbortSignal.timeout(3000) });
+    const restarted = isManagedLocalServerUrl(state.serverUrl) ? await restartLocalServer() : null;
+    if (!restarted) {
+      await apiFetch("restart", { method: "POST", signal: AbortSignal.timeout(3000) });
+    }
   } catch {}
   // Wait for new process to come up, then reload UI
   setTimeout(() => location.reload(), 2000);
@@ -5915,6 +6025,16 @@ async function setupTauri() {
   const win = await currentTauriWindow();
   if (!win) return;
 
+  dom.titlebar?.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    if (!(event.target instanceof Element)) return;
+    if (event.target.closest('[data-no-drag="true"], button, input, textarea, select, a, label, summary, [contenteditable="true"]')) {
+      return;
+    }
+    event.preventDefault();
+    win.startDragging?.().catch(() => undefined);
+  });
+
   $("#btnMinimize")?.addEventListener("click", () => win.minimize());
   $("#btnClose")?.addEventListener("click", () => win.close());
 
@@ -6449,6 +6569,7 @@ async function loadConfigInfo() {
 async function init() {
   AppLog.info("init", "OpenCorvus overlay starting", { version: OVERLAY_VERSION });
   await loadOverlaySettings();
+  await syncLocalServerUrl();
   await loadI18n();
   renderLocale();
   renderTheme();
@@ -6484,6 +6605,7 @@ init();
 
 window.addEventListener("resize", renderScale);
 window.visualViewport?.addEventListener("resize", renderScale);
+window.addEventListener("keydown", handleZoomHotkey);
 window.addEventListener("blur", () => {
   stopPaneResize();
 });
