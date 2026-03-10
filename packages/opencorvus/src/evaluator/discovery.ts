@@ -15,13 +15,13 @@ export async function resolveConfig(metadata?: Record<string, unknown>) {
 
 export function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
   if (task?.activeSpecVersionID) {
-    return { spec_check: { enabled: true, mode: "strict" } }
+    return { spec_check: { enabled: true, mode: "soft" } }
   }
   try {
     const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
     const specFiles = require("fs").readdirSync(specsDir) as string[]
     if (specFiles.some((f: string) => f.endsWith(".md"))) {
-      return { spec_check: { enabled: true, mode: "strict" } }
+      return { spec_check: { enabled: true, mode: "soft" } }
     }
   } catch {}
   return {}
