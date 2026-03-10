@@ -13,18 +13,30 @@ import { ControlMessageInput, ControlMessageResult } from "./message-schema"
 import { ControlTimeline } from "./timeline"
 import { Bus } from "@/bus"
 import { Log } from "@/util/log"
+import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "control-message" })
 const ResultSchema = z.toJSONSchema(ControlMessageResult)
 
 type StreamCallback = (event: { type: string; [key: string]: unknown }) => void
+type RunResult = {
+  result: z.infer<typeof ControlMessageResult>
+  timeline: boolean
+}
+type SessionInfo = Awaited<ReturnType<typeof Session.create>>
+type ControlSession = {
+  info: SessionInfo
+  created: boolean
+  persistent: boolean
+  keep: boolean
+}
 
 export namespace ControlMessage {
   export async function handle(raw: z.input<typeof ControlMessageInput>) {
     const input = ControlMessageInput.parse(raw)
-    const result = await run(input)
-    appendTimeline(input, result)
-    return result
+    const runResult = await run(input)
+    if (runResult.timeline) appendTimeline(input, runResult.result)
+    return runResult.result
   }
 
   export async function handleStream(
@@ -32,9 +44,9 @@ export namespace ControlMessage {
     onEvent: StreamCallback,
   ) {
     const input = ControlMessageInput.parse(raw)
-    const result = await run(input, onEvent)
-    appendTimeline(input, result)
-    return result
+    const runResult = await run(input, onEvent)
+    if (runResult.timeline) appendTimeline(input, runResult.result)
+    return runResult.result
   }
 }
 
@@ -55,20 +67,21 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       reason: "model_unconfigured",
       result: loggedResult(result),
     })
-    return result
+    return {
+      result,
+      timeline: true,
+    } satisfies RunResult
   }
 
-  let session: Awaited<ReturnType<typeof Session.create>> | undefined
+  let control: ControlSession | undefined
 
   const unsubs: (() => void)[] = []
 
   try {
-    session = await Session.create({
-      title: `Panel control (${input.surface})`,
-    })
-    log.info("panel control session created", {
+    control = await resolveSession(input)
+    log.info(control.created ? "panel control session created" : "panel control session reused", {
       input: payload,
-      panel_session: session,
+      panel_session: control.info,
       stream: !!onEvent,
     })
 
@@ -76,7 +89,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       unsubs.push(
         Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
           const part = event.properties.part as Record<string, unknown>
-          if (part.sessionID !== session?.id) return
+          if (part.sessionID !== control?.info.id) return
           if (part.type === "tool") {
             onEvent({ type: "tool", tool: part.tool as string })
           }
@@ -87,15 +100,16 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
 
     const agent = await Agent.defaultAgent()
     const system = await systemPrompt(input)
-    const parts: Array<{ type: "text"; text: string }> = [{ type: "text", text: buildUserPrompt(input) }]
+    const parts = buildUserParts(input)
     const tools = await panelTools()
     const extra = {
       surface: input.surface,
       source: input.source ?? defaultSource(input.surface),
+      ...(input.request_id ? { requestID: input.request_id } : {}),
     }
 
     const result = await SessionPrompt.prompt({
-      sessionID: session.id,
+      sessionID: control.info.id,
       agent,
       system,
       parts,
@@ -109,43 +123,58 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     })
 
     if (result.info.role === "assistant" && result.info.structured) {
-      const output = ControlMessageResult.parse(result.info.structured)
+      const output = finalizeResult(ControlMessageResult.parse(result.info.structured), control)
+      if (control?.keep) {
+        await appendSummary(control.info.id, result, output.message)
+      }
       log.info("panel request completed", {
         input: payload,
-        panel_session_id: session.id,
+        panel_session_id: control.info.id,
         result: loggedResult(output),
       })
-      return output
+      return {
+        result: output,
+        timeline: shouldAppendTimeline(input, output, control),
+      } satisfies RunResult
     }
 
     const text = textFromMessage(result)
-    const output = parseTextAsResult(text)
+    const output = finalizeResult(parseTextAsResult(text), control)
+    if (control?.keep) {
+      await appendSummary(control.info.id, result, output.message)
+    }
     log.info("panel request completed", {
       input: payload,
-      panel_session_id: session.id,
+      panel_session_id: control.info.id,
       result: loggedResult(output),
       fallback_text: text,
     })
-    return output
+    return {
+      result: output,
+      timeline: shouldAppendTimeline(input, output, control),
+    } satisfies RunResult
   } catch (error) {
-    const output = ControlMessageResult.parse({
+    const output = finalizeResult(ControlMessageResult.parse({
       kind: "panel_response",
       message: `Control message processing failed: ${error instanceof Error ? error.message : String(error)}`,
-    })
+    }), control)
     log.error("panel request failed", {
       input: payload,
-      panel_session_id: session?.id,
+      panel_session_id: control?.info.id,
       error: error instanceof Error ? error.message : String(error),
       result: loggedResult(output),
     })
-    return output
+    return {
+      result: output,
+      timeline: shouldAppendTimeline(input, output, control),
+    } satisfies RunResult
   } finally {
     for (const unsub of unsubs) unsub()
-    if (session?.id) {
-      await Session.remove(session.id).catch(() => undefined)
+    if (control && shouldRemoveSession(control)) {
+      await Session.remove(control.info.id).catch(() => undefined)
       log.info("panel control session removed", {
         input: payload,
-        panel_session_id: session.id,
+        panel_session_id: control.info.id,
       })
     }
   }
@@ -222,20 +251,36 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
   return lines.join("\n")
 }
 
-function buildUserPrompt(input: z.infer<typeof ControlMessageInput>) {
-  return JSON.stringify({
-    surface: input.surface,
-    text: input.text,
-    taskID: input.taskID,
-    sessionID: input.sessionID,
-    executor: input.executor,
-    channel: input.channel,
-    thread: input.thread,
-    source: input.source,
-    allow_create: input.allow_create,
-    metadata: input.metadata,
-    request_id: input.request_id,
-  })
+function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
+  return [
+    {
+      type: "text" as const,
+      text: input.text,
+    },
+    {
+      type: "text" as const,
+      text: JSON.stringify({
+        surface: input.surface,
+        text: input.text,
+        taskID: input.taskID,
+        sessionID: input.sessionID,
+        executor: input.executor,
+        channel: input.channel,
+        thread: input.thread,
+        source: input.source,
+        allow_create: input.allow_create,
+        metadata: input.metadata,
+        request_id: input.request_id,
+      }),
+      kind: "control" as const,
+      source: "system" as const,
+      audience: {
+        model: true,
+        ui: false,
+        acp: false,
+      },
+    },
+  ]
 }
 
 async function panelTools() {
@@ -272,6 +317,93 @@ function parseTextAsResult(text: string): z.infer<typeof ControlMessageResult> {
 function defaultSource(surface: z.infer<typeof ControlMessageInput>["surface"]) {
   if (surface === "panel") return "panel"
   return `channel:${surface}`
+}
+
+async function resolveSession(input: z.infer<typeof ControlMessageInput>) {
+  const persistent = input.surface === "panel" && !input.taskID
+  if (persistent && input.sessionID) {
+    return {
+      info: await Session.get(input.sessionID),
+      created: false,
+      persistent: true,
+      keep: true,
+    } satisfies ControlSession
+  }
+  const info = await Session.create({
+    title: `Panel control (${input.surface})`,
+  })
+  return {
+    info,
+    created: true,
+    persistent,
+    keep: false,
+  } satisfies ControlSession
+}
+
+function finalizeResult(result: z.infer<typeof ControlMessageResult>, control?: ControlSession) {
+  if (!control) return result
+  control.keep = shouldKeepSession(control, result)
+  if (!control.keep) return result
+  if (result.session_id) return result
+  return ControlMessageResult.parse({
+    ...result,
+    session_id: control.info.id,
+  })
+}
+
+function shouldKeepSession(control: ControlSession, result: z.infer<typeof ControlMessageResult>) {
+  if (!control.persistent) return false
+  if (result.task_id) return false
+  if (result.session_id && result.session_id !== control.info.id) return false
+  return true
+}
+
+function shouldAppendTimeline(
+  input: z.infer<typeof ControlMessageInput>,
+  result: z.infer<typeof ControlMessageResult>,
+  control?: ControlSession,
+) {
+  if (!control) return true
+  if (control.keep) return false
+  return !(input.surface === "panel" && !input.taskID && !result.task_id)
+}
+
+function shouldRemoveSession(control?: ControlSession) {
+  if (!control) return false
+  if (!control.created) return false
+  return !control.keep
+}
+
+async function appendSummary(sessionID: string, message: MessageV2.WithParts, text: string) {
+  if (message.info.role !== "assistant") return
+  const now = Date.now()
+  const info = await Session.updateMessage({
+    ...message.info,
+    id: Identifier.ascending("message"),
+    sessionID,
+    summary: true,
+    structured: undefined,
+    time: {
+      created: now,
+      completed: now,
+    },
+  })
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    sessionID,
+    messageID: info.id,
+    type: "text",
+    text,
+    synthetic: true,
+    kind: "control",
+    source: "system",
+    audience: {
+      model: false,
+      ui: true,
+      acp: false,
+    },
+  })
+  await Session.touch(sessionID)
 }
 
 function scope(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {

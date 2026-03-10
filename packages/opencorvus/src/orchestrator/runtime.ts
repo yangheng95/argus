@@ -8,6 +8,8 @@ import { Plugin } from "@/plugin"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { installRuntimeShims } from "@/runtime/shims"
+import { Session } from "@/session"
+import { MessageV2 } from "@/session/message"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
@@ -66,6 +68,281 @@ const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stal
 // Unattended-mode safeguards
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
 const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
+
+type TranscriptState = {
+  message: MessageV2.Assistant
+  text?: MessageV2.TextPart
+  reasoning?: MessageV2.ReasoningPart
+  tools: Map<string, MessageV2.ToolPart>
+  usage: {
+    input: number
+    output: number
+    total: number
+    cost: number
+  }
+}
+
+const transcript = new Map<string, TranscriptState>()
+
+async function projectExecutorEventToSession(taskID: string, run: RunRow, event: {
+  type: string
+  summary?: string
+  payload?: Record<string, unknown>
+}) {
+  if (run.executor === "opencode" || !run.session_id) return
+  const payload = event.payload ?? {}
+  const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : run.session_id
+  if (!sessionID) return
+  if (event.type === "executor.status") return
+
+  const state = await ensureTranscriptState(taskID, run, sessionID)
+  if (!state) return
+
+  if (event.type === "message.part.delta") {
+    if (payload.field !== "text" || typeof payload.delta !== "string" || payload.delta.length === 0) return
+    if (!state.text) {
+      state.text = await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: state.message.id,
+        sessionID,
+        type: "text",
+        text: "",
+      } satisfies MessageV2.TextPart) as MessageV2.TextPart
+    }
+    const text = state.text
+    if (!text) return
+    text.text += payload.delta
+    await Session.updatePartDelta({
+      sessionID,
+      messageID: state.message.id,
+      partID: text.id,
+      field: "text",
+      delta: payload.delta,
+    })
+    return
+  }
+
+  if (event.type === "reasoning.delta") {
+    const delta = typeof event.summary === "string" ? event.summary : ""
+    if (!delta) return
+    if (!state.reasoning) {
+      state.reasoning = await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: state.message.id,
+        sessionID,
+        type: "reasoning",
+        text: "",
+        time: {
+          start: Date.now(),
+        },
+      } satisfies MessageV2.ReasoningPart) as MessageV2.ReasoningPart
+    }
+    const reasoning = state.reasoning
+    if (!reasoning) return
+    reasoning.text += delta
+    await Session.updatePartDelta({
+      sessionID,
+      messageID: state.message.id,
+      partID: reasoning.id,
+      field: "text",
+      delta,
+    })
+    return
+  }
+
+  if (event.type === "tool.call") {
+    await flushTranscriptText(state)
+    state.text = undefined
+    state.reasoning = undefined
+    const id = typeof payload.id === "string" ? payload.id : Identifier.ascending("tool")
+    const part = await Session.updatePart({
+      id: state.tools.get(id)?.id ?? Identifier.ascending("part"),
+      messageID: state.message.id,
+      sessionID,
+      type: "tool",
+      callID: id,
+      tool: typeof payload.name === "string" ? payload.name : "tool",
+      state: {
+        status: "running",
+        input: toolInput(payload.input),
+        title: typeof payload.name === "string" ? payload.name : "Tool call",
+        metadata: {},
+        time: {
+          start: Date.now(),
+        },
+      },
+    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
+    state.tools.set(id, part)
+    return
+  }
+
+  if (event.type === "tool.result") {
+    await flushTranscriptText(state)
+    state.text = undefined
+    state.reasoning = undefined
+    const id = typeof payload.id === "string" ? payload.id : ""
+    const match = id ? state.tools.get(id) : undefined
+    if (!match) return
+    const start = "time" in match.state ? match.state.time.start : Date.now()
+    const next = await Session.updatePart({
+      ...match,
+      state: {
+        status: "completed",
+        input: match.state.input,
+        output: typeof payload.output === "string" ? payload.output : "",
+        title: match.tool,
+        metadata: {},
+        time: {
+          start,
+          end: Date.now(),
+        },
+      },
+    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
+    state.tools.set(id, next)
+    return
+  }
+
+  if (event.type === "usage.updated") {
+    state.usage = {
+      input: toNumber(payload.inputTokens),
+      output: toNumber(payload.outputTokens),
+      total: toNumber(payload.totalTokens),
+      cost: toNumber(payload.costUSD),
+    }
+    return
+  }
+
+  if (event.type === "session.idle" || event.type === "session.error") {
+    await flushTranscriptText(state)
+    state.text = undefined
+    state.reasoning = undefined
+    if (event.type === "session.idle" && !state.text && typeof payload.output === "string" && payload.output.trim()) {
+      state.text = await Session.updatePart({
+        id: Identifier.ascending("part"),
+        messageID: state.message.id,
+        sessionID,
+        type: "text",
+        text: payload.output,
+      } satisfies MessageV2.TextPart) as MessageV2.TextPart
+    }
+    if (event.type === "session.error" && typeof payload.error === "string" && payload.error) {
+      if (!state.text) {
+        state.text = await Session.updatePart({
+          id: Identifier.ascending("part"),
+          messageID: state.message.id,
+          sessionID,
+          type: "text",
+          text: payload.error,
+        } satisfies MessageV2.TextPart) as MessageV2.TextPart
+      } else if (!state.text.text.trim()) {
+        state.text.text = payload.error
+        await Session.updatePart(state.text)
+      }
+    }
+    const completed = Date.now()
+    state.message = await Session.updateMessage({
+      ...state.message,
+      time: {
+        ...state.message.time,
+        completed,
+      },
+      cost: state.usage.cost,
+      tokens: {
+        total: state.usage.total || undefined,
+        input: state.usage.input,
+        output: state.usage.output,
+        reasoning: 0,
+        cache: {
+          read: 0,
+          write: 0,
+        },
+      },
+    } satisfies MessageV2.Assistant) as MessageV2.Assistant
+    transcript.delete(run.id)
+  }
+}
+
+async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: string) {
+  const current = transcript.get(run.id)
+  if (current) return current
+  const parentID = await transcriptParentID(sessionID, taskID, run.id)
+  const message = await Session.updateMessage({
+    id: Identifier.ascending("message"),
+    sessionID,
+    role: "assistant",
+    parentID,
+    modelID: run.executor,
+    providerID: run.executor,
+    mode: run.executor,
+    agent: run.executor,
+    path: {
+      cwd: Instance.directory,
+      root: Instance.worktree,
+    },
+    time: {
+      created: Date.now(),
+    },
+    cost: 0,
+    tokens: {
+      input: 0,
+      output: 0,
+      reasoning: 0,
+      cache: {
+        read: 0,
+        write: 0,
+      },
+    },
+  } satisfies MessageV2.Assistant) as MessageV2.Assistant
+  const next: TranscriptState = {
+    message,
+    tools: new Map<string, MessageV2.ToolPart>(),
+    usage: {
+      input: 0,
+      output: 0,
+      total: 0,
+      cost: 0,
+    },
+    text: undefined as MessageV2.TextPart | undefined,
+    reasoning: undefined as MessageV2.ReasoningPart | undefined,
+  }
+  transcript.set(run.id, next)
+  return next
+}
+
+async function transcriptParentID(sessionID: string, taskID: string, runID: string) {
+  const rows = await Session.messages({ sessionID, limit: 20 }).catch(() => [])
+  const user = rows.findLast((item) => item.info.role === "user")
+  if (user?.info.role === "user") return user.info.id
+  return `${taskID}:${runID}`
+}
+
+async function flushTranscriptText(state: {
+  text?: MessageV2.TextPart
+  reasoning?: MessageV2.ReasoningPart
+}) {
+  if (state.text) await Session.updatePart(state.text)
+  if (state.reasoning) await Session.updatePart({
+    ...state.reasoning,
+    time: {
+      ...state.reasoning.time,
+      end: Date.now(),
+    },
+  } satisfies MessageV2.ReasoningPart)
+}
+
+function toolInput(input: unknown) {
+  if (input && typeof input === "object" && !Array.isArray(input)) return input as Record<string, unknown>
+  if (typeof input !== "string") return {}
+  try {
+    const parsed = JSON.parse(input)
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>
+  } catch {}
+  return input ? { value: input } : {}
+}
+
+function toNumber(value: unknown) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0
+}
 
 async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
   if (Instance.project.vcs !== "git") {
@@ -552,26 +829,6 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
-  // If evaluator analysis threw, treat as a fatal evaluation failure
-  if (analysisError) {
-    const errorSummary = `Evaluator failure: ${analysisError}`
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery, result,
-      analysis, analysisError,
-      finalVerdict: "rejected",
-      finalStatus: "failed",
-      finalSummary: errorSummary,
-      goals,
-    })
-    updateExecutorSessionStatus(run.id, "failed")
-    const now = Date.now()
-    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
-    if (task.active_run_id === run.id) {
-      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
-    }
-    return
-  }
-
   // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
   // do not let Phase 2 EvaluatorAgent override the verdict
   const phase1Failed = result.status === "failed"
@@ -726,25 +983,6 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
     analysisError = err instanceof Error ? err.message : String(err)
     log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
     analysis = fallbackAnalysis(result, goals.length, analysisError)
-  }
-
-  if (analysisError) {
-    const errorSummary = `Evaluator failure: ${analysisError}`
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery, result,
-      analysis, analysisError,
-      finalVerdict: "rejected",
-      finalStatus: "failed",
-      finalSummary: errorSummary,
-      goals,
-    })
-    updateExecutorSessionStatus(run.id, "failed")
-    const now = Date.now()
-    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
-    if (task.active_run_id === run.id) {
-      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
-    }
-    return
   }
 
   const phase1Failed = result.status === "failed"
@@ -1017,6 +1255,7 @@ function consumeExecutorEvents(
     try {
       for await (const event of executor.events({ sessionID })) {
         upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
+        await projectExecutorEventToSession(taskID, requireRun(runID), event)
         appendExecutorEvent(executorSessionID, taskID, runID, executorName, {
           provider: executorName,
           kind: protocolEventKind(event.type),
