@@ -6,48 +6,48 @@
   <title>OpenCorvus</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page="overlay" data-theme="dark">
+<body data-page="overlay" data-theme="dark" data-workspace="offline">
 
   <!-- Titlebar (draggable) -->
   <header class="titlebar" id="titlebar">
     <div class="titlebar-brand" data-tauri-drag-region>
-      <img class="brand-logo" src="opencorvus-logo.png" alt="OpenCorvus logo" data-i18n-alt="brand.logo_alt">
+      <img class="brand-logo" src="opencorvus-logo-dark.svg" alt="OpenCorvus logo" data-i18n-alt="brand.logo_alt">
       <div class="brand-heading">
         <div class="brand-guide" tabindex="0" data-no-drag="true" data-i18n-aria-label="brand.guide_trigger">
           <span class="brand-name">OpenCorvus</span>
           <div class="brand-guide-card" aria-hidden="true">
-            <div class="brand-guide-kicker" data-i18n="brand.guide_kicker">Overlay Guide</div>
+            <div class="brand-guide-kicker" data-i18n="brand.guide_kicker">Quick Guide</div>
             <div class="brand-guide-section">
-              <div class="brand-guide-title" data-i18n="brand.guide_positioning_title">Positioning</div>
+              <div class="brand-guide-title" data-i18n="brand.guide_positioning_title">What This Panel Is For</div>
               <p class="brand-guide-copy" data-i18n="brand.guide_positioning_body">
-                This is the local control overlay for OpenCorvus: one place to switch working directories, choose an executor, track task status, and inspect spec, plan, evaluation, and changes.
+                This is the task cockpit, not decorative chrome: left sets scope, center drives the session, right verifies spec, plan, evaluation, and file changes so the agent does not drift.
               </p>
             </div>
             <div class="brand-guide-section">
-              <div class="brand-guide-title" data-i18n="brand.guide_usage_title">How to use</div>
+              <div class="brand-guide-title" data-i18n="brand.guide_usage_title">Fast Path</div>
               <div class="brand-guide-steps">
                 <div class="brand-guide-step">
                   <span class="brand-guide-step-index" aria-hidden="true">1</span>
                   <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_1">
-                    Pick an existing session on the left or create a blank one, then confirm the working directory is correct.
+                    Set scope first: pick the session or task on the left, and verify the working directory before you send anything.
                   </span>
                 </div>
                 <div class="brand-guide-step">
                   <span class="brand-guide-step-index" aria-hidden="true">2</span>
                   <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_2">
-                    Choose an executor in the center and send requirements, constraints, or follow-ups from the session composer.
+                    Then give a real brief: choose an executor and send the goal, constraints, and acceptance bar, not just a vague prompt.
                   </span>
                 </div>
                 <div class="brand-guide-step">
                   <span class="brand-guide-step-index" aria-hidden="true">3</span>
                   <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_3">
-                    Use the right-side Spec, Plan, Goals, Evaluation, and File Diff sections to keep the task aligned.
+                    Watch the right side while it runs: Spec checks understanding, Plan checks route, Goals and Evaluation catch drift, Files shows what actually changed.
                   </span>
                 </div>
                 <div class="brand-guide-step">
                   <span class="brand-guide-step-index" aria-hidden="true">4</span>
                   <span class="brand-guide-step-copy" data-i18n="brand.guide_usage_4">
-                    Use Channels, Settings, Logs, and pin-to-top in the titlebar for configuration, debugging, and long-running monitoring.
+                    The titlebar actions are operational tools: Channels for delivery, Settings and Logs for debugging, pin-to-top for long-running supervision.
                   </span>
                 </div>
               </div>
@@ -73,41 +73,107 @@
           <span class="brand-channel brand-channel-summary brand-channel-empty" data-i18n="channel.setup_needed">Setup needed</span>
         </button>
       </span>
-      <div class="task-status titlebar-task-status" id="taskStatus" hidden>
-        <span class="status-icon" id="statusIcon" data-status="idle" aria-hidden="true"></span>
-        <span class="status-label" id="statusLabel" data-i18n="task.status.idle">No task</span>
-        <span class="elapsed" id="elapsed"></span>
-      </div>
       <div class="titlebar-actions" data-no-drag="true">
-        <button class="titlebar-btn" id="btnLocale" title="Switch language">
-          <span id="btnLocaleLabel">EN</span>
-        </button>
-        <button class="titlebar-btn" id="btnTheme" title="Switch to light mode" data-theme="dark">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/>
-            <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-          </svg>
-        </button>
-        <button class="titlebar-btn" id="btnSettings" title="Settings" data-i18n-title="titlebar.settings">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-            <path d="M3 4h10M3 8h10M3 12h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-            <circle cx="6" cy="4" r="1.6" fill="currentColor"/>
-            <circle cx="10" cy="8" r="1.6" fill="currentColor"/>
-            <circle cx="7.5" cy="12" r="1.6" fill="currentColor"/>
-          </svg>
-        </button>
-        <button class="titlebar-btn" id="btnLog" title="Logs" data-i18n-title="titlebar.logs">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        </button>
-        <button class="titlebar-btn" id="btnPin" title="Always on top" data-pinned="false" data-i18n-title="titlebar.pin">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        </button>
-        <button class="titlebar-btn" id="btnMinimize" title="Minimize" data-i18n-title="titlebar.minimize">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        </button>
-        <button class="titlebar-btn titlebar-close" id="btnClose" title="Close" data-i18n-title="common.close">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        </button>
+        <div class="titlebar-menu-wrap" data-no-drag="true">
+          <button class="titlebar-btn" id="btnTitlebarMenu" title="More" aria-label="More" aria-expanded="false" aria-controls="titlebarMenu" aria-haspopup="true" data-i18n-title="titlebar.more" data-i18n-aria-label="titlebar.more">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="3.5" cy="8" r="1.2" fill="currentColor"/>
+              <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+              <circle cx="12.5" cy="8" r="1.2" fill="currentColor"/>
+            </svg>
+          </button>
+          <div class="titlebar-menu-panel" id="titlebarMenu" data-no-drag="true" hidden>
+            <button class="titlebar-menu-item" id="btnLocale" title="Switch language">
+              <span class="titlebar-menu-icon" aria-hidden="true">A</span>
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="settings.language">Language</span>
+                <span class="titlebar-menu-meta" id="btnLocaleLabel">English</span>
+              </span>
+            </button>
+            <button class="titlebar-menu-item" id="btnTheme" title="Switch to light mode" data-theme="dark">
+              <span class="titlebar-menu-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                </svg>
+              </span>
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="settings.theme">Theme</span>
+                <span class="titlebar-menu-meta" id="btnThemeValue">Dark</span>
+              </span>
+            </button>
+            <button class="titlebar-menu-item" id="btnSettings" title="Server Config" data-i18n-title="titlebar.server_config">
+              <span class="titlebar-menu-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 4h10M3 8h10M3 12h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                  <circle cx="6" cy="4" r="1.6" fill="currentColor"/>
+                  <circle cx="10" cy="8" r="1.6" fill="currentColor"/>
+                  <circle cx="7.5" cy="12" r="1.6" fill="currentColor"/>
+                </svg>
+              </span>
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="titlebar.server_config">Server Config</span>
+                <span class="titlebar-menu-meta" data-i18n="common.open">Open</span>
+              </span>
+            </button>
+            <button class="titlebar-menu-item" id="btnLog" title="Logs" data-i18n-title="titlebar.logs">
+              <span class="titlebar-menu-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3h10M3 6.5h8M3 10h6M3 13.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </span>
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="titlebar.logs">Logs</span>
+                <span class="titlebar-menu-meta" data-i18n="common.open">Open</span>
+              </span>
+            </button>
+            <button class="titlebar-menu-item" id="btnPin" title="Always on top" data-pinned="false" data-i18n-title="titlebar.pin">
+              <span class="titlebar-menu-icon" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1v6M5.5 7h5l-.5 4H6l-.5-4z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </span>
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="titlebar.pin">Always on top</span>
+                <span class="titlebar-menu-meta" id="btnPinValue">No</span>
+              </span>
+            </button>
+            <div class="titlebar-menu-divider" aria-hidden="true"></div>
+            <label class="titlebar-menu-toggle" for="chkAutoPermission">
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="titlebar.auto_permission">Auto-approve permissions</span>
+                <span class="titlebar-menu-meta" data-i18n="titlebar.auto_permission_hint">Automatically allow permission prompts with the persistent option.</span>
+              </span>
+              <input class="titlebar-menu-check" id="chkAutoPermission" type="checkbox">
+            </label>
+            <label class="titlebar-menu-toggle" for="chkAutoQuestion">
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="titlebar.auto_question">Auto-confirm questions</span>
+                <span class="titlebar-menu-meta" data-i18n="titlebar.auto_question_hint">Choose the first recommended answer and skip the popup.</span>
+              </span>
+              <input class="titlebar-menu-check" id="chkAutoQuestion" type="checkbox">
+            </label>
+            <label class="titlebar-menu-range" for="opacityRange">
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="titlebar.opacity">Window opacity</span>
+                <span class="titlebar-menu-meta" data-i18n="titlebar.opacity_hint">Lower values make the whole overlay more transparent.</span>
+              </span>
+              <span class="titlebar-menu-range-control">
+                <input class="titlebar-menu-slider" id="opacityRange" type="range" min="30" max="100" step="5" value="30">
+                <span class="titlebar-menu-value" id="opacityValue">30%</span>
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="titlebar-window-controls">
+          <button class="titlebar-btn" id="btnMinimize" title="Minimize" data-i18n-title="titlebar.minimize">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+          <button class="titlebar-btn" id="btnMaximize" title="Maximize" data-i18n-title="titlebar.maximize">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="9" height="9" rx="1.2" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+          </button>
+          <button class="titlebar-btn titlebar-close" id="btnClose" title="Close" data-i18n-title="common.close">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -147,6 +213,21 @@
             <div class="sidebar-subtitle" id="sidebarSubtitle" data-i18n="sidebar.subtitle">Tasks and sessions</div>
           </div>
           <div class="sidebar-header-actions">
+            <button
+              type="button"
+              class="btn btn-ghost mini sidebar-btn"
+              id="btnGlobalView"
+              data-i18n-title="sidebar.global"
+              title="All Projects"
+            >
+              <span class="sidebar-btn-icon" aria-hidden="true">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/>
+                  <path d="M2.5 8h11M8 2.5c-1.8 2-2.7 3.5-2.7 5.5s.9 3.5 2.7 5.5c1.8-2 2.7-3.5 2.7-5.5S9.8 4.5 8 2.5z" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </span>
+              <span class="sidebar-btn-label" data-i18n="sidebar.global">All Projects</span>
+            </button>
             <button
               type="button"
               class="btn btn-ghost mini sidebar-btn"
@@ -193,6 +274,13 @@
       <section class="chat" id="chatSection">
         <header class="chat-header">
           <span class="chat-title" data-i18n="chat.title">Session</span>
+          <div class="chat-header-status">
+            <div class="task-status chat-task-status" id="taskStatus" hidden>
+              <span class="status-icon" id="statusIcon" data-status="idle" aria-hidden="true"></span>
+              <span class="status-label" id="statusLabel" data-i18n="task.status.idle">No task</span>
+              <span class="elapsed" id="elapsed"></span>
+            </div>
+          </div>
           <div class="chat-header-meta">
             <span class="chat-count" id="chatCount"></span>
             <button
@@ -244,7 +332,7 @@
       <div class="sections" id="sections">
 
         <!-- Spec -->
-        <details class="section" id="specSection">
+        <details class="section" id="specSection" data-phase-kind="spec">
           <summary class="section-head">
             <span class="section-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2h6l3 3v9H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6.5 7h4M6.5 9.5h4M6.5 12h2" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>
@@ -252,13 +340,13 @@
             <span class="section-title" data-i18n="section.spec">Spec</span>
             <span class="section-badge" id="specBadge"></span>
           </summary>
-          <div class="section-body" id="specBody" data-section-detail="spec">
+          <div class="section-body" id="specBody">
             <p class="empty-hint" data-i18n="empty.spec">No spec yet</p>
           </div>
         </details>
 
         <!-- Plan -->
-        <details class="section" id="planSection">
+        <details class="section" id="planSection" data-phase-kind="plan">
           <summary class="section-head">
             <span class="section-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 3h10M3 6.5h7M3 10h5M3 13h8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
@@ -266,13 +354,13 @@
             <span class="section-title" data-i18n="section.plan">Plan</span>
             <span class="section-badge" id="planBadge"></span>
           </summary>
-          <div class="section-body" id="planBody" data-section-detail="plan">
+          <div class="section-body" id="planBody">
             <p class="empty-hint" data-i18n="empty.plan">No plan yet</p>
           </div>
         </details>
 
         <!-- Goals -->
-        <details class="section" id="goalsSection">
+        <details class="section" id="goalsSection" data-phase-kind="goals">
           <summary class="section-head">
             <span class="section-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="0.8" fill="currentColor"/></svg>
@@ -280,13 +368,13 @@
             <span class="section-title" data-i18n="section.goals">Goals</span>
             <span class="section-badge" id="goalsBadge"></span>
           </summary>
-          <div class="section-body" id="goalsBody" data-section-detail="goals">
+          <div class="section-body" id="goalsBody">
             <p class="empty-hint" data-i18n="empty.goals">No goals defined</p>
           </div>
         </details>
 
         <!-- Evaluation -->
-        <details class="section" id="criteriaSection">
+        <details class="section" id="criteriaSection" data-phase-kind="evaluation">
           <summary class="section-head">
             <span class="section-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 4h10v9H3z" stroke="currentColor" stroke-width="1.2"/><path d="M5.5 7.5l2 2 3.5-3.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -294,7 +382,7 @@
             <span class="section-title" data-i18n="section.evaluation">Evaluation</span>
             <span class="section-badge" id="criteriaBadge"></span>
           </summary>
-          <div class="section-body" id="criteriaBody" data-section-detail="evaluation">
+          <div class="section-body" id="criteriaBody">
             <div class="criteria-list" id="criteriaList">
               <div class="empty-hint" data-i18n="empty.checks">No checks configured</div>
             </div>
@@ -303,7 +391,7 @@
         </details>
 
         <!-- Files -->
-        <details class="section" id="changesSection">
+        <details class="section" id="changesSection" data-phase-kind="files">
           <summary class="section-head">
             <span class="section-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 2.5h5l3 3V13.5H4z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 2.5v3h3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M6 8h4M6 10.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
@@ -311,13 +399,13 @@
             <span class="section-title" data-i18n="section.files">Files</span>
             <span class="section-badge" id="changesBadge"></span>
           </summary>
-          <div class="section-body" id="changesBody" data-section-detail="files">
+          <div class="section-body" id="changesBody">
             <p class="empty-hint" data-i18n="empty.files">No file changes yet</p>
           </div>
         </details>
 
         <!-- Overview / Actions -->
-        <details class="section" id="overviewSection">
+        <details class="section" id="overviewSection" data-phase-kind="overview">
           <summary class="section-head">
             <span class="section-icon">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 2a6 6 0 100 12A6 6 0 008 2z" stroke="currentColor" stroke-width="1.2"/><path d="M8 5v3.5l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -325,7 +413,7 @@
             <span class="section-title" data-i18n="section.overview">Overview</span>
             <span class="section-badge" id="overviewBadge"></span>
           </summary>
-          <div class="section-body" id="overviewBody" data-section-detail="overview">
+          <div class="section-body" id="overviewBody">
             <p class="empty-hint" data-i18n="empty.overview">Select a task to view overview</p>
           </div>
         </details>
@@ -346,7 +434,7 @@
                   </label>
                   <div class="field">
                     <span class="field-label" data-i18n="llm.available">Available</span>
-                    <div class="field-input config-status-box" id="cfgAvailableProviders" data-i18n="llm.available_count_zero">0 providers</div>
+                    <div class="field-input config-status-box config-status-box-static" id="cfgAvailableProviders" data-i18n="llm.available_count_zero">0 providers</div>
                   </div>
                 </div>
                 <div class="field-row config-field-row">
@@ -356,19 +444,26 @@
                   </label>
                   <div class="field">
                     <span class="field-label" data-i18n="common.status">Status</span>
-                    <div class="field-input config-status-box" id="llmStatus" data-i18n="llm.status.unknown">Unknown</div>
+                    <div class="field-input config-status-box config-status-box-static" id="llmStatus" data-i18n="llm.status.unknown">Unknown</div>
                   </div>
                 </div>
-                <label class="field">
-                  <span class="field-label" data-i18n="llm.api_key">API Key</span>
-                  <div class="field-input-group">
-                    <input class="field-input" name="llmApiKey" id="llmApiKey" type="password" placeholder="Optional" data-i18n-placeholder="common.optional">
-                    <div class="field-input-actions">
-                      <button type="button" class="field-input-icon" id="btnLlmApiKeyToggle" title="Show API key" aria-label="Show API key"></button>
-                      <button type="button" class="field-input-icon" id="btnLlmApiKeyCopy" title="Copy API key" aria-label="Copy API key"></button>
-                    </div>
+                <details class="config-subsection llm-advanced" id="llmAdvanced">
+                  <summary class="config-subsection-head">
+                    <span data-i18n="llm.api_key">API Key</span>
+                    <span class="section-badge" id="llmApiKeySummary"></span>
+                  </summary>
+                  <div class="config-subsection-body">
+                    <label class="field">
+                      <div class="field-input-group">
+                        <input class="field-input" name="llmApiKey" id="llmApiKey" type="password" placeholder="Optional" data-i18n-placeholder="common.optional">
+                        <div class="field-input-actions">
+                          <button type="button" class="field-input-icon" id="btnLlmApiKeyToggle" title="Show API key" aria-label="Show API key"></button>
+                          <button type="button" class="field-input-icon" id="btnLlmApiKeyCopy" title="Copy API key" aria-label="Copy API key"></button>
+                        </div>
+                      </div>
+                    </label>
                   </div>
-                </label>
+                </details>
               </form>
               <div class="config-inline-popup" id="llmNotice" role="status" aria-live="polite"></div>
             </div>
@@ -400,24 +495,6 @@
       </div>
       <div class="diff-preview" id="diffDialogBody">
         <p class="empty-hint" data-i18n="diff.empty">Select a file to inspect its diff.</p>
-      </div>
-    </div>
-  </dialog>
-
-  <!-- Section Detail Dialog -->
-  <dialog class="dialog dialog-wide" id="sectionDialog">
-    <div class="dialog-form section-dialog-form">
-      <div class="dialog-head">
-        <div class="section-dialog-head">
-          <h3 class="dialog-title" id="sectionDialogTitle" data-i18n="detail.title">Detail</h3>
-          <div class="section-dialog-meta" id="sectionDialogMeta"></div>
-        </div>
-        <div class="dialog-actions compact">
-          <button type="button" class="btn btn-ghost" id="btnCloseSectionDialog" data-i18n="common.close">Close</button>
-        </div>
-      </div>
-      <div class="section-dialog-body" id="sectionDialogBody">
-        <p class="empty-hint" data-i18n="detail.empty">Select a section to inspect details.</p>
       </div>
     </div>
   </dialog>
@@ -572,21 +649,6 @@
         <span class="field-label" data-i18n="settings.username">Username</span>
         <input class="field-input" name="username" id="serverUsername" value="opencorvus" placeholder="opencorvus">
       </label>
-      <label class="field">
-        <span class="field-label" data-i18n="settings.language">Language</span>
-        <select class="field-input" name="localeMode" id="localeMode">
-          <option value="zh-CN" data-i18n="settings.language.zh_cn">简体中文</option>
-          <option value="en-US" data-i18n="settings.language.en_us">English</option>
-        </select>
-      </label>
-      <label class="field">
-        <span class="field-label" data-i18n="settings.theme">Theme</span>
-        <select class="field-input" name="themeMode" id="themeMode">
-          <option value="system" data-i18n="settings.theme.system">System</option>
-          <option value="dark" data-i18n="settings.theme.dark">Dark</option>
-          <option value="light" data-i18n="settings.theme.light">Light</option>
-        </select>
-      </label>
       <div class="dialog-actions">
         <button type="button" class="btn btn-ghost" id="btnCancelSettings" data-i18n="common.cancel">Cancel</button>
         <button type="submit" class="btn btn-primary" data-i18n="settings.save">Save Server</button>
@@ -618,7 +680,14 @@
                 >
               </label>
               <div class="dialog-actions compact">
-                <button type="button" class="btn btn-ghost mini" id="btnSaveChannelPublicUrl" data-i18n="common.save">Save</button>
+                <button
+                  type="button"
+                  class="btn btn-ghost mini"
+                  id="btnSaveChannelPublicUrl"
+                  data-i18n="common.save"
+                  data-i18n-title="channel.public_url_save_title"
+                  data-i18n-aria-label="channel.public_url_save_title"
+                >Save</button>
               </div>
             </div>
             <div class="empty-hint" data-i18n="channel.public_url_hint">
@@ -638,11 +707,11 @@
               <div class="config-subsection-body">
                 <div class="extension-head">
                   <div class="dialog-actions compact">
-                    <button type="button" class="btn btn-ghost mini" id="btnSkillMarket" data-i18n="skill.market.button">Market</button>
-                    <button type="button" class="btn btn-ghost mini" id="btnOpenSkillRoot" data-i18n="skill.open_dir">Open Dir</button>
-                    <button type="button" class="btn btn-ghost mini" id="btnReloadSkills" data-i18n="common.reload">Reload</button>
-                    <button type="button" class="btn btn-ghost mini" id="btnAddSkill" data-i18n="skill.add">Add Skill</button>
-                    <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllSkills" data-i18n="common.delete_all">Delete All</button>
+                    <button type="button" class="btn btn-ghost mini" id="btnSkillMarket" data-i18n="skill.market.button" data-i18n-title="skill.market.button_title" data-i18n-aria-label="skill.market.button_title">Market</button>
+                    <button type="button" class="btn btn-ghost mini" id="btnOpenSkillRoot" data-i18n="skill.open_dir" data-i18n-title="skill.open_dir_title" data-i18n-aria-label="skill.open_dir_title">Open Dir</button>
+                    <button type="button" class="btn btn-ghost mini" id="btnReloadSkills" data-i18n="common.reload" data-i18n-title="skill.reload_title" data-i18n-aria-label="skill.reload_title">Reload</button>
+                    <button type="button" class="btn btn-ghost mini" id="btnAddSkill" data-i18n="skill.add" data-i18n-title="skill.add_button_title" data-i18n-aria-label="skill.add_button_title">Add Skill</button>
+                    <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllSkills" data-i18n="common.delete_all" data-i18n-title="skill.delete_all_button_title" data-i18n-aria-label="skill.delete_all_button_title">Delete All</button>
                   </div>
                 </div>
                 <div class="extension-list" id="skillList">
@@ -655,8 +724,8 @@
               <div class="config-subsection-body">
                 <div class="extension-head">
                   <div class="dialog-actions compact">
-                    <button type="button" class="btn btn-ghost mini" id="btnAddMcp" data-i18n="mcp.add_action">Add MCP</button>
-                    <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllMcp" data-i18n="common.delete_all">Delete All</button>
+                    <button type="button" class="btn btn-ghost mini" id="btnAddMcp" data-i18n="mcp.add_action" data-i18n-title="mcp.add_action_title" data-i18n-aria-label="mcp.add_action_title">Add MCP</button>
+                    <button type="button" class="btn btn-ghost mini danger" id="btnDeleteAllMcp" data-i18n="common.delete_all" data-i18n-title="mcp.delete_all_button_title" data-i18n-aria-label="mcp.delete_all_button_title">Delete All</button>
                   </div>
                 </div>
                 <div class="extension-list" id="mcpList">
@@ -672,8 +741,8 @@
           <div class="config-section-body" id="memoryBody">
             <div class="knowledge-toolbar">
               <input type="text" class="knowledge-search" id="memorySearch" placeholder="Search memories..." data-i18n-placeholder="memory.search_placeholder">
-              <button type="button" class="btn btn-ghost mini" id="btnMemorySearch" data-i18n="common.search">Search</button>
-              <button type="button" class="btn btn-ghost mini" id="btnMemoryRefresh" data-i18n="common.refresh">Refresh</button>
+              <button type="button" class="btn btn-ghost mini" id="btnMemorySearch" data-i18n="common.search" data-i18n-title="memory.search_button_title" data-i18n-aria-label="memory.search_button_title">Search</button>
+              <button type="button" class="btn btn-ghost mini" id="btnMemoryRefresh" data-i18n="common.refresh" data-i18n-title="memory.refresh_title" data-i18n-aria-label="memory.refresh_title">Refresh</button>
             </div>
             <div class="knowledge-list" id="memoryList">
               <div class="empty-hint" data-i18n="memory.none">No memories</div>
@@ -685,8 +754,8 @@
           <summary class="config-section-head"><span data-i18n="preference.title">Preferences</span> <span class="section-badge" id="preferenceBadge"></span></summary>
           <div class="config-section-body" id="preferenceBody">
             <div class="knowledge-toolbar">
-              <button type="button" class="btn btn-ghost mini" id="btnPreferenceRefresh" data-i18n="common.refresh">Refresh</button>
-              <button type="button" class="btn btn-ghost mini" id="btnPreferenceAdd" data-i18n="common.add">Add</button>
+              <button type="button" class="btn btn-ghost mini" id="btnPreferenceRefresh" data-i18n="common.refresh" data-i18n-title="preference.refresh_title" data-i18n-aria-label="preference.refresh_title">Refresh</button>
+              <button type="button" class="btn btn-ghost mini" id="btnPreferenceAdd" data-i18n="common.add" data-i18n-title="preference.add_title" data-i18n-aria-label="preference.add_title">Add</button>
             </div>
             <div class="knowledge-list" id="preferenceList">
               <div class="empty-hint" data-i18n="preference.none">No preferences</div>
@@ -758,6 +827,8 @@
     </form>
   </dialog>
 
+  <script src="workspace.js"></script>
+  <script src="interactions.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

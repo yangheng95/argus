@@ -40,6 +40,18 @@ export namespace Bus {
     },
   )
 
+  const SUBSCRIBER_TIMEOUT_MS = 120_000 // 2 minutes per subscriber (last-resort safety net)
+
+  function withTimeout(promise: unknown, timeoutMs: number, label: string): Promise<unknown> {
+    if (!promise || typeof (promise as any).then !== "function") return Promise.resolve(promise)
+    return Promise.race([
+      promise as Promise<unknown>,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Bus subscriber timeout (${timeoutMs}ms): ${label}`)), timeoutMs),
+      ),
+    ])
+  }
+
   export async function publish<Definition extends BusEvent.Definition>(
     def: Definition,
     properties: z.output<Definition["properties"]>,
@@ -51,7 +63,7 @@ export namespace Bus {
     log.info("publishing", {
       type: def.type,
     })
-    const pending: Array<ReturnType<Subscription>> = []
+    const pending: Array<Promise<unknown>> = []
     let index = 0
     for (const key of [def.type, "*"]) {
       const match = state().subscriptions.get(key)
@@ -66,7 +78,12 @@ export namespace Bus {
             source: source.get(sub),
           })
         }
-        pending.push(sub(payload))
+        const result = sub(payload)
+        pending.push(
+          withTimeout(result, SUBSCRIBER_TIMEOUT_MS, `${def.type}/${source.get(sub) ?? "unknown"}`).catch((err) => {
+            log.warn("subscriber timed out or failed", { type: def.type, error: String(err) })
+          }),
+        )
       }
     }
     GlobalBus.emit("event", {

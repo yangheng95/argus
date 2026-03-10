@@ -9,6 +9,9 @@ use std::{
     sync::Mutex,
 };
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
@@ -20,6 +23,8 @@ use tauri_plugin_opener::OpenerExt;
 
 const LOCAL_SERVER_HOST: &str = "127.0.0.1";
 const DEFAULT_SERVER_PORT: u16 = 7878;
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Default)]
 struct ServerState {
@@ -40,13 +45,17 @@ struct OverlayServerInfo {
 #[serde(rename_all = "camelCase")]
 struct OverlaySettings {
     server_url: Option<String>,
+    auto_server: Option<bool>,
     password: Option<String>,
     username: Option<String>,
     executor: Option<String>,
     init_git: Option<bool>,
     always_on_top: Option<bool>,
+    auto_permission: Option<bool>,
+    auto_question: Option<bool>,
     sidebar_width: Option<u32>,
     sections_width: Option<u32>,
+    opacity: Option<f64>,
     zoom: Option<f64>,
     theme: Option<String>,
     locale: Option<String>,
@@ -239,10 +248,13 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     let child = cmd.spawn().map_err(|err| err.to_string())?;
     let info = server_info(port);
-    let mut lock = app.state::<Server>().0.lock().unwrap();
+    let state = app.state::<Server>();
+    let mut lock = state.0.lock().unwrap();
     lock.child = Some(child);
     lock.port = Some(port);
     Ok(info)
@@ -334,8 +346,8 @@ fn main() {
                     let logical_w = screen.width as f64 / scale;
                     let logical_h = screen.height as f64 / scale;
 
-                    // Panel: ~50% width (clamped 640..1100), ~72% height (clamped 480..920)
-                    let w = (logical_w * 0.50).clamp(640.0, 1100.0);
+                    // Panel: ~80% width (clamped 760..1600), ~72% height (clamped 480..920)
+                    let w = (logical_w * 0.80).clamp(760.0, 1600.0);
                     let h = (logical_h * 0.72).clamp(480.0, 920.0);
                     // Position: bottom-right with 24px margin
                     let x = logical_w - w - 24.0;

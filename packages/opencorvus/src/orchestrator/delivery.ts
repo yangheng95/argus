@@ -191,6 +191,8 @@ registerDefaults()
 // DeliveryService — 遍历 pipeline 执行所有适配器
 // ---------------------------------------------------------------------------
 
+const ADAPTER_TIMEOUT_MS = 30_000 // 30 seconds per adapter
+
 export namespace DeliveryService {
   export async function deliver(input: DeliveryContext) {
     const artifacts: DeliveryArtifact[] = []
@@ -198,7 +200,12 @@ export namespace DeliveryService {
 
     for (const adapter of registry) {
       try {
-        const result = await adapter.execute(input)
+        const result = await Promise.race([
+          adapter.execute(input),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`adapter ${adapter.id} timeout (${ADAPTER_TIMEOUT_MS}ms)`)), ADAPTER_TIMEOUT_MS),
+          ),
+        ])
         artifacts.push(...result.artifacts)
         publish.adapters.push({
           id: result.id,
@@ -207,7 +214,7 @@ export namespace DeliveryService {
           detail: result.detail,
         })
       } catch (error) {
-        log.warn("delivery adapter failed", { adapter: adapter.id, error: String(error) })
+        log.warn("delivery adapter failed or timed out", { adapter: adapter.id, error: String(error) })
         publish.adapters.push({
           id: adapter.id,
           status: "skipped",

@@ -10,6 +10,7 @@ import { PlannerFailureError } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
 import { PlannerService } from "../../src/planner/service"
 import { Server } from "../../src/server/server"
+import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -620,6 +621,52 @@ describe("orchestrator routes", () => {
     })
 
     expect(submit).toHaveBeenCalledTimes(2)
+  })
+
+  test("GET /global/tasks returns tasks across projects with directories", async () => {
+    await using first = await tmpdir({ git: true })
+    await using second = await tmpdir({ git: true })
+    const insert = async (dir: string, title: string, time: number) =>
+      Instance.provide({
+        directory: dir,
+        async fn() {
+          const session = await Session.create({ title })
+          Database.use((db) =>
+            db.insert(OrchestratorTaskTable).values({
+              id: Identifier.ascending("task"),
+              project_id: Instance.project.id,
+              session_id: session.id,
+              source: "api",
+              title,
+              request: title,
+              status: "queued",
+              priority: "normal",
+              time_created: time,
+              time_updated: time,
+            }).run(),
+          )
+        },
+      })
+
+    const now = Date.now()
+    await insert(first.path, "global-task-one", now - 10)
+    await insert(second.path, "global-task-two", now)
+
+    const response = await Server.App().request("/global/tasks?q=global-task", {
+      headers: {
+        "x-opencorvus-directory": first.path,
+      },
+    })
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      summary: { total_tasks: number }
+      tasks: Array<{ task: { title: string; directory?: string }; project?: { worktree: string } | null }>
+    }
+
+    expect(body.summary.total_tasks).toBe(2)
+    expect(body.tasks.map((item) => item.task.title)).toEqual(["global-task-two", "global-task-one"])
+    expect(body.tasks.map((item) => item.task.directory)).toEqual([second.path, first.path])
+    expect(body.tasks.map((item) => item.project?.worktree)).toEqual([second.path, first.path])
   })
 
   test("POST /task/:id/retry queues a deterministic retry run", async () => {

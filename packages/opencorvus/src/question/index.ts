@@ -95,6 +95,12 @@ export namespace Question {
     }
   })
 
+  const QUESTION_MIN_TIMEOUT_MS = 1000
+  const QUESTION_AUTO_REJECT_MS = Math.max(
+    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "10000", 10),
+    QUESTION_MIN_TIMEOUT_MS,
+  )
+
   export async function ask(input: {
     sessionID: string
     questions: Info[]
@@ -118,6 +124,18 @@ export namespace Question {
         reject,
       }
       Bus.publish(Event.Asked, info)
+      // Auto-reject questions after timeout so executor proceeds without blocking (always ≥ 1s)
+      setTimeout(() => {
+        if (s.pending[id]) {
+          log.info("auto-reject timeout", { id, questions: input.questions.length })
+          delete s.pending[id]
+          Bus.publish(Event.Rejected, {
+            sessionID: input.sessionID,
+            requestID: id,
+          })
+          reject(new RejectedError())
+        }
+      }, QUESTION_AUTO_REJECT_MS)
     })
   }
 

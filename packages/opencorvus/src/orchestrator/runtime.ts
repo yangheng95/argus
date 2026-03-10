@@ -58,7 +58,14 @@ import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
-const evaluatingRuns = new Set<string>() // in-memory guard against concurrent re-evaluation
+const DELIVERY_FETCH_TIMEOUT_MS = 120_000 // 120 seconds for executor.delivery() (git operations can be slow on Windows)
+const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
+const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
+const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
+
+// Unattended-mode safeguards
+const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
+const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
 
 async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
   if (Instance.project.vcs !== "git") {
@@ -98,6 +105,9 @@ export namespace OrchestratorRuntime {
       for (const row of rows) {
         await syncRun(row.id, hooks)
       }
+      // Startup recovery: recover tasks stuck in transient states from a previous server instance
+      // Tasks in "evaluating" or "delivering" with no active in-memory evaluation are stranded
+      recoverStrandedTasks(hooks)
     } finally {
       current.syncing = false
     }
@@ -196,13 +206,47 @@ export namespace OrchestratorRuntime {
     const delivery = findDeliveryByRun(run.id)
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
-      if (run.status !== "blocked") {
-        await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
+      // Auto-reject stale interactions for unattended operation
+      const now = Date.now()
+      const stale = pending.filter((p) => (now - (p.time_created ?? 0)) > INTERACTION_STALE_MS)
+      if (stale.length > 0) {
+        for (const interaction of stale) {
+          log.info("auto-rejecting stale interaction", { id: interaction.id, type: interaction.request_type, ageMs: now - (interaction.time_created ?? 0) })
+          Database.use((db) =>
+            db.update(OrchestratorInteractionRequestTable)
+              .set({ status: "rejected", time_resolved: now, time_updated: now })
+              .where(eq(OrchestratorInteractionRequestTable.id, interaction.id))
+              .run(),
+          )
+        }
+        // Re-check after auto-rejection
+        const stillPending = findPendingInteractions(run.id)
+        if (stillPending.length === 0) {
+          if (run.status === "blocked") {
+            await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected")
+          }
+          if (task.status === "blocked") {
+            await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Stale interactions auto-rejected")
+          }
+          // Fall through to continue sync
+        } else {
+          if (run.status !== "blocked") {
+            await hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked")
+          }
+          if (task.status !== "blocked") {
+            await hooks.updateTask(task, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Awaiting user input")
+          }
+          return
+        }
+      } else {
+        if (run.status !== "blocked") {
+          await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
+        }
+        if (task.status !== "blocked") {
+          await hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input")
+        }
+        return
       }
-      if (task.status !== "blocked") {
-        await hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input")
-      }
-      return
     }
 
     if (run.status === "completed" && delivery) {
@@ -230,6 +274,14 @@ export namespace OrchestratorRuntime {
     }
 
     if (queue.status === "running") {
+      // Run execution timeout — fail runs that have been running too long
+      const started = run.time_started ?? run.time_created
+      if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
+        log.warn("run exceeded max execution time", { runID: run.id, maxMs: RUN_MAX_EXECUTION_MS, elapsedMs: Date.now() - started })
+        try { await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID }) } catch {}
+        await failRun(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
+        return
+      }
       if (run.status !== "running") {
         await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
       }
@@ -335,16 +387,37 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
         await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
       }
       // Re-run evaluation for this existing delivery (evaluation was interrupted by prior restart)
+      // Check if already evaluating (with stale detection)
+      const evalStart = evaluatingRuns.get(run.id)
+      const isStale = evalStart !== undefined && (Date.now() - evalStart) > EVALUATING_STALE_MS
+      if (isStale) {
+        log.warn("clearing stale evaluatingRuns entry", { runID: run.id, ageMs: Date.now() - evalStart })
+        evaluatingRuns.delete(run.id)
+      }
       const canReEval = task.active_run_id === run.id && run.session_id && !evaluatingRuns.has(run.id)
       console.log(`[completeRun] no evaluation for run ${run.id}, canReEval=${canReEval}, activeRunMatch=${task.active_run_id === run.id}, sessionId=${!!run.session_id}, alreadyEvaluating=${evaluatingRuns.has(run.id)}`)
       if (canReEval) {
-        evaluatingRuns.add(run.id)
+        evaluatingRuns.set(run.id, Date.now())
         console.log(`[completeRun] starting runEvaluation for ${run.id}`)
         try {
-          await runEvaluation(task, run, existingDelivery, hooks)
+          await Promise.race([
+            runEvaluation(task, run, existingDelivery, hooks),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("runEvaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
+            ),
+          ])
+        } catch (timeoutErr) {
+          const msg = timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr)
+          console.log(`[completeRun] runEvaluation error for ${run.id}: ${msg}`)
+          log.error("runEvaluation timed out or failed", { runID: run.id, error: msg })
+          const now = Date.now()
+          await hooks.updateRun(run, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
+          if (task.active_run_id === run.id) {
+            await hooks.updateTask(task, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
+          }
         } finally {
           evaluatingRuns.delete(run.id)
-          console.log(`[completeRun] runEvaluation finished for ${run.id}`)
+          console.log(`[completeRun] runEvaluation finished for ${run.id}, active evals: ${evaluatingRuns.size}`)
         }
       }
       return
@@ -370,10 +443,15 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: completedAt }, "Run completed")
   await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
   const executor = ExecutorRegistry.require(run.executor)
-  const delivery = await executor.delivery({
-    sessionID: run.session_id,
-    since: run.time_started ?? run.time_created,
-  })
+  const delivery = await Promise.race([
+    executor.delivery({
+      sessionID: run.session_id,
+      since: run.time_started ?? run.time_created,
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
+    ),
+  ])
   const now = Date.now()
   const deliveryID = Identifier.ascending("delivery")
   const evaluationID = Identifier.ascending("evaluation")
@@ -391,29 +469,35 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     },
   }, { actions: [] }).catch(() => undefined)
 
-  const evaluationDeadline = AbortSignal.timeout(EVALUATION_HARD_TIMEOUT_MS)
+  const hardTimeoutPromise = <T>() =>
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
+    )
 
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
-    result = await EvaluatorService.evaluate(
-      {
-        taskID: task.id,
-        activeSpecVersionID: task.active_spec_version_id ?? undefined,
-        request: task.request,
-        metadata: {
-          ...(task.metadata ?? {}),
-          delivery_changed_files: delivery.diffs.map((item) => item.file),
+    result = await Promise.race([
+      EvaluatorService.evaluate(
+        {
+          taskID: task.id,
+          activeSpecVersionID: task.active_spec_version_id ?? undefined,
+          request: task.request,
+          metadata: {
+            ...(task.metadata ?? {}),
+            delivery_changed_files: delivery.diffs.map((item) => item.file),
+          },
         },
-      },
-      {
-        summary: delivery.summary,
-        diffs: delivery.diffs,
-        changedFiles: delivery.diffs.map((item) => item.file),
-      },
-    )
+        {
+          summary: delivery.summary,
+          diffs: delivery.diffs,
+          changedFiles: delivery.diffs.map((item) => item.file),
+        },
+      ),
+      hardTimeoutPromise<typeof result>(),
+    ])
   } catch (evalErr) {
     const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-    log.error("Phase 1 evaluate() threw", { error: msg })
+    log.error("Phase 1 evaluate() threw or timed out", { error: msg })
     const errorSummary = `Evaluator Phase 1 failure: ${msg}`
     persistEvaluation({
       task, run, deliveryID, evaluationID, delivery,
@@ -434,38 +518,37 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     return
   }
 
-  if (evaluationDeadline.aborted) {
-    log.error("evaluation hard timeout reached after Phase 1")
-  }
-
   // Phase 2: Independent-context EvaluatorAgent analysis
   // Analyzes check results, investigates failures, assesses each goal, classifies failure type
   const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
   try {
-    analysis = await EvaluatorService.analyzeDelivery({
-      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
-      goals: goals.map((g) => ({
-        description: g.description,
-        criteria: g.criteria,
-        priority: g.priority as "blocking" | "advisory",
-        check_selector: selectorList(g.metadata) as string[],
-      })),
-      delivery: {
-        summary: delivery.summary,
-        changedFiles: delivery.diffs.map((d) => d.file),
-        diffs: delivery.diffs,
-      },
-      checkResults: result.checks.map((c) => ({
-        name: c.name,
-        status: c.status,
-        evidence: c.evidence,
-      })),
-    })
+    analysis = await Promise.race([
+      EvaluatorService.analyzeDelivery({
+        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+        goals: goals.map((g) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority as "blocking" | "advisory",
+          check_selector: selectorList(g.metadata) as string[],
+        })),
+        delivery: {
+          summary: delivery.summary,
+          changedFiles: delivery.diffs.map((d) => d.file),
+          diffs: delivery.diffs,
+        },
+        checkResults: result.checks.map((c) => ({
+          name: c.name,
+          status: c.status,
+          evidence: c.evidence,
+        })),
+      }),
+      hardTimeoutPromise<typeof analysis>(),
+    ])
   } catch (err) {
     analysisError = err instanceof Error ? err.message : String(err)
-    log.error("evaluator agent analysis failed", { error: analysisError })
+    log.error("evaluator agent analysis failed or timed out", { error: analysisError })
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
@@ -542,10 +625,15 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   const executor = ExecutorRegistry.require(run.executor)
   let delivery: Awaited<ReturnType<typeof executor.delivery>>
   try {
-    delivery = await executor.delivery({
-      sessionID: run.session_id,
-      since: run.time_started ?? run.time_created,
-    })
+    delivery = await Promise.race([
+      executor.delivery({
+        sessionID: run.session_id,
+        since: run.time_started ?? run.time_created,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
+      ),
+    ])
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
@@ -559,26 +647,32 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   const deliveryID = existingDelivery.id
   const evaluationID = Identifier.ascending("evaluation")
 
-  const evaluationDeadline = AbortSignal.timeout(EVALUATION_HARD_TIMEOUT_MS)
+  const reEvalHardTimeout = <T>() =>
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("re-evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
+    )
 
   let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
   try {
-    result = await EvaluatorService.evaluate(
-      {
-        taskID: task.id,
-        activeSpecVersionID: task.active_spec_version_id ?? undefined,
-        request: task.request,
-        metadata: {
-          ...(task.metadata ?? {}),
-          delivery_changed_files: delivery.diffs.map((item) => item.file),
+    result = await Promise.race([
+      EvaluatorService.evaluate(
+        {
+          taskID: task.id,
+          activeSpecVersionID: task.active_spec_version_id ?? undefined,
+          request: task.request,
+          metadata: {
+            ...(task.metadata ?? {}),
+            delivery_changed_files: delivery.diffs.map((item) => item.file),
+          },
         },
-      },
-      {
-        summary: delivery.summary,
-        diffs: delivery.diffs,
-        changedFiles: delivery.diffs.map((item) => item.file),
-      },
-    )
+        {
+          summary: delivery.summary,
+          diffs: delivery.diffs,
+          changedFiles: delivery.diffs.map((item) => item.file),
+        },
+      ),
+      reEvalHardTimeout<typeof result>(),
+    ])
   } catch (evalErr) {
     const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
     log.error("re-evaluation Phase 1 failed", { error: msg })
@@ -606,28 +700,31 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   let analysis: EvaluatorAnalysisType
   let analysisError: string | undefined
   try {
-    analysis = await EvaluatorService.analyzeDelivery({
-      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
-      goals: goals.map((g) => ({
-        description: g.description,
-        criteria: g.criteria,
-        priority: g.priority as "blocking" | "advisory",
-        check_selector: selectorList(g.metadata) as string[],
-      })),
-      delivery: {
-        summary: delivery.summary,
-        changedFiles: delivery.diffs.map((d) => d.file),
-        diffs: delivery.diffs,
-      },
-      checkResults: result.checks.map((c) => ({
-        name: c.name,
-        status: c.status,
-        evidence: c.evidence,
-      })),
-    })
+    analysis = await Promise.race([
+      EvaluatorService.analyzeDelivery({
+        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+        goals: goals.map((g) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority as "blocking" | "advisory",
+          check_selector: selectorList(g.metadata) as string[],
+        })),
+        delivery: {
+          summary: delivery.summary,
+          changedFiles: delivery.diffs.map((d) => d.file),
+          diffs: delivery.diffs,
+        },
+        checkResults: result.checks.map((c) => ({
+          name: c.name,
+          status: c.status,
+          evidence: c.evidence,
+        })),
+      }),
+      reEvalHardTimeout<typeof analysis>(),
+    ])
   } catch (err) {
     analysisError = err instanceof Error ? err.message : String(err)
-    log.error("re-evaluation agent analysis failed", { error: analysisError })
+    log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
@@ -683,6 +780,39 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
 }
 
+function recoverStrandedTasks(hooks: RuntimeHooks) {
+  // Find tasks stuck in transient states (evaluating/delivering) with no active in-memory evaluation
+  const strandedTasks = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorTaskTable)
+      .where(
+        and(
+          eq(OrchestratorTaskTable.project_id, Instance.project.id),
+          inArray(OrchestratorTaskTable.status, ["evaluating", "delivering"]),
+        ),
+      )
+      .all(),
+  )
+  const now = Date.now()
+  for (const task of strandedTasks) {
+    // Only recover if task has been in this state longer than the evaluation hard timeout
+    const updated = task.time_updated ?? task.time_created ?? 0
+    const age = now - updated
+    if (age < EVALUATING_STALE_MS) continue
+    // Check if this task has an active in-memory evaluation
+    if (task.active_run_id && evaluatingRuns.has(task.active_run_id)) continue
+    log.warn("recovering stranded task", { taskID: task.id, status: task.status, ageMs: age })
+    const error = `Task was stranded in '${task.status}' state for ${Math.round(age / 60000)}min (server restart recovery)`
+    hooks.updateTask(task, {
+      status: "failed",
+      error,
+      blocking_reason: null,
+      time_completed: now,
+    }, error).catch((err) => log.error("failed to recover stranded task", { taskID: task.id, error: String(err) }))
+  }
+}
+
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   updateExecutorSessionStatus(run.id, "failed")
   const task = requireTask(run.task_id)
@@ -717,7 +847,12 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
   markDeliveryPublishing(delivery.id, now)
 
-  const result = await DeliveryService.deliver({ task, run, delivery }).catch((error) => ({
+  const result = await Promise.race([
+    DeliveryService.deliver({ task, run, delivery }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("DeliveryService.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS),
+    ),
+  ]).catch((error) => ({
     status: "failed" as const,
     summary: String(error),
     artifacts: [] as Array<{ kind: "patch" | "report" | "html_trace" | "link" | "git_ref"; label: string; payload: Record<string, unknown> }>,

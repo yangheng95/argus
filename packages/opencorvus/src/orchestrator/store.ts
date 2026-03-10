@@ -1,5 +1,8 @@
 import { Instance } from "@/project/instance"
-import { Database, NotFoundError, and, desc, eq, inArray, like } from "@/storage/db"
+import { ProjectTable } from "@/project/project.sql"
+import { SessionTable } from "@/session/session.sql"
+import { Database, NotFoundError, and, desc, eq, inArray, like, lt } from "@/storage/db"
+import type { SQL } from "@/storage/db"
 import { Snapshot } from "@/snapshot"
 import { EvaluationCheck } from "./model"
 import {
@@ -36,6 +39,16 @@ export type ExecutorSessionRow = typeof OrchestratorExecutorSessionTable.$inferS
 export type ExecutorEventRow = typeof OrchestratorExecutorEventTable.$inferSelect
 export type SpecSnapshotRow = typeof OrchestratorSpecSnapshotTable.$inferSelect
 export type SpecItemRow = typeof OrchestratorSpecItemTable.$inferSelect
+export type TaskProjectRow = {
+  id: string
+  name?: string
+  worktree: string
+}
+export type TaskListRow = {
+  task: TaskRow
+  directory: string
+  project: TaskProjectRow | null
+}
 
 export function requireTask(taskID: string) {
   const row = findTask(taskID)
@@ -286,6 +299,56 @@ export function findRuns(taskID: string) {
   )
 }
 
+function taskRows(rows: TaskRow[]) {
+  const sessionIDs = [...new Set(rows.map((row) => row.session_id).filter((item): item is string => !!item))]
+  const projectIDs = [...new Set(rows.map((row) => row.project_id))]
+  const sessions = new Map<string, string>()
+  const projects = new Map<string, TaskProjectRow>()
+
+  if (sessionIDs.length > 0) {
+    const items = Database.use((db) =>
+      db
+        .select({ id: SessionTable.id, directory: SessionTable.directory })
+        .from(SessionTable)
+        .where(inArray(SessionTable.id, sessionIDs))
+        .all(),
+    )
+    for (const item of items) {
+      sessions.set(item.id, item.directory)
+    }
+  }
+
+  if (projectIDs.length > 0) {
+    const items = Database.use((db) =>
+      db
+        .select({ id: ProjectTable.id, name: ProjectTable.name, worktree: ProjectTable.worktree })
+        .from(ProjectTable)
+        .where(inArray(ProjectTable.id, projectIDs))
+        .all(),
+    )
+    for (const item of items) {
+      projects.set(item.id, {
+        id: item.id,
+        name: item.name ?? undefined,
+        worktree: item.worktree,
+      })
+    }
+  }
+
+  return rows.map((task) => {
+    const project = projects.get(task.project_id) ?? null
+    return {
+      task,
+      directory: sessions.get(task.session_id ?? "") ?? project?.worktree ?? "",
+      project,
+    }
+  })
+}
+
+export function listTaskRows(rows: TaskRow[]) {
+  return taskRows(rows)
+}
+
 export function listProjectTasks(projectID: string, limit = 50) {
   return Database.use((db) =>
     db
@@ -319,6 +382,43 @@ export function searchProjectTasks(
       .limit(opts.limit ?? 50)
       .all(),
   )
+}
+
+export function listGlobalTasks(input?: {
+  directory?: string
+  cursor?: number
+  query?: string
+  status?: string
+  limit?: number
+}) {
+  const conditions: SQL[] = []
+
+  if (input?.directory) {
+    conditions.push(eq(SessionTable.directory, input.directory))
+  }
+  if (input?.cursor) {
+    conditions.push(lt(OrchestratorTaskTable.time_updated, input.cursor))
+  }
+  if (input?.status) {
+    conditions.push(eq(OrchestratorTaskTable.status, input.status as typeof OrchestratorTaskTable.$inferSelect.status))
+  }
+  if (input?.query) {
+    conditions.push(like(OrchestratorTaskTable.title, `%${input.query}%`))
+  }
+
+  const rows = Database.use((db) => {
+    const query = db
+      .select({ task: OrchestratorTaskTable })
+      .from(OrchestratorTaskTable)
+      .leftJoin(SessionTable, eq(OrchestratorTaskTable.session_id, SessionTable.id))
+    return (conditions.length > 0 ? query.where(and(...conditions)) : query)
+      .orderBy(desc(OrchestratorTaskTable.time_updated), desc(OrchestratorTaskTable.id))
+      .limit(input?.limit ?? 100)
+      .all()
+      .map((item) => item.task)
+  })
+
+  return taskRows(rows)
 }
 
 export function listInteractions(taskID: string) {
@@ -401,10 +501,11 @@ export function activeRunBySession(sessionID: string) {
   return row?.run
 }
 
-export function viewTask(row: TaskRow) {
+export function viewTask(row: TaskRow, input?: { directory?: string }) {
   return {
     id: row.id,
     projectID: row.project_id,
+    directory: input?.directory,
     sessionID: row.session_id ?? undefined,
     activeSpecVersionID: row.active_spec_version_id ?? undefined,
     activePlanVersionID: row.active_plan_version_id ?? undefined,

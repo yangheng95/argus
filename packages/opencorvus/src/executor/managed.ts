@@ -192,6 +192,7 @@ export const ManagedCodingExecutor = {
         })
       },
       async *events(input) {
+        const MAX_IDLE_MS = 30 * 60 * 1000 // 30 minutes max idle before giving up
         const state = pick(tasks, latest, input)
         if (!state) return
         let index = 0
@@ -207,10 +208,17 @@ export const ManagedCodingExecutor = {
             }
             if (input.signal?.aborted) return
             if (state.status === "completed" || state.status === "failed") return
-            await new Promise<void>((resolve) => {
-              state.wake = resolve
-            })
+            // Wait for new events with idle timeout protection
+            const idled = await Promise.race([
+              new Promise<false>((resolve) => {
+                state.wake = () => resolve(false)
+              }),
+              new Promise<true>((resolve) =>
+                setTimeout(() => resolve(true), MAX_IDLE_MS),
+              ),
+            ])
             state.wake = undefined
+            if (idled) return // idle timeout — stop event stream
           }
         } finally {
           input.signal?.removeEventListener("abort", abort)

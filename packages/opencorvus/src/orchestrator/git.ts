@@ -144,8 +144,18 @@ async function commit(input: { task: TaskRow; plan?: PlanRow; delivery?: Deliver
     env: env(),
   })
   if (result.exitCode !== 0) {
+    const output = result.stderr.toString().trim() || result.stdout.toString().trim() || ""
+    // If working tree is clean (executor already committed), fall back to recording HEAD
+    if (output.includes("nothing to commit")) {
+      const currentHead = await head()
+      return {
+        mode: "recorded_head" as const,
+        commit: currentHead,
+        message: await subject(currentHead),
+      }
+    }
     return {
-      error: result.stderr.toString().trim() || result.stdout.toString().trim() || "git commit failed",
+      error: output || "git commit failed",
     }
   }
   return {

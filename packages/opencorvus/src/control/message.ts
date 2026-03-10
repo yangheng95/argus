@@ -39,33 +39,52 @@ export namespace ControlMessage {
 }
 
 async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamCallback) {
+  const payload = loggedInput(input)
+  log.info("panel request received", {
+    input: payload,
+    stream: !!onEvent,
+  })
   const model = await resolveModel()
   if (!model) {
-    return ControlMessageResult.parse({
+    const result = ControlMessageResult.parse({
       kind: "panel_response",
       message: "尚未配置模型。请先在设置中配置提供方。",
     })
+    log.warn("panel request skipped", {
+      input: payload,
+      reason: "model_unconfigured",
+      result: loggedResult(result),
+    })
+    return result
   }
 
-  const session = await Session.create({
-    title: `Panel control (${input.surface})`,
-  })
+  let session: Awaited<ReturnType<typeof Session.create>> | undefined
 
   const unsubs: (() => void)[] = []
-  if (onEvent) {
-    unsubs.push(
-      Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
-        const part = event.properties.part as Record<string, unknown>
-        if (part.sessionID !== session.id) return
-        if (part.type === "tool") {
-          onEvent({ type: "tool", tool: part.tool as string })
-        }
-      }),
-    )
-    onEvent({ type: "start" })
-  }
 
   try {
+    session = await Session.create({
+      title: `Panel control (${input.surface})`,
+    })
+    log.info("panel control session created", {
+      input: payload,
+      panel_session: session,
+      stream: !!onEvent,
+    })
+
+    if (onEvent) {
+      unsubs.push(
+        Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
+          const part = event.properties.part as Record<string, unknown>
+          if (part.sessionID !== session?.id) return
+          if (part.type === "tool") {
+            onEvent({ type: "tool", tool: part.tool as string })
+          }
+        }),
+      )
+      onEvent({ type: "start" })
+    }
+
     const agent = await Agent.defaultAgent()
     const system = await systemPrompt(input)
     const parts: Array<{ type: "text"; text: string }> = [{ type: "text", text: buildUserPrompt(input) }]
@@ -90,19 +109,45 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     })
 
     if (result.info.role === "assistant" && result.info.structured) {
-      return ControlMessageResult.parse(result.info.structured)
+      const output = ControlMessageResult.parse(result.info.structured)
+      log.info("panel request completed", {
+        input: payload,
+        panel_session_id: session.id,
+        result: loggedResult(output),
+      })
+      return output
     }
 
     const text = textFromMessage(result)
-    return parseTextAsResult(text)
+    const output = parseTextAsResult(text)
+    log.info("panel request completed", {
+      input: payload,
+      panel_session_id: session.id,
+      result: loggedResult(output),
+      fallback_text: text,
+    })
+    return output
   } catch (error) {
-    return ControlMessageResult.parse({
+    const output = ControlMessageResult.parse({
       kind: "panel_response",
       message: `Control message processing failed: ${error instanceof Error ? error.message : String(error)}`,
     })
+    log.error("panel request failed", {
+      input: payload,
+      panel_session_id: session?.id,
+      error: error instanceof Error ? error.message : String(error),
+      result: loggedResult(output),
+    })
+    return output
   } finally {
     for (const unsub of unsubs) unsub()
-    await Session.remove(session.id).catch(() => undefined)
+    if (session?.id) {
+      await Session.remove(session.id).catch(() => undefined)
+      log.info("panel control session removed", {
+        input: payload,
+        panel_session_id: session.id,
+      })
+    }
   }
 }
 
@@ -248,4 +293,33 @@ function taskSession(taskID?: string) {
       .get(),
   )
   return row?.sessionID ?? undefined
+}
+
+function loggedInput(input: z.infer<typeof ControlMessageInput>) {
+  return {
+    surface: input.surface,
+    text: input.text,
+    ...(input.taskID ? { taskID: input.taskID } : {}),
+    ...(input.sessionID ? { sessionID: input.sessionID } : {}),
+    ...(input.executor ? { executor: input.executor } : {}),
+    ...(input.channel ? { channel: input.channel } : {}),
+    ...(input.thread ? { thread: input.thread } : {}),
+    ...(input.user_id ? { user_id: input.user_id } : {}),
+    ...(input.request_id ? { request_id: input.request_id } : {}),
+    ...(input.source ? { source: input.source } : {}),
+    allow_create: input.allow_create,
+    ...(input.metadata ? { metadata: input.metadata } : {}),
+  }
+}
+
+function loggedResult(result: z.infer<typeof ControlMessageResult>) {
+  return {
+    kind: result.kind,
+    message: result.message,
+    ...(result.task_id ? { task_id: result.task_id } : {}),
+    ...(result.session_id ? { session_id: result.session_id } : {}),
+    ...(result.interaction_id ? { interaction_id: result.interaction_id } : {}),
+    ...(result.local_action ? { local_action: result.local_action } : {}),
+    ...(result.attachments ? { attachments: result.attachments } : {}),
+  }
 }

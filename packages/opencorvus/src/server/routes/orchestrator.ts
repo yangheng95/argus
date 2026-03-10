@@ -11,6 +11,7 @@ import {
   ExecutorEvent,
   ExecutorSession,
   Evaluation,
+  GlobalTaskBoard,
   InjectMessageInput,
   Interaction,
   Progress,
@@ -96,6 +97,43 @@ export const OrchestratorRoutes = lazy(() =>
         const status = c.req.query("status") || undefined
         const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined
         return c.json(await OrchestratorService.getProjectBoard({ query, status, limit }))
+      },
+    )
+    .get(
+      "/global/tasks",
+      describeRoute({
+        summary: "List tasks across projects",
+        operationId: "task.global.list",
+        responses: {
+          200: {
+            description: "Global task board",
+            content: {
+              "application/json": {
+                schema: resolver(GlobalTaskBoard),
+              },
+            },
+          },
+        },
+      }),
+      validator(
+        "query",
+        z.object({
+          directory: z.string().optional(),
+          q: z.string().optional(),
+          status: z.string().optional(),
+          limit: z.coerce.number().optional(),
+          cursor: z.coerce.number().optional(),
+        }),
+      ),
+      async (c) => {
+        const query = c.req.valid("query")
+        return c.json(await OrchestratorService.getGlobalTaskBoard({
+          directory: query.directory,
+          query: query.q,
+          status: query.status,
+          limit: query.limit,
+          cursor: query.cursor,
+        }))
       },
     )
     .get(
