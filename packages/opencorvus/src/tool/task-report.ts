@@ -21,9 +21,9 @@ export namespace TaskReport {
 }
 
 export const TaskReportTool = Tool.define("task_report", {
-  description: `Signal your current status to the bot orchestrator at the end of each work turn.
+  description: `Signal your current status to the channel orchestrator at the end of each work turn.
 
-In bot/Slack mode you MUST call this tool at the end of every turn. Pick the right status:
+In managed channel mode you MUST call this tool at the end of every turn. Pick the right status:
 - **progress**: Made headway but need more turns. Describe what you did in summary and set next_plan for the next step.
 - **need_input**: Cannot proceed without user clarification. Set question clearly.
 - **done**: Task fully complete. Summarize the result and list modified files in artifacts.
@@ -51,7 +51,7 @@ In bot/Slack mode you MUST call this tool at the end of every turn. Pick the rig
 
     const message =
       params.status === "need_input"
-        ? "Bot will relay your question to the user. Your next turn will contain their answer — wait for it."
+        ? "Channel runtime will relay your question to the user. Your next turn will contain their answer — wait for it."
         : params.status === "progress"
           ? "Progress recorded. You will receive a continue signal in the next turn."
           : `Task marked as ${params.status}. Session will close.`
@@ -63,3 +63,4 @@ In bot/Slack mode you MUST call this tool at the end of every turn. Pick the rig
     }
   },
 })
+

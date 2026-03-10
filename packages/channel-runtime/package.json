@@ -1,0 +1,25 @@
+{
+  "name": "@opencorvus-ai/channel-runtime",
+  "version": "0.0.1-alpha",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@opencorvus-ai/channel-config": "workspace:*",
+    "@opencorvus-ai/sdk": "workspace:*",
+    "@slack/bolt": "4.6.0",
+    "discord.js": "14.23.2",
+    "grammy": "1.40.1"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "@typescript/native-preview": "catalog:"
+  },
+  "scripts": {
+    "dev": "bun run src/main.ts",
+    "typecheck": "tsgo --noEmit",
+    "test": "bun test"
+  }
+}
+

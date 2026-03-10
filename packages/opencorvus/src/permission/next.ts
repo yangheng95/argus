@@ -10,6 +10,7 @@ import { Log } from "@/util/log"
 import { Wildcard } from "@/util/wildcard"
 import os from "os"
 import z from "zod"
+import { entries, values as objectValues } from "@/util/object"
 
 export namespace PermissionNext {
   const log = Log.create({ service: "permission" })
@@ -61,7 +62,7 @@ export namespace PermissionNext {
       return [{ permission: "*", pattern: "*", action: permission as Action }]
     }
     const ruleset: Ruleset = []
-    for (const [key, value] of Object.entries(permission)) {
+    for (const [key, value] of entries(permission)) {
       if (typeof value === "string") {
         ruleset.push({
           permission: key,
@@ -71,7 +72,7 @@ export namespace PermissionNext {
         continue
       }
       ruleset.push(
-        ...Object.entries(value).map(([pattern, action]) => ({
+        ...entries(value).map(([pattern, action]) => ({
           permission: key,
           pattern: expand(pattern),
           action: action as "allow" | "ask" | "deny",
@@ -200,7 +201,7 @@ export namespace PermissionNext {
         existing.reject(input.message ? new CorrectedError(input.message) : new RejectedError())
         // Reject all other pending permissions for this session
         const sessionID = existing.info.sessionID
-        for (const [id, pending] of Object.entries(s.pending)) {
+        for (const [id, pending] of entries(s.pending)) {
           if (pending.info.sessionID === sessionID) {
             delete s.pending[id]
             Bus.publish(Event.Replied, {
@@ -229,7 +230,7 @@ export namespace PermissionNext {
         existing.resolve()
 
         const sessionID = existing.info.sessionID
-        for (const [id, pending] of Object.entries(s.pending)) {
+        for (const [id, pending] of entries(s.pending)) {
           if (pending.info.sessionID !== sessionID) continue
           const ok = pending.info.patterns.every(
             (pattern) => evaluate(pending.info.permission, pattern, s.approved).action === "allow",
@@ -307,6 +308,6 @@ export namespace PermissionNext {
 
   export async function list() {
     const s = await state()
-    return Object.values(s.pending).map((x) => x.info)
+    return objectValues(s.pending).map((x) => x.info)
   }
 }

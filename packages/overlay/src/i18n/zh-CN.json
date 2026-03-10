@@ -1,8 +1,17 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "d7945938d9201279"
+    "panel_revision": "a1854d6c2fbbe5b5"
   },
+  "brand.guide_kicker": "Overlay 指引",
+  "brand.guide_positioning_body": "这是 OpenCorvus 的本地悬浮控制面板，用来在一个窗口里切换工作目录、选择执行器、跟踪任务状态，并联动查看规格、计划、评估和变更。",
+  "brand.guide_positioning_title": "定位",
+  "brand.guide_trigger": "OpenCorvus 定位与使用方法",
+  "brand.guide_usage_1": "先在左侧选择已有会话，或新建一个空白会话，再确认当前工作目录是否正确。",
+  "brand.guide_usage_2": "中间选择执行器，在会话输入框直接下发需求、补充限制，或继续追问当前任务。",
+  "brand.guide_usage_3": "右侧随时展开 Spec、Plan、Goals、Evaluation 和 File Diff，判断任务是否偏航并及时修正。",
+  "brand.guide_usage_4": "顶部的 Channels、Settings、Logs 和置顶按钮用于通道配置、运行排查和常驻监控。",
+  "brand.guide_usage_title": "使用方法",
   "brand.logo_alt": "OpenCorvus 标志",
   "channel.available": "可用：{{names}}",
   "channel.channels": "通道",

@@ -73,7 +73,7 @@ Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).
   - `packages/opencorvus`: Core business logic, server, agents, tools, LSP
   - `packages/opencorvus/src/cli/cmd/tui/`: TUI interface (SolidJS + [opentui](https://github.com/sst/opentui))
   - `packages/sdk`: JavaScript SDK (`@opencorvus-ai/sdk`)
-  - `packages/bot`: Chat bot adapters (Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, LINE, Matrix, Mattermost, Signal, WeCom, DingTalk)
+  - `packages/channel-runtime`: Channel runtime adapters (Slack, Telegram, Discord, Feishu, WhatsApp, Google Chat, Microsoft Teams, LINE, Matrix, Mattermost, Signal, WeCom, DingTalk)
   - `packages/plugin`: Plugin system (`@opencorvus-ai/plugin`)
 
 ### Understanding bun dev vs opencorvus
@@ -191,7 +191,7 @@ You can optionally include a scope to indicate which package is affected:
 
 - `feat(opencorvus):` feature in the opencorvus core package
 - `fix(sdk):` bug fix in the SDK package
-- `chore(bot):` maintenance in the bot package
+- `chore(channel-runtime):` maintenance in the channel runtime package
 
 Examples:
 
@@ -199,7 +199,7 @@ Examples:
 - `fix: resolve crash on startup`
 - `feat: add desktop automation support`
 - `feat(opencorvus): add new tool for file search`
-- `fix(bot): resolve Slack adapter timeout`
+- `fix(channel-runtime): resolve Slack adapter timeout`
 - `chore: bump dependency versions`
 
 ### Style Preferences
@@ -264,3 +264,4 @@ Issues may be flagged for:
 - Missing meaningful content
 
 If you believe your issue was incorrectly flagged, let a maintainer know.
+

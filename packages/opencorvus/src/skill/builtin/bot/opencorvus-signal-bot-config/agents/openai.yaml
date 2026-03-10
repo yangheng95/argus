@@ -1,4 +1,0 @@
-﻿interface:
-  display_name: "OpenCorvus Signal Bot Config"
-  short_description: "Configure Signal bot integration for OpenCorvus"
-  default_prompt: "Use $opencorvus-signal-bot-config to set up or debug Signal bot integration for OpenCorvus."

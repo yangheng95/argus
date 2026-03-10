@@ -362,8 +362,7 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
     return {
       theme: new Proxy(values(), {
         get(_target, prop) {
-          // @ts-expect-error
-          return values()[prop]
+          return values()[prop as keyof ReturnType<typeof values>]
         },
       }),
       get selected() {

@@ -1,4 +1,0 @@
-interface:
-  display_name: "OpenCorvus Bot Config Wizard"
-  short_description: "Unified overlay-guided bot channel setup with text fallback"
-  default_prompt: "Use $opencorvus-bot-config-wizard to configure chat bot channels through Bot Config -> Environment Variables, then validate in Runtime."

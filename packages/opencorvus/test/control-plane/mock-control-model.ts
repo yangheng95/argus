@@ -23,6 +23,7 @@ const channelPlatforms = new Set([
   "signal",
   "wecom",
   "dingtalk",
+  "qq",
 ])
 
 const model = Provider.Model.parse({

@@ -118,7 +118,7 @@ export const ChannelRoutes = lazy(() =>
       "/runtime",
       describeRoute({
         summary: "Get managed channel runtime",
-        description: "Get managed bot runtime status for configured channel integrations.",
+        description: "Get managed channel runtime status for configured channel integrations.",
         operationId: "channel.runtime",
         responses: {
           200: {
@@ -148,7 +148,7 @@ export const ChannelRoutes = lazy(() =>
       "/runtime/restart",
       describeRoute({
         summary: "Restart managed channel runtime",
-        description: "Restart the managed channel bot runtime with the current config.",
+        description: "Restart the managed channel runtime with the current config.",
         operationId: "channel.runtime.restart",
         responses: {
           200: {

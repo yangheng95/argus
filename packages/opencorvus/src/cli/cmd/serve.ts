@@ -113,10 +113,7 @@ export const ServeCommand = cmd({
       console.error("[serve] unhandledRejection:", err)
     })
 
-    const server = Server.listen({
-      ...opts,
-      projectDir: projectDir ? require("path").resolve(projectDir) : undefined,
-    })
+    const server = Server.listen(opts)
     console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
     console.log(`overlay UI available at http://${server.hostname}:${server.port}/ui/`)
 

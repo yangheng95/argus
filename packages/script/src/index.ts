@@ -15,10 +15,22 @@ if (!semver.satisfies(process.versions.bun, expectedBunVersionRange)) {
   throw new Error(`This script requires bun@${expectedBunVersionRange}, but you are using bun@${process.versions.bun}`)
 }
 
+const pattern = /^\d+\.\d+\.\d+(?:[-.][0-9A-Za-z.-]+)?$/
+
+function normalize(input?: string) {
+  const value = input?.trim()
+  if (!value) return undefined
+  const version = value.replace(/^v(?=\d)/, "")
+  if (!pattern.test(version)) {
+    throw new Error(`Invalid OPENCORVUS_VERSION: ${value}`)
+  }
+  return version
+}
+
 const env = {
   CHANNEL: process.env["OPENCORVUS_CHANNEL"],
   BUMP: process.env["OPENCORVUS_BUMP"],
-  VERSION: process.env["OPENCORVUS_VERSION"],
+  VERSION: normalize(process.env["OPENCORVUS_VERSION"]),
   RELEASE: process.env["OPENCORVUS_RELEASE"],
 }
 

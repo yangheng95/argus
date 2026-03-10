@@ -16,6 +16,8 @@ Use:
 bun ./script/sync-version.ts 0.0.1
 ```
 
+`sync-version.ts` accepts `0.0.1-alpha` and `v0.0.1-alpha`, then normalizes the stored repo version to `0.0.1-alpha`.
+
 Validate:
 
 ```bash
@@ -28,6 +30,8 @@ bun ./script/sync-version.ts --check
 - Trigger sources:
   - tag push `v*`
   - manual dispatch with `version`
+
+Version inputs accept `0.0.1-alpha` and `v0.0.1-alpha`, but stored repo versions are normalized to `0.0.1-alpha`. The tag-triggered GitHub release workflow still listens to `v*` tags.
 
 The workflow does all of the following in one pipeline:
 
@@ -48,6 +52,7 @@ Use:
 ./script/release minor
 ./script/release major
 ./script/release 0.0.1
+./script/release v0.0.1
 ```
 
 What it does:

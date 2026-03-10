@@ -183,7 +183,7 @@ export namespace Filesystem {
 
   export async function findUp(target: string, start: string, stop?: string) {
     let current = start
-    const result = []
+    const result: string[] = []
     while (true) {
       const search = join(current, target)
       if (await exists(search)) result.push(search)
@@ -212,7 +212,7 @@ export namespace Filesystem {
 
   export async function globUp(pattern: string, start: string, stop?: string) {
     let current = start
-    const result = []
+    const result: string[] = []
     while (true) {
       try {
         const matches = await Glob.scan(pattern, {

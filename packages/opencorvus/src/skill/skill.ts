@@ -14,7 +14,7 @@ import { Bus } from "@/bus"
 import { Session } from "@/session"
 import { Discovery } from "./discovery"
 import { Glob } from "../util/glob"
-import { botBundles } from "./builtin/bot"
+import { channelBundles } from "./builtin/channel"
 import panelMd from "./builtin/panel.md" with { type: "text" }
 
 export namespace Skill {
@@ -59,7 +59,7 @@ export namespace Skill {
   const BUILTIN_PATH = path.join(Global.Path.cache, "builtin-skills")
 
   const builtins = [
-    ...botBundles,
+    ...channelBundles,
     {
       skill: panelMd,
       files: {},
@@ -232,3 +232,4 @@ export namespace Skill {
     return state().then((x) => x.dirs)
   }
 }
+

@@ -110,7 +110,7 @@ export const SkillTool = Tool.define("skill", async (ctx) => {
 
       const limit = 10
       const files = await iife(async () => {
-        const arr = []
+        const arr: string[] = []
         for await (const file of Ripgrep.files({
           cwd: dir,
           follow: false,

@@ -15,6 +15,12 @@ function flag(name: string) {
   return idx >= 0 ? args[idx + 1] : undefined
 }
 
+function version(name: string) {
+  const value = flag(name)?.trim()
+  if (!value) return undefined
+  return value.replace(/^v(?=\d)/, "")
+}
+
 function exists(p: string) {
   return fs.existsSync(p)
 }
@@ -39,7 +45,7 @@ function requireAny(dir: string, patterns: RegExp[], label: string) {
 if (mode === "cli") {
   const dir = path.resolve(flag("--dir") || "")
   const rawPlatforms = flag("--platforms")
-  const version = flag("--version")
+  const current = version("--version")
   const requireArchives = args.includes("--require-archives")
   if (!dir || !rawPlatforms) {
     throw new Error("cli mode requires --dir and --platforms")
@@ -62,10 +68,10 @@ if (mode === "cli") {
       requireFile(archive)
     }
   }
-  if (version) {
+  if (current) {
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, "opencorvus-windows-x64", "package.json"), "utf8")) as { version?: string }
-    if (pkg.version && pkg.version !== version) {
-      throw new Error(`CLI package version mismatch: expected ${version}, got ${pkg.version}`)
+    if (pkg.version && pkg.version !== current) {
+      throw new Error(`CLI package version mismatch: expected ${current}, got ${pkg.version}`)
     }
   }
   console.log(`CLI assets validated for ${platforms.join(", ")}`)
@@ -74,16 +80,16 @@ if (mode === "cli") {
 
 const dir = path.resolve(flag("--dir") || "")
 const platform = flag("--platform")
-const version = flag("--version")
-if (!dir || !platform || !version) {
+const current = version("--version")
+if (!dir || !platform || !current) {
   throw new Error("overlay mode requires --dir, --platform and --version")
 }
 
 requireAny(dir, [/^opencorvus-overlay(\.exe)?$/], "overlay binary")
 
 if (platform.startsWith("windows")) {
-  requireAny(dir, [new RegExp(`^OpenCorvus_${version.replace(/\./g, "\\.")}.*\\.msi$`)], "Windows MSI bundle")
-  requireAny(dir, [new RegExp(`^OpenCorvus_${version.replace(/\./g, "\\.")}.*-setup\\.exe$`)], "Windows NSIS bundle")
+  requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*\\.msi$`)], "Windows MSI bundle")
+  requireAny(dir, [new RegExp(`^OpenCorvus_${current.replace(/\./g, "\\.")}.*-setup\\.exe$`)], "Windows NSIS bundle")
 } else if (platform.startsWith("darwin")) {
   requireAny(dir, [/\.dmg$/, /\.app\.tar\.gz$/], "macOS bundle")
 } else if (platform.startsWith("linux")) {

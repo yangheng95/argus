@@ -1,0 +1,5 @@
+{
+  "$schema": "https://opencorvus.ai/config.json",
+  "model": "alibaba-cn/qwen3.5-plus",
+  "disabled_providers": ["moonshotai", "evroc", "openrouter"]
+}

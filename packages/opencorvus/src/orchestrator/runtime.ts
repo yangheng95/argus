@@ -1,4 +1,5 @@
 import { Bus } from "@/bus"
+import { selectorList } from "@/check/policy"
 import { EvaluatorService } from "@/evaluator/service"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { ExecutorRegistry } from "@/executor/registry"
@@ -6,64 +7,48 @@ import { PlannerFailureError } from "@/planner/service"
 import { Plugin } from "@/plugin"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
-import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
 import { installRuntimeShims } from "@/runtime/shims"
-import { Database, and, desc, eq, inArray } from "@/storage/db"
+import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import {
-  OrchestratorArtifactTable,
-  OrchestratorExecutorEventTable,
-  OrchestratorExecutorSessionTable,
-  OrchestratorDeliveryTable,
-  OrchestratorEvaluationTable,
-  OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
-  OrchestratorMilestoneTable,
-  OrchestratorProgressSnapshotTable,
   OrchestratorRunTable,
-  OrchestratorSpecItemTable,
-  OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
-  type OrchestratorMilestoneStatus,
 } from "./orchestrator.sql"
 import { Event } from "./model"
 import {
-  DEFAULT_MAX_REPLANS,
-  DEFAULT_MAX_RUNS,
-  ORCHESTRATOR_POLL_INTERVAL_MS,
-  SAME_PLAN_RETRY_LIMIT,
   buildOperatorPrompt,
-  buildRetryPrompt,
   orchestratorState,
-  progressStatus,
-  type RetryContext,
 } from "./helpers"
 import {
-  buildReplanContext,
-  compileTransition,
-  persistReplanTransition,
-  persistReplanTransitionFailure,
+  appendExecutorEvent,
+  createReplanRun,
+  createRetryRun,
+  ensureExecutorSession,
+  failGoals,
+  finalizeDeliveryResult,
+  markDeliveryPublishing,
+  persistDelivery,
+  persistEvaluation,
+  persistFailedRunEvaluation,
+  updateExecutorSessionStatus,
 } from "./transition"
+import { buildRetryContext, decideRetryOrReplan } from "./strategy"
 import {
   findDeliveryByRun,
   findEvaluationByRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
-  findPlans,
   findRun,
-  findRuns,
-  findSpecItems,
   findTask,
   listGoalsByPlan,
-  listMilestonesByPlan,
   requireRun,
   requireTask,
-  type GoalRow,
   type DeliveryRow,
   type PlanRow,
   type RunRow,
@@ -72,6 +57,8 @@ import {
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator-runtime" })
+const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
+const evaluatingRuns = new Set<string>() // in-memory guard against concurrent re-evaluation
 
 async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
   if (Instance.project.vcs !== "git") {
@@ -103,7 +90,7 @@ export namespace OrchestratorRuntime {
           .where(
             and(
               eq(OrchestratorTaskTable.project_id, Instance.project.id),
-              inArray(OrchestratorRunTable.status, ["accepted", "running", "blocked"]),
+              inArray(OrchestratorRunTable.status, ["accepted", "running", "blocked", "completed"]),
             ),
           )
           .all(),
@@ -347,6 +334,19 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
       if (task.active_run_id === run.id) {
         await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
       }
+      // Re-run evaluation for this existing delivery (evaluation was interrupted by prior restart)
+      const canReEval = task.active_run_id === run.id && run.session_id && !evaluatingRuns.has(run.id)
+      console.log(`[completeRun] no evaluation for run ${run.id}, canReEval=${canReEval}, activeRunMatch=${task.active_run_id === run.id}, sessionId=${!!run.session_id}, alreadyEvaluating=${evaluatingRuns.has(run.id)}`)
+      if (canReEval) {
+        evaluatingRuns.add(run.id)
+        console.log(`[completeRun] starting runEvaluation for ${run.id}`)
+        try {
+          await runEvaluation(task, run, existingDelivery, hooks)
+        } finally {
+          evaluatingRuns.delete(run.id)
+          console.log(`[completeRun] runEvaluation finished for ${run.id}`)
+        }
+      }
       return
     }
     if (task.active_run_id !== run.id) return
@@ -378,70 +378,7 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   const deliveryID = Identifier.ascending("delivery")
   const evaluationID = Identifier.ascending("evaluation")
 
-  Database.transaction((db) => {
-    db.insert(OrchestratorDeliveryTable)
-      .values({
-        id: deliveryID,
-        task_id: task.id,
-        run_id: run.id,
-        status: "candidate",
-        summary: delivery.summary,
-        result: {
-          summary: delivery.summary,
-          changed_files: delivery.diffs.map((item) => item.file),
-          diffs: delivery.diffs,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    db.insert(OrchestratorArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: task.id,
-        run_id: run.id,
-        delivery_id: deliveryID,
-        kind: "report",
-        label: "assistant-summary",
-        payload: { summary: delivery.summary },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    if (delivery.diffs.length > 0) {
-      db.insert(OrchestratorArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: deliveryID,
-          kind: "diff",
-          label: "workspace-diff",
-          payload: { diffs: delivery.diffs },
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    for (const item of delivery.diffs) {
-      db.insert(OrchestratorArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: deliveryID,
-          kind: "changed_file",
-          label: item.file,
-          payload: item,
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-    }
-    Database.effect(() =>
-      Bus.publish(Event.DeliveryReady, { taskID: task.id, runID: run.id, deliveryID, summary: delivery.summary }),
-    )
-  })
+  persistDelivery({ task, run, deliveryID, delivery, now })
 
   await Plugin.trigger("delivery.ready", {
     taskID: task.id,
@@ -454,23 +391,52 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     },
   }, { actions: [] }).catch(() => undefined)
 
-  // Phase 1: Automated checks (build/test/lint)
-  const result = await EvaluatorService.evaluate(
-    {
-      taskID: task.id,
-      activeSpecVersionID: task.active_spec_version_id ?? undefined,
-      request: task.request,
-      metadata: {
-        ...(task.metadata ?? {}),
-        delivery_changed_files: delivery.diffs.map((item) => item.file),
+  const evaluationDeadline = AbortSignal.timeout(EVALUATION_HARD_TIMEOUT_MS)
+
+  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+  try {
+    result = await EvaluatorService.evaluate(
+      {
+        taskID: task.id,
+        activeSpecVersionID: task.active_spec_version_id ?? undefined,
+        request: task.request,
+        metadata: {
+          ...(task.metadata ?? {}),
+          delivery_changed_files: delivery.diffs.map((item) => item.file),
+        },
       },
-    },
-    {
-      summary: delivery.summary,
-      diffs: delivery.diffs,
-      changedFiles: delivery.diffs.map((item) => item.file),
-    },
-  )
+      {
+        summary: delivery.summary,
+        diffs: delivery.diffs,
+        changedFiles: delivery.diffs.map((item) => item.file),
+      },
+    )
+  } catch (evalErr) {
+    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
+    log.error("Phase 1 evaluate() threw", { error: msg })
+    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery,
+      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
+      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
+      analysisError: msg,
+      finalVerdict: "rejected",
+      finalStatus: "failed",
+      finalSummary: errorSummary,
+      goals: [],
+    })
+    updateExecutorSessionStatus(run.id, "failed")
+    const failNow = Date.now()
+    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    if (task.active_run_id === run.id) {
+      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    }
+    return
+  }
+
+  if (evaluationDeadline.aborted) {
+    log.error("evaluation hard timeout reached after Phase 1")
+  }
 
   // Phase 2: Independent-context EvaluatorAgent analysis
   // Analyzes check results, investigates failures, assesses each goal, classifies failure type
@@ -503,6 +469,26 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     analysis = fallbackAnalysis(result, goals.length, analysisError)
   }
 
+  // If evaluator analysis threw, treat as a fatal evaluation failure
+  if (analysisError) {
+    const errorSummary = `Evaluator failure: ${analysisError}`
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery, result,
+      analysis, analysisError,
+      finalVerdict: "rejected",
+      finalStatus: "failed",
+      finalSummary: errorSummary,
+      goals,
+    })
+    updateExecutorSessionStatus(run.id, "failed")
+    const now = Date.now()
+    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
+    if (task.active_run_id === run.id) {
+      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
+    }
+    return
+  }
+
   // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
   // do not let Phase 2 EvaluatorAgent override the verdict
   const phase1Failed = result.status === "failed"
@@ -513,146 +499,173 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
     ? `Rejected: automated checks failed. ${result.summary}`
     : analysis.summary
 
-  Database.transaction((db) => {
-    db.insert(OrchestratorEvaluationTable)
-      .values({
-        id: evaluationID,
-        task_id: task.id,
-        run_id: run.id,
-        delivery_id: deliveryID,
-        status: finalStatus,
-        verdict: finalVerdict,
-        summary: finalSummary,
-        checks: result.checks,
-        time_completed: Date.now(),
-        time_created: now,
-        time_updated: Date.now(),
-      })
-      .run()
-    for (const artifact of result.artifacts) {
-      db.insert(OrchestratorArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: deliveryID,
-          kind: artifact.kind,
-          label: artifact.label,
-          payload: artifact.payload,
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        })
-        .run()
-    }
-    if (analysisError) {
-      db.insert(OrchestratorArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: deliveryID,
-          kind: "report",
-          label: "evaluator-agent-error",
-          payload: { error: analysisError, fallback: true },
-          time_created: Date.now(),
-          time_updated: Date.now(),
-        })
-        .run()
-    }
-    db.insert(OrchestratorArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: task.id,
-        run_id: run.id,
-        delivery_id: deliveryID,
-        kind: "report",
-        label: "evaluator-agent-analysis",
-        payload: analysis as unknown as Record<string, unknown>,
-        time_created: Date.now(),
-        time_updated: Date.now(),
-      })
-      .run()
-    // Update individual goal statuses from agent analysis (per-goal, not batch)
-    if (goals.length > 0) {
-      const now2 = Date.now()
-      for (const gs of (Array.isArray(analysis.goal_statuses) ? analysis.goal_statuses : [])) {
-        const goal = goals[gs.goal_index]
-        if (!goal) continue
-        let goalStatus = gs.status === "passed" ? "passed" as const : gs.status === "failed" ? "failed" as const : undefined
-        // Enforce check_selector: agent cannot mark a goal "passed" if its
-        // required checks did not actually pass in the automated results.
-        if (goalStatus === "passed") {
-          const selectors = selectorList(goal.metadata)
-          if (selectors.length > 0) {
-            const allSelectorsPassed = selectorsSatisfied(selectors, result.checks)
-            if (!allSelectorsPassed) {
-              goalStatus = undefined // keep goal pending — checks not satisfied
-            }
-          }
-        }
-        if (!goalStatus || goal.status === goalStatus) continue
-        db.update(OrchestratorGoalTable)
-          .set({ status: goalStatus, time_updated: now2 })
-          .where(eq(OrchestratorGoalTable.id, goal.id))
-          .run()
-        if (goalStatus === "passed") {
-          Database.effect(() =>
-            Bus.publish(Event.GoalPassed, { taskID: task.id, goalID: goal.id, summary: goal.description }),
-          )
-        } else if (goalStatus === "failed") {
-          Database.effect(() =>
-            Bus.publish(Event.GoalFailed, { taskID: task.id, goalID: goal.id, summary: `${goal.description}: ${gs.evidence}` }),
-          )
-        }
-      }
-      if (run.plan_version_id) {
-        deriveMilestoneStatuses(db, task.id, run.plan_version_id, now2)
-      }
-    }
-    // Update spec_item statuses based on evaluation outcome
-    if (task.active_spec_version_id) {
-      const specItems = findSpecItems(task.active_spec_version_id)
-      const specCheckVerdict = result.checks.find((c) => c.name === "spec_check")
-      const now3 = Date.now()
-      if (specItems.length > 0) {
-        const itemStatus = finalVerdict === "accepted" ? "done" as const : "failed" as const
-        for (const item of specItems) {
-          if (item.status === itemStatus) continue
-          db.update(OrchestratorSpecItemTable)
-            .set({ status: itemStatus, evidence: specCheckVerdict?.evidence ?? finalSummary, time_updated: now3 })
-            .where(eq(OrchestratorSpecItemTable.id, item.id))
-            .run()
-        }
-        // Mark spec snapshot as completed when all items pass
-        if (finalVerdict === "accepted") {
-          db.update(OrchestratorSpecSnapshotTable)
-            .set({ status: "completed", time_updated: now3 })
-            .where(eq(OrchestratorSpecSnapshotTable.id, task.active_spec_version_id))
-            .run()
-        }
-      }
-    }
-    Database.effect(() =>
-      Bus.publish(Event.EvaluationCompleted, {
-        taskID: task.id,
-        runID: run.id,
-        evaluationID,
-        status: finalStatus,
-        verdict: finalVerdict,
-        summary: finalSummary,
-      }),
-    )
+  persistEvaluation({
+    task,
+    run,
+    deliveryID,
+    evaluationID,
+    delivery,
+    result,
+    analysis,
+    analysisError,
+    finalVerdict,
+    finalStatus,
+    finalSummary,
+    goals,
   })
 
   if (finalStatus === "passed" || finalStatus === "inconclusive") {
-    // "passed" = full LLM investigation confirmed acceptance
-    // "inconclusive" = synthesis fallback or shallow investigation
-    // In both cases, check individual goal statuses — goals with check_selectors
-    // may have been verified mechanistically even without LLM investigation.
-    // Only goals that were actually verified (status !== "pending") count.
     const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
 
+    if (pendingBlocking.length === 0) {
+      const accepted = findDeliveryByRun(run.id)
+      if (!accepted) {
+        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+        return
+      }
+      await publishAcceptedDelivery(task, run, accepted, hooks)
+      return
+    }
+    const remaining = pendingBlocking.map((g) => g.description).join(", ")
+    await handleEvaluationFailure(requireTask(task.id), run, `Evaluation ${finalStatus} but blocking goals still pending: ${remaining}`, hooks, analysis)
+    return
+  }
+
+  await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
+}
+
+async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks) {
+  console.log(`[runEvaluation] START for run ${run.id}, task ${task.id}`)
+  if (!run.session_id) { console.log(`[runEvaluation] no session_id, skipping`); return }
+
+  const executor = ExecutorRegistry.require(run.executor)
+  let delivery: Awaited<ReturnType<typeof executor.delivery>>
+  try {
+    delivery = await executor.delivery({
+      sessionID: run.session_id,
+      since: run.time_started ?? run.time_created,
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
+    // Use minimal delivery from DB row
+    delivery = {
+      summary: existingDelivery.summary,
+      diffs: [],
+    }
+  }
+
+  const deliveryID = existingDelivery.id
+  const evaluationID = Identifier.ascending("evaluation")
+
+  const evaluationDeadline = AbortSignal.timeout(EVALUATION_HARD_TIMEOUT_MS)
+
+  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+  try {
+    result = await EvaluatorService.evaluate(
+      {
+        taskID: task.id,
+        activeSpecVersionID: task.active_spec_version_id ?? undefined,
+        request: task.request,
+        metadata: {
+          ...(task.metadata ?? {}),
+          delivery_changed_files: delivery.diffs.map((item) => item.file),
+        },
+      },
+      {
+        summary: delivery.summary,
+        diffs: delivery.diffs,
+        changedFiles: delivery.diffs.map((item) => item.file),
+      },
+    )
+  } catch (evalErr) {
+    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
+    log.error("re-evaluation Phase 1 failed", { error: msg })
+    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery,
+      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
+      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
+      analysisError: msg,
+      finalVerdict: "rejected",
+      finalStatus: "failed",
+      finalSummary: errorSummary,
+      goals: [],
+    })
+    updateExecutorSessionStatus(run.id, "failed")
+    const failNow = Date.now()
+    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    if (task.active_run_id === run.id) {
+      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
+    }
+    return
+  }
+
+  const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  let analysis: EvaluatorAnalysisType
+  let analysisError: string | undefined
+  try {
+    analysis = await EvaluatorService.analyzeDelivery({
+      task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
+      goals: goals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria,
+        priority: g.priority as "blocking" | "advisory",
+        check_selector: selectorList(g.metadata) as string[],
+      })),
+      delivery: {
+        summary: delivery.summary,
+        changedFiles: delivery.diffs.map((d) => d.file),
+        diffs: delivery.diffs,
+      },
+      checkResults: result.checks.map((c) => ({
+        name: c.name,
+        status: c.status,
+        evidence: c.evidence,
+      })),
+    })
+  } catch (err) {
+    analysisError = err instanceof Error ? err.message : String(err)
+    log.error("re-evaluation agent analysis failed", { error: analysisError })
+    analysis = fallbackAnalysis(result, goals.length, analysisError)
+  }
+
+  if (analysisError) {
+    const errorSummary = `Evaluator failure: ${analysisError}`
+    persistEvaluation({
+      task, run, deliveryID, evaluationID, delivery, result,
+      analysis, analysisError,
+      finalVerdict: "rejected",
+      finalStatus: "failed",
+      finalSummary: errorSummary,
+      goals,
+    })
+    updateExecutorSessionStatus(run.id, "failed")
+    const now = Date.now()
+    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
+    if (task.active_run_id === run.id) {
+      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: now }, errorSummary)
+    }
+    return
+  }
+
+  const phase1Failed = result.status === "failed"
+  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
+  const finalStatus =
+    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
+  const finalSummary = phase1Failed && analysis.verdict === "accepted"
+    ? `Rejected: automated checks failed. ${result.summary}`
+    : analysis.summary
+
+  persistEvaluation({
+    task, run, deliveryID, evaluationID, delivery, result,
+    analysis, analysisError, finalVerdict, finalStatus, finalSummary, goals,
+  })
+
+  if (finalStatus === "passed" || finalStatus === "inconclusive") {
+    const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+    const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
     if (pendingBlocking.length === 0) {
       const accepted = findDeliveryByRun(run.id)
       if (!accepted) {
@@ -675,29 +688,7 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   const task = requireTask(run.task_id)
   const now = Date.now()
   if (!findEvaluationByRun(run.id)) {
-    Database.use((db) =>
-      db
-        .insert(OrchestratorEvaluationTable)
-        .values({
-          id: Identifier.ascending("evaluation"),
-          task_id: task.id,
-          run_id: run.id,
-          status: "failed",
-          verdict: "rejected",
-          summary: error,
-          checks: [
-            {
-              name: "executor_completion",
-              status: "failed",
-              evidence: error,
-            },
-          ],
-          time_completed: now,
-          time_created: now,
-          time_updated: now,
-        })
-        .run(),
-    )
+    persistFailedRunEvaluation({ task, run, error, now })
   }
   await hooks.updateRun(run, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
   if (task.active_run_id === run.id) {
@@ -724,16 +715,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   const now = Date.now()
   await hooks.updateRun(run, { phase: "deliver" }, "Publishing accepted delivery")
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
-  Database.use((db) =>
-    db
-      .update(OrchestratorDeliveryTable)
-      .set({
-        status: "publishing",
-        time_updated: now,
-      })
-      .where(eq(OrchestratorDeliveryTable.id, delivery.id))
-      .run(),
-  )
+  markDeliveryPublishing(delivery.id, now)
 
   const result = await DeliveryService.deliver({ task, run, delivery }).catch((error) => ({
     status: "failed" as const,
@@ -751,39 +733,13 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   }))
 
   const completed = Date.now()
-  Database.transaction((db) => {
-    db.update(OrchestratorDeliveryTable)
-      .set({
-        status: result.status,
-        summary: result.summary,
-        result: {
-          ...(delivery.result ?? {}),
-          summary: result.summary,
-          artifacts: result.artifacts.map((item) => ({
-            kind: item.kind,
-            label: item.label,
-          })),
-          publish: result.publish,
-        },
-        time_updated: completed,
-      })
-      .where(eq(OrchestratorDeliveryTable.id, delivery.id))
-      .run()
-    for (const artifact of result.artifacts) {
-      db.insert(OrchestratorArtifactTable)
-        .values({
-          id: Identifier.ascending("artifact"),
-          task_id: task.id,
-          run_id: run.id,
-          delivery_id: delivery.id,
-          kind: artifact.kind,
-          label: artifact.label,
-          payload: artifact.payload,
-          time_created: completed,
-          time_updated: completed,
-        })
-        .run()
-    }
+  finalizeDeliveryResult({
+    deliveryId: delivery.id,
+    taskId: task.id,
+    runId: run.id,
+    delivery,
+    result,
+    now: completed,
   })
 
   if (result.status === "delivered") {
@@ -815,20 +771,10 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
 async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType) {
   if (task.active_run_id !== run.id) return
 
-  // Build rich retry context from delivery + evaluation data
-  const delivery = findDeliveryByRun(run.id)
-  const evaluation = findEvaluationByRun(run.id)
-  const retryContext: RetryContext = {
-    deliverySummary: delivery?.summary ?? undefined,
-    changedFiles: delivery?.result?.changed_files as string[] | undefined,
-    checks: (evaluation?.checks as Array<{ name: string; status: string; evidence: string }>) ?? undefined,
-    rootCause: analysis?.replan_guidance?.root_cause ?? undefined,
-    avoidApproaches: analysis?.replan_guidance?.avoid_approaches ?? undefined,
-    suggestedStrategy: analysis?.replan_guidance?.suggested_strategy ?? undefined,
-    classification: analysis?.classification ?? undefined,
-  }
+  const retryContext = buildRetryContext(run, summary, analysis)
+  const decision = decideRetryOrReplan(task, run, summary, analysis, retryContext)
 
-  const next = await retryOrReplan(task, run, summary, hooks, analysis, retryContext).catch(async (error) => {
+  const executed = await executeDecision(task, run, decision, hooks).catch(async (error) => {
     const message = error instanceof Error ? error.message : String(error)
     log.error("retry/replan failed", { taskID: task.id, runID: run.id, error: message })
     await hooks.updateTask(
@@ -843,9 +789,8 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
     )
     return false
   })
-  if (next) return
-  await failGoals(run, summary)
-  // Flush failure learnings (fire-and-forget)
+  if (executed) return
+  failGoals(run, summary)
   OrchestratorMemoryBridge.flushFailureLearnings({
     task,
     run,
@@ -855,115 +800,27 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: summary, time_completed: Date.now() }, summary)
 }
 
-async function retryOrReplan(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType, retryContext?: RetryContext) {
-  const limits = {
-    maxRuns: task.budget?.max_runs ?? DEFAULT_MAX_RUNS,
-    maxReplans: task.budget?.max_replans ?? DEFAULT_MAX_REPLANS,
-  }
-  const totalRuns = findRuns(task.id).length
-  if (totalRuns >= limits.maxRuns) return false
+async function executeDecision(
+  task: TaskRow,
+  run: RunRow,
+  decision: import("./strategy").StrategyDecision,
+  hooks: RuntimeHooks,
+): Promise<boolean> {
+  if (decision.action === "fail") return false
 
-  const classification = analysis?.classification ?? "unknown"
-
-  // Classification-based retry policy:
-  // - transient: retry immediately (flaky test, network issue)
-  // - input/permission: cannot fix automatically → fail
-  // - strategy: skip retry, go straight to replan (fundamental approach wrong)
-  // - evaluation/environment/unknown: try retry first, then replan
-
-  if (classification === "input" || classification === "permission") {
-    log.info("failure classified as non-retryable", { classification, taskID: task.id })
-    return false
-  }
-
-  if (classification === "strategy") {
-    // Strategy failure → skip retry, replan immediately with different approach
-    log.info("failure classified as strategy → replanning", { classification, taskID: task.id })
-    const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-    if (!currentPlan) return false
-    const replans = findPlans(task.id).length - 1
-    if (replans >= limits.maxReplans) return false
-    const next = await createReplanRun(task, currentPlan, run, summary, analysis)
-    if (!next.queued) return !!next.error
-    if (!next.runID) return false
-    await OrchestratorRuntime.dispatch(next.runID, hooks)
-    return true
-  }
-
-  // transient / evaluation / environment / unknown → retry first, then replan
-  if (run.retry_count < SAME_PLAN_RETRY_LIMIT) {
-    log.info("retrying current plan", { classification, retryCount: run.retry_count, taskID: task.id })
-    const nextRunID = createRetryRun(task, run, summary, retryContext)
+  if (decision.action === "retry") {
+    const nextRunID = createRetryRun(task, run, decision.summary, decision.retryContext)
     await OrchestratorRuntime.dispatch(nextRunID, hooks)
     return true
   }
 
   const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
   if (!currentPlan) return false
-  const replans = findPlans(task.id).length - 1
-  if (replans >= limits.maxReplans) return false
-  log.info("retries exhausted, replanning", { classification, replans, taskID: task.id })
-  const next = await createReplanRun(task, currentPlan, run, summary, analysis)
+  const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
   if (!next.queued) return !!next.error
   if (!next.runID) return false
   await OrchestratorRuntime.dispatch(next.runID, hooks)
   return true
-}
-
-async function failGoals(run: RunRow, summary: string) {
-  const planVersionID = run.plan_version_id
-  if (!planVersionID) return
-  const goals = listGoalsByPlan(planVersionID)
-  if (goals.length === 0) return
-  const now = Date.now()
-  Database.use((db) =>
-    db
-      .update(OrchestratorGoalTable)
-      .set({
-        status: "failed",
-        time_updated: now,
-      })
-      .where(eq(OrchestratorGoalTable.plan_version_id, planVersionID))
-      .run(),
-  )
-  for (const goal of goals) {
-    await Bus.publish(Event.GoalFailed, {
-      taskID: run.task_id,
-      goalID: goal.id,
-      summary: `${goal.description}: ${summary}`,
-    })
-  }
-}
-
-function deriveMilestoneStatuses(db: Parameters<Parameters<typeof Database.transaction>[0]>[0], taskID: string, planVersionID: string, now: number) {
-  const milestones = listMilestonesByPlan(planVersionID)
-  if (milestones.length === 0) return
-  const goals = listGoalsByPlan(planVersionID)
-  for (const ms of milestones) {
-    const msGoals = goals.filter((g) => g.milestone_id === ms.id)
-    const next = deriveMilestoneStatus(msGoals)
-    if (next === ms.status) continue
-    db.update(OrchestratorMilestoneTable)
-      .set({ status: next, time_updated: now })
-      .where(eq(OrchestratorMilestoneTable.id, ms.id))
-      .run()
-    if (next === "passed") {
-      Database.effect(() => Bus.publish(Event.MilestonePassed, { taskID, milestoneID: ms.id, summary: ms.title }))
-    } else if (next === "failed") {
-      Database.effect(() => Bus.publish(Event.MilestoneFailed, { taskID, milestoneID: ms.id, summary: ms.title }))
-    } else if (next === "active") {
-      Database.effect(() => Bus.publish(Event.MilestoneActivated, { taskID, milestoneID: ms.id, summary: ms.title }))
-    }
-  }
-}
-
-function deriveMilestoneStatus(goals: GoalRow[]): OrchestratorMilestoneStatus {
-  if (goals.length === 0) return "passed"
-  const blocking = goals.filter((g) => g.priority === "blocking")
-  if (blocking.some((g) => g.status === "failed")) return "failed"
-  if (blocking.every((g) => g.status === "passed")) return "passed"
-  if (goals.some((g) => g.status === "passed")) return "active"
-  return "pending"
 }
 
 function fallbackAnalysis(
@@ -1009,149 +866,6 @@ function fallbackAnalysis(
   }
 }
 
-function selectorList(metadata: unknown) {
-  if (!metadata || typeof metadata !== "object") return []
-  const value = (metadata as Record<string, unknown>).check_selector
-  if (!Array.isArray(value)) return []
-  return value.filter((item): item is string => typeof item === "string" && item.length > 0)
-}
-
-function selectorsSatisfied(selectors: string[], checks: Array<{ name: string; status: string }>) {
-  const relevant = selectors.filter((selector) =>
-    checks.some((check) => check.name === selector || check.name.startsWith(`${selector}#`)),
-  )
-  if (relevant.length === 0) return true
-  return relevant.every((selector) =>
-    checks.some(
-      (check) =>
-        (check.name === selector || check.name.startsWith(`${selector}#`)) && check.status === "passed",
-    ),
-  )
-}
-
-function createRetryRun(task: TaskRow, run: RunRow, summary: string, retryContext?: RetryContext) {
-  const nextRunID = Identifier.ascending("run")
-  const now = Date.now()
-  Database.transaction((db) => {
-    db.insert(OrchestratorRunTable)
-      .values({
-        id: nextRunID,
-        task_id: task.id,
-        plan_version_id: run.plan_version_id,
-        session_id: run.session_id,
-        executor: run.executor,
-        status: "queued",
-        phase: "execute",
-        retry_count: run.retry_count + 1,
-        metadata: {
-          previous_run_id: run.id,
-          strategy: "retry_same_plan",
-          prompt_override: buildRetryPrompt(summary, retryContext),
-          retry_context: retryContext,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    db.update(OrchestratorTaskTable)
-      .set({
-        active_run_id: nextRunID,
-        status: "running",
-        error: null,
-        blocking_reason: null,
-        time_completed: null,
-        time_updated: now,
-      })
-      .where(eq(OrchestratorTaskTable.id, task.id))
-      .run()
-    db.insert(OrchestratorProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: task.id,
-        status: "running",
-        summary: "Retrying current plan after evaluation failure",
-        payload: {
-          previousRunID: run.id,
-          nextRunID,
-          reason: summary,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    Database.effect(() =>
-      Bus.publish(Event.RunCreated, {
-        taskID: task.id,
-        runID: nextRunID,
-        status: "queued",
-        summary: "Retrying current plan after evaluation failure",
-      }),
-    )
-    Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
-        taskID: task.id,
-        status: "running",
-        summary: "Retrying current plan after evaluation failure",
-      }),
-    )
-  })
-  return nextRunID
-}
-
-async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow, summary: string, analysis?: EvaluatorAnalysisType) {
-  const goals = listGoalsByPlan(plan.id)
-  const routing =
-    task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
-      ? task.metadata.routing as any
-      : undefined
-  const replanContext = buildReplanContext({
-    analysis,
-    goals,
-    summary,
-    previousSummary: plan.summary,
-  })
-  const now = Date.now()
-  try {
-    const compiled = await compileTransition({
-      mode: "replan",
-      taskID: task.id,
-      now,
-      title: task.title,
-      request: task.request,
-      goals: goals.map((goal) => ({
-        description: goal.description,
-        criteria: goal.criteria,
-        priority: goal.priority,
-        metadata: goal.metadata ?? undefined,
-      })),
-      executor: run.executor,
-      routing,
-      task,
-      previousPlan: plan,
-      previousRun: run,
-      failureSummary: summary,
-      replanContext,
-    })
-    return persistReplanTransition({
-      task,
-      previousPlan: plan,
-      previousRun: run,
-      nextPlanID: Identifier.ascending("plan"),
-      nextRunID: Identifier.ascending("run"),
-      now,
-      summary,
-      replanContext,
-      compiled,
-    })
-  } catch (error) {
-    if (!(error instanceof PlannerFailureError)) throw error
-    return persistReplanTransitionFailure({
-      task,
-      now,
-      error: `Planner failure: ${error.message}`,
-    })
-  }
-}
 
 /** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */
 function consumeExecutorEvents(
@@ -1213,168 +927,6 @@ type RuntimeHooks = {
     values: Partial<typeof OrchestratorRunTable.$inferInsert>,
     summary: string,
   ) => Promise<RunRow>
-}
-
-function ensureExecutorSession(input: {
-  taskID: string
-  runID: string
-  provider: RunRow["executor"]
-  refs?: ProtocolRefsInfo
-  capabilities?: ProtocolCapabilitiesInfo
-  settings?: ProtocolSettingsInfo
-  started?: number
-}) {
-  const existing = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorSessionTable)
-      .where(eq(OrchestratorExecutorSessionTable.run_id, input.runID))
-      .get(),
-  )
-  const info = protocolInfo(input.provider)
-  const now = Date.now()
-  const refs = mergeRefs(existing?.refs ?? undefined, input.refs)
-  const capabilities = input.capabilities ?? info.capabilities
-  const settings = {
-    ...(existing?.settings ?? {}),
-    ...(input.settings ?? {}),
-  }
-  if (existing) {
-    Database.use((db) =>
-      db
-        .update(OrchestratorExecutorSessionTable)
-        .set({
-          provider: input.provider,
-          protocol: info.protocol,
-          protocol_version: info.version,
-          transport: ProtocolTransport.parse(info.transport).kind,
-          status: "active",
-          refs,
-          capabilities,
-          settings,
-          time_started: existing.time_started ?? input.started ?? now,
-          time_updated: now,
-        })
-        .where(eq(OrchestratorExecutorSessionTable.id, existing.id))
-        .run(),
-    )
-    return Database.use((db) =>
-      db
-        .select()
-        .from(OrchestratorExecutorSessionTable)
-        .where(eq(OrchestratorExecutorSessionTable.id, existing.id))
-        .get()!,
-    )
-  }
-  const id = Identifier.ascending("executor_session")
-  Database.use((db) =>
-    db
-      .insert(OrchestratorExecutorSessionTable)
-      .values({
-        id,
-        task_id: input.taskID,
-        run_id: input.runID,
-        provider: input.provider,
-        protocol: info.protocol,
-        protocol_version: info.version,
-        transport: ProtocolTransport.parse(info.transport).kind,
-        status: "active",
-        refs,
-        capabilities,
-        settings,
-        time_started: input.started ?? now,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
-  return Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorSessionTable)
-      .where(eq(OrchestratorExecutorSessionTable.id, id))
-      .get()!,
-  )
-}
-
-function updateExecutorSessionStatus(runID: string, status: typeof OrchestratorExecutorSessionTable.$inferInsert.status) {
-  const row = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorSessionTable)
-      .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
-      .get(),
-  )
-  if (!row) return
-  Database.use((db) =>
-    db
-      .update(OrchestratorExecutorSessionTable)
-      .set({
-        status,
-        time_completed: Date.now(),
-        time_updated: Date.now(),
-      })
-      .where(eq(OrchestratorExecutorSessionTable.id, row.id))
-      .run(),
-  )
-}
-
-function appendExecutorEvent(
-  executorSessionID: string,
-  taskID: string,
-  runID: string,
-  provider: RunRow["executor"],
-  event: {
-    provider: RunRow["executor"]
-    kind: string
-    summary?: string
-    refs?: ProtocolRefsInfo
-    payload?: Record<string, unknown>
-    raw?: Record<string, unknown>
-  },
-) {
-  const last = Database.use((db) =>
-    db
-      .select()
-      .from(OrchestratorExecutorEventTable)
-      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
-      .orderBy(desc(OrchestratorExecutorEventTable.sequence))
-      .get(),
-  )
-  const now = Date.now()
-  const sequence = (last?.sequence ?? 0) + 1
-  Database.use((db) =>
-    db
-      .insert(OrchestratorExecutorEventTable)
-      .values({
-        id: Identifier.ascending("executor_event"),
-        executor_session_id: executorSessionID,
-        task_id: taskID,
-        run_id: runID,
-        sequence,
-        kind: event.kind,
-        summary: event.summary ?? null,
-        refs: event.refs,
-        payload: {
-          provider,
-          ...(event.payload ?? {}),
-        },
-        raw: event.raw,
-        time_observed: now,
-        time_created: now,
-        time_updated: now,
-      })
-      .run(),
-  )
-}
-
-function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
-  if (!current && !next) return undefined
-  const result = {
-    ...(current ?? {}),
-    ...(next ?? {}),
-  }
-  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function protocolEventKind(type: string) {

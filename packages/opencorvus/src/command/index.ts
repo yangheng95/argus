@@ -7,6 +7,7 @@ import PROMPT_INITIALIZE from "./template/initialize.txt"
 import PROMPT_REVIEW from "./template/review.txt"
 import { MCP } from "../mcp"
 import { Skill } from "../skill"
+import { entries, values as objectValues } from "@/util/object"
 
 export namespace Command {
   export const Event = {
@@ -81,7 +82,7 @@ export namespace Command {
       },
     }
 
-    for (const [name, command] of Object.entries(cfg.command ?? {})) {
+    for (const [name, command] of entries((cfg.command ?? {}) as NonNullable<Config.Info["command"]>)) {
       result[name] = {
         name,
         agent: command.agent,
@@ -95,7 +96,7 @@ export namespace Command {
         hints: hints(command.template),
       }
     }
-    for (const [name, prompt] of Object.entries(await MCP.prompts())) {
+    for (const [name, prompt] of entries(await MCP.prompts())) {
       result[name] = {
         name,
         source: "mcp",
@@ -145,6 +146,6 @@ export namespace Command {
   }
 
   export async function list() {
-    return state().then((x) => Object.values(x))
+    return state().then((x) => objectValues(x))
   }
 }

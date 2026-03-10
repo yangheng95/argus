@@ -9,6 +9,7 @@ import { Config } from "../config/config"
 import { mergeDeep } from "remeda"
 import { Instance } from "../project/instance"
 import { Process } from "../util/process"
+import { entries, values as objectValues } from "@/util/object"
 
 export namespace Format {
   const log = Log.create({ service: "format" })
@@ -37,19 +38,23 @@ export namespace Format {
       }
     }
 
-    for (const item of Object.values(Formatter)) {
+    for (const item of objectValues(Formatter as Record<string, Formatter.Info>)) {
       formatters[item.name] = item
     }
-    for (const [name, item] of Object.entries(cfg.formatter ?? {})) {
+    for (const [name, item] of entries((cfg.formatter ?? {}) as Exclude<NonNullable<Config.Info["formatter"]>, false>)) {
       if (item.disabled) {
         delete formatters[name]
         continue
       }
-      const result: Formatter.Info = mergeDeep(formatters[name] ?? {}, {
-        command: [],
-        extensions: [],
-        ...item,
-      })
+      const result = mergeDeep(
+        formatters[name] ?? {
+          name,
+          command: [],
+          extensions: [],
+          enabled: async () => true,
+        },
+        item,
+      ) as Formatter.Info
 
       if (result.command.length === 0) continue
 
@@ -76,8 +81,8 @@ export namespace Format {
 
   async function getFormatter(ext: string) {
     const formatters = await state().then((x) => x.formatters)
-    const result = []
-    for (const item of Object.values(formatters)) {
+    const result: Formatter.Info[] = []
+    for (const item of objectValues(formatters)) {
       log.info("checking", { name: item.name, ext })
       if (!item.extensions.includes(ext)) continue
       if (!(await isEnabled(item))) continue
@@ -90,7 +95,7 @@ export namespace Format {
   export async function status() {
     const s = await state()
     const result: Status[] = []
-    for (const formatter of Object.values(s.formatters)) {
+    for (const formatter of objectValues(s.formatters)) {
       const enabled = await isEnabled(formatter)
       result.push({
         name: formatter.name,

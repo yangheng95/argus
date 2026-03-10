@@ -29,6 +29,7 @@ describe("channel.registry", () => {
         expect(ids).toContain("whatsapp")
         expect(ids).toContain("signal")
         expect(ids).toContain("mattermost")
+        expect(ids).toContain("qq")
         expect(telegram?.runtime_status).toBeDefined()
         expect(typeof telegram?.runtime_detail).toBe("string")
         expect(discord?.runtime_status).toBeDefined()

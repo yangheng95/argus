@@ -1,19 +1,27 @@
 import z from "zod"
 import { Bus } from "@/bus"
+import { inferSelectors, selectorList, selectorsSatisfied } from "@/check/policy"
 import { Identifier } from "@/id/id"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { type EvaluationOutput } from "@/evaluator/shared"
 import { ExecutorPlanner } from "@/planner/executor"
+import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
 import { type ReplanContext } from "@/planner/agent"
 import { PlannerFailureError, PlannerService, type PlanDraft } from "@/planner/service"
 import { installRuntimeShims } from "@/runtime/shims"
 import { writeSpec } from "@/orchestrator/spec"
 import { SpecService } from "@/spec/service"
-import { Database, eq } from "@/storage/db"
+import { Database, desc, eq } from "@/storage/db"
 import { Log } from "@/util/log"
-import { budgetRow } from "./helpers"
+import { budgetRow, buildRetryPrompt, type RetryContext } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
 import {
+  OrchestratorArtifactTable,
   OrchestratorChannelBindingTable,
+  OrchestratorDeliveryTable,
+  OrchestratorEvaluationTable,
+  OrchestratorExecutorEventTable,
+  OrchestratorExecutorSessionTable,
   OrchestratorGoalTable,
   OrchestratorMilestoneTable,
   OrchestratorPlanVersionTable,
@@ -22,9 +30,12 @@ import {
   OrchestratorSpecItemTable,
   OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
+  type OrchestratorMilestoneStatus,
+  type OrchestratorDeliveryStatus,
+  type OrchestratorArtifactKind,
 } from "./orchestrator.sql"
 import { plannerClarification } from "./planner-clarification"
-import { type GoalRow, type PlanRow, type RunRow, type TaskRow } from "./store"
+import { findSpecItems, listGoalsByPlan, listMilestonesByPlan, type GoalRow, type PlanRow, type RunRow, type TaskRow } from "./store"
 
 const log = Log.create({ service: "orchestrator-transition" })
 
@@ -922,19 +933,667 @@ function persistSpecSnapshot(
 }
 
 function inferGoalMetadata(description: string, criteria: string) {
-  const text = `${description} ${criteria}`.toLowerCase()
-  const selectors = new Set<string>()
-  if (text.includes("build")) selectors.add("build")
-  if (text.includes("test")) selectors.add("test")
-  if (text.includes("lint")) selectors.add("lint")
-  if (text.includes("verify")) selectors.add("verify_cmd")
-  if (/(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(text)) selectors.add("ui_review")
-  if (/(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(text)) selectors.add("code_quality")
-  if (/\bcr\b|code review|审查|代码评审|review finding|review comment/.test(text)) selectors.add("code_review")
-  if (/(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(text)) selectors.add("dead_code_review")
-  if (/(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(text)) selectors.add("startup")
-  if (selectors.size === 0) return undefined
-  return {
-    check_selector: [...selectors],
+  const selectors = inferSelectors(`${description} ${criteria}`)
+  if (selectors.length === 0) return undefined
+  return { check_selector: selectors }
+}
+
+export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retryContext?: RetryContext) {
+  const nextRunID = Identifier.ascending("run")
+  const now = Date.now()
+  Database.transaction((db) => {
+    db.insert(OrchestratorRunTable)
+      .values({
+        id: nextRunID,
+        task_id: task.id,
+        plan_version_id: run.plan_version_id,
+        session_id: run.session_id,
+        executor: run.executor,
+        status: "queued",
+        phase: "execute",
+        retry_count: run.retry_count + 1,
+        metadata: {
+          previous_run_id: run.id,
+          strategy: "retry_same_plan",
+          prompt_override: buildRetryPrompt(summary, retryContext),
+          retry_context: retryContext,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    db.update(OrchestratorTaskTable)
+      .set({
+        active_run_id: nextRunID,
+        status: "running",
+        error: null,
+        blocking_reason: null,
+        time_completed: null,
+        time_updated: now,
+      })
+      .where(eq(OrchestratorTaskTable.id, task.id))
+      .run()
+    db.insert(OrchestratorProgressSnapshotTable)
+      .values({
+        id: Identifier.ascending("progress"),
+        task_id: task.id,
+        status: "running",
+        summary: "Retrying current plan after evaluation failure",
+        payload: {
+          previousRunID: run.id,
+          nextRunID,
+          reason: summary,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    Database.effect(() =>
+      Bus.publish(Event.RunCreated, {
+        taskID: task.id,
+        runID: nextRunID,
+        status: "queued",
+        summary: "Retrying current plan after evaluation failure",
+      }),
+    )
+    Database.effect(() =>
+      Bus.publish(Event.TaskUpdated, {
+        taskID: task.id,
+        status: "running",
+        summary: "Retrying current plan after evaluation failure",
+      }),
+    )
+  })
+  return nextRunID
+}
+
+export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow, summary: string, analysis?: EvaluatorAnalysisType) {
+  const goals = listGoalsByPlan(plan.id)
+  const routing =
+    task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
+      ? task.metadata.routing as any
+      : undefined
+  const replanContext = buildReplanContext({
+    analysis,
+    goals,
+    summary,
+    previousSummary: plan.summary,
+  })
+  const now = Date.now()
+  try {
+    const compiled = await compileTransition({
+      mode: "replan",
+      taskID: task.id,
+      now,
+      title: task.title,
+      request: task.request,
+      goals: goals.map((goal) => ({
+        description: goal.description,
+        criteria: goal.criteria,
+        priority: goal.priority,
+        metadata: goal.metadata ?? undefined,
+      })),
+      executor: run.executor,
+      routing,
+      task,
+      previousPlan: plan,
+      previousRun: run,
+      failureSummary: summary,
+      replanContext,
+    })
+    return persistReplanTransition({
+      task,
+      previousPlan: plan,
+      previousRun: run,
+      nextPlanID: Identifier.ascending("plan"),
+      nextRunID: Identifier.ascending("run"),
+      now,
+      summary,
+      replanContext,
+      compiled,
+    })
+  } catch (error) {
+    if (!(error instanceof PlannerFailureError)) throw error
+    return persistReplanTransitionFailure({
+      task,
+      now,
+      error: `Planner failure: ${error.message}`,
+    })
   }
+}
+
+type EvaluationStatus = "passed" | "failed" | "inconclusive" | "pending"
+type EvaluationVerdict = "accepted" | "rejected" | "inconclusive"
+
+export function persistEvaluation(input: {
+  task: TaskRow
+  run: RunRow
+  deliveryID: string
+  evaluationID: string
+  delivery: {
+    summary: string
+    diffs: Array<{ file: string; [key: string]: unknown }>
+  }
+  result: EvaluationOutput
+  analysis: EvaluatorAnalysisType
+  analysisError?: string
+  finalVerdict: string
+  finalStatus: string
+  finalSummary: string
+  goals: GoalRow[]
+}) {
+  const now = Date.now()
+  Database.transaction((db) => {
+    db.insert(OrchestratorEvaluationTable)
+      .values({
+        id: input.evaluationID,
+        task_id: input.task.id,
+        run_id: input.run.id,
+        delivery_id: input.deliveryID,
+        status: input.finalStatus as EvaluationStatus,
+        verdict: input.finalVerdict as EvaluationVerdict,
+        summary: input.finalSummary,
+        checks: input.result.checks,
+        time_completed: now,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    for (const artifact of input.result.artifacts) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.task.id,
+          run_id: input.run.id,
+          delivery_id: input.deliveryID,
+          kind: artifact.kind as typeof OrchestratorArtifactTable.$inferInsert.kind,
+          label: artifact.label,
+          payload: artifact.payload,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
+    if (input.analysisError) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.task.id,
+          run_id: input.run.id,
+          delivery_id: input.deliveryID,
+          kind: "report",
+          label: "evaluator-agent-error",
+          payload: { error: input.analysisError, fallback: true },
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
+    db.insert(OrchestratorArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        delivery_id: input.deliveryID,
+        kind: "report",
+        label: "evaluator-agent-analysis",
+        payload: input.analysis as unknown as Record<string, unknown>,
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+    if (input.goals.length > 0) {
+      const now2 = Date.now()
+      for (const gs of (Array.isArray(input.analysis.goal_statuses) ? input.analysis.goal_statuses : [])) {
+        const goal = input.goals[gs.goal_index]
+        if (!goal) continue
+        let goalStatus = gs.status === "passed" ? "passed" as const : gs.status === "failed" ? "failed" as const : undefined
+        if (goalStatus === "passed") {
+          const selectors = selectorList(goal.metadata)
+          if (selectors.length > 0) {
+            const allSelectorsPassed = selectorsSatisfied(selectors, input.result.checks)
+            if (!allSelectorsPassed) {
+              goalStatus = undefined
+            }
+          }
+        }
+        if (!goalStatus || goal.status === goalStatus) continue
+        db.update(OrchestratorGoalTable)
+          .set({ status: goalStatus, time_updated: now2 })
+          .where(eq(OrchestratorGoalTable.id, goal.id))
+          .run()
+        if (goalStatus === "passed") {
+          Database.effect(() =>
+            Bus.publish(Event.GoalPassed, { taskID: input.task.id, goalID: goal.id, summary: goal.description }),
+          )
+        } else if (goalStatus === "failed") {
+          Database.effect(() =>
+            Bus.publish(Event.GoalFailed, { taskID: input.task.id, goalID: goal.id, summary: `${goal.description}: ${gs.evidence}` }),
+          )
+        }
+      }
+      if (input.run.plan_version_id) {
+        deriveMilestoneStatuses(db, input.task.id, input.run.plan_version_id, now2)
+      }
+    }
+    if (input.task.active_spec_version_id) {
+      const specItems = findSpecItems(input.task.active_spec_version_id)
+      const specCheckVerdict = input.result.checks.find((c) => c.name === "spec_check")
+      const now3 = Date.now()
+      if (specItems.length > 0) {
+        const itemStatus = input.finalVerdict === "accepted" ? "done" as const : "failed" as const
+        for (const item of specItems) {
+          if (item.status === itemStatus) continue
+          db.update(OrchestratorSpecItemTable)
+            .set({ status: itemStatus, evidence: specCheckVerdict?.evidence ?? input.finalSummary, time_updated: now3 })
+            .where(eq(OrchestratorSpecItemTable.id, item.id))
+            .run()
+        }
+        if (input.finalVerdict === "accepted") {
+          db.update(OrchestratorSpecSnapshotTable)
+            .set({ status: "completed", time_updated: now3 })
+            .where(eq(OrchestratorSpecSnapshotTable.id, input.task.active_spec_version_id))
+            .run()
+        }
+      }
+    }
+    Database.effect(() =>
+      Bus.publish(Event.EvaluationCompleted, {
+        taskID: input.task.id,
+        runID: input.run.id,
+        evaluationID: input.evaluationID,
+        status: input.finalStatus as EvaluationStatus,
+        verdict: input.finalVerdict as EvaluationVerdict,
+        summary: input.finalSummary,
+      }),
+    )
+  })
+}
+
+export function persistDelivery(input: {
+  task: TaskRow
+  run: RunRow
+  deliveryID: string
+  delivery: {
+    summary: string
+    diffs: Array<{ file: string; [key: string]: unknown }>
+  }
+  now: number
+}) {
+  Database.transaction((db) => {
+    db.insert(OrchestratorDeliveryTable)
+      .values({
+        id: input.deliveryID,
+        task_id: input.task.id,
+        run_id: input.run.id,
+        status: "candidate",
+        summary: input.delivery.summary,
+        result: {
+          summary: input.delivery.summary,
+          changed_files: input.delivery.diffs.map((item) => item.file),
+          diffs: input.delivery.diffs,
+        },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    db.insert(OrchestratorArtifactTable)
+      .values({
+        id: Identifier.ascending("artifact"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        delivery_id: input.deliveryID,
+        kind: "report",
+        label: "assistant-summary",
+        payload: { summary: input.delivery.summary },
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run()
+    if (input.delivery.diffs.length > 0) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.task.id,
+          run_id: input.run.id,
+          delivery_id: input.deliveryID,
+          kind: "diff",
+          label: "workspace-diff",
+          payload: { diffs: input.delivery.diffs },
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    }
+    for (const item of input.delivery.diffs) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.task.id,
+          run_id: input.run.id,
+          delivery_id: input.deliveryID,
+          kind: "changed_file",
+          label: item.file,
+          payload: item,
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    }
+    Database.effect(() =>
+      Bus.publish(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }),
+    )
+  })
+}
+
+export function persistFailedRunEvaluation(input: {
+  task: TaskRow
+  run: RunRow
+  error: string
+  now: number
+}) {
+  Database.use((db) =>
+    db
+      .insert(OrchestratorEvaluationTable)
+      .values({
+        id: Identifier.ascending("evaluation"),
+        task_id: input.task.id,
+        run_id: input.run.id,
+        status: "failed",
+        verdict: "rejected",
+        summary: input.error,
+        checks: [
+          {
+            name: "executor_completion",
+            status: "failed",
+            evidence: input.error,
+          },
+        ],
+        time_completed: input.now,
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run(),
+  )
+}
+
+export function failGoals(run: RunRow, summary: string) {
+  const planVersionID = run.plan_version_id
+  if (!planVersionID) return
+  const goals = listGoalsByPlan(planVersionID)
+  if (goals.length === 0) return
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .update(OrchestratorGoalTable)
+      .set({
+        status: "failed",
+        time_updated: now,
+      })
+      .where(eq(OrchestratorGoalTable.plan_version_id, planVersionID))
+      .run(),
+  )
+  for (const goal of goals) {
+    Bus.publish(Event.GoalFailed, {
+      taskID: run.task_id,
+      goalID: goal.id,
+      summary: `${goal.description}: ${summary}`,
+    })
+  }
+}
+
+export function ensureExecutorSession(input: {
+  taskID: string
+  runID: string
+  provider: RunRow["executor"]
+  refs?: ProtocolRefsInfo
+  capabilities?: ProtocolCapabilitiesInfo
+  settings?: ProtocolSettingsInfo
+  started?: number
+}) {
+  const existing = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.run_id, input.runID))
+      .get(),
+  )
+  const info = protocolInfo(input.provider)
+  const now = Date.now()
+  const refs = mergeRefs(existing?.refs ?? undefined, input.refs)
+  const capabilities = input.capabilities ?? info.capabilities
+  const settings = {
+    ...(existing?.settings ?? {}),
+    ...(input.settings ?? {}),
+  }
+  if (existing) {
+    Database.use((db) =>
+      db
+        .update(OrchestratorExecutorSessionTable)
+        .set({
+          provider: input.provider,
+          protocol: info.protocol,
+          protocol_version: info.version,
+          transport: ProtocolTransport.parse(info.transport).kind,
+          status: "active",
+          refs,
+          capabilities,
+          settings,
+          time_started: existing.time_started ?? input.started ?? now,
+          time_updated: now,
+        })
+        .where(eq(OrchestratorExecutorSessionTable.id, existing.id))
+        .run(),
+    )
+    return Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorExecutorSessionTable)
+        .where(eq(OrchestratorExecutorSessionTable.id, existing.id))
+        .get()!,
+    )
+  }
+  const id = Identifier.ascending("executor_session")
+  Database.use((db) =>
+    db
+      .insert(OrchestratorExecutorSessionTable)
+      .values({
+        id,
+        task_id: input.taskID,
+        run_id: input.runID,
+        provider: input.provider,
+        protocol: info.protocol,
+        protocol_version: info.version,
+        transport: ProtocolTransport.parse(info.transport).kind,
+        status: "active",
+        refs,
+        capabilities,
+        settings,
+        time_started: input.started ?? now,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.id, id))
+      .get()!,
+  )
+}
+
+export function updateExecutorSessionStatus(runID: string, status: typeof OrchestratorExecutorSessionTable.$inferInsert.status) {
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
+      .get(),
+  )
+  if (!row) return
+  Database.use((db) =>
+    db
+      .update(OrchestratorExecutorSessionTable)
+      .set({
+        status,
+        time_completed: Date.now(),
+        time_updated: Date.now(),
+      })
+      .where(eq(OrchestratorExecutorSessionTable.id, row.id))
+      .run(),
+  )
+}
+
+export function appendExecutorEvent(
+  executorSessionID: string,
+  taskID: string,
+  runID: string,
+  provider: RunRow["executor"],
+  event: {
+    provider: RunRow["executor"]
+    kind: string
+    summary?: string
+    refs?: ProtocolRefsInfo
+    payload?: Record<string, unknown>
+    raw?: Record<string, unknown>
+  },
+) {
+  const last = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorEventTable)
+      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
+      .orderBy(desc(OrchestratorExecutorEventTable.sequence))
+      .get(),
+  )
+  const now = Date.now()
+  const sequence = (last?.sequence ?? 0) + 1
+  Database.use((db) =>
+    db
+      .insert(OrchestratorExecutorEventTable)
+      .values({
+        id: Identifier.ascending("executor_event"),
+        executor_session_id: executorSessionID,
+        task_id: taskID,
+        run_id: runID,
+        sequence,
+        kind: event.kind,
+        summary: event.summary ?? null,
+        refs: event.refs,
+        payload: {
+          provider,
+          ...(event.payload ?? {}),
+        },
+        raw: event.raw,
+        time_observed: now,
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+}
+
+
+export function markDeliveryPublishing(deliveryId: string, now: number) {
+  Database.use((db) =>
+    db
+      .update(OrchestratorDeliveryTable)
+      .set({
+        status: "publishing",
+        time_updated: now,
+      })
+      .where(eq(OrchestratorDeliveryTable.id, deliveryId))
+      .run(),
+  )
+}
+
+export function finalizeDeliveryResult(input: {
+  deliveryId: string
+  taskId: string
+  runId: string
+  delivery: { result?: Record<string, unknown> | null }
+  result: {
+    status: OrchestratorDeliveryStatus
+    summary: string
+    artifacts: Array<{ kind: OrchestratorArtifactKind; label: string; payload: Record<string, unknown> }>
+    publish: unknown
+  }
+  now: number
+}) {
+  Database.transaction((db) => {
+    db.update(OrchestratorDeliveryTable)
+      .set({
+        status: input.result.status,
+        summary: input.result.summary,
+        result: {
+          ...(input.delivery.result ?? {}),
+          summary: input.result.summary,
+          artifacts: input.result.artifacts.map((item) => ({
+            kind: item.kind,
+            label: item.label,
+          })),
+          publish: input.result.publish,
+        },
+        time_updated: input.now,
+      })
+      .where(eq(OrchestratorDeliveryTable.id, input.deliveryId))
+      .run()
+    for (const artifact of input.result.artifacts) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.taskId,
+          run_id: input.runId,
+          delivery_id: input.deliveryId,
+          kind: artifact.kind,
+          label: artifact.label,
+          payload: artifact.payload,
+          time_created: input.now,
+          time_updated: input.now,
+        })
+        .run()
+    }
+  })
+}
+
+function deriveMilestoneStatuses(db: Parameters<Parameters<typeof Database.transaction>[0]>[0], taskID: string, planVersionID: string, now: number) {
+  const milestones = listMilestonesByPlan(planVersionID)
+  if (milestones.length === 0) return
+  const goals = listGoalsByPlan(planVersionID)
+  for (const ms of milestones) {
+    const msGoals = goals.filter((g) => g.milestone_id === ms.id)
+    const next = deriveMilestoneStatus(msGoals)
+    if (next === ms.status) continue
+    db.update(OrchestratorMilestoneTable)
+      .set({ status: next, time_updated: now })
+      .where(eq(OrchestratorMilestoneTable.id, ms.id))
+      .run()
+    if (next === "passed") {
+      Database.effect(() => Bus.publish(Event.MilestonePassed, { taskID, milestoneID: ms.id, summary: ms.title }))
+    } else if (next === "failed") {
+      Database.effect(() => Bus.publish(Event.MilestoneFailed, { taskID, milestoneID: ms.id, summary: ms.title }))
+    } else if (next === "active") {
+      Database.effect(() => Bus.publish(Event.MilestoneActivated, { taskID, milestoneID: ms.id, summary: ms.title }))
+    }
+  }
+}
+
+function deriveMilestoneStatus(goals: GoalRow[]): OrchestratorMilestoneStatus {
+  if (goals.length === 0) return "passed"
+  const blocking = goals.filter((g) => g.priority === "blocking")
+  if (blocking.some((g) => g.status === "failed")) return "failed"
+  if (blocking.every((g) => g.status === "passed")) return "passed"
+  if (goals.some((g) => g.status === "passed")) return "active"
+  return "pending"
+}
+
+function mergeRefs(current?: ProtocolRefsInfo, next?: ProtocolRefsInfo) {
+  if (!current && !next) return undefined
+  const result = {
+    ...(current ?? {}),
+    ...(next ?? {}),
+  }
+  return Object.keys(result).length > 0 ? result : undefined
 }

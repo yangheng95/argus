@@ -45,7 +45,7 @@ export function openPathCommand(target: string) {
 export const AppDocumentation = {
   info: {
     title: "opencorvus",
-    version: "0.0.1",
+    version: "0.0.1-alpha",
     description: "opencorvus api",
   },
   openapi: "3.1.1",

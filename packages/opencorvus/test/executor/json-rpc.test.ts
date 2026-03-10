@@ -25,7 +25,7 @@ describe("json rpc line transport", () => {
     const result = await transport.request("initialize", {
       clientInfo: {
         name: "test",
-        version: "0.0.1",
+        version: "0.0.1-alpha",
       },
     })
     expect(result).toEqual({ ok: true })

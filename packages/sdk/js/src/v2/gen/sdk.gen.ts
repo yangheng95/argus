@@ -945,7 +945,7 @@ export class Runtime extends HeyApiClient {
   /**
    * Restart managed channel runtime
    *
-   * Restart the managed channel bot runtime with the current config.
+   * Restart the managed channel runtime with the current config.
    */
   public restart<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -1004,6 +1004,7 @@ export class Channel extends HeyApiClient {
         | "signal"
         | "wecom"
         | "dingtalk"
+        | "qq"
       channel?: string
       thread?: string
       text?: string
@@ -1053,7 +1054,7 @@ export class Channel extends HeyApiClient {
   /**
    * Get managed channel runtime
    *
-   * Get managed bot runtime status for configured channel integrations.
+   * Get managed channel runtime status for configured channel integrations.
    */
   public runtime<ThrowOnError extends boolean = false>(
     parameters?: {
@@ -2283,9 +2284,6 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
-      extra?: {
-        [key: string]: unknown
-      }
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -2305,7 +2303,6 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
-            { in: "body", key: "extra" },
             { in: "body", key: "parts" },
           ],
         },
@@ -2413,9 +2410,6 @@ export class Session2 extends HeyApiClient {
       format?: OutputFormat
       system?: string
       variant?: string
-      extra?: {
-        [key: string]: unknown
-      }
       parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
     },
     options?: Options<never, ThrowOnError>,
@@ -2435,7 +2429,6 @@ export class Session2 extends HeyApiClient {
             { in: "body", key: "format" },
             { in: "body", key: "system" },
             { in: "body", key: "variant" },
-            { in: "body", key: "extra" },
             { in: "body", key: "parts" },
           ],
         },
@@ -3327,6 +3320,7 @@ export class Message extends HeyApiClient {
         | "signal"
         | "wecom"
         | "dingtalk"
+        | "qq"
       text?: string
       taskID?: string
       sessionID?: string
@@ -3656,6 +3650,7 @@ export class Panel extends HeyApiClient {
         | "signal"
         | "wecom"
         | "dingtalk"
+        | "qq"
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3700,6 +3695,7 @@ export class Panel extends HeyApiClient {
         | "signal"
         | "wecom"
         | "dingtalk"
+        | "qq"
       text?: string
       taskID?: string
       sessionID?: string
@@ -3787,6 +3783,7 @@ export class Control extends HeyApiClient {
         | "signal"
         | "wecom"
         | "dingtalk"
+        | "qq"
     },
     options?: Options<never, ThrowOnError>,
   ) {

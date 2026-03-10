@@ -13,6 +13,7 @@
 import { generateText, stepCountIs } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
+import { verificationHints, matchSelectors } from "@/check/policy"
 import { Provider } from "@/provider/provider"
 import { createEvaluatorTools } from "./tools"
 import { Memory } from "@/memory"
@@ -508,39 +509,10 @@ function buildUserPrompt(
   return sections.join("\n\n")
 }
 
-/**
- * Generate a verification hint for each goal based on its check_selector and criteria.
- * This tells the LLM exactly HOW to verify each goal.
- */
 function goalVerificationHint(goal: GoalInfo): string {
-  const hints: string[] = []
   const selectors = goal.check_selector ?? []
-  const text = `${goal.description} ${goal.criteria}`.toLowerCase()
-
-  if (selectors.includes("build") || text.includes("build") || text.includes("tsc") || text.includes("compile")) {
-    hints.push("Check build output for compilation errors")
-  }
-  if (selectors.includes("test") || text.includes("test") || text.includes("bun test") || text.includes("jest")) {
-    hints.push("Check test output for assertion failures, read test file to understand what was expected")
-  }
-  if (selectors.includes("lint") || text.includes("lint") || text.includes("eslint")) {
-    hints.push("Check lint output for violations")
-  }
-  if (selectors.includes("code_quality") || selectors.includes("code_review") || text.includes("quality") || text.includes("review")) {
-    hints.push("Read changed files, check against preferences/conventions")
-  }
-  if (text.includes("middleware") || text.includes("中间件")) {
-    hints.push("Read implementation to verify middleware chain pattern, read tests to verify behavior")
-  }
-  if (text.includes("type") || text.includes("export") || text.includes("interface")) {
-    hints.push("Read source file to verify type/export exists with correct signature")
-  }
-
-  if (hints.length === 0) {
-    hints.push("Read related files and check output to verify criteria is met")
-  }
-
-  return hints.join("; ")
+  const text = `${goal.description} ${goal.criteria}`
+  return verificationHints(selectors, text).join("; ")
 }
 
 function truncate(text: string, maxLen: number): string {
@@ -610,7 +582,7 @@ function synthesizeFromCheckResults(input: {
     }
 
     // Match selectors against actual check results
-    const relevantChecks = input.checkResults.filter((c) => selectors.some((s) => c.name.includes(s)))
+    const relevantChecks = matchSelectors(selectors, input.checkResults)
 
     if (relevantChecks.length === 0) {
       return {

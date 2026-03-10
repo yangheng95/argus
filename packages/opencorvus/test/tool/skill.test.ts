@@ -110,7 +110,7 @@ Use this skill.
     }
   })
 
-  test("execute loads builtin bot skill with bundled files", async () => {
+  test("execute loads builtin channel skill with bundled files", async () => {
     await using tmp = await tmpdir({ git: true })
 
     const home = process.env.OPENCORVUS_TEST_HOME
@@ -129,15 +129,15 @@ Use this skill.
             },
           }
 
-          const result = await tool.execute({ name: "opencorvus-bot-config-wizard" }, ctx)
+          const result = await tool.execute({ name: "opencorvus-channel-config-wizard" }, ctx)
           const ref = path.join(result.metadata.dir, "references", "channel-matrix.md")
 
           expect(requests.length).toBe(1)
           expect(requests[0].permission).toBe("skill")
-          expect(requests[0].patterns).toContain("opencorvus-bot-config-wizard")
-          expect(result.metadata.dir).toContain(path.join("builtin-skills", "opencorvus-bot-config-wizard"))
+          expect(requests[0].patterns).toContain("opencorvus-channel-config-wizard")
+          expect(result.metadata.dir).toContain(path.join("builtin-skills", "opencorvus-channel-config-wizard"))
           expect(result.output).toContain(`<file>${path.resolve(ref)}</file>`)
-          expect(await Bun.file(ref).text()).toContain("# OpenCorvus Bot Channel Matrix")
+          expect(await Bun.file(ref).text()).toContain("# OpenCorvus Channel Runtime Matrix")
         },
       })
     } finally {
@@ -145,3 +145,4 @@ Use this skill.
     }
   })
 })
+
