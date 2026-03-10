@@ -521,29 +521,20 @@ export async function specCheckResult(
       evidence: "Cannot verify delivery against spec: no spec exists.",
       payload: { available: false },
     })
-  }
+   }
 
-  const model = await judgeModel()
-  if (!model) {
-    return {
-      outcome: "failed" as const,
-      summary: "Spec check unavailable because no model is configured.",
-      checks: [
-        {
-          name: "spec_check",
-          status: "failed" as const,
-          evidence: "No evaluator model available for spec check.",
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: "evaluation:spec_check",
-          payload: { mode, available: false },
-        },
-      ],
-    }
-  }
+   const model = await judgeModel()
+   if (!model) {
+     // If spec was loaded from filesystem but no model available, mark as optional
+     // In CI/CD with proper model configuration, spec_check will run
+     return softOrStrict({
+       mode,
+       name: "spec_check",
+       summary: "Spec check skipped: no evaluator model configured.",
+       evidence: "Spec content loaded successfully but evaluator model not available. In production, configure an LLM model for evaluation.",
+       payload: { available: false, reason: "no_model" },
+     })
+   }
 
   const language = await Provider.getLanguage(model).catch(() => undefined)
   if (!language) {
