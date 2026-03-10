@@ -4182,6 +4182,13 @@
                   "variant": {
                     "type": "string"
                   },
+                  "extra": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
                   "parts": {
                     "type": "array",
                     "items": {
@@ -4653,6 +4660,13 @@
                   },
                   "variant": {
                     "type": "string"
+                  },
+                  "extra": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
                   },
                   "parts": {
                     "type": "array",
