@@ -69,7 +69,10 @@ async function resolveStaticPathArg(arg: string, cwd: string) {
   const cleaned = stripShellQuotes(arg)
   if (!cleaned || DYNAMIC_PATH_PATTERN.test(cleaned)) return undefined
 
-  const absolute = path.resolve(cwd, cleaned)
+  const absolute =
+    process.platform === "win32" && cleaned.startsWith("/")
+      ? Filesystem.windowsPath(cleaned)
+      : path.resolve(cwd, cleaned)
   const real = await fs.realpath(absolute).catch(() => absolute)
   return process.platform === "win32" ? Filesystem.windowsPath(real).replace(/\//g, "\\") : real
 }
@@ -110,7 +113,10 @@ export const BashTool = Tool.define("bash", async () => {
         ),
     }),
     async execute(params, ctx) {
-      const cwd = params.workdir || Instance.directory
+      const cwd =
+        process.platform === "win32"
+          ? Filesystem.windowsPath(params.workdir || Instance.directory)
+          : params.workdir || Instance.directory
       if (params.timeout !== undefined && params.timeout < 0) {
         throw new Error(`Invalid timeout value: ${params.timeout}. Timeout must be a positive number.`)
       }
@@ -196,8 +202,12 @@ export const BashTool = Tool.define("bash", async () => {
         { cwd, sessionID: ctx.sessionID, callID: ctx.callID },
         { env: {} },
       )
+      const sh =
+        typeof shell === "string" && path.isAbsolute(shell) && !Filesystem.stat(shell)?.size
+          ? process.env.COMSPEC || "cmd.exe"
+          : shell
       const proc = spawn(params.command, {
-        shell,
+        shell: sh,
         cwd,
         env: sanitizeChildEnv(process.env, shellEnv.env),
         stdio: ["ignore", "pipe", "pipe"],

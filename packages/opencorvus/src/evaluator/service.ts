@@ -60,12 +60,12 @@ export namespace EvaluatorService {
     const commands = commandGroups(config, discovered)
     const core = await commandChecks(commands, config.timeout_ms ?? DEFAULT_TIMEOUT_MS, delivery)
     if (core.checks.some((item) => item.status === "failed")) {
-      return publishResult(task, finalizeEvaluation(commands, core.checks, core.artifacts, []))
+      return publishResult(task, finalizeEvaluation(commands, core.checks, core.artifacts, [], !!task.activeSpecVersionID))
     }
     const optional = await optionalChecks(config, task, delivery)
     const checks = [...core.checks, ...optional.flatMap((item) => Array.isArray(item.checks) ? item.checks : [])]
     const artifacts = [...core.artifacts, ...optional.flatMap((item) => Array.isArray(item.artifacts) ? item.artifacts : [])]
-    return publishResult(task, finalizeEvaluation(commands, checks, artifacts, optional))
+    return publishResult(task, finalizeEvaluation(commands, checks, artifacts, optional, !!task.activeSpecVersionID))
   }
 
   export async function analyzeDelivery(input: {
@@ -184,6 +184,7 @@ function finalizeEvaluation(
   checks: z.infer<typeof EvaluationCheck>[],
   artifacts: EvaluationArtifact[],
   optional: EvaluationOutcome[],
+  requireSpecCheck: boolean,
 ): EvaluationOutput {
   const ordered = orderChecks(checks)
   const failed = ordered.filter((item) => item.status === "failed")
@@ -205,7 +206,7 @@ function finalizeEvaluation(
 
   const optionalChecks = ordered.filter((item) => item.name !== "evaluation_config")
   const specCheck = ordered.find((item) => item.name === "spec_check")
-  if (!specCheck || specCheck.status !== "passed") {
+  if (requireSpecCheck && (!specCheck || specCheck.status !== "passed")) {
     const reason = !specCheck
       ? "Spec check is required but did not run."
       : `Spec check is required and must pass before acceptance. Current status: ${specCheck.status}.`

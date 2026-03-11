@@ -3,6 +3,22 @@
     const state = deps.state;
     const dom = deps.dom;
 
+    function setWorkspaceDirectory(value, source = "manual") {
+      const next = typeof value === "string" ? value.trim() : "";
+      state.directory = next;
+      state.directoryMode = next ? "custom" : "temp";
+      state.workspaceDirectorySource = source;
+      if (typeof deps.onDirectoryChange === "function") deps.onDirectoryChange(next, source);
+      return next;
+    }
+
+    function restoreWorkspaceDirectory() {
+      if (state.directory) return state.directory;
+      const next = typeof state.path?.directory === "string" ? state.path.directory.trim() : "";
+      if (!next) return state.directory;
+      return setWorkspaceDirectory(next, "auto");
+    }
+
     function workspaceMode() {
       if (!state.connected) return "offline";
       if (state.selectedTaskID && state.chatSessionID) return "task-session";
@@ -51,15 +67,20 @@
       state.preferences = [];
     }
 
-    function enterEmptyWorkspace() {
+    function enterEmptyWorkspace(options = {}) {
+      if (options.globalView !== undefined) state.globalView = !!options.globalView;
       state.selectedTaskID = "";
       state.chatSessionID = "";
       state.managedSession = null;
+      if (options.restoreDirectory !== false) restoreWorkspaceDirectory();
       clearWorkspaceRuntime();
       deps.renderManagedSessionList();
     }
 
     function enterTaskWorkspace(taskID, options = {}) {
+      if (typeof options.directory === "string" && options.directory.trim()) {
+        setWorkspaceDirectory(options.directory, "task");
+      }
       state.selectedTaskID = taskID || "";
       state.chatSessionID = options.sessionID || "";
       state.managedSession = options.managedSession || null;
@@ -68,6 +89,9 @@
     }
 
     function enterSessionWorkspace(sessionID, options = {}) {
+      if (typeof options.directory === "string" && options.directory.trim()) {
+        setWorkspaceDirectory(options.directory, "session");
+      }
       state.selectedTaskID = "";
       state.chatSessionID = sessionID || "";
       state.managedSession = options.managedSession || null;
@@ -79,6 +103,8 @@
       workspaceMode,
       renderWorkspaceState,
       hasWorkspaceSelection,
+      setWorkspaceDirectory,
+      restoreWorkspaceDirectory,
       clearWorkspaceRuntime,
       clearProjectScopeData,
       enterEmptyWorkspace,

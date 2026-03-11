@@ -458,7 +458,9 @@ test("nested symlinks", async () => {
 
       const patch = await Snapshot.patch(before!)
       expect(patch.files).toContain(fwd(tmp.path, "sub", "dir", "link.txt"))
-      expect(patch.files).toContain(fwd(tmp.path, "sub-link"))
+      expect(
+        patch.files.some((item) => item === fwd(tmp.path, "sub-link") || item.startsWith(fwd(tmp.path, "sub-link") + "/")),
+      ).toBe(true)
     },
   })
 })

@@ -364,7 +364,7 @@ function shouldAppendTimeline(
   control?: ControlSession,
 ) {
   if (!control) return true
-  if (control.keep) return false
+  if (control.keep) return true
   return !(input.surface === "panel" && !input.taskID && !result.task_id)
 }
 
@@ -408,11 +408,18 @@ async function appendSummary(sessionID: string, message: MessageV2.WithParts, te
 
 function scope(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {
   const taskID = result.task_id ?? input.taskID
-  const sessionID = result.session_id ?? input.sessionID ?? taskSession(taskID)
-  return {
-    ...(taskID ? { taskID } : {}),
-    ...(sessionID ? { sessionID } : {}),
+  if (taskID) {
+    const sessionID = result.session_id ?? input.sessionID ?? taskSession(taskID)
+    return {
+      taskID,
+      ...(sessionID ? { sessionID } : {}),
+    }
   }
+  if (!input.sessionID && input.surface === "panel") {
+    return {}
+  }
+  const sessionID = result.session_id ?? input.sessionID
+  return sessionID ? { sessionID } : {}
 }
 
 function taskSession(taskID?: string) {

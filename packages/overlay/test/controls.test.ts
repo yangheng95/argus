@@ -1069,8 +1069,8 @@ test("overlay controls trigger without runtime failures", async () => {
     await waitIdle()
 
     await expand("#goalsSection")
-    seen.push("#goalsBody [data-goal-action='create']")
-    await tap("#goalsBody [data-goal-action='create']")
+    seen.push("#btnCreateGoal")
+    await tap("#btnCreateGoal")
     await page.waitForFunction(() => (document.querySelector("#goalDialog") as HTMLDialogElement | null)?.open === true)
     await page.type("#goalDescription", "Created goal from UI")
     await page.type("#goalCriteria", "Trigger goal save")
