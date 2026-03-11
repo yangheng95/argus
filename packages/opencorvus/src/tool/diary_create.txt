@@ -1,1 +1,0 @@
-Create a new diary entry with the specified date, title, and content.
