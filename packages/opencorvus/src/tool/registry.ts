@@ -7,12 +7,6 @@ import { BatchTool } from "./batch"
 import { ReadTool } from "./read"
 import { TaskTool } from "./task"
 import { TodoReadTool, TodoWriteTool } from "./todo"
-import { DiaryCreateTool } from "./diary_create"
-import { DiaryReadTool } from "./diary_read"
-import { DiaryUpdateTool } from "./diary_update"
-import { DiaryDeleteTool } from "./diary_delete"
-import { DiaryListTool } from "./diary_list"
-import { DiarySearchTool } from "./diary_search"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
@@ -136,12 +130,6 @@ export namespace ToolRegistry {
       WebFetchTool,
       TodoWriteTool,
       TodoReadTool,
-      DiaryCreateTool,
-      DiaryReadTool,
-      DiaryUpdateTool,
-      DiaryDeleteTool,
-      DiaryListTool,
-      DiarySearchTool,
       WebSearchTool,
       CodeSearchTool,
       SkillTool,
