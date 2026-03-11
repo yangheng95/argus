@@ -26,7 +26,6 @@ import {
   TaskAccepted,
   TaskEvent,
   Task,
-  UpdateGoalInput,
   UpdateTaskChecksInput,
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
@@ -719,21 +718,6 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ preferenceID: z.string() })),
       async (c) => {
         return c.json(await OrchestratorService.deletePreference(c.req.valid("param").preferenceID))
-      },
-    )
-    .patch(
-      "/goal/:goalID",
-      validator("param", z.object({ goalID: z.string() })),
-      validator("json", UpdateGoalInput),
-      async (c) => {
-        return c.json(await OrchestratorService.updateGoal(c.req.valid("param").goalID, c.req.valid("json")))
-      },
-    )
-    .delete(
-      "/goal/:goalID",
-      validator("param", z.object({ goalID: z.string() })),
-      async (c) => {
-        return c.json(await OrchestratorService.deleteGoal(c.req.valid("param").goalID))
       },
     ),
 )

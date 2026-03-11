@@ -88,9 +88,11 @@ describe("PlannerService.initial — with user-provided goals", () => {
       ],
     })
 
-    expect(plan.goals).toHaveLength(2)
-    expect(plan.goals[0].description).toBe("Goal A")
-    expect(plan.goals[1].description).toBe("Goal B")
+    expect(plan.metadata.spec_analysis?.goals).toHaveLength(2)
+    expect(plan.metadata.spec_analysis?.goals[0]?.description).toBe("Goal A")
+    expect(plan.metadata.spec_analysis?.goals[1]?.description).toBe("Goal B")
+    expect(plan.prompt).toContain("Goal A")
+    expect(plan.prompt).toContain("Goal B")
     expect(plan.metadata.planner?.quality).toBe("compiled")
     expect(plan.metadata.strategy).toBe("initial")
   })

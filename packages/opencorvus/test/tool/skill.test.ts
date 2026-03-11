@@ -36,21 +36,14 @@ description: Skill for tool tests.
       },
     })
 
-    const home = process.env.OPENCORVUS_TEST_HOME
-    process.env.OPENCORVUS_TEST_HOME = tmp.path
-
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const tool = await SkillTool.init()
-          const skillPath = path.join(tmp.path, ".opencorvus", "skill", "tool-skill", "SKILL.md")
-          expect(tool.description).toContain(`<location>${pathToFileURL(skillPath).href}</location>`)
-        },
-      })
-    } finally {
-      process.env.OPENCORVUS_TEST_HOME = home
-    }
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await SkillTool.init()
+        const skillPath = path.join(tmp.path, ".opencorvus", "skill", "tool-skill", "SKILL.md")
+        expect(tool.description).toContain(`<location>${pathToFileURL(skillPath).href}</location>`)
+      },
+    })
   })
 
   test("execute returns skill content block with files", async () => {
@@ -74,75 +67,60 @@ Use this skill.
       },
     })
 
-    const home = process.env.OPENCORVUS_TEST_HOME
-    process.env.OPENCORVUS_TEST_HOME = tmp.path
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await SkillTool.init()
+        const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+        const ctx: Tool.Context = {
+          ...baseCtx,
+          ask: async (req) => {
+            requests.push(req)
+          },
+        }
 
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const tool = await SkillTool.init()
-          const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
-          const ctx: Tool.Context = {
-            ...baseCtx,
-            ask: async (req) => {
-              requests.push(req)
-            },
-          }
+        const result = await tool.execute({ name: "tool-skill" }, ctx)
+        const dir = path.join(tmp.path, ".opencorvus", "skill", "tool-skill")
+        const file = path.resolve(dir, "scripts", "demo.txt")
 
-          const result = await tool.execute({ name: "tool-skill" }, ctx)
-          const dir = path.join(tmp.path, ".opencorvus", "skill", "tool-skill")
-          const file = path.resolve(dir, "scripts", "demo.txt")
+        expect(requests.length).toBe(1)
+        expect(requests[0].permission).toBe("skill")
+        expect(requests[0].patterns).toContain("tool-skill")
+        expect(requests[0].always).toContain("tool-skill")
 
-          expect(requests.length).toBe(1)
-          expect(requests[0].permission).toBe("skill")
-          expect(requests[0].patterns).toContain("tool-skill")
-          expect(requests[0].always).toContain("tool-skill")
-
-          expect(result.metadata.dir).toBe(dir)
-          expect(result.output).toContain(`<skill_content name="tool-skill">`)
-          expect(result.output).toContain(`Base directory for this skill: ${pathToFileURL(dir).href}`)
-          expect(result.output).toContain(`<file>${file}</file>`)
-        },
-      })
-    } finally {
-      process.env.OPENCORVUS_TEST_HOME = home
-    }
+        expect(result.metadata.dir).toBe(dir)
+        expect(result.output).toContain(`<skill_content name="tool-skill">`)
+        expect(result.output).toContain(`Base directory for this skill: ${pathToFileURL(dir).href}`)
+        expect(result.output).toContain(`<file>${file}</file>`)
+      },
+    })
   })
 
   test("execute loads builtin channel skill with bundled files", async () => {
     await using tmp = await tmpdir({ git: true })
 
-    const home = process.env.OPENCORVUS_TEST_HOME
-    process.env.OPENCORVUS_TEST_HOME = tmp.path
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await SkillTool.init()
+        const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
+        const ctx: Tool.Context = {
+          ...baseCtx,
+          ask: async (req) => {
+            requests.push(req)
+          },
+        }
 
-    try {
-      await Instance.provide({
-        directory: tmp.path,
-        fn: async () => {
-          const tool = await SkillTool.init()
-          const requests: Array<Omit<PermissionNext.Request, "id" | "sessionID" | "tool">> = []
-          const ctx: Tool.Context = {
-            ...baseCtx,
-            ask: async (req) => {
-              requests.push(req)
-            },
-          }
+        const result = await tool.execute({ name: "opencorvus-channel-config-wizard" }, ctx)
+        const ref = path.join(result.metadata.dir, "references", "channel-matrix.md")
 
-          const result = await tool.execute({ name: "opencorvus-channel-config-wizard" }, ctx)
-          const ref = path.join(result.metadata.dir, "references", "channel-matrix.md")
-
-          expect(requests.length).toBe(1)
-          expect(requests[0].permission).toBe("skill")
-          expect(requests[0].patterns).toContain("opencorvus-channel-config-wizard")
-          expect(result.metadata.dir).toContain(path.join("builtin-skills", "opencorvus-channel-config-wizard"))
-          expect(result.output).toContain(`<file>${path.resolve(ref)}</file>`)
-          expect(await Bun.file(ref).text()).toContain("# OpenCorvus Channel Runtime Matrix")
-        },
-      })
-    } finally {
-      process.env.OPENCORVUS_TEST_HOME = home
-    }
+        expect(requests.length).toBe(1)
+        expect(requests[0].permission).toBe("skill")
+        expect(requests[0].patterns).toContain("opencorvus-channel-config-wizard")
+        expect(result.metadata.dir).toContain(path.join("builtin-skills", "opencorvus-channel-config-wizard"))
+        expect(result.output).toContain(`<file>${path.resolve(ref)}</file>`)
+        expect(await Bun.file(ref).text()).toContain("# OpenCorvus Channel Runtime Matrix")
+      },
+    })
   })
 })
-

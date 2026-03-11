@@ -1,6 +1,6 @@
 /**
  * HeadlessPlannerAgent — the orchestrator-owned planning stage that expands a
- * task request into PRD/goals/milestones/subtasks/risks for downstream
+ * task request into PRD/milestones/subtasks/risks for downstream
  * execution.
  *
  * Capabilities:
@@ -8,7 +8,7 @@
  * 2. Preference awareness — respects project conventions and constraints
  * 3. Codebase exploration — reads files, searches code, lists directories
  * 4. Web research — searches external documentation when needed
- * 5. Structured output — PRD, goals, milestones, subtasks, risks, assumptions
+ * 5. Structured output — PRD, milestones, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
 import { generateText, stepCountIs, tool } from "ai"
@@ -30,14 +30,6 @@ const log = Log.create({ service: "planner-agent" })
 export const PlannerOutput = z.object({
   prd: z.string().describe("Expanded PRD with full technical context from codebase exploration"),
   summary: z.string().describe("One-line summary of the plan"),
-  goals: z.array(
-    z.object({
-      description: z.string(),
-      criteria: z.string(),
-      priority: z.enum(["blocking", "advisory"]),
-      check_selector: z.array(z.string()).optional(),
-    }),
-  ),
   milestones: z
     .array(
       z.object({
@@ -111,7 +103,7 @@ export namespace HeadlessPlannerAgent {
   export async function plan(input: {
     title: string
     request: string
-    /** User-provided goals -- planner should refine/expand, not discard */
+    /** Authoritative goals from spec -- planner uses them as execution constraints */
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
@@ -215,7 +207,6 @@ export namespace HeadlessPlannerAgent {
         const submitted = submittedPlan as PlannerOutputType
         log.info("planner agent finished via submit_plan tool call", {
           steps: result.steps.length,
-          goals: submitted.goals?.length ?? 0,
           subtasks: submitted.subtasks?.length ?? 0,
           prdLength: submitted.prd?.length ?? 0,
           attempt: attempt + 1,
@@ -225,7 +216,6 @@ export namespace HeadlessPlannerAgent {
           ...submitted,
           summary: submitted.summary ?? "",
           prd: submitted.prd ?? "",
-          goals: Array.isArray(submitted.goals) ? submitted.goals : [],
           subtasks: Array.isArray(submitted.subtasks) ? submitted.subtasks : [],
           risks: Array.isArray(submitted.risks) ? submitted.risks : [],
           assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
@@ -263,7 +253,6 @@ export namespace HeadlessPlannerAgent {
       // Validate plan quality
       const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
       log.info("planner agent output", {
-        goals: parsed.goals.length,
         subtasks: parsed.subtasks.length,
         milestones: parsed.milestones?.length ?? 0,
         risks: parsed.risks.length,
@@ -383,24 +372,11 @@ function extractJSON(text: string): PlannerOutputType {
         rawHead: raw.slice(0, 500),
         rawTail: raw.slice(-300),
       })
-      obj = { prd: "", summary: "", goals: [], subtasks: [], risks: [] }
+      obj = { prd: "", summary: "", subtasks: [], risks: [] }
     }
   }
 
   // Normalize LLM output quirks before strict validation
-  if (Array.isArray(obj.goals)) {
-    // Filter out incomplete goals from truncated JSON
-    obj.goals = obj.goals.filter((g: any) => g && typeof g === "object" && g.description && g.criteria)
-    for (const g of obj.goals) {
-      if (g.priority && g.priority !== "blocking" && g.priority !== "advisory") {
-        g.priority = "advisory"
-      }
-      // Ensure check_selector is array or undefined
-      if (g.check_selector && !Array.isArray(g.check_selector)) {
-        g.check_selector = [String(g.check_selector)]
-      }
-    }
-  }
   if (Array.isArray(obj.subtasks)) {
     // Filter out incomplete subtasks from truncated JSON
     obj.subtasks = obj.subtasks.filter((s: any) => s && typeof s === "object" && s.title)
@@ -423,7 +399,6 @@ function extractJSON(text: string): PlannerOutputType {
   // Fill in missing required fields when the JSON was truncated
   if (!obj.prd) obj.prd = ""
   if (!obj.summary) obj.summary = ""
-  if (!Array.isArray(obj.goals)) obj.goals = []
   if (!Array.isArray(obj.subtasks)) obj.subtasks = []
   if (!Array.isArray(obj.risks)) obj.risks = []
 
@@ -432,7 +407,6 @@ function extractJSON(text: string): PlannerOutputType {
   } catch (zodErr) {
     log.error("planner: Zod validation failed, returning with defaults", {
       error: String(zodErr),
-      goalsCount: obj.goals?.length,
       subtasksCount: obj.subtasks?.length,
     })
     // Return a minimal valid plan rather than crashing.
@@ -443,7 +417,6 @@ function extractJSON(text: string): PlannerOutputType {
     return PlannerOutput.parse({
       prd: typeof obj.prd === "string" ? obj.prd : "",
       summary: typeof obj.summary === "string" ? obj.summary : "",
-      goals: [],
       subtasks: [],
       risks: safeRisks,
     })
@@ -738,29 +711,6 @@ function synthesizeFromExploration(
     }
   }
 
-  // Synthesize goals if missing
-  if (result.goals.length === 0) {
-    const goals: PlannerOutputType["goals"] = []
-    if (fileRefs.size > 0) {
-      goals.push({
-        description: "TypeScript compilation succeeds",
-        criteria: "`bunx tsc --noEmit` exits 0",
-        priority: "blocking",
-        check_selector: ["build"],
-      })
-    }
-    const testFiles = Array.from(fileRefs).filter(f => f.includes("test"))
-    if (testFiles.length > 0) {
-      goals.push({
-        description: `Tests pass: ${testFiles.join(", ")}`,
-        criteria: `\`bun test ${testFiles.join(" ")}\` passes all assertions`,
-        priority: "blocking",
-        check_selector: ["test"],
-      })
-    }
-    if (goals.length > 0) result.goals = goals
-  }
-
   // Ensure summary
   if (!result.summary || result.summary.length < 10) {
     result.summary = input.title
@@ -769,7 +719,6 @@ function synthesizeFromExploration(
   log.info("planner: synthesized plan from exploration", {
     prdLength: result.prd.length,
     subtasks: result.subtasks.length,
-    goals: result.goals.length,
     discoveredFiles: discoveredFiles.size,
     requirements: requirements.length,
   })
@@ -784,9 +733,9 @@ function synthesizeFromExploration(
  * Scoring (0.0 – 1.0):
  *   - toolCalls >= 5  → +0.3  (agent explored)
  *   - PRD has file paths not in request → +0.25  (discovered new info)
- *   - Goals have concrete criteria (commands) → +0.2
- *   - Subtasks reference file paths → +0.15
- *   - PRD length > 300 chars → +0.1
+ *   - Subtasks reference file paths → +0.25
+ *   - Subtasks include verification language → +0.2
+ *   - PRD length > 300 chars → +0.25
  */
 function validatePlanQuality(
   plan: PlannerOutputType,
@@ -820,27 +769,25 @@ function validatePlanQuality(
     reasons.push("PRD contains no file paths discovered from exploration")
   }
 
-  // 3. Goals have concrete criteria (contain command-like patterns)
-  const CMD_PAT = /`[^`]+`|bun |tsc |npm |npx |bunx |eslint |jest /i
-  const goalsWithCriteria = plan.goals.filter((g) => CMD_PAT.test(g.criteria))
-  if (goalsWithCriteria.length >= plan.goals.length * 0.5 && plan.goals.length > 0) {
-    score += 0.2
-  } else {
-    reasons.push("goals lack concrete/executable criteria")
-  }
-
-  // 4. Subtasks reference specific file paths
+  // 3. Subtasks reference specific file paths
   const subtaskText = plan.subtasks.map((s) => `${s.title} ${s.description}`).join(" ")
   const subtaskPaths = Array.from(subtaskText.matchAll(FILE_PAT))
   if (subtaskPaths.length >= 2) {
-    score += 0.15
+    score += 0.25
   } else {
     reasons.push("subtasks don't reference specific file paths")
   }
 
+  // 4. Subtasks should include verification language
+  if (/verify|test|check|assert|验证|测试|检查/i.test(subtaskText)) {
+    score += 0.2
+  } else {
+    reasons.push("subtasks lack explicit verification steps")
+  }
+
   // 5. PRD length — detailed specs are longer
   if (plan.prd.length >= 300) {
-    score += 0.1
+    score += 0.25
   } else {
     reasons.push(`PRD too short (${plan.prd.length} chars)`)
   }
@@ -982,8 +929,8 @@ function buildUserPrompt(
         retryContext.reasons.some((r) => r.includes("file path"))
           ? "- Include specific file paths discovered from your exploration in PRD and subtasks"
           : "",
-        retryContext.reasons.some((r) => r.includes("criteria"))
-          ? "- Write concrete, executable criteria for each goal (e.g., 'bun test src/x.test.ts passes')"
+        retryContext.reasons.some((r) => r.includes("verification"))
+          ? "- Add explicit verification language to subtasks (e.g., 'run bun test src/x.test.ts and confirm it passes')"
           : "",
         retryContext.reasons.some((r) => r.includes("PRD"))
           ? "- Write a detailed PRD with bullet points (>300 chars)"
@@ -994,10 +941,10 @@ function buildUserPrompt(
     )
   }
 
-  // Include user-provided goals so the planner can refine and expand them
+  // Include spec-owned goals so the planner can build an execution graph around them.
   if (input.userGoals && input.userGoals.length > 0) {
     sections.push(
-      `# User-Provided Goals\n\nThe user specified these goals. Incorporate them into your plan, refine their criteria to be more specific, and add any missing goals discovered during codebase exploration.\n\n${input.userGoals
+      `# Authoritative Goals\n\nThese goals come from the approved specification. Do not redefine them or invent new acceptance goals here. Use them to shape the plan, milestones, subtasks, and verification strategy.\n\n${input.userGoals
         .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
         .join("\n")}`,
     )
@@ -1141,13 +1088,6 @@ For external APIs, unfamiliar libraries, or protocols -- use web_search. Skip fo
 Your output must be CONCRETE, not abstract. Reference specific files, functions, and commands.
 Think: "Could an executor implement this plan without asking me any questions?" If not, add more detail.
 
-**Goals** -- DETAILED descriptions of what to achieve. Each goal must include:
-- A clear description explaining the specific outcome (not just "tests pass" -- say WHICH functionality must work and HOW)
-- Machine-verifiable criteria with exact commands AND expected outcomes
-- Relevant check_selectors
-- Example GOOD goal: {"description": "Router middleware chain executes in onion model: each middleware calls next(), handler runs innermost, middleware can execute logic before/after next(), or short-circuit by returning Response directly", "criteria": "bun test src/middleware.test.ts passes, verifying before->handler->after execution order", "priority": "blocking", "check_selector": ["test"]}
-- Example BAD goal: {"description": "Tests pass", "criteria": "bun test exits 0"} -- too vague!
-
 **Subtasks** -- Ordered implementation steps. Each subtask must specify:
 - WHAT to change (specific code change)
 - WHERE (exact file path from exploration)
@@ -1160,11 +1100,10 @@ Think: "Could an executor implement this plan without asking me any questions?" 
 
 When you have finished exploring and are ready to deliver the plan, call the **submit_plan** tool with all the required fields. Do NOT output raw JSON text — use the tool call instead.
 
-Keep PRD concise (bullet points, ≤ 2000 chars). Goals and subtasks should be DETAILED — do not sacrifice clarity for brevity.
+Keep PRD concise (bullet points, ≤ 2000 chars). Subtasks should be DETAILED — do not sacrifice clarity for brevity.
 
 The submit_plan tool accepts these fields:
 - **summary**: One-line summary of the plan
-- **goals**: Array of {description, criteria (exact command + expected outcome), priority, check_selector}
 - **subtasks**: Array of {title, description (file paths + changes + patterns), order}
 - **risks**: Array of specific risks with mitigation
 - **milestones** (optional): Array of {title, goal_indices}
@@ -1175,9 +1114,8 @@ The submit_plan tool accepts these fields:
 
 - ALWAYS explore the codebase before planning. No exceptions. Plans without tool calls score 0.
 - Every file path in your plan MUST come from actual tool results or pre-read files -- never guess paths.
-- goals.criteria must be executable commands with expected outcomes, not vague statements.
-- goals.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
-- Every blocking goal MUST have at least one check_selector.
+- Goals are authoritative input from the specification. The planner must not redefine or mutate them.
+- Clarifications are only for execution-strategy blockers. Do NOT ask for missing scope, requirements, or acceptance criteria; that belongs to the spec stage.
 - subtask descriptions must reference specific files, functions, and patterns discovered during exploration.
 - Write in the same language as the request (Chinese request -> Chinese plan).
 - If replanning: your new plan MUST differ from the previous failed approach.
@@ -1191,17 +1129,15 @@ The submit_plan tool accepts these fields:
 Before outputting JSON, verify each of these. If ANY answer is NO, use more tools to fill the gap:
 
 1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
-2. Does EVERY goal have a detailed description explaining the specific outcome? (not just "tests pass")
-3. Does every goal criteria include an exact command AND expected outcome?
-4. Do subtasks reference specific file paths (not "relevant files" -- actual paths)?
-5. Is the PRD concise but complete (bullet points, not paragraphs)?
-6. Could an executor implement this plan WITHOUT asking follow-up questions?
-7. Does the summary accurately describe the plan in one line? (not a file path or heading)
+2. Do subtasks reference specific file paths (not "relevant files" -- actual paths)?
+3. Does every subtask include an explicit verification step or command?
+4. Is the PRD concise but complete (bullet points, not paragraphs)?
+5. Could an executor implement this plan WITHOUT asking follow-up questions?
+6. Does the summary accurately describe the plan in one line? (not a file path or heading)
 
 ## Output Format
 
 - PRD: Use bullet points, keep under 2000 chars.
-- Goals: Be DETAILED in description and criteria. Goals are the most important output.
 - Subtasks: Include file paths and verification steps.
 - Call submit_plan exactly once after exploration is complete.
 - Do NOT output raw JSON. Use the submit_plan tool call.`

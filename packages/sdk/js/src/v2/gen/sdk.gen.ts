@@ -28,7 +28,6 @@ import type {
   ConfigUpdateErrors,
   ConfigUpdateResponses,
   ControlTimelineResponses,
-  DeleteGoalGoalIdResponses,
   DeletePreferencePreferenceIdResponses,
   EventSubscribeResponses,
   EventTuiCommandExecute,
@@ -109,7 +108,6 @@ import type {
   PartDeleteResponses,
   PartUpdateErrors,
   PartUpdateResponses,
-  PatchGoalGoalIdResponses,
   PatchPreferencePreferenceIdResponses,
   PathGetResponses,
   PathOpenErrors,
@@ -232,6 +230,7 @@ import type {
   TaskEventsResponses,
   TaskGetErrors,
   TaskGetResponses,
+  TaskGlobalListResponses,
   TaskInjectErrors,
   TaskInjectResponses,
   TaskInteractionsErrors,
@@ -1798,9 +1797,10 @@ export class Session2 extends HeyApiClient {
    */
   public create<ThrowOnError extends boolean = false>(
     parameters?: {
-      directory?: string
+      query_directory?: string
       parentID?: string
       title?: string
+      body_directory?: string
       permission?: PermissionRuleset
     },
     options?: Options<never, ThrowOnError>,
@@ -1810,9 +1810,18 @@ export class Session2 extends HeyApiClient {
       [
         {
           args: [
-            { in: "query", key: "directory" },
+            {
+              in: "query",
+              key: "query_directory",
+              map: "directory",
+            },
             { in: "body", key: "parentID" },
             { in: "body", key: "title" },
+            {
+              in: "body",
+              key: "body_directory",
+              map: "directory",
+            },
             { in: "body", key: "permission" },
           ],
         },
@@ -3816,6 +3825,42 @@ export class Control extends HeyApiClient {
   }
 }
 
+export class Global2 extends HeyApiClient {
+  /**
+   * List tasks across projects
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      q?: string
+      status?: string
+      limit?: number
+      cursor?: number
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "q" },
+            { in: "query", key: "status" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "cursor" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<TaskGlobalListResponses, unknown, ThrowOnError>({
+      url: "/global/tasks",
+      ...options,
+      ...params,
+    })
+  }
+}
+
 export class Checks extends HeyApiClient {
   /**
    * Update task checks
@@ -3903,11 +3948,6 @@ export class Checks extends HeyApiClient {
           enabled?: boolean
           prompt?: string
           max_diffs?: number
-          mode?: "soft" | "strict"
-        }
-        judge?: {
-          enabled?: boolean
-          prompt?: string
           mode?: "soft" | "strict"
         }
         spec_check?: {
@@ -4051,11 +4091,6 @@ export class Task extends HeyApiClient {
           max_diffs?: number
           mode?: "soft" | "strict"
         }
-        judge?: {
-          enabled?: boolean
-          prompt?: string
-          mode?: "soft" | "strict"
-        }
         spec_check?: {
           enabled?: boolean
           prompt?: string
@@ -4077,8 +4112,10 @@ export class Task extends HeyApiClient {
         description: string
         criteria: string
         priority?: "blocking" | "advisory"
+        source?: "spec" | "system"
         metadata?: {
           check_selector?: Array<string>
+          [key: string]: unknown | Array<string> | undefined
         }
       }>
       milestones?: Array<{
@@ -4088,8 +4125,10 @@ export class Task extends HeyApiClient {
           description: string
           criteria: string
           priority?: "blocking" | "advisory"
+          source?: "spec" | "system"
           metadata?: {
             check_selector?: Array<string>
+            [key: string]: unknown | Array<string> | undefined
           }
         }>
       }>
@@ -4512,6 +4551,11 @@ export class Task extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _global?: Global2
+  get global(): Global2 {
+    return (this._global ??= new Global2({ client: this.client }))
   }
 
   private _checks?: Checks
@@ -6142,65 +6186,6 @@ export class OpencodeClient extends HeyApiClient {
     )
     return (options?.client ?? this.client).patch<PatchPreferencePreferenceIdResponses, unknown, ThrowOnError>({
       url: "/preference/{preferenceID}",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  public deleteGoalGoalId<ThrowOnError extends boolean = false>(
-    parameters: {
-      goalID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "goalID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).delete<DeleteGoalGoalIdResponses, unknown, ThrowOnError>({
-      url: "/goal/{goalID}",
-      ...options,
-      ...params,
-    })
-  }
-
-  public patchGoalGoalId<ThrowOnError extends boolean = false>(
-    parameters: {
-      goalID: string
-      directory?: string
-      description?: string
-      criteria?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "goalID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "description" },
-            { in: "body", key: "criteria" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).patch<PatchGoalGoalIdResponses, unknown, ThrowOnError>({
-      url: "/goal/{goalID}",
       ...options,
       ...params,
       headers: {

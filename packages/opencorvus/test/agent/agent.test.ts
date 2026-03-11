@@ -558,22 +558,15 @@ description: Permission skill.
     },
   })
 
-  const home = process.env.OPENCORVUS_TEST_HOME
-  process.env.OPENCORVUS_TEST_HOME = tmp.path
-
-  try {
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const build = await Agent.get("build")
-        const skillDir = path.join(tmp.path, ".opencorvus", "skill", "perm-skill")
-        const target = path.join(skillDir, "reference", "notes.md")
-        expect(PermissionNext.evaluate("external_directory", target, build!.permission).action).toBe("allow")
-      },
-    })
-  } finally {
-    process.env.OPENCORVUS_TEST_HOME = home
-  }
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const build = await Agent.get("build")
+      const skillDir = path.join(tmp.path, ".opencorvus", "skill", "perm-skill")
+      const target = path.join(skillDir, "reference", "notes.md")
+      expect(PermissionNext.evaluate("external_directory", target, build!.permission).action).toBe("allow")
+    },
+  })
 })
 
 test("defaultAgent returns build when no default_agent config", async () => {
@@ -649,7 +642,7 @@ test("defaultAgent throws when default_agent points to non-existent agent", asyn
   })
 })
 
-test("defaultAgent throws when all primary agents are disabled", async () => {
+test("defaultAgent falls back to spec when build and plan are disabled", async () => {
   await using tmp = await tmpdir({
     config: {
       agent: {
@@ -661,8 +654,7 @@ test("defaultAgent throws when all primary agents are disabled", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      // build and plan are disabled, no primary-capable agents remain
-      await expect(Agent.defaultAgent()).rejects.toThrow("no primary visible agent found")
+      expect(await Agent.defaultAgent()).toBe("spec")
     },
   })
 })

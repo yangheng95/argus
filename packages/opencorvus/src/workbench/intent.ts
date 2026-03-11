@@ -2,7 +2,6 @@ import z from "zod"
 import { generateObject } from "ai"
 import { Preference } from "@/preference"
 import { Provider } from "@/provider/provider"
-import { GoalService } from "@/orchestrator/goal-service"
 import { Database, eq } from "@/storage/db"
 import { OrchestratorTaskTable, OrchestratorPlanVersionTable } from "@/orchestrator/orchestrator.sql"
 import { setPreference, recordNote } from "./preference"
@@ -64,10 +63,6 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
 
   const goal = parseCommand(text, "/goal")
   if (goal) {
-    GoalService.addOperatorGoal({
-      taskID: input.taskID,
-      description: goal,
-    })
     recordNote({
       taskID: input.taskID,
       kind: "goal_update",
@@ -77,7 +72,7 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     })
     return {
       kind: "goal" as const,
-      message: `Added goal: ${goal}`,
+      message: `Recorded goal update for next spec rewrite: ${goal}`,
       should_resume: true,
     }
   }
@@ -139,10 +134,6 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
 
   if (resolved.kind === "goal" && Array.isArray(resolved.goals) && resolved.goals.length > 0) {
     for (const goal of resolved.goals) {
-      GoalService.addOperatorGoal({
-        taskID: input.taskID,
-        description: goal,
-      })
       recordNote({
         taskID: input.taskID,
         kind: "goal_update",
@@ -153,7 +144,7 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     }
     return {
       kind: "goal" as const,
-      message: `Added goal${resolved.goals.length > 1 ? "s" : ""}: ${resolved.goals.join("; ")}`,
+      message: `Recorded goal update${resolved.goals.length > 1 ? "s" : ""} for next spec rewrite: ${resolved.goals.join("; ")}`,
       should_resume: true,
     }
   }

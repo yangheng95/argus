@@ -182,20 +182,6 @@ function action(prompt: LanguageModelV2Prompt) {
       ...(answer ? { message: answer } : {}),
     }
   }
-  if (goalID && /delete/i.test(input.text)) {
-    return {
-      action: "delete_goal",
-      goalID,
-    }
-  }
-  if (goalID && description) {
-    return {
-      action: "update_goal",
-      goalID,
-      description,
-      criteria: criteria ?? "The requested change is implemented and acceptance checks pass.",
-    }
-  }
   if (taskID && meta.selection && ui === "criteria") {
     return {
       action: "update_checks",

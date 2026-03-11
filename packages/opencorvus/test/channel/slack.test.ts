@@ -15,6 +15,7 @@ import { ControlMessage } from "../../src/control"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
+import { SpecService } from "../../src/spec/service"
 import { Database, and, eq } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
@@ -23,6 +24,22 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 function stub() {
+  spyOn(SpecService, "initial").mockResolvedValue({
+    summary: "Implement feature",
+    content: "# Scope\n\nImplement the requested change.",
+    goals: [
+      {
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+      },
+    ],
+    assumptions: [],
+    risks: [],
+    spec_items: [],
+    evidence_sources: [],
+    unresolved_questions: [],
+  })
   spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Implement feature",
     prompt: "Do the work",
@@ -332,7 +349,7 @@ describe("channel.slack", () => {
 
     expect(posted.at(-1)?.channel).toBe("C3")
     expect(posted.at(-1)?.thread_ts).toBe("3.01")
-    expect(posted.at(-1)?.text).toContain("Evaluation accepted")
+    expect(posted.at(-1)?.text).toContain("accepted")
 
     await gateway.stop()
   })

@@ -58,7 +58,7 @@ describe("executor session routes", () => {
             session_id: session.id,
             executor: "codex",
             status: "completed",
-            phase: "execute",
+            phase: "dispatch",
             retry_count: 0,
             time_created: now,
             time_updated: now,

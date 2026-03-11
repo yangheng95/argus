@@ -2,11 +2,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::{
+    collections::VecDeque,
     fs,
     net::TcpListener,
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::Mutex,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 #[cfg(windows)]
@@ -59,14 +61,25 @@ struct OverlaySettings {
     zoom: Option<f64>,
     theme: Option<String>,
     locale: Option<String>,
+    directory_mode: Option<String>,
     directory: Option<String>,
 }
 
-fn overlay_settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_config_dir()
-        .map(|dir| dir.join("overlay.json"))
-        .map_err(|err| err.to_string())
+fn overlay_directory(directory: Option<String>) -> Option<PathBuf> {
+    directory.and_then(|item| {
+        let item = item.trim();
+        (!item.is_empty()).then(|| PathBuf::from(item))
+    })
+}
+
+fn overlay_settings_path(directory: Option<String>) -> Result<PathBuf, String> {
+    overlay_directory(directory)
+        .map(|dir| Ok(dir.join(".opencorvus").join("overlay.json")))
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .map(|dir| dir.join(".opencorvus").join("overlay.json"))
+                .map_err(|err| err.to_string())
+        })
 }
 
 fn legacy_overlay_settings_path() -> Result<PathBuf, String> {
@@ -76,8 +89,8 @@ fn legacy_overlay_settings_path() -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn overlay_settings_load<R: Runtime>(app: AppHandle<R>) -> Result<OverlaySettings, String> {
-    let path = overlay_settings_path(&app)?;
+fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, String> {
+    let path = overlay_settings_path(directory)?;
     if path.exists() {
         let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
         return serde_json::from_str(&text).map_err(|err| err.to_string());
@@ -99,11 +112,8 @@ fn overlay_settings_load<R: Runtime>(app: AppHandle<R>) -> Result<OverlaySetting
 }
 
 #[tauri::command]
-fn overlay_settings_save<R: Runtime>(
-    app: AppHandle<R>,
-    settings: OverlaySettings,
-) -> Result<bool, String> {
-    let path = overlay_settings_path(&app)?;
+fn overlay_settings_save(settings: OverlaySettings, directory: Option<String>) -> Result<bool, String> {
+    let path = overlay_settings_path(directory.or_else(|| settings.directory.clone()))?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
@@ -130,18 +140,6 @@ fn overlay_open_path<R: Runtime>(app: AppHandle<R>, path: String) -> Result<bool
 }
 
 #[tauri::command]
-fn overlay_open_url<R: Runtime>(app: AppHandle<R>, url: String) -> Result<bool, String> {
-    if url.trim().is_empty() {
-        return Ok(false);
-    }
-
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map(|_| true)
-        .map_err(|err| err.to_string())
-}
-
-#[tauri::command]
 fn overlay_create_dir(path: String) -> Result<bool, String> {
     let path = path.trim();
     if path.is_empty() {
@@ -149,6 +147,31 @@ fn overlay_create_dir(path: String) -> Result<bool, String> {
     }
     fs::create_dir_all(path).map_err(|err| err.to_string())?;
     Ok(true)
+}
+
+#[tauri::command]
+fn overlay_create_temp_dir() -> Result<String, String> {
+    let root = std::env::temp_dir();
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| err.to_string())?
+        .as_millis();
+
+    for attempt in 0..64 {
+        let suffix = if attempt == 0 {
+            format!("{stamp}-{}", std::process::id())
+        } else {
+            format!("{stamp}-{}-{attempt}", std::process::id())
+        };
+        let path = root.join(format!("opencorvus-overlay-{suffix}"));
+        match fs::create_dir(&path) {
+            Ok(()) => return Ok(path.to_string_lossy().to_string()),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => return Err(err.to_string()),
+        }
+    }
+
+    Err("failed to create overlay temp directory".into())
 }
 
 #[tauri::command]
@@ -305,23 +328,151 @@ fn overlay_server_restart<R: Runtime>(app: AppHandle<R>) -> Result<OverlayServer
 /// Embed the window icon at compile time so it works in both dev and prod builds.
 const WINDOW_ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
 
-fn app_icon() -> Result<tauri::image::Image<'static>, String> {
-    let img = image::load_from_memory_with_format(WINDOW_ICON_PNG, image::ImageFormat::Png)
-        .map_err(|err| format!("failed to decode app icon: {err}"))?;
-    let rgba = img.to_rgba8();
+fn embedded_icon(size: Option<u32>) -> Option<tauri::image::Image<'static>> {
+    match image::load_from_memory_with_format(WINDOW_ICON_PNG, image::ImageFormat::Png) {
+        Ok(img) => {
+            let rgba = if let Some(size) = size {
+                img.resize_exact(size, size, image::imageops::FilterType::Lanczos3)
+                    .to_rgba8()
+            } else {
+                img.to_rgba8()
+            };
+            let (width, height) = rgba.dimensions();
+            Some(tauri::image::Image::new_owned(
+                rgba.into_raw(),
+                width,
+                height,
+            ))
+        }
+        Err(err) => {
+            eprintln!("overlay: failed to decode window icon: {err}");
+            None
+        }
+    }
+}
+
+fn tray_background(pixel: &image::Rgba<u8>) -> bool {
+    let [r, g, b, a] = pixel.0;
+    if a == 0 {
+        return false;
+    }
+
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let lum = (u16::from(r) + u16::from(g) + u16::from(b)) / 3;
+    max - min <= 28 && lum >= 150
+}
+
+fn queue_tray_pixel(
+    rgba: &image::RgbaImage,
+    seen: &mut [bool],
+    queue: &mut VecDeque<(u32, u32)>,
+    x: u32,
+    y: u32,
+) {
+    let idx = (y * rgba.width() + x) as usize;
+    if seen[idx] || !tray_background(rgba.get_pixel(x, y)) {
+        return;
+    }
+    seen[idx] = true;
+    queue.push_back((x, y));
+}
+
+fn clear_tray_background(rgba: &mut image::RgbaImage) {
     let (width, height) = rgba.dimensions();
-    Ok(tauri::image::Image::new_owned(rgba.into_raw(), width, height))
+    let mut seen = vec![false; (width * height) as usize];
+    let mut queue = VecDeque::new();
+
+    for x in 0..width {
+        queue_tray_pixel(rgba, &mut seen, &mut queue, x, 0);
+        queue_tray_pixel(rgba, &mut seen, &mut queue, x, height - 1);
+    }
+    for y in 1..height.saturating_sub(1) {
+        queue_tray_pixel(rgba, &mut seen, &mut queue, 0, y);
+        queue_tray_pixel(rgba, &mut seen, &mut queue, width - 1, y);
+    }
+
+    while let Some((x, y)) = queue.pop_front() {
+        rgba.get_pixel_mut(x, y).0[3] = 0;
+
+        if x > 0 {
+            queue_tray_pixel(rgba, &mut seen, &mut queue, x - 1, y);
+        }
+        if x + 1 < width {
+            queue_tray_pixel(rgba, &mut seen, &mut queue, x + 1, y);
+        }
+        if y > 0 {
+            queue_tray_pixel(rgba, &mut seen, &mut queue, x, y - 1);
+        }
+        if y + 1 < height {
+            queue_tray_pixel(rgba, &mut seen, &mut queue, x, y + 1);
+        }
+    }
+}
+
+fn crop_tray_icon(rgba: image::RgbaImage) -> Option<image::RgbaImage> {
+    let (width, height) = rgba.dimensions();
+    let mut left = width;
+    let mut top = height;
+    let mut right = 0;
+    let mut bottom = 0;
+
+    for y in 0..height {
+        for x in 0..width {
+            if rgba.get_pixel(x, y).0[3] == 0 {
+                continue;
+            }
+            left = left.min(x);
+            top = top.min(y);
+            right = right.max(x);
+            bottom = bottom.max(y);
+        }
+    }
+
+    if left == width || top == height {
+        return None;
+    }
+
+    let pad = ((right - left + 1).min(bottom - top + 1) / 18).max(12);
+    let left = left.saturating_sub(pad);
+    let top = top.saturating_sub(pad);
+    let right = (right + pad).min(width - 1);
+    let bottom = (bottom + pad).min(height - 1);
+
+    Some(
+        image::imageops::crop_imm(&rgba, left, top, right - left + 1, bottom - top + 1)
+            .to_image(),
+    )
+}
+
+fn tray_icon_from_bundle() -> Option<tauri::image::Image<'static>> {
+    match image::load_from_memory_with_format(WINDOW_ICON_PNG, image::ImageFormat::Png) {
+        Ok(img) => {
+            let mut rgba = img.to_rgba8();
+            clear_tray_background(&mut rgba);
+            let rgba = crop_tray_icon(rgba)?;
+            let rgba = image::DynamicImage::ImageRgba8(rgba)
+                .resize_exact(32, 32, image::imageops::FilterType::Lanczos3)
+                .to_rgba8();
+            Some(tauri::image::Image::new_owned(rgba.into_raw(), 32, 32))
+        }
+        Err(err) => {
+            eprintln!("overlay: failed to decode tray icon: {err}");
+            None
+        }
+    }
 }
 
 fn set_window_icon<R: Runtime>(window: &tauri::WebviewWindow<R>) {
-    match app_icon() {
-        Ok(icon) => {
-            let _ = window.set_icon(icon);
-        }
-        Err(err) => {
-            eprintln!("overlay: {err}");
-        }
+    if let Some(icon) = embedded_icon(None) {
+        let _ = window.set_icon(icon);
     }
+}
+
+fn show_window<R: Runtime>(window: &tauri::WebviewWindow<R>) {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 fn main() {
@@ -333,9 +484,9 @@ fn main() {
             overlay_settings_save,
             overlay_server_info,
             overlay_server_restart,
-            overlay_open_url,
             overlay_open_path,
             overlay_create_dir,
+            overlay_create_temp_dir,
             overlay_pick_dir
         ])
         .setup(|app| {
@@ -360,10 +511,9 @@ fn main() {
                     // Panel: ~80% width (clamped 760..1600), ~72% height (clamped 480..920)
                     let w = (logical_w * 0.80).clamp(760.0, 1600.0);
                     let h = (logical_h * 0.72).clamp(480.0, 920.0);
-                    // Position: center on the primary monitor in logical coordinates,
-                    // so OS DPI scaling is handled consistently.
-                    let x = ((logical_w - w) / 2.0).max(0.0);
-                    let y = ((logical_h - h) / 2.0).max(0.0);
+                    // Position: bottom-right with 24px margin
+                    let x = logical_w - w - 24.0;
+                    let y = logical_h - h - 64.0; // leave room for taskbar
 
                     let _ = window.set_size(tauri::LogicalSize::new(w, h));
                     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
@@ -388,20 +538,19 @@ fn main() {
                 ],
             )?;
 
-            let icon = app_icon()
-                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+            let icon = create_tray_icon();
 
             let _tray = TrayIconBuilder::new()
                 .icon(icon)
                 .tooltip("OpenCorvus")
                 .menu(&menu)
+                .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| {
                     let id = event.id().as_ref();
                     match id {
                         "show" => {
                             if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
+                                show_window(&window);
                             }
                         }
                         "hide" => {
@@ -414,8 +563,7 @@ fn main() {
                             if let Some(window) = app.get_webview_window("main") {
                                 // Reload the frontend
                                 let _ = window.eval("location.reload()");
-                                let _ = window.show();
-                                let _ = window.set_focus();
+                                show_window(&window);
                             }
                         }
                         "quit" => {
@@ -428,17 +576,13 @@ fn main() {
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click {
                         button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
                         ..
                     } = event
                     {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
-                                let _ = window.hide();
-                            } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            show_window(&window);
                         }
                     }
                 })
@@ -453,4 +597,40 @@ fn main() {
                 stop_server(app);
             }
         })
+}
+
+/// Build a tray-specific icon by stripping the flat background from the bundled logo.
+fn create_tray_icon() -> tauri::image::Image<'static> {
+    if let Some(icon) = tray_icon_from_bundle() {
+        return icon;
+    }
+
+    let size: u32 = 32;
+    let mut rgba = vec![0u8; (size * size * 4) as usize];
+    let cx = size as f64 / 2.0;
+    let cy = size as f64 / 2.0;
+    let r = 12.0;
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f64 - cx;
+            let dy = y as f64 - cy;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let idx = ((y * size + x) * 4) as usize;
+
+            if dist <= r {
+                rgba[idx] = 0x5b;
+                rgba[idx + 1] = 0x8d;
+                rgba[idx + 2] = 0xef;
+                let edge = r - dist;
+                rgba[idx + 3] = if edge >= 1.0 {
+                    255
+                } else {
+                    (edge * 255.0) as u8
+                };
+            }
+        }
+    }
+
+    tauri::image::Image::new_owned(rgba, size, size)
 }

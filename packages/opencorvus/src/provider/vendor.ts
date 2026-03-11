@@ -137,15 +137,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
 
     const awsAccessKeyId = Env.get("AWS_ACCESS_KEY_ID")
 
-    const awsBearerToken = iife(() => {
-      const envToken = process.env.AWS_BEARER_TOKEN_BEDROCK
-      if (envToken) return envToken
-      if (auth?.type === "api") {
-        process.env.AWS_BEARER_TOKEN_BEDROCK = auth.key
-        return auth.key
-      }
-      return undefined
-    })
+    const awsBearerToken = process.env.AWS_BEARER_TOKEN_BEDROCK || (auth?.type === "api" ? auth.key : undefined)
 
     const awsWebIdentityTokenFile = Env.get("AWS_WEB_IDENTITY_TOKEN_FILE")
 
@@ -158,6 +150,7 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
 
     const providerOptions: AmazonBedrockProviderSettings = {
       region: defaultRegion,
+      apiKey: awsBearerToken,
     }
 
     if (!awsBearerToken) {
@@ -328,21 +321,13 @@ export const CUSTOM_LOADERS: Record<string, CustomLoader> = {
   },
   "sap-ai-core": async () => {
     const auth = await Auth.get("sap-ai-core")
-    const envServiceKey = iife(() => {
-      const envAICoreServiceKey = process.env.AICORE_SERVICE_KEY
-      if (envAICoreServiceKey) return envAICoreServiceKey
-      if (auth?.type === "api") {
-        process.env.AICORE_SERVICE_KEY = auth.key
-        return auth.key
-      }
-      return undefined
-    })
+    const envServiceKey = process.env.AICORE_SERVICE_KEY || (auth?.type === "api" ? auth.key : undefined)
     const deploymentId = process.env.AICORE_DEPLOYMENT_ID
     const resourceGroup = process.env.AICORE_RESOURCE_GROUP
 
     return {
       autoload: !!envServiceKey,
-      options: envServiceKey ? { deploymentId, resourceGroup } : {},
+      options: envServiceKey ? { apiKey: envServiceKey, deploymentId, resourceGroup } : {},
       async getModel(sdk: any, modelID: string) {
         return sdk(modelID)
       },

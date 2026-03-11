@@ -13,7 +13,7 @@
 import { generateText, stepCountIs } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
-import { verificationHints, matchSelectors } from "@/check/policy"
+import { verificationHints } from "@/check/policy"
 import { Provider } from "@/provider/provider"
 import { createEvaluatorTools } from "./tools"
 import { Memory } from "@/memory"
@@ -99,10 +99,7 @@ export namespace EvaluatorAgent {
     checkResults: CheckResult[]
   }): Promise<EvaluatorAnalysisType> {
     const language = await agentLanguageModel()
-    if (!language) {
-      log.warn("evaluator: no LLM model available — falling back to check-only synthesis")
-      return synthesizeFromCheckResults(input)
-    }
+    if (!language) throw new Error("Evaluator analysis model is unavailable")
 
     // Full evaluator tool set: codebase exploration + memory + preferences
     const tools = createEvaluatorTools({ sessionID: input.task.sessionID })
@@ -152,27 +149,20 @@ export namespace EvaluatorAgent {
     try {
       parsed = extractJSON(allText, input.goals.length)
     } catch (err) {
-      log.warn("evaluator: JSON extraction failed, using synthesis fallback", {
+      log.warn("evaluator: JSON extraction failed", {
         error: String(err),
         textLength: allText.length,
       })
-      parsed = synthesizeFromCheckResults(input)
+      throw new Error(`Evaluator analysis returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`)
     }
 
-    // If the agent produced a verdict but made too few tool calls, the
-    // investigation was too shallow — downgrade "accepted" to "inconclusive"
-    // so the orchestrator doesn't rubber-stamp the delivery.
     const MIN_TOOL_CALLS = 3
     if (parsed.verdict === "accepted" && toolCallCount < MIN_TOOL_CALLS) {
-      log.warn("evaluator: agent accepted but made too few tool calls — downgrading to inconclusive", {
+      log.warn("evaluator: agent accepted but made too few tool calls", {
         toolCalls: toolCallCount,
         minRequired: MIN_TOOL_CALLS,
       })
-      parsed = {
-        ...parsed,
-        verdict: "inconclusive",
-        summary: `${parsed.summary} [Downgraded from accepted: evaluator made only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls — investigation was too shallow.]`,
-      }
+      throw new Error(`Evaluator analysis was too shallow: only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
     }
 
     log.info("evaluator agent output", {
@@ -235,7 +225,7 @@ function extractJSON(text: string, goalCount: number): EvaluatorAnalysisType {
   // Normalize empty classification (LLM sometimes leaves it empty for accepted verdicts)
   if (!obj.classification) obj.classification = "evaluation"
   // Fill missing required fields for truncated output
-  if (!obj.verdict) obj.verdict = "inconclusive"
+  if (!obj.verdict) obj.verdict = "rejected"
   if (!obj.summary) obj.summary = "Evaluation analysis was truncated"
   if (!Array.isArray(obj.goal_statuses)) obj.goal_statuses = []
 
@@ -244,9 +234,9 @@ function extractJSON(text: string, goalCount: number): EvaluatorAnalysisType {
     for (let i = obj.goal_statuses.length; i < goalCount; i++) {
       obj.goal_statuses.push({
         goal_index: i,
-        status: "inconclusive",
+        status: "failed",
         evidence: "Goal assessment was truncated in LLM output",
-        reasoning: "Unable to assess — output was cut off before this goal was evaluated",
+        reasoning: "The evaluator did not provide a complete assessment for this goal.",
       })
     }
   }
@@ -528,118 +518,6 @@ function indent(text: string, prefix = "   "): string {
 }
 
 // ---------------------------------------------------------------------------
-// Synthesis fallback — when LLM output is completely unparseable
-// ---------------------------------------------------------------------------
-
-/**
- * When the evaluator agent's LLM output cannot be parsed as JSON at all
- * (truncated, empty, or garbage), synthesize a reasonable analysis from
- * the automated check results. This is a last resort — the analysis will
- * be shallow but structurally correct.
- */
-function synthesizeFromCheckResults(input: {
-  task: { title: string; request: string }
-  goals: GoalInfo[]
-  delivery: DeliveryInfo
-  checkResults: CheckResult[]
-}): EvaluatorAnalysisType {
-  const failedChecks = input.checkResults.filter((c) => c.status === "failed")
-  const allPassed = failedChecks.length === 0
-
-  // NEVER auto-accept from synthesis — LLM investigation is required for a real verdict.
-  // When checks fail, we can confidently reject. When they pass, we can't confirm goals
-  // are actually met without reading the code, so verdict must be "inconclusive".
-  const verdict = allPassed ? "inconclusive" as const : "rejected" as const
-  const classification = "evaluation" as const
-
-  const failedNames = failedChecks.map((c) => c.name).join(", ")
-  const passedNames = input.checkResults.filter((c) => c.status === "passed").map((c) => c.name).join(", ")
-
-  const summary = allPassed
-    ? `All ${input.checkResults.length} automated checks passed (${passedNames}), but LLM analysis was unavailable — cannot confirm goals are truly met without code investigation. Verdict: inconclusive.`
-    : `${failedChecks.length}/${input.checkResults.length} checks failed (${failedNames}). LLM analysis was unavailable — verdict based on check results only.`
-
-  // Goal assessment from synthesis:
-  // - Goals WITH check_selectors + matching checks ALL passed → "passed" (mechanistic verification)
-  // - Goals WITH check_selectors + some matching checks failed → "failed" (concrete evidence)
-  // - Goals WITHOUT check_selectors → "inconclusive" (no mechanistic evidence either way)
-  // - Goals with selectors but NO matching checks found → "inconclusive"
-  //
-  // This prevents rubber-stamping semantic goals (e.g., "clean separation") that can't be
-  // verified by automated checks alone, while still allowing mechanistic goals (e.g., "build
-  // passes") to be confirmed when their specific check succeeded.
-  const goal_statuses: Array<z.infer<typeof GoalAssessment>> = input.goals.map((goal, i) => {
-    const selectors = goal.check_selector ?? []
-
-    // Without selectors, we have NO mechanistic way to verify — must be inconclusive
-    if (selectors.length === 0) {
-      return {
-        goal_index: i,
-        status: "inconclusive" as const,
-        evidence: `No check_selector defined for this goal. Automated checks passed globally but cannot confirm this specific goal without code investigation.`,
-        reasoning: `Synthesized (LLM unavailable). This goal has no check_selectors — it requires code review to verify. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
-      }
-    }
-
-    // Match selectors against actual check results
-    const relevantChecks = matchSelectors(selectors, input.checkResults)
-
-    if (relevantChecks.length === 0) {
-      return {
-        goal_index: i,
-        status: "inconclusive" as const,
-        evidence: `Goal selectors [${selectors.join(", ")}] did not match any executed checks. Cannot verify.`,
-        reasoning: `Synthesized (LLM unavailable). No matching checks were found for selectors [${selectors.join(", ")}]. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
-      }
-    }
-
-    const goalFailed = relevantChecks.some((c) => c.status === "failed")
-    if (goalFailed) {
-      const failedEvidence = relevantChecks
-        .filter((c) => c.status === "failed")
-        .map((c) => `${c.name}: ${c.evidence?.slice(0, 200) || "no output"}`)
-        .join("; ")
-      return {
-        goal_index: i,
-        status: "failed" as const,
-        evidence: `Check failures: ${failedEvidence}`,
-        reasoning: `Synthesized (LLM unavailable). Matching checks failed — concrete evidence of goal not met. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
-      }
-    }
-
-    // All matching checks passed — mechanistic verification
-    return {
-      goal_index: i,
-      status: "passed" as const,
-      evidence: `All matching checks passed: ${relevantChecks.map((c) => c.name).join(", ")}`,
-      reasoning: `Synthesized (LLM unavailable). Goal's check_selectors [${selectors.join(", ")}] all passed. ${goal.priority === "blocking" ? "Blocking goal." : "Advisory goal."}`,
-    }
-  })
-
-  const replan_guidance = !allPassed
-    ? {
-        root_cause: `Automated checks failed: ${failedChecks.map((c) => `${c.name} (${c.evidence?.slice(0, 100) || "no details"})`).join("; ")}`,
-        what_failed: failedNames,
-        suggested_strategy: "Review the failing check output carefully and fix the specific errors indicated",
-        avoid_approaches: [] as string[],
-      }
-    : {
-        root_cause: "Evaluator agent LLM output was unparseable — could not perform code investigation",
-        what_failed: "LLM analysis phase — automated checks passed but goal satisfaction was not verified",
-        suggested_strategy: "Retry evaluation with the evaluator agent; if it fails again, review changed files manually",
-        avoid_approaches: [] as string[],
-      }
-
-  return {
-    verdict,
-    classification,
-    summary,
-    goal_statuses,
-    replan_guidance,
-  }
-}
-
-// ---------------------------------------------------------------------------
 // System prompt
 // ---------------------------------------------------------------------------
 
@@ -781,7 +659,7 @@ Respond with ONLY a JSON object. **CRITICAL**: Output fields in EXACTLY this ord
 - classification "transient" should be very rare (< 10% of failures). Most failures are "evaluation" (partial implementation) or "strategy" (wrong approach).
 - If verdict is "accepted", still provide detailed evidence for each goal. An accepted verdict with weak evidence is useless for learning.
 - Write in the same language as the task request (Chinese request → Chinese output).
-- Do NOT fabricate evidence. If you truly can't determine something after investigation, use "inconclusive" — but this should be rare if you investigated properly.
+- Do NOT fabricate evidence. If investigation cannot verify a required goal, reject the delivery and explain the missing evidence.
 - After finishing tool calls, output JSON immediately. Do not add commentary before or after the JSON.
 
 ## Quality Self-Check

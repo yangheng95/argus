@@ -40,6 +40,238 @@ function serve() {
   })
 }
 
+test("overlay initializes cwd in a fresh temp directory when no custom cwd is saved", async () => {
+  const exe = await browser()
+  const seen: { path: string; directory: string | null }[] = []
+  const send = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+    })
+  const server = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const url = new URL(req.url)
+      const path = url.pathname.replace(/\/+$/, "") || "/"
+      if (!path.startsWith("/i18n/") && !path.endsWith(".svg") && !path.endsWith(".css") && !path.endsWith(".js") && !path.endsWith(".json") && path !== "/") {
+        seen.push({
+          path,
+          directory: url.searchParams.get("directory"),
+        })
+      }
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks") return send({ tasks: [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/experimental/session") return send([])
+      if (path === "/path") {
+        const directory = url.searchParams.get("directory") || ""
+        return send({
+          home: "C:/Users/test",
+          state: "C:/Users/test/.opencorvus/state",
+          config: "C:/Users/test/.opencorvus/config",
+          worktree: directory,
+          directory,
+        })
+      }
+      if (path === "/vcs") {
+        return send({
+          branch: "",
+          clean: false,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/config") return send({})
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send(true)
+
+      const name = path === "/" ? "index.html" : path.slice(1)
+      const file = Bun.file(new URL(name, src))
+      const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
+      return file.exists().then((ok) => (ok ? new Response(file, { headers: { "content-type": type } }) : new Response("not found", { status: 404 })))
+    },
+  })
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    const serverUrl = `http://127.0.0.1:${server.port}`
+    await tab.evaluateOnNewDocument((value) => {
+      const state = {
+        settings: {
+          serverUrl: value,
+          autoServer: false,
+        },
+        temp: [] as string[],
+      }
+      Object.defineProperty(window, "__overlayTest", {
+        configurable: true,
+        value: state,
+      })
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string, args: Record<string, unknown> = {}) => {
+            if (command === "overlay_settings_load") return state.settings
+            if (command === "overlay_settings_save") {
+              state.settings = { ...((args.settings as Record<string, unknown>) || {}) }
+              return true
+            }
+            if (command === "overlay_create_temp_dir") {
+              const next = `D:/overlay/temp-auto-${state.temp.length + 1}`
+              state.temp.push(next)
+              return next
+            }
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              setAlwaysOnTop: async () => undefined,
+              isAlwaysOnTop: async () => false,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
+    }, serverUrl)
+
+    await tab.goto(serverUrl, { waitUntil: "load" })
+    await tab.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
+    await tab.waitForFunction(() => {
+      try {
+        const state = window.eval("state")
+        return state.directory === "D:/overlay/temp-auto-1" && state.path?.directory === "D:/overlay/temp-auto-1"
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const test = (window as typeof window & { __overlayTest: { settings: Record<string, unknown> } }).__overlayTest
+      return {
+        directory: state.directory,
+        directoryMode: state.directoryMode,
+        savedDirectory: test.settings.directory,
+        savedDirectoryMode: test.settings.directoryMode,
+      }
+    })
+
+    expect(result.directory).toBe("D:/overlay/temp-auto-1")
+    expect(result.directoryMode).toBe("temp")
+    expect(result.savedDirectory).toBeUndefined()
+    expect(result.savedDirectoryMode).toBe("temp")
+    expect(seen.some((item) => item.path === "/tasks" && item.directory === "D:/overlay/temp-auto-1")).toBe(true)
+    expect(seen.some((item) => item.path === "/path" && item.directory === "D:/overlay/temp-auto-1")).toBe(true)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+})
+
+test("cwd uses state.directory as the only active source and keeps actions on the right", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderMeta") === "function"
+          && typeof window.eval("activeDirectory") === "function"
+          && typeof window.eval("clearProjectScopeData") === "function"
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const renderMeta = window.eval("renderMeta")
+      const activeDirectory = window.eval("activeDirectory")
+      const clearProjectScopeData = window.eval("clearProjectScopeData")
+
+      state.directory = "D:/overlay/current"
+      state.path = { directory: "D:/overlay/stale" }
+      renderMeta()
+      const filled = {
+        active: activeDirectory(),
+        lastChild: document.querySelector(".task-dir-shell")?.lastElementChild?.className || "",
+      }
+
+      state.directory = ""
+      renderMeta()
+      const empty = {
+        active: activeDirectory(),
+        lastChild: document.querySelector(".task-dir-shell")?.lastElementChild?.className || "",
+      }
+
+      state.memoryFiles = [{ id: "mem-1", title: "note", scope: "global", source: "test", timeUpdated: 1 }]
+      state.memorySearchMode = true
+      state.preferences = [{ id: "pref-1", key: "tone", value: "brief", scope: "cwd", source: "test" }]
+      state.path = { directory: "D:/overlay/stale" }
+      state.vcs = { branch: "main" }
+      state.tasks = [{ task: { id: "task-1" } }]
+      state.sessions = [{ id: "session-1" }]
+      clearProjectScopeData()
+
+      return {
+        filled,
+        empty,
+        cleared: {
+          path: state.path,
+          vcs: state.vcs,
+          tasks: state.tasks.length,
+          sessions: state.sessions.length,
+          memory: state.memoryFiles.length,
+          search: state.memorySearchMode,
+          preferences: state.preferences.length,
+        },
+      }
+    })
+
+    expect(result.filled.active).toBe("D:/overlay/current")
+    expect(result.filled.lastChild).toContain("task-dir-actions")
+    expect(result.empty.active).toBe("")
+    expect(result.empty.lastChild).toContain("task-dir-actions")
+    expect(result.cleared.path).toBeNull()
+    expect(result.cleared.vcs).toBeNull()
+    expect(result.cleared.tasks).toBe(0)
+    expect(result.cleared.sessions).toBe(0)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+})
+
 test("planner turn refreshes when synthetic board content changes", async () => {
   const exe = await browser()
   const server = serve()
@@ -705,7 +937,7 @@ test("workspace mode follows unified selection helpers", async () => {
       const renderWorkspaceState = window.eval("renderWorkspaceState")
 
       state.connected = true
-      enterEmptyWorkspace({ globalView: false })
+      enterEmptyWorkspace()
       const empty = document.body.dataset.workspace || ""
 
       enterTaskWorkspace("task-1")
@@ -722,22 +954,17 @@ test("workspace mode follows unified selection helpers", async () => {
       })
       const session = document.body.dataset.workspace || ""
 
-      state.globalView = true
-      renderWorkspaceState()
-      const global = document.body.dataset.workspace || ""
-
       state.connected = false
       renderWorkspaceState()
       const offline = document.body.dataset.workspace || ""
 
-      return { empty, task, taskSession, session, global, offline }
+      return { empty, task, taskSession, session, offline }
     })
 
     expect(modes.empty).toBe("empty")
     expect(modes.task).toBe("task")
     expect(modes.taskSession).toBe("task-session")
     expect(modes.session).toBe("session")
-    expect(modes.global).toBe("global")
     expect(modes.offline).toBe("offline")
   } finally {
     await page.close()

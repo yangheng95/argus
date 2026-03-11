@@ -21,37 +21,6 @@ export const NotFoundError = NamedError.create(
 
 const log = Log.create({ service: "db" })
 
-function columnNames(sqlite: BunDatabase, table: string) {
-  return sqlite
-    .query(`PRAGMA table_info(${table})`)
-    .all() as Array<{ name: string }>
-}
-
-function ensureColumn(sqlite: BunDatabase, table: string, name: string, definition: string) {
-  if (columnNames(sqlite, table).some((item) => item.name === name)) return
-  sqlite.run(`ALTER TABLE ${table} ADD COLUMN ${definition}`)
-}
-
-function applySchemaPatches(sqlite: BunDatabase) {
-  ensureColumn(sqlite, "control_message", "scope", "scope text NOT NULL DEFAULT 'global'")
-  ensureColumn(sqlite, "control_message", "scope_id", "scope_id text NOT NULL DEFAULT 'panel'")
-  ensureColumn(sqlite, "memory_file", "session_id", "session_id text")
-  ensureColumn(sqlite, "memory_file", "scope", "scope text NOT NULL DEFAULT 'global'")
-  ensureColumn(sqlite, "memory_file", "kind", "kind text NOT NULL DEFAULT 'note'")
-  ensureColumn(sqlite, "memory_file", "key", "key text")
-  ensureColumn(sqlite, "memory_file", "importance", "importance integer NOT NULL DEFAULT 60")
-  ensureColumn(sqlite, "memory_file", "confidence", "confidence integer NOT NULL DEFAULT 75")
-  ensureColumn(sqlite, "workbench_preference", "session_id", "session_id text")
-  ensureColumn(sqlite, "orchestrator_task", "active_spec_version_id", "active_spec_version_id text")
-  sqlite.run("CREATE INDEX IF NOT EXISTS control_message_scope_idx ON control_message (scope, scope_id)")
-  sqlite.run("CREATE INDEX IF NOT EXISTS memory_file_session_idx ON memory_file (session_id)")
-  sqlite.run("CREATE INDEX IF NOT EXISTS memory_file_scope_idx ON memory_file (scope)")
-  sqlite.run("CREATE INDEX IF NOT EXISTS memory_file_kind_idx ON memory_file (kind)")
-  sqlite.run("CREATE INDEX IF NOT EXISTS memory_file_key_idx ON memory_file (key)")
-  sqlite.run("CREATE INDEX IF NOT EXISTS workbench_preference_session_idx ON workbench_preference (session_id)")
-  sqlite.run("CREATE INDEX IF NOT EXISTS workbench_preference_scope_idx ON workbench_preference (scope)")
-}
-
 export namespace Database {
   export const Path = path.join(Global.Path.data, "opencorvus.db")
   type Schema = typeof schema
@@ -75,10 +44,7 @@ export namespace Database {
     sqlite.run("PRAGMA cache_size = -64000")
     sqlite.run("PRAGMA foreign_keys = ON")
     sqlite.run("PRAGMA wal_checkpoint(PASSIVE)")
-
-    // Create all tables (IF NOT EXISTS — idempotent)
     sqlite.exec(SCHEMA_DDL)
-    applySchemaPatches(sqlite)
     log.info("schema applied")
 
     const db = drizzle({ client: sqlite, schema })

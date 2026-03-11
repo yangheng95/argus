@@ -1,4 +1,3 @@
-import z from "zod"
 import { Tool } from "./tool"
 import { OrchestratorService } from "@/orchestrator/service"
 import { Session } from "@/session"
@@ -12,20 +11,42 @@ import { PanelActionSchema } from "@/panel/capability"
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
 
 export const PanelTool = Tool.define("panel", {
-  description: "Operate the OpenCorvus control plane: inspect plans/boards, manage task state, reply to interactions, and manage sessions.",
+  description: "Operate the OpenCorvus control plane: inspect specs, plans, and task boards, manage task state, reply to interactions, and manage sessions.",
   parameters: PanelActionSchema,
   async execute(params, ctx) {
     switch (params.action) {
+      case "view_spec": {
+        const board = await OrchestratorService.getBoard(params.taskID)
+        return {
+          title: "Spec",
+          output: [
+            `Task: ${board.task.title}`,
+            board.spec ? `Spec v${board.spec.version}: ${board.spec.summary}` : "Spec unavailable",
+            board.spec?.scope ? `Scope: ${board.spec.scope}` : undefined,
+            board.spec?.outOfScope ? `Out of scope: ${board.spec.outOfScope}` : undefined,
+            board.specItems.length > 0 ? "Acceptance items:" : undefined,
+            ...board.specItems.slice(0, 12).map((item, index) =>
+              `${index + 1}. ${item.title}${item.description ? ` - ${item.description}` : ""} [${item.status}]${item.checkSelector?.length ? ` {${item.checkSelector.join(", ")}}` : ""}`),
+            board.specItems.length > 12 ? `... ${board.specItems.length - 12} more items` : undefined,
+          ].filter(Boolean).join("\n"),
+          metadata: {},
+        }
+      }
       case "view_plan": {
         const board = await OrchestratorService.getBoard(params.taskID)
-        const goals = board.lanes.find((item) => item.id === "goals")?.cards ?? []
         return {
           title: "Plan",
           output: [
             `Task: ${board.task.title}`,
-            board.plan ? `Plan: ${board.plan.summary}` : "Plan unavailable",
-            goals.length > 0 ? "Goals:" : undefined,
-            ...goals.map((goal, index) => `${index + 1}. ${goal.title}${goal.detail ? ` — ${goal.detail}` : ""} [${goal.status || "pending"}]`),
+            board.plan ? `Plan v${board.plan.version}: ${board.plan.summary}` : "Plan unavailable",
+            board.plan && board.spec && board.plan.specSnapshotID !== board.spec.id
+              ? `Plan spec: ${board.plan.specSnapshotID} (active spec: ${board.spec.id})`
+              : undefined,
+            board.milestones.length > 0 ? "Milestones:" : undefined,
+            ...board.milestones.slice(0, 8).map((item, index) => `${index + 1}. ${item.title}${item.description ? ` - ${item.description}` : ""} [${item.status}]`),
+            board.planNodes.length > 0 ? "Plan nodes:" : undefined,
+            ...board.planNodes.slice(0, 12).map((item, index) => `${index + 1}. ${item.title}${item.brief ? ` - ${item.brief}` : ""} [${item.kind}]`),
+            board.planNodes.length > 12 ? `... ${board.planNodes.length - 12} more nodes` : undefined,
           ].filter(Boolean).join("\n"),
           metadata: {},
         }
@@ -49,8 +70,12 @@ export const PanelTool = Tool.define("panel", {
             `Status: ${board.task.status}`,
             board.overview?.headline,
             board.overview?.summary,
+            board.spec ? `Spec: ${board.spec.summary}` : undefined,
+            board.plan ? `Plan: ${board.plan.summary}` : undefined,
+            `Goals: ${board.goals.length}, acceptance items: ${board.specItems.length}`,
+            pendingCount(board) > 0 ? `Pending blockers: ${pendingCount(board)}` : undefined,
+            board.evaluation ? `Evaluation: ${board.evaluation.verdict} - ${board.evaluation.summary}` : undefined,
             board.delivery ? `Delivery: ${board.delivery.summary}` : undefined,
-            board.evaluation ? `Evaluation: ${board.evaluation.verdict} — ${board.evaluation.summary}` : undefined,
           ].filter(Boolean).join("\n"),
           metadata: {},
         }
@@ -152,7 +177,7 @@ export const PanelTool = Tool.define("panel", {
         } else {
           await OrchestratorService.selectTaskChecks(params.taskID, params.selection ?? {})
         }
-        return { title: "Checks updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task checks updated." }), metadata: {} }
+        return { title: "Checks updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task checks updated. spec_check remains required." }), metadata: {} }
       case "capture_overlay_screenshot":
         try {
           const shot = await captureWindowScreenshot(params.match)
@@ -286,15 +311,6 @@ export const PanelTool = Tool.define("panel", {
           metadata: {},
         }
       }
-      case "update_goal":
-        await OrchestratorService.updateGoal(params.goalID, {
-          description: params.description,
-          criteria: params.criteria,
-        })
-        return { title: "Goal updated", output: JSON.stringify({ kind: "panel_response", message: "Goal updated." }), metadata: {} }
-      case "delete_goal":
-        await OrchestratorService.deleteGoal(params.goalID)
-        return { title: "Goal deleted", output: JSON.stringify({ kind: "panel_response", message: "Goal deleted." }), metadata: {} }
     }
   },
 })
@@ -315,4 +331,8 @@ async function exportSessionHtml(sessionID: string) {
   const out = `${Global.Path.data}/panel-${sessionID}.html`
   await Filesystem.write(out, report)
   return out
+}
+
+function pendingCount(board: Awaited<ReturnType<typeof OrchestratorService.getBoard>>) {
+  return board.interactions.filter((item) => item.status === "pending").length
 }

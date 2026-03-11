@@ -12,6 +12,17 @@ import { tmpdir } from "../fixture/fixture"
 // This helper does the same for expected values so assertions match cross-platform.
 const fwd = (...parts: string[]) => path.join(...parts).replaceAll("\\", "/")
 
+async function symlink(target: string, link: string, type: "file" | "dir") {
+  try {
+    await fs.symlink(target, link, process.platform === "win32" && type === "dir" ? "junction" : type)
+    return true
+  } catch (error) {
+    if (process.platform === "win32" && typeof error === "object" && error && "code" in error && error.code === "EPERM")
+      return false
+    throw error
+  }
+}
+
 async function bootstrap() {
   return tmpdir({
     git: true,
@@ -170,7 +181,7 @@ test("symlink handling", async () => {
       const before = await Snapshot.track()
       expect(before).toBeTruthy()
 
-      await fs.symlink(`${tmp.path}/a.txt`, `${tmp.path}/link.txt`, "file")
+      if (!(await symlink(`${tmp.path}/a.txt`, `${tmp.path}/link.txt`, "file"))) return
 
       expect((await Snapshot.patch(before!)).files).toContain(fwd(tmp.path, "link.txt"))
     },
@@ -442,8 +453,8 @@ test("nested symlinks", async () => {
 
       await $`mkdir -p ${tmp.path}/sub/dir`.quiet()
       await Filesystem.write(`${tmp.path}/sub/dir/target.txt`, "target content")
-      await fs.symlink(`${tmp.path}/sub/dir/target.txt`, `${tmp.path}/sub/dir/link.txt`, "file")
-      await fs.symlink(`${tmp.path}/sub`, `${tmp.path}/sub-link`, "dir")
+      if (!(await symlink(`${tmp.path}/sub/dir/target.txt`, `${tmp.path}/sub/dir/link.txt`, "file"))) return
+      if (!(await symlink(`${tmp.path}/sub`, `${tmp.path}/sub-link`, "dir"))) return
 
       const patch = await Snapshot.patch(before!)
       expect(patch.files).toContain(fwd(tmp.path, "sub", "dir", "link.txt"))

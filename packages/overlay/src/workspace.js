@@ -3,28 +3,8 @@
     const state = deps.state;
     const dom = deps.dom;
 
-    function normalizeDirectory(value) {
-      return typeof value === "string" ? value.trim() : "";
-    }
-
-    function setWorkspaceDirectory(directory, source = "manual") {
-      const next = normalizeDirectory(directory);
-      if (next === state.directory) return;
-      state.directory = next;
-      deps.onDirectoryChange?.(next, source);
-    }
-
-    function restoreWorkspaceDirectory() {
-      setWorkspaceDirectory(state.directory, state.directory ? "manual" : "auto");
-    }
-
-    function activeDirectory() {
-      return state.directory || "";
-    }
-
     function workspaceMode() {
       if (!state.connected) return "offline";
-      if (state.globalView) return "global";
       if (state.selectedTaskID && state.chatSessionID) return "task-session";
       if (state.selectedTaskID) return "task";
       if (state.chatSessionID) return "session";
@@ -34,9 +14,6 @@
     function renderWorkspaceState() {
       if (deps.document?.body) {
         deps.document.body.dataset.workspace = workspaceMode();
-      }
-      if (dom.btnGlobalView) {
-        dom.btnGlobalView.dataset.active = state.globalView ? "true" : "false";
       }
     }
 
@@ -60,8 +37,6 @@
       state.boardUpdatedAt = 0;
       state.sessionUpdatedAt = 0;
       state.session = [];
-      state.sessionSource = "";
-      state.sessionRenderPending = false;
       renderWorkspaceState();
     }
 
@@ -71,18 +46,15 @@
       state.sessions = [];
       state.path = null;
       state.vcs = null;
+      state.memoryFiles = [];
+      state.memorySearchMode = false;
+      state.preferences = [];
     }
 
-    function enterEmptyWorkspace(options = {}) {
+    function enterEmptyWorkspace() {
       state.selectedTaskID = "";
       state.chatSessionID = "";
       state.managedSession = null;
-      if (typeof options.globalView === "boolean") {
-        state.globalView = options.globalView;
-      }
-      if (options.restoreDirectory !== false) {
-        restoreWorkspaceDirectory();
-      }
       clearWorkspaceRuntime();
       deps.renderManagedSessionList();
     }
@@ -91,10 +63,6 @@
       state.selectedTaskID = taskID || "";
       state.chatSessionID = options.sessionID || "";
       state.managedSession = options.managedSession || null;
-      state.globalView = false;
-      if (options.directory !== undefined) {
-        setWorkspaceDirectory(options.directory, "task");
-      }
       clearWorkspaceRuntime();
       deps.renderManagedSessionList();
     }
@@ -103,18 +71,11 @@
       state.selectedTaskID = "";
       state.chatSessionID = sessionID || "";
       state.managedSession = options.managedSession || null;
-      state.globalView = false;
-      if (options.directory !== undefined) {
-        setWorkspaceDirectory(options.directory, "session");
-      }
       clearWorkspaceRuntime();
       deps.renderManagedSessionList();
     }
 
     return {
-      activeDirectory,
-      setWorkspaceDirectory,
-      restoreWorkspaceDirectory,
       workspaceMode,
       renderWorkspaceState,
       hasWorkspaceSelection,

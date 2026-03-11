@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { Config } from "../../src/config/config"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
@@ -13,8 +14,16 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 describe("session routes", () => {
+  beforeEach(async () => {
+    await Instance.disposeAll()
+    await resetDatabase()
+    Config.global.reset()
+  })
+
   afterEach(async () => {
     mock.restore()
+    Config.global.reset()
+    await Instance.disposeAll()
     await resetDatabase()
   })
 
@@ -34,20 +43,23 @@ describe("session routes", () => {
         })
 
         expect(response.status).toBe(200)
-        await Bun.sleep(50)
-
-        const logs = await app.request("/log/tail?n=500", {
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        expect(logs.status).toBe(200)
-        const body = await logs.json() as { lines: string[] }
-        const line = [...body.lines].reverse().find((item) =>
-          item.includes("service=server") &&
-          item.includes("session.get") &&
-          item.includes(`sessionID=${session.id}`),
-        )
+        let line: string | undefined
+        for (const _ of Array.from({ length: 10 })) {
+          await Bun.sleep(100)
+          const logs = await app.request("/log/tail?n=5000", {
+            headers: {
+              "x-opencorvus-directory": tmp.path,
+            },
+          })
+          expect(logs.status).toBe(200)
+          const body = await logs.json() as { lines: string[] }
+          line = [...body.lines].reverse().find((item) =>
+            item.includes("service=server") &&
+            item.includes("session.get") &&
+            item.includes(`sessionID=${session.id}`),
+          )
+          if (line) break
+        }
 
         expect(line).toBeDefined()
         expect(line).toContain(`sessionID=${session.id}`)

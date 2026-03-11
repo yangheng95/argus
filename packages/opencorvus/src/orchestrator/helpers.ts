@@ -4,7 +4,7 @@ import { Budget } from "./model"
 import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 1500
-export const SAME_PLAN_RETRY_LIMIT = parseInt(process.env.OPENCORVUS_SAME_PLAN_RETRY_LIMIT || "2", 10)
+export const SAME_PLAN_RETRY_LIMIT = parseInt(process.env.OPENCORVUS_SAME_PLAN_RETRY_LIMIT || "1", 10)
 export const DEFAULT_MAX_RUNS = parseInt(process.env.OPENCORVUS_MAX_RUNS || "10", 10)
 export const DEFAULT_MAX_REPLANS = parseInt(process.env.OPENCORVUS_MAX_REPLANS || "3", 10)
 

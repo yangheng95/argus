@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Database, eq } from "../../src/storage/db"
-import { OrchestratorGoalTable, OrchestratorPlanVersionTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { OrchestratorGoalTable, OrchestratorPlanVersionTable, OrchestratorRunTable, OrchestratorSpecSnapshotTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { WorkbenchBriefSnapshotTable, WorkbenchPreferenceTable, WorkbenchTaskNoteTable } from "../../src/workbench/workbench.sql"
 import { WorkbenchService } from "../../src/workbench/service"
@@ -23,6 +23,49 @@ describe("workbench.service", () => {
       summary: "Compiled spec",
       content: "# Scope\n\nImplement feature",
       scope: "Implement feature",
+      goals: [
+        {
+          description: "Implement feature",
+          criteria: "Task completed successfully",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["spec_check"],
+          },
+        },
+      ],
+      assumptions: [],
+      risks: [],
+      spec_items: [
+        {
+          title: "Implement feature",
+          description: "Task completed successfully",
+          priority: "blocking",
+          check_selector: ["spec_check"],
+        },
+      ],
+      evidence_sources: [],
+      unresolved_questions: [],
+    } as any)
+    spyOn(SpecService, "rewrite").mockResolvedValue({
+      summary: "Rewritten spec",
+      content: "# Scope\n\nImplement feature with the updated operator goals",
+      scope: "Implement feature with the updated operator goals",
+      goals: [
+        {
+          description: "Implement feature",
+          criteria: "Task completed successfully",
+          priority: "blocking",
+          metadata: {},
+        },
+        {
+          description: "add regression coverage",
+          criteria: "The rewritten specification explicitly captures this operator goal and the delivered implementation satisfies it: add regression coverage",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["spec_check"],
+          },
+        },
+      ],
       assumptions: [],
       risks: [],
       spec_items: [
@@ -39,17 +82,23 @@ describe("workbench.service", () => {
     spyOn(PlannerService, "initial").mockResolvedValue({
       summary: "Compiled plan",
       prompt: "Execute the compiled plan",
-      goals: [
-        {
-          description: "Implement feature",
-          criteria: "Task completed successfully",
-          priority: "blocking",
-          metadata: {},
-        },
-      ],
       metadata: {
         strategy: "initial",
         steps: ["Execute the task"],
+        planner: {
+          role: "headless_compiler",
+          quality: "compiled",
+          source: "planner_agent",
+          clarification_source: "none",
+        },
+      },
+    } as any)
+    spyOn(PlannerService, "replan").mockResolvedValue({
+      summary: "Compiled replan",
+      prompt: "Execute the compiled replan",
+      metadata: {
+        strategy: "replan",
+        steps: ["Rewrite the specification", "Rebuild the plan", "Execute the task"],
         planner: {
           role: "headless_compiler",
           quality: "compiled",
@@ -175,6 +224,7 @@ describe("workbench.service", () => {
       sessionID: input.sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
+    spyOn(OpencodeExecutor, "abort").mockResolvedValue(true)
 
     await Instance.provide({
       directory: tmp.path,
@@ -182,7 +232,7 @@ describe("workbench.service", () => {
         const taskID = await OrchestratorService.createTask({
           request: "implement feature",
         })
-        await OrchestratorService.handleTaskMessage(taskID, {
+        const goal = await OrchestratorService.handleTaskMessage(taskID, {
           text: "/goal add regression coverage",
           source: "slack",
         })
@@ -191,13 +241,20 @@ describe("workbench.service", () => {
           source: "slack",
         })
         const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get())!
-        const goals = Database.use((db) =>
-          db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.plan_version_id, task.active_plan_version_id!)).all(),
+        const plans = Database.use((db) =>
+          db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.task_id, taskID)).all(),
+        )
+        const specs = Database.use((db) =>
+          db.select().from(OrchestratorSpecSnapshotTable).where(eq(OrchestratorSpecSnapshotTable.task_id, taskID)).all(),
         )
         const notes = Database.use((db) => db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all())
-        expect(goals.some((item) => item.description === "add regression coverage")).toBe(true)
-        const added = goals.find((item) => item.description === "add regression coverage")
-        expect((added?.metadata as { check_selector?: string[] } | null | undefined)?.check_selector).toContain("test")
+        expect(goal.message).toContain("Queued a spec rewrite and replan")
+        expect(task.status).toBe("running")
+        expect(task.active_plan_version_id).toBe(plans.at(-1)?.id)
+        expect(task.active_spec_version_id).toBe(specs.at(-1)?.id)
+        expect(plans).toHaveLength(2)
+        expect(specs).toHaveLength(2)
+        expect(notes.some((item) => item.kind === "goal_update" && item.content === "add regression coverage")).toBe(true)
         expect(notes.some((item) => item.kind === "plan_hint")).toBe(true)
       },
     })
@@ -294,6 +351,7 @@ describe("workbench.service", () => {
         const now = Date.now()
         const taskID = Identifier.ascending("task")
         const planID = Identifier.ascending("plan")
+        const specID = Identifier.ascending("spec")
         const session = await Session.create({ title: "implement feature" })
         Database.transaction((db) => {
           db.insert(OrchestratorTaskTable)
@@ -301,6 +359,7 @@ describe("workbench.service", () => {
               id: taskID,
               project_id: Instance.project.id,
               session_id: session.id,
+              active_spec_version_id: specID,
               active_plan_version_id: planID,
               source: "api",
               title: "implement feature",
@@ -311,10 +370,24 @@ describe("workbench.service", () => {
               time_updated: now,
             })
             .run()
+          db.insert(OrchestratorSpecSnapshotTable)
+            .values({
+              id: specID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: "Compiled spec",
+              content: "# Scope\n\nImplement feature",
+              scope: "Implement feature",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
           db.insert(OrchestratorPlanVersionTable)
             .values({
               id: planID,
               task_id: taskID,
+              spec_snapshot_id: specID,
               version: 1,
               status: "active",
               summary: "Compiled plan",
@@ -331,7 +404,7 @@ describe("workbench.service", () => {
             .values({
               id: Identifier.ascending("goal"),
               task_id: taskID,
-              plan_version_id: planID,
+              spec_snapshot_id: specID,
               description: "Implement feature",
               criteria: "Task completed successfully",
               priority: "blocking",
@@ -424,10 +497,82 @@ describe("workbench.service", () => {
           user_id: "U3",
         })
         const board = WorkbenchService.compileBoard({ taskID })
-        expect(board.lanes.find((lane) => lane.id === "preferences")?.cards.length).toBeGreaterThan(0)
-        expect(board.lanes.find((lane) => lane.id === "staging")?.cards.length).toBeGreaterThan(0)
-        expect(board.lanes.find((lane) => lane.id === "notes")?.cards.length).toBeGreaterThan(0)
+        expect(board.lanes.map((lane) => lane.id)).toEqual(["spec", "plan", "goals", "acceptance", "evaluation", "delivery"])
         expect(board.brief.content).toContain("Global preferences:")
+        expect(board.brief.content).toContain("Recent task notes:")
+      },
+    })
+  })
+
+  test("brief and board fall back to active spec goals when no active plan exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const specID = Identifier.ascending("spec")
+        const session = await Session.create({ title: "spec only task" })
+        Database.transaction((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: session.id,
+              active_spec_version_id: specID,
+              active_plan_version_id: null,
+              source: "api",
+              title: "spec only task",
+              request: "ship the spec-only path",
+              status: "queued",
+              priority: "normal",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorSpecSnapshotTable)
+            .values({
+              id: specID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: "Spec only",
+              content: "# Scope\n\nSpec-only flow",
+              scope: "Spec-only flow",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorGoalTable)
+            .values({
+              id: Identifier.ascending("goal"),
+              task_id: taskID,
+              spec_snapshot_id: specID,
+              description: "Spec-only goal",
+              criteria: "Still visible before plan activation.",
+              priority: "blocking",
+              status: "pending",
+              order_index: 0,
+              metadata: {
+                check_selector: ["spec_check"],
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const brief = WorkbenchService.compileBrief({
+          taskID,
+          sessionID: session.id,
+        })
+        const board = WorkbenchService.compileBoard({ taskID })
+
+        expect(brief.goals).toHaveLength(1)
+        expect(brief.content).toContain("Spec-only goal")
+        expect(board.task.activeSpecVersionID).toBe(specID)
+        expect(board.plan).toBeUndefined()
+        expect(board.lanes.find((lane) => lane.id === "goals")?.cards[0]?.title).toBe("Spec-only goal")
       },
     })
   })
@@ -445,7 +590,7 @@ describe("workbench.service", () => {
         const taskID = await OrchestratorService.createTask({
           request: "implement feature",
         })
-        for (const index of Array.from({ length: 14 }, (_, item) => item + 1)) {
+        for (const index of Array.from({ length: 8 }, (_, item) => item + 1)) {
           await OrchestratorService.handleTaskMessage(taskID, {
             text: `/plan hint-${index}`,
             source: "api",
@@ -463,13 +608,11 @@ describe("workbench.service", () => {
           sessionID: task.session_id!,
         })
         const board = WorkbenchService.compileBoard({ taskID })
-        const staging = board.lanes.find((lane) => lane.id === "staging")?.cards ?? []
         const noteSection = brief.content.split("Recent task notes:\n").at(1)?.split("\n\nRelevant memory:").at(0) ?? brief.content
 
-        expect(noteSection).toMatch(/\[plan_hint\] hint-14(?:\D|$)/)
+        expect(noteSection).toMatch(/\[plan_hint\] hint-8(?:\D|$)/)
         expect(noteSection).not.toMatch(/\[plan_hint\] hint-1(?:\D|$)/)
-        expect(staging.some((card) => String(card.detail ?? "") === "hint-14")).toBe(true)
-        expect(staging.some((card) => String(card.detail ?? "") === "hint-1")).toBe(false)
+        expect(board.brief.content).toContain("hint-8")
       },
     })
   })
@@ -493,8 +636,8 @@ describe("workbench.service", () => {
           user_id: "U-API",
         })
         const board = WorkbenchService.compileBoard({ taskID })
-        expect(board.lanes.find((lane) => lane.id === "preferences")?.cards.some((card) => card.title === "style")).toBe(false)
-        expect((board.lanes.find((lane) => lane.id === "notes")?.cards.length ?? 0)).toBeGreaterThan(0)
+        expect(board.brief.content).not.toContain("style: concise")
+        expect(board.brief.content).toContain("Please keep updates concise")
       },
     })
   })

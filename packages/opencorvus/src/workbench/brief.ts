@@ -24,12 +24,13 @@ export function compileBrief(input: {
   const plan = planID
     ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, planID)).get())
     : undefined
-  const goals = planID
+  const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
+  const goals = specID
     ? Database.use((db) =>
         db
           .select()
           .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.plan_version_id, planID))
+          .where(eq(OrchestratorGoalTable.spec_snapshot_id, specID))
           .orderBy(OrchestratorGoalTable.order_index)
           .all(),
       )

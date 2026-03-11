@@ -2,16 +2,12 @@ import { findSpecSnapshot, findSpecItems } from "@/orchestrator/store"
 import { Provider } from "@/provider/provider"
 import { CheckConfig } from "@/orchestrator/model"
 import { Snapshot } from "@/snapshot"
-import { generateObject, generateText } from "ai"
+import { generateObject } from "ai"
 import z from "zod"
 import { Log } from "@/util/log"
-import fs from "fs"
-import path from "path"
-import { Instance } from "@/project/instance"
 import {
   type EvaluationDelivery,
   type EvaluationOutcome,
-  JudgeResult,
   SpecCheckResult,
   ReviewResultSchema,
   clip,
@@ -23,38 +19,6 @@ import {
 
 const evaluatorLog = Log.create({ service: "evaluator" })
 const REVIEW_TIMEOUT_MS = 120_000
-
-async function loadSpecFromFilesystem(): Promise<string> {
-  try {
-    const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
-    
-    // Read all .md files from the specs directory
-    if (!fs.existsSync(specsDir)) {
-      return ""
-    }
-    
-    const files = fs.readdirSync(specsDir).filter((f) => f.endsWith(".md"))
-    if (files.length === 0) {
-      return ""
-    }
-    
-    // Try to load primary spec files in order of preference
-    const preferredFiles = ["MOMENT_DIARY_SOLUTION.md", "SPEC.md", "README.md"]
-    const primaryFile = preferredFiles.find((f) => files.includes(f)) || files[0]
-    
-    if (!primaryFile) {
-      return ""
-    }
-    
-    const filePath = path.join(specsDir, primaryFile)
-    const content = fs.readFileSync(filePath, "utf-8")
-    return content || ""
-  } catch (error) {
-    evaluatorLog.debug("Failed to load spec from filesystem", { error: String(error) })
-    return ""
-  }
-}
-
 
 export async function uiReviewResult(
   config: z.infer<typeof CheckConfig>["ui_review"],
@@ -332,155 +296,13 @@ function reviewOutcome(
     : softOrStrict({
         mode,
         name,
-        summary: result.object.verdict === "rejected" ? `${name} rejected the delivery.` : `${name} was inconclusive.`,
+        summary: `${name} rejected the delivery.`,
         evidence: clip(result.object.rationale),
         payload: {
           ...extra,
           ...result.object,
         },
       })
-}
-
-export async function judgeResult(
-  config: z.infer<typeof CheckConfig>["judge"],
-  request: string | undefined,
-  delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<EvaluationOutcome> {
-  if (!config?.enabled) return emptyOptional()
-  const mode = config.mode ?? "soft"
-  const model = await judgeModel()
-  if (!model) {
-    return {
-      outcome: "failed" as const,
-      summary: "Judge check unavailable because no model is configured.",
-      checks: [
-        {
-          name: "judge",
-          status: "failed" as const,
-          evidence: "No evaluator judge model available.",
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: "evaluation:judge",
-          payload: {
-            mode,
-            available: false,
-          },
-        },
-      ],
-    }
-  }
-
-  const language = await Provider.getLanguage(model).catch(() => undefined)
-  if (!language) {
-    return {
-      outcome: "failed" as const,
-      summary: "Judge check unavailable because the language model could not be loaded.",
-      checks: [
-        {
-          name: "judge",
-          status: "failed" as const,
-          evidence: "Could not load evaluator judge model.",
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: "evaluation:judge",
-          payload: {
-            mode,
-            available: false,
-          },
-        },
-      ],
-    }
-  }
-
-  const result = await generateObject({
-    model: language,
-    temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-    abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
-    messages: [
-      {
-        role: "system",
-        content:
-          "Judge whether the implementation appears complete based on the request and concrete delivery summary. Be pragmatic. If evidence is weak, return inconclusive.",
-      },
-      {
-        role: "user",
-        content: [
-          config.prompt ? `Judge instruction: ${config.prompt}` : "",
-          request ? `Task request:\n${request}` : "",
-          `Delivery summary:\n${delivery.summary}`,
-          `Changed files: ${(delivery.changedFiles ?? delivery.diffs?.map((item) => item.file) ?? []).join(", ") || "(none)"}`,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      },
-    ],
-    schema: JudgeResult,
-  }).catch((err) => {
-    evaluatorLog.warn("judge model call failed", { error: String(err), model: `${model.providerID}/${model.id}` })
-    return undefined
-  })
-
-  if (!result) {
-    return {
-      outcome: "failed" as const,
-      summary: "Judge check failed to execute.",
-      checks: [
-        {
-          name: "judge",
-          status: "failed" as const,
-          evidence: "Judge model call failed.",
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: "evaluation:judge",
-          payload: {
-            mode,
-            available: true,
-          },
-        },
-      ],
-    }
-  }
-
-  if (result.object.verdict === "accepted") {
-    return {
-      outcome: "passed" as const,
-      summary: "Judge check accepted the delivery.",
-      checks: [
-        {
-          name: "judge",
-          status: "passed" as const,
-          evidence: clip(result.object.rationale),
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: "evaluation:judge",
-          payload: result.object,
-        },
-      ],
-    }
-  }
-
-  return softOrStrict({
-    mode,
-    name: "judge",
-    summary:
-      result.object.verdict === "rejected"
-        ? "Judge check rejected the delivery."
-        : "Judge check was inconclusive.",
-    evidence: clip(result.object.rationale),
-    payload: result.object,
-  })
 }
 
 export async function specCheckResult(
@@ -508,33 +330,38 @@ export async function specCheckResult(
           ).join("\n")
       }
     } catch {}
-   }
-   if (!specContent.trim()) {
-     // Try to load from filesystem as fallback
-     specContent = await loadSpecFromFilesystem()
-   }
-   if (!specContent.trim()) {
-     return softOrStrict({
-       mode,
+  }
+  if (!specContent.trim()) {
+    return softOrStrict({
+      mode,
       name: "spec_check",
       summary: "No spec found in database.",
       evidence: "Cannot verify delivery against spec: no spec exists.",
       payload: { available: false },
     })
-   }
+  }
 
-   const model = await judgeModel()
-   if (!model) {
-     // If spec was loaded from filesystem but no model available, mark as optional
-     // In CI/CD with proper model configuration, spec_check will run
-     return softOrStrict({
-       mode,
-       name: "spec_check",
-       summary: "Spec check skipped: no evaluator model configured.",
-       evidence: "Spec content loaded successfully but evaluator model not available. In production, configure an LLM model for evaluation.",
-       payload: { available: false, reason: "no_model" },
-     })
-   }
+  const model = await evaluationModel()
+  if (!model) {
+    return {
+      outcome: "failed" as const,
+      summary: "Spec check unavailable because no model is configured.",
+      checks: [
+        {
+          name: "spec_check",
+          status: "failed" as const,
+          evidence: "No evaluator model available for spec check.",
+        },
+      ],
+      artifacts: [
+        {
+          kind: "report" as const,
+          label: "evaluation:spec_check",
+          payload: { mode, available: false },
+        },
+      ],
+    }
+  }
 
   const language = await Provider.getLanguage(model).catch(() => undefined)
   if (!language) {
@@ -579,7 +406,7 @@ export async function specCheckResult(
         "Pay special attention to the 'Required Spec Items' section — each item marked [blocking] " +
         "MUST be individually verified as passed for acceptance. " +
         "ALL criteria must pass for acceptance. Be thorough and precise. " +
-        "Respond with a JSON object: {\"verdict\":\"accepted\"|\"rejected\"|\"inconclusive\",\"rationale\":\"...\",\"criteria\":[{\"criterion\":\"...\",\"status\":\"passed\"|\"failed\"|\"inconclusive\",\"evidence\":\"...\"}]}",
+        "Respond with a JSON object: {\"verdict\":\"accepted\"|\"rejected\",\"rationale\":\"...\",\"criteria\":[{\"criterion\":\"...\",\"status\":\"passed\"|\"failed\",\"evidence\":\"...\"}]}",
     },
     {
       role: "user" as const,
@@ -595,37 +422,13 @@ export async function specCheckResult(
     },
   ]
 
-  let result: { object: z.infer<typeof SpecCheckResult> } | undefined
-  result = await generateObject({
+  const result = await generateObject({
     model: language,
     temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
     abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
     messages: specCheckMessages,
     schema: SpecCheckResult,
   }).catch(() => undefined)
-
-  if (!result) {
-    const textResult = await generateText({
-      model: language,
-      temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-      abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
-      messages: specCheckMessages,
-    }).catch((err) => {
-      evaluatorLog.warn("spec_check text fallback failed", { error: String(err), model: `${model.providerID}/${model.id}` })
-      return undefined
-    })
-    if (textResult?.text) {
-      try {
-        const jsonMatch = textResult.text.match(/\{[\s\S]*\}/)
-        if (jsonMatch) {
-          const parsed = SpecCheckResult.parse(JSON.parse(jsonMatch[0]))
-          result = { object: parsed }
-        }
-      } catch {
-        evaluatorLog.warn("spec_check JSON parse failed", { text: textResult.text.substring(0, 200) })
-      }
-    }
-  }
 
   if (!result) {
     return {
@@ -711,7 +514,7 @@ async function reviewModel() {
   )
 }
 
-async function judgeModel() {
+async function evaluationModel() {
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) return
   return Provider.getModel(def.providerID, def.modelID).catch(() => undefined)

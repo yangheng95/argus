@@ -55,9 +55,13 @@ export function decideRetryOrReplan(
   }
 
   const classification = analysis?.classification ?? "unknown"
-
   if (classification === "input" || classification === "permission") {
     log.info("failure classified as non-retryable", { classification, taskID: task.id })
+    return { action: "fail", summary, retryContext: ctx }
+  }
+
+  if (classification === "environment") {
+    log.info("failure classified as environment -> fail", { classification, taskID: task.id })
     return { action: "fail", summary, retryContext: ctx }
   }
 
