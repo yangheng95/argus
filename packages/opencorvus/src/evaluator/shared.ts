@@ -4,25 +4,18 @@ import { Snapshot } from "@/snapshot"
 
 const MAX_OUTPUT = 12000
 
-export const JudgeResult = z.object({
-  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
-  rationale: z.string(),
-  strengths: z.array(z.string()).optional(),
-  concerns: z.array(z.string()).optional(),
-})
-
 export const SpecCheckResult = z.object({
-  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
+  verdict: z.enum(["accepted", "rejected"]),
   rationale: z.string(),
   criteria: z.array(z.object({
     criterion: z.string(),
-    status: z.enum(["passed", "failed", "inconclusive"]),
+    status: z.enum(["passed", "failed"]),
     evidence: z.string(),
   })),
 })
 
 export const ReviewResultSchema = z.object({
-  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
+  verdict: z.enum(["accepted", "rejected"]),
   rationale: z.string(),
   strengths: z.array(z.string()),
   concerns: z.array(z.string()),
@@ -67,8 +60,8 @@ export type EvaluationOutcome = {
 }
 
 export type EvaluationOutput = {
-  status: "passed" | "failed" | "inconclusive"
-  verdict: "accepted" | "rejected" | "inconclusive"
+  status: "passed" | "failed"
+  verdict: "accepted" | "rejected"
   summary: string
   checks: z.infer<typeof EvaluationCheck>[]
   artifacts: EvaluationArtifact[]

@@ -22,6 +22,10 @@ test("ask - returns pending promise", async () => {
         ],
       })
       expect(promise).toBeInstanceOf(Promise)
+
+      const pending = await Question.list()
+      await Question.reject(pending[0].id)
+      await promise.catch(() => {})
     },
   })
 })
@@ -42,7 +46,7 @@ test("ask - adds to pending list", async () => {
         },
       ]
 
-      Question.ask({
+      const askPromise = Question.ask({
         sessionID: "ses_test",
         questions,
       })
@@ -50,6 +54,9 @@ test("ask - adds to pending list", async () => {
       const pending = await Question.list()
       expect(pending.length).toBe(1)
       expect(pending[0].questions).toEqual(questions)
+
+      await Question.reject(pending[0].id)
+      await askPromise.catch(() => {})
     },
   })
 })
@@ -260,7 +267,7 @@ test("list - returns all pending requests", async () => {
   await Instance.provide({
     directory: tmp.path,
     fn: async () => {
-      Question.ask({
+      const first = Question.ask({
         sessionID: "ses_test1",
         questions: [
           {
@@ -271,7 +278,7 @@ test("list - returns all pending requests", async () => {
         ],
       })
 
-      Question.ask({
+      const second = Question.ask({
         sessionID: "ses_test2",
         questions: [
           {
@@ -284,6 +291,9 @@ test("list - returns all pending requests", async () => {
 
       const pending = await Question.list()
       expect(pending.length).toBe(2)
+
+      await Promise.all(pending.map((item) => Question.reject(item.id)))
+      await Promise.all([first, second].map((item) => item.catch(() => {})))
     },
   })
 })

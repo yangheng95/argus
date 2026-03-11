@@ -11,14 +11,6 @@ afterEach(() => {
 const MOCK_PLAN = {
   prd: "Expanded spec based on real files",
   summary: "Update the landing page plan summary",
-  goals: [
-    {
-      description: "Primary goal",
-      criteria: "build passes",
-      priority: "blocking",
-      check_selector: ["build"],
-    },
-  ],
   subtasks: [
     {
       title: "Inspect code",
@@ -37,6 +29,16 @@ const MOCK_PLAN = {
 const MOCK_SPEC = {
   summary: "Spec summary",
   content: "# Scope\n\nExpanded spec based on real files",
+  goals: [
+    {
+      description: "Primary goal",
+      criteria: "build passes",
+      priority: "blocking",
+      metadata: {
+        check_selector: ["build"],
+      },
+    },
+  ],
   assumptions: [],
   risks: [],
   spec_items: [],
@@ -54,7 +56,7 @@ describe("planner.service", () => {
     })
 
     expect(plan.summary).toContain("Update the landing page")
-    expect(plan.goals.length).toBeGreaterThanOrEqual(1)
+    expect(plan.metadata.spec_analysis?.goals.length).toBeGreaterThanOrEqual(1)
     expect(plan.metadata.strategy).toBe("initial")
     expect(plan.metadata.planner?.role).toBe("headless_compiler")
     expect(plan.metadata.steps.length).toBeGreaterThan(1)
@@ -114,45 +116,45 @@ describe("planner.service", () => {
   })
 
   test("infers ui and startup selectors for relevant requests", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue({
-      ...MOCK_PLAN,
-      goals: [
-        {
-          description: "Improve the dashboard UI",
-          criteria: "The app starts normally and the UI review passes",
-          priority: "blocking",
-        },
-      ],
-    } as any)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
     const plan = await PlannerService.initial({
       title: "Review dashboard UI",
       request: "Improve the dashboard UI/UX and make sure the app starts normally before delivery.",
-      spec: MOCK_SPEC,
+      spec: {
+        ...MOCK_SPEC,
+        goals: [
+          {
+            description: "Improve the dashboard UI",
+            criteria: "The app starts normally and the UI review passes",
+            priority: "blocking",
+          },
+        ],
+      },
     })
 
-    expect(plan.goals[0]?.metadata?.check_selector).toContain("ui_review")
-    expect(plan.goals[0]?.metadata?.check_selector).toContain("startup")
+    expect(plan.prompt).toContain("ui_review")
+    expect(plan.prompt).toContain("startup")
   })
 
   test("infers code review and dead code selectors for relevant requests", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue({
-      ...MOCK_PLAN,
-      goals: [
-        {
-          description: "Run a code review",
-          criteria: "Review findings are addressed and dead code is checked",
-          priority: "blocking",
-        },
-      ],
-    } as any)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
     const plan = await PlannerService.initial({
       title: "Review cleanup",
       request: "Do a CR for this refactor and check whether dead code or obsolete branches still remain.",
-      spec: MOCK_SPEC,
+      spec: {
+        ...MOCK_SPEC,
+        goals: [
+          {
+            description: "Run a code review",
+            criteria: "Review findings are addressed and dead code is checked",
+            priority: "blocking",
+          },
+        ],
+      },
     })
 
-    expect(plan.goals[0]?.metadata?.check_selector).toContain("code_review")
-    expect(plan.goals[0]?.metadata?.check_selector).toContain("dead_code_review")
+    expect(plan.prompt).toContain("code_review")
+    expect(plan.prompt).toContain("dead_code_review")
   })
 
   test("flags vague requests for clarification by default", async () => {
@@ -171,14 +173,6 @@ describe("planner.service", () => {
     spyOn(PlannerAgent, "plan").mockResolvedValue({
       prd: "Expanded spec",
       summary: "Plan summary",
-      goals: [
-        {
-          description: "Goal",
-          criteria: "Criteria",
-          priority: "blocking",
-          check_selector: ["build"],
-        },
-      ],
       subtasks: [
         {
           title: "Inspect",
@@ -262,14 +256,6 @@ describe("planner.service", () => {
           output: JSON.stringify({
             prd: "Executor PRD",
             summary: "Executor plan summary",
-            goals: [
-              {
-                description: "Executor goal",
-                criteria: "bun test passes",
-                priority: "blocking",
-                check_selector: ["test"],
-              },
-            ],
             subtasks: [
               {
                 title: "Inspect",

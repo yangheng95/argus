@@ -41,6 +41,18 @@ export type ClarificationResult = z.infer<typeof Clarification>
 export const SpecDraftSchema = z.object({
   summary: z.string(),
   content: z.string(),
+  goals: z.array(
+    z.object({
+      description: z.string(),
+      criteria: z.string(),
+      priority: z.enum(["blocking", "advisory"]).default("blocking"),
+      metadata: z
+        .object({
+          check_selector: z.array(z.string()).optional(),
+        })
+        .optional(),
+    }),
+  ).default([]),
   assumptions: z.array(
     z.object({
       question: z.string(),
@@ -64,11 +76,24 @@ export const SpecItemSchema = z.object({
 })
 export type SpecItem = z.infer<typeof SpecItemSchema>
 
+export const SpecGoalSchema = z.object({
+  description: z.string().describe("Goal contract this task must satisfy"),
+  criteria: z.string().describe("How to verify the goal as satisfied"),
+  priority: z.enum(["blocking", "advisory"]).default("blocking"),
+  metadata: z
+    .object({
+      check_selector: z.array(z.string()).optional(),
+    })
+    .optional(),
+})
+export type SpecGoal = z.infer<typeof SpecGoalSchema>
+
 export const SpecOutput = z.object({
   summary: z.string().describe("One-line summary of the specification"),
   content: z.string().describe("Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria, Out-of-Scope, Open Questions"),
   scope: z.string().describe("What is in scope for this task"),
   out_of_scope: z.string().optional().describe("Explicitly excluded items"),
+  goals: z.array(SpecGoalSchema).describe("Authoritative task goals owned by this specification"),
   spec_items: z.array(SpecItemSchema).describe("Required spec items — each must be verifiably implemented"),
   assumptions: z.array(
     z.object({
@@ -137,20 +162,6 @@ export namespace HeadlessSpecAgent {
   }
 
   /**
-   * Compile/fill a spec during the spec compilation phase.
-   * Called when the spec is in "blocked" state and needs gap-filling.
-   */
-  export async function compile(input: {
-    title: string
-    request: string
-    previousSpec?: string
-    goals?: Array<{ description: string; criteria: string; priority?: string }>
-    signal?: AbortSignal
-  }): Promise<SpecOutputType> {
-    return run({ ...input, mode: "compile" })
-  }
-
-  /**
    * Rewrite a spec based on failure analysis from a previous execution.
    */
   export async function rewrite(input: {
@@ -173,9 +184,8 @@ export { HeadlessSpecAgent as SpecAgent }
 async function run(input: {
   title: string
   request: string
-  mode: "initial" | "compile" | "rewrite"
+  mode: "initial" | "rewrite"
   goals?: Array<{ description: string; criteria: string; priority?: string }>
-  previousSpec?: string
   rewriteContext?: SpecRewriteContext
   signal?: AbortSignal
 }): Promise<SpecOutputType> {
@@ -281,6 +291,7 @@ async function run(input: {
         summary: submitted.summary ?? "",
         content: submitted.content ?? "",
         scope: submitted.scope ?? "",
+        goals: Array.isArray(submitted.goals) ? submitted.goals : [],
         spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
         assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
         risks: Array.isArray(submitted.risks) ? submitted.risks : [],
@@ -357,9 +368,8 @@ function buildUserPrompt(
   input: {
     title: string
     request: string
-    mode: "initial" | "compile" | "rewrite"
+    mode: "initial" | "rewrite"
     goals?: Array<{ description: string; criteria: string; priority?: string }>
-    previousSpec?: string
     rewriteContext?: SpecRewriteContext
   },
   fileRefs: Array<{ ref: string; content: string }>,
@@ -403,10 +413,6 @@ function buildUserPrompt(
         .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
         .join("\n")}`,
     )
-  }
-
-  if (input.previousSpec) {
-    sections.push(`# Previous Specification (for revision)\n\n${input.previousSpec}`)
   }
 
   if (context) {
@@ -519,11 +525,20 @@ function extractJSON(text: string): SpecOutputType {
         error: String(parseErr.error),
         rawLength: raw.length,
       })
-      obj = { summary: "", content: "", scope: "", spec_items: [], assumptions: [], risks: [], evidence_sources: [], unresolved_questions: [] }
+      obj = { summary: "", content: "", scope: "", goals: [], spec_items: [], assumptions: [], risks: [], evidence_sources: [], unresolved_questions: [] }
     }
   }
 
   // Normalize
+  if (Array.isArray(obj.goals)) {
+    obj.goals = obj.goals.filter((goal: any) => goal && typeof goal === "object" && goal.description && goal.criteria)
+    for (const goal of obj.goals) {
+      if (goal.priority && goal.priority !== "blocking" && goal.priority !== "advisory") goal.priority = "blocking"
+      if (goal.metadata?.check_selector && !Array.isArray(goal.metadata.check_selector)) {
+        goal.metadata.check_selector = [String(goal.metadata.check_selector)]
+      }
+    }
+  }
   if (Array.isArray(obj.spec_items)) {
     obj.spec_items = obj.spec_items.filter((s: any) => s && typeof s === "object" && s.title)
     for (const s of obj.spec_items) {
@@ -542,6 +557,7 @@ function extractJSON(text: string): SpecOutputType {
   if (!obj.summary) obj.summary = ""
   if (!obj.content) obj.content = ""
   if (!obj.scope) obj.scope = ""
+  if (!Array.isArray(obj.goals)) obj.goals = []
   if (!Array.isArray(obj.spec_items)) obj.spec_items = []
   if (!Array.isArray(obj.assumptions)) obj.assumptions = []
   if (!Array.isArray(obj.risks)) obj.risks = []
@@ -556,6 +572,7 @@ function extractJSON(text: string): SpecOutputType {
       summary: obj.summary || "",
       content: obj.content || "",
       scope: obj.scope || "",
+      goals: Array.isArray(obj.goals) ? obj.goals : [],
       spec_items: [],
       assumptions: [],
       risks: Array.isArray(obj.risks) ? obj.risks : [],
@@ -748,6 +765,14 @@ function validateSpecQuality(
     reasons.push("No spec items — define at least 4 concrete, verifiable spec items for non-trivial tasks")
   }
 
+  if (spec.goals.length >= 2) {
+    score += 0.1
+  } else if (spec.goals.length >= 1) {
+    score += 0.05
+  } else {
+    reasons.push("No goals — define authoritative blocking/advisory goals in the spec")
+  }
+
   // Evidence sources (did the agent actually discover things?) (0.1 max)
   if (spec.evidence_sources.length >= 2) {
     score += 0.1
@@ -837,6 +862,16 @@ function synthesizeFromExploration(
     result.evidence_sources = Array.from(discoveredFiles).slice(0, 15)
   }
 
+  if (result.goals.length === 0) {
+    result.goals = input.request.trim()
+      ? [{
+          description: input.request.split("\n")[0]!,
+          criteria: "The requested change is implemented and acceptance checks pass.",
+          priority: "blocking",
+        }]
+      : []
+  }
+
   return result
 }
 
@@ -920,7 +955,8 @@ You are NOT the planner. You do NOT decompose tasks into subtasks or implementat
 2. **Explore** the codebase to ground requirements in reality
 3. **Identify** gaps, ambiguities, constraints, and risks
 4. **Define** precise, verifiable spec items (acceptance criteria)
-5. **Surface** unresolved questions that need user input
+5. **Define** authoritative goals the execution system must satisfy
+6. **Surface** unresolved questions that need user input
 
 The downstream PlannerAgent will take your spec and create implementation plans.
 
@@ -970,7 +1006,7 @@ Your spec must be CONCRETE, not abstract. Reference specific files, functions, a
 Think: "Could a planner create implementation steps from this spec without exploring the codebase again?"
 
 **Spec Items** — Each must be independently verifiable:
-- GOOD: "The SpecAgent class in spec/agent.ts exports initial(), compile(), and rewrite() methods, each returning SpecOutputType"
+- GOOD: "The SpecAgent module in spec/agent.ts exposes initial() and rewrite() for grounded specification generation and revision"
 - BAD: "Create a spec agent" (too vague)
 
 **Content** — Must include these markdown sections:
@@ -989,6 +1025,7 @@ The submit_spec tool accepts these fields:
 - **summary**: One-line summary of the specification
 - **scope**: What is in scope for this task
 - **out_of_scope** (optional): What is explicitly excluded
+- **goals**: Array of authoritative goals with description, criteria, priority, optional check_selector metadata
 - **spec_items**: Array of verifiable items, each with title, description, check_selector, priority
 - **assumptions**: Array of {question, assumption} pairs
 - **risks**: Array of specific risks with codebase context
@@ -1016,10 +1053,11 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
 2. Does the content reference specific file paths discovered via tools?
 3. Are all spec items concrete and verifiable (not vague aspirations)?
-4. Does each blocking spec item have a check_selector?
-5. Are evidence_sources populated with actual files I consulted?
-6. Could a planner create implementation steps from this spec WITHOUT further exploration?
-7. Does the summary accurately describe the specification in one line?
+4. Are authoritative goals present and aligned with the specification?
+5. Does each blocking spec item have a check_selector?
+6. Are evidence_sources populated with actual files I consulted?
+7. Could a planner create implementation steps from this spec WITHOUT further exploration?
+8. Does the summary accurately describe the specification in one line?
 
 ## Output Format
 

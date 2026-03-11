@@ -3,8 +3,6 @@ import { EvaluatorService } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
-import { DeliveryService } from "../../src/orchestrator/delivery"
-import { OrchestratorGit } from "../../src/orchestrator/git"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -21,12 +19,59 @@ afterEach(async () => {
   await resetDatabase()
 })
 
+function mockSpec() {
+  spyOn(SpecService, "initial").mockImplementation(async (input) => ({
+    summary: `Spec: ${input.title}`,
+    content: `# Scope\n\n${input.request}`,
+    goals: (input.goals ?? [{
+      description: input.request,
+      criteria: "Task completed successfully",
+      priority: "blocking" as const,
+    }]).map((goal) => ({
+      description: goal.description,
+      criteria: goal.criteria,
+      priority: goal.priority ?? ("blocking" as const),
+      metadata: { check_selector: ["verify_cmd"] },
+    })),
+    assumptions: [],
+    risks: [],
+    clarifications: [],
+    spec_items: [{
+      title: input.title,
+      description: input.request,
+      priority: "blocking" as const,
+      check_selector: ["spec_check"],
+    }],
+    evidence_sources: [],
+    unresolved_questions: [],
+  }))
+}
+
 test(
-  "task completes when evaluator agent analysis fails after automated checks pass",
+  "task fails when evaluator analysis rejects a blocking goal after automated checks pass",
   async () => {
     await using tmp = await tmpdir({ git: true })
+    mockSpec()
+    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+      status: "passed",
+      verdict: "accepted",
+      summary: "Automated checks passed.",
+      checks: [
+        {
+          name: "verify_cmd",
+          status: "passed",
+          evidence: "ok",
+        },
+        {
+          name: "spec_check",
+          status: "passed",
+          evidence: "ok",
+        },
+      ],
+      artifacts: [],
+    })
     spyOn(PlannerService, "initial").mockResolvedValue({
-      summary: "Plan: fallback",
+      summary: "Plan: rejected analysis",
       prompt: "Execute the task and pass the checks.",
       goals: [{
         description: "Task completed successfully",
@@ -47,19 +92,23 @@ test(
         },
       },
     })
-    spyOn(SpecService, "initial").mockResolvedValue(undefined as never)
-    spyOn(SpecService, "rewrite").mockResolvedValue(undefined as never)
-    spyOn(DeliveryService, "deliver").mockResolvedValue({
-      status: "delivered",
-      summary: "Delivery published.",
-      artifacts: [],
-      publish: {
-        mode: "manual",
-        adapters: [],
+    spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue({
+      verdict: "rejected",
+      classification: "evaluation",
+      summary: "Evaluator analysis rejected the blocking goal.",
+      goal_statuses: [{
+        goal_index: 0,
+        status: "failed",
+        evidence: "Automated checks passed but the implementation did not satisfy the contract.",
+        reasoning: "Goal verification found a contract mismatch.",
+      }],
+      replan_guidance: {
+        root_cause: "Goal verification found a contract mismatch",
+        what_failed: "Final evaluator analysis",
+        suggested_strategy: "Tighten the implementation or the evaluation evidence and retry.",
+        avoid_approaches: [],
       },
     })
-    spyOn(OrchestratorGit, "complete").mockImplementation(async (task) => ({ task }))
-    spyOn(EvaluatorService, "analyzeDelivery").mockRejectedValue(new Error("ProviderModelNotFoundError"))
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -86,7 +135,7 @@ test(
           },
           body: JSON.stringify({
             project: Instance.project.id,
-            request: "complete task with evaluator fallback",
+            request: "complete task with rejected evaluator analysis",
             checks: {
               verify_cmd: [`"${process.execPath}" -e "process.exit(0)"`],
             },
@@ -98,10 +147,9 @@ test(
         let progressBody:
           | {
               task: { status: string; error?: string }
-              evaluation?: { verdict: string; summary: string }
             }
           | undefined
-        for (let index = 0; index < 40; index++) {
+        for (const _ of Array.from({ length: 40 })) {
           const progress = await app.request(`/task/${task_id}/progress`, {
             headers: {
               "x-opencorvus-directory": tmp.path,
@@ -110,15 +158,13 @@ test(
           expect(progress.status).toBe(200)
           progressBody = await progress.json() as {
             task: { status: string; error?: string }
-            evaluation?: { verdict: string; summary: string }
           }
-          if (progressBody.task.status === "completed") break
+          if (["completed", "failed"].includes(progressBody.task.status)) break
           await Bun.sleep(50)
         }
 
-        expect(progressBody?.task.status).toBe("completed")
-        expect(progressBody?.evaluation?.verdict).toBe("accepted")
-        expect(progressBody?.task.error).toBeUndefined()
+        expect(progressBody?.task.status).toBe("failed")
+        expect(progressBody?.task.error).toContain("rejected the blocking goal")
 
         const exported = await app.request(`/export/task/${task_id}`, {
           headers: {
@@ -127,9 +173,9 @@ test(
         })
         expect(exported.status).toBe(200)
         const exportBody = await exported.json() as {
-          artifacts: Array<{ label: string; payload?: { fallback?: boolean } }>
+          coordinatorRun?: { status: string }
         }
-        expect(exportBody.artifacts.some((item) => item.label === "evaluator-agent-error" && item.payload?.fallback === true)).toBe(true)
+        expect(exportBody.coordinatorRun?.status).toBe("failed")
       },
     })
   },

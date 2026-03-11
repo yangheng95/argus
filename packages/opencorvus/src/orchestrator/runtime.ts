@@ -1,6 +1,4 @@
 import { Bus } from "@/bus"
-import { selectorList } from "@/check/policy"
-import { EvaluatorService } from "@/evaluator/service"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PlannerFailureError } from "@/planner/service"
@@ -9,11 +7,23 @@ import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { installRuntimeShims } from "@/runtime/shims"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
+import { Snapshot } from "@/snapshot"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
+import {
+  applyGoalDelivery,
+  buildGoalPrompt,
+  createGoalSession,
+  createGoalWorkspace,
+  currentGoal,
+  deliveryFromSnapshot,
+  evaluateGoal,
+  evaluateTask,
+  goalEvaluationOutcome,
+} from "./goal-runner"
+import { nextGoalNode, pendingBlockingGoals } from "./goal-scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import {
@@ -28,6 +38,7 @@ import {
 } from "./helpers"
 import {
   appendExecutorEvent,
+  createGoalRun,
   createReplanRun,
   createRetryRun,
   ensureExecutorSession,
@@ -37,21 +48,30 @@ import {
   persistDelivery,
   persistEvaluation,
   persistFailedRunEvaluation,
+  updateGoalRun,
+  updateGoalRunExecutorSessionStatus,
   updateExecutorSessionStatus,
 } from "./transition"
 import { buildRetryContext, decideRetryOrReplan } from "./strategy"
 import {
+  activeGoalRunByCoordinator,
+  findDeliveryByGoalRun,
   findDeliveryByRun,
+  findEvaluationByGoalRun,
   findEvaluationByRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
   findRun,
   findTask,
-  listGoalsByPlan,
+  goalRunQueueTaskID,
+  latestGoalRunByCoordinator,
+  listGoalsBySpec,
+  listPlanNodesByPlan,
   requireRun,
   requireTask,
   type DeliveryRow,
+  type GoalRunRow,
   type PlanRow,
   type RunRow,
   type TaskRow,
@@ -63,285 +83,342 @@ const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire
 const DELIVERY_FETCH_TIMEOUT_MS = 120_000 // 120 seconds for executor.delivery() (git operations can be slow on Windows)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
+const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
 // Unattended-mode safeguards
 const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
 const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
+// Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
+// Default is off so automated pipelines continue without interruption.
+const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
 
-type TranscriptState = {
-  message: MessageV2.Assistant
-  text?: MessageV2.TextPart
-  reasoning?: MessageV2.ReasoningPart
-  tools: Map<string, MessageV2.ToolPart>
-  usage: {
-    input: number
-    output: number
-    total: number
-    cost: number
+function goalsForRun(run: RunRow) {
+  const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+  return plan ? listGoalsBySpec(plan.spec_snapshot_id) : []
+}
+
+function planForRun(run: RunRow) {
+  return run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+}
+
+function taskBaselineRef(task: TaskRow) {
+  const git = task.metadata?.git
+  if (!git || typeof git !== "object" || Array.isArray(git)) return
+  const baseline = (git as Record<string, unknown>).baseline
+  if (!baseline || typeof baseline !== "object" || Array.isArray(baseline)) return
+  const snapshot = (baseline as Record<string, unknown>).snapshot
+  return typeof snapshot === "string" && snapshot ? snapshot : undefined
+}
+
+function activeGoalRun(run: RunRow) {
+  return activeGoalRunByCoordinator(run.id)
+}
+
+function latestGoalRun(run: RunRow) {
+  return activeGoalRun(run) ?? latestGoalRunByCoordinator(run.id)
+}
+
+function runExecutionTarget(run: RunRow, goalRun = activeGoalRun(run)) {
+  return {
+    goalRun,
+    sessionID: goalRun?.session_id ?? run.session_id ?? undefined,
+    queueTaskID: goalRunQueueTaskID(goalRun) ?? run.executor_ref?.queue_task_id,
   }
 }
 
-const transcript = new Map<string, TranscriptState>()
+async function provideWorkspace<R>(directory: string | undefined, fn: () => Promise<R>) {
+  if (!directory || directory === Instance.directory) return fn()
+  return Instance.provide({ directory, fn })
+}
 
-async function projectExecutorEventToSession(taskID: string, run: RunRow, event: {
-  type: string
-  summary?: string
-  payload?: Record<string, unknown>
-}) {
-  if (run.executor === "opencode" || !run.session_id) return
-  const payload = event.payload ?? {}
-  const sessionID = typeof payload.sessionID === "string" ? payload.sessionID : run.session_id
-  if (!sessionID) return
-  if (event.type === "executor.status") return
+async function taskDirectory(task: TaskRow) {
+  if (!task.session_id) return Instance.directory
+  const session = await Session.get(task.session_id).catch(() => undefined)
+  return session?.directory ?? Instance.directory
+}
 
-  const state = await ensureTranscriptState(taskID, run, sessionID)
-  if (!state) return
+function storedDiffs(delivery: DeliveryRow) {
+  const result = delivery.result
+  const diffs = result && typeof result === "object" && !Array.isArray(result)
+    ? (result as Record<string, unknown>).diffs
+    : undefined
+  if (!Array.isArray(diffs)) return []
+  return diffs.flatMap((item) => {
+    const parsed = Snapshot.FileDiff.safeParse(item)
+    return parsed.success ? [parsed.data] : []
+  })
+}
 
-  if (event.type === "message.part.delta") {
-    if (payload.field !== "text" || typeof payload.delta !== "string" || payload.delta.length === 0) return
-    if (!state.text) {
-      state.text = await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: state.message.id,
-        sessionID,
-        type: "text",
-        text: "",
-      } satisfies MessageV2.TextPart) as MessageV2.TextPart
-    }
-    const text = state.text
-    if (!text) return
-    text.text += payload.delta
-    await Session.updatePartDelta({
-      sessionID,
-      messageID: state.message.id,
-      partID: text.id,
-      field: "text",
-      delta: payload.delta,
+async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
+  const goals = listGoalsBySpec(plan.spec_snapshot_id)
+  const next = nextGoalNode(listPlanNodesByPlan(plan.id), goals)
+  if (!next) return false
+  const brief = WorkbenchService.compileBrief({
+    taskID: task.id,
+    runID: run.id,
+    planVersionID: plan.id,
+    sessionID: task.session_id ?? undefined,
+  })
+  const startRef = taskBaselineRef(task)
+  const baseRef = await Snapshot.track()
+  const workspaceDir = await createGoalWorkspace({
+    task,
+    goal: next.goal,
+    snapshot: baseRef,
+  })
+  const session = await createGoalSession(task, next.goal, workspaceDir)
+  const goalRun = createGoalRun({
+    taskID: task.id,
+    goalID: next.goal.id,
+    planNodeID: next.node.id,
+    coordinatorRunID: run.id,
+    sessionID: session.id,
+    executor: run.executor,
+    workspaceDir,
+    baseRef,
+    metadata: {
+      title: next.goal.description,
+      selectors: next.goal.metadata?.check_selector,
+    },
+  })
+  const prompt = buildGoalPrompt({
+    brief: brief.content,
+    plan: {
+      ...plan,
+      prompt: typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override : plan.prompt,
+    },
+    goal: next.goal,
+  })
+  const source: "planner" | "scheduler" | "system" = run.metadata?.strategy === "operator_note" ? "system" : "scheduler"
+  const executor = ExecutorRegistry.require(run.executor)
+  const submission = await provideWorkspace(workspaceDir, () =>
+    executor.submit({
+      sessionID: session.id,
+      prompt,
+      priority: task.priority,
+      source,
     })
+  )
+  const now = Date.now()
+  updateGoalRun(goalRun.id, {
+    session_id: submission.sessionID,
+    status: "accepted",
+    time_started: now,
+    metadata: {
+      ...(goalRun.metadata ?? {}),
+      queue_task_id: submission.queueTaskID,
+      provider_session_id: submission.sessionID,
+      task_base_ref: startRef,
+    },
+  })
+  await hooks.updateRun(
+    run,
+    {
+      status: "accepted",
+      phase: run.phase === "replan" ? "replan" : "dispatch",
+      time_started: run.time_started ?? now,
+    },
+    `Goal queued: ${next.goal.description}`,
+  )
+  await hooks.updateTask(
+    task,
+    {
+      status: "running",
+      time_started: task.time_started ?? now,
+    },
+    `Running goal: ${next.goal.description}`,
+  )
+  const executorSession = ensureExecutorSession({
+    taskID: task.id,
+    runID: run.id,
+    goalRunID: goalRun.id,
+    provider: run.executor,
+    refs: {
+      provider_session_id: submission.sessionID,
+      queue_task_id: submission.queueTaskID,
+    },
+    settings: {
+      cwd: workspaceDir,
+    },
+    started: now,
+  })
+  appendExecutorEvent(executorSession.id, task.id, run.id, run.executor, goalRun.id, {
+    provider: run.executor,
+    kind: "lifecycle",
+    summary: "Goal accepted by executor",
+    refs: executorSession.refs ?? undefined,
+    payload: {
+      goal_id: next.goal.id,
+      goal_run_id: goalRun.id,
+      queue_task_id: submission.queueTaskID,
+      provider_session_id: submission.sessionID,
+    },
+  })
+  consumeExecutorEvents(task.id, run.id, goalRun.id, run.executor, submission.sessionID, executorSession.id)
+  return true
+}
+
+async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
+  const plan = planForRun(run)
+  if (!plan) throw new Error(`Task ${task.id} has no plan`)
+  const refreshedTask = requireTask(task.id)
+  const refreshedRun = requireRun(run.id)
+  if (await queueNextGoalRun(refreshedTask, refreshedRun, plan, hooks)) return
+  const pending = pendingBlockingGoals(goalsForRun(refreshedRun))
+  if (pending.length > 0) {
+    await handleEvaluationFailure(
+      refreshedTask,
+      refreshedRun,
+      `No ready blocking goals remain for dispatch: ${pending.map((goal) => goal.description).join(", ")}`,
+      hooks,
+    )
     return
   }
+  await finalizeCoordinatorRun(requireTask(task.id), requireRun(run.id), hooks)
+}
 
-  if (event.type === "reasoning.delta") {
-    const delta = typeof event.summary === "string" ? event.summary : ""
-    if (!delta) return
-    if (!state.reasoning) {
-      state.reasoning = await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: state.message.id,
-        sessionID,
-        type: "reasoning",
-        text: "",
-        time: {
-          start: Date.now(),
-        },
-      } satisfies MessageV2.ReasoningPart) as MessageV2.ReasoningPart
+async function finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
+  const existingDelivery = findDeliveryByRun(run.id)
+  if (existingDelivery) {
+    const evaluation = findEvaluationByRun(run.id)
+    if (!evaluation) {
+      await runEvaluation(task, run, existingDelivery, hooks)
+      return
     }
-    const reasoning = state.reasoning
-    if (!reasoning) return
-    reasoning.text += delta
-    await Session.updatePartDelta({
-      sessionID,
-      messageID: state.message.id,
-      partID: reasoning.id,
-      field: "text",
-      delta,
-    })
-    return
-  }
-
-  if (event.type === "tool.call") {
-    await flushTranscriptText(state)
-    state.text = undefined
-    state.reasoning = undefined
-    const id = typeof payload.id === "string" ? payload.id : Identifier.ascending("tool")
-    const part = await Session.updatePart({
-      id: state.tools.get(id)?.id ?? Identifier.ascending("part"),
-      messageID: state.message.id,
-      sessionID,
-      type: "tool",
-      callID: id,
-      tool: typeof payload.name === "string" ? payload.name : "tool",
-      state: {
-        status: "running",
-        input: toolInput(payload.input),
-        title: typeof payload.name === "string" ? payload.name : "Tool call",
-        metadata: {},
-        time: {
-          start: Date.now(),
-        },
-      },
-    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
-    state.tools.set(id, part)
-    return
-  }
-
-  if (event.type === "tool.result") {
-    await flushTranscriptText(state)
-    state.text = undefined
-    state.reasoning = undefined
-    const id = typeof payload.id === "string" ? payload.id : ""
-    const match = id ? state.tools.get(id) : undefined
-    if (!match) return
-    const start = "time" in match.state ? match.state.time.start : Date.now()
-    const next = await Session.updatePart({
-      ...match,
-      state: {
-        status: "completed",
-        input: match.state.input,
-        output: typeof payload.output === "string" ? payload.output : "",
-        title: match.tool,
-        metadata: {},
-        time: {
-          start,
-          end: Date.now(),
-        },
-      },
-    } satisfies MessageV2.ToolPart) as MessageV2.ToolPart
-    state.tools.set(id, next)
-    return
-  }
-
-  if (event.type === "usage.updated") {
-    state.usage = {
-      input: toNumber(payload.inputTokens),
-      output: toNumber(payload.outputTokens),
-      total: toNumber(payload.totalTokens),
-      cost: toNumber(payload.costUSD),
+    if (evaluation.status === "passed") {
+      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
+      return
     }
+    await handleEvaluationFailure(task, run, evaluation.summary, hooks)
     return
   }
-
-  if (event.type === "session.idle" || event.type === "session.error") {
-    await flushTranscriptText(state)
-    state.text = undefined
-    state.reasoning = undefined
-    if (event.type === "session.idle" && !state.text && typeof payload.output === "string" && payload.output.trim()) {
-      state.text = await Session.updatePart({
-        id: Identifier.ascending("part"),
-        messageID: state.message.id,
-        sessionID,
-        type: "text",
-        text: payload.output,
-      } satisfies MessageV2.TextPart) as MessageV2.TextPart
-    }
-    if (event.type === "session.error" && typeof payload.error === "string" && payload.error) {
-      if (!state.text) {
-        state.text = await Session.updatePart({
-          id: Identifier.ascending("part"),
-          messageID: state.message.id,
-          sessionID,
-          type: "text",
-          text: payload.error,
-        } satisfies MessageV2.TextPart) as MessageV2.TextPart
-      } else if (!state.text.text.trim()) {
-        state.text.text = payload.error
-        await Session.updatePart(state.text)
+  const baseRef = taskBaselineRef(task)
+  if (!baseRef) throw new Error(`Task ${task.id} has no baseline snapshot`)
+  const completedAt = Date.now()
+  await hooks.updateRun(run, { status: "completed", phase: "evaluate", blocking_reason: null, error: null, time_completed: completedAt }, "All goals executed")
+  await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating final delivery")
+  const { delivery } = await deliveryFromSnapshot(baseRef, "Task delivery")
+  const deliveryID = Identifier.ascending("delivery")
+  const evaluationID = Identifier.ascending("evaluation")
+  persistDelivery({ task, run, deliveryID, delivery, now: Date.now() })
+  await Plugin.trigger("delivery.ready", {
+    taskID: task.id,
+    runID: run.id,
+    deliveryID,
+    delivery: {
+      summary: delivery.summary,
+      changedFiles: delivery.diffs.map((item) => item.file),
+      diffs: delivery.diffs,
+    },
+  }, { actions: [] }).catch(() => undefined)
+  const goals = goalsForRun(run)
+  const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
+  const phase1Failed = result.status === "failed"
+  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
+  const finalStatus = (finalVerdict === "accepted" ? "passed" : "failed") as typeof result.status
+  const finalSummary = phase1Failed && analysis.verdict === "accepted"
+    ? `Rejected: automated checks failed. ${result.summary}`
+    : analysis.summary
+  persistEvaluation({
+    task,
+    run,
+    deliveryID,
+    evaluationID,
+    delivery,
+    result,
+    analysis,
+    finalVerdict,
+    finalStatus,
+    finalSummary,
+    goals,
+    analysisError,
+  })
+  if (finalStatus === "passed") {
+    if (pendingBlockingGoals(goalsForRun(run)).length === 0) {
+      const accepted = findDeliveryByRun(run.id)
+      if (!accepted) {
+        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
+        return
       }
+      await publishAcceptedDelivery(task, run, accepted, hooks)
+      return
     }
-    const completed = Date.now()
-    state.message = await Session.updateMessage({
-      ...state.message,
-      time: {
-        ...state.message.time,
-        completed,
-      },
-      cost: state.usage.cost,
-      tokens: {
-        total: state.usage.total || undefined,
-        input: state.usage.input,
-        output: state.usage.output,
-        reasoning: 0,
-        cache: {
-          read: 0,
-          write: 0,
+  }
+  await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
+}
+
+async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
+  const goals = goalsForRun(run)
+  const goal = currentGoal(goalRun, goals)
+  if (!goal) throw new Error(`Goal ${goalRun.goal_id} not found for run ${run.id}`)
+  const existingDelivery = findDeliveryByGoalRun(goalRun.id)
+  const existingEvaluation = findEvaluationByGoalRun(goalRun.id)
+  if (existingEvaluation) {
+    if (existingEvaluation.status === "passed" || goal.priority === "advisory") {
+      await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
+      return
+    }
+    await handleEvaluationFailure(requireTask(task.id), run, existingEvaluation.summary, hooks)
+    return
+  }
+  const deliveryID = existingDelivery?.id ?? Identifier.ascending("delivery")
+  const evaluationID = Identifier.ascending("evaluation")
+  const workspaceDir = goalRun.workspace_dir ?? Instance.directory
+  const deliveredInfo = existingDelivery
+    ? {
+        mergeRef: goalRun.merge_ref,
+        delivery: {
+          summary: existingDelivery.summary,
+          diffs: storedDiffs(existingDelivery),
         },
-      },
-    } satisfies MessageV2.Assistant) as MessageV2.Assistant
-    transcript.delete(run.id)
+      }
+    : await provideWorkspace(workspaceDir, () =>
+        deliveryFromSnapshot(goalRun.base_ref ?? undefined, `Goal delivery: ${goal.description}`)
+      )
+  const delivered = deliveredInfo.delivery
+  if (!existingDelivery) {
+    persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery: delivered, now: Date.now() })
   }
-}
-
-async function ensureTranscriptState(taskID: string, run: RunRow, sessionID: string) {
-  const current = transcript.get(run.id)
-  if (current) return current
-  const parentID = await transcriptParentID(sessionID, taskID, run.id)
-  const message = await Session.updateMessage({
-    id: Identifier.ascending("message"),
-    sessionID,
-    role: "assistant",
-    parentID,
-    modelID: run.executor,
-    providerID: run.executor,
-    mode: run.executor,
-    agent: run.executor,
-    path: {
-      cwd: Instance.directory,
-      root: Instance.worktree,
-    },
-    time: {
-      created: Date.now(),
-    },
-    cost: 0,
-    tokens: {
-      input: 0,
-      output: 0,
-      reasoning: 0,
-      cache: {
-        read: 0,
-        write: 0,
-      },
-    },
-  } satisfies MessageV2.Assistant) as MessageV2.Assistant
-  const next: TranscriptState = {
-    message,
-    tools: new Map<string, MessageV2.ToolPart>(),
-    usage: {
-      input: 0,
-      output: 0,
-      total: 0,
-      cost: 0,
-    },
-    text: undefined as MessageV2.TextPart | undefined,
-    reasoning: undefined as MessageV2.ReasoningPart | undefined,
+  const { result, analysis, analysisError } = await evaluateGoal({ task, goal, delivery: delivered })
+  const outcome = goalEvaluationOutcome(result, analysis)
+  persistEvaluation({
+    task,
+    run,
+    goalRunID: goalRun.id,
+    deliveryID,
+    evaluationID,
+    delivery: delivered,
+    result,
+    analysis,
+    finalVerdict: outcome.verdict,
+    finalStatus: outcome.status,
+    finalSummary: outcome.summary,
+    goals: [goal],
+    finalizeSpec: false,
+    analysisError,
+  })
+  updateGoalRun(goalRun.id, {
+    status: outcome.status === "passed" ? "completed" : "failed",
+    error: outcome.status === "passed" ? null : outcome.summary,
+    blocking_reason: null,
+    merge_ref: deliveredInfo.mergeRef ?? goalRun.merge_ref,
+    time_completed: Date.now(),
+  })
+  if (outcome.status === "passed") {
+    await provideWorkspace(await taskDirectory(task), () =>
+      applyGoalDelivery({
+        directory: Instance.directory,
+        delivery: delivered,
+      })
+    )
   }
-  transcript.set(run.id, next)
-  return next
-}
-
-async function transcriptParentID(sessionID: string, taskID: string, runID: string) {
-  const rows = await Session.messages({ sessionID, limit: 20 }).catch(() => [])
-  const user = rows.findLast((item) => item.info.role === "user")
-  if (user?.info.role === "user") return user.info.id
-  return `${taskID}:${runID}`
-}
-
-async function flushTranscriptText(state: {
-  text?: MessageV2.TextPart
-  reasoning?: MessageV2.ReasoningPart
-}) {
-  if (state.text) await Session.updatePart(state.text)
-  if (state.reasoning) await Session.updatePart({
-    ...state.reasoning,
-    time: {
-      ...state.reasoning.time,
-      end: Date.now(),
-    },
-  } satisfies MessageV2.ReasoningPart)
-}
-
-function toolInput(input: unknown) {
-  if (input && typeof input === "object" && !Array.isArray(input)) return input as Record<string, unknown>
-  if (typeof input !== "string") return {}
-  try {
-    const parsed = JSON.parse(input)
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>
-  } catch {}
-  return input ? { value: input } : {}
-}
-
-function toNumber(value: unknown) {
-  return Number.isFinite(Number(value)) ? Number(value) : 0
+  if (outcome.status === "passed" || goal.priority === "advisory") {
+    await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, `Goal finished: ${goal.description}`)
+    await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
+    return
+  }
+  await handleEvaluationFailure(requireTask(task.id), run, outcome.summary, hooks, analysis)
 }
 
 async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
@@ -395,78 +472,14 @@ export namespace OrchestratorRuntime {
     const run = requireRun(runID)
     if (run.status !== "queued") return
     let task = requireTask(run.task_id)
-    const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
+    const plan = planForRun(run)
     if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
     if (!plan) throw new Error(`Task ${task.id} has no plan`)
-    const base = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override : plan.prompt
-    const brief = WorkbenchService.compileBrief({
-      taskID: task.id,
-      runID: run.id,
-      planVersionID: plan.id,
-      sessionID: task.session_id,
-    })
-    const prompt = [brief.content, base].join("\n\n")
-    const strategy = run.metadata?.strategy as string | undefined
-    const source: "planner" | "scheduler" | "system" =
-      strategy === "operator_note" ? "system" : strategy === "retry_same_plan" ? "scheduler" : "planner"
     const prepared = await prepareRun(task, run, plan, hooks)
     if (!prepared) return
     task = prepared
-    const sessionID = task.session_id
-    if (!sessionID) throw new Error(`Task ${task.id} has no session`)
-    const executor = ExecutorRegistry.require(run.executor)
-    const submission = await executor.submit({
-      sessionID,
-      prompt,
-      priority: task.priority,
-      source,
-    })
-    const now = Date.now()
-    await hooks.updateRun(
-      run,
-      {
-        status: "accepted",
-        executor_ref: {
-          session_id: submission.sessionID,
-          queue_task_id: submission.queueTaskID,
-        },
-        time_started: now,
-      },
-      "Run accepted by executor",
-    )
-    await hooks.updateTask(
-      task,
-      {
-        status: "running",
-        time_started: task.time_started ?? now,
-      },
-      "Run dispatched",
-    )
-    const session = ensureExecutorSession({
-      taskID: task.id,
-      runID: run.id,
-      provider: run.executor,
-      refs: {
-        provider_session_id: submission.sessionID,
-        queue_task_id: submission.queueTaskID,
-      },
-      settings: {
-        cwd: Instance.directory,
-      },
-      started: now,
-    })
-    appendExecutorEvent(session.id, task.id, run.id, run.executor, {
-      provider: run.executor,
-      kind: "lifecycle",
-      summary: "Run accepted by executor",
-      refs: session.refs ?? undefined,
-      payload: {
-        queue_task_id: submission.queueTaskID,
-        provider_session_id: submission.sessionID,
-      },
-    })
-    // Start executor event bridge (fire-and-forget background coroutine)
-    consumeExecutorEvents(task.id, run.id, run.executor, sessionID, session.id)
+    if (await queueNextGoalRun(task, run, plan, hooks)) return
+    await finalizeCoordinatorRun(task, run, hooks)
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -481,6 +494,9 @@ export namespace OrchestratorRuntime {
     if (!run) throw new Error(`Run not found: ${runID}`)
     const task = requireTask(run.task_id)
     const delivery = findDeliveryByRun(run.id)
+    const goalRun = activeGoalRun(run)
+    const latest = goalRun ?? latestGoalRun(run)
+    const goalDelivery = latest ? findDeliveryByGoalRun(latest.id) : undefined
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
       // Auto-reject stale interactions for unattended operation
@@ -526,6 +542,11 @@ export namespace OrchestratorRuntime {
       }
     }
 
+    if (!delivery && latest?.status === "completed" && goalDelivery) {
+      await finalizeGoalRun(task, run, latest, hooks)
+      return
+    }
+
     if (run.status === "completed" && delivery) {
       await completeRun(run, hooks)
       return
@@ -535,7 +556,8 @@ export namespace OrchestratorRuntime {
       return
     }
 
-    const queueTaskID = run.executor_ref?.queue_task_id
+    const target = runExecutionTarget(run, goalRun)
+    const queueTaskID = target.queueTaskID
     if (!queueTaskID) return
     const executor = ExecutorRegistry.require(run.executor)
     const queue = await executor.status(queueTaskID)
@@ -555,12 +577,15 @@ export namespace OrchestratorRuntime {
       const started = run.time_started ?? run.time_created
       if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
         log.warn("run exceeded max execution time", { runID: run.id, maxMs: RUN_MAX_EXECUTION_MS, elapsedMs: Date.now() - started })
-        try { await executor.abort({ sessionID: run.session_id ?? undefined, queueTaskID }) } catch {}
+        try { await executor.abort({ sessionID: target.sessionID, queueTaskID }) } catch {}
         await failRun(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
         return
       }
       if (run.status !== "running") {
         await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
+      }
+      if (goalRun && goalRun.status !== "running") {
+        updateGoalRun(goalRun.id, { status: "running", blocking_reason: null })
       }
       if (task.status !== "running") {
         await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
@@ -574,6 +599,10 @@ export namespace OrchestratorRuntime {
     }
 
     if (queue.status === "completed") {
+      if (goalRun) {
+        await finalizeGoalRun(task, run, goalRun, hooks)
+        return
+      }
       await completeRun(run, hooks)
     }
   }
@@ -587,10 +616,10 @@ export namespace OrchestratorRuntime {
           id: nextRunID,
           task_id: task.id,
           plan_version_id: task.active_plan_version_id,
-          session_id: run.session_id,
+          session_id: task.session_id,
           executor: run.executor,
           status: "queued",
-          phase: "execute",
+          phase: "dispatch",
           retry_count: 0,
           metadata: {
             previous_run_id: run.id,
@@ -650,356 +679,54 @@ export namespace OrchestratorRuntime {
 }
 
 async function completeRun(run: RunRow, hooks: RuntimeHooks) {
+  if (completingRuns.has(run.id)) {
+    console.log(`[completeRun] already completing run ${run.id}, skipping concurrent call`)
+    return
+  }
+  completingRuns.add(run.id)
+  try {
+    await _completeRun(run, hooks)
+  } finally {
+    completingRuns.delete(run.id)
+  }
+}
+
+async function _completeRun(run: RunRow, hooks: RuntimeHooks) {
   installRuntimeShims()
-  updateExecutorSessionStatus(run.id, "completed")
-  const existingDelivery = findDeliveryByRun(run.id)
-  if (existingDelivery) {
-    const task = requireTask(run.task_id)
-    const evaluation = findEvaluationByRun(run.id)
-    if (run.status !== "completed") {
-      await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Run completed")
-    }
-    if (!evaluation) {
-      if (task.active_run_id === run.id) {
-        await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
-      }
-      // Re-run evaluation for this existing delivery (evaluation was interrupted by prior restart)
-      // Check if already evaluating (with stale detection)
-      const evalStart = evaluatingRuns.get(run.id)
-      const isStale = evalStart !== undefined && (Date.now() - evalStart) > EVALUATING_STALE_MS
-      if (isStale) {
-        log.warn("clearing stale evaluatingRuns entry", { runID: run.id, ageMs: Date.now() - evalStart })
-        evaluatingRuns.delete(run.id)
-      }
-      const canReEval = task.active_run_id === run.id && run.session_id && !evaluatingRuns.has(run.id)
-      console.log(`[completeRun] no evaluation for run ${run.id}, canReEval=${canReEval}, activeRunMatch=${task.active_run_id === run.id}, sessionId=${!!run.session_id}, alreadyEvaluating=${evaluatingRuns.has(run.id)}`)
-      if (canReEval) {
-        evaluatingRuns.set(run.id, Date.now())
-        console.log(`[completeRun] starting runEvaluation for ${run.id}`)
-        try {
-          await Promise.race([
-            runEvaluation(task, run, existingDelivery, hooks),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("runEvaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
-            ),
-          ])
-        } catch (timeoutErr) {
-          const msg = timeoutErr instanceof Error ? timeoutErr.message : String(timeoutErr)
-          console.log(`[completeRun] runEvaluation error for ${run.id}: ${msg}`)
-          log.error("runEvaluation timed out or failed", { runID: run.id, error: msg })
-          const now = Date.now()
-          await hooks.updateRun(run, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
-          if (task.active_run_id === run.id) {
-            await hooks.updateTask(task, { status: "failed", error: msg, blocking_reason: null, time_completed: now }, msg)
-          }
-        } finally {
-          evaluatingRuns.delete(run.id)
-          console.log(`[completeRun] runEvaluation finished for ${run.id}, active evals: ${evaluatingRuns.size}`)
-        }
-      }
-      return
-    }
-    if (task.active_run_id !== run.id) return
-    if (evaluation.status === "passed" && existingDelivery.status === "delivered") {
-      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
-      return
-    }
-    if (evaluation.status === "passed" && existingDelivery.status !== "delivered") {
-      await publishAcceptedDelivery(task, run, existingDelivery, hooks)
-      return
-    }
-    if (evaluation.status !== "passed") {
-      await handleEvaluationFailure(task, run, evaluation.summary, hooks)
-    }
-    return
-  }
-
-  if (!run.session_id) throw new Error(`Run ${run.id} has no session`)
   const task = requireTask(run.task_id)
-  const completedAt = Date.now()
-  await hooks.updateRun(run, { status: "completed", blocking_reason: null, error: null, time_completed: completedAt }, "Run completed")
-  await hooks.updateTask(task, { status: "evaluating", blocking_reason: null, error: null }, "Evaluating delivery")
-  const executor = ExecutorRegistry.require(run.executor)
-  const delivery = await Promise.race([
-    executor.delivery({
-      sessionID: run.session_id,
-      since: run.time_started ?? run.time_created,
-    }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
-    ),
-  ])
-  const now = Date.now()
-  const deliveryID = Identifier.ascending("delivery")
-  const evaluationID = Identifier.ascending("evaluation")
-
-  persistDelivery({ task, run, deliveryID, delivery, now })
-
-  await Plugin.trigger("delivery.ready", {
-    taskID: task.id,
-    runID: run.id,
-    deliveryID,
-    delivery: {
-      summary: delivery.summary,
-      changedFiles: delivery.diffs.map((item) => item.file),
-      diffs: delivery.diffs,
-    },
-  }, { actions: [] }).catch(() => undefined)
-
-  const hardTimeoutPromise = <T>() =>
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
-    )
-
-  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
-  try {
-    result = await Promise.race([
-      EvaluatorService.evaluate(
-        {
-          taskID: task.id,
-          activeSpecVersionID: task.active_spec_version_id ?? undefined,
-          request: task.request,
-          metadata: {
-            ...(task.metadata ?? {}),
-            delivery_changed_files: delivery.diffs.map((item) => item.file),
-          },
-        },
-        {
-          summary: delivery.summary,
-          diffs: delivery.diffs,
-          changedFiles: delivery.diffs.map((item) => item.file),
-        },
-      ),
-      hardTimeoutPromise<typeof result>(),
-    ])
-  } catch (evalErr) {
-    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-    log.error("Phase 1 evaluate() threw or timed out", { error: msg })
-    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery,
-      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
-      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
-      analysisError: msg,
-      finalVerdict: "rejected",
-      finalStatus: "failed",
-      finalSummary: errorSummary,
-      goals: [],
-    })
-    updateExecutorSessionStatus(run.id, "failed")
-    const failNow = Date.now()
-    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    if (task.active_run_id === run.id) {
-      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    }
+  const goalRun = latestGoalRun(run)
+  if (goalRun?.status === "completed" && !findDeliveryByRun(run.id)) {
+    updateGoalRunExecutorSessionStatus(goalRun.id, "completed")
+    await finalizeGoalRun(task, run, goalRun, hooks)
     return
   }
-
-  // Phase 2: Independent-context EvaluatorAgent analysis
-  // Analyzes check results, investigates failures, assesses each goal, classifies failure type
-  const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  let analysis: EvaluatorAnalysisType
-  let analysisError: string | undefined
-  try {
-    analysis = await Promise.race([
-      EvaluatorService.analyzeDelivery({
-        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
-        goals: goals.map((g) => ({
-          description: g.description,
-          criteria: g.criteria,
-          priority: g.priority as "blocking" | "advisory",
-          check_selector: selectorList(g.metadata) as string[],
-        })),
-        delivery: {
-          summary: delivery.summary,
-          changedFiles: delivery.diffs.map((d) => d.file),
-          diffs: delivery.diffs,
-        },
-        checkResults: result.checks.map((c) => ({
-          name: c.name,
-          status: c.status,
-          evidence: c.evidence,
-        })),
-      }),
-      hardTimeoutPromise<typeof analysis>(),
-    ])
-  } catch (err) {
-    analysisError = err instanceof Error ? err.message : String(err)
-    log.error("evaluator agent analysis failed or timed out", { error: analysisError })
-    analysis = fallbackAnalysis(result, goals.length, analysisError)
-  }
-
-  // If Phase 1 evaluation failed (e.g. strict spec_check or build/test failures),
-  // do not let Phase 2 EvaluatorAgent override the verdict
-  const phase1Failed = result.status === "failed"
-  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
-  const finalStatus =
-    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
-  const finalSummary = phase1Failed && analysis.verdict === "accepted"
-    ? `Rejected: automated checks failed. ${result.summary}`
-    : analysis.summary
-
-  persistEvaluation({
-    task,
-    run,
-    deliveryID,
-    evaluationID,
-    delivery,
-    result,
-    analysis,
-    analysisError,
-    finalVerdict,
-    finalStatus,
-    finalSummary,
-    goals,
-  })
-
-  if (finalStatus === "passed" || finalStatus === "inconclusive") {
-    const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-    const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
-
-    if (pendingBlocking.length === 0) {
-      const accepted = findDeliveryByRun(run.id)
-      if (!accepted) {
-        await hooks.updateTask(task, { status: "completed", blocking_reason: null, error: null, time_completed: Date.now() }, "Task completed")
-        return
-      }
-      await publishAcceptedDelivery(task, run, accepted, hooks)
-      return
-    }
-    const remaining = pendingBlocking.map((g) => g.description).join(", ")
-    await handleEvaluationFailure(requireTask(task.id), run, `Evaluation ${finalStatus} but blocking goals still pending: ${remaining}`, hooks, analysis)
-    return
-  }
-
-  await handleEvaluationFailure(requireTask(task.id), run, finalSummary, hooks, analysis)
+  updateExecutorSessionStatus(run.id, "completed")
+  await finalizeCoordinatorRun(task, run, hooks)
 }
 
 async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: DeliveryRow, hooks: RuntimeHooks) {
-  console.log(`[runEvaluation] START for run ${run.id}, task ${task.id}`)
-  if (!run.session_id) { console.log(`[runEvaluation] no session_id, skipping`); return }
-
-  const executor = ExecutorRegistry.require(run.executor)
-  let delivery: Awaited<ReturnType<typeof executor.delivery>>
-  try {
-    delivery = await Promise.race([
-      executor.delivery({
-        sessionID: run.session_id,
-        since: run.time_started ?? run.time_created,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("executor.delivery() timeout")), DELIVERY_FETCH_TIMEOUT_MS),
-      ),
-    ])
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    log.error("re-evaluation: failed to fetch delivery from executor", { error: msg })
-    // Use minimal delivery from DB row
-    delivery = {
-      summary: existingDelivery.summary,
-      diffs: [],
-    }
+  const delivery = {
+    summary: existingDelivery.summary,
+    diffs: storedDiffs(existingDelivery),
   }
-
   const deliveryID = existingDelivery.id
   const evaluationID = Identifier.ascending("evaluation")
-
-  const reEvalHardTimeout = <T>() =>
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("re-evaluation hard timeout")), EVALUATION_HARD_TIMEOUT_MS),
-    )
-
-  let result: Awaited<ReturnType<typeof EvaluatorService.evaluate>>
-  try {
-    result = await Promise.race([
-      EvaluatorService.evaluate(
-        {
-          taskID: task.id,
-          activeSpecVersionID: task.active_spec_version_id ?? undefined,
-          request: task.request,
-          metadata: {
-            ...(task.metadata ?? {}),
-            delivery_changed_files: delivery.diffs.map((item) => item.file),
-          },
-        },
-        {
-          summary: delivery.summary,
-          diffs: delivery.diffs,
-          changedFiles: delivery.diffs.map((item) => item.file),
-        },
-      ),
-      reEvalHardTimeout<typeof result>(),
-    ])
-  } catch (evalErr) {
-    const msg = evalErr instanceof Error ? evalErr.message : String(evalErr)
-    log.error("re-evaluation Phase 1 failed", { error: msg })
-    const errorSummary = `Evaluator Phase 1 failure: ${msg}`
-    persistEvaluation({
-      task, run, deliveryID, evaluationID, delivery,
-      result: { status: "failed", verdict: "rejected", summary: errorSummary, checks: [], artifacts: [] },
-      analysis: fallbackAnalysis({ verdict: "rejected", summary: errorSummary }, 0, msg),
-      analysisError: msg,
-      finalVerdict: "rejected",
-      finalStatus: "failed",
-      finalSummary: errorSummary,
-      goals: [],
-    })
-    updateExecutorSessionStatus(run.id, "failed")
-    const failNow = Date.now()
-    await hooks.updateRun(run, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    if (task.active_run_id === run.id) {
-      await hooks.updateTask(task, { status: "failed", error: errorSummary, blocking_reason: null, time_completed: failNow }, errorSummary)
-    }
-    return
-  }
-
-  const goals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
-  let analysis: EvaluatorAnalysisType
-  let analysisError: string | undefined
-  try {
-    analysis = await Promise.race([
-      EvaluatorService.analyzeDelivery({
-        task: { title: task.title, request: task.request, sessionID: task.session_id ?? undefined },
-        goals: goals.map((g) => ({
-          description: g.description,
-          criteria: g.criteria,
-          priority: g.priority as "blocking" | "advisory",
-          check_selector: selectorList(g.metadata) as string[],
-        })),
-        delivery: {
-          summary: delivery.summary,
-          changedFiles: delivery.diffs.map((d) => d.file),
-          diffs: delivery.diffs,
-        },
-        checkResults: result.checks.map((c) => ({
-          name: c.name,
-          status: c.status,
-          evidence: c.evidence,
-        })),
-      }),
-      reEvalHardTimeout<typeof analysis>(),
-    ])
-  } catch (err) {
-    analysisError = err instanceof Error ? err.message : String(err)
-    log.error("re-evaluation agent analysis failed or timed out", { error: analysisError })
-    analysis = fallbackAnalysis(result, goals.length, analysisError)
-  }
-
+  const goals = goalsForRun(run)
+  const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
   const phase1Failed = result.status === "failed"
   const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
-  const finalStatus =
-    (finalVerdict === "accepted" ? "passed" : finalVerdict === "rejected" ? "failed" : "inconclusive") as typeof result.status
+  const finalStatus = (finalVerdict === "accepted" ? "passed" : "failed") as typeof result.status
   const finalSummary = phase1Failed && analysis.verdict === "accepted"
     ? `Rejected: automated checks failed. ${result.summary}`
     : analysis.summary
 
   persistEvaluation({
     task, run, deliveryID, evaluationID, delivery, result,
-    analysis, analysisError, finalVerdict, finalStatus, finalSummary, goals,
+    analysis, finalVerdict, finalStatus, finalSummary, goals, analysisError,
   })
 
-  if (finalStatus === "passed" || finalStatus === "inconclusive") {
-    const allGoals = run.plan_version_id ? listGoalsByPlan(run.plan_version_id) : []
+  if (finalStatus === "passed") {
+    const allGoals = goalsForRun(run)
     const pendingBlocking = allGoals.filter((g) => g.priority === "blocking" && g.status === "pending")
     if (pendingBlocking.length === 0) {
       const accepted = findDeliveryByRun(run.id)
@@ -1039,7 +766,7 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
     const age = now - updated
     if (age < EVALUATING_STALE_MS) continue
     // Check if this task has an active in-memory evaluation
-    if (task.active_run_id && evaluatingRuns.has(task.active_run_id)) continue
+    if (task.active_run_id && (evaluatingRuns.has(task.active_run_id) || completingRuns.has(task.active_run_id))) continue
     log.warn("recovering stranded task", { taskID: task.id, status: task.status, ageMs: age })
     const error = `Task was stranded in '${task.status}' state for ${Math.round(age / 60000)}min (server restart recovery)`
     hooks.updateTask(task, {
@@ -1052,11 +779,26 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
 }
 
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
-  updateExecutorSessionStatus(run.id, "failed")
   const task = requireTask(run.task_id)
+  const goalRun = activeGoalRun(run)
   const now = Date.now()
-  if (!findEvaluationByRun(run.id)) {
-    persistFailedRunEvaluation({ task, run, error, now })
+  if (goalRun) {
+    updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
+    if (!findEvaluationByGoalRun(goalRun.id)) {
+      persistFailedRunEvaluation({ task, run, goalRunID: goalRun.id, error, now })
+    }
+    updateGoalRun(goalRun.id, { status: "failed", error, blocking_reason: null, time_completed: now })
+    const goal = currentGoal(goalRun, goalsForRun(run))
+    if (goal?.priority === "advisory") {
+      await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, error)
+      await continueGoalPipeline(task, requireRun(run.id), hooks)
+      return
+    }
+  } else {
+    updateExecutorSessionStatus(run.id, "failed")
+    if (!findEvaluationByRun(run.id)) {
+      persistFailedRunEvaluation({ task, run, error, now })
+    }
   }
   await hooks.updateRun(run, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
   if (task.active_run_id === run.id) {
@@ -1170,6 +912,16 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
     summary,
     retryContext,
   }).catch((err) => log.warn("failed to flush failure learnings", { error: String(err) }))
+  await hooks.updateRun(
+    run,
+    {
+      status: run.status === "completed" ? "completed" : "failed",
+      error: summary,
+      blocking_reason: null,
+      time_completed: Date.now(),
+    },
+    summary,
+  )
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: summary, time_completed: Date.now() }, summary)
 }
 
@@ -1189,61 +941,72 @@ async function executeDecision(
 
   const currentPlan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
   if (!currentPlan) return false
-  const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
-  if (!next.queued) return !!next.error
-  if (!next.runID) return false
-  await OrchestratorRuntime.dispatch(next.runID, hooks)
+
+  // Before rewriting the spec, ask user to confirm (only when OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1).
+  // Spec rewrite silently overwrites the original requirements, so confirmation protects user intent.
+  if (!REQUIRE_REPLAN_CONFIRM) {
+    const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
+    if (!next.queued) return !!next.error
+    if (!next.runID) return false
+    await OrchestratorRuntime.dispatch(next.runID, hooks)
+    return true
+  }
+  const interactionID = Identifier.ascending("interaction")
+  const guidance = decision.analysis?.replan_guidance
+  const rootCause = guidance?.root_cause ?? decision.summary
+  const strategy = guidance?.suggested_strategy ?? "Rewrite the spec and retry with an updated plan."
+  const body = [
+    `**Evaluation failed** — the plan requires a rewrite before retrying.`,
+    ``,
+    `**Root cause:** ${rootCause}`,
+    `**Suggested strategy:** ${strategy}`,
+    ``,
+    `Approve to proceed with spec rewrite, or reject to fail the task.`,
+  ].join("\n")
+  const now = Date.now()
+  Database.transaction((db) => {
+    db.insert(OrchestratorInteractionRequestTable)
+      .values({
+        id: interactionID,
+        task_id: task.id,
+        run_id: run.id,
+        external_id: interactionID,
+        request_type: "question",
+        status: "pending",
+        title: "Confirm replan",
+        body,
+        payload: {
+          replan_confirm: true,
+          failure_summary: decision.summary,
+          plan_id: currentPlan.id,
+          analysis: decision.analysis ?? null,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
+  })
+  await hooks.updateRun(run, { status: "blocked", blocking_reason: "pending_replan" }, "Waiting for replan confirmation")
+  await hooks.updateTask(task, { status: "blocked", blocking_reason: "pending_replan" }, "Waiting for replan confirmation")
+  Database.effect(() =>
+    Bus.publish(Event.InteractionRequested, {
+      taskID: task.id,
+      runID: run.id,
+      interactionID,
+      requestType: "question",
+      summary: "Confirm replan",
+    }),
+  )
   return true
 }
 
-function fallbackAnalysis(
-  result: {
-    verdict: "accepted" | "rejected" | "inconclusive"
-    summary: string
-  },
-  goalCount: number,
-  message: string,
-): EvaluatorAnalysisType {
-  const goalStatus =
-    result.verdict === "accepted"
-      ? "passed"
-      : result.verdict === "rejected"
-        ? "failed"
-        : "inconclusive"
-  const summary =
-    result.verdict === "accepted"
-      ? result.summary
-      : `${result.summary} Evaluator agent unavailable: ${message}`
-  const reasoning =
-    result.verdict === "accepted"
-      ? "Automated evaluator checks passed; fell back because evaluator agent analysis was unavailable."
-      : `Fell back to automated evaluator result because evaluator agent analysis failed: ${message}`
-  return {
-    verdict: result.verdict,
-    classification: "evaluation",
-    summary,
-    goal_statuses: Array.from({ length: goalCount }, (_, goal_index) => ({
-      goal_index,
-      status: goalStatus,
-      evidence: summary,
-      reasoning,
-    })),
-    replan_guidance: result.verdict === "rejected"
-      ? {
-          root_cause: `Evaluator agent unavailable: ${message}`,
-          what_failed: result.summary,
-          suggested_strategy: "Fix the failing automated checks and retry the current plan.",
-          avoid_approaches: [],
-        }
-      : null,
-  }
-}
 
 
 /** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */
 function consumeExecutorEvents(
   taskID: string,
   runID: string,
+  goalRunID: string | undefined,
   executorName: Parameters<typeof ExecutorRegistry.require>[0],
   sessionID: string,
   executorSessionID: string,
@@ -1255,8 +1018,7 @@ function consumeExecutorEvents(
     try {
       for await (const event of executor.events({ sessionID })) {
         upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
-        await projectExecutorEventToSession(taskID, requireRun(runID), event)
-        appendExecutorEvent(executorSessionID, taskID, runID, executorName, {
+        appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
           provider: executorName,
           kind: protocolEventKind(event.type),
           summary: event.summary ?? event.type,

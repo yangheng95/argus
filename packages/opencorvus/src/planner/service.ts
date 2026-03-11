@@ -38,19 +38,13 @@ type StageSet = {
 
 const SpecAnalysis = z.object({
   expanded_spec: z.string(),
+  goals: GoalInput.array().default([]),
   ambiguities: z.array(z.string()),
   questions: z.array(
     z.object({
       question: z.string(),
       context: z.string(),
       default_assumption: z.string(),
-    }),
-  ),
-  goals: z.array(
-    z.object({
-      description: z.string(),
-      criteria: z.string(),
-      priority: z.enum(["blocking", "advisory"]),
     }),
   ),
   risk_areas: z.array(z.string()),
@@ -64,17 +58,15 @@ const SpecAnalysis = z.object({
 })
 type SpecAnalysisResult = z.infer<typeof SpecAnalysis>
 
+type PlannerSpec = SpecDraft & {
+  spec_items?: Array<{
+    check_selector?: string[]
+  }>
+}
+
 export type PlanDraft = {
   summary: string
   prompt: string
-  goals: Array<{
-    description: string
-    criteria: string
-    priority?: "blocking" | "advisory"
-    metadata?: {
-      check_selector?: string[]
-    }
-  }>
   metadata: {
     strategy?: "initial" | "replan"
     steps: string[]
@@ -122,9 +114,9 @@ export class PlannerFailureError extends Error {
  * Generates execution prompts with LLM-powered spec analysis.
  *
  * New flow:
- *   1. Analyze the spec with an LLM to expand, decompose, and identify ambiguities
- *   2. Generate specific goals with verifiable criteria
- *   3. If confidence is low and questions exist, return them for orchestrator to ask
+ *   1. Consume the approved spec and its authoritative goals
+ *   2. Generate execution structure, milestones, risks, and prompt fragments
+ *   3. Surface execution-strategy clarifications only when planning is blocked
  *   4. Build a detailed execution prompt incorporating the expanded spec
  *
  * Planning is mandatory. If the planner agent fails, surface the error.
@@ -140,26 +132,26 @@ export namespace HeadlessPlannerService {
   export async function initial(input: {
     title: string
     request: string
-    spec?: SpecDraft
+    spec?: PlannerSpec
     goals?: z.infer<typeof GoalInput>[]
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
   }): Promise<PlanDraft> {
-    const hasUserGoals = input.goals && input.goals.length > 0
     const stages = resolveStages(input.executor, input.routing)
     const spec = input.spec
-
-    if (input.allowClarification !== false) {
-      const blocked = clarificationDraft({
+    const goals = resolveGoals(input.request, spec, input.goals)
+    const clarification = specClarification(spec)
+    if (clarification) {
+      return blockedPlanDraft({
+        strategy: "initial",
         title: input.title,
         request: input.request,
-        strategy: "initial",
-        userGoals: input.goals,
         spec,
+        goals,
+        clarification,
         stages,
       })
-      if (blocked) return blocked
     }
     if (stages.plan.resolved === "executor" && stages.plan.executor) {
       if (!spec) throw new PlannerFailureError("executor-native planner requires a specification")
@@ -168,7 +160,7 @@ export namespace HeadlessPlannerService {
         title: input.title,
         request: input.request,
         spec,
-        goals: input.goals,
+        goals,
       }).catch((error) => {
         throw new PlannerFailureError("executor-native planner failed", { cause: error })
       })
@@ -180,7 +172,7 @@ export namespace HeadlessPlannerService {
         undefined,
         undefined,
         input.allowClarification !== false,
-        input.goals,
+        goals,
         {
           spec,
           stages,
@@ -196,13 +188,11 @@ export namespace HeadlessPlannerService {
       PlannerAgent.plan({
         title: input.title,
         request: input.request,
-        userGoals: hasUserGoals
-          ? input.goals!.map((g) => ({
-              description: g.description,
-              criteria: g.criteria,
-              priority: g.priority,
-            }))
-          : undefined,
+        userGoals: goals.map((g) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority,
+        })),
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         signal: controller.signal,
       }).catch((error) => {
@@ -216,26 +206,6 @@ export namespace HeadlessPlannerService {
       controller.abort()
     })
 
-    // When user provided explicit goals, use them (they have the correct check_selectors
-    // and metadata). The agent's PRD, subtasks, risks provide the codebase context.
-    if (hasUserGoals) {
-      return agentOutputToDraft(
-        input.title,
-        input.request,
-        { ...agentResult, goals: agentResult.goals },
-        "initial",
-        undefined,
-        undefined,
-        input.allowClarification !== false,
-        input.goals,
-        {
-          spec,
-          stages,
-          source: "planner_agent",
-        },
-      )
-    }
-
     return agentOutputToDraft(
       input.title,
       input.request,
@@ -244,7 +214,7 @@ export namespace HeadlessPlannerService {
       undefined,
       undefined,
       input.allowClarification !== false,
-      undefined,
+      goals,
       {
         spec,
         stages,
@@ -261,8 +231,8 @@ export namespace HeadlessPlannerService {
   export async function replan(input: {
     title: string
     request: string
-    spec?: SpecDraft
-    goals: z.infer<typeof GoalInput>[]
+    spec?: PlannerSpec
+    goals?: z.infer<typeof GoalInput>[]
     previousPrompt: string
     previousPlanID: string
     failureSummary: string
@@ -273,6 +243,21 @@ export namespace HeadlessPlannerService {
   }): Promise<PlanDraft> {
     const stages = resolveStages(input.executor, input.routing)
     const spec = input.spec
+    const goals = resolveGoals(input.request, spec, input.goals)
+    const clarification = specClarification(spec)
+    if (clarification) {
+      return blockedPlanDraft({
+        strategy: "replan",
+        title: input.title,
+        request: input.request,
+        spec,
+        goals,
+        clarification,
+        stages,
+        previousPlanID: input.previousPlanID,
+        failureSummary: input.failureSummary,
+      })
+    }
     // Build replan context (use structured analysis if available, otherwise infer from summary)
     const replanCtx: ReplanContext = input.replanContext ?? {
       previousSummary: summarize(input.previousPrompt),
@@ -283,27 +268,13 @@ export namespace HeadlessPlannerService {
         suggestedStrategy: "Analyze the failure and try a different approach",
         avoidApproaches: [],
       },
-      previousGoalStatuses: input.goals.map((g) => ({
+      previousGoalStatuses: goals.map((g) => ({
         description: g.description,
         status: "failed",
         evidence: input.failureSummary,
         })),
     }
 
-    if (input.allowClarification !== false) {
-      const blocked = clarificationDraft({
-        title: input.title,
-        request: input.request,
-        strategy: "replan",
-        previousPlanID: input.previousPlanID,
-        failureSummary: input.failureSummary,
-        userGoals: input.goals,
-        spec,
-        stages,
-        replanContext: replanCtx,
-      })
-      if (blocked) return blocked
-    }
     if (stages.plan.resolved === "executor" && stages.plan.executor) {
       if (!spec) throw new PlannerFailureError("executor-native planner requires a specification")
       const output = await ExecutorPlanner.plan({
@@ -311,7 +282,7 @@ export namespace HeadlessPlannerService {
         title: input.title,
         request: input.request,
         spec,
-        goals: input.goals,
+        goals,
         replanContext: replanCtx,
       }).catch((error) => {
         throw new PlannerFailureError("executor-native planner replan failed", { cause: error })
@@ -324,7 +295,7 @@ export namespace HeadlessPlannerService {
         input.previousPlanID,
         input.failureSummary,
         input.allowClarification !== false,
-        undefined,
+        goals,
         {
           spec,
           stages,
@@ -349,7 +320,7 @@ export namespace HeadlessPlannerService {
       input.previousPlanID,
       input.failureSummary,
       input.allowClarification !== false,
-      undefined,
+      goals,
       {
         spec,
         stages,
@@ -413,6 +384,90 @@ function resolvePlanningStage(
   }
 }
 
+function specClarification(spec?: PlannerSpec): ClarificationResult | undefined {
+  const questions = (Array.isArray(spec?.clarifications) ? spec.clarifications : []).flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    if (typeof item.question !== "string" || !item.question.trim()) return []
+    return [{
+      header: typeof item.header === "string" && item.header.trim() ? item.header : "Clarification",
+      question: item.question,
+      context: typeof item.context === "string" && item.context.trim() ? item.context : undefined,
+      default_assumption:
+        typeof item.default_assumption === "string" && item.default_assumption.trim() ? item.default_assumption : undefined,
+    }]
+  })
+  if (questions.length === 0) return
+  return {
+    reason: questions[0]?.context ?? "Specification requires clarification before planning.",
+    questions,
+  }
+}
+
+function planSpecMeta(spec?: PlannerSpec, stages?: StageSet) {
+  if (!spec) return
+  return {
+    summary: spec.summary,
+    source: stages?.spec,
+    ...("spec_items" in spec ? { spec_items: (spec as any).spec_items } : {}),
+    ...("evidence_sources" in spec ? { evidence_sources: (spec as any).evidence_sources } : {}),
+    ...("unresolved_questions" in spec ? { unresolved_questions: (spec as any).unresolved_questions } : {}),
+    ...("scope" in spec && (spec as any).scope ? { scope: (spec as any).scope } : {}),
+    ...("out_of_scope" in spec && (spec as any).out_of_scope ? { out_of_scope: (spec as any).out_of_scope } : {}),
+  }
+}
+
+function blockedPlanDraft(input: {
+  strategy: "initial" | "replan"
+  title: string
+  request: string
+  spec?: PlannerSpec
+  goals: z.infer<typeof GoalInput>[]
+  clarification: ClarificationResult
+  stages: StageSet
+  previousPlanID?: string
+  failureSummary?: string
+}): PlanDraft {
+  const risks = Array.isArray(input.spec?.risks) ? [...new Set(input.spec.risks)] : []
+  const assumptions = Array.isArray(input.spec?.assumptions) ? input.spec.assumptions : []
+  return {
+    summary: "Clarification required before planning",
+    prompt: [
+      "Planning is blocked pending specification clarification.",
+      `Task: ${input.title}`,
+      `Original request:\n${input.request.trim()}`,
+      input.spec?.content ? `Current specification:\n${input.spec.content.trim()}` : "",
+    ].filter(Boolean).join("\n\n"),
+    metadata: {
+      strategy: input.strategy,
+      steps: ["Clarify the specification before generating a plan"],
+      failure_summary: input.failureSummary,
+      previous_plan_id: input.previousPlanID,
+      risks,
+      planner: plannerMeta({
+        quality: "compiled",
+        source: "spec_stage",
+        clarificationSource: "model",
+      }),
+      spec: planSpecMeta(input.spec, input.stages),
+      stage_sources: input.stages,
+      clarification: input.clarification,
+      spec_analysis: {
+        expanded_spec: input.spec?.content ?? "",
+        goals: input.goals,
+        ambiguities: input.clarification.questions.map((item) => item.question),
+        questions: input.clarification.questions.map((item) => ({
+          question: item.question,
+          context: item.context ?? input.clarification.reason,
+          default_assumption: item.default_assumption ?? "",
+        })),
+        risk_areas: risks,
+        assumptions,
+        confidence: 0.35,
+      },
+    },
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Agent output → PlanDraft conversion
 // ---------------------------------------------------------------------------
@@ -425,10 +480,9 @@ function agentOutputToDraft(
   previousPlanID?: string,
   failureSummary?: string,
   allowClarification = true,
-  /** When user provided explicit goals, prefer them over agent-generated ones */
-  userGoals?: z.infer<typeof GoalInput>[],
+  goals: z.infer<typeof GoalInput>[] = [],
   stage?: {
-    spec?: SpecDraft
+    spec?: PlannerSpec
     stages?: StageSet
     source: "planner_agent" | "executor_native"
   },
@@ -436,44 +490,15 @@ function agentOutputToDraft(
   // Normalize output arrays — tool-call args may lack Zod defaults for optional fields
   output = {
     ...output,
-    goals: Array.isArray(output.goals) ? output.goals : [],
     subtasks: Array.isArray(output.subtasks) ? output.subtasks : [],
     risks: Array.isArray(output.risks) ? output.risks : [],
     assumptions: Array.isArray(output.assumptions) ? output.assumptions : undefined,
     milestones: Array.isArray(output.milestones) ? output.milestones : undefined,
     clarifications: Array.isArray(output.clarifications) ? output.clarifications : undefined,
   }
-  // User-provided goals take precedence — they have the correct check_selectors and metadata.
-  // Agent goals are used when no user goals were provided.
-  // When spec exists, spec_check is always included per design doc.
+  // Authoritative goals come from the spec (or user goals when no spec exists).
+  // The planner output is only execution structure and analysis.
   const spec = stage?.spec
-  const rawGoals = userGoals && userGoals.length > 0
-    ? userGoals.map((g) => ({
-        description: g.description,
-        criteria: g.criteria,
-        priority: g.priority ?? ("blocking" as const),
-        metadata: {
-          check_selector: g.metadata?.check_selector ?? inferSelectors(`${g.description} ${g.criteria}`),
-        },
-      }))
-    : output.goals.length > 0
-      ? output.goals.map((g) => ({
-          description: g.description,
-          criteria: g.criteria,
-          priority: g.priority,
-          metadata: {
-            check_selector: g.check_selector ?? inferSelectors(`${g.description} ${g.criteria}`),
-          },
-        }))
-      : normalizeGoals(request, undefined, spec)
-  // Ensure spec_check selector is present on every goal when spec is available
-  const goals = spec
-    ? rawGoals.map((g) => {
-        const sel: string[] = g.metadata?.check_selector ?? []
-        if (!sel.includes("spec_check")) sel.push("spec_check")
-        return { ...g, metadata: { ...g.metadata, check_selector: sel } }
-      })
-    : rawGoals
   const assumptions = mergeAssumptions(stage?.spec?.assumptions, output.assumptions)
   const risks = mergeStrings(stage?.spec?.risks ?? [], output.risks)
 
@@ -495,20 +520,19 @@ function agentOutputToDraft(
   const steps = output.subtasks
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((s, i) => `${s.order ?? i + 1}. ${s.title}: ${s.description}`)
-  const clarification = allowClarification ? deriveClarification(request, output, stage?.spec) : undefined
+  const clarification = allowClarification ? deriveClarification(output, request) : undefined
   const clarificationSource =
     !allowClarification
       ? "suppressed"
-      : hasModelClarification(output, stage?.spec)
+      : hasModelClarification(output)
         ? "model"
         : clarification
           ? "heuristic"
-          : "none"
+        : "none"
 
   return {
     summary: output.summary,
     prompt,
-    goals,
     metadata: {
       strategy: strategy as "initial" | "replan",
       steps,
@@ -521,22 +545,12 @@ function agentOutputToDraft(
         source: stage?.source ?? "planner_agent",
         clarificationSource,
       }),
-      spec: stage?.spec
-        ? {
-            summary: stage.spec.summary,
-            source: stage.stages?.spec,
-            // Propagate agent-based spec fields for persistence
-            ...("spec_items" in stage.spec ? { spec_items: (stage.spec as any).spec_items } : {}),
-            ...("evidence_sources" in stage.spec ? { evidence_sources: (stage.spec as any).evidence_sources } : {}),
-            ...("unresolved_questions" in stage.spec ? { unresolved_questions: (stage.spec as any).unresolved_questions } : {}),
-            ...("scope" in stage.spec && (stage.spec as any).scope ? { scope: (stage.spec as any).scope } : {}),
-            ...("out_of_scope" in stage.spec && (stage.spec as any).out_of_scope ? { out_of_scope: (stage.spec as any).out_of_scope } : {}),
-          }
-        : undefined,
+      spec: planSpecMeta(stage?.spec, stage?.stages),
       stage_sources: stage?.stages,
       clarification,
       spec_analysis: {
         expanded_spec: output.prd || stage?.spec?.content || "",
+        goals,
         ambiguities: clarification?.questions.map((item) => item.question) ?? [],
         questions:
           clarification?.questions.map((item) => ({
@@ -544,92 +558,12 @@ function agentOutputToDraft(
             context: item.context ?? clarification.reason,
             default_assumption: item.default_assumption ?? "",
           })) ?? [],
-        goals: goals.map((goal) => ({
-          description: goal.description,
-          criteria: goal.criteria,
-          priority: goal.priority ?? "blocking",
-        })),
         risk_areas: risks,
         assumptions,
         confidence: clarification ? 0.45 : 0.9,
       },
     },
   }
-}
-
-function clarificationDraft(input: {
-  title: string
-  request: string
-  strategy: "initial" | "replan"
-  previousPlanID?: string
-  failureSummary?: string
-  userGoals?: z.infer<typeof GoalInput>[]
-  spec?: SpecDraft
-  stages: StageSet
-  replanContext?: ReplanContext
-}) {
-  const clarification = clarificationFromSpec(input.spec)
-  if (!clarification) return
-  const goals = (input.userGoals ?? []).map((goal) => ({
-    description: goal.description,
-    criteria: goal.criteria,
-    priority: goal.priority ?? ("blocking" as const),
-    metadata: {
-      check_selector: goal.metadata?.check_selector ?? inferSelectors(`${goal.description} ${goal.criteria}`),
-    },
-  }))
-  const assumptions = mergeAssumptions(input.spec?.assumptions)
-  const risks = mergeStrings(input.spec?.risks ?? [])
-  return {
-    summary: "Clarification required before planning",
-    prompt: [
-      "Planning is blocked pending clarification.",
-      `Task: ${input.title}`,
-      `Original request:\n${input.request.trim()}`,
-      input.spec ? `Current specification:\n${input.spec.content.trim()}` : "",
-    ].filter(Boolean).join("\n\n"),
-    goals,
-    metadata: {
-      strategy: input.strategy,
-      steps: ["Clarify the specification before generating a plan"],
-      failure_summary: input.failureSummary,
-      previous_plan_id: input.previousPlanID,
-      risks,
-      planner: plannerMeta({
-        quality: "compiled",
-        source: input.stages.spec.resolved === "executor" ? "executor_native" : "spec_stage",
-        clarificationSource: "model",
-      }),
-      spec: input.spec
-        ? {
-            summary: input.spec.summary,
-            source: input.stages.spec,
-          }
-        : undefined,
-      stage_sources: input.stages,
-      ...(input.replanContext ? { replan_context: input.replanContext } : {}),
-      clarification,
-      spec_analysis: input.spec
-        ? {
-            expanded_spec: input.spec.content,
-            ambiguities: clarification.questions.map((item) => item.question),
-            questions: clarification.questions.map((item) => ({
-              question: item.question,
-              context: item.context ?? clarification.reason,
-              default_assumption: item.default_assumption ?? "",
-            })),
-            goals: goals.map((goal) => ({
-              description: goal.description,
-              criteria: goal.criteria,
-              priority: goal.priority ?? "blocking",
-            })),
-            risk_areas: risks,
-            assumptions,
-            confidence: 0.35,
-          }
-        : undefined,
-    },
-  } satisfies PlanDraft
 }
 
 function renderAgentPrompt(input: {
@@ -697,21 +631,6 @@ ${input.prd.trim()}`,
   }))
 
   return sections.join("\n\n")
-}
-
-function clarificationFromSpec(spec?: SpecDraft): ClarificationResult | undefined {
-  const clarifications = Array.isArray(spec?.clarifications) ? spec.clarifications : []
-  if (clarifications.length === 0) return
-  // Validate each entry has the expected shape
-  const questions = clarifications.filter(
-    (c): c is { header: string; question: string; context?: string; default_assumption?: string } =>
-      !!c && typeof c === "object" && typeof c.question === "string" && c.question.trim().length > 0,
-  )
-  if (questions.length === 0) return
-  return {
-    reason: questions[0]?.context ?? "Specification requires clarification before safe planning.",
-    questions,
-  }
 }
 
 function mergeStrings(...items: Array<string[] | undefined>) {
@@ -952,42 +871,42 @@ ${truncatedPrevious}
 // Goal helpers
 // ---------------------------------------------------------------------------
 
-function normalizeGoals(request: string, goals?: z.infer<typeof GoalInput>[], spec?: SpecDraft) {
-  if (goals && goals.length > 0) return goals
-  const selectors = inferSelectors(request)
-  // Per design doc: when spec exists, always include spec_check; also merge
-  // check_selectors declared on spec items so that goal-level selectors align
-  // with the spec-driven evaluation gate.
-  if (spec) {
-    selectors.push("spec_check")
-    const items = "spec_items" in spec ? (spec as any).spec_items : undefined
-    if (Array.isArray(items)) {
-      for (const item of items) {
-        if (Array.isArray(item.check_selector)) {
-          for (const sel of item.check_selector) {
-            if (!selectors.includes(sel)) selectors.push(sel)
+function resolveGoals(request: string, spec?: PlannerSpec, goals?: z.infer<typeof GoalInput>[]) {
+  const source =
+    spec?.goals && spec.goals.length > 0
+      ? spec.goals
+      : Array.isArray(goals) && goals.length > 0
+        ? goals
+        : []
+  const selectors = goalSelectors(request, spec)
+  return source.map((goal) => {
+    const check_selector = [...new Set([...(goal.metadata?.check_selector ?? []), ...selectors])]
+    return {
+      ...goal,
+      metadata: check_selector.length > 0
+        ? {
+            ...goal.metadata,
+            check_selector,
           }
-        }
-      }
+        : goal.metadata,
     }
-  }
-  return [
-    {
-      description: summarize(request),
-      criteria: "The requested change is implemented and acceptance checks pass.",
-      priority: "blocking" as const,
-      metadata: {
-        check_selector: [...new Set(selectors)],
-      },
-    },
-  ]
+  })
 }
 
-function deriveClarification(request: string, output: PlannerOutputType, spec?: SpecDraft): ClarificationResult | undefined {
-  const questions = [
-    ...(spec?.clarifications ?? []),
-    ...(Array.isArray(output.clarifications) ? output.clarifications : []),
-  ].filter((item) => item.question?.trim())
+function goalSelectors(request: string, spec?: PlannerSpec) {
+  const selectors = inferSelectors(request)
+  if (!spec) return [...new Set(selectors)]
+  selectors.push("spec_check")
+  for (const item of spec.spec_items ?? []) {
+    for (const sel of item.check_selector ?? []) {
+      selectors.push(sel)
+    }
+  }
+  return [...new Set(selectors)]
+}
+
+function deriveClarification(output: PlannerOutputType, request: string): ClarificationResult | undefined {
+  const questions = (Array.isArray(output.clarifications) ? output.clarifications : []).filter((item) => item.question?.trim())
   if (questions.length > 0) {
     const deduped = questions.filter((item, index) =>
       questions.findIndex((next) => next.question.trim() === item.question.trim()) === index,
@@ -1000,53 +919,44 @@ function deriveClarification(request: string, output: PlannerOutputType, spec?: 
   return heuristicClarification(request)
 }
 
-function hasModelClarification(output: PlannerOutputType, spec?: SpecDraft) {
-  return (spec?.clarifications?.length ?? 0) > 0 || (output.clarifications?.length ?? 0) > 0
+function hasModelClarification(output: PlannerOutputType) {
+  return (output.clarifications?.length ?? 0) > 0
 }
 
 function heuristicClarification(request: string): ClarificationResult | undefined {
-  const text = request.trim()
-  if (!text) return undefined
-  const lower = text.toLowerCase()
-  const vague =
-    text.length <= 18 ||
-    [
-      "优化性能",
-      "修复bug",
-      "修 bug",
-      "修复问题",
-      "重构",
-      "优化一下",
-      "improve performance",
-      "fix bug",
-      "refactor",
-      "clean this up",
-    ].some((item) => lower === item || text === item)
-  if (!vague) return undefined
-  const chinese = /[\u3400-\u9fff]/.test(text)
-  return chinese
-    ? {
-        reason: "当前需求过于宽泛，直接执行容易偏离目标。",
-        questions: [
-          {
-            header: "范围",
-            question: "请明确这次要改的具体模块、页面或问题现象，以及你希望如何验收。",
-            context: `原始请求：${text}`,
-            default_assumption: "如果你不补充，我会优先处理当前仓库里最直接相关的热点问题。",
-          },
-        ],
-      }
-    : {
-        reason: "The request is too broad to execute safely without a concrete target.",
-        questions: [
-          {
-            header: "Scope",
-            question: "Which specific module, page, or failure should this task target, and how should success be verified?",
-            context: `Original request: ${text}`,
-            default_assumption: "If no extra detail is provided, prioritize the most directly related hotspot in the repo.",
-          },
-        ],
-      }
+  const trimmed = request.trim()
+  if (!trimmed) return
+  const analysis = preAnalyzeRequest(request)
+  const grounded =
+    trimmed.length > 40 ||
+    trimmed.includes("\n") ||
+    !!analysis.workDir ||
+    analysis.files.length > 0 ||
+    analysis.requirements.some((item) => item.length > 24) ||
+    analysis.entities.length > 0
+  if (grounded) return
+  const generic = /(优化|修复|改进|重构|整理|升级|实现|支持|处理|性能|问题|bug|issue|fix|optimi[sz]e|improve|refactor|cleanup|performance|review)/i.test(trimmed)
+  if (!generic) return
+  if (/[\u3400-\u9fff]/.test(trimmed)) {
+    return {
+      reason: "当前请求过于宽泛，规划前需要明确具体目标范围。",
+      questions: [{
+        header: "范围",
+        question: "这次要优先处理哪个模块、页面或流程？",
+        context: "当前请求没有指出具体对象，无法生成可靠的执行计划。",
+        default_assumption: "先聚焦当前项目里最直接相关的主路径。",
+      }],
+    }
+  }
+  return {
+    reason: "The request is too broad to produce a reliable execution plan without a concrete target.",
+    questions: [{
+      header: "Scope",
+      question: "Which module, page, or workflow should this focus on first?",
+      context: "The request does not identify a concrete target, so planning would be guesswork.",
+      default_assumption: "Focus on the primary user-facing path in the main package.",
+    }],
+  }
 }
 
 function inferSelectors(request: string) {

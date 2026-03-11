@@ -3,6 +3,8 @@ import { EvaluatorService } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
+import { DeliveryService } from "../../src/orchestrator/delivery"
+import { OrchestratorGit } from "../../src/orchestrator/git"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -48,7 +50,7 @@ function mockSpec() {
 }
 
 test(
-  "GET /task/:id/progress replays a completed run after executor queue state disappears",
+  "task fails cleanly when evaluator agent analysis fails after automated checks pass",
   async () => {
     await using tmp = await tmpdir({ git: true })
     mockSpec()
@@ -70,36 +72,12 @@ test(
       ],
       artifacts: [],
     })
-    spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
-      const allPassed = input.checkResults.every((c) => c.status === "passed")
-      return {
-        verdict: allPassed ? "accepted" : "rejected",
-        classification: "evaluation",
-        summary: allPassed ? "All checks passed" : "Some checks failed",
-        goal_statuses: input.goals.map((_, i) => ({
-          goal_index: i,
-          status: allPassed ? ("passed" as const) : ("failed" as const),
-          evidence: allPassed ? "Checks passed" : "Checks failed",
-          reasoning: allPassed ? "All checks passed" : "Some checks failed",
-        })),
-        replan_guidance: allPassed ? null : {
-          root_cause: "Checks failed",
-          what_failed: "Automated verification",
-          suggested_strategy: "Fix the failing checks",
-          avoid_approaches: [],
-        },
-      }
-    })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
     spyOn(PlannerService, "initial").mockResolvedValue({
-      summary: "stub plan",
-      prompt: "Execute the task and verify the checks.",
+      summary: "Plan: analysis failure",
+      prompt: "Execute the task and pass the checks.",
       goals: [{
-        description: "Ship the requested task",
-        criteria: "The task is completed and checks pass.",
+        description: "Task completed successfully",
+        criteria: "Automated checks pass.",
         priority: "blocking",
         metadata: {
           check_selector: ["verify_cmd"],
@@ -116,7 +94,24 @@ test(
         },
       },
     })
-    const status = spyOn(OpencodeExecutor, "status").mockResolvedValue({
+    spyOn(SpecService, "initial").mockResolvedValue(undefined as never)
+    spyOn(SpecService, "rewrite").mockResolvedValue(undefined as never)
+    spyOn(DeliveryService, "deliver").mockResolvedValue({
+      status: "delivered",
+      summary: "Delivery published.",
+      artifacts: [],
+      publish: {
+        mode: "manual",
+        adapters: [],
+      },
+    })
+    spyOn(OrchestratorGit, "complete").mockImplementation(async (task) => ({ task }))
+    spyOn(EvaluatorService, "analyzeDelivery").mockRejectedValue(new Error("ProviderModelNotFoundError"))
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
       queueTaskID: Identifier.ascending("task"),
       status: "completed",
       error: null,
@@ -138,7 +133,7 @@ test(
           },
           body: JSON.stringify({
             project: Instance.project.id,
-            request: "ship a completed task",
+            request: "complete task with evaluator analysis failure",
             checks: {
               verify_cmd: [`"${process.execPath}" -e "process.exit(0)"`],
             },
@@ -147,36 +142,50 @@ test(
         expect(created.status).toBe(202)
         const { task_id } = (await created.json()) as { task_id: string }
 
-        let progressBody: { task: { status: string } } | undefined
-        for (let index = 0; index < 30; index++) {
+        let progressBody:
+          | {
+              task: { status: string; error?: string }
+              evaluation?: { verdict: string; summary: string }
+            }
+          | undefined
+        for (let index = 0; index < 40; index++) {
           const progress = await app.request(`/task/${task_id}/progress`, {
             headers: {
               "x-opencorvus-directory": tmp.path,
             },
           })
           expect(progress.status).toBe(200)
-          progressBody = await progress.json() as { task: { status: string } }
-          if (progressBody.task.status === "completed") break
+          progressBody = await progress.json() as {
+            task: { status: string; error?: string }
+            evaluation?: { verdict: string; summary: string }
+          }
+          if (["completed", "failed"].includes(progressBody.task.status)) break
           await Bun.sleep(50)
         }
 
-        expect(progressBody?.task.status).toBe("completed")
-        const calls = status.mock.calls.length
-        status.mockRejectedValue(new Error("executor task not found"))
+        expect(progressBody?.task.status).toBe("failed")
+        expect(progressBody?.task.error).toContain("Evaluator agent analysis failed")
 
-        const replay = await app.request(`/task/${task_id}/progress`, {
+        const exported = await app.request(`/export/task/${task_id}`, {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
         })
-        expect(replay.status).toBe(200)
-        const replayBody = await replay.json() as { task: { status: string } }
-        expect(replayBody.task.status).toBe("completed")
-        expect(status.mock.calls.length).toBe(calls)
+        expect(exported.status).toBe(200)
+        const exportBody = await exported.json() as {
+          coordinatorRun?: { id: string; status: string }
+          goalRuns?: Array<{ coordinatorRunID: string }>
+          deliveries: Array<{ goalRunID?: string }>
+          evaluations: Array<{ goalRunID?: string }>
+          artifacts: Array<{ label: string; payload?: { analysis_failed?: boolean } }>
+        }
+        expect(exportBody.coordinatorRun?.status).toBe("failed")
+        expect(exportBody.goalRuns?.every((item) => item.coordinatorRunID === exportBody.coordinatorRun?.id)).toBe(true)
+        expect(exportBody.deliveries.some((item) => !!item.goalRunID)).toBe(true)
+        expect(exportBody.evaluations.some((item) => !!item.goalRunID)).toBe(true)
+        expect(exportBody.artifacts.some((item) => item.label === "evaluator-agent-error" && item.payload?.analysis_failed === true)).toBe(true)
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   },
   { timeout: 20_000 },
 )

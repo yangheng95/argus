@@ -1,7 +1,10 @@
-import { test, expect } from "bun:test"
+import { afterEach, beforeEach, expect, test } from "bun:test"
+import { Config } from "../../src/config/config"
+import { Global } from "../../src/global"
 import { Skill } from "../../src/skill"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
+import os from "os"
 import path from "path"
 import fs from "fs/promises"
 
@@ -9,6 +12,62 @@ import fs from "fs/promises"
 function nonBuiltin(skills: Skill.Info[]) {
   return skills.filter((s) => !s.builtin)
 }
+
+const sharedHome = process.env.OPENCORVUS_TEST_HOME || path.join(os.tmpdir(), "opencorvus-test-home")
+const sharedConfig = path.join(sharedHome, "config")
+const globalConfigFiles = ["config.json", "opencorvus.json", "opencorvus.jsonc"] as const
+const globalConfigBackup = new Map<string, string | undefined>()
+
+async function cleanGlobalSkills() {
+  await fs.mkdir(sharedHome, { recursive: true })
+  await fs.mkdir(sharedConfig, { recursive: true })
+  await Promise.all([
+    fs.rm(path.join(sharedHome, ".claude"), { recursive: true, force: true }).catch(() => {}),
+    fs.rm(path.join(sharedHome, ".agents"), { recursive: true, force: true }).catch(() => {}),
+    fs.rm(path.join(sharedConfig, "config.json"), { force: true }).catch(() => {}),
+    fs.rm(path.join(sharedConfig, "opencorvus.json"), { force: true }).catch(() => {}),
+    fs.rm(path.join(sharedConfig, "opencorvus.jsonc"), { force: true }).catch(() => {}),
+  ])
+}
+
+async function clearGlobalConfig() {
+  globalConfigBackup.clear()
+  for (const name of globalConfigFiles) {
+    const file = path.join(Global.Path.config, name)
+    const content = await fs.readFile(file, "utf8").catch(() => undefined)
+    globalConfigBackup.set(name, content)
+    await fs.rm(file, { force: true }).catch(() => {})
+  }
+}
+
+async function restoreGlobalConfig() {
+  for (const name of globalConfigFiles) {
+    const file = path.join(Global.Path.config, name)
+    const content = globalConfigBackup.get(name)
+    if (content === undefined) {
+      await fs.rm(file, { force: true }).catch(() => {})
+      continue
+    }
+    await fs.writeFile(file, content)
+  }
+  globalConfigBackup.clear()
+}
+
+beforeEach(async () => {
+  await Instance.disposeAll()
+  Config.global.reset()
+  process.env.OPENCORVUS_CONFIG_DIR = sharedConfig
+  await clearGlobalConfig()
+  await cleanGlobalSkills()
+})
+
+afterEach(async () => {
+  await Instance.disposeAll()
+  Config.global.reset()
+  process.env.OPENCORVUS_CONFIG_DIR = sharedConfig
+  await cleanGlobalSkills()
+  await restoreGlobalConfig()
+})
 
 async function createGlobalSkill(homeDir: string) {
   const skillDir = path.join(homeDir, ".claude", "skills", "global-test-skill")
@@ -78,22 +137,15 @@ description: Skill for dirs test.
     },
   })
 
-  const home = process.env.OPENCORVUS_TEST_HOME
-  process.env.OPENCORVUS_TEST_HOME = tmp.path
-
-  try {
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const dirs = await Skill.dirs()
-        const skillDir = path.join(tmp.path, ".opencorvus", "skill", "dir-skill")
-        expect(dirs).toContain(skillDir)
-        expect(dirs.length).toBe(1)
-      },
-    })
-  } finally {
-    process.env.OPENCORVUS_TEST_HOME = home
-  }
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const dirs = await Skill.dirs()
+      const skillDir = path.join(tmp.path, ".opencorvus", "skill", "dir-skill")
+      expect(dirs).toContain(skillDir)
+      expect(dirs.length).toBe(1)
+    },
+  })
 })
 
 test("discovers multiple skills from .opencorvus/skill/ directory", async () => {
@@ -193,25 +245,18 @@ description: A skill in the .claude/skills directory.
 test("discovers global skills from ~/.claude/skills/ directory", async () => {
   await using tmp = await tmpdir({ git: true })
 
-  const originalHome = process.env.OPENCORVUS_TEST_HOME
-  process.env.OPENCORVUS_TEST_HOME = tmp.path
-
-  try {
-    await createGlobalSkill(tmp.path)
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const skills = await Skill.all()
-        expect(nonBuiltin(skills).length).toBe(1)
-        const globalTestSkill = skills.find((s) => s.name === "global-test-skill")
-        expect(globalTestSkill).toBeDefined()
-        expect(globalTestSkill!.description).toBe("A global skill from ~/.claude/skills for testing.")
-        expect(globalTestSkill!.location).toContain(path.join(".claude", "skills", "global-test-skill", "SKILL.md"))
-      },
-    })
-  } finally {
-    process.env.OPENCORVUS_TEST_HOME = originalHome
-  }
+  await createGlobalSkill(sharedHome)
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(nonBuiltin(skills).length).toBe(1)
+      const globalTestSkill = skills.find((s) => s.name === "global-test-skill")
+      expect(globalTestSkill).toBeDefined()
+      expect(globalTestSkill!.description).toBe("A global skill from ~/.claude/skills for testing.")
+      expect(globalTestSkill!.location).toContain(path.join(".claude", "skills", "global-test-skill", "SKILL.md"))
+    },
+  })
 })
 
 test("returns empty array when no skills exist", async () => {
@@ -272,15 +317,11 @@ description: A skill in the .agents/skills directory.
 test("discovers global skills from ~/.agents/skills/ directory", async () => {
   await using tmp = await tmpdir({ git: true })
 
-  const originalHome = process.env.OPENCORVUS_TEST_HOME
-  process.env.OPENCORVUS_TEST_HOME = tmp.path
-
-  try {
-    const skillDir = path.join(tmp.path, ".agents", "skills", "global-agent-skill")
-    await fs.mkdir(skillDir, { recursive: true })
-    await Bun.write(
-      path.join(skillDir, "SKILL.md"),
-      `---
+  const skillDir = path.join(sharedHome, ".agents", "skills", "global-agent-skill")
+  await fs.mkdir(skillDir, { recursive: true })
+  await Bun.write(
+    path.join(skillDir, "SKILL.md"),
+    `---
 name: global-agent-skill
 description: A global skill from ~/.agents/skills for testing.
 ---
@@ -289,22 +330,19 @@ description: A global skill from ~/.agents/skills for testing.
 
 This skill is loaded from the global home directory.
 `,
-    )
+  )
 
-    await Instance.provide({
-      directory: tmp.path,
-      fn: async () => {
-        const skills = await Skill.all()
-        expect(nonBuiltin(skills).length).toBe(1)
-        const globalAgentSkill = skills.find((s) => s.name === "global-agent-skill")
-        expect(globalAgentSkill).toBeDefined()
-        expect(globalAgentSkill!.description).toBe("A global skill from ~/.agents/skills for testing.")
-        expect(globalAgentSkill!.location).toContain(path.join(".agents", "skills", "global-agent-skill", "SKILL.md"))
-      },
-    })
-  } finally {
-    process.env.OPENCORVUS_TEST_HOME = originalHome
-  }
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const skills = await Skill.all()
+      expect(nonBuiltin(skills).length).toBe(1)
+      const globalAgentSkill = skills.find((s) => s.name === "global-agent-skill")
+      expect(globalAgentSkill).toBeDefined()
+      expect(globalAgentSkill!.description).toBe("A global skill from ~/.agents/skills for testing.")
+      expect(globalAgentSkill!.location).toContain(path.join(".agents", "skills", "global-agent-skill", "SKILL.md"))
+    },
+  })
 })
 
 test("discovers skills from both .claude/skills/ and .agents/skills/", async () => {

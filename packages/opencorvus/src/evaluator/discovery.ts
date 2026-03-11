@@ -10,21 +10,16 @@ import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "./shared"
 
 export async function resolveConfig(metadata?: Record<string, unknown>) {
   const configured = CheckConfig.safeParse(metadata?.checks)
-  return CheckConfig.parse(configured.success ? configured.data : {})
+  const next = configured.success ? configured.data : {}
+  return CheckConfig.parse({
+    ...next,
+    spec_check: requiredSpecCheck(next.spec_check),
+  })
 }
 
 export function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
-  if (task?.activeSpecVersionID) {
-    return { spec_check: { enabled: true, mode: "soft" } }
-  }
-  try {
-    const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
-    const specFiles = require("fs").readdirSync(specsDir) as string[]
-    if (specFiles.some((f: string) => f.endsWith(".md"))) {
-      return { spec_check: { enabled: true, mode: "soft" } }
-    }
-  } catch {}
-  return {}
+  void task
+  return { spec_check: requiredSpecCheck(undefined) }
 }
 
 export function resolvedChecks(
@@ -44,8 +39,7 @@ export function resolvedChecks(
     ...(config.code_quality ? { code_quality: config.code_quality } : {}),
     ...(config.code_review ? { code_review: config.code_review } : {}),
     ...(config.dead_code_review ? { dead_code_review: config.dead_code_review } : {}),
-    ...(config.judge ? { judge: config.judge } : {}),
-    ...(config.spec_check ? { spec_check: config.spec_check } : autoSpecCheck()),
+    spec_check: requiredSpecCheck(config.spec_check),
     ...(config.custom ? { custom: config.custom } : {}),
     ...(config.timeout_ms ? { timeout_ms: config.timeout_ms } : {}),
   } as Record<string, unknown>
@@ -65,6 +59,14 @@ export function resolvedChecks(
   }
   if (Object.keys(named).length > 0) next.named = named
   return CheckConfig.parse(next)
+}
+
+function requiredSpecCheck(current: z.infer<typeof CheckConfig>["spec_check"]) {
+  return {
+    ...(current ?? {}),
+    enabled: true,
+    mode: "strict" as const,
+  }
 }
 
 export async function discoverChecks(changedFiles?: unknown) {
@@ -194,9 +196,9 @@ function namedGroups(
         })),
       } satisfies CommandGroup]
     }
-    const fallback = discovered[key]
-    if (!fallback) return []
-    return [fallback]
+    const group = discovered[key]
+    if (!group) return []
+    return [group]
   })
 }
 
@@ -272,10 +274,10 @@ function pythonLauncher() {
   return ["python", "python3", "py"].find((item) => which(item))
 }
 
-function pythonToolCommand(module: string, fallback: string) {
+function pythonToolCommand(module: string, executable: string) {
   const python = pythonLauncher()
   if (python) return `${python} -m ${module}`
-  if (which(fallback)) return fallback
+  if (which(executable)) return executable
 }
 
 function checkLabel(key: string) {

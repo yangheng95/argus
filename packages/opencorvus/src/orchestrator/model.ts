@@ -36,15 +36,18 @@ export const StageRouting = z.object({
   evaluation: EvaluationProvider.optional(),
 })
 
+const GoalMetadata = z
+  .object({
+    check_selector: z.array(z.string()).optional(),
+  })
+  .catchall(z.any())
+
 export const GoalInput = z.object({
   description: z.string(),
   criteria: z.string(),
   priority: z.enum(["blocking", "advisory"]).optional(),
-  metadata: z
-    .object({
-      check_selector: z.array(z.string()).optional(),
-    })
-    .optional(),
+  source: z.enum(["spec", "system"]).optional(),
+  metadata: GoalMetadata.optional(),
 })
 
 export const MilestoneInput = z.object({
@@ -94,9 +97,9 @@ export const CheckConfig = z.object({
       target: z.literal("web"),
       url: z.string().url(),
       require_text: z.array(z.string()).optional(),
-        require_title: z.string().optional(),
-        timeout_ms: z.number().int().positive().optional(),
-        mode: z.enum(["soft", "strict"]).optional(),
+      require_title: z.string().optional(),
+      timeout_ms: z.number().int().positive().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
   puppeteer: z
@@ -154,13 +157,6 @@ export const CheckConfig = z.object({
       mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
-  judge: z
-    .object({
-      enabled: z.boolean().optional(),
-      prompt: z.string().optional(),
-      mode: z.enum(["soft", "strict"]).optional(),
-    })
-    .optional(),
   spec_check: z
     .object({
       enabled: z.boolean().optional(),
@@ -194,6 +190,7 @@ export const Task = z.object({
   projectID: z.string(),
   directory: z.string().optional(),
   sessionID: Identifier.schema("session").nullable().optional(),
+  activeSpecVersionID: Identifier.schema("spec").nullable().optional(),
   activePlanVersionID: Identifier.schema("plan").nullable().optional(),
   activeRunID: Identifier.schema("run").nullable().optional(),
   requestID: z.string().optional(),
@@ -217,6 +214,7 @@ export const Task = z.object({
 export const PlanVersion = z.object({
   id: Identifier.schema("plan"),
   taskID: Identifier.schema("task"),
+  specSnapshotID: Identifier.schema("spec"),
   version: z.number().int(),
   status: z.enum(["active", "superseded"]),
   summary: z.string(),
@@ -231,18 +229,48 @@ export const PlanVersion = z.object({
 export const Goal = z.object({
   id: Identifier.schema("goal"),
   taskID: Identifier.schema("task"),
-  planVersionID: Identifier.schema("plan"),
-  milestoneID: z.string().nullable().optional(),
+  specSnapshotID: Identifier.schema("spec"),
   description: z.string(),
   criteria: z.string(),
   priority: z.enum(["blocking", "advisory"]),
+  source: z.enum(["spec", "system"]).default("spec"),
   status: z.enum(["pending", "passed", "failed"]),
   orderIndex: z.number().int(),
-  metadata: z
-    .object({
-      check_selector: z.array(z.string()).optional(),
-    })
-    .optional(),
+  metadata: GoalMetadata.optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+  }),
+})
+
+export const SpecItem = z.object({
+  id: Identifier.schema("specitem"),
+  taskID: Identifier.schema("task"),
+  specSnapshotID: Identifier.schema("spec"),
+  title: z.string(),
+  description: z.string(),
+  status: z.enum(["pending", "done", "failed"]),
+  priority: z.enum(["blocking", "advisory"]),
+  checkSelector: z.array(z.string()).optional(),
+  evidence: z.string().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+  }),
+})
+
+export const PlanNode = z.object({
+  id: Identifier.schema("plan_node"),
+  taskID: Identifier.schema("task"),
+  planVersionID: Identifier.schema("plan"),
+  kind: z.enum(["goal", "milestone", "step"]),
+  goalID: Identifier.schema("goal").optional(),
+  title: z.string(),
+  brief: z.string(),
+  dependsOnIDs: z.array(z.string()).optional(),
+  orderIndex: z.number().int(),
+  metadata: z.record(z.string(), z.any()).optional(),
   time: z.object({
     created: z.number(),
     updated: z.number(),
@@ -276,7 +304,7 @@ export const Run = z.object({
   sessionID: Identifier.schema("session").nullable().optional(),
   executor: ExecutorName,
   status: z.enum(["queued", "accepted", "running", "blocked", "completed", "failed", "aborted"]),
-  phase: z.enum(["plan", "execute", "evaluate", "deliver", "replan"]),
+  phase: z.enum(["plan", "dispatch", "evaluate", "deliver", "replan"]),
   blockingReason: z.string().optional(),
   error: z.string().optional(),
   retryCount: z.number().int(),
@@ -290,10 +318,35 @@ export const Run = z.object({
   }),
 })
 
+export const GoalRun = z.object({
+  id: Identifier.schema("goal_run"),
+  taskID: Identifier.schema("task"),
+  goalID: Identifier.schema("goal"),
+  planNodeID: Identifier.schema("plan_node").optional(),
+  coordinatorRunID: Identifier.schema("run"),
+  sessionID: Identifier.schema("session").optional(),
+  executor: ExecutorName,
+  status: z.enum(["queued", "accepted", "running", "blocked", "completed", "failed", "aborted", "superseded"]),
+  retryCount: z.number().int(),
+  blockingReason: z.string().optional(),
+  error: z.string().optional(),
+  workspaceDir: z.string().optional(),
+  baseRef: z.string().optional(),
+  mergeRef: z.string().optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+    started: z.number().optional(),
+    completed: z.number().optional(),
+  }),
+})
+
 export const ExecutorSession = z.object({
   id: z.string(),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
+  goalRunID: Identifier.schema("goal_run").optional(),
   provider: ExecutorName,
   protocol: z.string(),
   protocolVersion: z.string(),
@@ -315,6 +368,7 @@ export const ExecutorEvent = z.object({
   executorSessionID: z.string(),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
+  goalRunID: Identifier.schema("goal_run").optional(),
   sequence: z.number().int(),
   kind: z.string(),
   summary: z.string().optional(),
@@ -351,6 +405,7 @@ export const Artifact = z.object({
   id: Identifier.schema("artifact"),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
+  goalRunID: Identifier.schema("goal_run").optional(),
   deliveryID: Identifier.schema("delivery").nullable().optional(),
   kind: z.enum(["patch", "changed_file", "log", "report", "image", "diff", "html_trace", "link", "git_ref", "pr"]),
   label: z.string(),
@@ -365,6 +420,7 @@ export const Delivery = z.object({
   id: Identifier.schema("delivery"),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
+  goalRunID: Identifier.schema("goal_run").optional(),
   status: z.enum(["candidate", "publishing", "delivered", "failed"]),
   summary: z.string(),
   result: z.object({
@@ -400,9 +456,10 @@ export const Evaluation = z.object({
   id: Identifier.schema("evaluation"),
   taskID: Identifier.schema("task"),
   runID: Identifier.schema("run"),
+  goalRunID: Identifier.schema("goal_run").optional(),
   deliveryID: Identifier.schema("delivery").nullable().optional(),
-  status: z.enum(["pending", "passed", "failed", "inconclusive"]),
-  verdict: z.enum(["accepted", "rejected", "inconclusive"]),
+  status: z.enum(["pending", "passed", "failed"]),
+  verdict: z.enum(["accepted", "rejected"]),
   summary: z.string(),
   checks: EvaluationCheck.array(),
   time: z.object({
@@ -426,14 +483,34 @@ export const ProgressSnapshot = z.object({
 
 export const Progress = z.object({
   task: Task,
+  spec: z.lazy(() => SpecSnapshot).optional(),
   plan: PlanVersion.optional(),
   goals: Goal.array(),
+  planNodes: PlanNode.array(),
+  goalRuns: GoalRun.array(),
   milestones: Milestone.array().optional(),
   run: Run.optional(),
   pendingInteractions: Interaction.array(),
   delivery: Delivery.optional(),
   evaluation: Evaluation.optional(),
   snapshots: ProgressSnapshot.array(),
+})
+
+export const TaskExport = z.object({
+  task: Task,
+  spec: z.lazy(() => SpecSnapshot).optional(),
+  plan: PlanVersion.optional(),
+  coordinatorRun: Run.optional(),
+  goals: Goal.array(),
+  planNodes: PlanNode.array(),
+  goalRuns: GoalRun.array(),
+  milestones: Milestone.array(),
+  runs: Run.array(),
+  interactions: Interaction.array(),
+  snapshots: ProgressSnapshot.array(),
+  deliveries: Delivery.array(),
+  evaluations: Evaluation.array(),
+  artifacts: Artifact.array(),
 })
 
 export const ReplyInteractionInput = z.object({
@@ -516,7 +593,7 @@ export const TaskChannelBinding = z.object({
 
 export const TaskBoardCard = z.object({
   id: z.string(),
-  kind: z.enum(["goal", "interaction", "preference", "note", "run", "plan_hint"]),
+  kind: z.enum(["goal", "goal_run", "interaction", "preference", "note", "run", "plan_hint", "spec", "plan", "milestone", "spec_item", "check", "delivery", "evaluation"]),
   title: z.string(),
   detail: z.string().optional(),
   status: z.string().optional(),
@@ -556,18 +633,32 @@ export const TaskBoardOverview = z.object({
 })
 
 export const SpecSnapshot = z.object({
+  id: Identifier.schema("spec"),
+  taskID: Identifier.schema("task"),
+  version: z.number().int(),
+  status: z.enum(["ready", "blocked", "completed", "superseded"]),
+  summary: z.string(),
   content: z.string(),
-  file: z.string().optional(),
-  source: z.record(z.string(), z.any()).optional(),
+  scope: z.string(),
+  outOfScope: z.string().optional(),
+  evidence: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   time: z.object({
     created: z.number(),
+    updated: z.number(),
   }),
 })
 
 export const TaskBoard = z.object({
   task: Task,
   spec: SpecSnapshot.optional(),
+  checks: CheckConfig.optional(),
+  goals: Goal.array(),
+  specItems: SpecItem.array(),
   plan: PlanVersion.optional(),
+  planNodes: PlanNode.array(),
+  goalRuns: GoalRun.array(),
+  milestones: Milestone.array(),
   run: Run.optional(),
   delivery: Delivery.optional(),
   candidateDelivery: Delivery.optional(),

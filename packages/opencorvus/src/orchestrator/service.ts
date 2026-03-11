@@ -1,22 +1,18 @@
 import z from "zod"
-import { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
-import { discoverChecks, resolveConfig, resolvedChecks } from "@/evaluator/discovery"
+import { EvaluatorService } from "@/evaluator/service"
 import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
-import { writeSpec } from "@/orchestrator/spec"
+import { writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "@/orchestrator/docs"
 import { PermissionNext } from "@/permission/next"
 import { type ReplanContext } from "@/planner/agent"
-import { PlannerFailureError, PlannerService } from "@/planner/service"
-import { Provider } from "@/provider/provider"
-import { SpecFailureError } from "@/spec/service"
+import { PlannerFailureError } from "@/planner/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
-import { MessageV2 } from "@/session/message"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
@@ -26,7 +22,6 @@ import {
   OrchestratorDeliveryTable,
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
-  OrchestratorGoalTable,
   OrchestratorInteractionRequestTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
@@ -39,12 +34,9 @@ import {
 import {
   CreateTaskInput,
   Event,
-  GoalInput,
   RejectInteractionInput,
   ReplyInteractionInput,
   TaskMessageInput,
-  CheckConfig,
-  UpdateGoalInput,
   UpdateTaskChecksInput,
   UpdatePreferenceInput,
 } from "./model"
@@ -61,19 +53,24 @@ import {
   progressStatus,
 } from "./helpers"
 import { mergeTaskChecks, writeTaskChecks } from "./checks"
-import { GoalService } from "./goal-service"
 import { OrchestratorInteraction } from "./interaction"
 import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
 import {
   compileTransition,
+  createReplanRun,
+  ensureExecutorSession,
+  insertGoalRows,
   insertPlanItems,
   insertSpecItems,
   persistInitialTransition,
   persistInitialTransitionFailure,
   specDraftFromFailure,
+  updateGoalRun,
+  updateGoalRunExecutorSessionStatus,
 } from "./transition"
 import {
+  activeGoalRunByCoordinator,
   activeRunBySession,
   findArtifacts,
   findDeliveryByRun,
@@ -84,20 +81,23 @@ import {
   findPendingInteractions,
   findPlan,
   findPlans,
+  findSpecSnapshot,
   findRun,
   findRuns,
   findTask,
   findTaskByRequest,
+  goalRunQueueTaskID,
   listGlobalTasks,
   listProjectTasks,
   listTaskRows,
   searchProjectTasks,
-  listGoals,
-  listGoalsByPlan,
+  listGoalsBySpec,
   listExecutorEvents as listExecutorProtocolEvents,
+  listGoalRunsByTask,
   listInteractions,
   listMilestones,
   listMilestonesByPlan,
+  listPlanNodesByPlan,
   listSnapshots,
   requireInteraction,
   requireRun,
@@ -108,132 +108,26 @@ import {
   viewExecutorSession,
   viewEvaluation,
   viewGoal,
+  viewGoalRun,
   viewInteraction,
   viewMilestone,
   viewPlan,
+  viewPlanNode,
   viewRun,
   viewSnapshot,
+  viewSpecSnapshot,
   viewTask,
   type GoalRow,
+  type GoalRunRow,
   type TaskListRow,
-  type TaskRow,
   type PlanRow,
   type RunRow,
+  type TaskRow,
   type InteractionRow,
 } from "./store"
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator" })
-
-async function continueTaskMessage(taskID: string, text: string) {
-  const task = requireTask(taskID)
-  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-  const injected = run ? await injectRunningTaskMessage(task, run, text) : false
-  if (injected) {
-    return {
-      mode: "injected" as const,
-      resumed: true,
-      status: "running" as const,
-    }
-  }
-  await appendTaskSessionMessage(task, text)
-  const note = await OrchestratorService.recordOperatorNote(taskID, text)
-  return {
-    mode: note.resumed ? "queued" as const : "recorded" as const,
-    ...note,
-  }
-}
-
-async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: string) {
-  if (!["accepted", "running"].includes(run.status)) return false
-  if (!run.session_id) return false
-  const executor = ExecutorRegistry.require(run.executor)
-  if (!executor.capabilities().resume) return false
-
-  const submission = await executor.resume({
-    sessionID: run.session_id,
-    message,
-  })
-  if (run.executor !== "opencode") {
-    await appendTaskSessionMessage(task, message)
-  }
-  if (submission.queueTaskID !== run.executor_ref?.queue_task_id) {
-    await updateRun(
-      run,
-      {
-        executor_ref: {
-          session_id: submission.sessionID,
-          queue_task_id: submission.queueTaskID,
-        },
-      },
-      "Message injected into running session",
-    )
-  }
-  await Bus.publish(Event.MessageInjected, {
-    taskID: task.id,
-    runID: run.id,
-    text: message,
-    summary: "Operator message injected into running session",
-  })
-  return true
-}
-
-async function appendTaskSessionMessage(task: TaskRow, text: string) {
-  if (!task.session_id) return
-  const ctx = await messageContext(task.session_id)
-  if (!ctx) return
-  const msg = await Session.updateMessage({
-    id: Identifier.ascending("message"),
-    role: "user",
-    sessionID: task.session_id,
-    time: {
-      created: Date.now(),
-    },
-    agent: ctx.agent,
-    model: ctx.model,
-  } satisfies MessageV2.User)
-  await Session.updatePart({
-    id: Identifier.ascending("part"),
-    messageID: msg.id,
-    sessionID: task.session_id,
-    type: "text",
-    text,
-    kind: "user_content",
-  } satisfies MessageV2.TextPart)
-  await Session.touch(task.session_id)
-}
-
-async function messageContext(sessionID: string) {
-  const rows = await Session.messages({ sessionID, limit: 20 }).catch(() => [])
-  const user = rows.findLast((item) => item.info.role === "user")
-  if (user?.info.role === "user") {
-    return {
-      agent: user.info.agent,
-      model: user.info.model,
-    }
-  }
-  const assistant = rows.findLast((item) => item.info.role === "assistant")
-  if (assistant?.info.role === "assistant") {
-    return {
-      agent: assistant.info.agent,
-      model: {
-        providerID: assistant.info.providerID,
-        modelID: assistant.info.modelID,
-      },
-    }
-  }
-  const name = await Agent.defaultAgent().catch(() => undefined)
-  const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
-  const model = agent?.model ?? await Provider.defaultModel().catch(() => undefined)
-  if (!agent || !model) return
-  return {
-    agent: agent.name,
-    model: {
-      providerID: model.providerID,
-      modelID: model.modelID,
-    },
-  }
-}
 
 async function prepareProject(project?: string) {
   if (Instance.project.vcs !== "git") {
@@ -284,41 +178,130 @@ function taskItems(rows: TaskListRow[]) {
   })
 }
 
-async function taskChecks(checks?: z.input<typeof CheckConfig>) {
-  const found = await discoverChecks()
-  const next = structuredClone(
-    resolvedChecks(await resolveConfig(checks ? { checks } : undefined), found),
+function activeGoalRun(run: RunRow) {
+  return activeGoalRunByCoordinator(run.id)
+}
+
+function executionTarget(run: RunRow) {
+  const goalRun = activeGoalRun(run)
+  return {
+    goalRun,
+    sessionID: goalRun?.session_id ?? run.session_id ?? undefined,
+    queueTaskID: goalRunQueueTaskID(goalRun) ?? run.executor_ref?.queue_task_id,
+  }
+}
+
+async function supersedeRunForSpecRewrite(task: TaskRow, run: RunRow, summary: string) {
+  const target = executionTarget(run)
+  const now = Date.now()
+  const pending = findPendingInteractions(run.id)
+  if (pending.length > 0) {
+    Database.use((db) =>
+      db.update(OrchestratorInteractionRequestTable)
+        .set({
+          status: "rejected",
+          response: {
+            superseded: true,
+            message: summary,
+          },
+          time_resolved: now,
+          time_updated: now,
+        })
+        .where(inArray(OrchestratorInteractionRequestTable.id, pending.map((item) => item.id)))
+        .run(),
+    )
+  }
+  if (target.sessionID || target.queueTaskID) {
+    await ExecutorRegistry.require(run.executor).abort({
+      sessionID: target.sessionID,
+      queueTaskID: target.queueTaskID,
+    })
+  }
+  if (target.goalRun) {
+    updateGoalRun(target.goalRun.id, {
+      status: "aborted",
+      error: summary,
+      blocking_reason: null,
+      time_completed: now,
+    })
+    updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
+  }
+  await updateRun(
+    run,
+    {
+      status: "aborted",
+      error: summary,
+      blocking_reason: null,
+      time_completed: now,
+    },
+    summary,
   )
-
-  if (found.lint.length > 0 && next.lint === false) {
-    next.lint = found.lint.map((item) => item.command)
-  }
-
-  const current = next.named?.typecheck
-  const typecheck = found.named.typecheck
-  if (current || typecheck) {
-    next.named = {
-      ...(next.named ?? {}),
-      typecheck: {
-        label: current?.label ?? typecheck?.label ?? "Type Check",
-        family: current?.family ?? typecheck?.family ?? "lint",
-        commands: current?.commands ?? typecheck?.commands.map((item) => item.command) ?? [],
-        enabled: true,
-        ...(current?.cwd ? { cwd: current.cwd } : {}),
+  if (task.status === "blocked") {
+    await updateTask(
+      task,
+      {
+        status: "running",
+        error: null,
+        blocking_reason: null,
+        time_completed: null,
       },
-    }
+      "Superseding blocked run with a rewritten specification",
+    )
   }
+}
 
-  next.spec_check = {
-    ...(next.spec_check ?? {}),
-    enabled: true,
-    mode: next.spec_check?.mode ?? "strict",
+async function replanForGoalUpdate(taskID: string, note: string) {
+  const task = requireTask(taskID)
+  if (task.status === "cancelled") {
+    return { resumed: false, status: task.status }
   }
-
-  return CheckConfig.parse(next)
+  const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
+  if (!run) {
+    return { resumed: false, status: task.status }
+  }
+  const summary = `Spec rewrite requested after goal update: ${note.trim() || "operator goal change"}`
+  if (
+    ["queued", "running", "blocked", "evaluating", "delivering"].includes(task.status) &&
+    !["failed", "aborted"].includes(run.status)
+  ) {
+    await supersedeRunForSpecRewrite(task, run, summary)
+  }
+  const nextRunID = await OrchestratorRuntime.queueReplan(requireTask(taskID), run, summary, hooks())
+  return {
+    resumed: true,
+    status: requireRun(nextRunID).status,
+  }
 }
 
 export namespace OrchestratorService {
+  async function settleTask(taskID: string) {
+    let previous = ""
+    let activeRunID = findTask(taskID)?.active_run_id
+    let runChanges = 0
+    for (const _ of [0, 1, 2, 3]) {
+      await OrchestratorRuntime.syncTask(taskID, hooks())
+      const task = findTask(taskID)
+      if (!task) return
+      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+      if (task.active_run_id !== activeRunID) {
+        activeRunID = task.active_run_id
+        runChanges += 1
+        if (runChanges >= 1) return
+      }
+      const signature = JSON.stringify({
+        taskStatus: task.status,
+        taskBlocking: task.blocking_reason,
+        taskRun: task.active_run_id,
+        runStatus: run?.status,
+        runPhase: run?.phase,
+        runBlocking: run?.blocking_reason,
+        queueTaskID: run?.executor_ref?.queue_task_id,
+      })
+      if (signature === previous) return
+      previous = signature
+    }
+  }
+
   export function init() {
     const current = orchestratorState()
     if (!current.booted) {
@@ -348,7 +331,7 @@ export namespace OrchestratorService {
     }
     ExecutorRegistry.require(executor)
     const session = await Session.create({ title })
-    const resolvedChecks = await taskChecks(input.checks)
+    const resolvedChecks = await EvaluatorService.resolveChecks(input.checks ? { checks: input.checks } : undefined)
     const now = Date.now()
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
@@ -457,25 +440,30 @@ export namespace OrchestratorService {
   }
 
   export async function getTask(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
+    await settleTask(taskID)
     const task = requireTask(taskID)
     const item = listTaskRows([task])[0]
     return viewTask(task, { directory: item?.directory })
   }
 
   export async function getProgress(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
+    await settleTask(taskID)
     const task = requireTask(taskID)
     const item = listTaskRows([task])[0]
     const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+    const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     const delivery = run ? findDeliveryByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
+    const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
     return {
       task: viewTask(task, { directory: item?.directory }),
+      spec: spec ? viewSpecSnapshot(spec) : undefined,
       plan: plan ? viewPlan(plan) : undefined,
-      goals: (plan ? listGoalsByPlan(plan.id) : listGoals(taskID)).map(viewGoal),
+      goals: (specID ? listGoalsBySpec(specID) : []).map(viewGoal),
+      planNodes: plan ? listPlanNodesByPlan(plan.id).map(viewPlanNode) : [],
+      goalRuns: listGoalRunsByTask(taskID).map(viewGoalRun),
       milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
       run: run ? viewRun(run) : undefined,
       pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),
@@ -486,7 +474,7 @@ export namespace OrchestratorService {
   }
 
   export async function listRuns(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
+    await settleTask(taskID)
     requireTask(taskID)
     return findRuns(taskID).map(viewRun)
   }
@@ -633,29 +621,6 @@ export namespace OrchestratorService {
     WorkbenchService.deletePreference(preferenceID)
     return true
   }
-
-  export async function updateGoal(goalID: string, input: z.input<typeof UpdateGoalInput>) {
-    const body = UpdateGoalInput.parse(input)
-    const row = Database.use((db) =>
-      db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).get(),
-    )
-    if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
-    GoalService.updateGoal({
-      goalID,
-      description: body.description,
-      criteria: body.criteria,
-    })
-    return true
-  }
-
-  export async function deleteGoal(goalID: string) {
-    const row = Database.use((db) =>
-      db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).get(),
-    )
-    if (!row) throw new NotFoundError({ message: `Goal not found: ${goalID}` })
-    GoalService.deleteGoal(goalID)
-    return true
-  }
 }
 
 function recoverTaskByRequest(requestID: string, error: unknown) {
@@ -701,6 +666,26 @@ export namespace OrchestratorService {
       await OrchestratorRuntime.syncTask(row.task_id, hooks())
       return viewInteraction(requireInteraction(interactionID))
     }
+    // Replan confirmation: user approved the spec rewrite → proceed with actual replan
+    if (row.payload?.replan_confirm === true) {
+      const task = requireTask(row.task_id)
+      const run = requireRun(row.run_id)
+      const planID = typeof row.payload?.plan_id === "string" ? row.payload.plan_id : run.plan_version_id
+      const plan = planID ? findPlan(planID) : undefined
+      if (!plan) throw new Error(`Plan not found for replan confirmation: ${planID}`)
+      const failureSummary = typeof row.payload?.failure_summary === "string" ? row.payload.failure_summary : "Evaluation failed"
+      Database.use((db) =>
+        db.update(OrchestratorInteractionRequestTable)
+          .set({ status: "answered", response: { approved: true }, time_resolved: Date.now(), time_updated: Date.now() })
+          .where(eq(OrchestratorInteractionRequestTable.id, interactionID))
+          .run(),
+      )
+      const next = await createReplanRun(task, plan, run, failureSummary, row.payload?.analysis as never)
+      if (next.queued && next.runID) {
+        await OrchestratorRuntime.dispatch(next.runID, hooks())
+      }
+      return viewInteraction(requireInteraction(interactionID))
+    }
     if (row.request_type === "permission") {
       await PermissionNext.reply({
         requestID: row.external_id,
@@ -732,6 +717,21 @@ export namespace OrchestratorService {
       await OrchestratorRuntime.syncTask(row.task_id, hooks())
       return viewInteraction(requireInteraction(interactionID))
     }
+    // Replan confirmation: user rejected the spec rewrite → fail the task
+    if (row.payload?.replan_confirm === true) {
+      Database.use((db) =>
+        db.update(OrchestratorInteractionRequestTable)
+          .set({ status: "rejected", response: { approved: false }, time_resolved: Date.now(), time_updated: Date.now() })
+          .where(eq(OrchestratorInteractionRequestTable.id, interactionID))
+          .run(),
+      )
+      const task = requireTask(row.task_id)
+      const run = requireRun(row.run_id)
+      const reason = input.message ?? "Replan rejected by user"
+      await updateRun(run, { status: "failed", error: reason, blocking_reason: null, time_completed: Date.now() }, reason)
+      await updateTask(task, { status: "failed", error: reason, blocking_reason: null, time_completed: Date.now() }, reason)
+      return viewInteraction(requireInteraction(interactionID))
+    }
     if (row.request_type === "permission") {
       await PermissionNext.reply({
         requestID: row.external_id,
@@ -753,11 +753,23 @@ export namespace OrchestratorService {
   export async function cancelTask(taskID: string) {
     const task = requireTask(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const target = run ? executionTarget(run) : undefined
     if (run) {
-      await ExecutorRegistry.require(run.executor).abort({
-        sessionID: run.session_id ?? undefined,
-        queueTaskID: run.executor_ref?.queue_task_id,
-      })
+      if (target?.sessionID || target?.queueTaskID) {
+        await ExecutorRegistry.require(run.executor).abort({
+          sessionID: target.sessionID,
+          queueTaskID: target.queueTaskID,
+        })
+      }
+      if (target?.goalRun) {
+        updateGoalRun(target.goalRun.id, {
+          status: "aborted",
+          error: "task cancelled",
+          blocking_reason: null,
+          time_completed: Date.now(),
+        })
+        updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
+      }
     }
     if (run) {
       await updateRun(
@@ -877,7 +889,10 @@ export namespace OrchestratorService {
     if (["completed", "cancelled"].includes(task.status)) {
       return { resumed: false, status: task.status }
     }
-    if (["accepted", "running"].includes(run.status)) {
+    if (
+      ["queued", "running", "blocked", "evaluating", "delivering"].includes(task.status) &&
+      ["accepted", "running"].includes(run.status)
+    ) {
       return { resumed: false, status: run.status }
     }
     const nextRunID = await OrchestratorRuntime.createOperatorRun(task, run, note)
@@ -903,15 +918,20 @@ export namespace OrchestratorService {
     if (!result.should_resume) {
       return result
     }
-    const note = await continueTaskMessage(taskID, input.text)
+    if (result.kind === "goal") {
+      const replan = await replanForGoalUpdate(taskID, input.text)
+      return {
+        ...result,
+        message: replan.resumed
+          ? "Recorded goal update. Queued a spec rewrite and replan."
+          : result.message,
+      }
+    }
+    const note = await OrchestratorService.recordOperatorNote(taskID, input.text)
     return {
       ...result,
-      message: result.kind === "note"
-        ? note.mode === "injected"
-          ? "Operator message injected into the running task."
-          : note.resumed
-            ? "Operator note recorded. Queued a follow-up run."
-            : "Operator note recorded."
+      message: result.kind === "note" && note.resumed
+        ? "Operator note recorded. Queued a follow-up run."
         : result.message,
     }
   }
@@ -925,18 +945,107 @@ export namespace OrchestratorService {
     const task = requireTask(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     if (!run) throw new Error(`No active run for task ${taskID}`)
-    const resumed = await injectRunningTaskMessage(task, run, message)
-    if (resumed) return { resumed: true, status: "running" as const }
-    await appendTaskSessionMessage(task, message)
-    return recordOperatorNote(taskID, message)
+    const target = executionTarget(run)
+
+    // 只有运行中的 run 才能注入
+    if (!["accepted", "running"].includes(run.status)) {
+      return recordOperatorNote(taskID, message)
+    }
+    if (!target.sessionID) {
+      return recordOperatorNote(taskID, message)
+    }
+
+    const executor = ExecutorRegistry.require(run.executor)
+    if (!executor.capabilities().resume) {
+      return recordOperatorNote(taskID, message)
+    }
+
+    const submission = await (
+      target.goalRun?.workspace_dir && target.goalRun.workspace_dir !== Instance.directory
+        ? Instance.provide({
+            directory: target.goalRun.workspace_dir,
+            fn: () =>
+              executor.resume({
+                sessionID: target.sessionID!,
+                message,
+              }),
+          })
+        : executor.resume({
+            sessionID: target.sessionID,
+            message,
+          })
+    )
+
+    ensureExecutorSession({
+      taskID: task.id,
+      runID: run.id,
+      goalRunID: target.goalRun?.id,
+      provider: run.executor,
+      refs: {
+        provider_session_id: submission.sessionID,
+        queue_task_id: submission.queueTaskID,
+      },
+      settings: target.goalRun?.workspace_dir
+        ? {
+            cwd: target.goalRun.workspace_dir,
+          }
+        : undefined,
+    })
+
+    // 更新 executor ref（queueTaskID 可能变化）
+    if (target.goalRun) {
+      if (submission.queueTaskID !== target.queueTaskID || submission.sessionID !== target.sessionID) {
+        updateGoalRun(target.goalRun.id, {
+          session_id: submission.sessionID,
+          metadata: {
+            ...(target.goalRun.metadata ?? {}),
+            queue_task_id: submission.queueTaskID,
+            provider_session_id: submission.sessionID,
+          },
+        })
+      }
+    } else if (submission.queueTaskID !== run.executor_ref?.queue_task_id || submission.sessionID !== run.session_id) {
+      await updateRun(
+        run,
+        {
+          session_id: submission.sessionID,
+          executor_ref: {
+            session_id: submission.sessionID,
+            queue_task_id: submission.queueTaskID,
+          },
+        },
+        "Message injected into running session",
+      )
+    }
+
+    await Bus.publish(Event.MessageInjected, {
+      taskID: task.id,
+      runID: run.id,
+      text: message,
+      summary: "Operator message injected into running session",
+    })
+
+    return { resumed: true, status: "running" as const }
   }
 
   export async function abortRun(runID: string) {
     const run = requireRun(runID)
-    await ExecutorRegistry.require(run.executor).abort({
-      sessionID: run.session_id ?? undefined,
-      queueTaskID: run.executor_ref?.queue_task_id,
-    })
+    const target = executionTarget(run)
+    if (target.sessionID || target.queueTaskID) {
+      await ExecutorRegistry.require(run.executor).abort({
+        sessionID: target.sessionID,
+        queueTaskID: target.queueTaskID,
+      })
+    }
+    if (target.goalRun) {
+      updateGoalRun(target.goalRun.id, {
+        status: "aborted",
+        error: "run aborted",
+        blocking_reason: null,
+        time_completed: Date.now(),
+      })
+      updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
+    }
     await updateRun(
       run,
       {
@@ -994,11 +1103,12 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
   const payload = row.payload ?? {}
   const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
   const now = Date.now()
+  const target = executionTarget(run)
 
   if (row.request_type === "permission") {
     await executor.resolve({
-      sessionID: run.session_id ?? undefined,
-      queueTaskID: run.executor_ref?.queue_task_id,
+      sessionID: target.sessionID,
+      queueTaskID: target.queueTaskID,
       requestID,
       kind: "approval",
       response: {
@@ -1026,8 +1136,8 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
     questions.map((id, index) => [id, { answers: answers[index] ?? answers[0] ?? [] }]),
   )
   await executor.resolve({
-    sessionID: run.session_id ?? undefined,
-    queueTaskID: run.executor_ref?.queue_task_id,
+    sessionID: target.sessionID,
+    queueTaskID: target.queueTaskID,
     requestID,
     kind: "input",
     response: {
@@ -1047,10 +1157,11 @@ async function rejectProtocolInteraction(row: InteractionRow, message?: string) 
   const payload = row.payload ?? {}
   const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
   const now = Date.now()
+  const target = executionTarget(run)
   if (row.request_type === "permission") {
     await executor.resolve({
-      sessionID: run.session_id ?? undefined,
-      queueTaskID: run.executor_ref?.queue_task_id,
+      sessionID: target.sessionID,
+      queueTaskID: target.queueTaskID,
       requestID,
       kind: "approval",
       response: {
@@ -1061,8 +1172,8 @@ async function rejectProtocolInteraction(row: InteractionRow, message?: string) 
     return
   }
   await executor.resolve({
-    sessionID: run.session_id ?? undefined,
-    queueTaskID: run.executor_ref?.queue_task_id,
+    sessionID: target.sessionID,
+    queueTaskID: target.queueTaskID,
     requestID,
     kind: "input",
     error: {
@@ -1122,22 +1233,19 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
     task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
       ? task.metadata.routing as z.infer<typeof CreateTaskInput>["routing"]
       : undefined
-  const parsedGoals = GoalInput.array().safeParse(provisional.goals)
   const isReplan = run.phase === "replan" || provisionalMeta.strategy === "replan"
   const previousPlanID = task.active_plan_version_id ?? run.plan_version_id
   const previousPlan = isReplan && previousPlanID ? findPlan(previousPlanID) : undefined
   if (isReplan && !previousPlan) throw new Error(`Previous plan not found for task ${task.id}`)
   const goals =
-    parsedGoals.success && parsedGoals.data.length > 0
-      ? parsedGoals.data
-      : previousPlan
-        ? listGoalsByPlan(previousPlan.id).map((goal) => ({
-            description: goal.description,
-            criteria: goal.criteria,
-            priority: goal.priority,
-            metadata: goal.metadata ?? undefined,
-          }))
-        : undefined
+    previousPlan
+      ? listGoalsBySpec(previousPlan.spec_snapshot_id).map((goal) => ({
+          description: goal.description,
+          criteria: goal.criteria,
+          priority: goal.priority,
+          metadata: goal.metadata ?? undefined,
+        }))
+      : undefined
   const replanContext =
     provisionalMeta.replan_context && typeof provisionalMeta.replan_context === "object" && !Array.isArray(provisionalMeta.replan_context)
       ? provisionalMeta.replan_context as ReplanContext
@@ -1150,65 +1258,48 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       : typeof run.metadata?.failure_summary === "string"
         ? run.metadata.failure_summary
         : task.error ?? "Replan requested after clarification."
-  const planDraft = isReplan
-    ? await (() => {
-        if (!previousPlan) {
-          throw new Error(`Previous plan missing for replan request on task ${task.id}`)
-        }
-        return PlannerService.replan({
+  const now = Date.now()
+  const compiled = await (
+    isReplan
+      ? (() => {
+          if (!previousPlan) {
+            throw new Error(`Previous plan missing for replan request on task ${task.id}`)
+          }
+          return compileTransition({
+            mode: "replan",
+            taskID: task.id,
+            now,
+            title: task.title,
+            request: clarifiedRequest,
+            goals: goals ?? [],
+            executor: run.executor,
+            routing,
+            task,
+            previousPlan,
+            previousRun: run,
+            failureSummary,
+            replanContext,
+          })
+        })()
+      : compileTransition({
+          mode: "initial",
+          taskID: task.id,
+          now,
           title: task.title,
           request: clarifiedRequest,
-          goals: goals ?? [],
-          previousPrompt: previousPlan.prompt,
-          previousPlanID: previousPlan.id,
-          failureSummary,
-          replanContext,
-          allowClarification: false,
+          goals,
           executor: run.executor,
           routing,
+          metadata: task.metadata ?? {},
         })
-      })()
-    : await PlannerService.initial({
-        title: task.title,
-        request: clarifiedRequest,
-        goals,
-        allowClarification: false,
-        executor: run.executor,
-        routing,
-      })
+  )
+  const planDraft = compiled.planDraft
+  const specDraft = compiled.specDraft
   const planID = Identifier.ascending("plan")
-  const now = Date.now()
-  const specContent = (planDraft.metadata as Record<string, any>)?.spec_analysis?.expanded_spec
-  const specSummary = typeof planDraft.metadata?.spec?.summary === "string" ? planDraft.metadata.spec.summary : planDraft.summary
   const specVersion = isReplan && previousPlan ? previousPlan.version + 1 : 1
-  const specItems =
-    planDraft.metadata?.spec &&
-      typeof planDraft.metadata.spec === "object" &&
-      !Array.isArray(planDraft.metadata.spec) &&
-      Array.isArray((planDraft.metadata.spec as Record<string, unknown>).spec_items)
-      ? (planDraft.metadata.spec as Record<string, unknown>).spec_items as unknown[]
-      : []
-  const specMeta = typeof specContent === "string"
-    ? writeSpec({
-        taskID: task.id,
-        title: task.title,
-        content: specContent,
-        summary: specSummary,
-        source:
-          planDraft.metadata?.spec?.source && typeof planDraft.metadata.spec.source === "object"
-            ? planDraft.metadata.spec.source as Record<string, unknown>
-            : undefined,
-        createdAt: now,
-      })
-    : undefined
-  // Create a DB spec snapshot so the evaluator's spec_check can find it
-  const specSnapshotID = typeof specContent === "string" && specContent.trim()
-    ? Identifier.ascending("spec")
-    : undefined
+  const specSnapshotID = Identifier.ascending("spec")
   const taskMetadata = {
-    ...(task.metadata ?? {}),
-    ...(planDraft.metadata?.stage_sources ? { stage_sources: planDraft.metadata.stage_sources } : {}),
-    ...(specMeta ? { spec: specMeta } : {}),
+    ...compiled.taskMetadata,
     planner_clarification: false,
     clarified_request: clarifiedRequest,
   }
@@ -1217,17 +1308,9 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       ? run.metadata.previous_run_id
       : run.id
   const planMetadata = {
-    ...(isReplan ? { previous_run_id: previousRunID } : task.metadata ?? {}),
-    ...planDraft.metadata,
+    ...compiled.planMetadata,
+    ...(isReplan ? { previous_run_id: previousRunID } : {}),
     clarified_request: clarifiedRequest,
-    ...(specMeta
-      ? {
-          spec: {
-            ...specMeta,
-            source: specMeta.source ?? planDraft.metadata?.spec?.source,
-          },
-        }
-      : {}),
   }
   Database.transaction((db) => {
     db.update(OrchestratorInteractionRequestTable)
@@ -1254,32 +1337,49 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
         .where(eq(OrchestratorPlanVersionTable.id, previousPlan.id))
         .run()
     }
-    // Persist spec snapshot in DB so spec_check evaluator can find it
-    if (specSnapshotID && typeof specContent === "string") {
-      db.insert(OrchestratorSpecSnapshotTable)
-        .values({
-          id: specSnapshotID,
-          task_id: task.id,
-          version: specVersion,
-          status: "ready",
-          summary: specSummary,
-          content: specContent,
-          scope: "",
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      insertSpecItems(db, {
-        taskID: task.id,
-        specSnapshotID,
-        specItems,
-        now,
+    db.insert(OrchestratorSpecSnapshotTable)
+      .values({
+        id: specSnapshotID,
+        task_id: task.id,
+        version: specVersion,
+        status: "ready",
+        summary: specDraft.summary,
+        content: specDraft.content,
+        scope:
+          typeof (specDraft as { scope?: unknown }).scope === "string"
+            ? (specDraft as { scope?: string }).scope ?? ""
+            : "",
+        out_of_scope:
+          typeof (specDraft as { out_of_scope?: unknown }).out_of_scope === "string"
+            ? (specDraft as { out_of_scope?: string }).out_of_scope
+            : undefined,
+        evidence: specDraft.evidence_sources.length > 0 ? specDraft.evidence_sources : undefined,
+        metadata: {
+          assumptions: specDraft.assumptions,
+          risks: specDraft.risks,
+          unresolved_questions: specDraft.unresolved_questions,
+        },
+        time_created: now,
+        time_updated: now,
       })
-    }
+      .run()
+    insertSpecItems(db, {
+      taskID: task.id,
+      specSnapshotID,
+      specItems: specDraft.spec_items ?? [],
+      now,
+    })
+    const goals = insertGoalRows(db, {
+      taskID: task.id,
+      specSnapshotID,
+      goals: specDraft.goals ?? [],
+      now,
+    })
     db.insert(OrchestratorPlanVersionTable)
       .values({
         id: planID,
         task_id: task.id,
+        spec_snapshot_id: specSnapshotID,
         version: isReplan && previousPlan ? previousPlan.version + 1 : 1,
         status: "active",
         summary: planDraft.summary,
@@ -1292,6 +1392,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
     insertPlanItems(db, {
       taskID: task.id,
       planID,
+      goals,
       planDraft,
       now,
       milestones: [],
@@ -1300,7 +1401,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       .set({
         plan_version_id: planID,
         status: "queued",
-        phase: isReplan ? "replan" : "execute",
+        phase: isReplan ? "replan" : "dispatch",
         blocking_reason: null,
         metadata: {
           ...(run.metadata ?? {}),
@@ -1318,7 +1419,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       .set({
         active_plan_version_id: planID,
         active_run_id: run.id,
-        active_spec_version_id: specSnapshotID ?? task.active_spec_version_id,
+        active_spec_version_id: specSnapshotID,
         status: "queued",
         blocking_reason: null,
         error: null,
@@ -1373,6 +1474,38 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
         summary: isReplan ? "Clarification resolved; replanned task queued" : "Clarification resolved; task queued",
       }),
     )
+  })
+  writePrdSnapshot({
+    task,
+    plan: {
+      id: planID,
+      version: isReplan && previousPlan ? previousPlan.version + 1 : 1,
+      summary: planDraft.summary,
+      metadata: planMetadata,
+    },
+    createdAt: now,
+  })
+  writePlanSnapshot({
+    task,
+    plan: {
+      id: planID,
+      version: isReplan && previousPlan ? previousPlan.version + 1 : 1,
+      summary: planDraft.summary,
+      prompt: planDraft.prompt,
+      metadata: planMetadata,
+    },
+    createdAt: now,
+  })
+  writeGoalSnapshot({
+    task,
+    plan: {
+      id: planID,
+      version: isReplan && previousPlan ? previousPlan.version + 1 : 1,
+      summary: planDraft.summary,
+    },
+    goals: listGoalsBySpec(specSnapshotID),
+    milestones: listMilestonesByPlan(planID),
+    createdAt: now,
   })
   await OrchestratorRuntime.dispatch(run.id, hooks())
 }

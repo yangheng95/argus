@@ -58,8 +58,17 @@ function schemas<const T extends readonly Capability[]>(items: T) {
 
 export const PanelCapabilityRegistry = list(
   item({
+    action: "view_spec",
+    description: "Inspect the active task spec and acceptance contract.",
+    kind: "query",
+    surfaces: all,
+    params: {
+      taskID: z.string(),
+    },
+  }),
+  item({
     action: "view_plan",
-    description: "Inspect a task plan and goal list.",
+    description: "Inspect the active execution plan, milestones, and plan nodes.",
     kind: "query",
     surfaces: all,
     params: {
@@ -68,7 +77,7 @@ export const PanelCapabilityRegistry = list(
   }),
   item({
     action: "view_board",
-    description: "Inspect a task board or list recent tasks when taskID is omitted.",
+    description: "Inspect the task overview panel or list recent tasks when taskID is omitted.",
     kind: "query",
     surfaces: all,
     params: {
@@ -163,7 +172,7 @@ export const PanelCapabilityRegistry = list(
   }),
   item({
     action: "update_checks",
-    description: "Update the selected verification checks for a task, or replace the full evaluation config.",
+    description: "Update the selected verification checks for a task, or replace the full evaluation config. spec_check remains required.",
     kind: "mutation",
     surfaces: all,
     params: {
@@ -252,26 +261,6 @@ export const PanelCapabilityRegistry = list(
     surfaces: all,
     params: {
       sessionID: z.string(),
-    },
-  }),
-  item({
-    action: "update_goal",
-    description: "Update a goal description and criteria.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      goalID: z.string(),
-      description: z.string(),
-      criteria: z.string(),
-    },
-  }),
-  item({
-    action: "delete_goal",
-    description: "Delete a goal.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      goalID: z.string(),
     },
   }),
 )

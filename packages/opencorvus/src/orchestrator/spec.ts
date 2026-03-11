@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "fs"
 import path from "path"
 import { Instance } from "@/project/instance"
+import { docStamp } from "./docs"
 
 export function writeSpec(input: {
   taskID: string
@@ -16,7 +17,7 @@ export function writeSpec(input: {
     const createdAt = input.createdAt ?? Date.now()
     const specsDir = path.join(Instance.worktree, ".opencorvus", "specs")
     const slug = input.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || "task"
-    const file = path.join(specsDir, `${createdAt}-${input.taskID}-${slug}.md`)
+    const file = path.join(specsDir, `${docStamp(createdAt)}-${input.taskID}-${slug}.md`)
     mkdirSync(specsDir, { recursive: true })
     writeFileSync(file, content, "utf-8")
     return {

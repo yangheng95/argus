@@ -3123,6 +3123,9 @@
                   "title": {
                     "type": "string"
                   },
+                  "directory": {
+                    "type": "string"
+                  },
                   "permission": {
                     "$ref": "#/components/schemas/PermissionRuleset"
                   }
@@ -8649,24 +8652,6 @@
                           }
                         }
                       },
-                      "judge": {
-                        "type": "object",
-                        "properties": {
-                          "enabled": {
-                            "type": "boolean"
-                          },
-                          "prompt": {
-                            "type": "string"
-                          },
-                          "mode": {
-                            "type": "string",
-                            "enum": [
-                              "soft",
-                              "strict"
-                            ]
-                          }
-                        }
-                      },
                       "spec_check": {
                         "type": "object",
                         "properties": {
@@ -8749,6 +8734,13 @@
                             "advisory"
                           ]
                         },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "spec",
+                            "system"
+                          ]
+                        },
                         "metadata": {
                           "type": "object",
                           "properties": {
@@ -8758,7 +8750,8 @@
                                 "type": "string"
                               }
                             }
-                          }
+                          },
+                          "additionalProperties": {}
                         }
                       },
                       "required": [
@@ -8796,6 +8789,13 @@
                                   "advisory"
                                 ]
                               },
+                              "source": {
+                                "type": "string",
+                                "enum": [
+                                  "spec",
+                                  "system"
+                                ]
+                              },
                               "metadata": {
                                 "type": "object",
                                 "properties": {
@@ -8805,7 +8805,8 @@
                                       "type": "string"
                                     }
                                   }
-                                }
+                                },
+                                "additionalProperties": {}
                               }
                             },
                             "required": [
@@ -8978,11 +8979,25 @@
                               "projectID": {
                                 "type": "string"
                               },
+                              "directory": {
+                                "type": "string"
+                              },
                               "sessionID": {
                                 "anyOf": [
                                   {
                                     "type": "string",
                                     "pattern": "^ses.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "activeSpecVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^spc.*"
                                   },
                                   {
                                     "type": "null"
@@ -9116,6 +9131,31 @@
                               "time"
                             ]
                           },
+                          "project": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "worktree": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "worktree"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
                           "plan": {
                             "type": "object",
                             "properties": {
@@ -9126,6 +9166,10 @@
                               "taskID": {
                                 "type": "string",
                                 "pattern": "^tsk.*"
+                              },
+                              "specSnapshotID": {
+                                "type": "string",
+                                "pattern": "^spc.*"
                               },
                               "version": {
                                 "type": "integer",
@@ -9171,6 +9215,7 @@
                             "required": [
                               "id",
                               "taskID",
+                              "specSnapshotID",
                               "version",
                               "status",
                               "summary",
@@ -9235,7 +9280,7 @@
                                 "type": "string",
                                 "enum": [
                                   "plan",
-                                  "execute",
+                                  "dispatch",
                                   "evaluate",
                                   "deliver",
                                   "replan"
@@ -9318,6 +9363,10 @@
                               "runID": {
                                 "type": "string",
                                 "pattern": "^run.*"
+                              },
+                              "goalRunID": {
+                                "type": "string",
+                                "pattern": "^grn.*"
                               },
                               "deliveryID": {
                                 "anyOf": [
@@ -9447,6 +9496,640 @@
         ]
       }
     },
+    "/global/tasks": {
+      "get": {
+        "operationId": "task.global.list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "summary": "List tasks across projects",
+        "responses": {
+          "200": {
+            "description": "Global task board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total_tasks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "open_tasks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "running_tasks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "blocked_tasks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "completed_tasks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "failed_tasks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "cancelled_tasks": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "median_completion_ms": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "total_tasks",
+                        "open_tasks",
+                        "running_tasks",
+                        "blocked_tasks",
+                        "completed_tasks",
+                        "failed_tasks",
+                        "cancelled_tasks"
+                      ]
+                    },
+                    "tasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "task": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "projectID": {
+                                "type": "string"
+                              },
+                              "directory": {
+                                "type": "string"
+                              },
+                              "sessionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "activeSpecVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^spc.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "activePlanVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^pln.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "activeRunID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^run.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "requestID": {
+                                "type": "string"
+                              },
+                              "source": {
+                                "type": "string"
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "request": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "planning",
+                                  "running",
+                                  "blocked",
+                                  "evaluating",
+                                  "delivering",
+                                  "completed",
+                                  "failed",
+                                  "cancelled"
+                                ]
+                              },
+                              "priority": {
+                                "type": "string",
+                                "enum": [
+                                  "high",
+                                  "normal",
+                                  "low"
+                                ]
+                              },
+                              "blockingReason": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "budget": {
+                                "type": "object",
+                                "properties": {
+                                  "maxRuns": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "maxReplans": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "maxEvaluations": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  },
+                                  "maxWallTimeMs": {
+                                    "type": "integer",
+                                    "exclusiveMinimum": 0,
+                                    "maximum": 9007199254740991
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "started": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "projectID",
+                              "source",
+                              "title",
+                              "request",
+                              "status",
+                              "priority",
+                              "time"
+                            ]
+                          },
+                          "project": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "worktree": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "worktree"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "plan": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^pln.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "specSnapshotID": {
+                                "type": "string",
+                                "pattern": "^spc.*"
+                              },
+                              "version": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "superseded"
+                                ]
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "prompt": {
+                                "type": "string"
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "specSnapshotID",
+                              "version",
+                              "status",
+                              "summary",
+                              "prompt",
+                              "time"
+                            ]
+                          },
+                          "run": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "planVersionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^pln.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "sessionID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "executor": {
+                                "type": "string",
+                                "enum": [
+                                  "opencode",
+                                  "codex",
+                                  "claude-code"
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "queued",
+                                  "accepted",
+                                  "running",
+                                  "blocked",
+                                  "completed",
+                                  "failed",
+                                  "aborted"
+                                ]
+                              },
+                              "phase": {
+                                "type": "string",
+                                "enum": [
+                                  "plan",
+                                  "dispatch",
+                                  "evaluate",
+                                  "deliver",
+                                  "replan"
+                                ]
+                              },
+                              "blockingReason": {
+                                "type": "string"
+                              },
+                              "error": {
+                                "type": "string"
+                              },
+                              "retryCount": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "executorRef": {
+                                "type": "object",
+                                "properties": {
+                                  "sessionID": {
+                                    "type": "string",
+                                    "pattern": "^ses.*"
+                                  },
+                                  "queueTaskID": {
+                                    "type": "string",
+                                    "pattern": "^tsk.*"
+                                  }
+                                }
+                              },
+                              "metadata": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "started": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "executor",
+                              "status",
+                              "phase",
+                              "retryCount",
+                              "time"
+                            ]
+                          },
+                          "evaluation": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "pattern": "^evl.*"
+                              },
+                              "taskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              },
+                              "runID": {
+                                "type": "string",
+                                "pattern": "^run.*"
+                              },
+                              "goalRunID": {
+                                "type": "string",
+                                "pattern": "^grn.*"
+                              },
+                              "deliveryID": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "pattern": "^dlv.*"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "pending",
+                                  "passed",
+                                  "failed",
+                                  "inconclusive"
+                                ]
+                              },
+                              "verdict": {
+                                "type": "string",
+                                "enum": [
+                                  "accepted",
+                                  "rejected",
+                                  "inconclusive"
+                                ]
+                              },
+                              "summary": {
+                                "type": "string"
+                              },
+                              "checks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "family": {
+                                      "type": "string"
+                                    },
+                                    "status": {
+                                      "type": "string",
+                                      "enum": [
+                                        "passed",
+                                        "failed",
+                                        "skipped"
+                                      ]
+                                    },
+                                    "evidence": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "name",
+                                    "status"
+                                  ]
+                                }
+                              },
+                              "time": {
+                                "type": "object",
+                                "properties": {
+                                  "created": {
+                                    "type": "number"
+                                  },
+                                  "updated": {
+                                    "type": "number"
+                                  },
+                                  "completed": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "created",
+                                  "updated"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "taskID",
+                              "runID",
+                              "status",
+                              "verdict",
+                              "summary",
+                              "checks",
+                              "time"
+                            ]
+                          },
+                          "pending_interactions": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "updated_at": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "task",
+                          "pending_interactions",
+                          "updated_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "summary",
+                    "tasks"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.task.global.list({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/task/{taskID}": {
       "get": {
         "operationId": "task.get",
@@ -9484,11 +10167,25 @@
                     "projectID": {
                       "type": "string"
                     },
+                    "directory": {
+                      "type": "string"
+                    },
                     "sessionID": {
                       "anyOf": [
                         {
                           "type": "string",
                           "pattern": "^ses.*"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "activeSpecVersionID": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^spc.*"
                         },
                         {
                           "type": "null"
@@ -9684,11 +10381,25 @@
                         "projectID": {
                           "type": "string"
                         },
+                        "directory": {
+                          "type": "string"
+                        },
                         "sessionID": {
                           "anyOf": [
                             {
                               "type": "string",
                               "pattern": "^ses.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activeSpecVersionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^spc.*"
                             },
                             {
                               "type": "null"
@@ -9822,6 +10533,83 @@
                         "time"
                       ]
                     },
+                    "spec": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^spc.*"
+                        },
+                        "taskID": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready",
+                            "blocked",
+                            "completed",
+                            "superseded"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "outOfScope": {
+                          "type": "string"
+                        },
+                        "evidence": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "taskID",
+                        "version",
+                        "status",
+                        "summary",
+                        "content",
+                        "scope",
+                        "time"
+                      ]
+                    },
                     "plan": {
                       "type": "object",
                       "properties": {
@@ -9832,6 +10620,10 @@
                         "taskID": {
                           "type": "string",
                           "pattern": "^tsk.*"
+                        },
+                        "specSnapshotID": {
+                          "type": "string",
+                          "pattern": "^spc.*"
                         },
                         "version": {
                           "type": "integer",
@@ -9877,6 +10669,7 @@
                       "required": [
                         "id",
                         "taskID",
+                        "specSnapshotID",
                         "version",
                         "status",
                         "summary",
@@ -9897,19 +10690,9 @@
                             "type": "string",
                             "pattern": "^tsk.*"
                           },
-                          "planVersionID": {
+                          "specSnapshotID": {
                             "type": "string",
-                            "pattern": "^pln.*"
-                          },
-                          "milestoneID": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "pattern": "^spc.*"
                           },
                           "description": {
                             "type": "string"
@@ -9922,6 +10705,14 @@
                             "enum": [
                               "blocking",
                               "advisory"
+                            ]
+                          },
+                          "source": {
+                            "default": "spec",
+                            "type": "string",
+                            "enum": [
+                              "spec",
+                              "system"
                             ]
                           },
                           "status": {
@@ -9946,7 +10737,90 @@
                                   "type": "string"
                                 }
                               }
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "specSnapshotID",
+                          "description",
+                          "criteria",
+                          "priority",
+                          "status",
+                          "orderIndex",
+                          "time"
+                        ]
+                      }
+                    },
+                    "planNodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^pnd.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "planVersionID": {
+                            "type": "string",
+                            "pattern": "^pln.*"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "goal",
+                              "milestone",
+                              "step"
+                            ]
+                          },
+                          "goalID": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "brief": {
+                            "type": "string"
+                          },
+                          "dependsOnIDs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
                             }
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
                           },
                           "time": {
                             "type": "object",
@@ -9968,11 +10842,121 @@
                           "id",
                           "taskID",
                           "planVersionID",
-                          "description",
-                          "criteria",
-                          "priority",
-                          "status",
+                          "kind",
+                          "title",
+                          "brief",
                           "orderIndex",
+                          "time"
+                        ]
+                      }
+                    },
+                    "goalRuns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^grn.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "goalID": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "planNodeID": {
+                            "type": "string",
+                            "pattern": "^pnd.*"
+                          },
+                          "coordinatorRunID": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "sessionID": {
+                            "type": "string",
+                            "pattern": "^ses.*"
+                          },
+                          "executor": {
+                            "type": "string",
+                            "enum": [
+                              "opencode",
+                              "codex",
+                              "claude-code"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "accepted",
+                              "running",
+                              "blocked",
+                              "completed",
+                              "failed",
+                              "aborted",
+                              "superseded"
+                            ]
+                          },
+                          "retryCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "blockingReason": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "workspaceDir": {
+                            "type": "string"
+                          },
+                          "baseRef": {
+                            "type": "string"
+                          },
+                          "mergeRef": {
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              },
+                              "started": {
+                                "type": "number"
+                              },
+                              "completed": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "goalID",
+                          "coordinatorRunID",
+                          "executor",
+                          "status",
+                          "retryCount",
                           "time"
                         ]
                       }
@@ -10105,7 +11089,7 @@
                           "type": "string",
                           "enum": [
                             "plan",
-                            "execute",
+                            "dispatch",
                             "evaluate",
                             "deliver",
                             "replan"
@@ -10288,6 +11272,10 @@
                           "type": "string",
                           "pattern": "^run.*"
                         },
+                        "goalRunID": {
+                          "type": "string",
+                          "pattern": "^grn.*"
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -10397,6 +11385,10 @@
                         "runID": {
                           "type": "string",
                           "pattern": "^run.*"
+                        },
+                        "goalRunID": {
+                          "type": "string",
+                          "pattern": "^grn.*"
                         },
                         "deliveryID": {
                           "anyOf": [
@@ -10554,6 +11546,8 @@
                   "required": [
                     "task",
                     "goals",
+                    "planNodes",
+                    "goalRuns",
                     "pendingInteractions",
                     "snapshots"
                   ]
@@ -10816,11 +11810,25 @@
                         "projectID": {
                           "type": "string"
                         },
+                        "directory": {
+                          "type": "string"
+                        },
                         "sessionID": {
                           "anyOf": [
                             {
                               "type": "string",
                               "pattern": "^ses.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activeSpecVersionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^spc.*"
                             },
                             {
                               "type": "null"
@@ -10957,13 +11965,47 @@
                     "spec": {
                       "type": "object",
                       "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^spc.*"
+                        },
+                        "taskID": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready",
+                            "blocked",
+                            "completed",
+                            "superseded"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
                         "content": {
                           "type": "string"
                         },
-                        "file": {
+                        "scope": {
                           "type": "string"
                         },
-                        "source": {
+                        "outOfScope": {
+                          "type": "string"
+                        },
+                        "evidence": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "metadata": {
                           "type": "object",
                           "propertyNames": {
                             "type": "string"
@@ -10975,17 +12017,630 @@
                           "properties": {
                             "created": {
                               "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
                             }
                           },
                           "required": [
-                            "created"
+                            "created",
+                            "updated"
                           ]
                         }
                       },
                       "required": [
+                        "id",
+                        "taskID",
+                        "version",
+                        "status",
+                        "summary",
                         "content",
+                        "scope",
                         "time"
                       ]
+                    },
+                    "checks": {
+                      "type": "object",
+                      "properties": {
+                        "build": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          ]
+                        },
+                        "test": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          ]
+                        },
+                        "lint": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          ]
+                        },
+                        "verify_cmd": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            {
+                              "type": "boolean",
+                              "const": false
+                            }
+                          ]
+                        },
+                        "named": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                              "label": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "family": {
+                                "type": "string",
+                                "enum": [
+                                  "build",
+                                  "test",
+                                  "lint",
+                                  "verify_cmd"
+                                ]
+                              },
+                              "commands": {
+                                "minItems": 1,
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "enabled": {
+                                "type": "boolean"
+                              },
+                              "cwd": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": [
+                              "commands"
+                            ]
+                          }
+                        },
+                        "startup": {
+                          "type": "object",
+                          "properties": {
+                            "command": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "ready_url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "ready_text": {
+                              "type": "string"
+                            },
+                            "timeout_ms": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "warmup_ms": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "require_exit_zero": {
+                              "type": "boolean"
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "command"
+                          ]
+                        },
+                        "artifact": {
+                          "type": "object",
+                          "properties": {
+                            "require_changed_files": {
+                              "type": "boolean"
+                            },
+                            "min_changed_files": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "require_diff": {
+                              "type": "boolean"
+                            },
+                            "require_summary": {
+                              "type": "boolean"
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          }
+                        },
+                        "visual": {
+                          "type": "object",
+                          "properties": {
+                            "target": {
+                              "type": "string",
+                              "const": "web"
+                            },
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "require_text": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "require_title": {
+                              "type": "string"
+                            },
+                            "timeout_ms": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "target",
+                            "url"
+                          ]
+                        },
+                        "puppeteer": {
+                          "type": "object",
+                          "properties": {
+                            "target": {
+                              "type": "string",
+                              "const": "web"
+                            },
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "browser": {
+                              "type": "string",
+                              "enum": [
+                                "chrome",
+                                "edge",
+                                "chromium"
+                              ]
+                            },
+                            "executable_path": {
+                              "type": "string"
+                            },
+                            "wait_for_selector": {
+                              "type": "string"
+                            },
+                            "wait_for_text": {
+                              "type": "string"
+                            },
+                            "require_text": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "require_title": {
+                              "type": "string"
+                            },
+                            "full_page": {
+                              "type": "boolean"
+                            },
+                            "viewport": {
+                              "type": "object",
+                              "properties": {
+                                "width": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                },
+                                "height": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 9007199254740991
+                                }
+                              }
+                            },
+                            "timeout_ms": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "target",
+                            "url"
+                          ]
+                        },
+                        "ui_review": {
+                          "type": "object",
+                          "properties": {
+                            "target": {
+                              "type": "string",
+                              "const": "web"
+                            },
+                            "url": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "prompt": {
+                              "type": "string"
+                            },
+                            "focus": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "layout",
+                                  "hierarchy",
+                                  "clarity",
+                                  "navigation",
+                                  "feedback",
+                                  "accessibility"
+                                ]
+                              }
+                            },
+                            "timeout_ms": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "target"
+                          ]
+                        },
+                        "code_quality": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "prompt": {
+                              "type": "string"
+                            },
+                            "max_diffs": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          }
+                        },
+                        "code_review": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "prompt": {
+                              "type": "string"
+                            },
+                            "max_diffs": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          }
+                        },
+                        "dead_code_review": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "prompt": {
+                              "type": "string"
+                            },
+                            "max_diffs": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          }
+                        },
+                        "spec_check": {
+                          "type": "object",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean"
+                            },
+                            "prompt": {
+                              "type": "string"
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": [
+                                "soft",
+                                "strict"
+                              ]
+                            }
+                          }
+                        },
+                        "custom": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          }
+                        },
+                        "timeout_ms": {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      }
+                    },
+                    "goals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "specSnapshotID": {
+                            "type": "string",
+                            "pattern": "^spc.*"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "criteria": {
+                            "type": "string"
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "blocking",
+                              "advisory"
+                            ]
+                          },
+                          "source": {
+                            "default": "spec",
+                            "type": "string",
+                            "enum": [
+                              "spec",
+                              "system"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "passed",
+                              "failed"
+                            ]
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "properties": {
+                              "check_selector": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "specSnapshotID",
+                          "description",
+                          "criteria",
+                          "priority",
+                          "status",
+                          "orderIndex",
+                          "time"
+                        ]
+                      }
+                    },
+                    "specItems": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^spi.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "specSnapshotID": {
+                            "type": "string",
+                            "pattern": "^spc.*"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "done",
+                              "failed"
+                            ]
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "blocking",
+                              "advisory"
+                            ]
+                          },
+                          "checkSelector": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "evidence": {
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "specSnapshotID",
+                          "title",
+                          "description",
+                          "status",
+                          "priority",
+                          "time"
+                        ]
+                      }
                     },
                     "plan": {
                       "type": "object",
@@ -10997,6 +12652,10 @@
                         "taskID": {
                           "type": "string",
                           "pattern": "^tsk.*"
+                        },
+                        "specSnapshotID": {
+                          "type": "string",
+                          "pattern": "^spc.*"
                         },
                         "version": {
                           "type": "integer",
@@ -11042,12 +12701,276 @@
                       "required": [
                         "id",
                         "taskID",
+                        "specSnapshotID",
                         "version",
                         "status",
                         "summary",
                         "prompt",
                         "time"
                       ]
+                    },
+                    "planNodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^pnd.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "planVersionID": {
+                            "type": "string",
+                            "pattern": "^pln.*"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "goal",
+                              "milestone",
+                              "step"
+                            ]
+                          },
+                          "goalID": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "brief": {
+                            "type": "string"
+                          },
+                          "dependsOnIDs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "planVersionID",
+                          "kind",
+                          "title",
+                          "brief",
+                          "orderIndex",
+                          "time"
+                        ]
+                      }
+                    },
+                    "goalRuns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^grn.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "goalID": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "planNodeID": {
+                            "type": "string",
+                            "pattern": "^pnd.*"
+                          },
+                          "coordinatorRunID": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "sessionID": {
+                            "type": "string",
+                            "pattern": "^ses.*"
+                          },
+                          "executor": {
+                            "type": "string",
+                            "enum": [
+                              "opencode",
+                              "codex",
+                              "claude-code"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "accepted",
+                              "running",
+                              "blocked",
+                              "completed",
+                              "failed",
+                              "aborted",
+                              "superseded"
+                            ]
+                          },
+                          "retryCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "blockingReason": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "workspaceDir": {
+                            "type": "string"
+                          },
+                          "baseRef": {
+                            "type": "string"
+                          },
+                          "mergeRef": {
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              },
+                              "started": {
+                                "type": "number"
+                              },
+                              "completed": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "goalID",
+                          "coordinatorRunID",
+                          "executor",
+                          "status",
+                          "retryCount",
+                          "time"
+                        ]
+                      }
+                    },
+                    "milestones": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "planVersionID": {
+                            "type": "string",
+                            "pattern": "^pln.*"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "passed",
+                              "failed"
+                            ]
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "planVersionID",
+                          "title",
+                          "description",
+                          "status",
+                          "orderIndex",
+                          "time"
+                        ]
+                      }
                     },
                     "run": {
                       "type": "object",
@@ -11106,7 +13029,7 @@
                           "type": "string",
                           "enum": [
                             "plan",
-                            "execute",
+                            "dispatch",
                             "evaluate",
                             "deliver",
                             "replan"
@@ -11189,6 +13112,10 @@
                         "runID": {
                           "type": "string",
                           "pattern": "^run.*"
+                        },
+                        "goalRunID": {
+                          "type": "string",
+                          "pattern": "^grn.*"
                         },
                         "status": {
                           "type": "string",
@@ -11300,6 +13227,10 @@
                           "type": "string",
                           "pattern": "^run.*"
                         },
+                        "goalRunID": {
+                          "type": "string",
+                          "pattern": "^grn.*"
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -11410,6 +13341,10 @@
                           "type": "string",
                           "pattern": "^run.*"
                         },
+                        "goalRunID": {
+                          "type": "string",
+                          "pattern": "^grn.*"
+                        },
                         "status": {
                           "type": "string",
                           "enum": [
@@ -11519,6 +13454,10 @@
                         "runID": {
                           "type": "string",
                           "pattern": "^run.*"
+                        },
+                        "goalRunID": {
+                          "type": "string",
+                          "pattern": "^grn.*"
                         },
                         "deliveryID": {
                           "anyOf": [
@@ -11777,6 +13716,10 @@
                           "runID": {
                             "type": "string",
                             "pattern": "^run.*"
+                          },
+                          "goalRunID": {
+                            "type": "string",
+                            "pattern": "^grn.*"
                           },
                           "deliveryID": {
                             "anyOf": [
@@ -12056,11 +13999,19 @@
                                   "type": "string",
                                   "enum": [
                                     "goal",
+                                    "goal_run",
                                     "interaction",
                                     "preference",
                                     "note",
                                     "run",
-                                    "plan_hint"
+                                    "plan_hint",
+                                    "spec",
+                                    "plan",
+                                    "milestone",
+                                    "spec_item",
+                                    "check",
+                                    "delivery",
+                                    "evaluation"
                                   ]
                                 },
                                 "title": {
@@ -12101,6 +14052,11 @@
                   },
                   "required": [
                     "task",
+                    "goals",
+                    "specItems",
+                    "planNodes",
+                    "goalRuns",
+                    "milestones",
                     "interactions",
                     "channels",
                     "artifacts",
@@ -12218,7 +14174,7 @@
                         "type": "string",
                         "enum": [
                           "plan",
-                          "execute",
+                          "dispatch",
                           "evaluate",
                           "deliver",
                           "replan"
@@ -12694,11 +14650,25 @@
                     "projectID": {
                       "type": "string"
                     },
+                    "directory": {
+                      "type": "string"
+                    },
                     "sessionID": {
                       "anyOf": [
                         {
                           "type": "string",
                           "pattern": "^ses.*"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "activeSpecVersionID": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "pattern": "^spc.*"
                         },
                         {
                           "type": "null"
@@ -13253,24 +15223,6 @@
                           }
                         }
                       },
-                      "judge": {
-                        "type": "object",
-                        "properties": {
-                          "enabled": {
-                            "type": "boolean"
-                          },
-                          "prompt": {
-                            "type": "string"
-                          },
-                          "mode": {
-                            "type": "string",
-                            "enum": [
-                              "soft",
-                              "strict"
-                            ]
-                          }
-                        }
-                      },
                       "spec_check": {
                         "type": "object",
                         "properties": {
@@ -13458,7 +15410,7 @@
                       "type": "string",
                       "enum": [
                         "plan",
-                        "execute",
+                        "dispatch",
                         "evaluate",
                         "deliver",
                         "replan"
@@ -13633,7 +15585,7 @@
                       "type": "string",
                       "enum": [
                         "plan",
-                        "execute",
+                        "dispatch",
                         "evaluate",
                         "deliver",
                         "replan"
@@ -13808,7 +15760,7 @@
                       "type": "string",
                       "enum": [
                         "plan",
-                        "execute",
+                        "dispatch",
                         "evaluate",
                         "deliver",
                         "replan"
@@ -13939,6 +15891,10 @@
                     "runID": {
                       "type": "string",
                       "pattern": "^run.*"
+                    },
+                    "goalRunID": {
+                      "type": "string",
+                      "pattern": "^grn.*"
                     },
                     "provider": {
                       "type": "string",
@@ -14220,6 +16176,10 @@
                       "runID": {
                         "type": "string",
                         "pattern": "^run.*"
+                      },
+                      "goalRunID": {
+                        "type": "string",
+                        "pattern": "^grn.*"
                       },
                       "sequence": {
                         "type": "integer",
@@ -14539,6 +16499,10 @@
                       "type": "string",
                       "pattern": "^run.*"
                     },
+                    "goalRunID": {
+                      "type": "string",
+                      "pattern": "^grn.*"
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -14700,6 +16664,10 @@
                         "type": "string",
                         "pattern": "^run.*"
                       },
+                      "goalRunID": {
+                        "type": "string",
+                        "pattern": "^grn.*"
+                      },
                       "deliveryID": {
                         "anyOf": [
                           {
@@ -14827,6 +16795,10 @@
                       "runID": {
                         "type": "string",
                         "pattern": "^run.*"
+                      },
+                      "goalRunID": {
+                        "type": "string",
+                        "pattern": "^grn.*"
                       },
                       "deliveryID": {
                         "anyOf": [
@@ -15379,89 +17351,6 @@
         ]
       }
     },
-    "/goal/{goalID}": {
-      "patch": {
-        "operationId": "patchGoal:goalID",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "goalID",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "description": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "criteria": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                },
-                "required": [
-                  "description",
-                  "criteria"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {}
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.patchGoal:goalID({\n  ...\n})"
-          }
-        ]
-      },
-      "delete": {
-        "operationId": "deleteGoal:goalID",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "directory",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "goalID",
-            "schema": {
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {}
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.deleteGoal:goalID({\n  ...\n})"
-          }
-        ]
-      }
-    },
     "/export/task/{taskID}": {
       "get": {
         "operationId": "export.task",
@@ -15492,44 +17381,1401 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "task": {},
-                    "plan": {},
+                    "task": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "projectID": {
+                          "type": "string"
+                        },
+                        "directory": {
+                          "type": "string"
+                        },
+                        "sessionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^ses.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activeSpecVersionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^spc.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activePlanVersionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^pln.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "activeRunID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^run.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "requestID": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "request": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "planning",
+                            "running",
+                            "blocked",
+                            "evaluating",
+                            "delivering",
+                            "completed",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "priority": {
+                          "type": "string",
+                          "enum": [
+                            "high",
+                            "normal",
+                            "low"
+                          ]
+                        },
+                        "blockingReason": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "budget": {
+                          "type": "object",
+                          "properties": {
+                            "maxRuns": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "maxReplans": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "maxEvaluations": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "maxWallTimeMs": {
+                              "type": "integer",
+                              "exclusiveMinimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            },
+                            "started": {
+                              "type": "number"
+                            },
+                            "completed": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "projectID",
+                        "source",
+                        "title",
+                        "request",
+                        "status",
+                        "priority",
+                        "time"
+                      ]
+                    },
+                    "spec": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^spc.*"
+                        },
+                        "taskID": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "ready",
+                            "blocked",
+                            "completed",
+                            "superseded"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "type": "string"
+                        },
+                        "scope": {
+                          "type": "string"
+                        },
+                        "outOfScope": {
+                          "type": "string"
+                        },
+                        "evidence": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "taskID",
+                        "version",
+                        "status",
+                        "summary",
+                        "content",
+                        "scope",
+                        "time"
+                      ]
+                    },
+                    "plan": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^pln.*"
+                        },
+                        "taskID": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "specSnapshotID": {
+                          "type": "string",
+                          "pattern": "^spc.*"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "superseded"
+                          ]
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "prompt": {
+                          "type": "string"
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "taskID",
+                        "specSnapshotID",
+                        "version",
+                        "status",
+                        "summary",
+                        "prompt",
+                        "time"
+                      ]
+                    },
+                    "coordinatorRun": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^run.*"
+                        },
+                        "taskID": {
+                          "type": "string",
+                          "pattern": "^tsk.*"
+                        },
+                        "planVersionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^pln.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "sessionID": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^ses.*"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "executor": {
+                          "type": "string",
+                          "enum": [
+                            "opencode",
+                            "codex",
+                            "claude-code"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "accepted",
+                            "running",
+                            "blocked",
+                            "completed",
+                            "failed",
+                            "aborted"
+                          ]
+                        },
+                        "phase": {
+                          "type": "string",
+                          "enum": [
+                            "plan",
+                            "dispatch",
+                            "evaluate",
+                            "deliver",
+                            "replan"
+                          ]
+                        },
+                        "blockingReason": {
+                          "type": "string"
+                        },
+                        "error": {
+                          "type": "string"
+                        },
+                        "retryCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "executorRef": {
+                          "type": "object",
+                          "properties": {
+                            "sessionID": {
+                              "type": "string",
+                              "pattern": "^ses.*"
+                            },
+                            "queueTaskID": {
+                              "type": "string",
+                              "pattern": "^tsk.*"
+                            }
+                          }
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "time": {
+                          "type": "object",
+                          "properties": {
+                            "created": {
+                              "type": "number"
+                            },
+                            "updated": {
+                              "type": "number"
+                            },
+                            "started": {
+                              "type": "number"
+                            },
+                            "completed": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "created",
+                            "updated"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "taskID",
+                        "executor",
+                        "status",
+                        "phase",
+                        "retryCount",
+                        "time"
+                      ]
+                    },
                     "goals": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "specSnapshotID": {
+                            "type": "string",
+                            "pattern": "^spc.*"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "criteria": {
+                            "type": "string"
+                          },
+                          "priority": {
+                            "type": "string",
+                            "enum": [
+                              "blocking",
+                              "advisory"
+                            ]
+                          },
+                          "source": {
+                            "default": "spec",
+                            "type": "string",
+                            "enum": [
+                              "spec",
+                              "system"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "passed",
+                              "failed"
+                            ]
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "properties": {
+                              "check_selector": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "specSnapshotID",
+                          "description",
+                          "criteria",
+                          "priority",
+                          "status",
+                          "orderIndex",
+                          "time"
+                        ]
+                      }
+                    },
+                    "planNodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^pnd.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "planVersionID": {
+                            "type": "string",
+                            "pattern": "^pln.*"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "goal",
+                              "milestone",
+                              "step"
+                            ]
+                          },
+                          "goalID": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "brief": {
+                            "type": "string"
+                          },
+                          "dependsOnIDs": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "planVersionID",
+                          "kind",
+                          "title",
+                          "brief",
+                          "orderIndex",
+                          "time"
+                        ]
+                      }
+                    },
+                    "goalRuns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^grn.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "goalID": {
+                            "type": "string",
+                            "pattern": "^gol.*"
+                          },
+                          "planNodeID": {
+                            "type": "string",
+                            "pattern": "^pnd.*"
+                          },
+                          "coordinatorRunID": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "sessionID": {
+                            "type": "string",
+                            "pattern": "^ses.*"
+                          },
+                          "executor": {
+                            "type": "string",
+                            "enum": [
+                              "opencode",
+                              "codex",
+                              "claude-code"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "accepted",
+                              "running",
+                              "blocked",
+                              "completed",
+                              "failed",
+                              "aborted",
+                              "superseded"
+                            ]
+                          },
+                          "retryCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "blockingReason": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "workspaceDir": {
+                            "type": "string"
+                          },
+                          "baseRef": {
+                            "type": "string"
+                          },
+                          "mergeRef": {
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              },
+                              "started": {
+                                "type": "number"
+                              },
+                              "completed": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "goalID",
+                          "coordinatorRunID",
+                          "executor",
+                          "status",
+                          "retryCount",
+                          "time"
+                        ]
+                      }
                     },
                     "milestones": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "planVersionID": {
+                            "type": "string",
+                            "pattern": "^pln.*"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "passed",
+                              "failed"
+                            ]
+                          },
+                          "orderIndex": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "planVersionID",
+                          "title",
+                          "description",
+                          "status",
+                          "orderIndex",
+                          "time"
+                        ]
+                      }
                     },
                     "runs": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "planVersionID": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^pln.*"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "sessionID": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^ses.*"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "executor": {
+                            "type": "string",
+                            "enum": [
+                              "opencode",
+                              "codex",
+                              "claude-code"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "accepted",
+                              "running",
+                              "blocked",
+                              "completed",
+                              "failed",
+                              "aborted"
+                            ]
+                          },
+                          "phase": {
+                            "type": "string",
+                            "enum": [
+                              "plan",
+                              "dispatch",
+                              "evaluate",
+                              "deliver",
+                              "replan"
+                            ]
+                          },
+                          "blockingReason": {
+                            "type": "string"
+                          },
+                          "error": {
+                            "type": "string"
+                          },
+                          "retryCount": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "executorRef": {
+                            "type": "object",
+                            "properties": {
+                              "sessionID": {
+                                "type": "string",
+                                "pattern": "^ses.*"
+                              },
+                              "queueTaskID": {
+                                "type": "string",
+                                "pattern": "^tsk.*"
+                              }
+                            }
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              },
+                              "started": {
+                                "type": "number"
+                              },
+                              "completed": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "executor",
+                          "status",
+                          "phase",
+                          "retryCount",
+                          "time"
+                        ]
+                      }
                     },
                     "interactions": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^int.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "runID": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "sessionID": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^ses.*"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "externalID": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "permission",
+                              "question"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "answered",
+                              "rejected",
+                              "expired"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "response": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              },
+                              "resolved": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "runID",
+                          "externalID",
+                          "type",
+                          "status",
+                          "title",
+                          "body",
+                          "time"
+                        ]
+                      }
                     },
                     "snapshots": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^prg.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "created",
+                              "running",
+                              "blocked",
+                              "completed",
+                              "failed",
+                              "cancelled"
+                            ]
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "status",
+                          "summary",
+                          "time"
+                        ]
+                      }
                     },
                     "deliveries": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^dlv.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "runID": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "goalRunID": {
+                            "type": "string",
+                            "pattern": "^grn.*"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "candidate",
+                              "publishing",
+                              "delivered",
+                              "failed"
+                            ]
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "result": {
+                            "type": "object",
+                            "properties": {
+                              "summary": {
+                                "type": "string"
+                              },
+                              "changedFiles": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "diffs": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/components/schemas/FileDiff"
+                                }
+                              },
+                              "artifacts": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "kind": {
+                                      "type": "string"
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "payload": {
+                                      "type": "object",
+                                      "propertyNames": {
+                                        "type": "string"
+                                      },
+                                      "additionalProperties": {}
+                                    }
+                                  },
+                                  "required": [
+                                    "kind",
+                                    "label"
+                                  ]
+                                }
+                              },
+                              "publish": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            },
+                            "required": [
+                              "summary",
+                              "changedFiles",
+                              "diffs"
+                            ]
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "runID",
+                          "status",
+                          "summary",
+                          "result",
+                          "time"
+                        ]
+                      }
                     },
                     "evaluations": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^evl.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "runID": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "goalRunID": {
+                            "type": "string",
+                            "pattern": "^grn.*"
+                          },
+                          "deliveryID": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^dlv.*"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "passed",
+                              "failed",
+                              "inconclusive"
+                            ]
+                          },
+                          "verdict": {
+                            "type": "string",
+                            "enum": [
+                              "accepted",
+                              "rejected",
+                              "inconclusive"
+                            ]
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "checks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "label": {
+                                  "type": "string"
+                                },
+                                "family": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "passed",
+                                    "failed",
+                                    "skipped"
+                                  ]
+                                },
+                                "evidence": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "status"
+                              ]
+                            }
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              },
+                              "completed": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "runID",
+                          "status",
+                          "verdict",
+                          "summary",
+                          "checks",
+                          "time"
+                        ]
+                      }
                     },
                     "artifacts": {
                       "type": "array",
-                      "items": {}
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^art.*"
+                          },
+                          "taskID": {
+                            "type": "string",
+                            "pattern": "^tsk.*"
+                          },
+                          "runID": {
+                            "type": "string",
+                            "pattern": "^run.*"
+                          },
+                          "goalRunID": {
+                            "type": "string",
+                            "pattern": "^grn.*"
+                          },
+                          "deliveryID": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^dlv.*"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "patch",
+                              "changed_file",
+                              "log",
+                              "report",
+                              "image",
+                              "diff",
+                              "html_trace",
+                              "link",
+                              "git_ref",
+                              "pr"
+                            ]
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "payload": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {}
+                          },
+                          "time": {
+                            "type": "object",
+                            "properties": {
+                              "created": {
+                                "type": "number"
+                              },
+                              "updated": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "created",
+                              "updated"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "taskID",
+                          "runID",
+                          "kind",
+                          "label",
+                          "time"
+                        ]
+                      }
                     }
                   },
                   "required": [
                     "task",
                     "goals",
+                    "planNodes",
+                    "goalRuns",
                     "milestones",
                     "runs",
                     "interactions",

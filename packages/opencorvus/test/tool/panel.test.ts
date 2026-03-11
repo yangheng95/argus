@@ -142,7 +142,6 @@ describe("panel tool", () => {
               code_quality: true,
               code_review: true,
               spec_check: true,
-              judge: false,
             },
           },
           {
@@ -183,12 +182,13 @@ describe("panel tool", () => {
           visual: {
             target: "web",
             url: "https://example.com/review",
-          },
-          spec_check: {
-            enabled: true,
-          },
-          lint: ["bun", "run", "lint"],
-        })
+            },
+            spec_check: {
+              enabled: true,
+              mode: "strict",
+            },
+            lint: ["bun", "run", "lint"],
+          })
       },
     })
   })

@@ -49,34 +49,74 @@ export class SlackGateway {
 
   private subscribeEvents() {
     this.unsub?.()
-    this.unsub = Bus.subscribe(OrchestratorEvent.EvaluationCompleted, async (event) => {
-      await this.withInstance(async () => {
-        const binding = Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorChannelBindingTable)
-            .where(
-              and(
-                eq(OrchestratorChannelBindingTable.task_id, event.properties.taskID),
-                eq(OrchestratorChannelBindingTable.platform, "slack"),
-              ),
-            )
-            .get(),
-        )
-        if (!binding) return
-        await this.sendThread(
-          binding.channel,
-          binding.thread,
-          `Evaluation ${event.properties.verdict}: ${event.properties.summary}`,
-        )
-      }).catch((error) => {
-        log.error("slack event publish failed", {
-          error,
-          event: event.type,
-          taskID: event.properties.taskID,
+    const handlers: Array<() => void> = []
+
+    handlers.push(
+      Bus.subscribe(OrchestratorEvent.TaskUpdated, async (event) => {
+        await this.withInstance(async () => {
+          const binding = this.findBinding(event.properties.taskID)
+          if (!binding) return
+          const icon = taskStatusIcon(event.properties.status)
+          await this.sendThread(
+            binding.channel,
+            binding.thread,
+            `${icon} 任务状态: *${event.properties.status}*\n📁 \`${Instance.directory}\`\n${event.properties.summary}`,
+          )
+        }).catch((error) => {
+          log.error("slack task-updated publish failed", { error, taskID: event.properties.taskID })
         })
-      })
-    })
+      }),
+    )
+
+    handlers.push(
+      Bus.subscribe(OrchestratorEvent.RunCreated, async (event) => {
+        await this.withInstance(async () => {
+          const binding = this.findBinding(event.properties.taskID)
+          if (!binding) return
+          await this.sendThread(
+            binding.channel,
+            binding.thread,
+            `🚀 开始执行轮次 \`${event.properties.runID}\`\n📁 \`${Instance.directory}\``,
+          )
+        }).catch((error) => {
+          log.error("slack run-created publish failed", { error, taskID: event.properties.taskID })
+        })
+      }),
+    )
+
+    handlers.push(
+      Bus.subscribe(OrchestratorEvent.EvaluationCompleted, async (event) => {
+        await this.withInstance(async () => {
+          const binding = this.findBinding(event.properties.taskID)
+          if (!binding) return
+          const icon = event.properties.verdict === "accepted" ? "✅" : "❌"
+          await this.sendThread(
+            binding.channel,
+            binding.thread,
+            `${icon} 评估完成: verdict=*${event.properties.verdict}*\n📁 \`${Instance.directory}\`\n${event.properties.summary}`,
+          )
+        }).catch((error) => {
+          log.error("slack evaluation-completed publish failed", { error, taskID: event.properties.taskID })
+        })
+      }),
+    )
+
+    this.unsub = () => { for (const h of handlers) h() }
+  }
+
+  private findBinding(taskID: string) {
+    return Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorChannelBindingTable)
+        .where(
+          and(
+            eq(OrchestratorChannelBindingTable.task_id, taskID),
+            eq(OrchestratorChannelBindingTable.platform, "slack"),
+          ),
+        )
+        .get(),
+    )
   }
 
   private async handleMessage(message: {
@@ -161,4 +201,17 @@ function defaultFileName(mime: string) {
   if (mime === "image/png") return "opencorvus-gui.png"
   if (mime === "image/jpeg") return "opencorvus-gui.jpg"
   return "opencorvus-gui.bin"
+}
+
+function taskStatusIcon(status: string) {
+  switch (status) {
+    case "planning": return "🧠"
+    case "running": return "⚙️"
+    case "evaluating": return "🔍"
+    case "delivering": return "📦"
+    case "completed": return "🎉"
+    case "failed": return "💥"
+    case "cancelled": return "🚫"
+    default: return "📋"
+  }
 }

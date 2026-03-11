@@ -29,20 +29,33 @@ export type OrchestratorExecutor = "opencode" | "codex" | "claude-code"
 export type OrchestratorPlanStatus = "active" | "superseded"
 export type OrchestratorGoalPriority = "blocking" | "advisory"
 export type OrchestratorGoalStatus = "pending" | "passed" | "failed"
+export type OrchestratorPlanNodeKind = "goal" | "milestone" | "step"
 export type OrchestratorMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type OrchestratorRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-export type OrchestratorRunPhase = "plan" | "spec" | "execute" | "evaluate" | "deliver" | "replan"
+export type OrchestratorRunPhase = "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
+export type OrchestratorGoalRunStatus =
+  | "queued"
+  | "accepted"
+  | "running"
+  | "blocked"
+  | "completed"
+  | "failed"
+  | "aborted"
+  | "superseded"
 export type OrchestratorInteractionType = "permission" | "question"
 export type OrchestratorInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 
-export type OrchestratorSpecSnapshotStatus = "ready" | "blocked" | "completed"
+export type OrchestratorSpecSnapshotStatus = "ready" | "blocked" | "completed" | "superseded"
+export type OrchestratorGoalSource = "spec" | "system"
 export type OrchestratorSpecItemStatus = "pending" | "done" | "failed"
 
 export const OrchestratorSpecSnapshotTable = sqliteTable(
   "orchestrator_spec_snapshot",
   {
     id: text().primaryKey(),
-    task_id: text().notNull(),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
     version: integer().notNull().default(1),
     status: text().notNull().$type<OrchestratorSpecSnapshotStatus>().default("ready"),
     summary: text().notNull(),
@@ -62,8 +75,12 @@ export const OrchestratorSpecItemTable = sqliteTable(
   "orchestrator_spec_item",
   {
     id: text().primaryKey(),
-    task_id: text().notNull(),
-    spec_snapshot_id: text().notNull(),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    spec_snapshot_id: text()
+      .notNull()
+      .references(() => OrchestratorSpecSnapshotTable.id, { onDelete: "cascade" }),
     title: text().notNull(),
     description: text().notNull(),
     status: text().notNull().$type<OrchestratorSpecItemStatus>().default("pending"),
@@ -90,8 +107,8 @@ export type OrchestratorArtifactKind =
   | "git_ref"
   | "pr"
 export type OrchestratorDeliveryStatus = "candidate" | "publishing" | "delivered" | "failed"
-export type OrchestratorEvaluationStatus = "pending" | "passed" | "failed" | "inconclusive"
-export type OrchestratorEvaluationVerdict = "accepted" | "rejected" | "inconclusive"
+export type OrchestratorEvaluationStatus = "pending" | "passed" | "failed"
+export type OrchestratorEvaluationVerdict = "accepted" | "rejected"
 export type OrchestratorProgressStatus = "created" | "running" | "blocked" | "completed" | "failed" | "cancelled"
 export type OrchestratorExecutorTransport = "inproc" | "stdio" | "ws" | "http"
 export type OrchestratorExecutorSessionStatus = "active" | "completed" | "failed" | "aborted"
@@ -150,6 +167,9 @@ export const OrchestratorPlanVersionTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    spec_snapshot_id: text()
+      .notNull()
+      .references(() => OrchestratorSpecSnapshotTable.id, { onDelete: "cascade" }),
     version: integer().notNull(),
     status: text().notNull().$type<OrchestratorPlanStatus>().default("active"),
     summary: text().notNull(),
@@ -192,22 +212,47 @@ export const OrchestratorGoalTable = sqliteTable(
     task_id: text()
       .notNull()
       .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
-    plan_version_id: text()
+    spec_snapshot_id: text()
       .notNull()
-      .references(() => OrchestratorPlanVersionTable.id, { onDelete: "cascade" }),
-    milestone_id: text().references(() => OrchestratorMilestoneTable.id, { onDelete: "set null" }),
+      .references(() => OrchestratorSpecSnapshotTable.id, { onDelete: "cascade" }),
     description: text().notNull(),
     criteria: text().notNull(),
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
     priority: text().notNull().$type<OrchestratorGoalPriority>().default("blocking"),
+    source: text().notNull().$type<OrchestratorGoalSource>().default("spec"),
     status: text().notNull().$type<OrchestratorGoalStatus>().default("pending"),
     order_index: integer().notNull().default(0),
     ...Timestamps,
   },
   (table) => [
     index("orchestrator_goal_task_idx").on(table.task_id),
-    index("orchestrator_goal_plan_idx").on(table.plan_version_id),
-    index("orchestrator_goal_milestone_idx").on(table.milestone_id),
+    index("orchestrator_goal_spec_idx").on(table.spec_snapshot_id),
+  ],
+)
+
+export const OrchestratorPlanNodeTable = sqliteTable(
+  "orchestrator_plan_node",
+  {
+    id: text().primaryKey(),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    plan_version_id: text()
+      .notNull()
+      .references(() => OrchestratorPlanVersionTable.id, { onDelete: "cascade" }),
+    kind: text().notNull().$type<OrchestratorPlanNodeKind>().default("goal"),
+    goal_id: text().references(() => OrchestratorGoalTable.id, { onDelete: "set null" }),
+    title: text().notNull(),
+    brief: text().notNull().default(""),
+    depends_on_ids: text({ mode: "json" }).$type<string[]>(),
+    order_index: integer().notNull().default(0),
+    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_plan_node_task_idx").on(table.task_id),
+    index("orchestrator_plan_node_plan_idx").on(table.plan_version_id),
+    index("orchestrator_plan_node_goal_idx").on(table.goal_id),
   ],
 )
 
@@ -222,7 +267,7 @@ export const OrchestratorRunTable = sqliteTable(
     session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
     executor: text().notNull().$type<OrchestratorExecutor>().default("opencode"),
     status: text().notNull().$type<OrchestratorRunStatus>().default("queued"),
-    phase: text().notNull().$type<OrchestratorRunPhase>().default("execute"),
+    phase: text().notNull().$type<OrchestratorRunPhase>().default("dispatch"),
     blocking_reason: text(),
     error: text(),
     retry_count: integer().notNull().default(0),
@@ -235,6 +280,42 @@ export const OrchestratorRunTable = sqliteTable(
   (table) => [
     index("orchestrator_run_task_idx").on(table.task_id),
     index("orchestrator_run_status_idx").on(table.status),
+  ],
+)
+
+export const OrchestratorGoalRunTable = sqliteTable(
+  "orchestrator_goal_run",
+  {
+    id: text().primaryKey(),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    goal_id: text()
+      .notNull()
+      .references(() => OrchestratorGoalTable.id, { onDelete: "cascade" }),
+    plan_node_id: text().references(() => OrchestratorPlanNodeTable.id, { onDelete: "set null" }),
+    coordinator_run_id: text()
+      .notNull()
+      .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    session_id: text().references(() => SessionTable.id, { onDelete: "set null" }),
+    executor: text().notNull().$type<OrchestratorExecutor>().default("opencode"),
+    status: text().notNull().$type<OrchestratorGoalRunStatus>().default("queued"),
+    blocking_reason: text(),
+    error: text(),
+    retry_count: integer().notNull().default(0),
+    workspace_dir: text(),
+    base_ref: text(),
+    merge_ref: text(),
+    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    time_started: integer(),
+    time_completed: integer(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_goal_run_task_idx").on(table.task_id),
+    index("orchestrator_goal_run_goal_idx").on(table.goal_id),
+    index("orchestrator_goal_run_coord_idx").on(table.coordinator_run_id),
+    index("orchestrator_goal_run_status_idx").on(table.status),
   ],
 )
 
@@ -276,6 +357,7 @@ export const OrchestratorDeliveryTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
     status: text().notNull().$type<OrchestratorDeliveryStatus>().default("candidate"),
     summary: text().notNull(),
     result: text({ mode: "json" }).$type<OrchestratorMetadata>(),
@@ -283,6 +365,7 @@ export const OrchestratorDeliveryTable = sqliteTable(
   },
   (table) => [
     index("orchestrator_delivery_run_idx").on(table.run_id),
+    index("orchestrator_delivery_goal_run_idx").on(table.goal_run_id),
   ],
 )
 
@@ -296,6 +379,7 @@ export const OrchestratorArtifactTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
     delivery_id: text().references(() => OrchestratorDeliveryTable.id, { onDelete: "set null" }),
     kind: text().notNull().$type<OrchestratorArtifactKind>(),
     label: text().notNull(),
@@ -304,6 +388,7 @@ export const OrchestratorArtifactTable = sqliteTable(
   },
   (table) => [
     index("orchestrator_artifact_run_idx").on(table.run_id),
+    index("orchestrator_artifact_goal_run_idx").on(table.goal_run_id),
     index("orchestrator_artifact_delivery_idx").on(table.delivery_id),
   ],
 )
@@ -318,9 +403,10 @@ export const OrchestratorEvaluationTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
     delivery_id: text().references(() => OrchestratorDeliveryTable.id, { onDelete: "set null" }),
     status: text().notNull().$type<OrchestratorEvaluationStatus>().default("pending"),
-    verdict: text().notNull().$type<OrchestratorEvaluationVerdict>().default("inconclusive"),
+    verdict: text().notNull().$type<OrchestratorEvaluationVerdict>().default("rejected"),
     summary: text().notNull(),
     checks: text({ mode: "json" }).$type<OrchestratorGoalCheck[]>(),
     time_completed: integer(),
@@ -328,6 +414,7 @@ export const OrchestratorEvaluationTable = sqliteTable(
   },
   (table) => [
     index("orchestrator_evaluation_run_idx").on(table.run_id),
+    index("orchestrator_evaluation_goal_run_idx").on(table.goal_run_id),
   ],
 )
 
@@ -358,6 +445,7 @@ export const OrchestratorExecutorSessionTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
     provider: text().notNull().$type<OrchestratorExecutor>(),
     protocol: text().notNull(),
     protocol_version: text().notNull(),
@@ -372,7 +460,8 @@ export const OrchestratorExecutorSessionTable = sqliteTable(
   },
   (table) => [
     index("orchestrator_executor_session_task_idx").on(table.task_id),
-    uniqueIndex("orchestrator_executor_session_run_idx").on(table.run_id),
+    index("orchestrator_executor_session_run_idx").on(table.run_id),
+    index("orchestrator_executor_session_goal_run_idx").on(table.goal_run_id),
     index("orchestrator_executor_session_status_idx").on(table.status),
   ],
 )
@@ -390,6 +479,7 @@ export const OrchestratorExecutorEventTable = sqliteTable(
     run_id: text()
       .notNull()
       .references(() => OrchestratorRunTable.id, { onDelete: "cascade" }),
+    goal_run_id: text().references(() => OrchestratorGoalRunTable.id, { onDelete: "set null" }),
     sequence: integer().notNull(),
     kind: text().notNull(),
     summary: text(),
@@ -402,6 +492,7 @@ export const OrchestratorExecutorEventTable = sqliteTable(
   (table) => [
     index("orchestrator_executor_event_session_idx").on(table.executor_session_id, table.sequence),
     index("orchestrator_executor_event_run_idx").on(table.run_id, table.sequence),
+    index("orchestrator_executor_event_goal_run_idx").on(table.goal_run_id, table.sequence),
     index("orchestrator_executor_event_task_idx").on(table.task_id, table.sequence),
     index("orchestrator_executor_event_kind_idx").on(table.kind),
   ],

@@ -3,13 +3,13 @@ import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
 import { EvaluatorAgent, type EvaluatorAnalysisType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
 import z from "zod"
-import { resolveConfig, autoSpecCheck, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
+import { resolveConfig, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
 import { commandChecks } from "./checks"
 import { startupResult } from "./checks"
 import { artifactResult } from "./checks"
 import { visualResult } from "./checks"
 import { puppeteerResult } from "./checks"
-import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, judgeResult, specCheckResult } from "./review"
+import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, specCheckResult } from "./review"
 import {
   type EvaluationTask,
   type EvaluationDelivery,
@@ -38,7 +38,6 @@ const OPTIONAL_CHECK_DEFS = [
   { name: "code_quality", label: "Code Quality", family: "review", run: (config, task, delivery) => codeQualityResult(config.code_quality, task.request, delivery) },
   { name: "code_review", label: "Code Review", family: "review", run: (config, task, delivery) => codeReviewResult(config.code_review, task.request, delivery) },
   { name: "dead_code_review", label: "Dead Code Review", family: "review", run: (config, task, delivery) => deadCodeReviewResult(config.dead_code_review, task.request, delivery) },
-  { name: "judge", label: "LLM Judge", family: "acceptance", run: (config, task, delivery) => judgeResult(config.judge, task.request, delivery) },
   { name: "spec_check", label: "Spec Check", family: "acceptance", run: (config, task, delivery) => specCheckResult(config.spec_check, task.request, task.activeSpecVersionID, delivery) },
 ] as const satisfies OptionalCheckDef[]
 
@@ -56,8 +55,7 @@ export namespace EvaluatorService {
     task: EvaluationTask,
     delivery: EvaluationDelivery,
   ) {
-    const rawConfig = await resolveConfig(task.metadata)
-    const config = { ...rawConfig, ...(!rawConfig.spec_check ? autoSpecCheck(task) : {}) } as typeof rawConfig
+    const config = await resolveConfig(task.metadata)
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
     const commands = commandGroups(config, discovered)
     const core = await commandChecks(commands, config.timeout_ms ?? DEFAULT_TIMEOUT_MS, delivery)
@@ -126,7 +124,7 @@ async function pluginCheck(
   task: EvaluationTask,
   delivery: EvaluationDelivery,
 ): Promise<EvaluationOutcome> {
-  const result = await input.run({ request: task.request, delivery }).catch(() => pluginFallback(input.name))
+  const result = await input.run({ request: task.request, delivery }).catch((error) => pluginErrorResult(input.name, error))
   const artifacts = [
     {
       kind: "report" as const,
@@ -163,10 +161,10 @@ async function pluginCheck(
   }
 }
 
-function pluginFallback(name: string) {
+function pluginErrorResult(name: string, error: unknown) {
   return {
-    status: "skipped" as const,
-    evidence: `Plugin check ${name} threw an error.`,
+    status: "failed" as const,
+    evidence: `Plugin check ${name} threw an error: ${error instanceof Error ? error.message : String(error)}`,
     artifacts: undefined as Array<{ kind: string; label: string; payload: Record<string, unknown> }> | undefined,
   }
 }
@@ -206,10 +204,23 @@ function finalizeEvaluation(
   }
 
   const optionalChecks = ordered.filter((item) => item.name !== "evaluation_config")
+  const specCheck = ordered.find((item) => item.name === "spec_check")
+  if (!specCheck || specCheck.status !== "passed") {
+    const reason = !specCheck
+      ? "Spec check is required but did not run."
+      : `Spec check is required and must pass before acceptance. Current status: ${specCheck.status}.`
+    return {
+      status: "failed",
+      verdict: "rejected",
+      summary: reason,
+      checks: ordered,
+      artifacts,
+    }
+  }
   if (commands.length === 0 && optionalChecks.length === 0 && ordered.every((item) => item.status === "skipped")) {
     return {
-      status: "inconclusive",
-      verdict: "inconclusive",
+      status: "failed",
+      verdict: "rejected",
       summary: "No blocking evaluator checks ran.",
       checks: ordered,
       artifacts,

@@ -2,9 +2,12 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
 import { BunProc } from "../../src/bun"
 import { EvaluatorService } from "../../src/evaluator/service"
+import { Identifier } from "../../src/id/id"
+import { OrchestratorSpecSnapshotTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { Plugin } from "../../src/plugin"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
+import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -35,9 +38,10 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const result = await EvaluatorService.evaluate({}, { summary: "delivery ready" })
-        expect(result.status).toBe("passed")
-        expect(result.verdict).toBe("accepted")
-        expect(result.checks.map((item) => item.name)).toEqual(["build", "test", "lint"])
+        expect(result.status).toBe("failed")
+        expect(result.verdict).toBe("rejected")
+        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["build", "test", "lint", "spec_check"]))
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -98,9 +102,10 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready" },
         )
-        expect(result.status).toBe("passed")
-        expect(result.checks.map((item) => item.name)).toEqual(["py_compile", "pytest", "typecheck"])
-        expect(result.checks.map((item) => item.label)).toEqual(["Python Compile", "Pytest", "Type Check"])
+        expect(result.status).toBe("failed")
+        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["py_compile", "pytest", "typecheck", "spec_check"]))
+        expect(result.checks.map((item) => item.label)).toEqual(expect.arrayContaining(["Python Compile", "Pytest", "Type Check", "Spec Check"]))
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -192,9 +197,10 @@ describe("evaluator.service", () => {
         expect(resolved.named?.typecheck?.commands).toEqual(["bun run typecheck"])
 
         const result = await EvaluatorService.evaluate({}, { summary: "delivery ready" })
-        expect(result.status).toBe("passed")
-        expect(result.checks.map((item) => item.name)).toEqual(["typecheck"])
-        expect(result.checks[0]?.family).toBe("lint")
+        expect(result.status).toBe("failed")
+        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["typecheck", "spec_check"]))
+        expect(result.checks.find((item) => item.name === "typecheck")?.family).toBe("lint")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -228,7 +234,8 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready" },
         )
-        expect(result.status).toBe("inconclusive")
+        expect(result.status).toBe("failed")
+        expect(result.verdict).toBe("rejected")
         expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
         expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
         expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
@@ -255,8 +262,9 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
-        expect(result.status).toBe("passed")
+        expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "artifact")?.status).toBe("skipped")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -318,8 +326,9 @@ describe("evaluator.service", () => {
             },
             { summary: "delivery ready", changedFiles: [], diffs: [] },
           )
-          expect(result.status).toBe("passed")
+          expect(result.status).toBe("failed")
           expect(result.checks.find((item) => item.name === "visual")?.status).toBe("passed")
+          expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
         },
       })
     } finally {
@@ -327,21 +336,49 @@ describe("evaluator.service", () => {
     }
   })
 
-  test("judge check fails when no model is available", async () => {
+  test("spec check fails when no model is available", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+    const taskID = Identifier.ascending("task")
+    const specID = Identifier.ascending("spec")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "implement feature",
+              request: "implement feature",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorSpecSnapshotTable)
+            .values({
+              id: specID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: "Compiled spec",
+              content: "# Scope\n\nImplement feature",
+              scope: "Implement feature",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
         const result = await EvaluatorService.evaluate(
           {
             request: "implement feature",
+            activeSpecVersionID: specID,
             metadata: {
               checks: {
-                judge: {
+                spec_check: {
                   enabled: true,
-                  mode: "soft",
                 },
               },
             },
@@ -349,7 +386,7 @@ describe("evaluator.service", () => {
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "judge")?.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -419,8 +456,9 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
-        expect(result.status).toBe("passed")
+        expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "startup")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -493,9 +531,10 @@ describe("evaluator.service", () => {
             },
             { summary: "delivery ready", changedFiles: ["index.html"], diffs: [] },
           )
-          expect(result.status).toBe("passed")
+          expect(result.status).toBe("failed")
           const status = result.checks.find((item) => item.name === "puppeteer")?.status
           expect(status === "skipped" || status === "passed").toBe(true)
+          expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
         },
       })
     } finally {
@@ -771,13 +810,14 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
-        expect(result.status).toBe("passed")
+        expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
 
-  test("keeps soft plugin checks non-blocking when the plugin reports failure", async () => {
+  test("keeps soft plugin failures skipped without turning them into hard plugin failures", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
       if (name !== "evaluation.checks") return output
@@ -807,8 +847,8 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
-        expect(result.status).toBe("passed")
-        expect(result.summary).toBe("Optional evaluator checks ran in soft mode without blocking the flow.")
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("skipped")
       },
     })
@@ -817,22 +857,50 @@ describe("evaluator.service", () => {
   test("annotates builtin optional checks with stable labels and families", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+    const taskID = Identifier.ascending("task")
+    const specID = Identifier.ascending("spec")
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "review the delivery",
+              request: "review the delivery",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorSpecSnapshotTable)
+            .values({
+              id: specID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: "Compiled spec",
+              content: "# Scope\n\nReview the delivery",
+              scope: "Review the delivery",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
         const result = await EvaluatorService.evaluate(
           {
             request: "review the delivery",
+            activeSpecVersionID: specID,
             metadata: {
               checks: {
                 artifact: {
                   require_changed_files: true,
                   mode: "soft",
                 },
-                judge: {
+                spec_check: {
                   enabled: true,
-                  mode: "soft",
                 },
               },
             },
@@ -845,8 +913,8 @@ describe("evaluator.service", () => {
           family: "artifact",
           status: "skipped",
         })
-        expect(result.checks.find((item) => item.name === "judge")).toMatchObject({
-          label: "LLM Judge",
+        expect(result.checks.find((item) => item.name === "spec_check")).toMatchObject({
+          label: "Spec Check",
           family: "acceptance",
           status: "failed",
         })
@@ -895,8 +963,9 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: ["sample.spec.ts"], diffs: [] },
         )
-        expect(result.status).toBe("passed")
+        expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   }, 30000)
@@ -955,8 +1024,9 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: ["sample.spec.ts", "unit.test.ts"], diffs: [] },
         )
-        expect(result.status).toBe("passed")
+        expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   }, 30000)
@@ -996,8 +1066,9 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: ["unit.test.ts"], diffs: [] },
         )
-        expect(result.status).toBe("passed")
+        expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })
@@ -1046,12 +1117,13 @@ describe("evaluator.service", () => {
             diffs: [],
           },
         )
-        expect(result.status).toBe("passed")
-        expect(result.checks.map((item) => item.name)).toEqual(["build", "test", "lint"])
+        expect(result.status).toBe("failed")
+        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["build", "test", "lint", "spec_check"]))
         const commands = result.artifacts
           .filter((item) => item.kind === "log")
           .map((item) => String(item.payload.command ?? ""))
         expect(commands.every((item) => item.includes("bun run"))).toBe(true)
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
   })

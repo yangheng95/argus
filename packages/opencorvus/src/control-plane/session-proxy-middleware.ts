@@ -1,5 +1,6 @@
 import { Instance } from "@/project/instance"
 import type { MiddlewareHandler } from "hono"
+import path from "path"
 import { Installation } from "../installation"
 import { getAdaptor } from "./adaptors"
 import { Workspace } from "./workspace"
@@ -8,11 +9,12 @@ import { Workspace } from "./workspace"
 // remote. The remote workspace needs to handle session mutations
 async function proxySessionRequest(req: Request) {
   if (req.method === "GET") return
-  if (!Instance.directory.startsWith("wrk_")) return
+  const workspaceID = path.basename(Instance.directory)
+  if (!workspaceID.startsWith("wrk_")) return
 
-  const workspace = await Workspace.get(Instance.directory)
+  const workspace = await Workspace.get(workspaceID)
   if (!workspace) {
-    return new Response(`Workspace not found: ${Instance.directory}`, {
+    return new Response(`Workspace not found: ${workspaceID}`, {
       status: 500,
       headers: {
         "content-type": "text/plain; charset=utf-8",

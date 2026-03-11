@@ -213,13 +213,14 @@ export namespace Session {
       .object({
         parentID: Identifier.schema("session").optional(),
         title: z.string().optional(),
+        directory: z.string().optional(),
         permission: Info.shape.permission,
       })
       .optional(),
     async (input) => {
       return createNext({
         parentID: input?.parentID,
-        directory: Instance.directory,
+        directory: input?.directory ?? Instance.directory,
         title: input?.title,
         permission: input?.permission,
       })

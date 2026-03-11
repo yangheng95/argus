@@ -212,7 +212,7 @@ const PLAN_SYSTEM = [
   "WARNING: This is a planning-only read-only session.",
   "You may inspect the codebase and documentation, but you must not modify files, apply patches, or run commands with side effects.",
   "Produce a detailed implementation plan as JSON only.",
-  "Every blocking goal must have concrete criteria and at least one relevant check_selector.",
+  "Use the authoritative goals from the specification as execution constraints, but do not redefine them in your output.",
 ].join("\n")
 
 const PLANNING_WARNING_PROMPT = [

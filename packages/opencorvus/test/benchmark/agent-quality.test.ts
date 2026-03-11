@@ -103,7 +103,7 @@ Rules:
 - ALWAYS explore the codebase before planning
 - goals.criteria must be concrete and machine-verifiable
 - Every blocking goal MUST have at least one check_selector
-- check_selector options: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, judge
+- check_selector options: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
 - subtasks should reference specific files from exploration
 - Write in the same language as the request
 - After finishing tool calls, STOP and output JSON immediately`

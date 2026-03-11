@@ -323,6 +323,15 @@ export namespace Provider {
 
     log.info("init")
 
+    if (enabled && enabled.size === 0) {
+      return {
+        models: languages,
+        providers,
+        sdk,
+        modelLoaders,
+      }
+    }
+
     const configProviders = entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>)
 
     // Add GitHub Copilot Enterprise provider that inherits from GitHub Copilot

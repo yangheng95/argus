@@ -57,12 +57,6 @@ export namespace Project {
       .toSorted()
   }
 
-  async function initRepo(directory: string) {
-    const result = await git(["init"], { cwd: directory }).catch(() => undefined)
-    if (!result || result.exitCode !== 0) return false
-    return Filesystem.exists(path.join(directory, ".git"))
-  }
-
   async function identify(cwd: string, common: string) {
     const cached = await Filesystem.readText(marker(common))
       .then((x) => x.trim())
@@ -171,8 +165,7 @@ export namespace Project {
       }
 
       const inherited = local ? undefined : await text(["rev-parse", "--show-toplevel"], directory)
-      const root = inherited ? gitpath(directory, inherited) : undefined
-      const hasLocalGit = local || (!!root && root !== Filesystem.resolve(directory) && (await initRepo(directory)))
+      const hasLocalGit = local || !!inherited
 
       if (hasLocalGit) {
         let sandbox = directory
@@ -347,7 +340,7 @@ export namespace Project {
 
   export async function initGit(directory: string) {
     const current = await fromDirectory(directory)
-    if (current.project.vcs === "git") {
+    if (current.project.vcs === "git" && (await Filesystem.exists(path.join(directory, ".git")))) {
       return InitGitResult.parse({
         created: false,
         project: current.project,

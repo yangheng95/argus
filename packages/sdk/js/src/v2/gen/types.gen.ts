@@ -3921,6 +3921,7 @@ export type SessionCreateData = {
   body?: {
     parentID?: string
     title?: string
+    directory?: string
     permission?: PermissionRuleset
   }
   path?: never
@@ -6074,11 +6075,6 @@ export type TaskCreateData = {
         max_diffs?: number
         mode?: "soft" | "strict"
       }
-      judge?: {
-        enabled?: boolean
-        prompt?: string
-        mode?: "soft" | "strict"
-      }
       spec_check?: {
         enabled?: boolean
         prompt?: string
@@ -6100,8 +6096,10 @@ export type TaskCreateData = {
       description: string
       criteria: string
       priority?: "blocking" | "advisory"
+      source?: "spec" | "system"
       metadata?: {
         check_selector?: Array<string>
+        [key: string]: unknown | Array<string> | undefined
       }
     }>
     milestones?: Array<{
@@ -6111,8 +6109,10 @@ export type TaskCreateData = {
         description: string
         criteria: string
         priority?: "blocking" | "advisory"
+        source?: "spec" | "system"
         metadata?: {
           check_selector?: Array<string>
+          [key: string]: unknown | Array<string> | undefined
         }
       }>
     }>
@@ -6192,7 +6192,9 @@ export type TaskListResponses = {
       task: {
         id: string
         projectID: string
+        directory?: string
         sessionID?: string | null
+        activeSpecVersionID?: string | null
         activePlanVersionID?: string | null
         activeRunID?: string | null
         requestID?: string
@@ -6228,9 +6230,15 @@ export type TaskListResponses = {
           completed?: number
         }
       }
+      project?: {
+        id: string
+        name?: string
+        worktree: string
+      } | null
       plan?: {
         id: string
         taskID: string
+        specSnapshotID: string
         version: number
         status: "active" | "superseded"
         summary: string
@@ -6250,7 +6258,7 @@ export type TaskListResponses = {
         sessionID?: string | null
         executor: "opencode" | "codex" | "claude-code"
         status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-        phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+        phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
         blockingReason?: string
         error?: string
         retryCount: number
@@ -6272,6 +6280,7 @@ export type TaskListResponses = {
         id: string
         taskID: string
         runID: string
+        goalRunID?: string
         deliveryID?: string | null
         status: "pending" | "passed" | "failed" | "inconclusive"
         verdict: "accepted" | "rejected" | "inconclusive"
@@ -6296,6 +6305,152 @@ export type TaskListResponses = {
 }
 
 export type TaskListResponse = TaskListResponses[keyof TaskListResponses]
+
+export type TaskGlobalListData = {
+  body?: never
+  path?: never
+  query?: {
+    directory?: string
+    q?: string
+    status?: string
+    limit?: number
+    cursor?: number
+  }
+  url: "/global/tasks"
+}
+
+export type TaskGlobalListResponses = {
+  /**
+   * Global task board
+   */
+  200: {
+    summary: {
+      total_tasks: number
+      open_tasks: number
+      running_tasks: number
+      blocked_tasks: number
+      completed_tasks: number
+      failed_tasks: number
+      cancelled_tasks: number
+      median_completion_ms?: number
+    }
+    tasks: Array<{
+      task: {
+        id: string
+        projectID: string
+        directory?: string
+        sessionID?: string | null
+        activeSpecVersionID?: string | null
+        activePlanVersionID?: string | null
+        activeRunID?: string | null
+        requestID?: string
+        source: string
+        title: string
+        request: string
+        status:
+          | "queued"
+          | "planning"
+          | "running"
+          | "blocked"
+          | "evaluating"
+          | "delivering"
+          | "completed"
+          | "failed"
+          | "cancelled"
+        priority: "high" | "normal" | "low"
+        blockingReason?: string
+        error?: string
+        budget?: {
+          maxRuns?: number
+          maxReplans?: number
+          maxEvaluations?: number
+          maxWallTimeMs?: number
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          started?: number
+          completed?: number
+        }
+      }
+      project?: {
+        id: string
+        name?: string
+        worktree: string
+      } | null
+      plan?: {
+        id: string
+        taskID: string
+        specSnapshotID: string
+        version: number
+        status: "active" | "superseded"
+        summary: string
+        prompt: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+        }
+      }
+      run?: {
+        id: string
+        taskID: string
+        planVersionID?: string | null
+        sessionID?: string | null
+        executor: "opencode" | "codex" | "claude-code"
+        status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+        phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
+        blockingReason?: string
+        error?: string
+        retryCount: number
+        executorRef?: {
+          sessionID?: string
+          queueTaskID?: string
+        }
+        metadata?: {
+          [key: string]: unknown
+        }
+        time: {
+          created: number
+          updated: number
+          started?: number
+          completed?: number
+        }
+      }
+      evaluation?: {
+        id: string
+        taskID: string
+        runID: string
+        goalRunID?: string
+        deliveryID?: string | null
+        status: "pending" | "passed" | "failed" | "inconclusive"
+        verdict: "accepted" | "rejected" | "inconclusive"
+        summary: string
+        checks: Array<{
+          name: string
+          label?: string
+          family?: string
+          status: "passed" | "failed" | "skipped"
+          evidence?: string
+        }>
+        time: {
+          created: number
+          updated: number
+          completed?: number
+        }
+      }
+      pending_interactions: number
+      updated_at: number
+    }>
+  }
+}
+
+export type TaskGlobalListResponse = TaskGlobalListResponses[keyof TaskGlobalListResponses]
 
 export type TaskGetData = {
   body?: never
@@ -6324,7 +6479,9 @@ export type TaskGetResponses = {
   200: {
     id: string
     projectID: string
+    directory?: string
     sessionID?: string | null
+    activeSpecVersionID?: string | null
     activePlanVersionID?: string | null
     activeRunID?: string | null
     requestID?: string
@@ -6392,7 +6549,9 @@ export type TaskProgressResponses = {
     task: {
       id: string
       projectID: string
+      directory?: string
       sessionID?: string | null
+      activeSpecVersionID?: string | null
       activePlanVersionID?: string | null
       activeRunID?: string | null
       requestID?: string
@@ -6428,9 +6587,28 @@ export type TaskProgressResponses = {
         completed?: number
       }
     }
+    spec?: {
+      id: string
+      taskID: string
+      version: number
+      status: "ready" | "blocked" | "completed" | "superseded"
+      summary: string
+      content: string
+      scope: string
+      outOfScope?: string
+      evidence?: Array<string>
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
     plan?: {
       id: string
       taskID: string
+      specSnapshotID: string
       version: number
       status: "active" | "superseded"
       summary: string
@@ -6446,19 +6624,63 @@ export type TaskProgressResponses = {
     goals: Array<{
       id: string
       taskID: string
-      planVersionID: string
-      milestoneID?: string | null
+      specSnapshotID: string
       description: string
       criteria: string
       priority: "blocking" | "advisory"
+      source?: "spec" | "system"
       status: "pending" | "passed" | "failed"
       orderIndex: number
       metadata?: {
         check_selector?: Array<string>
+        [key: string]: unknown | Array<string> | undefined
       }
       time: {
         created: number
         updated: number
+      }
+    }>
+    planNodes: Array<{
+      id: string
+      taskID: string
+      planVersionID: string
+      kind: "goal" | "milestone" | "step"
+      goalID?: string
+      title: string
+      brief: string
+      dependsOnIDs?: Array<string>
+      orderIndex: number
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    goalRuns: Array<{
+      id: string
+      taskID: string
+      goalID: string
+      planNodeID?: string
+      coordinatorRunID: string
+      sessionID?: string
+      executor: "opencode" | "codex" | "claude-code"
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted" | "superseded"
+      retryCount: number
+      blockingReason?: string
+      error?: string
+      workspaceDir?: string
+      baseRef?: string
+      mergeRef?: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
       }
     }>
     milestones?: Array<{
@@ -6484,7 +6706,7 @@ export type TaskProgressResponses = {
       sessionID?: string | null
       executor: "opencode" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-      phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+      phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
       blockingReason?: string
       error?: string
       retryCount: number
@@ -6528,6 +6750,7 @@ export type TaskProgressResponses = {
       id: string
       taskID: string
       runID: string
+      goalRunID?: string
       status: "candidate" | "publishing" | "delivered" | "failed"
       summary: string
       result: {
@@ -6554,6 +6777,7 @@ export type TaskProgressResponses = {
       id: string
       taskID: string
       runID: string
+      goalRunID?: string
       deliveryID?: string | null
       status: "pending" | "passed" | "failed" | "inconclusive"
       verdict: "accepted" | "rejected" | "inconclusive"
@@ -6690,7 +6914,9 @@ export type TaskBoardResponses = {
     task: {
       id: string
       projectID: string
+      directory?: string
       sessionID?: string | null
+      activeSpecVersionID?: string | null
       activePlanVersionID?: string | null
       activeRunID?: string | null
       requestID?: string
@@ -6727,18 +6953,157 @@ export type TaskBoardResponses = {
       }
     }
     spec?: {
+      id: string
+      taskID: string
+      version: number
+      status: "ready" | "blocked" | "completed" | "superseded"
+      summary: string
       content: string
-      file?: string
-      source?: {
+      scope: string
+      outOfScope?: string
+      evidence?: Array<string>
+      metadata?: {
         [key: string]: unknown
       }
       time: {
         created: number
+        updated: number
       }
     }
+    checks?: {
+      build?: Array<string> | false
+      test?: Array<string> | false
+      lint?: Array<string> | false
+      verify_cmd?: Array<string> | false
+      named?: {
+        [key: string]: {
+          label?: string
+          family?: "build" | "test" | "lint" | "verify_cmd"
+          commands: Array<string>
+          enabled?: boolean
+          cwd?: string
+        }
+      }
+      startup?: {
+        command: string
+        ready_url?: string
+        ready_text?: string
+        timeout_ms?: number
+        warmup_ms?: number
+        require_exit_zero?: boolean
+        mode?: "soft" | "strict"
+      }
+      artifact?: {
+        require_changed_files?: boolean
+        min_changed_files?: number
+        require_diff?: boolean
+        require_summary?: boolean
+        mode?: "soft" | "strict"
+      }
+      visual?: {
+        target: "web"
+        url: string
+        require_text?: Array<string>
+        require_title?: string
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      puppeteer?: {
+        target: "web"
+        url: string
+        browser?: "chrome" | "edge" | "chromium"
+        executable_path?: string
+        wait_for_selector?: string
+        wait_for_text?: string
+        require_text?: Array<string>
+        require_title?: string
+        full_page?: boolean
+        viewport?: {
+          width?: number
+          height?: number
+        }
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      ui_review?: {
+        target: "web"
+        url?: string
+        prompt?: string
+        focus?: Array<"layout" | "hierarchy" | "clarity" | "navigation" | "feedback" | "accessibility">
+        timeout_ms?: number
+        mode?: "soft" | "strict"
+      }
+      code_quality?: {
+        enabled?: boolean
+        prompt?: string
+        max_diffs?: number
+        mode?: "soft" | "strict"
+      }
+      code_review?: {
+        enabled?: boolean
+        prompt?: string
+        max_diffs?: number
+        mode?: "soft" | "strict"
+      }
+      dead_code_review?: {
+        enabled?: boolean
+        prompt?: string
+        max_diffs?: number
+        mode?: "soft" | "strict"
+      }
+      spec_check?: {
+        enabled?: boolean
+        prompt?: string
+        mode?: "soft" | "strict"
+      }
+      custom?: {
+        [key: string]: {
+          [key: string]: unknown
+        }
+      }
+      timeout_ms?: number
+    }
+    goals: Array<{
+      id: string
+      taskID: string
+      specSnapshotID: string
+      description: string
+      criteria: string
+      priority: "blocking" | "advisory"
+      source?: "spec" | "system"
+      status: "pending" | "passed" | "failed"
+      orderIndex: number
+      metadata?: {
+        check_selector?: Array<string>
+        [key: string]: unknown | Array<string> | undefined
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    specItems: Array<{
+      id: string
+      taskID: string
+      specSnapshotID: string
+      title: string
+      description: string
+      status: "pending" | "done" | "failed"
+      priority: "blocking" | "advisory"
+      checkSelector?: Array<string>
+      evidence?: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
     plan?: {
       id: string
       taskID: string
+      specSnapshotID: string
       version: number
       status: "active" | "superseded"
       summary: string
@@ -6751,6 +7116,65 @@ export type TaskBoardResponses = {
         updated: number
       }
     }
+    planNodes: Array<{
+      id: string
+      taskID: string
+      planVersionID: string
+      kind: "goal" | "milestone" | "step"
+      goalID?: string
+      title: string
+      brief: string
+      dependsOnIDs?: Array<string>
+      orderIndex: number
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    goalRuns: Array<{
+      id: string
+      taskID: string
+      goalID: string
+      planNodeID?: string
+      coordinatorRunID: string
+      sessionID?: string
+      executor: "opencode" | "codex" | "claude-code"
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted" | "superseded"
+      retryCount: number
+      blockingReason?: string
+      error?: string
+      workspaceDir?: string
+      baseRef?: string
+      mergeRef?: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }>
+    milestones: Array<{
+      id: string
+      taskID: string
+      planVersionID: string
+      title: string
+      description: string
+      status: "pending" | "active" | "passed" | "failed"
+      orderIndex: number
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
     run?: {
       id: string
       taskID: string
@@ -6758,7 +7182,7 @@ export type TaskBoardResponses = {
       sessionID?: string | null
       executor: "opencode" | "codex" | "claude-code"
       status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-      phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+      phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
       blockingReason?: string
       error?: string
       retryCount: number
@@ -6780,6 +7204,7 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
+      goalRunID?: string
       status: "candidate" | "publishing" | "delivered" | "failed"
       summary: string
       result: {
@@ -6806,6 +7231,7 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
+      goalRunID?: string
       status: "candidate" | "publishing" | "delivered" | "failed"
       summary: string
       result: {
@@ -6832,6 +7258,7 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
+      goalRunID?: string
       status: "candidate" | "publishing" | "delivered" | "failed"
       summary: string
       result: {
@@ -6858,6 +7285,7 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
+      goalRunID?: string
       deliveryID?: string | null
       status: "pending" | "passed" | "failed" | "inconclusive"
       verdict: "accepted" | "rejected" | "inconclusive"
@@ -6914,6 +7342,7 @@ export type TaskBoardResponses = {
       id: string
       taskID: string
       runID: string
+      goalRunID?: string
       deliveryID?: string | null
       kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link" | "git_ref" | "pr"
       label: string
@@ -6973,7 +7402,21 @@ export type TaskBoardResponses = {
       title: string
       cards: Array<{
         id: string
-        kind: "goal" | "interaction" | "preference" | "note" | "run" | "plan_hint"
+        kind:
+          | "goal"
+          | "goal_run"
+          | "interaction"
+          | "preference"
+          | "note"
+          | "run"
+          | "plan_hint"
+          | "spec"
+          | "plan"
+          | "milestone"
+          | "spec_item"
+          | "check"
+          | "delivery"
+          | "evaluation"
         title: string
         detail?: string
         status?: string
@@ -7019,7 +7462,7 @@ export type TaskRunsResponses = {
     sessionID?: string | null
     executor: "opencode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+    phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
     blockingReason?: string
     error?: string
     retryCount: number
@@ -7253,11 +7696,6 @@ export type TaskChecksUpdateData = {
         max_diffs?: number
         mode?: "soft" | "strict"
       }
-      judge?: {
-        enabled?: boolean
-        prompt?: string
-        mode?: "soft" | "strict"
-      }
       spec_check?: {
         enabled?: boolean
         prompt?: string
@@ -7300,7 +7738,9 @@ export type TaskChecksUpdateResponses = {
   200: {
     id: string
     projectID: string
+    directory?: string
     sessionID?: string | null
+    activeSpecVersionID?: string | null
     activePlanVersionID?: string | null
     activeRunID?: string | null
     requestID?: string
@@ -7400,7 +7840,7 @@ export type TaskRetryResponses = {
     sessionID?: string | null
     executor: "opencode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+    phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
     blockingReason?: string
     error?: string
     retryCount: number
@@ -7453,7 +7893,7 @@ export type TaskReplanResponses = {
     sessionID?: string | null
     executor: "opencode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+    phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
     blockingReason?: string
     error?: string
     retryCount: number
@@ -7506,7 +7946,7 @@ export type RunGetResponses = {
     sessionID?: string | null
     executor: "opencode" | "codex" | "claude-code"
     status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
-    phase: "plan" | "execute" | "evaluate" | "deliver" | "replan"
+    phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
     blockingReason?: string
     error?: string
     retryCount: number
@@ -7556,6 +7996,7 @@ export type RunExecutorSessionResponses = {
     id: string
     taskID: string
     runID: string
+    goalRunID?: string
     provider: "opencode" | "codex" | "claude-code"
     protocol: string
     protocolVersion: string
@@ -7652,6 +8093,7 @@ export type RunExecutorEventsResponses = {
     executorSessionID: string
     taskID: string
     runID: string
+    goalRunID?: string
     sequence: number
     kind: string
     summary?: string
@@ -7781,6 +8223,7 @@ export type RunDeliveryResponses = {
     id: string
     taskID: string
     runID: string
+    goalRunID?: string
     status: "candidate" | "publishing" | "delivered" | "failed"
     summary: string
     result: {
@@ -7835,6 +8278,7 @@ export type RunArtifactsResponses = {
     id: string
     taskID: string
     runID: string
+    goalRunID?: string
     deliveryID?: string | null
     kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link" | "git_ref" | "pr"
     label: string
@@ -7878,6 +8322,7 @@ export type RunEvaluationsResponses = {
     id: string
     taskID: string
     runID: string
+    goalRunID?: string
     deliveryID?: string | null
     status: "pending" | "passed" | "failed" | "inconclusive"
     verdict: "accepted" | "rejected" | "inconclusive"
@@ -8046,39 +8491,6 @@ export type PatchPreferencePreferenceIdResponses = {
   200: unknown
 }
 
-export type DeleteGoalGoalIdData = {
-  body?: never
-  path: {
-    goalID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/goal/{goalID}"
-}
-
-export type DeleteGoalGoalIdResponses = {
-  200: unknown
-}
-
-export type PatchGoalGoalIdData = {
-  body?: {
-    description: string
-    criteria: string
-  }
-  path: {
-    goalID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/goal/{goalID}"
-}
-
-export type PatchGoalGoalIdResponses = {
-  200: unknown
-}
-
 export type ExportTaskData = {
   body?: never
   path: {
@@ -8104,16 +8516,309 @@ export type ExportTaskResponses = {
    * Complete task export including plan, runs, evaluations, goals, milestones, interactions, snapshots, and artifacts
    */
   200: {
-    task: unknown
-    plan?: unknown
-    goals: Array<unknown>
-    milestones: Array<unknown>
-    runs: Array<unknown>
-    interactions: Array<unknown>
-    snapshots: Array<unknown>
-    deliveries: Array<unknown>
-    evaluations: Array<unknown>
-    artifacts: Array<unknown>
+    task: {
+      id: string
+      projectID: string
+      directory?: string
+      sessionID?: string | null
+      activeSpecVersionID?: string | null
+      activePlanVersionID?: string | null
+      activeRunID?: string | null
+      requestID?: string
+      source: string
+      title: string
+      request: string
+      status:
+        | "queued"
+        | "planning"
+        | "running"
+        | "blocked"
+        | "evaluating"
+        | "delivering"
+        | "completed"
+        | "failed"
+        | "cancelled"
+      priority: "high" | "normal" | "low"
+      blockingReason?: string
+      error?: string
+      budget?: {
+        maxRuns?: number
+        maxReplans?: number
+        maxEvaluations?: number
+        maxWallTimeMs?: number
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+    spec?: {
+      id: string
+      taskID: string
+      version: number
+      status: "ready" | "blocked" | "completed" | "superseded"
+      summary: string
+      content: string
+      scope: string
+      outOfScope?: string
+      evidence?: Array<string>
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    plan?: {
+      id: string
+      taskID: string
+      specSnapshotID: string
+      version: number
+      status: "active" | "superseded"
+      summary: string
+      prompt: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }
+    coordinatorRun?: {
+      id: string
+      taskID: string
+      planVersionID?: string | null
+      sessionID?: string | null
+      executor: "opencode" | "codex" | "claude-code"
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+      phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
+      blockingReason?: string
+      error?: string
+      retryCount: number
+      executorRef?: {
+        sessionID?: string
+        queueTaskID?: string
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }
+    goals: Array<{
+      id: string
+      taskID: string
+      specSnapshotID: string
+      description: string
+      criteria: string
+      priority: "blocking" | "advisory"
+      source?: "spec" | "system"
+      status: "pending" | "passed" | "failed"
+      orderIndex: number
+      metadata?: {
+        check_selector?: Array<string>
+        [key: string]: unknown | Array<string> | undefined
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    planNodes: Array<{
+      id: string
+      taskID: string
+      planVersionID: string
+      kind: "goal" | "milestone" | "step"
+      goalID?: string
+      title: string
+      brief: string
+      dependsOnIDs?: Array<string>
+      orderIndex: number
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    goalRuns: Array<{
+      id: string
+      taskID: string
+      goalID: string
+      planNodeID?: string
+      coordinatorRunID: string
+      sessionID?: string
+      executor: "opencode" | "codex" | "claude-code"
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted" | "superseded"
+      retryCount: number
+      blockingReason?: string
+      error?: string
+      workspaceDir?: string
+      baseRef?: string
+      mergeRef?: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }>
+    milestones: Array<{
+      id: string
+      taskID: string
+      planVersionID: string
+      title: string
+      description: string
+      status: "pending" | "active" | "passed" | "failed"
+      orderIndex: number
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    runs: Array<{
+      id: string
+      taskID: string
+      planVersionID?: string | null
+      sessionID?: string | null
+      executor: "opencode" | "codex" | "claude-code"
+      status: "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
+      phase: "plan" | "dispatch" | "evaluate" | "deliver" | "replan"
+      blockingReason?: string
+      error?: string
+      retryCount: number
+      executorRef?: {
+        sessionID?: string
+        queueTaskID?: string
+      }
+      metadata?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        started?: number
+        completed?: number
+      }
+    }>
+    interactions: Array<{
+      id: string
+      taskID: string
+      runID: string
+      sessionID?: string | null
+      externalID: string
+      type: "permission" | "question"
+      status: "pending" | "answered" | "rejected" | "expired"
+      title: string
+      body: string
+      payload?: {
+        [key: string]: unknown
+      }
+      response?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+        resolved?: number
+      }
+    }>
+    snapshots: Array<{
+      id: string
+      taskID: string
+      status: "created" | "running" | "blocked" | "completed" | "failed" | "cancelled"
+      summary: string
+      payload?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    deliveries: Array<{
+      id: string
+      taskID: string
+      runID: string
+      goalRunID?: string
+      status: "candidate" | "publishing" | "delivered" | "failed"
+      summary: string
+      result: {
+        summary: string
+        changedFiles: Array<string>
+        diffs: Array<FileDiff>
+        artifacts?: Array<{
+          kind: string
+          label: string
+          payload?: {
+            [key: string]: unknown
+          }
+        }>
+        publish?: {
+          [key: string]: unknown
+        }
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
+    evaluations: Array<{
+      id: string
+      taskID: string
+      runID: string
+      goalRunID?: string
+      deliveryID?: string | null
+      status: "pending" | "passed" | "failed" | "inconclusive"
+      verdict: "accepted" | "rejected" | "inconclusive"
+      summary: string
+      checks: Array<{
+        name: string
+        label?: string
+        family?: string
+        status: "passed" | "failed" | "skipped"
+        evidence?: string
+      }>
+      time: {
+        created: number
+        updated: number
+        completed?: number
+      }
+    }>
+    artifacts: Array<{
+      id: string
+      taskID: string
+      runID: string
+      goalRunID?: string
+      deliveryID?: string | null
+      kind: "patch" | "changed_file" | "log" | "report" | "image" | "diff" | "html_trace" | "link" | "git_ref" | "pr"
+      label: string
+      payload?: {
+        [key: string]: unknown
+      }
+      time: {
+        created: number
+        updated: number
+      }
+    }>
   }
 }
 

@@ -23,19 +23,6 @@ import type { ReplanContext } from "@/planner/agent"
 const MOCK_PLAN_OUTPUT: PlannerOutputType = {
   prd: "Expanded PRD: Add a greeting endpoint to the API that returns 'Hello, World!'.\n\nBased on codebase exploration:\n- Server uses Hono framework\n- Routes are in src/server/routes/\n- Tests use bun:test",
   summary: "Add GET /hello endpoint returning Hello World",
-  goals: [
-    {
-      description: "GET /hello endpoint returns 200 with greeting",
-      criteria: "curl localhost:3000/hello returns HTTP 200 with body containing 'Hello'",
-      priority: "blocking",
-      check_selector: ["build", "test"],
-    },
-    {
-      description: "Endpoint has proper error handling",
-      criteria: "Invalid requests return appropriate HTTP error codes",
-      priority: "advisory",
-    },
-  ],
   milestones: [
     {
       title: "Core Implementation",
@@ -73,6 +60,19 @@ const MOCK_PLAN_OUTPUT: PlannerOutputType = {
     },
   ],
 }
+
+const MOCK_GOALS = [
+  {
+    description: "GET /hello endpoint returns 200 with greeting",
+    criteria: "curl localhost:3000/hello returns HTTP 200 with body containing 'Hello'",
+    priority: "blocking" as const,
+  },
+  {
+    description: "Endpoint has proper error handling",
+    criteria: "Invalid requests return appropriate HTTP error codes",
+    priority: "advisory" as const,
+  },
+]
 
 const MOCK_ANALYSIS_ACCEPTED: EvaluatorAnalysisType = {
   verdict: "accepted",
@@ -149,16 +149,8 @@ describe("PlannerAgent output structure", () => {
     const output = MOCK_PLAN_OUTPUT
     expect(output.prd).toBeTruthy()
     expect(output.summary).toBeTruthy()
-    expect(output.goals.length).toBeGreaterThan(0)
     expect(output.subtasks.length).toBeGreaterThan(0)
     expect(output.risks.length).toBeGreaterThan(0)
-
-    // Goals have required fields
-    for (const goal of output.goals) {
-      expect(goal.description).toBeTruthy()
-      expect(goal.criteria).toBeTruthy()
-      expect(["blocking", "advisory"]).toContain(goal.priority)
-    }
 
     // Subtasks are ordered
     const orders = output.subtasks.map((s) => s.order ?? 0)
@@ -171,7 +163,7 @@ describe("PlannerAgent output structure", () => {
     for (const ms of output.milestones!) {
       for (const idx of ms.goal_indices) {
         expect(idx).toBeGreaterThanOrEqual(0)
-        expect(idx).toBeLessThan(output.goals.length)
+        expect(idx).toBeLessThan(MOCK_GOALS.length)
       }
     }
   })
@@ -209,14 +201,19 @@ describe("PlannerService integration", () => {
     const result = await PlannerService.initial({
       title: "Test task",
       request: "Do something",
-      goals: [
-        { description: "Goal A", criteria: "A passes", priority: "blocking" },
-      ],
+      spec: {
+        summary: "Spec summary",
+        content: "# Scope\n\nDo something",
+        goals: [
+          { description: "Goal A", criteria: "A passes", priority: "blocking" },
+        ],
+        assumptions: [],
+        risks: [],
+      },
     })
     expect(result.summary).toBeTruthy()
     expect(result.prompt).toContain("Test task")
-    expect(result.goals).toHaveLength(1)
-    expect(result.goals[0].description).toBe("Goal A")
+    expect(result.prompt).toContain("Goal A")
     expect(result.metadata.strategy).toBe("initial")
   })
 
@@ -236,6 +233,13 @@ describe("PlannerService integration", () => {
       PlannerService.replan({
         title: "Fix bug",
         request: "Fix the login validation bug",
+        spec: {
+          summary: "Spec summary",
+          content: "# Scope\n\nFix the login validation bug",
+          goals: [{ description: "Login works", criteria: "Test passes", priority: "blocking" }],
+          assumptions: [],
+          risks: [],
+        },
         goals: [{ description: "Login works", criteria: "Test passes", priority: "blocking" }],
         previousPrompt: "Previous prompt content...",
         previousPlanID: "plan_001",
@@ -248,7 +252,7 @@ describe("PlannerService integration", () => {
 describe("ReplanContext construction", () => {
   test("builds valid ReplanContext from evaluator analysis", () => {
     const analysis = MOCK_ANALYSIS_REJECTED
-    const goals = MOCK_PLAN_OUTPUT.goals
+    const goals = MOCK_GOALS
 
     const ctx: ReplanContext = {
       previousSummary: "Add GET /hello endpoint returning Hello World",
@@ -328,13 +332,19 @@ describe("Agent output to PlanDraft conversion", () => {
     const result = await PlannerService.initial({
       title: "Test conversion",
       request: "Implement feature X",
-      goals: [
-        {
-          description: "Feature X works",
-          criteria: "bun run test passes",
-          priority: "blocking",
-        },
-      ],
+      spec: {
+        summary: "Spec summary",
+        content: "# Scope\n\nImplement feature X",
+        goals: [
+          {
+            description: "Feature X works",
+            criteria: "bun run test passes",
+            priority: "blocking",
+          },
+        ],
+        assumptions: [],
+        risks: [],
+      },
     })
 
     expect(result.prompt).toContain("Test conversion")

@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import fs from "fs/promises"
+import os from "os"
+import path from "path"
 import { Bus } from "../../src/bus"
+import { Config } from "../../src/config/config"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { OpencodeExecutor } from "../../src/executor/opencode"
@@ -8,8 +12,8 @@ import { OrchestratorChannelBindingTable, OrchestratorTaskTable } from "../../sr
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
-import { SessionSummary } from "../../src/session/summary"
 import { SpecService } from "../../src/spec/service"
+import { SessionSummary } from "../../src/session/summary"
 import { Log } from "../../src/util/log"
 import { installControlModel } from "../control-plane/mock-control-model"
 import { resetDatabase } from "../fixture/db"
@@ -17,27 +21,13 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+let configDir = ""
+let originalConfigDir: string | undefined
+
 function stub() {
   spyOn(SpecService, "initial").mockResolvedValue({
-    summary: "Compiled spec",
-    content: "# Scope\n\nImplement feature",
-    scope: "Implement feature",
-    assumptions: [],
-    risks: [],
-    spec_items: [
-      {
-        title: "Implement the requested change",
-        description: "The requested change is implemented and checks pass.",
-        priority: "blocking",
-        check_selector: [],
-      },
-    ],
-    evidence_sources: [],
-    unresolved_questions: [],
-  })
-  spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Implement feature",
-    prompt: "Do the work",
+    content: "# Scope\n\nImplement feature",
     goals: [
       {
         description: "Implement the requested change",
@@ -45,6 +35,21 @@ function stub() {
         priority: "blocking",
       },
     ],
+    assumptions: [],
+    risks: [],
+    clarifications: [],
+    spec_items: [{
+      title: "Implement the requested change",
+      description: "The requested change is implemented and checks pass.",
+      priority: "blocking",
+      check_selector: ["spec_check"],
+    }],
+    evidence_sources: [],
+    unresolved_questions: [],
+  })
+  spyOn(PlannerService, "initial").mockResolvedValue({
+    summary: "Implement feature",
+    prompt: "Do the work",
     metadata: {
       strategy: "initial",
       steps: ["Implement the requested change"],
@@ -60,7 +65,13 @@ function stub() {
 }
 
 describe("channel routes", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await Instance.disposeAll()
+    await resetDatabase()
+    Config.global.reset()
+    originalConfigDir = process.env.OPENCORVUS_CONFIG_DIR
+    configDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-channel-config-"))
+    process.env.OPENCORVUS_CONFIG_DIR = configDir
     spyOn(SessionSummary, "summarize").mockResolvedValue(undefined as never)
   })
 
@@ -69,6 +80,12 @@ describe("channel routes", () => {
     delete process.env.OPENCORVUS_WORKBENCH_LLM
     delete process.env.OPENCORVUS_PUBLIC_URL
     delete process.env.OPENCORVUS_PUBLIC_URL_SECRET
+    Config.global.reset()
+    if (originalConfigDir === undefined) delete process.env.OPENCORVUS_CONFIG_DIR
+    else process.env.OPENCORVUS_CONFIG_DIR = originalConfigDir
+    if (configDir) await fs.rm(configDir, { recursive: true, force: true }).catch(() => undefined)
+    configDir = ""
+    await Instance.disposeAll()
     await resetDatabase()
   })
 

@@ -5,10 +5,12 @@ import { EvaluatorService } from "../../src/evaluator/service"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
-import { OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { OrchestratorGoalRunTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { PlannerFailureError } from "../../src/orchestrator/service"
+import { Preference } from "../../src/preference"
 import { Instance } from "../../src/project/instance"
 import { PlannerService } from "../../src/planner/service"
+import { SpecService } from "../../src/spec/service"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
@@ -18,6 +20,45 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 function mockLLM() {
+  const goals = (input: { request: string; goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }>; spec?: { goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }> } }) =>
+    (input.goals ?? input.spec?.goals ?? [{ description: input.request, criteria: "Task completed successfully", priority: "blocking" as const }]).map((goal) => ({
+      description: goal.description,
+      criteria: goal.criteria,
+      priority: goal.priority ?? ("blocking" as const),
+      metadata: goal.metadata ?? {},
+    }))
+  spyOn(SpecService, "initial").mockImplementation(async (input) => ({
+    summary: `Spec: ${input.title}`,
+    content: `# Scope\n\n${input.request}`,
+    goals: goals(input),
+    assumptions: [],
+    risks: [],
+    clarifications: [],
+    spec_items: [{
+      title: input.title,
+      description: input.request,
+      priority: "blocking" as const,
+      check_selector: ["spec_check"],
+    }],
+    evidence_sources: [],
+    unresolved_questions: [],
+  }))
+  spyOn(SpecService, "rewrite").mockImplementation(async (input) => ({
+    summary: `Spec rewrite: ${input.title}`,
+    content: `# Scope\n\n${input.request}`,
+    goals: goals(input),
+    assumptions: [],
+    risks: [input.rewriteContext.failureAnalysis.summary],
+    clarifications: [],
+    spec_items: [{
+      title: input.title,
+      description: input.request,
+      priority: "blocking" as const,
+      check_selector: ["spec_check"],
+    }],
+    evidence_sources: [],
+    unresolved_questions: [],
+  }))
   spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
     const allPassed = input.checkResults.every((c) => c.status === "passed")
     return {
@@ -41,12 +82,7 @@ function mockLLM() {
   spyOn(PlannerService, "initial").mockImplementation(async (input) => ({
     summary: `Plan: ${input.title}`,
     prompt: `Execute: ${input.request}`,
-    goals: (input.goals ?? [{ description: input.request, criteria: "Task completed successfully", priority: "blocking" as const }]).map((g) => ({
-      description: g.description,
-      criteria: g.criteria,
-      priority: g.priority ?? ("blocking" as const),
-      metadata: {},
-    })),
+    goals: goals(input),
     metadata: {
       strategy: "initial" as const,
       steps: ["1. Execute the task"],
@@ -61,12 +97,7 @@ function mockLLM() {
   spyOn(PlannerService, "replan").mockImplementation(async (input) => ({
     summary: `Replan: ${input.title}`,
     prompt: `Retry: ${input.request}\n\nPrevious failure: ${input.failureSummary}`,
-    goals: input.goals.map((g) => ({
-      description: g.description,
-      criteria: g.criteria,
-      priority: g.priority ?? ("blocking" as const),
-      metadata: {},
-    })),
+    goals: goals(input),
     metadata: {
       strategy: "replan" as const,
       steps: ["1. Retry the task"],
@@ -131,8 +162,11 @@ describe("orchestrator routes", () => {
         const run = Database.use((db) =>
           db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, json.task_id)).get(),
         )
+        const goalRun = Database.use((db) =>
+          db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.task_id, json.task_id)).get(),
+        )
         expect(run?.status).toBe("accepted")
-        expect(run?.executor_ref?.queue_task_id).toBeTruthy()
+        expect(goalRun?.metadata?.queue_task_id).toBeTruthy()
       },
     })
 
@@ -826,14 +860,10 @@ describe("orchestrator routes", () => {
             text: "/pref style=concise",
           }),
         })
-        const before = await app.request(`/task/${task_id}/board`, {
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        const beforeBody = (await before.json()) as { lanes: Array<{ id: string; cards: Array<{ id: string; title: string; detail?: string }> }> }
-        const pref = beforeBody.lanes.find((lane) => lane.id === "preferences")?.cards[0]
-        expect(pref?.title).toBe("style")
+        const pref = Preference.manageable({
+          projectID: Instance.project.id,
+        }).find((item) => item.key === "style")
+        expect(pref?.key).toBe("style")
 
         const updated = await app.request(`/preference/${pref!.id}`, {
           method: "PATCH",
@@ -848,13 +878,13 @@ describe("orchestrator routes", () => {
         })
         expect(updated.status).toBe(200)
 
-        const afterUpdate = await app.request(`/task/${task_id}/board`, {
+        const afterUpdate = await app.request(`/task/${task_id}/brief`, {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
         })
-        const updatedBody = (await afterUpdate.json()) as { lanes: Array<{ id: string; cards: Array<{ detail?: string }> }> }
-        expect(updatedBody.lanes.find((lane) => lane.id === "preferences")?.cards[0]?.detail).toBe("minimal_diff")
+        const updatedBody = (await afterUpdate.json()) as { content: string }
+        expect(updatedBody.content).toContain("style: minimal_diff")
 
         const removed = await app.request(`/preference/${pref!.id}`, {
           method: "DELETE",
@@ -864,13 +894,13 @@ describe("orchestrator routes", () => {
         })
         expect(removed.status).toBe(200)
 
-        const afterDelete = await app.request(`/task/${task_id}/board`, {
+        const afterDelete = await app.request(`/task/${task_id}/brief`, {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
         })
-        const deletedBody = (await afterDelete.json()) as { lanes: Array<{ id: string; cards: unknown[] }> }
-        expect(deletedBody.lanes.find((lane) => lane.id === "preferences")?.cards.length).toBe(0)
+        const deletedBody = (await afterDelete.json()) as { content: string }
+        expect(deletedBody.content).not.toContain("style: minimal_diff")
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
@@ -878,7 +908,7 @@ describe("orchestrator routes", () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
-  test("PATCH and DELETE goal routes mutate board data", async () => {
+  test("PATCH and DELETE goal routes are no longer exposed", async () => {
     await using tmp = await tmpdir({ git: true })
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
@@ -928,15 +958,7 @@ describe("orchestrator routes", () => {
             criteria: "Updated criteria",
           }),
         })
-        expect(updated.status).toBe(200)
-
-        const afterUpdate = await app.request(`/task/${task_id}/board`, {
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        const updatedBody = (await afterUpdate.json()) as { lanes: Array<{ id: string; cards: Array<{ title: string; detail?: string }> }> }
-        expect(updatedBody.lanes.find((lane) => lane.id === "goals")?.cards[0]?.title).toBe("Updated goal")
+        expect(updated.status).toBe(404)
 
         const removed = await app.request(`/goal/${goal!.id}`, {
           method: "DELETE",
@@ -944,15 +966,7 @@ describe("orchestrator routes", () => {
             "x-opencorvus-directory": tmp.path,
           },
         })
-        expect(removed.status).toBe(200)
-
-        const afterDelete = await app.request(`/task/${task_id}/board`, {
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        const deletedBody = (await afterDelete.json()) as { lanes: Array<{ id: string; cards: unknown[] }> }
-        expect(deletedBody.lanes.find((lane) => lane.id === "goals")?.cards.length).toBe(0)
+        expect(removed.status).toBe(404)
       },
     })
 
@@ -1072,6 +1086,7 @@ describe("orchestrator routes", () => {
   test("POST /task returns 503 when planner compilation fails", async () => {
     await using tmp = await tmpdir({ git: true })
     mock.restore()
+    mockLLM()
     spyOn(PlannerService, "initial").mockRejectedValue(new PlannerFailureError("planner agent failed"))
 
     await Instance.provide({

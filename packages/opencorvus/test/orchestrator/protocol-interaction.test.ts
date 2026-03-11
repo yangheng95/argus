@@ -62,7 +62,7 @@ describe("protocol interaction resolution", () => {
             session_id: session.id,
             executor: "codex",
             status: "blocked",
-            phase: "execute",
+            phase: "dispatch",
             blocking_reason: "permission",
             retry_count: 0,
             executor_ref: {
