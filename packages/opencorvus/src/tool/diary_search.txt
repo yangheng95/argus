@@ -1,1 +1,0 @@
-Search diary entries by date range and/or keyword in title/content.
