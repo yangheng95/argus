@@ -221,12 +221,14 @@ const dom = {
   planBadge: $("#planBadge"),
   planBody: $("#planBody"),
   goalsBadge: $("#goalsBadge"),
+  btnCreateGoal: $("#btnCreateGoal"),
   goalsBody: $("#goalsBody"),
   criteriaBadge: $("#criteriaBadge"),
   criteriaList: $("#criteriaList"),
   evalBody: $("#evalBody"),
   changesBadge: $("#changesBadge"),
   changesBody: $("#changesBody"),
+  chatGoalsStrip: $("#chatGoalsStrip"),
   chatScroll: $("#chatScroll"),
   chatEmpty: $("#chatEmpty"),
   chatCount: $("#chatCount"),
@@ -276,6 +278,9 @@ const dom = {
   appDialogInputField: $("#appDialogInputField"),
   appDialogInputLabel: $("#appDialogInputLabel"),
   appDialogInput: $("#appDialogInput"),
+  appDialogSelectField: $("#appDialogSelectField"),
+  appDialogSelectLabel: $("#appDialogSelectLabel"),
+  appDialogSelect: $("#appDialogSelect"),
   btnAppDialogCancel: $("#btnAppDialogCancel"),
   btnAppDialogOk: $("#btnAppDialogOk"),
   llmForm: $("#llmForm"),
@@ -288,6 +293,7 @@ const dom = {
   llmApiKeySummary: $("#llmApiKeySummary"),
   btnLlmApiKeyToggle: $("#btnLlmApiKeyToggle"),
   btnLlmApiKeyCopy: $("#btnLlmApiKeyCopy"),
+  btnLlmAuthAction: $("#btnLlmAuthAction"),
   llmStatus: $("#llmStatus"),
   llmNotice: $("#llmNotice"),
   channelDialog: $("#channelDialog"),
@@ -343,6 +349,9 @@ const workspace = window.createOverlayWorkspace?.({
   stopPolling,
   stopSSE,
   renderManagedSessionList,
+  onDirectoryChange() {
+    void persistOverlaySettings();
+  },
 });
 
 if (!workspace) {
@@ -353,6 +362,8 @@ const {
   workspaceMode,
   renderWorkspaceState,
   hasWorkspaceSelection,
+  setWorkspaceDirectory,
+  restoreWorkspaceDirectory,
   clearWorkspaceRuntime,
   clearProjectScopeData,
   enterEmptyWorkspace,
@@ -364,6 +375,8 @@ Object.assign(window, {
   workspaceMode,
   renderWorkspaceState,
   hasWorkspaceSelection,
+  setWorkspaceDirectory,
+  restoreWorkspaceDirectory,
   clearWorkspaceRuntime,
   clearProjectScopeData,
   enterEmptyWorkspace,
@@ -1296,6 +1309,15 @@ async function applyPanelResult(result) {
     await selectTask(result.task_id);
     return;
   }
+  if (result?.session_id && !state.selectedTaskID) {
+    if (currentSessionID() === result.session_id) {
+      await Promise.all([loadConversation(), loadManagedSessions(), loadMemory()]);
+      return;
+    }
+    await openManagedSession(result.session_id);
+    await loadManagedSessions();
+    return;
+  }
   if (state.selectedTaskID) {
     await loadBoard();
     await loadConversation();
@@ -1349,25 +1371,40 @@ async function panelMessageStream(text, metadata) {
   const decoder = new TextDecoder();
   let buf = "";
   let result = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
+  const consume = (chunk, flush = false) => {
+    buf += chunk;
+    const blocks = buf.split(/\r?\n\r?\n/);
+    if (!flush) {
+      buf = blocks.pop() || "";
+    } else {
+      buf = "";
+    }
+    for (const block of blocks) {
+      const data = block
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+      if (!data) continue;
       try {
-        const ev = JSON.parse(line.slice(5).trim());
+        const ev = JSON.parse(data);
         if (ev.type === "tool" && placeholder) {
           placeholder.parts[0].text = `${ev.tool}...`;
           renderSession();
         } else if (ev.type === "done") {
           result = ev.result;
         }
-      } catch (e) { AppLog.debug("stream", "malformed SSE event: " + line, { error: String(e) }); }
+      } catch (e) { AppLog.debug("stream", "malformed SSE event: " + data, { error: String(e) }); }
     }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      consume(decoder.decode(), true);
+      break;
+    }
+    consume(decoder.decode(value, { stream: true }));
   }
 
   if (!result) return null;
@@ -1771,8 +1808,11 @@ function providerPreferredOauthMethod(providerID) {
   return methods.find((item) => /browser/i.test(item.label)) || methods[0];
 }
 
-async function authorizeProvider(providerID) {
-  const match = providerPreferredOauthMethod(providerID);
+async function authorizeProvider(providerID, methodIndex) {
+  const methods = providerAuthMethods(providerID).map((item, index) => ({ ...item, index }));
+  const match = typeof methodIndex === "number"
+    ? methods.find((item) => item.index === methodIndex)
+    : providerPreferredOauthMethod(providerID);
   if (!match) return false;
 
   const confirmed = await nativeConfirm(`${providerLabel(providerID)} ${t("llm.status.auth_required")}: ${match.label}`, {
@@ -1834,6 +1874,42 @@ async function authorizeProvider(providerID) {
   return true;
 }
 
+function renderLlmAuthAction(providerID) {
+  if (!dom.btnLlmAuthAction) return;
+  const methods = providerAuthMethods(providerID);
+  const visible = methods.length > 0;
+  dom.btnLlmAuthAction.classList.toggle("hidden", !visible);
+  dom.btnLlmAuthAction.disabled = !visible || !!dom.llmProvider?.disabled;
+  if (!visible) return;
+  dom.btnLlmAuthAction.textContent = t("llm.auth_connect");
+  dom.btnLlmAuthAction.title = t("llm.auth_connect_title");
+  dom.btnLlmAuthAction.setAttribute("aria-label", t("llm.auth_connect_title"));
+}
+
+async function authenticateSelectedProvider() {
+  const providerID = dom.llmProvider?.value?.trim() || "";
+  const methods = providerAuthMethods(providerID).map((item, index) => ({ ...item, index }));
+  if (!providerID || methods.length === 0) return false;
+  if (methods.length === 1 && methods[0]?.type === "oauth") {
+    return authorizeProvider(providerID, methods[0].index);
+  }
+  const value = await nativeSelect(t("llm.auth_choose_method"), {
+    title: providerLabel(providerID),
+    selectLabel: t("llm.auth_method"),
+    options: methods.map((item) => ({
+      label: item.label,
+      value: String(item.index),
+      hint: item.type === "oauth" ? t("llm.auth_type_oauth") : t("llm.auth_type_api"),
+    })),
+  });
+  if (value == null) return false;
+  const method = methods.find((item) => String(item.index) === value);
+  if (!method) return false;
+  if (method.type === "oauth") return authorizeProvider(providerID, method.index);
+  dom.llmApiKey?.focus();
+  return true;
+}
+
 function providerState(providerID, configOverride) {
   const config = configOverride || state.config || {};
   const item = providerEntry(providerID);
@@ -1890,6 +1966,7 @@ function renderProviderStatus(providerID, configOverride) {
     dom.llmStatus.textContent = t("llm.status.unknown");
     dom.llmStatus.dataset.status = "";
     dom.llmStatus.title = "";
+    renderLlmAuthAction("");
     renderLlmSummary();
     return;
   }
@@ -1897,6 +1974,7 @@ function renderProviderStatus(providerID, configOverride) {
   dom.llmStatus.textContent = info.label;
   dom.llmStatus.dataset.status = info.tone;
   dom.llmStatus.title = info.detail || info.label;
+  renderLlmAuthAction(providerID);
   renderLlmSummary();
 }
 
@@ -2002,6 +2080,7 @@ function setLlmBusy(value) {
   if (dom.llmApiKey) dom.llmApiKey.disabled = busy;
   if (dom.btnLlmApiKeyToggle) dom.btnLlmApiKeyToggle.disabled = busy;
   if (dom.btnLlmApiKeyCopy) dom.btnLlmApiKeyCopy.disabled = busy || !dom.llmApiKey?.value?.trim();
+  renderLlmAuthAction(dom.llmProvider?.value || "");
   renderLlmApiKeyTools();
 }
 
@@ -2207,6 +2286,24 @@ async function nativePrompt(message, options) {
   return result.confirmed ? result.value : null;
 }
 
+async function nativeSelect(message, options) {
+  const list = Array.isArray(options?.options) ? options.options : [];
+  if (!list.length) return null;
+  const result = await showAppDialog({
+    title: options?.title || t("dialog.input"),
+    message,
+    kind: options?.kind || "info",
+    okLabel: options?.okLabel || t("common.ok"),
+    cancelLabel: options?.cancelLabel || t("common.cancel"),
+    cancel: true,
+    select: true,
+    selectLabel: options?.selectLabel || t("dialog.value"),
+    selectOptions: list,
+    selectValue: options?.selectValue || list[0]?.value || "",
+  });
+  return result.confirmed ? result.value : null;
+}
+
 async function copyText(text) {
   if (!text) return false;
   if (navigator.clipboard?.writeText) {
@@ -2237,6 +2334,9 @@ function showAppDialog(options = {}) {
     !dom.appDialogInputField ||
     !dom.appDialogInputLabel ||
     !dom.appDialogInput ||
+    !dom.appDialogSelectField ||
+    !dom.appDialogSelectLabel ||
+    !dom.appDialogSelect ||
     !dom.btnAppDialogCancel ||
     !dom.btnAppDialogOk
   ) {
@@ -2244,6 +2344,8 @@ function showAppDialog(options = {}) {
   }
 
   return new Promise((resolve) => {
+    const useInput = !!options.input;
+    const useSelect = !!options.select;
     let settled = false;
     const finish = (confirmed) => {
       if (settled) return;
@@ -2252,14 +2354,14 @@ function showAppDialog(options = {}) {
       if (dom.appDialog.open) dom.appDialog.close();
       resolve({
         confirmed,
-        value: confirmed && options.input ? dom.appDialogInput.value : null,
+        value: confirmed ? (useInput ? dom.appDialogInput.value : useSelect ? dom.appDialogSelect.value : null) : null,
       });
     };
     const onCancel = () => finish(false);
     const onOk = () => finish(true);
     const onClose = () => finish(false);
     const onKeydown = (event) => {
-      if (event.key === "Enter" && options.input) {
+      if (event.key === "Enter" && (useInput || useSelect)) {
         event.preventDefault();
         finish(true);
       }
@@ -2269,6 +2371,7 @@ function showAppDialog(options = {}) {
       dom.btnAppDialogOk.removeEventListener("click", onOk);
       dom.appDialog.removeEventListener("close", onClose);
       dom.appDialogInput.removeEventListener("keydown", onKeydown);
+      dom.appDialogSelect.removeEventListener("keydown", onKeydown);
     };
 
     dom.appDialogTitle.textContent = options.title || t("dialog.notice");
@@ -2277,19 +2380,30 @@ function showAppDialog(options = {}) {
     dom.btnAppDialogOk.textContent = options.okLabel || t("common.ok");
     dom.btnAppDialogCancel.textContent = options.cancelLabel || t("common.cancel");
     dom.btnAppDialogCancel.classList.toggle("hidden", !options.cancel);
-    dom.appDialogInputField.classList.toggle("hidden", !options.input);
+    dom.appDialogInputField.classList.toggle("hidden", !useInput);
     dom.appDialogInputLabel.textContent = options.inputLabel || t("dialog.value");
     dom.appDialogInput.placeholder = options.inputPlaceholder || "";
     dom.appDialogInput.value = options.inputValue || "";
+    dom.appDialogSelectField.classList.toggle("hidden", !useSelect);
+    dom.appDialogSelectLabel.textContent = options.selectLabel || t("dialog.value");
+    dom.appDialogSelect.innerHTML = (options.selectOptions || [])
+      .map((item) => {
+        const label = item?.hint ? `${item.label} · ${item.hint}` : item.label;
+        return `<option value="${escapeHtml(item.value)}">${escapeHtml(label)}</option>`;
+      })
+      .join("");
+    dom.appDialogSelect.value = options.selectValue || options.selectOptions?.[0]?.value || "";
 
     dom.btnAppDialogCancel.addEventListener("click", onCancel);
     dom.btnAppDialogOk.addEventListener("click", onOk);
     dom.appDialog.addEventListener("close", onClose);
     dom.appDialogInput.addEventListener("keydown", onKeydown);
+    dom.appDialogSelect.addEventListener("keydown", onKeydown);
     dom.appDialog.showModal();
 
     requestAnimationFrame(() => {
-      if (options.input) dom.appDialogInput.focus();
+      if (useInput) dom.appDialogInput.focus();
+      else if (useSelect) dom.appDialogSelect.focus();
       else dom.btnAppDialogOk.focus();
     });
   });
@@ -2551,6 +2665,9 @@ async function loadMeta() {
     if (epoch !== state.directoryEpoch) return;
     state.path = path;
     state.vcs = vcs;
+    if (!activeDirectory() && typeof path?.directory === "string" && path.directory.trim()) {
+      setWorkspaceDirectory(path.directory, "auto");
+    }
     renderMeta();
   } catch {
     if (epoch !== state.directoryEpoch) return;
@@ -2683,8 +2800,15 @@ function resetProjectScope() {
 }
 
 async function reloadProjectScope() {
+  await ensureWorkspaceDirectory();
   await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
   await restoreInitialWorkspace();
+}
+
+async function ensureWorkspaceDirectory() {
+  if (activeDirectory()) return activeDirectory();
+  await loadMeta();
+  return activeDirectory();
 }
 
 async function applyDirectory(next, mode) {
@@ -3194,6 +3318,19 @@ async function loadConversation() {
     } catch (e) {
       AppLog.error("ui", "Failed to load conversation", { error: String(e) });
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
+      const sessionID = currentSessionID();
+      if (sessionID) {
+        try {
+          const sessionMsgs = await apiJson(`session/${sessionID}/message`);
+          state.session = Array.isArray(sessionMsgs) ? sessionMsgs : [];
+          state.sessionUpdatedAt = Date.now();
+          renderSession();
+          if (!state.selectedTaskID || state.chatSessionID) {
+            await loadChanges();
+          }
+          return;
+        } catch {}
+      }
       state.session = [];
       state.sessionUpdatedAt = Date.now();
       renderSession();
@@ -3352,8 +3489,49 @@ function stopSSE() {
   state.sseConnected = false;
 }
 
-function handleSSEEvent(event) {
+function handleEventStreamEvent(event) {
   const type = event.type || "";
+  if (type === "message.updated") {
+    const info = event.properties?.info;
+    if (info?.sessionID !== currentSessionID()) return;
+    const existing = state.session.find((item) => item.info?.id === info.id);
+    if (!existing) {
+      state.session.push({
+        info,
+        parts: [],
+      });
+    }
+    state.sessionUpdatedAt = Date.now();
+    renderSession();
+    return;
+  }
+  if (type === "message.part.updated") {
+    const part = event.properties?.part;
+    if (part?.sessionID !== currentSessionID()) return;
+    const message = state.session.find((item) => item.info?.id === part.messageID);
+    if (!message) return;
+    const index = message.parts.findIndex((item) => item.id === part.id);
+    if (index >= 0) {
+      message.parts[index] = part;
+    } else {
+      message.parts.push(part);
+    }
+    state.sessionUpdatedAt = Date.now();
+    renderSession();
+    return;
+  }
+  if (type === "message.part.delta") {
+    const properties = event.properties || {};
+    if (properties.sessionID !== currentSessionID() || properties.field !== "text" || typeof properties.delta !== "string") return;
+    const message = state.session.find((item) => item.info?.id === properties.messageID);
+    if (!message) return;
+    const part = message.parts.find((item) => item.id === properties.partID && item.type === "text");
+    if (!part) return;
+    part.text += properties.delta;
+    state.sessionUpdatedAt = Date.now();
+    renderSession();
+    return;
+  }
   if (
     type.includes("task.updated") ||
     type.includes("task.completed") ||
@@ -3370,6 +3548,10 @@ function handleSSEEvent(event) {
       scheduleConversation(SESSION_EVENT_DEBOUNCE);
     }
   }
+}
+
+function handleSSEEvent(event) {
+  handleEventStreamEvent(event);
 }
 
 // ── Polling ──
@@ -4025,7 +4207,6 @@ const performTaskAction = async function (action) {
 
 const openGoalDialog = function () {
   if (!state.selectedTaskID) return;
-  dom.goalDialogTitle.textContent = t("goal.new_title");
   dom.goalId.value = "";
   dom.goalDescription.value = "";
   dom.goalCriteria.value = "";
@@ -4033,7 +4214,6 @@ const openGoalDialog = function () {
 };
 
 const editGoal = function (id, description, criteria) {
-  dom.goalDialogTitle.textContent = t("goal.edit_title");
   dom.goalId.value = id || "";
   dom.goalDescription.value = description || "";
   dom.goalCriteria.value = criteria || "";
@@ -6022,6 +6202,14 @@ dom.btnCancelGoal.addEventListener("click", () => {
   dom.goalDialog.close();
 });
 
+if (dom.btnCreateGoal) {
+  dom.btnCreateGoal.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openGoalDialog();
+  });
+}
+
 if (dom.overviewBody) {
   dom.overviewBody.addEventListener("click", async (e) => {
     const button = eventClosest(e, "[data-task-action]");
@@ -6334,6 +6522,12 @@ dom.btnLlmApiKeyCopy?.addEventListener("click", async () => {
   if (!value) return;
   const ok = await copyText(value);
   showLlmNotice(t(ok ? "llm.notice.api_key_copied" : "llm.notice.api_key_copy_failed"), ok ? "active" : "error", ok ? 1800 : 3200);
+});
+
+dom.btnLlmAuthAction?.addEventListener("click", async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  await authenticateSelectedProvider();
 });
 
 dom.localeMode?.addEventListener("change", async () => {
@@ -7228,6 +7422,7 @@ async function init() {
   const ok = await checkConnection();
   if (ok) {
     AppLog.info("init", "loading initial data");
+    await ensureWorkspaceDirectory();
     await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
     await restoreInitialWorkspace();
     AppLog.info("init", "ready");
@@ -7241,6 +7436,7 @@ async function init() {
     if (!state.connected) {
       const ok = await checkConnection();
       if (ok) {
+        await ensureWorkspaceDirectory();
         await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
         await restoreInitialWorkspace();
         if (state.selectedTaskID) await selectTask(state.selectedTaskID);

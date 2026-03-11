@@ -63,7 +63,7 @@ type BudgetInput = z.infer<typeof CreateTaskInput>["budget"]
 type PriorityInput = z.infer<typeof CreateTaskInput>["priority"]
 type ChannelBindingInput = z.infer<typeof CreateTaskInput>["channelBinding"]
 
-type SpecDraft = Awaited<ReturnType<typeof SpecService.initial>>
+type SpecDraft = NonNullable<Awaited<ReturnType<typeof SpecService.initial>>>
 
 export type TransitionMode = "initial" | "replan"
 
@@ -107,6 +107,31 @@ export type CompileTransitionResult = {
 
 type PlannerFailureWithSpec = PlannerFailureError & {
   specDraft?: SpecDraft
+}
+
+function fallbackSpecDraft(draft: Awaited<ReturnType<typeof SpecService.initial>>, input: CompileTransitionInput): SpecDraft {
+  if (draft) return draft
+  const goals = (input.goals && input.goals.length > 0 ? input.goals : [{
+    description: input.request,
+    criteria: "The requested change is implemented and acceptance checks pass.",
+    priority: "blocking" as const,
+  }]).map((goal) => ({
+    description: goal.description,
+    criteria: goal.criteria,
+    priority: goal.priority ?? "blocking",
+    metadata: goal.metadata,
+  }))
+  return {
+    summary: `Spec: ${input.title}`,
+    content: input.request,
+    goals,
+    assumptions: [],
+    risks: [],
+    clarifications: [],
+    spec_items: [],
+    evidence_sources: [],
+    unresolved_questions: [],
+  }
 }
 
 type PersistInitialInput = {
@@ -280,7 +305,7 @@ function blockedPlanDraft(input: {
 
 export async function compileTransition(input: CompileTransitionInput): Promise<CompileTransitionResult> {
   installRuntimeShims()
-  const specDraft = await compileSpec(input)
+  const specDraft = fallbackSpecDraft(await compileSpec(input), input)
   const specBlock = specClarification(specDraft)
   const planDraft = await (
     specBlock
