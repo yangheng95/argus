@@ -459,7 +459,7 @@ export namespace SessionLoop {
       messages: modelMessages,
       tools,
       model: input.model,
-      toolChoice: format.type === "json_schema" ? "required" : undefined,
+      toolChoice: format.type === "json_schema" ? (input.model.capabilities.reasoning ? "auto" : "required") : undefined,
     })
 
     if (structured !== undefined) {
@@ -713,6 +713,7 @@ export namespace SessionLoop {
       { modelID: input.model.api.id, providerID: input.model.providerID },
       input.agent,
     )) {
+      if (input.tools !== undefined && !input.tools[item.id]) continue
       const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
       tools[item.id] = tool({
         id: item.id as any,

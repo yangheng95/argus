@@ -1,0 +1,1 @@
+List diary entries with optional pagination and sorting.

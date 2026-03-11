@@ -1,11 +1,16 @@
 #!/usr/bin/env bun
 
 import { createHash } from "node:crypto"
+import { readdirSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import ts from "typescript"
 
 const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
-const panel = ["src/index.html", "src/app.js"].map((file) => path.join(dir, file))
+const panel = readdirSync(path.join(dir, "src"))
+  .filter((file) => /\.(?:html|js)$/.test(file))
+  .map((file) => path.join(dir, "src", file))
+  .sort()
 const locale = ["en-US", "zh-CN"].map((lang) => path.join(dir, "src", "i18n", `${lang}.json`))
 
 function record(input: unknown): input is Record<string, unknown> {
@@ -24,17 +29,49 @@ function flatten(input: unknown, prefix = "") {
 
 function extract(text: string) {
   const keys = new Set<string>()
-  for (const match of text.matchAll(/\b(?:t|tc|errorText)\(\s*["'`]([^"'`]+)["'`]/g)) {
-    keys.add(match[1])
-  }
   for (const match of text.matchAll(/data-i18n(?:-[a-z-]+)?="([^"]+)"/g)) {
     keys.add(match[1])
   }
   return [...keys]
 }
 
+function callKey(input?: ts.Expression): string[] {
+  if (!input) return []
+  if (ts.isStringLiteralLike(input) || ts.isNoSubstitutionTemplateLiteral(input)) return [input.text]
+  if (ts.isParenthesizedExpression(input)) return callKey(input.expression)
+  if (ts.isConditionalExpression(input)) return [...callKey(input.whenTrue), ...callKey(input.whenFalse)]
+  return []
+}
+
+function scriptKeys(file: string, text: string) {
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const keys = new Set<string>()
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node)) {
+      const name = ts.isIdentifier(node.expression)
+        ? node.expression.text
+        : ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.name)
+          ? node.expression.name.text
+          : ""
+      if (["t", "tc", "errorText"].includes(name)) {
+        for (const key of callKey(node.arguments[0])) keys.add(key)
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return [...keys]
+}
+
+function referenced(keys: string[], input: string) {
+  return keys.includes(input) || keys.some((key) => input.startsWith(`${key}.`))
+}
+
 const panelText = await Promise.all(panel.map((file) => Bun.file(file).text()))
-const panelKeys = [...new Set(panelText.flatMap((text) => extract(text)))].sort()
+const panelKeys = [...new Set(panel.flatMap((file, index) => {
+  const text = panelText[index]
+  return file.endsWith(".js") ? scriptKeys(file, text) : extract(text)
+}))].sort()
 const revision = createHash("sha256")
   .update(panel.map((file, index) => `${path.relative(dir, file)}\n${panelText[index]}`).join("\n\n"))
   .digest("hex")
@@ -74,6 +111,18 @@ for (const item of docs) {
       `Locale keys: ${item.keys.length}`,
       `Missing keys: ${missing.join(", ")}`,
       "Update both en-US.json and zh-CN.json when the panel adds or renames UI strings.",
+    ].join("\n"),
+  )
+}
+
+for (const item of docs) {
+  const unused = item.keys.filter((key) => !referenced(panelKeys, key))
+  if (unused.length === 0) continue
+  throw new Error(
+    [
+      `Panel locale has unused keys: ${path.relative(dir, item.file)}`,
+      `Unused keys: ${unused.join(", ")}`,
+      "Remove stale keys when the panel stops referencing them.",
     ].join("\n"),
   )
 }

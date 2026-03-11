@@ -105,6 +105,72 @@ describe("evaluator.service", () => {
     })
   })
 
+  test("runs named checks concurrently while preserving result order", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const wait = `setTimeout(() => process.exit(0), 900)`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const started = Date.now()
+        const result = await EvaluatorService.evaluate(
+          {
+            metadata: {
+              checks: {
+                named: {
+                  alpha: {
+                    label: "Alpha",
+                    family: "lint",
+                    commands: [`"${BunProc.which()}" -e "${wait}"`],
+                  },
+                  beta: {
+                    label: "Beta",
+                    family: "test",
+                    commands: [`"${BunProc.which()}" -e "${wait}"`],
+                  },
+                },
+              },
+            },
+          },
+          { summary: "delivery ready" },
+        )
+        const elapsed = Date.now() - started
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["alpha", "beta"])
+        expect(elapsed).toBeLessThan(1600)
+      },
+    })
+  })
+
+  test("runs explicit multi-command lint checks concurrently", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const wait = `setTimeout(() => process.exit(0), 900)`
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const started = Date.now()
+        const result = await EvaluatorService.evaluate(
+          {
+            metadata: {
+              checks: {
+                lint: [
+                  `"${BunProc.which()}" -e "${wait}"`,
+                  `"${BunProc.which()}" -e "${wait}"`,
+                ],
+              },
+            },
+          },
+          { summary: "delivery ready" },
+        )
+        const elapsed = Date.now() - started
+        expect(result.status).toBe("passed")
+        expect(result.checks.map((item) => item.name)).toEqual(["lint#1", "lint#2"])
+        expect(elapsed).toBeLessThan(1600)
+      },
+    })
+  })
+
   test("discovers typecheck script as a named lint check", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
@@ -284,6 +350,34 @@ describe("evaluator.service", () => {
         )
         expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "judge")?.status).toBe("failed")
+      },
+    })
+  })
+
+  test("skips spec check when no active spec exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "validate delivery",
+            metadata: {
+              checks: {
+                verify_cmd: [`"${BunProc.which()}" -e "process.exit(0)"`],
+                spec_check: {
+                  enabled: true,
+                  mode: "strict",
+                },
+              },
+            },
+          },
+          { summary: "delivery ready", changedFiles: [], diffs: [] },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.verdict).toBe("accepted")
+        expect(result.checks.find((item) => item.name === "spec_check")).toBeUndefined()
       },
     })
   })
@@ -552,6 +646,97 @@ describe("evaluator.service", () => {
         )
         expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("failed")
+      },
+    })
+  })
+
+  test("reuses review model lookup across multiple review checks", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const defaultModel = spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "Review the implementation quality.",
+            metadata: {
+              checks: {
+                code_quality: {
+                  enabled: true,
+                  mode: "soft",
+                },
+                code_review: {
+                  enabled: true,
+                  mode: "soft",
+                },
+                dead_code_review: {
+                  enabled: true,
+                  mode: "soft",
+                },
+              },
+            },
+          },
+          {
+            summary: "Updated the service implementation.",
+            changedFiles: ["service.ts"],
+            diffs: [
+              {
+                file: "service.ts",
+                before: "export const value = 1\n",
+                after: "export const value = 2\n",
+                additions: 1,
+                deletions: 1,
+                status: "modified",
+              },
+            ],
+          },
+        )
+        expect(result.status).toBe("failed")
+        expect(defaultModel).toHaveBeenCalledTimes(1)
+        expect(result.checks.filter((item) => item.name !== "evaluation_config").map((item) => item.name)).toEqual([
+          "code_quality",
+          "code_review",
+          "dead_code_review",
+        ])
+      },
+    })
+  })
+
+  test("skips review checks after a strict local failure", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const defaultModel = spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "Review the delivery.",
+            metadata: {
+              checks: {
+                artifact: {
+                  require_changed_files: true,
+                  mode: "strict",
+                },
+                code_review: {
+                  enabled: true,
+                  mode: "soft",
+                },
+                judge: {
+                  enabled: true,
+                  mode: "soft",
+                },
+              },
+            },
+          },
+          { summary: "delivery ready", changedFiles: [], diffs: [] },
+        )
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "artifact")?.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "code_review")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "judge")).toBeUndefined()
+        expect(defaultModel).not.toHaveBeenCalled()
       },
     })
   })

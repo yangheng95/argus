@@ -22,6 +22,7 @@ import { OrchestratorService } from "../../src/orchestrator/service"
 import { DeliveryService } from "../../src/orchestrator/delivery"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
+import { Session } from "../../src/session"
 import { PlannerFailureError, PlannerService } from "../../src/planner/service"
 import { SpecService } from "../../src/spec/service"
 import { Filesystem } from "../../src/util/filesystem"
@@ -268,6 +269,66 @@ describe("orchestrator.service", () => {
     const subject = await $`git log -1 --pretty=%s`.cwd(tmp.path).quiet().text()
     expect(subject.trim()).toBe("Checkpoint before create a starter task in a standalone directory")
     expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  test("new tasks keep lint, typecheck, and spec checks enabled", async () => {
+    await using tmp = await tmpdir({
+      git: true,
+      init: async (dir) => {
+        await Bun.write(
+          path.join(dir, "package.json"),
+          JSON.stringify({
+            name: "task-checks",
+            scripts: {
+              lint: "bun -e \"console.log('lint ok')\"",
+              typecheck: "bun -e \"console.log('typecheck ok')\"",
+            },
+          }),
+        )
+      },
+    })
+    stubPlanner()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "enforce default checks on new tasks",
+          checks: {
+            lint: false,
+            spec_check: {
+              enabled: false,
+            },
+            named: {
+              typecheck: {
+                label: "Type Check",
+                family: "lint",
+                commands: ["bun run typecheck"],
+                enabled: false,
+              },
+            },
+          },
+        })
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )
+        const checks = task?.metadata?.checks as {
+          lint?: string[] | false
+          spec_check?: { enabled?: boolean; mode?: string }
+          named?: { typecheck?: { enabled?: boolean; commands?: string[] } }
+        } | undefined
+
+        expect(checks?.lint).toEqual(["bun run lint"])
+        expect(checks?.named?.typecheck?.enabled).toBe(true)
+        expect(checks?.named?.typecheck?.commands).toEqual(["bun run typecheck"])
+        expect(checks?.spec_check?.enabled).toBe(true)
+        expect(checks?.spec_check?.mode).toBe("strict")
+      },
+    })
   })
 
   test("commits the accepted workspace state with a meaningful message", async () => {
@@ -1502,6 +1563,96 @@ describe("orchestrator.service", () => {
 
     expect(calls).toHaveLength(1)
     expect(calls[0]?.prompt).toContain("update the landing page hero section copy")
+  })
+
+  test("projects managed executor output into session messages", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stubPlanner()
+    const codex: ExecutorAdapter = {
+      capabilities() {
+        return {
+          submit: true,
+          status: true,
+          abort: true,
+          delivery: true,
+          resume: true,
+          events: true,
+        }
+      },
+      async submit(input: { sessionID: string }) {
+        return {
+          sessionID: input.sessionID,
+          queueTaskID: Identifier.ascending("task"),
+        }
+      },
+      async status(queueTaskID: string) {
+        return {
+          queueTaskID,
+          status: "running",
+          error: null,
+        }
+      },
+      async abort() {
+        return true
+      },
+      async delivery() {
+        return {
+          summary: "Hello from codex",
+          diffs: [],
+        }
+      },
+      async resume(input: { sessionID: string; message: string; priority?: "high" | "normal" | "low" }) {
+        return {
+          sessionID: input.sessionID,
+          queueTaskID: Identifier.ascending("task"),
+        }
+      },
+      async *events(input: { sessionID?: string }) {
+        yield {
+          type: "message.part.delta",
+          summary: "Delta: text",
+          payload: {
+            sessionID: input.sessionID,
+            field: "text",
+            delta: "Hello from codex",
+          },
+        }
+        yield {
+          type: "session.idle",
+          summary: "Session idle",
+          payload: {
+            sessionID: input.sessionID,
+            output: "Hello from codex",
+          },
+        }
+      },
+    }
+    ExecutorRegistry.register("codex", codex)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "stream managed executor output",
+          executor: "codex",
+        })
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )!
+        let body = ""
+        for (const _ of Array.from({ length: 30 })) {
+          await new Promise((resolve) => setTimeout(resolve, 25))
+          const msg = (await Session.messages({ sessionID: task.session_id! }))
+            .findLast((item) => item.info.role === "assistant")
+          body = msg?.parts
+            .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
+            .map((part) => part.text)
+            .join("\n") ?? ""
+          if (body.includes("Hello from codex")) break
+        }
+        expect(body).toContain("Hello from codex")
+      },
+    })
   })
 
   test("persists task-specific spec metadata and stage routing", async () => {

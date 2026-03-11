@@ -1,0 +1,51 @@
+{
+  "$schema": "https://opencorvus.ai/config.json",
+  "skills": {
+    "paths": [
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-vmkqato5jum\\skill-e2e",
+      "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\skills-market\\github.com-openai-skills"
+    ]
+  },
+  "permission": {
+    "skill": {
+      "route-installed-skill": "ask",
+      "skill-installer": "ask",
+      "skill-creator": "ask",
+      "openai-docs": "ask",
+      "yeet": "ask",
+      "winui-app": "ask",
+      "speech": "ask",
+      "vercel-deploy": "ask",
+      "transcribe": "ask",
+      "sora": "ask",
+      "security-ownership-map": "ask",
+      "spreadsheet": "ask",
+      "security-best-practices": "ask",
+      "screenshot": "ask",
+      "security-threat-model": "ask",
+      "linear": "ask",
+      "pdf": "ask",
+      "sentry": "ask",
+      "notion-knowledge-capture": "ask",
+      "notion-meeting-intelligence": "ask",
+      "jupyter-notebook": "ask",
+      "slides": "ask",
+      "netlify-deploy": "ask",
+      "playwright": "ask",
+      "notion-research-documentation": "ask",
+      "imagegen": "ask",
+      "playwright-interactive": "ask",
+      "cloudflare-deploy": "ask",
+      "render-deploy": "ask",
+      "develop-web-game": "ask",
+      "notion-spec-to-implementation": "ask",
+      "doc": "ask",
+      "aspnet-core": "ask",
+      "figma-implement-design": "ask",
+      "gh-address-comments": "ask",
+      "chatgpt-apps": "ask",
+      "gh-fix-ci": "ask",
+      "figma": "ask"
+    }
+  }
+}

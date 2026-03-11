@@ -3,6 +3,25 @@
     const state = deps.state;
     const dom = deps.dom;
 
+    function normalizeDirectory(value) {
+      return typeof value === "string" ? value.trim() : "";
+    }
+
+    function setWorkspaceDirectory(directory, source = "manual") {
+      const next = normalizeDirectory(directory);
+      if (next === state.directory) return;
+      state.directory = next;
+      deps.onDirectoryChange?.(next, source);
+    }
+
+    function restoreWorkspaceDirectory() {
+      setWorkspaceDirectory(state.directory, state.directory ? "manual" : "auto");
+    }
+
+    function activeDirectory() {
+      return state.directory || "";
+    }
+
     function workspaceMode() {
       if (!state.connected) return "offline";
       if (state.globalView) return "global";
@@ -41,6 +60,8 @@
       state.boardUpdatedAt = 0;
       state.sessionUpdatedAt = 0;
       state.session = [];
+      state.sessionSource = "";
+      state.sessionRenderPending = false;
       renderWorkspaceState();
     }
 
@@ -59,6 +80,9 @@
       if (typeof options.globalView === "boolean") {
         state.globalView = options.globalView;
       }
+      if (options.restoreDirectory !== false) {
+        restoreWorkspaceDirectory();
+      }
       clearWorkspaceRuntime();
       deps.renderManagedSessionList();
     }
@@ -68,6 +92,9 @@
       state.chatSessionID = options.sessionID || "";
       state.managedSession = options.managedSession || null;
       state.globalView = false;
+      if (options.directory !== undefined) {
+        setWorkspaceDirectory(options.directory, "task");
+      }
       clearWorkspaceRuntime();
       deps.renderManagedSessionList();
     }
@@ -77,11 +104,17 @@
       state.chatSessionID = sessionID || "";
       state.managedSession = options.managedSession || null;
       state.globalView = false;
+      if (options.directory !== undefined) {
+        setWorkspaceDirectory(options.directory, "session");
+      }
       clearWorkspaceRuntime();
       deps.renderManagedSessionList();
     }
 
     return {
+      activeDirectory,
+      setWorkspaceDirectory,
+      restoreWorkspaceDirectory,
       workspaceMode,
       renderWorkspaceState,
       hasWorkspaceSelection,

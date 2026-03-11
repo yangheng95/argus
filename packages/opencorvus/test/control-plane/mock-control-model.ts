@@ -307,15 +307,21 @@ function userInput(prompt: LanguageModelV2Prompt) {
   const item = [...prompt]
     .reverse()
     .find((entry) => entry.role === "user")
-  const textValue = !item
-    ? ""
+  const parts = !item
+    ? []
     : typeof item.content === "string"
-      ? item.content
+      ? [item.content]
       : item.content
           .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
           .map((part) => part.text)
-          .join("\n")
-  const parsed = parse(textValue)
+  const textValue = parts.length === 0
+    ? ""
+    : parts.join("\n")
+  const parsed = [...parts]
+    .reverse()
+    .map(parse)
+    .find((value) => !!object(value))
+    ?? parse(textValue)
   return object(parsed) ?? { text: textValue }
 }
 

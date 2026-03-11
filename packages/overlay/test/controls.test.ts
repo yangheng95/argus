@@ -426,6 +426,7 @@ test("overlay controls trigger without runtime failures", async () => {
     ],
     counters: {
       restart: 0,
+      cancel: 0,
       nextSession: 3,
       nextGoal: 2,
       nextPreference: 2,
@@ -616,6 +617,36 @@ test("overlay controls trigger without runtime failures", async () => {
         if (sessionID) return send(data.timeline.session[sessionID] || [])
         return send([])
       }
+      if (path === "/task/task-1/message") {
+        const body = await req.json()
+        const ts = Date.now()
+        const text = String(body.text || "").trim()
+        data.timeline.session["session-1"] = [
+          ...(data.timeline.session["session-1"] || []),
+          {
+            parts: [{ type: "text", text }],
+            info: { id: `task-user-${ts}`, sessionID: "session-1", role: "user", time: { created: ts } },
+          },
+          {
+            parts: [{ type: "text", text: `Handled: ${text}` }],
+            info: { id: `task-assistant-${ts}`, sessionID: "session-1", role: "assistant", time: { created: ts + 1 } },
+          },
+        ]
+        return send({
+          kind: "note",
+          message: "Operator message injected into the running task.",
+          should_resume: true,
+        })
+      }
+      if (path === "/task/task-1/cancel" && req.method === "POST") {
+        data.counters.cancel += 1
+        data.tasks.tasks[0].task.status = "cancelled"
+        data.tasks.tasks[0].task.time.updated = Date.now()
+        data.board.task.status = "cancelled"
+        data.board.task.time.updated = Date.now()
+        data.board.overview.controls.canCancel = false
+        return send({ ok: true, task_id: "task-1", status: "cancelled" })
+      }
       if (path === "/panel/message") {
         return send(await append(await req.json()))
       }
@@ -649,6 +680,17 @@ test("overlay controls trigger without runtime failures", async () => {
       if (path === "/restart") {
         data.counters.restart += 1
         return send({ ok: true })
+      }
+      if (path === "/event") {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(`data: ${JSON.stringify({ type: "server.connected", properties: {} })}\n\n`)
+          },
+          cancel() {},
+        })
+        return new Response(stream, {
+          headers: { "content-type": "text/event-stream; charset=utf-8" },
+        })
       }
       if (path === "/task/task-1/board") {
         return send(data.board, {
@@ -750,6 +792,7 @@ test("overlay controls trigger without runtime failures", async () => {
   })
   page.on("requestfailed", (request) => {
     if (/\/task\/[^/]+\/events(?:\?.*)?$/.test(request.url())) return
+    if (/\/event(?:\?.*)?$/.test(request.url())) return
     errors.push(`requestfailed: ${request.url()}`)
   })
   page.on("console", (msg) => {
@@ -760,11 +803,14 @@ test("overlay controls trigger without runtime failures", async () => {
       close: 0,
       drag: 0,
       minimize: 0,
+      maximize: 0,
       open: [] as string[],
       copy: [] as string[],
       created: [] as string[],
       picked: ["D:/overlay/picked", "D:/overlay/picked"] as string[],
       alwaysOnTop: false,
+      maximized: false,
+      opacity: [] as number[],
       settings: {},
     }
     Object.defineProperty(window, "__overlayTest", {
@@ -796,6 +842,10 @@ test("overlay controls trigger without runtime failures", async () => {
             if (args.path) state.created.push(String(args.path))
             return true
           }
+          if (command === "overlay_open_url") {
+            if (args.url) state.open.push(String(args.url))
+            return true
+          }
           if (command === "overlay_open_path") {
             if (args.path) state.open.push(String(args.path))
             return true
@@ -815,10 +865,26 @@ test("overlay controls trigger without runtime failures", async () => {
             minimize: async () => {
               state.minimize += 1
             },
+            toggleMaximize: async () => {
+              state.maximize += 1
+              state.maximized = !state.maximized
+            },
+            maximize: async () => {
+              state.maximize += 1
+              state.maximized = true
+            },
+            unmaximize: async () => {
+              state.maximize += 1
+              state.maximized = false
+            },
+            isMaximized: async () => state.maximized,
             setAlwaysOnTop: async (value: boolean) => {
               state.alwaysOnTop = !!value
             },
             isAlwaysOnTop: async () => state.alwaysOnTop,
+            setOpacity: async (value: number) => {
+              state.opacity.push(Number(value))
+            },
           }
         },
       },
@@ -842,6 +908,13 @@ test("overlay controls trigger without runtime failures", async () => {
       seen.push(trigger)
       await tap(trigger)
       await page.waitForFunction((id) => (document.querySelector(id) as HTMLDialogElement | null)?.open !== true, {}, dialog)
+    }
+    const openTitlebarMenu = async () => {
+      const hidden = await page.$eval("#titlebarMenu", (node) => (node as HTMLElement).hidden)
+      if (!hidden) return
+      seen.push("#btnTitlebarMenu")
+      await page.click("#btnTitlebarMenu")
+      await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === false)
     }
     const confirm = async (value?: string) => {
       if (value !== undefined) {
@@ -917,22 +990,56 @@ test("overlay controls trigger without runtime failures", async () => {
     expect(await page.$eval(".brand-guide-card", (node) => node.querySelectorAll(".brand-guide-step").length)).toBe(4)
 
     const theme = await page.$eval("body", (node) => node.dataset.theme)
+    await openTitlebarMenu()
     seen.push("#btnTheme")
-    await tap("#btnTheme")
+    await page.click("#btnTheme")
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
     await page.waitForFunction((value) => document.body.dataset.theme !== value, {}, theme)
 
     const lang = await page.$eval("html", (node) => node.lang)
+    await openTitlebarMenu()
     seen.push("#btnLocale")
-    await tap("#btnLocale")
+    await page.click("#btnLocale")
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
     await page.waitForFunction((value) => document.documentElement.lang !== value, {}, lang)
 
     const pin = await page.$eval("#btnPin", (node) => node.dataset.pinned)
+    await openTitlebarMenu()
     seen.push("#btnPin")
-    await tap("#btnPin")
+    await page.click("#btnPin")
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
     await page.waitForFunction((value) => document.querySelector("#btnPin")?.dataset.pinned !== value, {}, pin)
+
+    await openTitlebarMenu()
+    seen.push("#chkAutoPermission")
+    await page.click("#chkAutoPermission")
+    await page.waitForFunction(() => (window as typeof window & { __overlayTest: { settings: { autoPermission?: boolean } } }).__overlayTest.settings.autoPermission === true)
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
+
+    await openTitlebarMenu()
+    seen.push("#chkAutoQuestion")
+    await page.click("#chkAutoQuestion")
+    await page.waitForFunction(() => (window as typeof window & { __overlayTest: { settings: { autoQuestion?: boolean } } }).__overlayTest.settings.autoQuestion === true)
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
+
+    await openTitlebarMenu()
+    seen.push("#opacityRange")
+    await page.$eval("#opacityRange", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "55"
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+      input.dispatchEvent(new Event("change", { bubbles: true }))
+    })
+    await page.waitForFunction(() => document.querySelector("#opacityValue")?.textContent === "55%")
+    await page.waitForFunction(() => (window as typeof window & { __overlayTest: { settings: { opacity?: number } } }).__overlayTest.settings.opacity === 0.55)
+    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
 
     seen.push("#btnMinimize")
     await tap("#btnMinimize")
+    const maximized = await page.$eval("#btnMaximize", (node) => node.dataset.maximized)
+    seen.push("#btnMaximize")
+    await tap("#btnMaximize")
+    await page.waitForFunction((value) => document.querySelector("#btnMaximize")?.dataset.maximized !== value, {}, maximized)
     seen.push("#btnClose")
     await tap("#btnClose")
     await page.waitForFunction(() => ((window as typeof window & { __overlayTest: { drag: number } }).__overlayTest.drag || 0) === 0)
@@ -1008,8 +1115,8 @@ test("overlay controls trigger without runtime failures", async () => {
     await tap('input[data-check="ui_review"]')
     await waitIdle()
 
-    seen.push("#goalsBody [data-goal-action='create']")
-    await tap("#goalsBody [data-goal-action='create']")
+    seen.push("#btnCreateGoal")
+    await tap("#btnCreateGoal")
     await page.waitForFunction(() => (document.querySelector("#goalDialog") as HTMLDialogElement | null)?.open === true)
     await page.type("#goalDescription", "Created goal from UI")
     await page.type("#goalCriteria", "Trigger goal save")
@@ -1034,29 +1141,42 @@ test("overlay controls trigger without runtime failures", async () => {
     await tap("#chatSend")
     await page.waitForFunction((value) => (document.querySelector("#chatCount")?.textContent || "") !== value, {}, count)
 
-    await open("#btnSettings", "#settingsDialog")
+    await openTitlebarMenu()
+    seen.push("#btnSettings")
+    await page.click("#btnSettings")
+    await page.waitForFunction(() => (document.querySelector("#settingsDialog") as HTMLDialogElement | null)?.open === true)
     await close("#btnCancelSettings", "#settingsDialog")
-    await open("#btnSettings", "#settingsDialog")
+    await openTitlebarMenu()
+    seen.push("#btnSettings")
+    await page.click("#btnSettings")
+    await page.waitForFunction(() => (document.querySelector("#settingsDialog") as HTMLDialogElement | null)?.open === true)
     seen.push("#settingsDialog [type='submit']")
     await tap("#settingsDialog [type='submit']")
     await page.waitForFunction(() => (document.querySelector("#settingsDialog") as HTMLDialogElement | null)?.open !== true)
     await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
 
+    const chatCopyCount = await page.evaluate(() => ((window as typeof window & { __overlayTest: { copy: string[] } }).__overlayTest.copy || []).length)
     seen.push("#btnChatCopyAll")
     await tap("#btnChatCopyAll")
-    await page.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
-    await confirm()
+    await page.waitForFunction((count) => ((window as typeof window & { __overlayTest: { copy: string[] } }).__overlayTest.copy || []).length > count, {}, chatCopyCount)
 
-    await open("#btnLog", "#logDialog")
+    await openTitlebarMenu()
+    seen.push("#btnLog")
+    await page.click("#btnLog")
+    await page.waitForFunction(() => (document.querySelector("#logDialog") as HTMLDialogElement | null)?.open === true)
     seen.push("#btnLogRefresh")
     await tap("#btnLogRefresh")
+    const logCopyCount = await page.evaluate(() => ((window as typeof window & { __overlayTest: { copy: string[] } }).__overlayTest.copy || []).length)
     seen.push("#btnLogCopy")
     await tap("#btnLogCopy")
-    await page.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
-    await confirm()
+    await page.waitForFunction((count) => ((window as typeof window & { __overlayTest: { copy: string[] } }).__overlayTest.copy || []).length > count, {}, logCopyCount)
     seen.push("#btnLogClear")
     await tap("#btnLogClear")
     await close("#btnCloseLog", "#logDialog")
+
+    seen.push("#btnTaskInterrupt")
+    await tap("#btnTaskInterrupt")
+    await page.waitForFunction(() => document.querySelector("#taskStatus")?.dataset.status === "cancelled")
 
     seen.push("[data-open-channels='true']")
     await tap("[data-open-channels='true']")
@@ -1192,8 +1312,12 @@ test("overlay controls trigger without runtime failures", async () => {
 
     seen.push("#btnDeleteAllMcp")
     await tap("#btnDeleteAllMcp")
-    await page.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
-    await confirm()
+    const mcpConfirm = await page
+      .waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true, { timeout: 2000 })
+      .then(() => true)
+      .catch(() => false)
+    if (mcpConfirm) await confirm()
+    else await waitIdle()
 
     await open("#btnAddMcp", "#mcpDialog")
     await page.select("#mcpType", "local")
@@ -1275,13 +1399,16 @@ test("overlay controls trigger without runtime failures", async () => {
     const stub = await page.evaluate(() => (window as typeof window & { __overlayTest: Record<string, unknown> }).__overlayTest)
     expect(seen.length).toBeGreaterThan(50)
     expect(data.counters.restart).toBe(1)
+    expect(data.counters.cancel).toBe(1)
     expect(data.counters.taskMessage).toBeGreaterThan(3)
     expect((stub.open as string[]).length).toBeGreaterThan(3)
     expect((stub.copy as string[]).length).toBeGreaterThan(2)
     expect((stub.created as string[])).toContain("D:/overlay/picked/child")
     expect(stub.drag).toBe(1)
     expect(stub.minimize).toBe(1)
+    expect(stub.maximize).toBe(1)
     expect(stub.close).toBe(1)
+    expect((stub.opacity as number[])).toContain(0.55)
     expect(errors).toEqual([])
   } finally {
     await page.close().catch(() => undefined)

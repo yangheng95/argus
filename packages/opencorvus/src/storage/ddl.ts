@@ -222,6 +222,21 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
   project_id UNINDEXED
 );
 
+-- ===== diary =====
+
+CREATE TABLE IF NOT EXISTS diary (
+  id           text PRIMARY KEY,
+  date         text NOT NULL,
+  title        text NOT NULL,
+  content      text NOT NULL,
+  mood         text,
+  image_paths  text,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS diary_date_idx ON diary (date);
+CREATE INDEX IF NOT EXISTS diary_created_idx ON diary (time_created);
+
 -- ===== scheduler =====
 
 CREATE TABLE IF NOT EXISTS cron_job (
@@ -688,5 +703,17 @@ CREATE TABLE IF NOT EXISTS workbench_brief_snapshot (
 );
 CREATE INDEX IF NOT EXISTS workbench_brief_task_idx ON workbench_brief_snapshot (task_id);
 CREATE INDEX IF NOT EXISTS workbench_brief_run_idx  ON workbench_brief_snapshot (run_id);
+
+-- ===== diary =====
+
+CREATE TABLE IF NOT EXISTS diary (
+  id           text PRIMARY KEY,
+  date         text NOT NULL,
+  title        text NOT NULL,
+  content      text NOT NULL,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS diary_date_idx ON diary (date);
 
 `

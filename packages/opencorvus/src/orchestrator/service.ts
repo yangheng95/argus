@@ -1,6 +1,7 @@
 import z from "zod"
+import { Agent } from "@/agent/agent"
 import { Bus } from "@/bus"
-import { EvaluatorService } from "@/evaluator/service"
+import { discoverChecks, resolveConfig, resolvedChecks } from "@/evaluator/discovery"
 import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
@@ -8,12 +9,14 @@ import { writeSpec } from "@/orchestrator/spec"
 import { PermissionNext } from "@/permission/next"
 import { type ReplanContext } from "@/planner/agent"
 import { PlannerFailureError, PlannerService } from "@/planner/service"
+import { Provider } from "@/provider/provider"
 import { SpecFailureError } from "@/spec/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
+import { MessageV2 } from "@/session/message"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
@@ -40,6 +43,7 @@ import {
   RejectInteractionInput,
   ReplyInteractionInput,
   TaskMessageInput,
+  CheckConfig,
   UpdateGoalInput,
   UpdateTaskChecksInput,
   UpdatePreferenceInput,
@@ -112,6 +116,7 @@ import {
   viewTask,
   type GoalRow,
   type TaskListRow,
+  type TaskRow,
   type PlanRow,
   type RunRow,
   type InteractionRow,
@@ -119,6 +124,116 @@ import {
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator" })
+
+async function continueTaskMessage(taskID: string, text: string) {
+  const task = requireTask(taskID)
+  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+  const injected = run ? await injectRunningTaskMessage(task, run, text) : false
+  if (injected) {
+    return {
+      mode: "injected" as const,
+      resumed: true,
+      status: "running" as const,
+    }
+  }
+  await appendTaskSessionMessage(task, text)
+  const note = await OrchestratorService.recordOperatorNote(taskID, text)
+  return {
+    mode: note.resumed ? "queued" as const : "recorded" as const,
+    ...note,
+  }
+}
+
+async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: string) {
+  if (!["accepted", "running"].includes(run.status)) return false
+  if (!run.session_id) return false
+  const executor = ExecutorRegistry.require(run.executor)
+  if (!executor.capabilities().resume) return false
+
+  const submission = await executor.resume({
+    sessionID: run.session_id,
+    message,
+  })
+  if (run.executor !== "opencode") {
+    await appendTaskSessionMessage(task, message)
+  }
+  if (submission.queueTaskID !== run.executor_ref?.queue_task_id) {
+    await updateRun(
+      run,
+      {
+        executor_ref: {
+          session_id: submission.sessionID,
+          queue_task_id: submission.queueTaskID,
+        },
+      },
+      "Message injected into running session",
+    )
+  }
+  await Bus.publish(Event.MessageInjected, {
+    taskID: task.id,
+    runID: run.id,
+    text: message,
+    summary: "Operator message injected into running session",
+  })
+  return true
+}
+
+async function appendTaskSessionMessage(task: TaskRow, text: string) {
+  if (!task.session_id) return
+  const ctx = await messageContext(task.session_id)
+  if (!ctx) return
+  const msg = await Session.updateMessage({
+    id: Identifier.ascending("message"),
+    role: "user",
+    sessionID: task.session_id,
+    time: {
+      created: Date.now(),
+    },
+    agent: ctx.agent,
+    model: ctx.model,
+  } satisfies MessageV2.User)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    messageID: msg.id,
+    sessionID: task.session_id,
+    type: "text",
+    text,
+    kind: "user_content",
+  } satisfies MessageV2.TextPart)
+  await Session.touch(task.session_id)
+}
+
+async function messageContext(sessionID: string) {
+  const rows = await Session.messages({ sessionID, limit: 20 }).catch(() => [])
+  const user = rows.findLast((item) => item.info.role === "user")
+  if (user?.info.role === "user") {
+    return {
+      agent: user.info.agent,
+      model: user.info.model,
+    }
+  }
+  const assistant = rows.findLast((item) => item.info.role === "assistant")
+  if (assistant?.info.role === "assistant") {
+    return {
+      agent: assistant.info.agent,
+      model: {
+        providerID: assistant.info.providerID,
+        modelID: assistant.info.modelID,
+      },
+    }
+  }
+  const name = await Agent.defaultAgent().catch(() => undefined)
+  const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
+  const model = agent?.model ?? await Provider.defaultModel().catch(() => undefined)
+  if (!agent || !model) return
+  return {
+    agent: agent.name,
+    model: {
+      providerID: model.providerID,
+      modelID: model.modelID,
+    },
+  }
+}
 
 async function prepareProject(project?: string) {
   if (Instance.project.vcs !== "git") {
@@ -169,6 +284,40 @@ function taskItems(rows: TaskListRow[]) {
   })
 }
 
+async function taskChecks(checks?: z.input<typeof CheckConfig>) {
+  const found = await discoverChecks()
+  const next = structuredClone(
+    resolvedChecks(await resolveConfig(checks ? { checks } : undefined), found),
+  )
+
+  if (found.lint.length > 0 && next.lint === false) {
+    next.lint = found.lint.map((item) => item.command)
+  }
+
+  const current = next.named?.typecheck
+  const typecheck = found.named.typecheck
+  if (current || typecheck) {
+    next.named = {
+      ...(next.named ?? {}),
+      typecheck: {
+        label: current?.label ?? typecheck?.label ?? "Type Check",
+        family: current?.family ?? typecheck?.family ?? "lint",
+        commands: current?.commands ?? typecheck?.commands.map((item) => item.command) ?? [],
+        enabled: true,
+        ...(current?.cwd ? { cwd: current.cwd } : {}),
+      },
+    }
+  }
+
+  next.spec_check = {
+    ...(next.spec_check ?? {}),
+    enabled: true,
+    mode: next.spec_check?.mode ?? "strict",
+  }
+
+  return CheckConfig.parse(next)
+}
+
 export namespace OrchestratorService {
   export function init() {
     const current = orchestratorState()
@@ -199,7 +348,7 @@ export namespace OrchestratorService {
     }
     ExecutorRegistry.require(executor)
     const session = await Session.create({ title })
-    const resolvedChecks = await EvaluatorService.resolveChecks(input.checks ? { checks: input.checks } : undefined)
+    const resolvedChecks = await taskChecks(input.checks)
     const now = Date.now()
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
@@ -754,11 +903,15 @@ export namespace OrchestratorService {
     if (!result.should_resume) {
       return result
     }
-    const note = await OrchestratorService.recordOperatorNote(taskID, input.text)
+    const note = await continueTaskMessage(taskID, input.text)
     return {
       ...result,
-      message: result.kind === "note" && note.resumed
-        ? "Operator note recorded. Queued a follow-up run."
+      message: result.kind === "note"
+        ? note.mode === "injected"
+          ? "Operator message injected into the running task."
+          : note.resumed
+            ? "Operator note recorded. Queued a follow-up run."
+            : "Operator note recorded."
         : result.message,
     }
   }
@@ -772,45 +925,10 @@ export namespace OrchestratorService {
     const task = requireTask(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     if (!run) throw new Error(`No active run for task ${taskID}`)
-
-    // 只有运行中的 run 才能注入
-    if (!["accepted", "running"].includes(run.status)) {
-      return recordOperatorNote(taskID, message)
-    }
-    if (!run.session_id) throw new Error(`Run ${run.id} has no session`)
-
-    const executor = ExecutorRegistry.require(run.executor)
-    if (!executor.capabilities().resume) {
-      return recordOperatorNote(taskID, message)
-    }
-
-    const submission = await executor.resume({
-      sessionID: run.session_id,
-      message,
-    })
-
-    // 更新 executor ref（queueTaskID 可能变化）
-    if (submission.queueTaskID !== run.executor_ref?.queue_task_id) {
-      await updateRun(
-        run,
-        {
-          executor_ref: {
-            session_id: submission.sessionID,
-            queue_task_id: submission.queueTaskID,
-          },
-        },
-        "Message injected into running session",
-      )
-    }
-
-    await Bus.publish(Event.MessageInjected, {
-      taskID: task.id,
-      runID: run.id,
-      text: message,
-      summary: "Operator message injected into running session",
-    })
-
-    return { resumed: true, status: "running" as const }
+    const resumed = await injectRunningTaskMessage(task, run, message)
+    if (resumed) return { resumed: true, status: "running" as const }
+    await appendTaskSessionMessage(task, message)
+    return recordOperatorNote(taskID, message)
   }
 
   export async function abortRun(runID: string) {

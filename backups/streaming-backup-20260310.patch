@@ -1,0 +1,1288 @@
+diff --git a/packages/opencorvus/src/orchestrator/service.ts b/packages/opencorvus/src/orchestrator/service.ts
+index d41e34a09..643a735bb 100644
+--- a/packages/opencorvus/src/orchestrator/service.ts
++++ b/packages/opencorvus/src/orchestrator/service.ts
+@@ -1,6 +1,7 @@
+ import z from "zod"
++import { Agent } from "@/agent/agent"
+ import { Bus } from "@/bus"
+-import { EvaluatorService } from "@/evaluator/service"
++import { discoverChecks, resolveConfig, resolvedChecks } from "@/evaluator/discovery"
+ import { ExecutorNotConfiguredError } from "@/executor/compat"
+ import { ExecutorBootstrap } from "@/executor/bootstrap"
+ import { ExecutorRegistry } from "@/executor/registry"
+@@ -8,12 +9,14 @@ import { writeSpec } from "@/orchestrator/spec"
+ import { PermissionNext } from "@/permission/next"
+ import { type ReplanContext } from "@/planner/agent"
+ import { PlannerFailureError, PlannerService } from "@/planner/service"
++import { Provider } from "@/provider/provider"
+ import { SpecFailureError } from "@/spec/service"
+ import { Instance } from "@/project/instance"
+ import { Project } from "@/project/project"
+ import { Question } from "@/question"
+ import { Scheduler } from "@/scheduler"
+ import { Session } from "@/session"
++import { MessageV2 } from "@/session/message"
+ import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
+ import { Log } from "@/util/log"
+ import { WorkbenchService } from "@/workbench/service"
+@@ -40,6 +43,7 @@ import {
+   RejectInteractionInput,
+   ReplyInteractionInput,
+   TaskMessageInput,
++  CheckConfig,
+   UpdateGoalInput,
+   UpdateTaskChecksInput,
+   UpdatePreferenceInput,
+@@ -112,6 +116,7 @@ import {
+   viewTask,
+   type GoalRow,
+   type TaskListRow,
++  type TaskRow,
+   type PlanRow,
+   type RunRow,
+   type InteractionRow,
+@@ -120,6 +125,113 @@ import { Identifier } from "@/id/id"
+ 
+ const log = Log.create({ service: "orchestrator" })
+ 
++async function continueTaskMessage(taskID: string, text: string) {
++  const task = requireTask(taskID)
++  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
++  const injected = run ? await injectRunningTaskMessage(task, run, text) : false
++  if (injected) {
++    return {
++      mode: "injected" as const,
++      resumed: true,
++      status: "running" as const,
++    }
++  }
++  await appendTaskSessionMessage(task, text)
++  const note = await OrchestratorService.recordOperatorNote(taskID, text)
++  return {
++    mode: note.resumed ? "queued" as const : "recorded" as const,
++    ...note,
++  }
++}
++
++async function injectRunningTaskMessage(task: TaskRow, run: RunRow, message: string) {
++  if (!["accepted", "running"].includes(run.status)) return false
++  if (!run.session_id) return false
++  const executor = ExecutorRegistry.require(run.executor)
++  if (!executor.capabilities().resume) return false
++
++  const submission = await executor.resume({
++    sessionID: run.session_id,
++    message,
++  })
++  if (submission.queueTaskID !== run.executor_ref?.queue_task_id) {
++    await updateRun(
++      run,
++      {
++        executor_ref: {
++          session_id: submission.sessionID,
++          queue_task_id: submission.queueTaskID,
++        },
++      },
++      "Message injected into running session",
++    )
++  }
++  await Bus.publish(Event.MessageInjected, {
++    taskID: task.id,
++    runID: run.id,
++    text: message,
++    summary: "Operator message injected into running session",
++  })
++  return true
++}
++
++async function appendTaskSessionMessage(task: TaskRow, text: string) {
++  if (!task.session_id) return
++  const ctx = await messageContext(task.session_id)
++  if (!ctx) return
++  const msg = await Session.updateMessage({
++    id: Identifier.ascending("message"),
++    role: "user",
++    sessionID: task.session_id,
++    time: {
++      created: Date.now(),
++    },
++    agent: ctx.agent,
++    model: ctx.model,
++  } satisfies MessageV2.User)
++  await Session.updatePart({
++    id: Identifier.ascending("part"),
++    messageID: msg.id,
++    sessionID: task.session_id,
++    type: "text",
++    text,
++    kind: "user_content",
++  } satisfies MessageV2.TextPart)
++  await Session.touch(task.session_id)
++}
++
++async function messageContext(sessionID: string) {
++  const rows = await Session.messages({ sessionID, limit: 20 }).catch(() => [])
++  const user = rows.findLast((item) => item.info.role === "user")
++  if (user?.info.role === "user") {
++    return {
++      agent: user.info.agent,
++      model: user.info.model,
++    }
++  }
++  const assistant = rows.findLast((item) => item.info.role === "assistant")
++  if (assistant?.info.role === "assistant") {
++    return {
++      agent: assistant.info.agent,
++      model: {
++        providerID: assistant.info.providerID,
++        modelID: assistant.info.modelID,
++      },
++    }
++  }
++  const name = await Agent.defaultAgent().catch(() => undefined)
++  const agent = name ? await Agent.get(name).catch(() => undefined) : undefined
++  const model = agent?.model ?? await Provider.defaultModel().catch(() => undefined)
++  if (!agent || !model) return
++  return {
++    agent: agent.name,
++    model: {
++      providerID: model.providerID,
++      modelID: model.modelID,
++    },
++  }
++}
++
+ async function prepareProject(project?: string) {
+   if (Instance.project.vcs !== "git") {
+     await Project.initGit(Instance.directory)
+@@ -169,6 +281,40 @@ function taskItems(rows: TaskListRow[]) {
+   })
+ }
+ 
++async function taskChecks(checks?: z.input<typeof CheckConfig>) {
++  const found = await discoverChecks()
++  const next = structuredClone(
++    resolvedChecks(await resolveConfig(checks ? { checks } : undefined), found),
++  )
++
++  if (found.lint.length > 0 && next.lint === false) {
++    next.lint = found.lint.map((item) => item.command)
++  }
++
++  const current = next.named?.typecheck
++  const typecheck = found.named.typecheck
++  if (current || typecheck) {
++    next.named = {
++      ...(next.named ?? {}),
++      typecheck: {
++        label: current?.label ?? typecheck?.label ?? "Type Check",
++        family: current?.family ?? typecheck?.family ?? "lint",
++        commands: current?.commands ?? typecheck?.commands.map((item) => item.command) ?? [],
++        enabled: true,
++        ...(current?.cwd ? { cwd: current.cwd } : {}),
++      },
++    }
++  }
++
++  next.spec_check = {
++    ...(next.spec_check ?? {}),
++    enabled: true,
++    mode: next.spec_check?.mode ?? "strict",
++  }
++
++  return CheckConfig.parse(next)
++}
++
+ export namespace OrchestratorService {
+   export function init() {
+     const current = orchestratorState()
+@@ -199,7 +345,7 @@ export namespace OrchestratorService {
+     }
+     ExecutorRegistry.require(executor)
+     const session = await Session.create({ title })
+-    const resolvedChecks = await EvaluatorService.resolveChecks(input.checks ? { checks: input.checks } : undefined)
++    const resolvedChecks = await taskChecks(input.checks)
+     const now = Date.now()
+     const taskID = Identifier.ascending("task")
+     const planID = Identifier.ascending("plan")
+@@ -754,11 +900,15 @@ export namespace OrchestratorService {
+     if (!result.should_resume) {
+       return result
+     }
+-    const note = await OrchestratorService.recordOperatorNote(taskID, input.text)
++    const note = await continueTaskMessage(taskID, input.text)
+     return {
+       ...result,
+-      message: result.kind === "note" && note.resumed
+-        ? "Operator note recorded. Queued a follow-up run."
++      message: result.kind === "note"
++        ? note.mode === "injected"
++          ? "Operator message injected into the running task."
++          : note.resumed
++            ? "Operator note recorded. Queued a follow-up run."
++            : "Operator note recorded."
+         : result.message,
+     }
+   }
+@@ -772,45 +922,10 @@ export namespace OrchestratorService {
+     const task = requireTask(taskID)
+     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+     if (!run) throw new Error(`No active run for task ${taskID}`)
+-
+-    // 只有运行中的 run 才能注入
+-    if (!["accepted", "running"].includes(run.status)) {
+-      return recordOperatorNote(taskID, message)
+-    }
+-    if (!run.session_id) throw new Error(`Run ${run.id} has no session`)
+-
+-    const executor = ExecutorRegistry.require(run.executor)
+-    if (!executor.capabilities().resume) {
+-      return recordOperatorNote(taskID, message)
+-    }
+-
+-    const submission = await executor.resume({
+-      sessionID: run.session_id,
+-      message,
+-    })
+-
+-    // 更新 executor ref（queueTaskID 可能变化）
+-    if (submission.queueTaskID !== run.executor_ref?.queue_task_id) {
+-      await updateRun(
+-        run,
+-        {
+-          executor_ref: {
+-            session_id: submission.sessionID,
+-            queue_task_id: submission.queueTaskID,
+-          },
+-        },
+-        "Message injected into running session",
+-      )
+-    }
+-
+-    await Bus.publish(Event.MessageInjected, {
+-      taskID: task.id,
+-      runID: run.id,
+-      text: message,
+-      summary: "Operator message injected into running session",
+-    })
+-
+-    return { resumed: true, status: "running" as const }
++    const resumed = await injectRunningTaskMessage(task, run, message)
++    if (resumed) return { resumed: true, status: "running" as const }
++    await appendTaskSessionMessage(task, message)
++    return recordOperatorNote(taskID, message)
+   }
+ 
+   export async function abortRun(runID: string) {
+diff --git a/packages/overlay/src/app.js b/packages/overlay/src/app.js
+index 02bb476e6..041e9bdef 100644
+--- a/packages/overlay/src/app.js
++++ b/packages/overlay/src/app.js
+@@ -115,13 +115,19 @@ const state = {
+   sessions: [],
+   managedSession: null,
+   session: [],
++  sessionSource: "",
+   sessionLoading: null,
+   sessionQueued: false,
+   sessionKick: null,
+   sessionUpdatedAt: 0,
++  sessionRenderPending: false,
+   changes: [],
+   sse: null,
+   sseConnected: false,
++  eventSSE: null,
++  eventConnected: false,
++  eventRetry: null,
++  eventUrl: "",
+   pollTimer: null,
+   sessionTimer: null,
+   elapsedTimer: null,
+@@ -216,12 +222,14 @@ const dom = {
+   planBadge: $("#planBadge"),
+   planBody: $("#planBody"),
+   goalsBadge: $("#goalsBadge"),
++  btnCreateGoal: $("#btnCreateGoal"),
+   goalsBody: $("#goalsBody"),
+   criteriaBadge: $("#criteriaBadge"),
+   criteriaList: $("#criteriaList"),
+   evalBody: $("#evalBody"),
+   changesBadge: $("#changesBadge"),
+   changesBody: $("#changesBody"),
++  chatGoalsStrip: $("#chatGoalsStrip"),
+   chatScroll: $("#chatScroll"),
+   chatEmpty: $("#chatEmpty"),
+   chatCount: $("#chatCount"),
+@@ -256,7 +264,6 @@ const dom = {
+   btnCancelMcp: $("#btnCancelMcp"),
+   goalDialog: $("#goalDialog"),
+   goalForm: $("#goalForm"),
+-  goalDialogTitle: $("#goalDialogTitle"),
+   goalId: $("#goalId"),
+   goalDescription: $("#goalDescription"),
+   goalCriteria: $("#goalCriteria"),
+@@ -272,6 +279,9 @@ const dom = {
+   appDialogInputField: $("#appDialogInputField"),
+   appDialogInputLabel: $("#appDialogInputLabel"),
+   appDialogInput: $("#appDialogInput"),
++  appDialogSelectField: $("#appDialogSelectField"),
++  appDialogSelectLabel: $("#appDialogSelectLabel"),
++  appDialogSelect: $("#appDialogSelect"),
+   btnAppDialogCancel: $("#btnAppDialogCancel"),
+   btnAppDialogOk: $("#btnAppDialogOk"),
+   llmForm: $("#llmForm"),
+@@ -284,6 +294,7 @@ const dom = {
+   llmApiKeySummary: $("#llmApiKeySummary"),
+   btnLlmApiKeyToggle: $("#btnLlmApiKeyToggle"),
+   btnLlmApiKeyCopy: $("#btnLlmApiKeyCopy"),
++  btnLlmAuthAction: $("#btnLlmAuthAction"),
+   llmStatus: $("#llmStatus"),
+   llmNotice: $("#llmNotice"),
+   channelDialog: $("#channelDialog"),
+@@ -369,8 +380,10 @@ Object.assign(window, {
+ 
+ let llmSaveTimer;
+ let llmNoticeTimer;
++let chatNoticeTimer;
+ let llmSyncSerial = 0;
+ let llmSavedValue = "";
++let llmAuthBusy = false;
+ 
+ // ── AppLog ──
+ 
+@@ -1262,6 +1275,43 @@ async function panelMessage(text, metadata) {
+   return result;
+ }
+ 
++function showChatNotice(message, tone = "", duration = 2600) {
++  if (!dom.chatGoalsStrip) return;
++  if (chatNoticeTimer) clearTimeout(chatNoticeTimer);
++  chatNoticeTimer = null;
++  dom.chatGoalsStrip.innerHTML = message
++    ? `<span class="chat-notice-chip" data-tone="${escapeHtml(tone)}">${escapeHtml(message)}</span>`
++    : "";
++  if (!message || duration <= 0) return;
++  chatNoticeTimer = setTimeout(() => {
++    if (!dom.chatGoalsStrip) return;
++    dom.chatGoalsStrip.innerHTML = "";
++  }, duration);
++}
++
++async function taskMessage(text) {
++  const taskID = state.selectedTaskID;
++  if (!taskID) throw new Error("No task selected");
++  const running = state.board?.task?.status === "running";
++  const result = await apiJson(`task/${encodeURIComponent(taskID)}/message`, {
++    method: "POST",
++    headers: { "Content-Type": "application/json" },
++    body: JSON.stringify({
++      text,
++      source: "panel",
++    }),
++    signal: AbortSignal.timeout(120000),
++  });
++  await Promise.all([loadBoard(), loadConversation()]);
++  const notice = result?.should_resume
++    ? running
++      ? t("chat.task_sent")
++      : t("chat.task_queued")
++    : t("chat.task_recorded");
++  showChatNotice(notice, result?.should_resume ? "active" : "warn");
++  return result;
++}
++
+ async function panelMessageStream(text, metadata) {
+   const body = JSON.stringify(panelRequestBody(text, metadata));
+   let res;
+@@ -1679,11 +1729,21 @@ function providerLabel(providerID) {
+   return providerEntry(providerID)?.name || providerID;
+ }
+ 
++function providerAuthMethods(providerID, type) {
++  const methods = Array.isArray(state.providerAuth?.[providerID]) ? state.providerAuth[providerID] : [];
++  if (!type) return methods;
++  return methods.filter((item) => item?.type === type);
++}
++
++function interactiveProviderMethods(providerID) {
++  return providerAuthMethods(providerID).filter((item) => item?.type === "oauth" || (item?.type === "api" && item?.prompts?.length));
++}
++
+ function providerState(providerID, configOverride) {
+   const config = configOverride || state.config || {};
+   const item = providerEntry(providerID);
+   const connected = Array.isArray(state.providerCatalog?.connected) && state.providerCatalog.connected.includes(providerID);
+-  const authMethods = Array.isArray(state.providerAuth?.[providerID]) ? state.providerAuth[providerID] : [];
++  const authMethods = providerAuthMethods(providerID);
+   const configKey = config?.provider?.[providerID]?.options?.apiKey;
+   const key = configKey || item?.key;
+   const tested = state.providerTest;
+@@ -1730,11 +1790,26 @@ function providerState(providerID, configOverride) {
+   };
+ }
+ 
++function renderLlmAuthAction(providerID, configOverride) {
++  if (!dom.btnLlmAuthAction) return;
++  const methods = interactiveProviderMethods(providerID);
++  const visible = methods.length > 0;
++  dom.btnLlmAuthAction.classList.toggle("hidden", !visible);
++  dom.btnLlmAuthAction.disabled = !visible || llmAuthBusy || !!dom.llmProvider?.disabled;
++  if (!visible) return;
++  const info = providerState(providerID, configOverride);
++  const label = info.tone === "active" ? t("llm.auth_reconnect") : t("llm.auth_connect");
++  dom.btnLlmAuthAction.textContent = label;
++  dom.btnLlmAuthAction.title = t("llm.auth_connect_title");
++  dom.btnLlmAuthAction.setAttribute("aria-label", t("llm.auth_connect_title"));
++}
++
+ function renderProviderStatus(providerID, configOverride) {
+   if (!providerID) {
+     dom.llmStatus.textContent = t("llm.status.unknown");
+     dom.llmStatus.dataset.status = "";
+     dom.llmStatus.title = "";
++    renderLlmAuthAction("", configOverride);
+     renderLlmSummary();
+     return;
+   }
+@@ -1742,6 +1817,7 @@ function renderProviderStatus(providerID, configOverride) {
+   dom.llmStatus.textContent = info.label;
+   dom.llmStatus.dataset.status = info.tone;
+   dom.llmStatus.title = info.detail || info.label;
++  renderLlmAuthAction(providerID, configOverride);
+   renderLlmSummary();
+ }
+ 
+@@ -1848,6 +1924,7 @@ function setLlmBusy(value) {
+   if (dom.btnLlmApiKeyToggle) dom.btnLlmApiKeyToggle.disabled = busy;
+   if (dom.btnLlmApiKeyCopy) dom.btnLlmApiKeyCopy.disabled = busy || !dom.llmApiKey?.value?.trim();
+   renderLlmApiKeyTools();
++  renderLlmAuthAction(dom.llmProvider?.value || "", state.config);
+ }
+ 
+ function showLlmNotice(message, tone = "", duration = 2600) {
+@@ -1863,6 +1940,11 @@ function showLlmNotice(message, tone = "", duration = 2600) {
+   }, duration);
+ }
+ 
++function setLlmAuthBusy(value) {
++  llmAuthBusy = !!value;
++  renderLlmAuthAction(dom.llmProvider?.value || "", state.config);
++}
++
+ async function testProviderConnection(providerID, modelID) {
+   return apiJson(`provider/${providerID}/test`, {
+     method: "POST",
+@@ -2036,6 +2118,24 @@ async function nativePrompt(message, options) {
+   return result.confirmed ? result.value : null;
+ }
+ 
++async function nativeSelect(message, options) {
++  const list = Array.isArray(options?.options) ? options.options : [];
++  if (!list.length) return null;
++  const result = await showAppDialog({
++    title: options?.title || t("dialog.input"),
++    message,
++    kind: options?.kind || "info",
++    okLabel: options?.okLabel || t("common.ok"),
++    cancelLabel: options?.cancelLabel || t("common.cancel"),
++    cancel: true,
++    select: true,
++    selectLabel: options?.selectLabel || t("dialog.value"),
++    selectOptions: list,
++    selectValue: options?.selectValue || list[0]?.value || "",
++  });
++  return result.confirmed ? result.value : null;
++}
++
+ async function copyText(text) {
+   if (!text) return false;
+   if (navigator.clipboard?.writeText) {
+@@ -2066,6 +2166,9 @@ function showAppDialog(options = {}) {
+     !dom.appDialogInputField ||
+     !dom.appDialogInputLabel ||
+     !dom.appDialogInput ||
++    !dom.appDialogSelectField ||
++    !dom.appDialogSelectLabel ||
++    !dom.appDialogSelect ||
+     !dom.btnAppDialogCancel ||
+     !dom.btnAppDialogOk
+   ) {
+@@ -2073,6 +2176,8 @@ function showAppDialog(options = {}) {
+   }
+ 
+   return new Promise((resolve) => {
++    const useInput = !!options.input;
++    const useSelect = !!options.select;
+     let settled = false;
+     const finish = (confirmed) => {
+       if (settled) return;
+@@ -2081,14 +2186,14 @@ function showAppDialog(options = {}) {
+       if (dom.appDialog.open) dom.appDialog.close();
+       resolve({
+         confirmed,
+-        value: confirmed && options.input ? dom.appDialogInput.value : null,
++        value: confirmed ? (useInput ? dom.appDialogInput.value : useSelect ? dom.appDialogSelect.value : null) : null,
+       });
+     };
+     const onCancel = () => finish(false);
+     const onOk = () => finish(true);
+     const onClose = () => finish(false);
+     const onKeydown = (event) => {
+-      if (event.key === "Enter" && options.input) {
++      if (event.key === "Enter" && (useInput || useSelect)) {
+         event.preventDefault();
+         finish(true);
+       }
+@@ -2098,6 +2203,7 @@ function showAppDialog(options = {}) {
+       dom.btnAppDialogOk.removeEventListener("click", onOk);
+       dom.appDialog.removeEventListener("close", onClose);
+       dom.appDialogInput.removeEventListener("keydown", onKeydown);
++      dom.appDialogSelect.removeEventListener("keydown", onKeydown);
+     };
+ 
+     dom.appDialogTitle.textContent = options.title || t("dialog.notice");
+@@ -2106,19 +2212,30 @@ function showAppDialog(options = {}) {
+     dom.btnAppDialogOk.textContent = options.okLabel || t("common.ok");
+     dom.btnAppDialogCancel.textContent = options.cancelLabel || t("common.cancel");
+     dom.btnAppDialogCancel.classList.toggle("hidden", !options.cancel);
+-    dom.appDialogInputField.classList.toggle("hidden", !options.input);
++    dom.appDialogInputField.classList.toggle("hidden", !useInput);
+     dom.appDialogInputLabel.textContent = options.inputLabel || t("dialog.value");
+     dom.appDialogInput.placeholder = options.inputPlaceholder || "";
+     dom.appDialogInput.value = options.inputValue || "";
++    dom.appDialogSelectField.classList.toggle("hidden", !useSelect);
++    dom.appDialogSelectLabel.textContent = options.selectLabel || t("dialog.value");
++    dom.appDialogSelect.innerHTML = (options.selectOptions || [])
++      .map((item) => {
++        const label = item?.hint ? `${item.label} · ${item.hint}` : item.label;
++        return `<option value="${escapeHtml(item.value)}">${escapeHtml(label)}</option>`;
++      })
++      .join("");
++    dom.appDialogSelect.value = options.selectValue || options.selectOptions?.[0]?.value || "";
+ 
+     dom.btnAppDialogCancel.addEventListener("click", onCancel);
+     dom.btnAppDialogOk.addEventListener("click", onOk);
+     dom.appDialog.addEventListener("close", onClose);
+     dom.appDialogInput.addEventListener("keydown", onKeydown);
++    dom.appDialogSelect.addEventListener("keydown", onKeydown);
+     dom.appDialog.showModal();
+ 
+     requestAnimationFrame(() => {
+-      if (options.input) dom.appDialogInput.focus();
++      if (useInput) dom.appDialogInput.focus();
++      else if (useSelect) dom.appDialogSelect.focus();
+       else dom.btnAppDialogOk.focus();
+     });
+   });
+@@ -2146,6 +2263,183 @@ async function nativeOpen(target) {
+   }
+ }
+ 
++function interactiveProviderMethodChoices(providerID) {
++  return providerAuthMethods(providerID).flatMap((item, index) => {
++    if (item?.type === "oauth") return [{ ...item, index }];
++    if (item?.type === "api" && item?.prompts?.length) return [{ ...item, index }];
++    return [];
++  });
++}
++
++async function pickProviderAuthMethod(providerID) {
++  const methods = interactiveProviderMethodChoices(providerID);
++  if (methods.length === 0) return null;
++  if (methods.length === 1) return methods[0];
++  const value = await nativeSelect(t("llm.auth_choose_method"), {
++    title: providerLabel(providerID),
++    selectLabel: t("llm.auth_method"),
++    options: methods.map((item) => ({
++      label: item.label,
++      value: String(item.index),
++      hint: item.type === "oauth" ? t("llm.auth_type_oauth") : t("llm.auth_type_api"),
++    })),
++  });
++  if (value == null) return null;
++  return methods.find((item) => String(item.index) === value) || null;
++}
++
++async function collectProviderAuthInputs(providerID, method) {
++  const inputs = {};
++  while (true) {
++    const items = await apiJson(`provider/${encodeURIComponent(providerID)}/auth/prompts`, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({
++        method: method.index,
++        inputs,
++      }),
++    });
++    const prompt = Array.isArray(items) ? items.find((item) => !(item?.key in inputs)) : null;
++    if (!prompt) return inputs;
++    if (prompt.type === "select") {
++      const value = await nativeSelect(prompt.message, {
++        title: method.label || providerLabel(providerID),
++        selectLabel: prompt.message,
++        options: prompt.options || [],
++      });
++      if (value == null) return null;
++      inputs[prompt.key] = value;
++      continue;
++    }
++    const value = await nativePrompt(prompt.message, {
++      title: method.label || providerLabel(providerID),
++      inputLabel: prompt.message,
++      inputPlaceholder: prompt.placeholder || "",
++    });
++    if (value == null) return null;
++    inputs[prompt.key] = value.trim();
++  }
++}
++
++async function refreshProviderAfterAuth(providerID) {
++  await loadConfigInfo();
++  if (dom.llmProvider?.value !== providerID || !dom.llmModel?.value) {
++    renderProviderStatus(dom.llmProvider?.value || "", state.config);
++    return;
++  }
++  try {
++    state.providerTest = await testProviderConnection(providerID, dom.llmModel.value);
++  } catch (e) {
++    state.providerTest = {
++      ok: false,
++      status: "error",
++      providerID,
++      modelID: dom.llmModel.value,
++      message: e instanceof Error ? e.message : String(e),
++    };
++  }
++  renderProviderStatus(providerID, state.config);
++}
++
++async function runProviderAuth(providerID, method) {
++  const inputs = await collectProviderAuthInputs(providerID, method);
++  if (inputs == null) return;
++
++  setLlmAuthBusy(true);
++  showLlmNotice(t("llm.notice.auth_start", { provider: providerLabel(providerID) }), "warn", 0);
++
++  try {
++    if (method.type === "api") {
++      await apiJson(`provider/${encodeURIComponent(providerID)}/auth/execute`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          method: method.index,
++          inputs,
++        }),
++      });
++      await refreshProviderAfterAuth(providerID);
++      showLlmNotice(t("llm.notice.auth_success", { provider: providerLabel(providerID) }), "active", 2600);
++      return;
++    }
++
++    const authorization = await apiJson(`provider/${encodeURIComponent(providerID)}/oauth/authorize`, {
++      method: "POST",
++      headers: { "Content-Type": "application/json" },
++      body: JSON.stringify({
++        method: method.index,
++        inputs,
++      }),
++    });
++
++    if (!authorization?.method || !authorization?.url) {
++      throw new Error(t("llm.auth_unavailable"));
++    }
++
++    const opened = await nativeOpen(authorization.url);
++    if (authorization.method === "auto") {
++      const waiting = apiJson(`provider/${encodeURIComponent(providerID)}/oauth/callback`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          method: method.index,
++        }),
++      });
++      await nativeMessage(
++        [authorization.instructions, authorization.url, t(opened ? "llm.auth_browser_opened" : "llm.auth_browser_manual")].join("\n\n"),
++        {
++          title: method.label || providerLabel(providerID),
++          kind: opened ? "info" : "warn",
++          okLabel: t("common.continue"),
++        },
++      );
++      await waiting;
++    }
++
++    if (authorization.method === "code") {
++      const code = await nativePrompt([authorization.instructions, authorization.url].join("\n\n"), {
++        title: method.label || providerLabel(providerID),
++        inputLabel: t("llm.auth_code"),
++        inputPlaceholder: t("llm.auth_code_placeholder"),
++        okLabel: t("common.submit"),
++      });
++      if (!code?.trim()) {
++        showLlmNotice("", "", 0);
++        return;
++      }
++      await apiJson(`provider/${encodeURIComponent(providerID)}/oauth/callback`, {
++        method: "POST",
++        headers: { "Content-Type": "application/json" },
++        body: JSON.stringify({
++          method: method.index,
++          code: code.trim(),
++        }),
++      });
++    }
++
++    await refreshProviderAfterAuth(providerID);
++    showLlmNotice(t("llm.notice.auth_success", { provider: providerLabel(providerID) }), "active", 2600);
++  } catch (e) {
++    AppLog.error("llm", "Provider auth failed", { providerID, error: String(e) });
++    const message = errorText("llm.notice.auth_failed", e);
++    showLlmNotice(message, "error", 3200);
++    await nativeMessage(message, {
++      title: providerLabel(providerID),
++      kind: "error",
++    });
++  } finally {
++    setLlmAuthBusy(false);
++  }
++}
++
++async function authenticateSelectedProvider() {
++  const providerID = dom.llmProvider?.value?.trim() || "";
++  if (!providerID) return;
++  const method = await pickProviderAuthMethod(providerID);
++  if (!method) return;
++  await runProviderAuth(providerID, method);
++}
++
+ async function pickDirectory(start) {
+   const selected = await tauriInvoke("overlay_pick_dir", { start: start || undefined });
+   return typeof selected === "string" ? selected : "";
+@@ -2171,6 +2465,7 @@ async function checkConnection() {
+       renderWorkspaceState();
+       AppLog.info("conn", "connected", { version: health?.version, serverUrl: state.serverUrl });
+       renderVersions(health?.version || "");
++      startEventStream();
+       return true;
+     } catch (e) {
+       error = e;
+@@ -2182,6 +2477,7 @@ async function checkConnection() {
+ 
+   setConnStatus("offline");
+   state.connected = false;
++  stopEventStream();
+   renderWorkspaceState();
+   AppLog.warn("conn", "connection failed", { error: String(error), serverUrl: state.serverUrl });
+   renderVersions("");
+@@ -2849,11 +3145,13 @@ async function selectTask(taskID, options = {}) {
+   } else {
+     enterEmptyWorkspace({ globalView: false });
+   }
++  syncGoalButton();
+   renderClear();
+ 
+   if (!nextTaskID) {
+     setTaskStatus("idle", { visible: false });
+     state.session = [];
++    state.sessionSource = "";
+     renderSession();
+     await syncManagedSession("");
+     return;
+@@ -2935,45 +3233,38 @@ function scheduleConversation(delay = 0) {
+ 
+ async function loadConversation() {
+   const target = conversationTarget();
+-  const targetKey = conversationTargetKey(target);
++  const sessionID = currentSessionID();
++  const targetKey = conversationStateKey(target);
+   if (state.sessionLoading) {
+     state.sessionQueued = true;
+     return state.sessionLoading;
+   }
+   state.sessionLoading = (async () => {
+     try {
+-      const params = new URLSearchParams();
+-      if (target.taskID) params.set("taskID", target.taskID);
+-      else if (target.sessionID) params.set("sessionID", target.sessionID);
+-      else params.set("surface", "panel");
+-      const messages = await apiJson(`control/timeline?${params.toString()}`);
+-      let result = Array.isArray(messages) ? messages : [];
+-
+-      // Fallback: if control timeline is empty, load the underlying session messages
+-      // (headless API tasks don't write to the control timeline)
+-      if (result.length === 0) {
+-        const sessionID = currentSessionID();
+-        if (sessionID) {
+-          try {
+-            const sessionMsgs = await apiJson(`session/${sessionID}/message`);
+-            result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
+-          } catch {}
+-        }
++      if (sessionID) {
++        const messages = await apiJson(`session/${sessionID}/message`);
++        if (targetKey !== conversationStateKey(conversationTarget())) return;
++        commitConversation(Array.isArray(messages) ? messages : [], "session");
++      } else {
++        const params = new URLSearchParams();
++        if (target.taskID) params.set("taskID", target.taskID);
++        else if (target.sessionID) params.set("sessionID", target.sessionID);
++        else params.set("surface", "panel");
++        const messages = await apiJson(`control/timeline?${params.toString()}`);
++        if (targetKey !== conversationStateKey(conversationTarget())) return;
++        commitConversation(Array.isArray(messages) ? messages : [], "timeline");
+       }
+-
+-      if (targetKey !== conversationTargetKey(conversationTarget())) return;
+-      state.session = result;
+-      state.sessionUpdatedAt = Date.now();
+-      renderSession();
+       if (!state.selectedTaskID || state.chatSessionID) {
+         await loadChanges();
+       }
+     } catch (e) {
+       AppLog.error("ui", "Failed to load conversation", { error: String(e) });
+-      if (targetKey !== conversationTargetKey(conversationTarget())) return;
+-      state.session = [];
+-      state.sessionUpdatedAt = Date.now();
+-      renderSession();
++      if (targetKey !== conversationStateKey(conversationTarget())) return;
++      if (sessionID && state.sessionSource === "session") {
++        state.sessionUpdatedAt = Date.now();
++      } else {
++        commitConversation([], sessionID ? "session" : "");
++      }
+       if (!state.selectedTaskID || state.chatSessionID) {
+         await loadChanges();
+       }
+@@ -2993,6 +3284,169 @@ function currentSessionID() {
+   return state.board?.task?.sessionID || "";
+ }
+ 
++function conversationStateKey(target = conversationTarget()) {
++  const sessionID = currentSessionID();
++  if (sessionID) return `session:${sessionID}`;
++  return conversationTargetKey(target);
++}
++
++function commitConversation(messages, source, options = {}) {
++  state.session = Array.isArray(messages) ? messages : [];
++  state.sessionSource = source || "";
++  state.sessionUpdatedAt = Date.now();
++  if (options.defer) {
++    queueConversationRender();
++    return;
++  }
++  renderSession();
++}
++
++function queueConversationRender() {
++  state.sessionUpdatedAt = Date.now();
++  if (state.sessionRenderPending) return;
++  state.sessionRenderPending = true;
++  const nextFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
++  nextFrame(() => {
++    state.sessionRenderPending = false;
++    renderSession();
++  });
++}
++
++function conversationEventSessionID(properties) {
++  if (typeof properties?.sessionID === "string") return properties.sessionID;
++  if (record(properties?.info) && typeof properties.info.sessionID === "string") return properties.info.sessionID;
++  if (record(properties?.part) && typeof properties.part.sessionID === "string") return properties.part.sessionID;
++  return "";
++}
++
++function ensureSessionConversation(sessionID) {
++  if (!sessionID || sessionID !== currentSessionID()) return false;
++  if (state.sessionSource === "session") return true;
++  if (state.session.length === 0) {
++    state.sessionSource = "session";
++    return true;
++  }
++  scheduleConversation(0);
++  return false;
++}
++
++function conversationMessageIndex(messageID) {
++  return state.session.findIndex((item) => item?.info?.id === messageID);
++}
++
++function sortConversationState(messages) {
++  return [...messages].sort((a, b) => {
++    const time = (a?.info?.time?.created || 0) - (b?.info?.time?.created || 0);
++    if (time !== 0) return time;
++    return String(a?.info?.id || "").localeCompare(String(b?.info?.id || ""));
++  });
++}
++
++function sortMessageParts(parts) {
++  return [...parts].sort((a, b) => String(a?.id || "").localeCompare(String(b?.id || "")));
++}
++
++function applyConversationMessage(info) {
++  if (!record(info) || typeof info.id !== "string") return false;
++  const index = conversationMessageIndex(info.id);
++  if (index >= 0) {
++    const current = state.session[index] || {};
++    state.session[index] = {
++      ...current,
++      info,
++      parts: Array.isArray(current.parts) ? current.parts : [],
++    };
++    return true;
++  }
++  state.session = sortConversationState([
++    ...state.session,
++    {
++      info,
++      parts: [],
++    },
++  ]);
++  return true;
++}
++
++function applyConversationPart(part) {
++  if (!record(part) || typeof part.messageID !== "string" || typeof part.id !== "string") return false;
++  const index = conversationMessageIndex(part.messageID);
++  if (index < 0) return false;
++  const current = state.session[index] || {};
++  const parts = Array.isArray(current.parts) ? [...current.parts] : [];
++  const partIndex = parts.findIndex((item) => item?.id === part.id);
++  if (partIndex >= 0) parts[partIndex] = part;
++  else parts.push(part);
++  state.session[index] = {
++    ...current,
++    parts: sortMessageParts(parts),
++  };
++  return true;
++}
++
++function applyConversationPartDelta(properties) {
++  if (!record(properties) || typeof properties.messageID !== "string" || typeof properties.partID !== "string") return false;
++  const index = conversationMessageIndex(properties.messageID);
++  if (index < 0) return false;
++  const current = state.session[index] || {};
++  const parts = Array.isArray(current.parts) ? [...current.parts] : [];
++  const partIndex = parts.findIndex((item) => item?.id === properties.partID);
++  if (partIndex < 0 || !record(parts[partIndex]) || typeof properties.field !== "string") return false;
++  const part = { ...parts[partIndex] };
++  const value = typeof part[properties.field] === "string" ? part[properties.field] : "";
++  part[properties.field] = value + String(properties.delta || "");
++  parts[partIndex] = part;
++  state.session[index] = {
++    ...current,
++    parts,
++  };
++  return true;
++}
++
++function removeConversationMessage(properties) {
++  if (!record(properties) || typeof properties.messageID !== "string") return false;
++  const index = conversationMessageIndex(properties.messageID);
++  if (index < 0) return false;
++  state.session = state.session.filter((_, itemIndex) => itemIndex !== index);
++  return true;
++}
++
++function removeConversationPart(properties) {
++  if (!record(properties) || typeof properties.messageID !== "string" || typeof properties.partID !== "string") return false;
++  const index = conversationMessageIndex(properties.messageID);
++  if (index < 0) return false;
++  const current = state.session[index] || {};
++  const parts = Array.isArray(current.parts) ? current.parts.filter((item) => item?.id !== properties.partID) : [];
++  state.session[index] = {
++    ...current,
++    parts,
++  };
++  return true;
++}
++
++function handleEventStreamEvent(event) {
++  const type = typeof event?.type === "string" ? event.type : "";
++  if (!type.startsWith("message.")) return false;
++  const properties = record(event?.properties) ? event.properties : {};
++  const sessionID = conversationEventSessionID(properties);
++  if (!ensureSessionConversation(sessionID)) return false;
++
++  let changed = false;
++  if (type === "message.updated") changed = applyConversationMessage(properties.info);
++  else if (type === "message.part.updated") changed = applyConversationPart(properties.part);
++  else if (type === "message.part.delta") changed = applyConversationPartDelta(properties);
++  else if (type === "message.removed") changed = removeConversationMessage(properties);
++  else if (type === "message.part.removed") changed = removeConversationPart(properties);
++
++  if (changed) {
++    queueConversationRender();
++    return true;
++  }
++
++  if (sessionID) scheduleConversation(0);
++  return false;
++}
++
+ function conversationTarget() {
+   if (state.chatSessionID) {
+     return {
+@@ -3073,7 +3527,79 @@ function diffStatus(item) {
+   return "modified";
+ }
+ 
+-// ── SSE Events ──
++// ── Global Events ──
++
++function startEventStream() {
++  if (!state.connected) return;
++  const url = apiUrl("event");
++  if (state.eventSSE && state.eventUrl === url) return;
++  stopEventStream();
++
++  const controller = new AbortController();
++  state.eventSSE = controller;
++  state.eventUrl = url;
++  state.eventConnected = false;
++
++  (async () => {
++    try {
++      const res = await fetch(url, {
++        headers: { ...apiHeaders(), Accept: "text/event-stream" },
++        signal: controller.signal,
++      });
++      if (!res.ok || !res.body) throw new Error(`API ${res?.status || 0}: ${res?.statusText || "event stream unavailable"}`);
++      state.eventConnected = true;
++      AppLog.info("event", "connected", { url });
++
++      const reader = res.body.getReader();
++      const decoder = new TextDecoder();
++      let buffer = "";
++
++      while (true) {
++        const { done, value } = await reader.read();
++        if (done) break;
++        buffer += decoder.decode(value, { stream: true });
++        const lines = buffer.split("\n");
++        buffer = lines.pop() || "";
++        for (const line of lines) {
++          if (!line.startsWith("data:")) continue;
++          try {
++            handleEventStreamEvent(JSON.parse(line.slice(5).trim()));
++          } catch (e) { AppLog.debug("event", "malformed event: " + line, { error: String(e) }); }
++        }
++      }
++    } catch (e) {
++      if (e.name === "AbortError") return;
++      AppLog.warn("event", "disconnected, retrying in 5s", { error: String(e), url });
++    } finally {
++      if (state.eventSSE === controller) {
++        state.eventSSE = null;
++        state.eventConnected = false;
++        state.eventUrl = "";
++        if (state.connected) {
++          state.eventRetry = setTimeout(() => {
++            state.eventRetry = null;
++            startEventStream();
++          }, 5000);
++        }
++      }
++    }
++  })();
++}
++
++function stopEventStream() {
++  if (state.eventRetry) {
++    clearTimeout(state.eventRetry);
++    state.eventRetry = null;
++  }
++  if (state.eventSSE) {
++    state.eventSSE.abort();
++    state.eventSSE = null;
++  }
++  state.eventConnected = false;
++  state.eventUrl = "";
++}
++
++// ── Task SSE ──
+ 
+ function startSSE(taskID) {
+   stopSSE();
+@@ -3160,7 +3686,8 @@ function startPolling() {
+     loadMeta();
+   }, POLL_INTERVAL);
+   state.sessionTimer = setInterval(() => {
+-    if (!state.sseConnected || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP) {
++    const live = !!currentSessionID() && state.eventConnected && state.sessionSource === "session";
++    if (!live && (!state.sseConnected || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP)) {
+       loadConversation();
+     }
+   }, SESSION_POLL);
+@@ -3802,7 +4329,6 @@ const performTaskAction = async function (action) {
+ 
+ const openGoalDialog = function () {
+   if (!state.selectedTaskID) return;
+-  dom.goalDialogTitle.textContent = t("goal.new_title");
+   dom.goalId.value = "";
+   dom.goalDescription.value = "";
+   dom.goalCriteria.value = "";
+@@ -3810,13 +4336,17 @@ const openGoalDialog = function () {
+ };
+ 
+ const editGoal = function (id, description, criteria) {
+-  dom.goalDialogTitle.textContent = t("goal.edit_title");
+   dom.goalId.value = id || "";
+   dom.goalDescription.value = description || "";
+   dom.goalCriteria.value = criteria || "";
+   dom.goalDialog.showModal();
+ };
+ 
++const syncGoalButton = function () {
++  if (!dom.btnCreateGoal) return;
++  dom.btnCreateGoal.disabled = !state.selectedTaskID;
++};
++
+ const deleteGoalAction = async function (id) {
+   if (!id) return;
+   const accepted = await nativeConfirm(t("goal.delete_confirm"), {
+@@ -3880,19 +4410,13 @@ function renderGoals(cards) {
+   const total = cards.length;
+   if (total === 0) {
+     dom.goalsBadge.textContent = "";
+-    dom.goalsBody.innerHTML = `${goalToolbar()}<p class="empty-hint">${escapeHtml(t("empty.goals"))}</p>`;
++    dom.goalsBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.goals"))}</p>`;
+     return;
+   }
+   dom.goalsBadge.textContent = `${passed}/${total}`;
+   dom.goalsBadge.dataset.tone = passed === total ? "good" : passed > 0 ? "warn" : "";
+ 
+-  dom.goalsBody.innerHTML = `${goalToolbar()}<div class="goals-list">${goalItemsHtml(cards)}</div>`;
+-}
+-
+-function goalToolbar() {
+-  return `<div class="section-actions compact">
+-    <button type="button" class="btn btn-primary mini" data-goal-action="create">${escapeHtml(t("goal.new"))}</button>
+-  </div>`;
++  dom.goalsBody.innerHTML = `<div class="goals-list">${goalItemsHtml(cards)}</div>`;
+ }
+ 
+ function goalIcon(status) {
+@@ -5368,8 +5892,7 @@ function renderSession() {
+ 
+   const el = dom.chatScroll;
+   const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+-  const target = conversationTarget();
+-  const targetKey = conversationTargetKey(target);
++  const targetKey = conversationStateKey();
+   const sessionChanged = state._renderedGroupKey !== targetKey;
+ 
+   if (sessionChanged) {
+@@ -5517,7 +6040,9 @@ function renderClear() {
+   renderMeta();
+   setTaskStatus("idle", { visible: false });
+   clearSectionPhases();
++  showChatNotice("", "");
+   state.session = [];
++  state.sessionSource = "";
+   state.sessionUpdatedAt = 0;
+   dom.overviewBadge.textContent = "";
+   dom.overviewBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.overview"))}</p>`;
+@@ -5566,33 +6091,39 @@ dom.chatForm.addEventListener("submit", async (e) => {
+   e.preventDefault();
+   const text = dom.chatTextarea.value.trim();
+   if (!text) return;
++  const taskMode = !!state.selectedTaskID;
+ 
+   dom.chatSend.disabled = true;
+   dom.chatTextarea.value = "";
+   sizeChat();
+ 
+-  // When no task is selected, each exchange is isolated — clear previous messages
+-  if (!state.selectedTaskID) {
++  if (!taskMode) {
+     state.session = [];
++    state.sessionSource = "";
++    const now = Date.now();
++    state.session = [
++      ...state.session,
++      { parts: [{ type: "text", text }], info: { role: "user", time: { created: now } } },
++      { parts: [{ type: "text", text: "……" }], info: { role: "assistant", time: { created: now + 1 } } },
++    ];
++    renderSession();
++  } else {
++    showChatNotice(t("chat.task_sending"), "warn", 0);
+   }
+ 
+-  // Immediately show user message + thinking indicator
+-  const now = Date.now();
+-  state.session = [
+-    ...state.session,
+-    { parts: [{ type: "text", text }], info: { role: "user", time: { created: now } } },
+-    { parts: [{ type: "text", text: "……" }], info: { role: "assistant", time: { created: now + 1 } } },
+-  ];
+-  renderSession();
+-
+   try {
+-    await panelMessage(text);
++    if (taskMode) await taskMessage(text);
++    else await panelMessage(text);
+   } catch (err) {
+-    const ph = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
+     const msg = t("interaction.error", { message: err?.message || err });
+-    if (ph) ph.parts[0].text = msg;
+-    else state.session.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
+-    renderSession();
++    if (taskMode) {
++      showChatNotice(errorText("chat.task_failed", err), "error", 4200);
++    } else {
++      const ph = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
++      if (ph) ph.parts[0].text = msg;
++      else state.session.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
++      renderSession();
++    }
+   } finally {
+     dom.chatSend.disabled = false;
+   }
+@@ -5887,6 +6418,14 @@ dom.btnCancelGoal.addEventListener("click", () => {
+   dom.goalDialog.close();
+ });
+ 
++if (dom.btnCreateGoal) {
++  dom.btnCreateGoal.addEventListener("click", (e) => {
++    e.preventDefault();
++    e.stopPropagation();
++    openGoalDialog();
++  });
++}
++
+ if (dom.overviewBody) {
+   dom.overviewBody.addEventListener("click", async (e) => {
+     const button = eventClosest(e, "[data-task-action]");
+@@ -5900,10 +6439,6 @@ if (dom.goalsBody) {
+     const button = eventClosest(e, "[data-goal-action]");
+     if (!(button instanceof HTMLElement)) return;
+     const action = button.dataset.goalAction || "";
+-    if (action === "create") {
+-      openGoalDialog();
+-      return;
+-    }
+     const goalID = button.dataset.goalId || "";
+     if (action === "edit") {
+       editGoal(goalID, button.dataset.goalTitle || "", button.dataset.goalDetail || "");
+@@ -6200,6 +6735,10 @@ dom.btnLlmApiKeyCopy?.addEventListener("click", async () => {
+   showLlmNotice(t(ok ? "llm.notice.api_key_copied" : "llm.notice.api_key_copy_failed"), ok ? "active" : "error", ok ? 1800 : 3200);
+ });
+ 
++dom.btnLlmAuthAction?.addEventListener("click", async () => {
++  await authenticateSelectedProvider();
++});
++
+ dom.localeMode?.addEventListener("change", async () => {
+   await setLocale(dom.localeMode.value);
+ });
+@@ -7064,6 +7603,7 @@ async function init() {
+   renderVersions();
+   renderLlmSummary();
+   renderLlmApiKeyTools();
++  syncGoalButton();
+   await setupTauri();
+   await applyWindowOpacity();
+   renderExecutor();
