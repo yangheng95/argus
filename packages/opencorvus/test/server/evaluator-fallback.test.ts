@@ -3,9 +3,12 @@ import { EvaluatorService } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
+import { DeliveryService } from "../../src/orchestrator/delivery"
+import { OrchestratorGit } from "../../src/orchestrator/git"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { SpecService } from "../../src/spec/service"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -44,6 +47,18 @@ test(
         },
       },
     })
+    spyOn(SpecService, "initial").mockResolvedValue(undefined as never)
+    spyOn(SpecService, "rewrite").mockResolvedValue(undefined as never)
+    spyOn(DeliveryService, "deliver").mockResolvedValue({
+      status: "delivered",
+      summary: "Delivery published.",
+      artifacts: [],
+      publish: {
+        mode: "manual",
+        adapters: [],
+      },
+    })
+    spyOn(OrchestratorGit, "complete").mockImplementation(async (task) => ({ task }))
     spyOn(EvaluatorService, "analyzeDelivery").mockRejectedValue(new Error("ProviderModelNotFoundError"))
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,

@@ -1,6 +1,7 @@
 import { SlackGateway } from "@/channel/slack"
 import { slackConfig } from "@/channel/slack-config"
 import { cmd } from "./cmd"
+import { bootstrap } from "../bootstrap"
 
 export const SlackCommand = cmd({
   command: "slack",
@@ -20,21 +21,23 @@ export const SlackCommand = cmd({
         describe: "Slack signing secret (defaults to SLACK_SIGNING_SECRET)",
       }),
   handler: async (args) => {
-    const slack = await slackConfig()
-    const token = args.botToken ?? slack.botToken
-    const appToken = args.appToken ?? slack.appToken
-    const signingSecret = args.signingSecret ?? slack.signingSecret
+    await bootstrap(process.cwd(), async () => {
+      const slack = await slackConfig()
+      const token = args.botToken ?? slack.botToken
+      const appToken = args.appToken ?? slack.appToken
+      const signingSecret = args.signingSecret ?? slack.signingSecret
 
-    if (!token) throw new Error("Slack bot token is required")
-    if (!appToken) throw new Error("Slack app token is required")
+      if (!token) throw new Error("Slack bot token is required")
+      if (!appToken) throw new Error("Slack app token is required")
 
-    const gateway = new SlackGateway({
-      directory: process.cwd(),
-      token,
-      appToken,
-      signingSecret,
+      const gateway = new SlackGateway({
+        directory: process.cwd(),
+        token,
+        appToken,
+        signingSecret,
+      })
+      await gateway.start()
+      await new Promise(() => {})
     })
-    await gateway.start()
-    await new Promise(() => {})
   },
 })

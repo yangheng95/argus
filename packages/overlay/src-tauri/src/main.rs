@@ -62,21 +62,11 @@ struct OverlaySettings {
     directory: Option<String>,
 }
 
-fn overlay_directory(directory: Option<String>) -> Option<PathBuf> {
-    directory.and_then(|item| {
-        let item = item.trim();
-        (!item.is_empty()).then(|| PathBuf::from(item))
-    })
-}
-
-fn overlay_settings_path(directory: Option<String>) -> Result<PathBuf, String> {
-    overlay_directory(directory)
-        .map(|dir| Ok(dir.join(".opencorvus").join("overlay.json")))
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .map(|dir| dir.join(".opencorvus").join("overlay.json"))
-                .map_err(|err| err.to_string())
-        })
+fn overlay_settings_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
+    app.path()
+        .app_config_dir()
+        .map(|dir| dir.join("overlay.json"))
+        .map_err(|err| err.to_string())
 }
 
 fn legacy_overlay_settings_path() -> Result<PathBuf, String> {
@@ -86,8 +76,8 @@ fn legacy_overlay_settings_path() -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, String> {
-    let path = overlay_settings_path(directory)?;
+fn overlay_settings_load<R: Runtime>(app: AppHandle<R>) -> Result<OverlaySettings, String> {
+    let path = overlay_settings_path(&app)?;
     if path.exists() {
         let text = fs::read_to_string(path).map_err(|err| err.to_string())?;
         return serde_json::from_str(&text).map_err(|err| err.to_string());
@@ -109,8 +99,11 @@ fn overlay_settings_load(directory: Option<String>) -> Result<OverlaySettings, S
 }
 
 #[tauri::command]
-fn overlay_settings_save(settings: OverlaySettings, directory: Option<String>) -> Result<bool, String> {
-    let path = overlay_settings_path(directory.or_else(|| settings.directory.clone()))?;
+fn overlay_settings_save<R: Runtime>(
+    app: AppHandle<R>,
+    settings: OverlaySettings,
+) -> Result<bool, String> {
+    let path = overlay_settings_path(&app)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|err| err.to_string())?;
     }
@@ -132,6 +125,18 @@ fn overlay_open_path<R: Runtime>(app: AppHandle<R>, path: String) -> Result<bool
 
     app.opener()
         .open_path(path, None::<&str>)
+        .map(|_| true)
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn overlay_open_url<R: Runtime>(app: AppHandle<R>, url: String) -> Result<bool, String> {
+    if url.trim().is_empty() {
+        return Ok(false);
+    }
+
+    app.opener()
+        .open_url(url, None::<&str>)
         .map(|_| true)
         .map_err(|err| err.to_string())
 }
@@ -300,16 +305,21 @@ fn overlay_server_restart<R: Runtime>(app: AppHandle<R>) -> Result<OverlayServer
 /// Embed the window icon at compile time so it works in both dev and prod builds.
 const WINDOW_ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
 
+fn app_icon() -> Result<tauri::image::Image<'static>, String> {
+    let img = image::load_from_memory_with_format(WINDOW_ICON_PNG, image::ImageFormat::Png)
+        .map_err(|err| format!("failed to decode app icon: {err}"))?;
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Ok(tauri::image::Image::new_owned(rgba.into_raw(), width, height))
+}
+
 fn set_window_icon<R: Runtime>(window: &tauri::WebviewWindow<R>) {
-    match image::load_from_memory_with_format(WINDOW_ICON_PNG, image::ImageFormat::Png) {
-        Ok(img) => {
-            let rgba = img.to_rgba8();
-            let (width, height) = rgba.dimensions();
-            let icon = tauri::image::Image::new_owned(rgba.into_raw(), width, height);
+    match app_icon() {
+        Ok(icon) => {
             let _ = window.set_icon(icon);
         }
         Err(err) => {
-            eprintln!("overlay: failed to decode window icon: {err}");
+            eprintln!("overlay: {err}");
         }
     }
 }
@@ -323,6 +333,7 @@ fn main() {
             overlay_settings_save,
             overlay_server_info,
             overlay_server_restart,
+            overlay_open_url,
             overlay_open_path,
             overlay_create_dir,
             overlay_pick_dir
@@ -349,9 +360,10 @@ fn main() {
                     // Panel: ~80% width (clamped 760..1600), ~72% height (clamped 480..920)
                     let w = (logical_w * 0.80).clamp(760.0, 1600.0);
                     let h = (logical_h * 0.72).clamp(480.0, 920.0);
-                    // Position: bottom-right with 24px margin
-                    let x = logical_w - w - 24.0;
-                    let y = logical_h - h - 64.0; // leave room for taskbar
+                    // Position: center on the primary monitor in logical coordinates,
+                    // so OS DPI scaling is handled consistently.
+                    let x = ((logical_w - w) / 2.0).max(0.0);
+                    let y = ((logical_h - h) / 2.0).max(0.0);
 
                     let _ = window.set_size(tauri::LogicalSize::new(w, h));
                     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
@@ -376,7 +388,8 @@ fn main() {
                 ],
             )?;
 
-            let icon = create_tray_icon();
+            let icon = app_icon()
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
             let _tray = TrayIconBuilder::new()
                 .icon(icon)
@@ -440,36 +453,4 @@ fn main() {
                 stop_server(app);
             }
         })
-}
-
-/// Create a simple 32x32 RGBA icon (blue circle on transparent background)
-fn create_tray_icon() -> tauri::image::Image<'static> {
-    let size: u32 = 32;
-    let mut rgba = vec![0u8; (size * size * 4) as usize];
-    let cx = size as f64 / 2.0;
-    let cy = size as f64 / 2.0;
-    let r = 12.0;
-
-    for y in 0..size {
-        for x in 0..size {
-            let dx = x as f64 - cx;
-            let dy = y as f64 - cy;
-            let dist = (dx * dx + dy * dy).sqrt();
-            let idx = ((y * size + x) * 4) as usize;
-
-            if dist <= r {
-                rgba[idx] = 0x5b;
-                rgba[idx + 1] = 0x8d;
-                rgba[idx + 2] = 0xef;
-                let edge = r - dist;
-                rgba[idx + 3] = if edge >= 1.0 {
-                    255
-                } else {
-                    (edge * 255.0) as u8
-                };
-            }
-        }
-    }
-
-    tauri::image::Image::new_owned(rgba, size, size)
 }

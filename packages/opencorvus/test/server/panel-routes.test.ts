@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { installControlModel } from "../control-plane/mock-control-model"
 import { resetDatabase } from "../fixture/db"
@@ -55,6 +56,7 @@ describe("panel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        const session = await Session.create({ title: "selected-panel-session" })
         const response = await app.request("/panel/message", {
           method: "POST",
           headers: {
@@ -76,9 +78,11 @@ describe("panel routes", () => {
         const body = await response.json() as {
           kind: string
           message: string
+          session_id?: string
           local_action?: { type: string; executor?: string }
         }
         expect(body.kind).toBe("panel_response")
+        expect(typeof body.session_id).toBe("string")
         expect(body.local_action?.type).toBe("set_executor")
         expect(body.local_action?.executor).toBe("codex")
       },
@@ -94,6 +98,7 @@ describe("panel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        const session = await Session.create({ title: "selected-panel-session" })
         const response = await app.request("/panel/message", {
           method: "POST",
           headers: {
@@ -103,7 +108,7 @@ describe("panel routes", () => {
           body: JSON.stringify({
             surface: "panel",
             text: "Use executor codex for desktop panel actions and new tasks.",
-            sessionID: "ses_selected",
+            sessionID: session.id,
             request_id: requestID,
             metadata: {
               executor: "codex",
@@ -135,7 +140,7 @@ describe("panel routes", () => {
 
         expect(requestLine).toBeDefined()
         expect(requestLine).toContain(`"request_id":"${requestID}"`)
-        expect(requestLine).toContain(`"sessionID":"ses_selected"`)
+        expect(requestLine).toContain(`"sessionID":"${session.id}"`)
         expect(requestLine).toContain(`"ui_context":"engine_bar"`)
         expect(resultLine).toBeDefined()
         expect(resultLine).toContain(`"kind":"panel_response"`)

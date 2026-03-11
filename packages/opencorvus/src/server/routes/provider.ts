@@ -82,6 +82,43 @@ export const ProviderRoutes = lazy(() =>
       },
     )
     .post(
+      "/:providerID/auth/prompts",
+      describeRoute({
+        summary: "Resolve provider auth prompts",
+        description: "Resolve interactive auth prompts for a specific provider and method using the current partial inputs.",
+        operationId: "provider.auth.prompts",
+        responses: {
+          200: {
+            description: "Resolved auth prompts",
+            content: {
+              "application/json": {
+                schema: resolver(z.array(ProviderAuth.Prompt)),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          providerID: z.string().meta({ description: "Provider ID" }),
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          method: z.number().meta({ description: "Auth method index" }),
+          inputs: z.record(z.string(), z.string()).optional(),
+        }),
+      ),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        const { method, inputs } = c.req.valid("json")
+        return c.json(await ProviderAuth.resolvePrompts({ providerID, method, inputs }))
+      },
+    )
+    .post(
       "/:providerID/test",
       describeRoute({
         summary: "Test provider connection",
@@ -186,6 +223,81 @@ export const ProviderRoutes = lazy(() =>
       },
     )
     .post(
+      "/:providerID/auth/api",
+      describeRoute({
+        summary: "Save provider API key",
+        description: "Store an API key for a specific AI provider.",
+        operationId: "provider.auth.api",
+        responses: {
+          200: {
+            description: "API key saved",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          providerID: z.string().meta({ description: "Provider ID" }),
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          key: z.string().min(1).meta({ description: "Provider API key" }),
+        }),
+      ),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        const { key } = c.req.valid("json")
+        await ProviderAuth.api({ providerID, key })
+        return c.json(true)
+      },
+    )
+    .post(
+      "/:providerID/auth/execute",
+      describeRoute({
+        summary: "Execute provider auth method",
+        description: "Execute a prompt-driven API authentication method for a specific provider.",
+        operationId: "provider.auth.execute",
+        responses: {
+          200: {
+            description: "Provider auth method executed",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(400),
+        },
+      }),
+      validator(
+        "param",
+        z.object({
+          providerID: z.string().meta({ description: "Provider ID" }),
+        }),
+      ),
+      validator(
+        "json",
+        z.object({
+          method: z.number().meta({ description: "Auth method index" }),
+          inputs: z.record(z.string(), z.string()).optional(),
+        }),
+      ),
+      async (c) => {
+        const providerID = c.req.valid("param").providerID
+        const { method, inputs } = c.req.valid("json")
+        await ProviderAuth.execute({ providerID, method, inputs })
+        return c.json(true)
+      },
+    )
+    .post(
       "/:providerID/oauth/authorize",
       describeRoute({
         summary: "OAuth authorize",
@@ -213,14 +325,16 @@ export const ProviderRoutes = lazy(() =>
         "json",
         z.object({
           method: z.number().meta({ description: "Auth method index" }),
+          inputs: z.record(z.string(), z.string()).optional(),
         }),
       ),
       async (c) => {
         const providerID = c.req.valid("param").providerID
-        const { method } = c.req.valid("json")
+        const { method, inputs } = c.req.valid("json")
         const result = await ProviderAuth.authorize({
           providerID,
           method,
+          inputs,
         })
         return c.json(result)
       },

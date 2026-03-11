@@ -227,6 +227,65 @@ describe("workbench.service", () => {
     })
   })
 
+  test("writes resumable task messages into the task session transcript", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
+      sessionID: input.sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "implement feature",
+        })
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )!
+        const run = Database.use((db) =>
+          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).get(),
+        )!
+        const now = Date.now()
+
+        Database.use((db) => {
+          db.update(OrchestratorRunTable)
+            .set({
+              status: "failed",
+              time_completed: now,
+              time_updated: now,
+            })
+            .where(eq(OrchestratorRunTable.id, run.id))
+            .run()
+          db.update(OrchestratorTaskTable)
+            .set({
+              status: "failed",
+              error: "previous run failed",
+              time_completed: now,
+              time_updated: now,
+            })
+            .where(eq(OrchestratorTaskTable.id, taskID))
+            .run()
+        })
+
+        const result = await OrchestratorService.handleTaskMessage(taskID, {
+          text: "/plan also update the copy",
+          source: "api",
+        })
+        const msgs = await Session.messages({ sessionID: task.session_id! })
+        const last = msgs.findLast((item) => item.info.role === "user")
+        const runs = Database.use((db) =>
+          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).all(),
+        )
+
+        expect(result.kind).toBe("plan")
+        expect(result.should_resume).toBe(true)
+        expect(last?.parts.some((part) => part.type === "text" && part.text === "/plan also update the copy")).toBe(true)
+        expect(runs.length).toBeGreaterThan(1)
+      },
+    })
+  })
+
   test("compiles assistant brief snapshot", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({

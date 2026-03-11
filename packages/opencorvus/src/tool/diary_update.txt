@@ -1,0 +1,1 @@
+Update an existing diary entry's date, title, or content.

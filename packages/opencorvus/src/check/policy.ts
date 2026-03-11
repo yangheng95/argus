@@ -10,6 +10,7 @@ export const CheckSelector = z.enum([
   "code_review",
   "dead_code_review",
   "startup",
+  "spec_check",
 ])
 export type CheckSelector = z.infer<typeof CheckSelector>
 
@@ -47,7 +48,7 @@ export function matchSelectors<T extends { name: string; status: string }>(
   checks: T[],
 ): T[] {
   return checks.filter((check) =>
-    selectors.some((s) => check.name === s || check.name.startsWith(`${s}#`)),
+    selectors.some((selector) => matches(selector, check.name)),
   )
 }
 
@@ -55,16 +56,28 @@ export function selectorsSatisfied(
   selectors: string[],
   checks: Array<{ name: string; status: string }>,
 ): boolean {
+  // Exclude skipped checks — a skipped check provides no evidence that the
+  // check actually ran, so it should not block goal completion. This prevents
+  // meta-checks like "evaluation_config: skipped" (emitted when no commands
+  // are configured) from falsely matching family selectors like "build" via
+  // inferFamily's fallback and causing goals to stay "pending".
+  const activeChecks = checks.filter((check) => check.status !== "skipped")
   const relevant = selectors.filter((selector) =>
-    checks.some((check) => check.name === selector || check.name.startsWith(`${selector}#`)),
+    activeChecks.some((check) => matches(selector, check.name)),
   )
   if (relevant.length === 0) return true
   return relevant.every((selector) =>
-    checks.some(
+    activeChecks.some(
       (check) =>
-        (check.name === selector || check.name.startsWith(`${selector}#`)) && check.status === "passed",
+        matches(selector, check.name) && check.status === "passed",
     ),
   )
+}
+
+function matches(selector: string, name: string) {
+  if (name === selector || name.startsWith(`${selector}#`)) return true
+  if (!CheckFamily.safeParse(selector).success) return false
+  return inferFamily(name) === selector
 }
 
 export function selectorList(metadata: unknown): string[] {

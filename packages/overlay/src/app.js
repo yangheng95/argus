@@ -38,6 +38,7 @@ const DEFAULT_OVERLAY_SETTINGS = {
   alwaysOnTop: false,
   autoPermission: false,
   autoQuestion: false,
+  showTranscriptDetails: true,
   sidebarCollapsed: false,
   sidebarWidth: null,
   sectionsWidth: null,
@@ -79,6 +80,7 @@ const state = {
   alwaysOnTop: DEFAULT_OVERLAY_SETTINGS.alwaysOnTop,
   autoPermission: DEFAULT_OVERLAY_SETTINGS.autoPermission,
   autoQuestion: DEFAULT_OVERLAY_SETTINGS.autoQuestion,
+  showTranscriptDetails: DEFAULT_OVERLAY_SETTINGS.showTranscriptDetails,
   sidebarCollapsed: DEFAULT_OVERLAY_SETTINGS.sidebarCollapsed,
   sidebarWidth: DEFAULT_OVERLAY_SETTINGS.sidebarWidth,
   sectionsWidth: DEFAULT_OVERLAY_SETTINGS.sectionsWidth,
@@ -115,16 +117,23 @@ const state = {
   sessions: [],
   managedSession: null,
   session: [],
+  sessionSource: "",
   sessionLoading: null,
   sessionQueued: false,
   sessionKick: null,
   sessionUpdatedAt: 0,
+  sessionRenderPending: false,
   changes: [],
   sse: null,
   sseConnected: false,
+  eventSSE: null,
+  eventConnected: false,
+  eventRetry: null,
+  eventUrl: "",
   pollTimer: null,
   sessionTimer: null,
   elapsedTimer: null,
+  interrupting: false,
   changeKey: "",
   _renderedGroupKey: "",
   _renderedMetaKey: "",
@@ -147,7 +156,7 @@ const dom = {
   connBadge: $("#connBadge"),
   brandLogo: $(".brand-logo"),
   brandVersion: $("#brandVersion"),
-  chatVersion: $("#chatVersion"),
+  sidebarVersion: $("#sidebarVersion"),
   chatAuthor: $("#chatAuthor"),
   btnTitlebarMenu: $("#btnTitlebarMenu"),
   titlebarMenu: $("#titlebarMenu"),
@@ -160,6 +169,7 @@ const dom = {
   btnPinValue: $("#btnPinValue"),
   chkAutoPermission: $("#chkAutoPermission"),
   chkAutoQuestion: $("#chkAutoQuestion"),
+  chkShowTranscriptDetails: $("#chkShowTranscriptDetails"),
   opacityRange: $("#opacityRange"),
   opacityValue: $("#opacityValue"),
   btnMinimize: $("#btnMinimize"),
@@ -216,18 +226,21 @@ const dom = {
   planBadge: $("#planBadge"),
   planBody: $("#planBody"),
   goalsBadge: $("#goalsBadge"),
+  btnCreateGoal: $("#btnCreateGoal"),
   goalsBody: $("#goalsBody"),
   criteriaBadge: $("#criteriaBadge"),
   criteriaList: $("#criteriaList"),
   evalBody: $("#evalBody"),
   changesBadge: $("#changesBadge"),
   changesBody: $("#changesBody"),
+  chatGoalsStrip: $("#chatGoalsStrip"),
   chatScroll: $("#chatScroll"),
   chatEmpty: $("#chatEmpty"),
   chatCount: $("#chatCount"),
   btnChatCopyAll: $("#btnChatCopyAll"),
   chatForm: $("#chatForm"),
   chatTextarea: $("#chatTextarea"),
+  btnTaskInterrupt: $("#btnTaskInterrupt"),
   chatSend: $("#chatSend"),
   sessionListPanel: $("#sessionListPanel"),
   btnGlobalView: $("#btnGlobalView"),
@@ -256,7 +269,6 @@ const dom = {
   btnCancelMcp: $("#btnCancelMcp"),
   goalDialog: $("#goalDialog"),
   goalForm: $("#goalForm"),
-  goalDialogTitle: $("#goalDialogTitle"),
   goalId: $("#goalId"),
   goalDescription: $("#goalDescription"),
   goalCriteria: $("#goalCriteria"),
@@ -272,6 +284,9 @@ const dom = {
   appDialogInputField: $("#appDialogInputField"),
   appDialogInputLabel: $("#appDialogInputLabel"),
   appDialogInput: $("#appDialogInput"),
+  appDialogSelectField: $("#appDialogSelectField"),
+  appDialogSelectLabel: $("#appDialogSelectLabel"),
+  appDialogSelect: $("#appDialogSelect"),
   btnAppDialogCancel: $("#btnAppDialogCancel"),
   btnAppDialogOk: $("#btnAppDialogOk"),
   llmForm: $("#llmForm"),
@@ -284,6 +299,7 @@ const dom = {
   llmApiKeySummary: $("#llmApiKeySummary"),
   btnLlmApiKeyToggle: $("#btnLlmApiKeyToggle"),
   btnLlmApiKeyCopy: $("#btnLlmApiKeyCopy"),
+  btnLlmAuthAction: $("#btnLlmAuthAction"),
   llmStatus: $("#llmStatus"),
   llmNotice: $("#llmNotice"),
   channelDialog: $("#channelDialog"),
@@ -339,6 +355,9 @@ const workspace = window.createOverlayWorkspace?.({
   stopPolling,
   stopSSE,
   renderManagedSessionList,
+  onDirectoryChange() {
+    void persistOverlaySettings();
+  },
 });
 
 if (!workspace) {
@@ -346,6 +365,9 @@ if (!workspace) {
 }
 
 const {
+  activeDirectory,
+  setWorkspaceDirectory,
+  restoreWorkspaceDirectory,
   workspaceMode,
   renderWorkspaceState,
   hasWorkspaceSelection,
@@ -357,6 +379,8 @@ const {
 } = workspace;
 
 Object.assign(window, {
+  activeDirectory,
+  restoreWorkspaceDirectory,
   workspaceMode,
   renderWorkspaceState,
   hasWorkspaceSelection,
@@ -369,8 +393,10 @@ Object.assign(window, {
 
 let llmSaveTimer;
 let llmNoticeTimer;
+let chatNoticeTimer;
 let llmSyncSerial = 0;
 let llmSavedValue = "";
+let llmAuthBusy = false;
 
 // ── AppLog ──
 
@@ -707,6 +733,7 @@ function refreshLocalizedState() {
     renderChanges();
   }
   renderSession();
+  syncTaskInterruptButton();
   if (dom.skillMarketDialog?.open) renderSkillMarket();
 }
 
@@ -932,6 +959,7 @@ function browserOverlaySettings() {
     alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
     autoPermission: localStorage.getItem("oc_auto_permission") === "true",
     autoQuestion: localStorage.getItem("oc_auto_question") === "true",
+    showTranscriptDetails: localStorage.getItem("oc_show_transcript_details") !== "false",
     sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
     sidebarWidth: sanitizePaneWidth(localStorage.getItem("oc_sidebar_width")),
     sectionsWidth: sanitizePaneWidth(localStorage.getItem("oc_sections_width")),
@@ -962,6 +990,7 @@ function applyOverlaySettings(settings) {
   state.alwaysOnTop = settings?.alwaysOnTop === true;
   state.autoPermission = settings?.autoPermission === true;
   state.autoQuestion = settings?.autoQuestion === true;
+  state.showTranscriptDetails = settings?.showTranscriptDetails !== false;
   state.sidebarCollapsed = settings?.sidebarCollapsed === true;
   state.sidebarWidth = sanitizePaneWidth(settings?.sidebarWidth);
   state.sectionsWidth = sanitizePaneWidth(settings?.sectionsWidth);
@@ -971,13 +1000,12 @@ function applyOverlaySettings(settings) {
   state.locale = sanitizeLocale(settings?.locale || DEFAULT_OVERLAY_SETTINGS.locale);
   state.directory =
     typeof settings?.directory === "string" ? settings.directory.trim() : DEFAULT_OVERLAY_SETTINGS.directory;
+  restoreWorkspaceDirectory();
 }
 
 async function loadOverlaySettings() {
   const browser = browserOverlaySettings();
-  const saved = await tauriInvoke("overlay_settings_load", {
-    directory: browser.directory || undefined,
-  }).catch(() => undefined);
+  const saved = await tauriInvoke("overlay_settings_load").catch(() => undefined);
   if (saved && typeof saved === "object") {
     applyOverlaySettings({ ...browser, ...saved });
     return;
@@ -996,6 +1024,7 @@ async function persistOverlaySettings() {
     alwaysOnTop: state.alwaysOnTop,
     autoPermission: state.autoPermission,
     autoQuestion: state.autoQuestion,
+    showTranscriptDetails: state.showTranscriptDetails,
     sidebarCollapsed: state.sidebarCollapsed,
     sidebarWidth: state.sidebarWidth || undefined,
     sectionsWidth: state.sectionsWidth || undefined,
@@ -1014,6 +1043,7 @@ async function persistOverlaySettings() {
   localStorage.setItem("oc_always_on_top", String(settings.alwaysOnTop));
   localStorage.setItem("oc_auto_permission", String(settings.autoPermission));
   localStorage.setItem("oc_auto_question", String(settings.autoQuestion));
+  localStorage.setItem("oc_show_transcript_details", String(settings.showTranscriptDetails));
   localStorage.setItem("oc_sidebar_collapsed", String(settings.sidebarCollapsed));
   if (settings.sidebarWidth) localStorage.setItem("oc_sidebar_width", String(settings.sidebarWidth));
   else localStorage.removeItem("oc_sidebar_width");
@@ -1024,10 +1054,7 @@ async function persistOverlaySettings() {
   localStorage.setItem("oc_theme", settings.theme);
   localStorage.setItem("oc_locale", settings.locale);
   localStorage.setItem("oc_directory", state.directory || "");
-  const saved = await tauriInvoke("overlay_settings_save", {
-    settings,
-    directory: state.directory || undefined,
-  }).catch(() => undefined);
+  const saved = await tauriInvoke("overlay_settings_save", { settings }).catch(() => undefined);
   if (saved) return;
 }
 
@@ -1085,6 +1112,9 @@ function renderTitlebarMenu() {
   }
   if (dom.chkAutoQuestion) {
     dom.chkAutoQuestion.checked = state.autoQuestion;
+  }
+  if (dom.chkShowTranscriptDetails) {
+    dom.chkShowTranscriptDetails.checked = state.showTranscriptDetails;
   }
   if (dom.opacityRange) {
     dom.opacityRange.value = String(Math.round(sanitizeOpacity(state.opacity) * 100));
@@ -1158,7 +1188,7 @@ function apiUrl(path, input = {}) {
   const pathname = idx >= 0 ? next.slice(0, idx) : next;
   const params = new URLSearchParams(idx >= 0 ? next.slice(idx + 1) : "");
   const dir = input.directory;
-  const current = typeof dir === "string" ? dir : dir === false ? "" : state.directory;
+  const current = typeof dir === "string" ? dir : dir === false ? "" : activeDirectory();
   if (current) params.set("directory", current);
   const query = params.toString();
   return `${base}/${pathname}${query ? `?${query}` : ""}`;
@@ -1223,7 +1253,10 @@ async function applyPanelResult(result) {
   }
   if (result?.local_action?.type === "select_task" && result.local_action.taskID) {
     await loadTasks();
-    await selectTask(result.local_action.taskID);
+    const item = taskItem(result.local_action.taskID, state.tasks) || taskItem(result.local_action.taskID, state.globalTasks);
+    await selectTask(result.local_action.taskID, {
+      directory: item?.task?.directory || item?.project?.worktree || "",
+    });
     return;
   }
   if (result?.local_action?.type === "select_session" && result.local_action.sessionID) {
@@ -1236,15 +1269,31 @@ async function applyPanelResult(result) {
   }
   if (result?.task_id && state.selectedTaskID !== result.task_id) {
     await loadTasks();
-    await selectTask(result.task_id);
+    const item = taskItem(result.task_id, state.tasks) || taskItem(result.task_id, state.globalTasks);
+    await selectTask(result.task_id, {
+      directory: item?.task?.directory || item?.project?.worktree || "",
+    });
+    return;
+  }
+  if (result?.session_id && !state.selectedTaskID) {
+    if (currentSessionID() === result.session_id) {
+      await Promise.all([loadConversation(), loadManagedSessions(), loadMemory()]);
+      return;
+    }
+    await openManagedSession(result.session_id);
+    await loadManagedSessions();
     return;
   }
   if (state.selectedTaskID) {
     await loadBoard();
     await loadConversation();
-  } else {
-    await loadTasks();
+    return;
   }
+  if (currentSessionID()) {
+    await Promise.all([loadConversation(), loadManagedSessions(), loadMemory()]);
+    return;
+  }
+  await loadTasks();
 }
 
 async function panelMessage(text, metadata) {
@@ -1259,6 +1308,43 @@ async function panelMessage(text, metadata) {
     signal: AbortSignal.timeout(120000),
   });
   await applyPanelResult(result);
+  return result;
+}
+
+function showChatNotice(message, tone = "", duration = 2600) {
+  if (!dom.chatGoalsStrip) return;
+  if (chatNoticeTimer) clearTimeout(chatNoticeTimer);
+  chatNoticeTimer = null;
+  dom.chatGoalsStrip.innerHTML = message
+    ? `<span class="chat-notice-chip" data-tone="${escapeHtml(tone)}">${escapeHtml(message)}</span>`
+    : "";
+  if (!message || duration <= 0) return;
+  chatNoticeTimer = setTimeout(() => {
+    if (!dom.chatGoalsStrip) return;
+    dom.chatGoalsStrip.innerHTML = "";
+  }, duration);
+}
+
+async function taskMessage(text) {
+  const taskID = state.selectedTaskID;
+  if (!taskID) throw new Error("No task selected");
+  const running = state.board?.task?.status === "running";
+  const result = await apiJson(`task/${encodeURIComponent(taskID)}/message`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      source: "panel",
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
+  await Promise.all([loadBoard(), loadConversation()]);
+  const notice = result?.should_resume
+    ? running
+      ? t("chat.task_sent")
+      : t("chat.task_queued")
+    : t("chat.task_recorded");
+  showChatNotice(notice, result?.should_resume ? "active" : "warn");
   return result;
 }
 
@@ -1292,25 +1378,42 @@ async function panelMessageStream(text, metadata) {
   const decoder = new TextDecoder();
   let buf = "";
   let result = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split("\n");
-    buf = lines.pop() || "";
-    for (const line of lines) {
-      if (!line.startsWith("data:")) continue;
+  const consume = (chunk, flush = false) => {
+    buf += chunk;
+    const blocks = buf.split(/\r?\n\r?\n/);
+    if (!flush) {
+      buf = blocks.pop() || "";
+    } else {
+      buf = "";
+    }
+    for (const block of blocks) {
+      const data = block
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+      if (!data) continue;
       try {
-        const ev = JSON.parse(line.slice(5).trim());
+        const ev = JSON.parse(data);
         if (ev.type === "tool" && placeholder) {
           placeholder.parts[0].text = `${ev.tool}...`;
           renderSession();
         } else if (ev.type === "done") {
           result = ev.result;
         }
-      } catch (e) { AppLog.debug("stream", "malformed SSE event: " + line, { error: String(e) }); }
+      } catch (e) {
+        AppLog.debug("stream", "malformed SSE event: " + data, { error: String(e) });
+      }
     }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      consume(decoder.decode(), true);
+      break;
+    }
+    consume(decoder.decode(value, { stream: true }));
   }
 
   if (!result) return null;
@@ -1679,11 +1782,21 @@ function providerLabel(providerID) {
   return providerEntry(providerID)?.name || providerID;
 }
 
+function providerAuthMethods(providerID, type) {
+  const methods = Array.isArray(state.providerAuth?.[providerID]) ? state.providerAuth[providerID] : [];
+  if (!type) return methods;
+  return methods.filter((item) => item?.type === type);
+}
+
+function interactiveProviderMethods(providerID) {
+  return providerAuthMethods(providerID).filter((item) => item?.type === "oauth" || item?.type === "api");
+}
+
 function providerState(providerID, configOverride) {
   const config = configOverride || state.config || {};
   const item = providerEntry(providerID);
   const connected = Array.isArray(state.providerCatalog?.connected) && state.providerCatalog.connected.includes(providerID);
-  const authMethods = Array.isArray(state.providerAuth?.[providerID]) ? state.providerAuth[providerID] : [];
+  const authMethods = providerAuthMethods(providerID);
   const configKey = config?.provider?.[providerID]?.options?.apiKey;
   const key = configKey || item?.key;
   const tested = state.providerTest;
@@ -1730,11 +1843,26 @@ function providerState(providerID, configOverride) {
   };
 }
 
+function renderLlmAuthAction(providerID, configOverride) {
+  if (!dom.btnLlmAuthAction) return;
+  const methods = interactiveProviderMethods(providerID);
+  const visible = methods.length > 0;
+  dom.btnLlmAuthAction.classList.toggle("hidden", !visible);
+  dom.btnLlmAuthAction.disabled = !visible || llmAuthBusy || !!dom.llmProvider?.disabled;
+  if (!visible) return;
+  const info = providerState(providerID, configOverride);
+  const label = info.tone === "active" ? t("llm.auth_reconnect") : t("llm.auth_connect");
+  dom.btnLlmAuthAction.textContent = label;
+  dom.btnLlmAuthAction.title = t("llm.auth_connect_title");
+  dom.btnLlmAuthAction.setAttribute("aria-label", t("llm.auth_connect_title"));
+}
+
 function renderProviderStatus(providerID, configOverride) {
   if (!providerID) {
     dom.llmStatus.textContent = t("llm.status.unknown");
     dom.llmStatus.dataset.status = "";
     dom.llmStatus.title = "";
+    renderLlmAuthAction("", configOverride);
     renderLlmSummary();
     return;
   }
@@ -1742,6 +1870,7 @@ function renderProviderStatus(providerID, configOverride) {
   dom.llmStatus.textContent = info.label;
   dom.llmStatus.dataset.status = info.tone;
   dom.llmStatus.title = info.detail || info.label;
+  renderLlmAuthAction(providerID, configOverride);
   renderLlmSummary();
 }
 
@@ -1848,6 +1977,7 @@ function setLlmBusy(value) {
   if (dom.btnLlmApiKeyToggle) dom.btnLlmApiKeyToggle.disabled = busy;
   if (dom.btnLlmApiKeyCopy) dom.btnLlmApiKeyCopy.disabled = busy || !dom.llmApiKey?.value?.trim();
   renderLlmApiKeyTools();
+  renderLlmAuthAction(dom.llmProvider?.value || "", state.config);
 }
 
 function showLlmNotice(message, tone = "", duration = 2600) {
@@ -1861,6 +1991,11 @@ function showLlmNotice(message, tone = "", duration = 2600) {
     if (!dom.llmNotice) return;
     dom.llmNotice.dataset.open = "false";
   }, duration);
+}
+
+function setLlmAuthBusy(value) {
+  llmAuthBusy = !!value;
+  renderLlmAuthAction(dom.llmProvider?.value || "", state.config);
 }
 
 async function testProviderConnection(providerID, modelID) {
@@ -2036,6 +2171,24 @@ async function nativePrompt(message, options) {
   return result.confirmed ? result.value : null;
 }
 
+async function nativeSelect(message, options) {
+  const list = Array.isArray(options?.options) ? options.options : [];
+  if (!list.length) return null;
+  const result = await showAppDialog({
+    title: options?.title || t("dialog.input"),
+    message,
+    kind: options?.kind || "info",
+    okLabel: options?.okLabel || t("common.ok"),
+    cancelLabel: options?.cancelLabel || t("common.cancel"),
+    cancel: true,
+    select: true,
+    selectLabel: options?.selectLabel || t("dialog.value"),
+    selectOptions: list,
+    selectValue: options?.selectValue || list[0]?.value || "",
+  });
+  return result.confirmed ? result.value : null;
+}
+
 async function copyText(text) {
   if (!text) return false;
   if (navigator.clipboard?.writeText) {
@@ -2066,6 +2219,9 @@ function showAppDialog(options = {}) {
     !dom.appDialogInputField ||
     !dom.appDialogInputLabel ||
     !dom.appDialogInput ||
+    !dom.appDialogSelectField ||
+    !dom.appDialogSelectLabel ||
+    !dom.appDialogSelect ||
     !dom.btnAppDialogCancel ||
     !dom.btnAppDialogOk
   ) {
@@ -2073,6 +2229,8 @@ function showAppDialog(options = {}) {
   }
 
   return new Promise((resolve) => {
+    const useInput = !!options.input;
+    const useSelect = !!options.select;
     let settled = false;
     const finish = (confirmed) => {
       if (settled) return;
@@ -2081,14 +2239,14 @@ function showAppDialog(options = {}) {
       if (dom.appDialog.open) dom.appDialog.close();
       resolve({
         confirmed,
-        value: confirmed && options.input ? dom.appDialogInput.value : null,
+        value: confirmed ? (useInput ? dom.appDialogInput.value : useSelect ? dom.appDialogSelect.value : null) : null,
       });
     };
     const onCancel = () => finish(false);
     const onOk = () => finish(true);
     const onClose = () => finish(false);
     const onKeydown = (event) => {
-      if (event.key === "Enter" && options.input) {
+      if (event.key === "Enter" && (useInput || useSelect)) {
         event.preventDefault();
         finish(true);
       }
@@ -2098,6 +2256,7 @@ function showAppDialog(options = {}) {
       dom.btnAppDialogOk.removeEventListener("click", onOk);
       dom.appDialog.removeEventListener("close", onClose);
       dom.appDialogInput.removeEventListener("keydown", onKeydown);
+      dom.appDialogSelect.removeEventListener("keydown", onKeydown);
     };
 
     dom.appDialogTitle.textContent = options.title || t("dialog.notice");
@@ -2106,19 +2265,30 @@ function showAppDialog(options = {}) {
     dom.btnAppDialogOk.textContent = options.okLabel || t("common.ok");
     dom.btnAppDialogCancel.textContent = options.cancelLabel || t("common.cancel");
     dom.btnAppDialogCancel.classList.toggle("hidden", !options.cancel);
-    dom.appDialogInputField.classList.toggle("hidden", !options.input);
+    dom.appDialogInputField.classList.toggle("hidden", !useInput);
     dom.appDialogInputLabel.textContent = options.inputLabel || t("dialog.value");
     dom.appDialogInput.placeholder = options.inputPlaceholder || "";
     dom.appDialogInput.value = options.inputValue || "";
+    dom.appDialogSelectField.classList.toggle("hidden", !useSelect);
+    dom.appDialogSelectLabel.textContent = options.selectLabel || t("dialog.value");
+    dom.appDialogSelect.innerHTML = (options.selectOptions || [])
+      .map((item) => {
+        const label = item?.hint ? `${item.label} · ${item.hint}` : item.label;
+        return `<option value="${escapeHtml(item.value)}">${escapeHtml(label)}</option>`;
+      })
+      .join("");
+    dom.appDialogSelect.value = options.selectValue || options.selectOptions?.[0]?.value || "";
 
     dom.btnAppDialogCancel.addEventListener("click", onCancel);
     dom.btnAppDialogOk.addEventListener("click", onOk);
     dom.appDialog.addEventListener("close", onClose);
     dom.appDialogInput.addEventListener("keydown", onKeydown);
+    dom.appDialogSelect.addEventListener("keydown", onKeydown);
     dom.appDialog.showModal();
 
     requestAnimationFrame(() => {
-      if (options.input) dom.appDialogInput.focus();
+      if (useInput) dom.appDialogInput.focus();
+      else if (useSelect) dom.appDialogSelect.focus();
       else dom.btnAppDialogOk.focus();
     });
   });
@@ -2126,6 +2296,12 @@ function showAppDialog(options = {}) {
 
 async function nativeOpen(target) {
   if (!target) return false;
+  if (/^https?:\/\//i.test(target)) {
+    try {
+      const opened = await tauriInvoke("overlay_open_url", { url: target });
+      if (opened) return true;
+    } catch {}
+  }
   try {
     const opened = await tauriInvoke("overlay_open_path", { path: target });
     if (opened) return true;
@@ -2144,6 +2320,214 @@ async function nativeOpen(target) {
   } catch {
     return false;
   }
+}
+
+function interactiveProviderMethodChoices(providerID) {
+  return providerAuthMethods(providerID).flatMap((item, index) => {
+    if (item?.type === "oauth") return [{ ...item, index }];
+    if (item?.type === "api") return [{ ...item, index }];
+    return [];
+  });
+}
+
+async function pickProviderAuthMethod(providerID) {
+  const methods = interactiveProviderMethodChoices(providerID);
+  if (methods.length === 0) return null;
+  if (methods.length === 1) return methods[0];
+  const value = await nativeSelect(t("llm.auth_choose_method"), {
+    title: providerLabel(providerID),
+    selectLabel: t("llm.auth_method"),
+    options: methods.map((item) => ({
+      label: item.label,
+      value: String(item.index),
+      hint: item.type === "oauth" ? t("llm.auth_type_oauth") : t("llm.auth_type_api"),
+    })),
+  });
+  if (value == null) return null;
+  return methods.find((item) => String(item.index) === value) || null;
+}
+
+async function collectProviderAuthInputs(providerID, method) {
+  const inputs = {};
+  while (true) {
+    const items = await apiJson(`provider/${encodeURIComponent(providerID)}/auth/prompts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: method.index,
+        inputs,
+      }),
+    });
+    const prompt = Array.isArray(items) ? items.find((item) => !(item?.key in inputs)) : null;
+    if (!prompt) return inputs;
+    if (prompt.type === "select") {
+      const value = await nativeSelect(prompt.message, {
+        title: method.label || providerLabel(providerID),
+        selectLabel: prompt.message,
+        options: prompt.options || [],
+      });
+      if (value == null) return null;
+      inputs[prompt.key] = value;
+      continue;
+    }
+    const value = await nativePrompt(prompt.message, {
+      title: method.label || providerLabel(providerID),
+      inputLabel: prompt.message,
+      inputPlaceholder: prompt.placeholder || "",
+    });
+    if (value == null) return null;
+    inputs[prompt.key] = value.trim();
+  }
+}
+
+async function refreshProviderAfterAuth(providerID) {
+  state.providerTest = null;
+  await loadConfigInfo();
+  renderProviderStatus(dom.llmProvider?.value || providerID, state.config);
+}
+
+async function runProviderAuth(providerID, method) {
+  if (method.type === "api") {
+    const hasPrompts = Array.isArray(method.prompts) && method.prompts.length > 0;
+    if (!hasPrompts) {
+      const key = await nativePrompt(t("llm.auth_connect_title"), {
+        title: method.label || providerLabel(providerID),
+        inputLabel: t("llm.api_key"),
+        inputPlaceholder: "sk-...",
+        inputValue: dom.llmApiKey?.value || "",
+        okLabel: t("common.submit"),
+      });
+      if (!key?.trim()) return;
+
+      setLlmAuthBusy(true);
+      showLlmNotice(t("llm.notice.auth_start", { provider: providerLabel(providerID) }), "warn", 0);
+
+      try {
+        await apiJson(`provider/${encodeURIComponent(providerID)}/auth/api`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            key: key.trim(),
+          }),
+        });
+        if (dom.llmApiKey) dom.llmApiKey.value = key.trim();
+        await refreshProviderAfterAuth(providerID);
+        showLlmNotice(t("llm.notice.auth_success", { provider: providerLabel(providerID) }), "active", 2600);
+        return;
+      } catch (e) {
+        AppLog.error("llm", "Provider auth failed", { providerID, error: String(e) });
+        const message = errorText("llm.notice.auth_failed", e);
+        showLlmNotice(message, "error", 3200);
+        await nativeMessage(message, {
+          title: providerLabel(providerID),
+          kind: "error",
+        });
+      } finally {
+        setLlmAuthBusy(false);
+      }
+      return;
+    }
+  }
+
+  const inputs = await collectProviderAuthInputs(providerID, method);
+  if (inputs == null) return;
+
+  setLlmAuthBusy(true);
+  showLlmNotice(t("llm.notice.auth_start", { provider: providerLabel(providerID) }), "warn", 0);
+
+  try {
+    if (method.type === "api") {
+      await apiJson(`provider/${encodeURIComponent(providerID)}/auth/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: method.index,
+          inputs,
+        }),
+      });
+      if (typeof inputs.token === "string" && dom.llmApiKey) {
+        dom.llmApiKey.value = inputs.token;
+      }
+      await refreshProviderAfterAuth(providerID);
+      showLlmNotice(t("llm.notice.auth_success", { provider: providerLabel(providerID) }), "active", 2600);
+      return;
+    }
+
+    const authorization = await apiJson(`provider/${encodeURIComponent(providerID)}/oauth/authorize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        method: method.index,
+        inputs,
+      }),
+    });
+
+    if (!authorization?.method || !authorization?.url) {
+      throw new Error(t("llm.auth_unavailable"));
+    }
+
+    const opened = await nativeOpen(authorization.url);
+    if (authorization.method === "auto") {
+      const waiting = apiJson(`provider/${encodeURIComponent(providerID)}/oauth/callback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: method.index,
+        }),
+      });
+      await nativeMessage(
+        [authorization.instructions, authorization.url, t(opened ? "llm.auth_browser_opened" : "llm.auth_browser_manual")].join("\n\n"),
+        {
+          title: method.label || providerLabel(providerID),
+          kind: opened ? "info" : "warn",
+          okLabel: t("common.continue"),
+        },
+      );
+      await waiting;
+    }
+
+    if (authorization.method === "code") {
+      const code = await nativePrompt([authorization.instructions, authorization.url].join("\n\n"), {
+        title: method.label || providerLabel(providerID),
+        inputLabel: t("llm.auth_code"),
+        inputPlaceholder: t("llm.auth_code_placeholder"),
+        okLabel: t("common.submit"),
+      });
+      if (!code?.trim()) {
+        showLlmNotice("", "", 0);
+        return;
+      }
+      await apiJson(`provider/${encodeURIComponent(providerID)}/oauth/callback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: method.index,
+          code: code.trim(),
+        }),
+      });
+    }
+
+    await refreshProviderAfterAuth(providerID);
+    showLlmNotice(t("llm.notice.auth_success", { provider: providerLabel(providerID) }), "active", 2600);
+  } catch (e) {
+    AppLog.error("llm", "Provider auth failed", { providerID, error: String(e) });
+    const message = errorText("llm.notice.auth_failed", e);
+    showLlmNotice(message, "error", 3200);
+    await nativeMessage(message, {
+      title: providerLabel(providerID),
+      kind: "error",
+    });
+  } finally {
+    setLlmAuthBusy(false);
+  }
+}
+
+async function authenticateSelectedProvider() {
+  const providerID = dom.llmProvider?.value?.trim() || "";
+  if (!providerID) return;
+  const method = await pickProviderAuthMethod(providerID);
+  if (!method) return;
+  await runProviderAuth(providerID, method);
 }
 
 async function pickDirectory(start) {
@@ -2171,6 +2555,7 @@ async function checkConnection() {
       renderWorkspaceState();
       AppLog.info("conn", "connected", { version: health?.version, serverUrl: state.serverUrl });
       renderVersions(health?.version || "");
+      startEventStream();
       return true;
     } catch (e) {
       error = e;
@@ -2182,6 +2567,7 @@ async function checkConnection() {
 
   setConnStatus("offline");
   state.connected = false;
+  stopEventStream();
   renderWorkspaceState();
   AppLog.warn("conn", "connection failed", { error: String(error), serverUrl: state.serverUrl });
   renderVersions("");
@@ -2205,9 +2591,9 @@ function renderVersions(coreVersion) {
   const parts = [t("version.overlay", { version: OVERLAY_VERSION })];
   parts.push(state.coreVersion ? t("version.core", { version: state.coreVersion }) : t("version.core_unknown"));
   const version = parts.join(" / ");
-  if (dom.chatVersion) {
-    dom.chatVersion.textContent = version;
-    dom.chatVersion.title = version;
+  if (dom.sidebarVersion) {
+    dom.sidebarVersion.textContent = version;
+    dom.sidebarVersion.title = version;
   }
   if (dom.chatAuthor) {
     const author = t("version.author");
@@ -2362,16 +2748,15 @@ async function loadMeta() {
     const [path, vcs] = await Promise.all([apiJson("path"), apiJson("vcs")]);
     state.path = path;
     state.vcs = vcs;
+    if (!activeDirectory() && typeof path?.directory === "string" && path.directory.trim()) {
+      setWorkspaceDirectory(path.directory, "auto");
+    }
     renderMeta();
   } catch {
     state.path = null;
     state.vcs = null;
     renderMeta();
   }
-}
-
-function activeDirectory() {
-  return state.directory || state.path?.directory || "";
 }
 
 function absolutePath(value) {
@@ -2471,34 +2856,54 @@ function pathBreadcrumb(value) {
     </span>
   `;
 }
+
 function canInitGit() {
   return !!activeDirectory() && state.connected && !state.vcs?.branch;
 }
 
-function resetProjectScope() {
-  enterEmptyWorkspace({ globalView: state.globalView });
+function resetProjectScope(options = {}) {
+  enterEmptyWorkspace({
+    globalView: state.globalView,
+    restoreDirectory: options.restoreDirectory !== false,
+  });
   clearProjectScopeData();
   renderClear();
   renderMeta();
   renderManagedSessionList();
 }
 
-async function reloadProjectScope() {
+async function reloadProjectScope(options = {}) {
+  await ensureWorkspaceDirectory();
   await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
-  await restoreInitialWorkspace();
+  if (options.restore !== false) {
+    await restoreInitialWorkspace();
+  }
 }
 
-async function setDirectory(value) {
+async function ensureWorkspaceDirectory() {
+  if (activeDirectory()) return activeDirectory();
+  await loadMeta();
+  return activeDirectory();
+}
+
+async function switchWorkspaceDirectory(value, options = {}) {
   const next = typeof value === "string" ? value.trim() : "";
-  if (next === state.directory) return;
+  const source = options.manual === true ? "manual" : options.source || "navigation";
+  if (next === activeDirectory()) return;
+  setWorkspaceDirectory(next, source);
+  resetProjectScope({ restoreDirectory: false });
 
-  state.directory = next;
-  resetProjectScope();
-
-  await persistOverlaySettings();
   const ok = await checkConnection();
   if (!ok) return;
-  await reloadProjectScope();
+  await reloadProjectScope({ restore: options.restore !== false });
+}
+
+async function setManualDirectory(value) {
+  await switchWorkspaceDirectory(value, {
+    manual: true,
+    source: "manual",
+    restore: true,
+  });
 }
 
 async function initGitCurrent(options = {}) {
@@ -2531,7 +2936,7 @@ async function browseDirectory() {
   try {
     const selected = await pickDirectory(activeDirectory());
     if (!selected) return;
-    await setDirectory(selected);
+    await setManualDirectory(selected);
   } catch (e) {
     AppLog.error("ui", "Failed to set working directory", { error: String(e) });
     await nativeMessage(errorText("cwd.set_failed", e), {
@@ -2556,7 +2961,7 @@ async function createDirectory() {
     const target = joinPath(parent, value);
     const created = await tauriInvoke("overlay_create_dir", { path: target }).catch(() => undefined);
     if (!created) throw new Error(t("cwd.create_unavailable"));
-    await setDirectory(target);
+    await setManualDirectory(target);
     if (state.initGit) {
       await initGitCurrent({ notify: false });
     }
@@ -2589,7 +2994,7 @@ async function openDirectory(target = activeDirectory()) {
 
 async function resetDirectory() {
   try {
-    await setDirectory("");
+    await setManualDirectory("");
   } catch (e) {
     AppLog.error("ui", "Failed to reset working directory", { error: String(e) });
     await nativeMessage(errorText("cwd.reset_failed", e), {
@@ -2841,17 +3246,25 @@ async function loadGlobalTasks() {
 async function selectTask(taskID, options = {}) {
   const nextTaskID = taskID || "";
   const nextSessionID = options.sessionID || "";
-  if (nextTaskID === state.selectedTaskID && nextSessionID === state.chatSessionID && state.board) return;
+  const nextDirectory = typeof options.directory === "string" ? options.directory.trim() : "";
+  if (
+    nextTaskID === state.selectedTaskID &&
+    nextSessionID === state.chatSessionID &&
+    state.board &&
+    (!nextDirectory || nextDirectory === activeDirectory())
+  ) return;
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
   } else {
     enterEmptyWorkspace({ globalView: false });
   }
+  syncGoalButton();
   renderClear();
 
   if (!nextTaskID) {
     setTaskStatus("idle", { visible: false });
     state.session = [];
+    state.sessionSource = "";
     renderSession();
     await syncManagedSession("");
     return;
@@ -2904,6 +3317,10 @@ async function loadBoard() {
       const etag = res.headers.get("etag");
       if (etag) state.boardEtag = etag;
       state.board = await res.json();
+      const boardDir = typeof state.board?.task?.directory === "string" ? state.board.task.directory : "";
+      if (boardDir) {
+        setWorkspaceDirectory(boardDir, state.chatSessionID ? "session" : "task");
+      }
       state.boardUpdatedAt = Date.now();
       renderBoard();
       await loadChanges();
@@ -2933,45 +3350,38 @@ function scheduleConversation(delay = 0) {
 
 async function loadConversation() {
   const target = conversationTarget();
-  const targetKey = conversationTargetKey(target);
+  const sessionID = currentSessionID();
+  const targetKey = conversationStateKey(target);
   if (state.sessionLoading) {
     state.sessionQueued = true;
     return state.sessionLoading;
   }
   state.sessionLoading = (async () => {
     try {
-      const params = new URLSearchParams();
-      if (target.taskID) params.set("taskID", target.taskID);
-      else if (target.sessionID) params.set("sessionID", target.sessionID);
-      else params.set("surface", "panel");
-      const messages = await apiJson(`control/timeline?${params.toString()}`);
-      let result = Array.isArray(messages) ? messages : [];
-
-      // Fallback: if control timeline is empty, load the underlying session messages
-      // (headless API tasks don't write to the control timeline)
-      if (result.length === 0) {
-        const sessionID = currentSessionID();
-        if (sessionID) {
-          try {
-            const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-            result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-          } catch {}
-        }
+      if (sessionID) {
+        const messages = await apiJson(`session/${sessionID}/message`);
+        if (targetKey !== conversationStateKey(conversationTarget())) return;
+        commitConversation(Array.isArray(messages) ? messages : [], "session");
+      } else {
+        const params = new URLSearchParams();
+        if (target.taskID) params.set("taskID", target.taskID);
+        else if (target.sessionID) params.set("sessionID", target.sessionID);
+        else params.set("surface", "panel");
+        const messages = await apiJson(`control/timeline?${params.toString()}`);
+        if (targetKey !== conversationStateKey(conversationTarget())) return;
+        commitConversation(Array.isArray(messages) ? messages : [], "timeline");
       }
-
-      if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      state.session = result;
-      state.sessionUpdatedAt = Date.now();
-      renderSession();
       if (!state.selectedTaskID || state.chatSessionID) {
         await loadChanges();
       }
     } catch (e) {
       AppLog.error("ui", "Failed to load conversation", { error: String(e) });
-      if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      state.session = [];
-      state.sessionUpdatedAt = Date.now();
-      renderSession();
+      if (targetKey !== conversationStateKey(conversationTarget())) return;
+      if (sessionID && state.sessionSource === "session") {
+        state.sessionUpdatedAt = Date.now();
+      } else {
+        commitConversation([], sessionID ? "session" : "");
+      }
       if (!state.selectedTaskID || state.chatSessionID) {
         await loadChanges();
       }
@@ -2989,6 +3399,169 @@ async function loadConversation() {
 function currentSessionID() {
   if (state.chatSessionID) return state.chatSessionID;
   return state.board?.task?.sessionID || "";
+}
+
+function conversationStateKey(target = conversationTarget()) {
+  const sessionID = currentSessionID();
+  if (sessionID) return `session:${sessionID}`;
+  return conversationTargetKey(target);
+}
+
+function commitConversation(messages, source, options = {}) {
+  state.session = Array.isArray(messages) ? messages : [];
+  state.sessionSource = source || "";
+  state.sessionUpdatedAt = Date.now();
+  if (options.defer) {
+    queueConversationRender();
+    return;
+  }
+  renderSession();
+}
+
+function queueConversationRender() {
+  state.sessionUpdatedAt = Date.now();
+  if (state.sessionRenderPending) return;
+  state.sessionRenderPending = true;
+  const nextFrame = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
+  nextFrame(() => {
+    state.sessionRenderPending = false;
+    renderSession();
+  });
+}
+
+function conversationEventSessionID(properties) {
+  if (typeof properties?.sessionID === "string") return properties.sessionID;
+  if (record(properties?.info) && typeof properties.info.sessionID === "string") return properties.info.sessionID;
+  if (record(properties?.part) && typeof properties.part.sessionID === "string") return properties.part.sessionID;
+  return "";
+}
+
+function ensureSessionConversation(sessionID) {
+  if (!sessionID || sessionID !== currentSessionID()) return false;
+  if (state.sessionSource === "session") return true;
+  if (state.session.length === 0) {
+    state.sessionSource = "session";
+    return true;
+  }
+  scheduleConversation(0);
+  return false;
+}
+
+function conversationMessageIndex(messageID) {
+  return state.session.findIndex((item) => item?.info?.id === messageID);
+}
+
+function sortConversationState(messages) {
+  return [...messages].sort((a, b) => {
+    const time = (a?.info?.time?.created || 0) - (b?.info?.time?.created || 0);
+    if (time !== 0) return time;
+    return String(a?.info?.id || "").localeCompare(String(b?.info?.id || ""));
+  });
+}
+
+function sortMessageParts(parts) {
+  return [...parts].sort((a, b) => String(a?.id || "").localeCompare(String(b?.id || "")));
+}
+
+function applyConversationMessage(info) {
+  if (!record(info) || typeof info.id !== "string") return false;
+  const index = conversationMessageIndex(info.id);
+  if (index >= 0) {
+    const current = state.session[index] || {};
+    state.session[index] = {
+      ...current,
+      info,
+      parts: Array.isArray(current.parts) ? current.parts : [],
+    };
+    return true;
+  }
+  state.session = sortConversationState([
+    ...state.session,
+    {
+      info,
+      parts: [],
+    },
+  ]);
+  return true;
+}
+
+function applyConversationPart(part) {
+  if (!record(part) || typeof part.messageID !== "string" || typeof part.id !== "string") return false;
+  const index = conversationMessageIndex(part.messageID);
+  if (index < 0) return false;
+  const current = state.session[index] || {};
+  const parts = Array.isArray(current.parts) ? [...current.parts] : [];
+  const partIndex = parts.findIndex((item) => item?.id === part.id);
+  if (partIndex >= 0) parts[partIndex] = part;
+  else parts.push(part);
+  state.session[index] = {
+    ...current,
+    parts: sortMessageParts(parts),
+  };
+  return true;
+}
+
+function applyConversationPartDelta(properties) {
+  if (!record(properties) || typeof properties.messageID !== "string" || typeof properties.partID !== "string") return false;
+  const index = conversationMessageIndex(properties.messageID);
+  if (index < 0) return false;
+  const current = state.session[index] || {};
+  const parts = Array.isArray(current.parts) ? [...current.parts] : [];
+  const partIndex = parts.findIndex((item) => item?.id === properties.partID);
+  if (partIndex < 0 || !record(parts[partIndex]) || typeof properties.field !== "string") return false;
+  const part = { ...parts[partIndex] };
+  const value = typeof part[properties.field] === "string" ? part[properties.field] : "";
+  part[properties.field] = value + String(properties.delta || "");
+  parts[partIndex] = part;
+  state.session[index] = {
+    ...current,
+    parts,
+  };
+  return true;
+}
+
+function removeConversationMessage(properties) {
+  if (!record(properties) || typeof properties.messageID !== "string") return false;
+  const index = conversationMessageIndex(properties.messageID);
+  if (index < 0) return false;
+  state.session = state.session.filter((_, itemIndex) => itemIndex !== index);
+  return true;
+}
+
+function removeConversationPart(properties) {
+  if (!record(properties) || typeof properties.messageID !== "string" || typeof properties.partID !== "string") return false;
+  const index = conversationMessageIndex(properties.messageID);
+  if (index < 0) return false;
+  const current = state.session[index] || {};
+  const parts = Array.isArray(current.parts) ? current.parts.filter((item) => item?.id !== properties.partID) : [];
+  state.session[index] = {
+    ...current,
+    parts,
+  };
+  return true;
+}
+
+function handleEventStreamEvent(event) {
+  const type = typeof event?.type === "string" ? event.type : "";
+  if (!type.startsWith("message.")) return false;
+  const properties = record(event?.properties) ? event.properties : {};
+  const sessionID = conversationEventSessionID(properties);
+  if (!ensureSessionConversation(sessionID)) return false;
+
+  let changed = false;
+  if (type === "message.updated") changed = applyConversationMessage(properties.info);
+  else if (type === "message.part.updated") changed = applyConversationPart(properties.part);
+  else if (type === "message.part.delta") changed = applyConversationPartDelta(properties);
+  else if (type === "message.removed") changed = removeConversationMessage(properties);
+  else if (type === "message.part.removed") changed = removeConversationPart(properties);
+
+  if (changed) {
+    queueConversationRender();
+    return true;
+  }
+
+  if (sessionID) scheduleConversation(0);
+  return false;
 }
 
 function conversationTarget() {
@@ -3071,7 +3644,79 @@ function diffStatus(item) {
   return "modified";
 }
 
-// ── SSE Events ──
+// ── Global Events ──
+
+function startEventStream() {
+  if (!state.connected) return;
+  const url = apiUrl("event");
+  if (state.eventSSE && state.eventUrl === url) return;
+  stopEventStream();
+
+  const controller = new AbortController();
+  state.eventSSE = controller;
+  state.eventUrl = url;
+  state.eventConnected = false;
+
+  (async () => {
+    try {
+      const res = await fetch(url, {
+        headers: { ...apiHeaders(), Accept: "text/event-stream" },
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) throw new Error(`API ${res?.status || 0}: ${res?.statusText || "event stream unavailable"}`);
+      state.eventConnected = true;
+      AppLog.info("event", "connected", { url });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            handleEventStreamEvent(JSON.parse(line.slice(5).trim()));
+          } catch (e) { AppLog.debug("event", "malformed event: " + line, { error: String(e) }); }
+        }
+      }
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      AppLog.warn("event", "disconnected, retrying in 5s", { error: String(e), url });
+    } finally {
+      if (state.eventSSE === controller) {
+        state.eventSSE = null;
+        state.eventConnected = false;
+        state.eventUrl = "";
+        if (state.connected) {
+          state.eventRetry = setTimeout(() => {
+            state.eventRetry = null;
+            startEventStream();
+          }, 5000);
+        }
+      }
+    }
+  })();
+}
+
+function stopEventStream() {
+  if (state.eventRetry) {
+    clearTimeout(state.eventRetry);
+    state.eventRetry = null;
+  }
+  if (state.eventSSE) {
+    state.eventSSE.abort();
+    state.eventSSE = null;
+  }
+  state.eventConnected = false;
+  state.eventUrl = "";
+}
+
+// ── Task SSE ──
 
 function startSSE(taskID) {
   stopSSE();
@@ -3158,7 +3803,8 @@ function startPolling() {
     loadMeta();
   }, POLL_INTERVAL);
   state.sessionTimer = setInterval(() => {
-    if (!state.sseConnected || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP) {
+    const live = !!currentSessionID() && state.eventConnected && state.sessionSource === "session";
+    if (!live && (!state.sseConnected || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP)) {
       loadConversation();
     }
   }, SESSION_POLL);
@@ -3177,6 +3823,7 @@ function stopPolling() {
 function renderBoard() {
   if (!state.board) {
     clearSectionPhases();
+    syncTaskInterruptButton();
     return;
   }
   const { task, plan, overview, lanes, evaluation, delivery, interactions, spec } = state.board;
@@ -3211,6 +3858,7 @@ function renderBoard() {
 
   // Re-render session to include updated board context (goals, evaluation)
   renderSession();
+  syncTaskInterruptButton();
 }
 
 function setTaskStatus(status, options = {}) {
@@ -3800,7 +4448,6 @@ const performTaskAction = async function (action) {
 
 const openGoalDialog = function () {
   if (!state.selectedTaskID) return;
-  dom.goalDialogTitle.textContent = t("goal.new_title");
   dom.goalId.value = "";
   dom.goalDescription.value = "";
   dom.goalCriteria.value = "";
@@ -3808,11 +4455,15 @@ const openGoalDialog = function () {
 };
 
 const editGoal = function (id, description, criteria) {
-  dom.goalDialogTitle.textContent = t("goal.edit_title");
   dom.goalId.value = id || "";
   dom.goalDescription.value = description || "";
   dom.goalCriteria.value = criteria || "";
   dom.goalDialog.showModal();
+};
+
+const syncGoalButton = function () {
+  if (!dom.btnCreateGoal) return;
+  dom.btnCreateGoal.disabled = !state.selectedTaskID;
 };
 
 const deleteGoalAction = async function (id) {
@@ -3878,19 +4529,13 @@ function renderGoals(cards) {
   const total = cards.length;
   if (total === 0) {
     dom.goalsBadge.textContent = "";
-    dom.goalsBody.innerHTML = `${goalToolbar()}<p class="empty-hint">${escapeHtml(t("empty.goals"))}</p>`;
+    dom.goalsBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.goals"))}</p>`;
     return;
   }
   dom.goalsBadge.textContent = `${passed}/${total}`;
   dom.goalsBadge.dataset.tone = passed === total ? "good" : passed > 0 ? "warn" : "";
 
-  dom.goalsBody.innerHTML = `${goalToolbar()}<div class="goals-list">${goalItemsHtml(cards)}</div>`;
-}
-
-function goalToolbar() {
-  return `<div class="section-actions compact">
-    <button type="button" class="btn btn-primary mini" data-goal-action="create">${escapeHtml(t("goal.new"))}</button>
-  </div>`;
+  dom.goalsBody.innerHTML = `<div class="goals-list">${goalItemsHtml(cards)}</div>`;
 }
 
 function goalIcon(status) {
@@ -4366,9 +5011,12 @@ async function selectManagedSession(sessionID, input = {}) {
   const dir =
     typeof input.directory === "string" && input.directory
       ? input.directory
-      : session?.directory || state.directory;
+      : session?.directory || activeDirectory();
   try {
     state.managedSession = await apiJson(`session/${sessionID}`, undefined, { directory: dir });
+    if (typeof state.managedSession?.directory === "string" && state.managedSession.directory.trim()) {
+      setWorkspaceDirectory(state.managedSession.directory, "session");
+    }
     AppLog.info("session", "Loaded managed session", {
       sessionID,
       session: state.managedSession,
@@ -4456,7 +5104,7 @@ async function deleteManagedSession(sessionID = state.managedSession?.id) {
   });
   if (!accepted) return;
   try {
-    await deleteSessionApi(sessionID, { deleteTasks: true }, { directory: session?.directory || state.directory });
+    await deleteSessionApi(sessionID, { deleteTasks: true }, { directory: session?.directory || activeDirectory() });
     if (state.chatSessionID === sessionID) {
       state.chatSessionID = "";
     }
@@ -4508,8 +5156,8 @@ function transcriptTime(value) {
 function formatTranscriptText(part, role) {
   let text = part?.text || "";
   if (!text.trim()) return "";
-  if (part.audience && part.audience.ui === false) return "";
-  if (part.kind === "trace" && !part.audience?.ui) return "";
+  if (!state.showTranscriptDetails && part.audience && part.audience.ui === false) return "";
+  if (!state.showTranscriptDetails && part.kind === "trace" && !part.audience?.ui) return "";
   const orchestratorRoles = ["user", "planner", "scheduler", "system"];
   if (orchestratorRoles.includes(role) && text.includes("<assistant-brief>")) {
     text = stripAssistantBrief(text);
@@ -4519,8 +5167,8 @@ function formatTranscriptText(part, role) {
 
 function formatTranscriptTool(part) {
   const toolName = part?.tool || "unknown";
-  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
-  if (hiddenTools.includes(toolName.toLowerCase())) return "";
+  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report", "panel", "structuredoutput"];
+  if (!state.showTranscriptDetails && hiddenTools.includes(toolName.toLowerCase())) return "";
   const st = part?.state || {};
   const detail = toolDetail(toolName, st.input || {}, st);
   const status = st.status || "pending";
@@ -4568,15 +5216,18 @@ async function openManagedSession(sessionID, input) {
   const task = await resolveTaskForSession(sessionID);
   const dir = task?.task?.directory || session?.directory || "";
   if (dir && dir !== activeDirectory()) {
-    await setDirectory(dir);
+    await switchWorkspaceDirectory(dir, {
+      source: "session",
+      restore: false,
+    });
   }
   if (task?.task?.id) {
-    await selectTask(task.task.id, { sessionID, managedSession: session });
+    await selectTask(task.task.id, { sessionID, managedSession: session, directory: dir });
     await selectManagedSession(sessionID, { session, directory: dir });
     await loadMemory();
     return;
   }
-  enterSessionWorkspace(sessionID, { managedSession: session });
+  enterSessionWorkspace(sessionID, { managedSession: session, directory: dir });
   renderClear();
   await selectManagedSession(sessionID, { session, directory: dir });
   await Promise.all([loadConversation(), loadMemory()]);
@@ -5032,7 +5683,7 @@ function buildBoardContextMessages() {
 function conversationMessages() {
   const boardMsgs = buildBoardContextMessages();
   let realMessages = state.session || [];
-  if (boardMsgs.length > 0 && realMessages.length > 0) {
+  if (!state.showTranscriptDetails && boardMsgs.length > 0 && realMessages.length > 0) {
     realMessages = realMessages.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
@@ -5059,8 +5710,8 @@ function renderTextPart(part, role) {
   if (!text.trim()) return "";
 
   // Skip system/scheduler messages that are not for UI
-  if (part.audience && part.audience.ui === false) return "";
-  if (part.kind === "trace" && !part.audience?.ui) return "";
+  if (!state.showTranscriptDetails && part.audience && part.audience.ui === false) return "";
+  if (!state.showTranscriptDetails && part.kind === "trace" && !part.audience?.ui) return "";
 
   // Strip <assistant-brief> orchestrator blocks from orchestrator-injected user messages
   const orchestratorRoles = ["user", "planner", "scheduler", "system"];
@@ -5366,8 +6017,7 @@ function renderSession() {
 
   const el = dom.chatScroll;
   const wasAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  const target = conversationTarget();
-  const targetKey = conversationTargetKey(target);
+  const targetKey = conversationStateKey();
   const sessionChanged = state._renderedGroupKey !== targetKey;
 
   if (sessionChanged) {
@@ -5407,25 +6057,12 @@ function renderSession() {
 async function copyChatConversation() {
   try {
     const transcript = formatSessionTranscript(conversationMessages());
-    if (!transcript) {
-      await nativeMessage(t("chat.copy_empty"), {
-        title: t("chat.copy_title"),
-        kind: "info",
-      });
-      return;
-    }
+    if (!transcript) return;
     const ok = await copyText(transcript);
     if (!ok) throw new Error(t("chat.copy_failed"));
-    await nativeMessage(t("chat.copy_done"), {
-      title: t("chat.copy_title"),
-      kind: "info",
-    });
   } catch (e) {
     AppLog.error("ui", "Failed to copy chat conversation", { error: String(e) });
-    await nativeMessage(errorText("chat.copy_failed", e), {
-      title: t("chat.copy_title"),
-      kind: "error",
-    });
+    showChatNotice(errorText("chat.copy_failed", e), "error", 4200);
   }
 }
 
@@ -5487,8 +6124,8 @@ function renderToolPart(part) {
   const st = part.state || {};
   const status = st.status || "pending";
   const input = st.input || {};
-  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
-  if (hiddenTools.includes(toolName.toLowerCase())) return "";
+  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report", "panel", "structuredoutput"];
+  if (!state.showTranscriptDetails && hiddenTools.includes(toolName.toLowerCase())) return "";
 
   const detail = toolDetail(toolName, input, st);
   const icon = toolIcon(toolName);
@@ -5515,7 +6152,9 @@ function renderClear() {
   renderMeta();
   setTaskStatus("idle", { visible: false });
   clearSectionPhases();
+  showChatNotice("", "");
   state.session = [];
+  state.sessionSource = "";
   state.sessionUpdatedAt = 0;
   dom.overviewBadge.textContent = "";
   dom.overviewBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.overview"))}</p>`;
@@ -5538,14 +6177,18 @@ function renderClear() {
   dom.elapsed.textContent = "";
   state._renderedGroupKey = "";
   renderExecutor();
+  syncTaskInterruptButton();
 }
 
 async function ensureTaskSelection() {
   if (state.globalView || hasWorkspaceSelection()) return false;
   const dir = activeDirectory();
-  const taskID = state.tasks[0]?.task?.id || (!dir ? state.globalTasks[0]?.task?.id : "") || "";
+  const task = state.tasks[0] || (!dir ? state.globalTasks[0] : null) || null;
+  const taskID = task?.task?.id || "";
   if (!taskID) return false;
-  await selectTask(taskID);
+  await selectTask(taskID, {
+    directory: task?.task?.directory || task?.project?.worktree || "",
+  });
   return true;
 }
 
@@ -5558,39 +6201,82 @@ function sizeChat() {
   dom.chatTextarea.style.height = `${Math.max(h, min)}px`;
 }
 
+function syncTaskInterruptButton() {
+  if (!dom.btnTaskInterrupt) return;
+  const visible = !!state.selectedTaskID;
+  const task = state.board?.task || null;
+  const controls = state.board?.overview?.controls || null;
+  const enabled =
+    visible &&
+    !!task &&
+    !["completed", "failed", "cancelled"].includes(task.status) &&
+    controls?.canCancel !== false;
+
+  dom.btnTaskInterrupt.hidden = !visible;
+  dom.btnTaskInterrupt.disabled = state.interrupting || !enabled;
+}
+
+async function interruptTask() {
+  const taskID = state.selectedTaskID;
+  if (!taskID || state.interrupting) return;
+
+  state.interrupting = true;
+  syncTaskInterruptButton();
+  showChatNotice(t("chat.task_interrupting"), "warn", 0);
+
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}/cancel`, {
+      method: "POST",
+    });
+    await Promise.all([loadBoard(), loadConversation(), loadTasks()]);
+    showChatNotice(t("chat.task_interrupted"), "warn");
+  } catch (e) {
+    AppLog.error("ui", "Failed to interrupt task", { error: String(e) });
+    showChatNotice(errorText("chat.task_interrupt_failed", e), "error", 4200);
+  } finally {
+    state.interrupting = false;
+    syncTaskInterruptButton();
+  }
+}
+
 // ── Chat Input ──
 
 dom.chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = dom.chatTextarea.value.trim();
   if (!text) return;
+  const taskMode = !!state.selectedTaskID;
 
   dom.chatSend.disabled = true;
   dom.chatTextarea.value = "";
   sizeChat();
 
-  // When no task is selected, each exchange is isolated — clear previous messages
-  if (!state.selectedTaskID) {
-    state.session = [];
-  }
-
-  // Immediately show user message + thinking indicator
-  const now = Date.now();
-  state.session = [
-    ...state.session,
-    { parts: [{ type: "text", text }], info: { role: "user", time: { created: now } } },
-    { parts: [{ type: "text", text: "……" }], info: { role: "assistant", time: { created: now + 1 } } },
-  ];
-  renderSession();
-
   try {
-    await panelMessage(text);
+    if (taskMode) {
+      showChatNotice(t("chat.task_sending"), "warn", 0);
+    } else {
+      const now = Date.now();
+      const sessionMode = !!currentSessionID();
+      state.sessionSource = sessionMode ? "session" : "";
+      state.session = [
+        ...(sessionMode ? state.session : []),
+        { parts: [{ type: "text", text }], info: { role: "user", time: { created: now } } },
+        { parts: [{ type: "text", text: "……" }], info: { role: "assistant", time: { created: now + 1 } } },
+      ];
+      renderSession();
+    }
+    if (taskMode) await taskMessage(text);
+    else await panelMessage(text);
   } catch (err) {
-    const ph = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
     const msg = t("interaction.error", { message: err?.message || err });
-    if (ph) ph.parts[0].text = msg;
-    else state.session.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
-    renderSession();
+    if (taskMode) {
+      showChatNotice(errorText("chat.task_failed", err), "error", 4200);
+    } else {
+      const ph = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
+      if (ph) ph.parts[0].text = msg;
+      else state.session.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
+      renderSession();
+    }
   } finally {
     dom.chatSend.disabled = false;
   }
@@ -5606,8 +6292,12 @@ dom.chatTextarea.addEventListener("keydown", (e) => {
 });
 
 dom.chatTextarea.addEventListener("input", sizeChat);
+dom.btnTaskInterrupt?.addEventListener("click", async () => {
+  await interruptTask();
+});
 dom.btnChatCopyAll?.addEventListener("click", () => copyChatConversation());
 sizeChat();
+syncTaskInterruptButton();
 
 // ── Connection Badge: double-click to restart core ──
 
@@ -5648,13 +6338,16 @@ dom.sessionListPanel?.addEventListener("click", async (event) => {
     if (dir && dir !== activeDirectory()) {
       state.globalView = false;
       renderWorkspaceState();
-      await setDirectory(dir);
-      if (taskID) await selectTask(taskID);
+      await switchWorkspaceDirectory(dir, {
+        source: "task",
+        restore: false,
+      });
+      if (taskID) await selectTask(taskID, { directory: dir });
     } else if (taskID) {
       state.globalView = false;
       renderWorkspaceState();
       renderManagedSessionList();
-      await selectTask(taskID);
+      await selectTask(taskID, { directory: dir });
     }
     return;
   }
@@ -5691,7 +6384,7 @@ dom.taskDir?.addEventListener("click", async (event) => {
   const target = button.dataset.pathSet || "";
   if (!target) return;
   try {
-    await setDirectory(target);
+    await setManualDirectory(target);
   } catch (e) {
     AppLog.error("ui", "Failed to set working directory", { error: String(e) });
     await nativeMessage(errorText("cwd.set_failed", e), {
@@ -5885,6 +6578,14 @@ dom.btnCancelGoal.addEventListener("click", () => {
   dom.goalDialog.close();
 });
 
+if (dom.btnCreateGoal) {
+  dom.btnCreateGoal.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openGoalDialog();
+  });
+}
+
 if (dom.overviewBody) {
   dom.overviewBody.addEventListener("click", async (e) => {
     const button = eventClosest(e, "[data-task-action]");
@@ -5898,10 +6599,6 @@ if (dom.goalsBody) {
     const button = eventClosest(e, "[data-goal-action]");
     if (!(button instanceof HTMLElement)) return;
     const action = button.dataset.goalAction || "";
-    if (action === "create") {
-      openGoalDialog();
-      return;
-    }
     const goalID = button.dataset.goalId || "";
     if (action === "edit") {
       editGoal(goalID, button.dataset.goalTitle || "", button.dataset.goalDetail || "");
@@ -6096,6 +6793,14 @@ dom.chkAutoQuestion?.addEventListener("change", async () => {
   if (state.autoQuestion) void loadBoard();
 });
 
+dom.chkShowTranscriptDetails?.addEventListener("change", async () => {
+  state.showTranscriptDetails = dom.chkShowTranscriptDetails.checked;
+  renderTitlebarMenu();
+  renderSession();
+  await persistOverlaySettings();
+  closeTitlebarMenu();
+});
+
 dom.opacityRange?.addEventListener("input", () => {
   state.opacity = sanitizeOpacity(Number(dom.opacityRange.value) / 100);
   void applyWindowOpacity();
@@ -6196,6 +6901,12 @@ dom.btnLlmApiKeyCopy?.addEventListener("click", async () => {
   if (!value) return;
   const ok = await copyText(value);
   showLlmNotice(t(ok ? "llm.notice.api_key_copied" : "llm.notice.api_key_copy_failed"), ok ? "active" : "error", ok ? 1800 : 3200);
+});
+
+dom.btnLlmAuthAction?.addEventListener("click", async (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  await authenticateSelectedProvider();
 });
 
 dom.localeMode?.addEventListener("change", async () => {
@@ -6967,25 +7678,12 @@ dom.btnLogRefresh?.addEventListener("click", async () => {
 dom.btnLogCopy?.addEventListener("click", async () => {
   try {
     const text = formatLogViewerText(logViewerEntries());
-    if (!text) {
-      await nativeMessage(t("log.copy_empty"), {
-        title: t("log.title"),
-        kind: "info",
-      });
-      return;
-    }
+    if (!text) return;
     const ok = await copyText(text);
     if (!ok) throw new Error(t("log.copy_failed"));
-    await nativeMessage(t("log.copy_done"), {
-      title: t("log.title"),
-      kind: "info",
-    });
   } catch (e) {
     AppLog.error("ui", "Failed to copy logs", { error: String(e) });
-    await nativeMessage(errorText("log.copy_failed", e), {
-      title: t("log.title"),
-      kind: "error",
-    });
+    showChatNotice(errorText("log.copy_failed", e), "error", 4200);
   }
 });
 dom.btnLogClear?.addEventListener("click", () => {
@@ -7062,12 +7760,14 @@ async function init() {
   renderVersions();
   renderLlmSummary();
   renderLlmApiKeyTools();
+  syncGoalButton();
   await setupTauri();
   await applyWindowOpacity();
   renderExecutor();
   const ok = await checkConnection();
   if (ok) {
     AppLog.info("init", "loading initial data");
+    await ensureWorkspaceDirectory();
     await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
     await restoreInitialWorkspace();
     AppLog.info("init", "ready");
@@ -7081,9 +7781,15 @@ async function init() {
     if (!state.connected) {
       const ok = await checkConnection();
       if (ok) {
+        await ensureWorkspaceDirectory();
         await Promise.all([loadTasks(), loadGlobalTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
         await restoreInitialWorkspace();
-        if (state.selectedTaskID) await selectTask(state.selectedTaskID);
+        if (state.selectedTaskID) {
+          const item = taskItem(state.selectedTaskID, state.tasks) || taskItem(state.selectedTaskID, state.globalTasks);
+          await selectTask(state.selectedTaskID, {
+            directory: item?.task?.directory || item?.project?.worktree || activeDirectory(),
+          });
+        }
       }
     }
   }, 10000);

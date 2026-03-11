@@ -149,6 +149,13 @@
               </span>
               <input class="titlebar-menu-check" id="chkAutoQuestion" type="checkbox">
             </label>
+            <label class="titlebar-menu-toggle" for="chkShowTranscriptDetails">
+              <span class="titlebar-menu-copy">
+                <span class="titlebar-menu-title" data-i18n="titlebar.full_transcript">Show full transcript</span>
+                <span class="titlebar-menu-meta" data-i18n="titlebar.full_transcript_hint">Reveal hidden control text, internal tool steps, and raw assistant details.</span>
+              </span>
+              <input class="titlebar-menu-check" id="chkShowTranscriptDetails" type="checkbox">
+            </label>
             <label class="titlebar-menu-range" for="opacityRange">
               <span class="titlebar-menu-copy">
                 <span class="titlebar-menu-title" data-i18n="titlebar.opacity">Window opacity</span>
@@ -265,6 +272,9 @@
             <div class="empty-hint" data-i18n="session.none_loaded">No sessions loaded</div>
           </div>
         </div>
+        <div class="sidebar-footer">
+          <span class="sidebar-version" id="sidebarVersion"></span>
+        </div>
       </aside>
       <div class="pane-resizer pane-resizer-left" id="leftPaneResizer" role="separator" aria-orientation="vertical" aria-label="Resize sessions panel"></div>
 
@@ -302,24 +312,41 @@
         <form class="chat-input" id="chatForm">
           <div class="chat-compose-row">
             <textarea class="chat-textarea" id="chatTextarea" placeholder="Send a message..." rows="2" data-i18n-placeholder="chat.placeholder"></textarea>
-            <button
-              class="chat-send"
-              type="submit"
-              id="chatSend"
-              title="Send message. Enter to send, Shift+Enter for newline."
-              aria-label="Send message"
-              data-i18n-title="chat.send_title"
-              data-i18n-aria-label="chat.send_label"
-            >
-              <span class="chat-send-icon" aria-hidden="true">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l10-5-3 5 3 5z" fill="currentColor"/></svg>
-              </span>
-              <span class="chat-send-label" data-i18n="chat.send_label">Send</span>
-            </button>
+            <div class="chat-compose-actions">
+              <button
+                class="chat-send chat-interrupt"
+                type="button"
+                id="btnTaskInterrupt"
+                title="Interrupt the current task."
+                aria-label="Interrupt the current task"
+                data-i18n="chat.interrupt_label"
+                data-i18n-title="chat.interrupt_title"
+                data-i18n-aria-label="chat.interrupt_title"
+                hidden
+              >
+                <span class="chat-send-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="4.25" y="4.25" width="7.5" height="7.5" rx="1.2" fill="currentColor"/></svg>
+                </span>
+                <span class="chat-send-label" data-i18n="chat.interrupt_label">Interrupt</span>
+              </button>
+              <button
+                class="chat-send"
+                type="submit"
+                id="chatSend"
+                title="Send message. Enter to send, Shift+Enter for newline."
+                aria-label="Send message"
+                data-i18n-title="chat.send_title"
+                data-i18n-aria-label="chat.send_label"
+              >
+                <span class="chat-send-icon" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l10-5-3 5 3 5z" fill="currentColor"/></svg>
+                </span>
+                <span class="chat-send-label" data-i18n="chat.send_label">Send</span>
+              </button>
+            </div>
           </div>
           <div class="chat-compose-meta">
             <div class="chat-build">
-              <span class="chat-version" id="chatVersion"></span>
               <a class="chat-author" id="chatAuthor" href="https://github.com/yangheng95" target="_blank" rel="noreferrer noopener" data-i18n="version.author">Author: Yang, Heng @GitHub</a>
             </div>
             <div class="chat-compose-tip" data-i18n="chat.tip">Enter to send / Shift+Enter for newline</div>
@@ -367,6 +394,7 @@
             </span>
             <span class="section-title" data-i18n="section.goals">Goals</span>
             <span class="section-badge" id="goalsBadge"></span>
+            <button type="button" class="btn btn-primary mini section-head-action" id="btnCreateGoal" data-i18n="goal.new">New Goal</button>
           </summary>
           <div class="section-body" id="goalsBody">
             <p class="empty-hint" data-i18n="empty.goals">No goals defined</p>
@@ -450,7 +478,17 @@
                 <details class="config-subsection llm-advanced" id="llmAdvanced">
                   <summary class="config-subsection-head">
                     <span data-i18n="llm.api_key">API Key</span>
-                    <span class="section-badge" id="llmApiKeySummary"></span>
+                    <span class="llm-advanced-meta">
+                      <span class="section-badge" id="llmApiKeySummary"></span>
+                      <button
+                        type="button"
+                        class="btn btn-ghost mini hidden"
+                        id="btnLlmAuthAction"
+                        data-i18n="llm.auth_connect"
+                        data-i18n-title="llm.auth_connect_title"
+                        data-i18n-aria-label="llm.auth_connect_title"
+                      >Connect</button>
+                    </span>
                   </summary>
                   <div class="config-subsection-body">
                     <label class="field">
@@ -509,6 +547,10 @@
       <label class="field hidden" id="appDialogInputField">
         <span class="field-label" id="appDialogInputLabel" data-i18n="dialog.input">Input</span>
         <input class="field-input app-dialog-input" id="appDialogInput" type="text">
+      </label>
+      <label class="field hidden" id="appDialogSelectField">
+        <span class="field-label" id="appDialogSelectLabel" data-i18n="dialog.input">Input</span>
+        <select class="field-input app-dialog-input custom-select" id="appDialogSelect"></select>
       </label>
       <div class="dialog-actions">
         <button type="button" class="btn btn-ghost" id="btnAppDialogCancel" data-i18n="common.cancel">Cancel</button>
@@ -601,9 +643,8 @@
   </dialog>
 
   <!-- Goal Dialog -->
-  <dialog class="dialog" id="goalDialog">
+  <dialog class="dialog" id="goalDialog" aria-label="Goal" data-i18n-aria-label="goal.title">
     <form class="dialog-form" id="goalForm">
-      <h3 class="dialog-title" id="goalDialogTitle" data-i18n="goal.title">Goal</h3>
       <input type="hidden" name="goalId" id="goalId">
       <label class="field">
         <span class="field-label" data-i18n-html="goal.description">Description <em>*</em></span>

@@ -9,6 +9,7 @@ import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { SessionSummary } from "../../src/session/summary"
+import { SpecService } from "../../src/spec/service"
 import { Log } from "../../src/util/log"
 import { installControlModel } from "../control-plane/mock-control-model"
 import { resetDatabase } from "../fixture/db"
@@ -17,6 +18,23 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 function stub() {
+  spyOn(SpecService, "initial").mockResolvedValue({
+    summary: "Compiled spec",
+    content: "# Scope\n\nImplement feature",
+    scope: "Implement feature",
+    assumptions: [],
+    risks: [],
+    spec_items: [
+      {
+        title: "Implement the requested change",
+        description: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+        check_selector: [],
+      },
+    ],
+    evidence_sources: [],
+    unresolved_questions: [],
+  })
   spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Implement feature",
     prompt: "Do the work",

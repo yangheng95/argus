@@ -74,7 +74,7 @@ export const PanelTool = Tool.define("panel", {
           }
         }
         const taskID = await OrchestratorService.createTask({
-          requestID: params.request_id,
+          requestID: params.request_id ?? ctx.extra?.requestID,
           request: params.request,
           executor: params.executor,
           checks: params.checks,

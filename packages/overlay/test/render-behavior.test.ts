@@ -54,7 +54,7 @@ test("planner turn refreshes when synthetic board content changes", async () => 
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderSession") === "function"
+        return typeof window.eval("renderSession") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -138,7 +138,7 @@ test("planner turn refreshes when synthetic board content changes", async () => 
     await page.close()
     server.stop(true)
   }
-})
+}, { timeout: 20_000 })
 
 test("live planner agent marks the plan section active", async () => {
   const exe = await browser()
@@ -154,7 +154,7 @@ test("live planner agent marks the plan section active", async () => {
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderSession") === "function"
+        return typeof window.eval("renderSession") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -190,7 +190,326 @@ test("live planner agent marks the plan section active", async () => {
     await page.close()
     server.stop(true)
   }
-})
+}, { timeout: 20_000 })
+
+test("session message deltas refresh the transcript live", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleEventStreamEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const renderSession = window.eval("renderSession")
+      const handleEventStreamEvent = window.eval("handleEventStreamEvent")
+
+      state.board = null
+      state.selectedTaskID = ""
+      state.chatSessionID = "session-1"
+      state.session = []
+      state.sessionSource = "session"
+      state._renderedGroupKey = ""
+      renderSession()
+
+      handleEventStreamEvent({
+        type: "message.updated",
+        properties: {
+          info: {
+            id: "msg-1",
+            sessionID: "session-1",
+            role: "assistant",
+            time: { created: 10 },
+          },
+        },
+      })
+      handleEventStreamEvent({
+        type: "message.part.updated",
+        properties: {
+          part: {
+            id: "part-1",
+            sessionID: "session-1",
+            messageID: "msg-1",
+            type: "text",
+            text: "Hel",
+          },
+        },
+      })
+      handleEventStreamEvent({
+        type: "message.part.delta",
+        properties: {
+          sessionID: "session-1",
+          messageID: "msg-1",
+          partID: "part-1",
+          field: "text",
+          delta: "lo",
+        },
+      })
+
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+
+      return {
+        body: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
+        count: document.querySelector("#chatCount")?.textContent || "",
+      }
+    })
+
+    expect(result.body).toContain("Hello")
+    expect(result.count).not.toBe("")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("first empty chat send opens the session-backed panel conversation", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderWorkspaceState") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    await tab.evaluate(() => {
+      const state = window.eval("state")
+      const renderWorkspaceState = window.eval("renderWorkspaceState")
+      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderClear = window.eval("renderClear")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const session = {
+        id: "session-9",
+        title: "Created session",
+        directory: "",
+        time: {
+          created: 1,
+          updated: 2,
+        },
+      }
+      const calls = []
+      const messages = []
+      const json = (value, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
+
+      root.__overlayCalls = calls
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
+
+        if (url.pathname === "/panel/message/stream" && method === "POST") {
+          return new Response("missing", { status: 404 })
+        }
+        if (url.pathname === "/panel/message" && method === "POST") {
+          const body = JSON.parse(String(init.body || "{}"))
+          const text = String(body.text || "")
+          messages.splice(
+            0,
+            messages.length,
+            {
+              parts: [{ type: "text", text }],
+              info: { id: "msg-user-1", role: "user", sessionID: "session-9", time: { created: 10 } },
+            },
+            {
+              parts: [{ type: "text", text: `Handled: ${text}` }],
+              info: { id: "msg-assistant-1", role: "assistant", sessionID: "session-9", time: { created: 11 } },
+            },
+          )
+          return json({
+            kind: "panel_response",
+            session_id: "session-9",
+            message: `Handled: ${text}`,
+          })
+        }
+        if (url.pathname === "/session/session-9" && method === "GET") {
+          return json(session)
+        }
+        if (url.pathname === "/session/session-9/message" && method === "GET") {
+          return json(messages)
+        }
+        if (url.pathname === "/experimental/session" && method === "GET") {
+          return json([session])
+        }
+        if (url.pathname === "/global/tasks" && method === "GET") {
+          return json({ tasks: [] })
+        }
+        if (url.pathname === "/panel/knowledge/memory" && method === "GET") {
+          return json([])
+        }
+        return new Response("not found", { status: 404 })
+      }
+
+      state.connected = true
+      state.globalView = false
+      state.selectedTaskID = ""
+      state.chatSessionID = ""
+      state.managedSession = null
+      state.sessions = []
+      state.session = []
+      state.sessionSource = ""
+      renderWorkspaceState()
+      renderManagedSessionList()
+      renderClear()
+    })
+
+    await tab.click("#chatTextarea")
+    await tab.type("#chatTextarea", "Start a new workspace chat")
+    await tab.click("#chatSend")
+
+    await tab.waitForFunction(() => {
+      try {
+        const state = window.eval("state")
+        return (
+          state.chatSessionID === "session-9" &&
+          document.body.dataset.workspace === "session" &&
+          (document.querySelector("#chatCount")?.textContent || "") !== ""
+        )
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => ({
+      calls: window.__overlayCalls || [],
+      workspace: document.body.dataset.workspace || "",
+      count: document.querySelector("#chatCount")?.textContent || "",
+      assistant: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
+      sessions: [...document.querySelectorAll(".session-row-main[data-session-id]")].map((node) => node.getAttribute("data-session-id")),
+    }))
+
+    expect(result.workspace).toBe("session")
+    expect(result.count).not.toBe("")
+    expect(result.assistant).toContain("Handled: Start a new workspace chat")
+    expect(result.calls).toContain("POST /panel/message/stream")
+    expect(result.calls).toContain("POST /panel/message")
+    expect(result.calls).toContain("GET /session/session-9")
+    expect(result.calls).toContain("GET /session/session-9/message")
+    expect(result.sessions).toContain("session-9")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("panel stream consumes the trailing done event without a final blank line", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderWorkspaceState") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    await tab.evaluate(() => {
+      const state = window.eval("state")
+      const renderWorkspaceState = window.eval("renderWorkspaceState")
+      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderClear = window.eval("renderClear")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const encoder = new TextEncoder()
+      const calls = []
+
+      root.__overlayCalls = calls
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
+
+        if (url.pathname === "/panel/message/stream" && method === "POST") {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", result: { kind: "panel_response", message: "Done from tail flush." } })}`))
+              controller.close()
+            },
+          })
+          return new Response(stream, {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream; charset=utf-8",
+            },
+          })
+        }
+
+        return new Response("not found", { status: 404 })
+      }
+
+      state.connected = true
+      state.globalView = false
+      state.selectedTaskID = ""
+      state.chatSessionID = ""
+      state.managedSession = null
+      state.sessions = []
+      state.session = []
+      state.sessionSource = ""
+      renderWorkspaceState()
+      renderManagedSessionList()
+      renderClear()
+    })
+
+    await tab.click("#chatTextarea")
+    await tab.type("#chatTextarea", "Stream parser regression")
+    await tab.click("#chatSend")
+
+    await tab.waitForFunction(() => {
+      const text = document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || ""
+      return text.includes("Done from tail flush.")
+    })
+
+    const result = await tab.evaluate(() => ({
+      assistant: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
+      calls: window.__overlayCalls || [],
+    }))
+
+    expect(result.assistant).toContain("Done from tail flush.")
+    expect(result.calls).toContain("POST /panel/message/stream")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
 
 test("executor width only remeasures on scale-driven renders", async () => {
   const exe = await browser()
@@ -206,7 +525,7 @@ test("executor width only remeasures on scale-driven renders", async () => {
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderExecutor") === "function" && typeof window.eval("renderScale") === "function"
+        return typeof window.eval("renderExecutor") === "function" && typeof window.eval("renderScale") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -241,7 +560,7 @@ test("executor width only remeasures on scale-driven renders", async () => {
     await page.close()
     server.stop(true)
   }
-})
+}, { timeout: 20_000 })
 
 test("external executors show manual install and auth tooltip when unavailable", async () => {
   const exe = await browser()
@@ -257,7 +576,7 @@ test("external executors show manual install and auth tooltip when unavailable",
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderExecutor") === "function"
+        return typeof window.eval("renderExecutor") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -290,7 +609,69 @@ test("external executors show manual install and auth tooltip when unavailable",
     await page.close()
     server.stop(true)
   }
-})
+}, { timeout: 20_000 })
+
+test("openai auth action opens a method picker instead of failing silently", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderProviderStatus") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    await tab.evaluate(() => {
+      const state = window.eval("state")
+      const renderProviderStatus = window.eval("renderProviderStatus")
+
+      state.locale = "en-US"
+      state.providerCatalog = {
+        all: [{ id: "openai", name: "OpenAI", env: [], models: { "gpt-4.1": {} } }],
+        connected: [],
+        default: { openai: "gpt-4.1" },
+      }
+      state.providerAuth = {
+        openai: [
+          { type: "oauth", label: "ChatGPT Pro/Plus (browser)" },
+          { type: "oauth", label: "ChatGPT Pro/Plus (headless)" },
+          { type: "api", label: "Manually enter API Key" },
+        ],
+      }
+      document.querySelector("#llmProvider").innerHTML = `<option value="openai">OpenAI</option>`
+      document.querySelector("#llmProvider").value = "openai"
+      renderProviderStatus("openai", {})
+    })
+
+    await tab.waitForFunction(() => !document.querySelector("#btnLlmAuthAction")?.classList.contains("hidden"))
+    await tab.evaluate(() => document.querySelector("#btnLlmAuthAction")?.dispatchEvent(new MouseEvent("click", { bubbles: true })))
+    await tab.waitForFunction(() => (document.querySelector("#appDialog") instanceof HTMLDialogElement) && document.querySelector("#appDialog").open === true)
+
+    const result = await tab.evaluate(() => ({
+      title: document.querySelector("#appDialogTitle")?.textContent || "",
+      selectLabel: document.querySelector("#appDialogSelectLabel")?.textContent || "",
+      options: [...document.querySelectorAll("#appDialogSelect option")].map((item) => item.textContent || ""),
+    }))
+
+    expect(result.title).toContain("OpenAI")
+    expect(result.selectLabel).not.toBe("")
+    expect(result.options).toHaveLength(3)
+    expect(result.options.some((item) => item.includes("Manually enter API Key"))).toBe(true)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
 
 test("workspace mode follows unified selection helpers", async () => {
   const exe = await browser()
@@ -310,6 +691,7 @@ test("workspace mode follows unified selection helpers", async () => {
           && typeof window.eval("enterSessionWorkspace") === "function"
           && typeof window.eval("enterEmptyWorkspace") === "function"
           && typeof window.eval("renderWorkspaceState") === "function"
+          && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -361,7 +743,198 @@ test("workspace mode follows unified selection helpers", async () => {
     await page.close()
     server.stop(true)
   }
-})
+}, { timeout: 20_000 })
+
+test("workspace directory uses the visible control value as the single source of truth", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("activeDirectory") === "function"
+          && typeof window.eval("restoreWorkspaceDirectory") === "function"
+          && typeof window.eval("enterTaskWorkspace") === "function"
+          && typeof window.eval("enterSessionWorkspace") === "function"
+          && typeof window.eval("enterEmptyWorkspace") === "function"
+          && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+      const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const activeDirectory = window.eval("activeDirectory")
+      const restoreWorkspaceDirectory = window.eval("restoreWorkspaceDirectory")
+      const enterTaskWorkspace = window.eval("enterTaskWorkspace")
+      const enterSessionWorkspace = window.eval("enterSessionWorkspace")
+      const enterEmptyWorkspace = window.eval("enterEmptyWorkspace")
+
+      state.directory = "D:/overlay/manual"
+      restoreWorkspaceDirectory()
+      const manual = activeDirectory()
+
+      enterTaskWorkspace("task-1", { directory: "D:/overlay/task" })
+      const task = {
+        active: activeDirectory(),
+        stored: state.directory,
+      }
+
+      enterSessionWorkspace("session-2", { directory: "D:/overlay/session" })
+      const session = {
+        active: activeDirectory(),
+        stored: state.directory,
+      }
+
+      state.path = { directory: "D:/overlay/fallback" }
+      enterEmptyWorkspace({ globalView: false })
+      return {
+        manual,
+        task,
+        session,
+        restored: activeDirectory(),
+        stored: state.directory,
+      }
+    })
+
+    expect(result.manual).toBe("D:/overlay/manual")
+    expect(result.task.active).toBe("D:/overlay/task")
+    expect(result.task.stored).toBe("D:/overlay/task")
+    expect(result.session.active).toBe("D:/overlay/session")
+    expect(result.session.stored).toBe("D:/overlay/session")
+    expect(result.restored).toBe("D:/overlay/session")
+    expect(result.stored).toBe("D:/overlay/session")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("api requests always use the control directory instead of hidden path fallbacks", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("apiUrl") === "function"
+          && typeof window.eval("setWorkspaceDirectory") === "function"
+          && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const apiUrl = window.eval("apiUrl")
+      const setWorkspaceDirectory = window.eval("setWorkspaceDirectory")
+
+      state.directory = "D:/overlay/control"
+      state.path = { directory: "D:/overlay/hidden" }
+      const before = apiUrl("path")
+
+      setWorkspaceDirectory("D:/overlay/next", "task")
+      const after = apiUrl("path")
+
+      return {
+        before,
+        after,
+        stored: state.directory,
+      }
+    })
+
+    expect(result.before).toContain("directory=D%3A%2Foverlay%2Fcontrol")
+    expect(result.before).not.toContain("hidden")
+    expect(result.after).toContain("directory=D%3A%2Foverlay%2Fnext")
+    expect(result.after).not.toContain("hidden")
+    expect(result.stored).toBe("D:/overlay/next")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("workspace bootstrap resolves the control directory before scoped loads run", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("ensureWorkspaceDirectory") === "function"
+          && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const ensureWorkspaceDirectory = window.eval("ensureWorkspaceDirectory")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls = []
+
+      root.__overlayCalls = calls
+      root.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        calls.push(url.pathname + (url.search ? url.search : ""))
+
+        if (url.pathname === "/path") {
+          return new Response(JSON.stringify({ directory: "D:/overlay/bootstrap", worktree: "", home: "", state: "", config: "" }), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        if (url.pathname === "/vcs") {
+          return new Response(JSON.stringify({ branch: "", clean: false, dirty: false, staged: 0, modified: 0, untracked: 0, conflicts: 0, ahead: 0, behind: 0 }), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+
+      state.directory = ""
+      state.path = null
+      await ensureWorkspaceDirectory()
+
+      return {
+        directory: state.directory,
+        calls,
+      }
+    })
+
+    expect(result.directory).toBe("D:/overlay/bootstrap")
+    expect(result.calls[0]).toBe("/path")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
 
 test("pending interactions render through extracted helpers without blocking the workspace", async () => {
   const exe = await browser()
@@ -379,6 +952,7 @@ test("pending interactions render through extracted helpers without blocking the
       try {
         return typeof window.eval("renderInteractions") === "function"
           && typeof window.eval("dismissInteractionModal") === "function"
+          && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -425,4 +999,4 @@ test("pending interactions render through extracted helpers without blocking the
     await page.close()
     server.stop(true)
   }
-})
+}, { timeout: 20_000 })
