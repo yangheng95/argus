@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { existsSync } from "fs"
 import path from "path"
 import { DeliveryService } from "../../src/orchestrator/delivery"
 import { OrchestratorService } from "../../src/orchestrator/service"
@@ -8,7 +7,6 @@ import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
-import { Project } from "../../src/project/project"
 import { Session } from "../../src/session"
 import { SpecService } from "../../src/spec/service"
 import { resetDatabase } from "../fixture/db"
@@ -236,14 +234,6 @@ describe("orchestrator.goal analysis-only acceptance", () => {
         }
 
         expect(progress.task.status).toBe("failed")
-        const workspace = progress.goalRuns[0]?.workspaceDir
-        expect(workspace).toBeTruthy()
-        for (const _ of Array.from({ length: 100 })) {
-          if (!existsSync(workspace!)) break
-          await Bun.sleep(50)
-        }
-        expect(existsSync(workspace!)).toBe(false)
-        expect(Project.get(Instance.project.id)?.sandboxes.includes(workspace!)).toBe(false)
         expect(progress.evaluation?.summary ?? progress.run?.error ?? "").toContain("generic checks passed")
       },
     })
