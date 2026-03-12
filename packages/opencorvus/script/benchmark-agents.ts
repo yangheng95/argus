@@ -6,13 +6,20 @@
  *   - EvaluatorAgent: Independent LLM (15 steps, 3min) — investigates failures → verdict + goal assessment
  *   - Goal evaluation: Two-layer — (1) automated checks (exit codes), (2) LLM assessment
  *
- * Run: DASHSCOPE_API_KEY=sk-sp-xxx bun run script/benchmark-agents.ts
+ * Run once: bun run packages/opencorvus/src/index.ts auth login
+ * Run: bun run script/benchmark-agents.ts
  */
 import { generateText, stepCountIs } from "ai"
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import z from "zod"
 import path from "path"
 import fs from "fs"
+import {
+  DEFAULT_OPENAI_CODEX_MODEL,
+  getOpenAICodexLanguage,
+  hasOpenAICodexAuth,
+  normalizeOpenAICodexModel,
+  openAICodexAuthHelp,
+} from "../src/provider/codex-live"
 
 // ---------------------------------------------------------------------------
 // Schema (inline to avoid import issues with @/ aliases)
@@ -75,25 +82,22 @@ type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
 // Setup
 // ---------------------------------------------------------------------------
 
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY
-if (!DASHSCOPE_API_KEY) {
-  console.error("DASHSCOPE_API_KEY is required. Run: DASHSCOPE_API_KEY=xxx bun run script/benchmark-agents.ts")
+const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_BENCHMARK_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
+if (!(await hasOpenAICodexAuth())) {
+  console.error(`OpenAI OAuth credentials are required. ${openAICodexAuthHelp()}`)
   process.exit(1)
 }
 
 const TIMEOUT = 300_000
 const PROJECT_ROOT = path.resolve(import.meta.dir, "..")
+let lang: ReturnType<typeof getOpenAICodexLanguage> | undefined
 
 function createModel() {
-  const baseURL = DASHSCOPE_API_KEY!.startsWith("sk-sp-")
-    ? "https://coding.dashscope.aliyuncs.com/v1"
-    : "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  const provider = createOpenAICompatible({
-    name: "dashscope",
-    baseURL,
-    apiKey: DASHSCOPE_API_KEY!,
+  lang ??= getOpenAICodexLanguage({
+    directory: PROJECT_ROOT,
+    model: MODEL,
   })
-  return provider.languageModel("qwen3.5-plus")
+  return lang
 }
 
 // Inline codebase tools (avoid @/ import issues)
@@ -327,7 +331,7 @@ async function runBenchmark(name: string, fn: () => Promise<Score[]>, retries = 
 // ── B1: Planner — Simple Task ──
 
 async function b1_plannerSimple(): Promise<Score[]> {
-  const model = createModel()
+  const model = await createModel()
   const tools = createCodebaseTools(PROJECT_ROOT)
 
   const result = await generateText({
@@ -362,7 +366,7 @@ async function b1_plannerSimple(): Promise<Score[]> {
 // ── B2: Planner — Complex Task ──
 
 async function b2_plannerComplex(): Promise<Score[]> {
-  const model = createModel()
+  const model = await createModel()
   const tools = createCodebaseTools(PROJECT_ROOT)
 
   const result = await generateText({
@@ -404,7 +408,7 @@ async function b2_plannerComplex(): Promise<Score[]> {
 // ── B3: Planner — Chinese Language ──
 
 async function b3_plannerChinese(): Promise<Score[]> {
-  const model = createModel()
+  const model = await createModel()
   const tools = createCodebaseTools(PROJECT_ROOT)
 
   const result = await generateText({
@@ -431,7 +435,7 @@ async function b3_plannerChinese(): Promise<Score[]> {
 // ── B5: Evaluator — All Pass ──
 
 async function b5_evaluatorAllPass(): Promise<Score[]> {
-  const model = createModel()
+  const model = await createModel()
 
   const result = await generateText({
     model,
@@ -455,7 +459,7 @@ async function b5_evaluatorAllPass(): Promise<Score[]> {
 // ── B6: Evaluator — Test Failure ──
 
 async function b6_evaluatorTestFail(): Promise<Score[]> {
-  const model = createModel()
+  const model = await createModel()
   const tools = createCodebaseTools(PROJECT_ROOT)
 
   const result = await generateText({
@@ -485,7 +489,7 @@ async function b6_evaluatorTestFail(): Promise<Score[]> {
 // ── B7: Evaluator — Strategy Failure (wrong framework) ──
 
 async function b7_evaluatorStrategy(): Promise<Score[]> {
-  const model = createModel()
+  const model = await createModel()
 
   const result = await generateText({
     model,
@@ -510,7 +514,7 @@ async function b7_evaluatorStrategy(): Promise<Score[]> {
 // ── B9: Evaluator — Mixed Results ──
 
 async function b9_evaluatorMixed(): Promise<Score[]> {
-  const model = createModel()
+  const model = await createModel()
 
   const result = await generateText({
     model,
@@ -547,7 +551,7 @@ async function b9_evaluatorMixed(): Promise<Score[]> {
 async function main() {
   console.log("╔══════════════════════════════════════════════════════════╗")
   console.log("║   OpenCorvus Agent Quality Benchmark                    ║")
-  console.log("║   Model: alibaba-cn/qwen3.5-plus                       ║")
+  console.log(`║   Model: ${MODEL.padEnd(47)}║`)
   console.log(`║   Time:  ${new Date().toISOString().padEnd(47)}║`)
   console.log("╚══════════════════════════════════════════════════════════╝")
 

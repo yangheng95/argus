@@ -43,17 +43,71 @@ function callKey(input?: ts.Expression): string[] {
   return []
 }
 
+function callName(input: ts.LeftHandSideExpression) {
+  if (ts.isIdentifier(input)) return input.text
+  if (ts.isPropertyAccessExpression(input) && ts.isIdentifier(input.name)) return input.name.text
+  return ""
+}
+
+function functionName(node: ts.Node) {
+  if (ts.isFunctionDeclaration(node) && node.name) return node.name.text
+  if ((ts.isFunctionExpression(node) || ts.isArrowFunction(node))
+    && ts.isVariableDeclaration(node.parent)
+    && ts.isIdentifier(node.parent.name)) return node.parent.name.text
+  return ""
+}
+
+function callParam(input: ts.Expression | undefined, param: string): boolean {
+  if (!input) return false
+  if (ts.isIdentifier(input)) return input.text === param
+  if (ts.isParenthesizedExpression(input)) return callParam(input.expression, param)
+  if (ts.isConditionalExpression(input)) return callParam(input.whenTrue, param) || callParam(input.whenFalse, param)
+  return false
+}
+
+function wrapperNames(source: ts.SourceFile) {
+  const names = new Set(["t", "tc", "errorText"])
+  let changed = true
+  while (changed) {
+    changed = false
+    const visit = (node: ts.Node) => {
+      if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
+        const name = functionName(node)
+        if (name && !names.has(name) && node.body && node.parameters[0] && ts.isIdentifier(node.parameters[0].name)) {
+          const param = node.parameters[0].name.text
+          let hit = false
+          const scan = (child: ts.Node) => {
+            if (hit) return
+            if (ts.isCallExpression(child)
+              && names.has(callName(child.expression))
+              && callParam(child.arguments[0], param)) {
+              hit = true
+              return
+            }
+            ts.forEachChild(child, scan)
+          }
+          scan(node.body)
+          if (hit) {
+            names.add(name)
+            changed = true
+          }
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+  }
+  return names
+}
+
 function scriptKeys(file: string, text: string) {
   const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const names = wrapperNames(source)
   const keys = new Set<string>()
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node)) {
-      const name = ts.isIdentifier(node.expression)
-        ? node.expression.text
-        : ts.isPropertyAccessExpression(node.expression) && ts.isIdentifier(node.expression.name)
-          ? node.expression.name.text
-          : ""
-      if (["t", "tc", "errorText"].includes(name)) {
+      const name = callName(node.expression)
+      if (names.has(name)) {
         for (const key of callKey(node.arguments[0])) keys.add(key)
       }
     }

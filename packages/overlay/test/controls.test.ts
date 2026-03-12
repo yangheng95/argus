@@ -803,6 +803,10 @@ test("overlay controls trigger without runtime failures", async () => {
             if (args.path) state.open.push(String(args.path))
             return true
           }
+          if (command === "overlay_open_url") {
+            if (args.url) state.open.push(String(args.url))
+            return true
+          }
           return null
         },
       },

@@ -181,8 +181,113 @@ test("buildRetryContext falls back to latest goal-run delivery and evaluation", 
       )
       const context = buildRetryContext(run, "failed")
       expect(context.deliverySummary).toBe("goal delivery")
-      expect(context.changedFiles).toEqual([])
+      expect(context.changedFiles).toBeUndefined()
       expect(context.checks?.[0]?.name).toBe("verify_cmd")
+    },
+  })
+})
+
+test("buildRetryContext inherits changed files from previous retry context when the latest delivery is empty", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const previousRunID = Identifier.ascending("run")
+      const runID = Identifier.ascending("run")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "task",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            status: "active",
+            summary: "plan",
+            prompt: "prompt",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: previousRunID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "failed",
+            phase: "dispatch",
+            retry_count: 0,
+            metadata: {
+              retry_context: {
+                changedFiles: ["src/retry.ts"],
+              },
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 1,
+            metadata: {
+              previous_run_id: previousRunID,
+              retry_context: {
+                deliverySummary: "empty retry",
+              },
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      })
+
+      const run = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get()!,
+      )
+      const context = buildRetryContext(run, "failed")
+
+      expect(context.changedFiles).toEqual(["src/retry.ts"])
     },
   })
 })

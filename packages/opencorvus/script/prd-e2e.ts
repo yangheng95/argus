@@ -2,22 +2,28 @@
 /**
  * PRD 全链路端到端测试
  *
- * 用 Coding Plan 端点 (CODING_DASHSCOPE_API_KEY) 将 PRD 喂给 PlannerAgent，
+ * 用 OpenAI Codex OAuth 将 PRD 喂给 PlannerAgent，
  * 生成完整开发计划，然后用 EvaluatorAgent 评估模拟交付结果。
  *
  * 用法:
- *   CODING_DASHSCOPE_API_KEY=sk-sp-xxx bun run script/prd-e2e.ts [--prd <path>]
+ *   bun run script/prd-e2e.ts [--prd <path>]
  *
  * 默认读取 specs/prd.txt
  */
 import path from "path"
 import * as fs from "fs/promises"
 import { generateText, stepCountIs } from "ai"
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import z from "zod"
 import { PlannerOutput, type PlannerOutputType } from "@/planner/agent"
 import { EvaluatorAnalysis, type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
+import {
+  DEFAULT_OPENAI_CODEX_MODEL,
+  getOpenAICodexLanguage,
+  hasOpenAICodexAuth,
+  normalizeOpenAICodexModel,
+  openAICodexAuthHelp,
+} from "../src/provider/codex-live"
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2)
@@ -27,21 +33,18 @@ const prdPath = prdFlag >= 0 && args[prdFlag + 1]
   : path.resolve(import.meta.dir, "../../../specs/prd.txt")
 
 // ── API key ─────────────────────────────────────────────────────────────────
-const API_KEY = process.env.CODING_DASHSCOPE_API_KEY || process.env.DASHSCOPE_API_KEY
-if (!API_KEY) {
-  console.error("ERROR: 需要 CODING_DASHSCOPE_API_KEY 或 DASHSCOPE_API_KEY 环境变量")
+const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_E2E_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
+
+if (!(await hasOpenAICodexAuth())) {
+  console.error(`ERROR: 需要 OpenAI OAuth 凭据。${openAICodexAuthHelp()}`)
   process.exit(1)
 }
-const BASE_URL = API_KEY.startsWith("sk-sp-")
-  ? "https://coding.dashscope.aliyuncs.com/v1"
-  : "https://dashscope.aliyuncs.com/compatible-mode/v1"
-const MODEL_ID = process.env.OPENCORVUS_E2E_MODEL?.split("/").pop() ?? "qwen3.5-plus"
 
 console.log(`\n═══════════════════════════════════════════════════════`)
 console.log(`  PRD 全链路端到端测试`)
 console.log(`═══════════════════════════════════════════════════════`)
-console.log(`  模型:     ${MODEL_ID}`)
-console.log(`  端点:     ${BASE_URL}`)
+console.log(`  模型:     ${MODEL}`)
+console.log(`  认证:     OpenAI OAuth (auth.json)`)
 console.log(`  PRD:      ${prdPath}`)
 console.log(`═══════════════════════════════════════════════════════\n`)
 
@@ -50,12 +53,10 @@ const prdContent = await fs.readFile(prdPath, "utf-8")
 console.log(`PRD 长度: ${prdContent.length} 字符, ${prdContent.split("\n").length} 行\n`)
 
 // ── 创建模型 ────────────────────────────────────────────────────────────────
-const provider = createOpenAICompatible({
-  name: "coding-plan",
-  baseURL: BASE_URL,
-  apiKey: API_KEY,
+const model = await getOpenAICodexLanguage({
+  directory: path.resolve(import.meta.dir, ".."),
+  model: MODEL,
 })
-const model = provider.languageModel(MODEL_ID)
 
 // ── 创建临时项目目录 ────────────────────────────────────────────────────────
 const tmpDir = path.join(

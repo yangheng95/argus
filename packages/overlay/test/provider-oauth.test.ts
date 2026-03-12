@@ -209,8 +209,8 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
               state.settings = { ...((args.settings as Record<string, unknown>) || {}) }
               return true
             }
-            if (command === "overlay_open_path") {
-              if (args.path) state.open.push(String(args.path))
+            if (command === "overlay_open_url") {
+              if (args.url) state.open.push(String(args.url))
               return true
             }
             if (command === "overlay_create_temp_dir") return "D:/overlay/temp"

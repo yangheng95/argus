@@ -1700,8 +1700,8 @@ body[data-theme="light"] .section-badge {
 
 .section-body {
   padding: 0 var(--section-body-padding-x) var(--section-body-padding-y);
-  max-height: calc(260px * var(--ui-scale));
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--section-corner);
@@ -2068,14 +2068,14 @@ body[data-theme="light"] .section-badge {
 }
 
 .criteria-name {
-  font-size: calc(12px * var(--ui-scale));
+  font-size: calc(10px * var(--ui-scale));
   font-weight: 500;
   color: var(--text-strong);
   line-height: 1.3;
 }
 
 .criteria-desc {
-  font-size: calc(11px * var(--ui-scale));
+  font-size: calc(9px * var(--ui-scale));
   color: var(--text-muted);
   line-height: 1.3;
 }
@@ -2088,7 +2088,7 @@ body[data-theme="light"] .section-badge {
 }
 .criteria-result {
   min-width: 48px;
-  font-size: calc(11px * var(--ui-scale));
+  font-size: calc(9px * var(--ui-scale));
   font-family: var(--mono);
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -5098,7 +5098,6 @@ select.field-input {
 .field-label,
 .brand-channel-label,
 .change-subline,
-.criteria-desc,
 .knowledge-item-meta,
 .config-status-box {
   font-size: var(--ui-font-label);

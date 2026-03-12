@@ -1,5 +1,7 @@
 import { Bus } from "@/bus"
 import { ExecutorRegistry } from "@/executor/registry"
+import { PermissionNext } from "@/permission/next"
+import { Question } from "@/question"
 import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
 import {
@@ -11,6 +13,7 @@ import {
 } from "./orchestrator.sql"
 import {
   activeGoalRunByCoordinator,
+  findInteraction,
   goalRunQueueTaskID,
   requireRun,
   requireTask,
@@ -194,6 +197,18 @@ export async function autoRejectInteraction(row: InteractionRow, message?: strin
   if (isPlannerClarification(row)) {
     await rejectPlannerClarification(row, message)
     return
+  }
+  if (row.request_type === "permission") {
+    await PermissionNext.reply({
+      requestID: row.external_id,
+      reply: "reject",
+      message,
+    })
+    if (findInteraction(row.id)?.status !== "pending") return
+  }
+  if (row.request_type === "question") {
+    await Question.reject(row.external_id)
+    if (findInteraction(row.id)?.status !== "pending") return
   }
   markInteraction(
     row,

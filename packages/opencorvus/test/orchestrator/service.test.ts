@@ -834,6 +834,7 @@ describe("orchestrator.service", () => {
         expect(runs.length).toBeGreaterThanOrEqual(2)
         expect(evaluations.length).toBeGreaterThanOrEqual(1)
         expect(evaluations.some((item) => item.status === "failed")).toBe(true)
+        expect(runs.some((item) => item.retry_count === 0 && item.status === "failed")).toBe(true)
         expect(runs.some((item) => item.status === "accepted" && item.retry_count === 1)).toBe(true)
       },
     })
@@ -1005,10 +1006,14 @@ describe("orchestrator.service", () => {
         const evaluations = Database.use((db) =>
           db.select().from(OrchestratorEvaluationTable).where(eq(OrchestratorEvaluationTable.task_id, taskID)).all(),
         )
+        const runs = Database.use((db) =>
+          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).all(),
+        )
         expect(task?.active_plan_version_id).toBe(progress.plan?.id)
         expect(plans.length).toBe(2)
         expect(evaluations.length).toBe(2)
         expect(evaluations.every((item) => item.status === "failed")).toBe(true)
+        expect(runs.filter((item) => item.id !== task?.active_run_id).some((item) => item.status === "failed")).toBe(true)
         expect(plans.some((item) => item.status === "superseded")).toBe(true)
       },
     })
