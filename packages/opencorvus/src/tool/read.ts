@@ -79,6 +79,7 @@ export const ReadTool = Tool.define("read", {
         dirents.map(async (dirent) => {
           if (dirent.isDirectory()) return dirent.name + "/"
           if (dirent.isSymbolicLink()) {
+            // Symlink target may not exist (dangling link)
             const target = await fs.stat(path.join(filepath, dirent.name)).catch(() => undefined)
             if (target?.isDirectory()) return dirent.name + "/"
           }

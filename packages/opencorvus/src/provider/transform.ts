@@ -131,27 +131,28 @@ export namespace ProviderTransform {
 
     if (typeof model.capabilities.interleaved === "object" && model.capabilities.interleaved.field) {
       const field = model.capabilities.interleaved.field
-      return msgs.map((msg) => {
+      return msgs.map((msg): ModelMessage => {
         if (msg.role === "assistant" && Array.isArray(msg.content)) {
-          const reasoningParts = msg.content.filter((part: any) => part.type === "reasoning")
-          const reasoningText = reasoningParts.map((part: any) => part.text).join("")
+          const reasoningParts = msg.content.filter((part) => part.type === "reasoning")
+          const reasoningText = reasoningParts.map((part) => ("text" in part ? part.text : "")).join("")
 
           // Filter out reasoning parts from content
-          const filteredContent = msg.content.filter((part: any) => part.type !== "reasoning")
+          const filteredContent = msg.content.filter((part) => part.type !== "reasoning")
 
           // Include reasoning_content | reasoning_details directly on the message for all assistant messages
           if (reasoningText) {
+            const existing = (msg.providerOptions as Record<string, unknown> | undefined)?.openaiCompatible as Record<string, unknown> | undefined
             return {
               ...msg,
               content: filteredContent,
               providerOptions: {
                 ...msg.providerOptions,
                 openaiCompatible: {
-                  ...(msg.providerOptions as any)?.openaiCompatible,
+                  ...existing,
                   [field]: reasoningText,
                 },
               },
-            }
+            } as ModelMessage
           }
 
           return {
@@ -833,7 +834,7 @@ export namespace ProviderTransform {
     amazon: "bedrock",
   }
 
-  export function providerOptions(model: Provider.Model, options: { [x: string]: any }) {
+  export function providerOptions(model: Provider.Model, options: Record<string, unknown>) {
     if (model.api.npm === "@ai-sdk/gateway") {
       // Gateway providerOptions are split across two namespaces:
       // - `gateway`: gateway-native routing/caching controls (order, only, byok, etc.)
@@ -873,27 +874,9 @@ export namespace ProviderTransform {
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
-    /*
-    if (["openai", "azure"].includes(providerID)) {
-      if (schema.type === "object" && schema.properties) {
-        for (const [key, value] of Object.entries(schema.properties)) {
-          if (schema.required?.includes(key)) continue
-          schema.properties[key] = {
-            anyOf: [
-              value as JSONSchema.JSONSchema,
-              {
-                type: "null",
-              },
-            ],
-          }
-        }
-      }
-    }
-    */
-
     // Convert integer enums to string enums for Google/Gemini
     if (model.providerID === "google" || model.api.id.includes("gemini")) {
-      const sanitizeGemini = (obj: any): any => {
+      const sanitizeGemini = (obj: unknown): unknown => {
         if (obj === null || typeof obj !== "object") {
           return obj
         }
@@ -902,7 +885,7 @@ export namespace ProviderTransform {
           return obj.map(sanitizeGemini)
         }
 
-        const result: any = {}
+        const result: Record<string, unknown> = {}
         for (const [key, value] of Object.entries(obj)) {
           if (key === "enum" && Array.isArray(value)) {
             // Convert all enum values to strings
@@ -920,7 +903,7 @@ export namespace ProviderTransform {
 
         // Filter required array to only include fields that exist in properties
         if (result.type === "object" && result.properties && Array.isArray(result.required)) {
-          result.required = result.required.filter((field: any) => field in result.properties)
+          result.required = (result.required as string[]).filter((field: string) => field in (result.properties as Record<string, unknown>))
         }
 
         if (result.type === "array") {
@@ -929,8 +912,9 @@ export namespace ProviderTransform {
           }
           // Ensure items has at least a type if it's an empty object
           // This handles nested arrays like { type: "array", items: { type: "array", items: {} } }
-          if (typeof result.items === "object" && !Array.isArray(result.items) && !result.items.type) {
-            result.items.type = "string"
+          const items = result.items
+          if (items && typeof items === "object" && !Array.isArray(items) && !("type" in items && items.type)) {
+            (items as Record<string, unknown>).type = "string"
           }
         }
 
@@ -943,7 +927,7 @@ export namespace ProviderTransform {
         return result
       }
 
-      schema = sanitizeGemini(schema)
+      schema = sanitizeGemini(schema) as JSONSchema7
     }
 
     return schema as JSONSchema7

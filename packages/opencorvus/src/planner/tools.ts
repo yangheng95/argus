@@ -163,11 +163,14 @@ export function createPlannerTools(taskWorkDir?: string) {
           const text = await response.text()
           for (const line of text.split("\n")) {
             if (line.startsWith("data: ")) {
-              const data = JSON.parse(line.substring(6))
-              if (data.result?.content?.[0]?.text) {
-                const content = data.result.content[0].text
-                // Truncate to avoid blowing up context
-                return content.length > 4000 ? content.slice(0, 4000) + "\n... (truncated)" : content
+              let data: Record<string, unknown>
+              try { data = JSON.parse(line.substring(6)) } catch { continue }
+              const content = (data.result as Record<string, unknown> | undefined)
+              const items = Array.isArray(content?.content) ? content!.content : undefined
+              const first = items?.[0] as Record<string, unknown> | undefined
+              if (typeof first?.text === "string") {
+                const text = first.text as string
+                return text.length > 4000 ? text.slice(0, 4000) + "\n... (truncated)" : text
               }
             }
           }

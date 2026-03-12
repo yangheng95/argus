@@ -311,6 +311,8 @@ export const PanelTool = Tool.define("panel", {
           metadata: {},
         }
       }
+      default:
+        throw new Error(`Unknown panel action: ${String((params as { action: string }).action)}`)
     }
   },
 })

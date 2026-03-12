@@ -131,6 +131,7 @@ function codexBinary(input: string) {
 }
 
 async function version(command: string[]) {
+  // Command may not exist on this system — missing tool is handled by the undefined check below
   const result = await Process.run([...command, "--version"], {
     nothrow: true,
   }).catch(() => undefined)

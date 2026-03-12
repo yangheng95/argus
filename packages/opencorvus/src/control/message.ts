@@ -171,10 +171,13 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
   } finally {
     for (const unsub of unsubs) unsub()
     if (control && shouldRemoveSession(control)) {
-      await Session.remove(control.info.id).catch(() => undefined)
+      const sessionID = control.info.id
+      await Session.remove(sessionID).catch((err) => {
+        log.warn("failed to remove panel control session", { sessionID, error: String(err) })
+      })
       log.info("panel control session removed", {
         input: payload,
-        panel_session_id: control.info.id,
+        panel_session_id: sessionID,
       })
     }
   }
@@ -215,12 +218,18 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
 }
 
 async function resolveModel() {
-  const agentName = await Agent.defaultAgent().catch(() => undefined)
+  const agentName = await Agent.defaultAgent().catch((err) => {
+    log.warn("failed to resolve default agent for model", { error: String(err) })
+    return undefined
+  })
   if (!agentName) return undefined
   const agent = await Agent.get(agentName)
   const target = agent?.model
   if (target) return target
-  return Provider.defaultModel().catch(() => undefined)
+  return Provider.defaultModel().catch((err) => {
+    log.warn("failed to resolve default model", { error: String(err) })
+    return undefined
+  })
 }
 
 async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
@@ -296,18 +305,26 @@ function textFromMessage(message: MessageV2.WithParts) {
 }
 
 function parseTextAsResult(text: string): z.infer<typeof ControlMessageResult> {
-  // Try to parse as JSON directly
+  // Cascading parse strategy: try progressively looser formats before falling
+  // back to wrapping the raw text as a plain panel_response.  Each catch block
+  // is intentionally empty so the next strategy is attempted silently.
+
+  // Strategy 1 - the model returned well-formed JSON matching the schema.
   try {
     return ControlMessageResult.parse(JSON.parse(text))
-  } catch {}
-  // Try to extract JSON from markdown code blocks
+  } catch {
+    // JSON parse or schema validation failed; fall through to next strategy.
+  }
+  // Strategy 2 - the model wrapped its JSON inside a markdown code fence.
   const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (jsonMatch) {
     try {
       return ControlMessageResult.parse(JSON.parse(jsonMatch[1].trim()))
-    } catch {}
+    } catch {
+      // Fenced content was not valid JSON or did not match schema; fall through.
+    }
   }
-  // Fallback: treat entire text as the message
+  // Strategy 3 (fallback) - treat the entire text as a plain message.
   return ControlMessageResult.parse({
     kind: "panel_response",
     message: text || "（模型未返回有效响应）",

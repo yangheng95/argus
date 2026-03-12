@@ -74,7 +74,9 @@ export namespace ProviderError {
         if (errMsg && typeof errMsg === "string") {
           return `${msg}: ${errMsg}`
         }
-      } catch {}
+      } catch {
+        // responseBody is not valid JSON — fall through to return raw body below
+      }
 
       return `${msg}: ${e.responseBody}`
     }).trim()

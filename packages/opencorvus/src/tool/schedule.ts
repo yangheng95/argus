@@ -252,6 +252,8 @@ export const ScheduleTool = Tool.define("schedule", {
           metadata: {},
         }
       }
+      default:
+        throw new Error(`Unknown schedule action: ${String((params as { action: string }).action)}`)
     }
   },
 })

@@ -73,10 +73,14 @@ export namespace ExecutorPlanner {
 
 function extractObject(text: string) {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenced?.[1]) return JSON.parse(sanitizeJSON(fenced[1]))
+  if (fenced?.[1]) {
+    try { return JSON.parse(sanitizeJSON(fenced[1])) } catch { /* fall through to next strategy */ }
+  }
   const match = text.match(/\{[\s\S]*\}/)
-  if (match?.[0]) return JSON.parse(sanitizeJSON(match[0]))
-  throw new Error("executor spec output did not contain JSON")
+  if (match?.[0]) {
+    try { return JSON.parse(sanitizeJSON(match[0])) } catch { /* fall through to throw */ }
+  }
+  throw new Error("executor spec output did not contain valid JSON")
 }
 
 /**

@@ -34,7 +34,9 @@ async function keyFromAuth() {
       const val = key.trim()
       if (!val) continue
       return { key: val, path: file, provider }
-    } catch {}
+    } catch {
+      // file missing, unreadable, or contains invalid JSON — skip to next candidate path
+    }
   }
   return { key: undefined, path: undefined as string | undefined, provider: undefined as string | undefined }
 }

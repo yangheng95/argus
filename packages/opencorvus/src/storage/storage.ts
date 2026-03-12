@@ -141,12 +141,15 @@ export namespace Storage {
   const state = lazy(async () => {
     const dir = path.join(Global.Path.data, "storage")
     const migration = await Filesystem.readJson<string>(path.join(dir, "migration"))
-      .then((x) => parseInt(x))
+      .then((x) => parseInt(x, 10))
       .catch(() => 0)
     for (let index = migration; index < MIGRATIONS.length; index++) {
       log.info("running migration", { index })
       const migration = MIGRATIONS[index]
-      await migration(dir).catch(() => log.error("failed to run migration", { index }))
+      await migration(dir).catch((error) => {
+        log.error("failed to run migration", { index, error: error instanceof Error ? error.message : String(error) })
+        throw new Error(`Storage migration ${index} failed — aborting remaining migrations`)
+      })
       await Filesystem.write(path.join(dir, "migration"), (index + 1).toString())
     }
     return {
@@ -158,6 +161,8 @@ export namespace Storage {
     const dir = await state().then((x) => x.dir)
     const target = path.join(dir, ...key) + ".json"
     return withErrorHandling(async () => {
+      // Ignore ENOENT — the file may already be deleted; other errors are
+      // non-critical for a best-effort removal so we swallow them silently.
       await fs.unlink(target).catch(() => {})
     })
   }
@@ -213,7 +218,10 @@ export namespace Storage {
       }).then((results) => results.map((x) => [...prefix, ...x.slice(0, -5).split(/[/\\]/)]))
       result.sort()
       return result
-    } catch {
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException)?.code
+      if (code === "ENOENT" || code === "ENOTDIR") return []
+      log.warn("storage list failed", { prefix: prefix.join("/"), error: error instanceof Error ? error.message : String(error) })
       return []
     }
   }

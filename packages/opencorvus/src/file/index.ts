@@ -468,11 +468,15 @@ export namespace File {
     if (diffOutput.trim()) {
       const lines = diffOutput.trim().split("\n")
       for (const line of lines) {
-        const [added, removed, filepath] = line.split("\t")
+        const parts = line.split("\t")
+        if (parts.length < 3) continue
+        const [added, removed, filepath] = parts
+        const addedN = added === "-" ? 0 : parseInt(added, 10)
+        const removedN = removed === "-" ? 0 : parseInt(removed, 10)
         changedFiles.push({
           path: filepath,
-          added: added === "-" ? 0 : parseInt(added, 10),
-          removed: removed === "-" ? 0 : parseInt(removed, 10),
+          added: Number.isFinite(addedN) ? addedN : 0,
+          removed: Number.isFinite(removedN) ? removedN : 0,
           status: "modified",
         })
       }

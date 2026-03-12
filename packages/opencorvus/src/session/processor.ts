@@ -210,7 +210,7 @@ export namespace SessionProcessor {
                       state: {
                         status: "error",
                         input: value.input ?? match.state.input,
-                        error: (value.error as any).toString(),
+                        error: value.error instanceof Error ? value.error.message : String(value.error),
                         time: {
                           start: match.state.time.start,
                           end: Date.now(),
@@ -369,7 +369,10 @@ export namespace SessionProcessor {
                 message: retry,
                 next: Date.now() + delay,
               })
-              await SessionRetry.sleep(delay, input.abort).catch(() => {})
+              await SessionRetry.sleep(delay, input.abort).catch((err) => {
+                if (err instanceof DOMException && err.name === "AbortError") return
+                log.warn("retry sleep failed", { error: err })
+              })
               continue
             }
             input.assistantMessage.error = error

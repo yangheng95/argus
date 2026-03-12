@@ -19,7 +19,7 @@ export namespace Bus {
 
   const state = Instance.state(
     () => {
-      const subscriptions = new Map<any, Subscription[]>()
+      const subscriptions = new Map<string, Subscription[]>()
 
       return {
         subscriptions,
@@ -43,12 +43,15 @@ export namespace Bus {
   const SUBSCRIBER_TIMEOUT_MS = 120_000 // 2 minutes per subscriber (last-resort safety net)
 
   function withTimeout(promise: unknown, timeoutMs: number, label: string): Promise<unknown> {
-    if (!promise || typeof (promise as any).then !== "function") return Promise.resolve(promise)
+    // Duck-type thenable check: subscriber callbacks may return void, a raw
+    // value, or a Promise.  We only need to race/timeout actual thenables.
+    if (!promise || typeof promise !== "object" || !("then" in promise) || typeof promise.then !== "function") return Promise.resolve(promise)
+    let timer: ReturnType<typeof setTimeout>
     return Promise.race([
-      promise as Promise<unknown>,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Bus subscriber timeout (${timeoutMs}ms): ${label}`)), timeoutMs),
-      ),
+      (promise as Promise<unknown>).finally(() => clearTimeout(timer)),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Bus subscriber timeout (${timeoutMs}ms): ${label}`)), timeoutMs)
+      }),
     ])
   }
 
@@ -81,7 +84,11 @@ export namespace Bus {
         const result = sub(payload)
         pending.push(
           withTimeout(result, SUBSCRIBER_TIMEOUT_MS, `${def.type}/${source.get(sub) ?? "unknown"}`).catch((err) => {
-            log.warn("subscriber timed out or failed", { type: def.type, error: String(err) })
+            log.warn("subscriber timed out or failed", {
+              type: def.type,
+              source: source.get(sub),
+              error: err instanceof Error ? err : String(err),
+            })
           }),
         )
       }

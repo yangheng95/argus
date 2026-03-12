@@ -718,6 +718,17 @@ describe("orchestrator routes", () => {
       summary: "executor finished",
       diffs: [],
     })
+    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+      status: "failed",
+      verdict: "rejected",
+      summary: "Some checks failed",
+      checks: [{
+        name: "verify_cmd",
+        status: "failed",
+        evidence: "exit 1",
+      }],
+      artifacts: [],
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -734,6 +745,7 @@ describe("orchestrator routes", () => {
             request: "update the landing page hero section copy",
             budget: {
               maxRuns: 1,
+              maxReplans: 0,
             },
             checks: {
               verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
@@ -779,6 +791,17 @@ describe("orchestrator routes", () => {
       summary: "executor finished",
       diffs: [],
     })
+    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+      status: "failed",
+      verdict: "rejected",
+      summary: "Some checks failed",
+      checks: [{
+        name: "verify_cmd",
+        status: "failed",
+        evidence: "exit 1",
+      }],
+      artifacts: [],
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -795,6 +818,7 @@ describe("orchestrator routes", () => {
             request: "update the landing page hero section copy",
             budget: {
               maxRuns: 1,
+              maxReplans: 0,
             },
             checks: {
               verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],

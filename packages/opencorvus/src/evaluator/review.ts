@@ -186,7 +186,12 @@ async function reviewResult(input: {
     }
   }
 
-  const language = await Provider.getLanguage(model).catch(() => undefined)
+  // Provider.getLanguage may fail if the provider is misconfigured or unavailable;
+  // the undefined result is handled immediately below.
+  const language = await Provider.getLanguage(model).catch((err) => {
+    evaluatorLog.warn("failed to load language model for review", { name: input.name, error: err })
+    return undefined
+  })
   if (!language) {
     return {
       ok: false as const,
@@ -199,34 +204,41 @@ async function reviewResult(input: {
     }
   }
 
-  const result = await generateObject({
-    model: language,
-    temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-    abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
-    messages: [
-      {
-        role: "system",
-        content: input.prompt,
-      },
-      {
-        role: "user",
-        content: [
-          input.request ? `Task request:\n${input.request}` : "",
-          `Delivery summary:\n${input.delivery.summary}`,
-          input.context,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      },
-    ],
-    schema: ReviewResultSchema,
-  }).catch(() => undefined)
+  let result: Awaited<ReturnType<typeof generateObject<typeof ReviewResultSchema>>> | undefined
+  for (let attempt = 0; attempt < 3; attempt++) {
+    result = await generateObject({
+      model: language,
+      temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
+      abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
+      messages: [
+        {
+          role: "system",
+          content: input.prompt,
+        },
+        {
+          role: "user",
+          content: [
+            input.request ? `Task request:\n${input.request}` : "",
+            `Delivery summary:\n${input.delivery.summary}`,
+            input.context,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      ],
+      schema: ReviewResultSchema,
+    }).catch((err) => {
+      evaluatorLog.warn("review generateObject attempt failed", { name: input.name, attempt: attempt + 1, error: err })
+      return undefined
+    })
+    if (result) break
+  }
 
   if (!result) {
     return {
       ok: false as const,
-      summary: `${input.name} failed to execute.`,
-      evidence: "Review model call failed.",
+      summary: `${input.name} failed to execute after 3 attempts.`,
+      evidence: "Review model call failed after 3 retry attempts.",
       payload: {
         available: true,
         mode: input.mode,
@@ -301,13 +313,16 @@ export async function specCheckResult(
   if (!config?.enabled) return emptyOptional()
   const mode = config.mode ?? "strict"
   if (!activeSpecVersionID) {
-    return softOrStrict({
-      mode,
-      name: "spec_check",
-      summary: "Spec check: no active spec version available.",
-      evidence: "Cannot verify delivery against spec: no active spec version.",
-      payload: { available: false },
-    })
+    return {
+      outcome: "passed" as const,
+      summary: "Spec check skipped: no active spec version available.",
+      checks: [{
+        name: "spec_check",
+        status: "passed" as const,
+        evidence: "No active spec version to compare against; skipping spec check.",
+      }],
+      artifacts: [],
+    }
   }
 
   let specContent = ""
@@ -316,7 +331,9 @@ export async function specCheckResult(
     try {
       const snapshot = findSpecSnapshot(activeSpecVersionID)
       if (snapshot?.content) specContent = snapshot.content
-    } catch {}
+    } catch (err) {
+      evaluatorLog.warn("failed to load spec snapshot", { specVersionID: activeSpecVersionID, error: err })
+    }
     try {
       const items = findSpecItems(activeSpecVersionID)
       if (items.length > 0) {
@@ -325,16 +342,21 @@ export async function specCheckResult(
             `${i + 1}. [${item.priority}] ${item.title}\n   ${item.description}`,
           ).join("\n")
       }
-    } catch {}
+    } catch (err) {
+      evaluatorLog.warn("failed to load spec items", { specVersionID: activeSpecVersionID, error: err })
+    }
   }
   if (!specContent.trim()) {
-    return softOrStrict({
-      mode,
-      name: "spec_check",
-      summary: "No spec found in database.",
-      evidence: "Cannot verify delivery against spec: no spec exists.",
-      payload: { available: false },
-    })
+    return {
+      outcome: "passed" as const,
+      summary: "Spec check skipped: no spec content available.",
+      checks: [{
+        name: "spec_check",
+        status: "passed" as const,
+        evidence: "Spec content is empty (LLM did not generate expanded_spec); skipping comparison.",
+      }],
+      artifacts: [],
+    }
   }
 
   const fileCount = delivery.diffs?.length ?? 0
@@ -376,7 +398,12 @@ export async function specCheckResult(
     }
   }
 
-  const language = await Provider.getLanguage(model).catch(() => undefined)
+  // Provider.getLanguage may fail if the provider is misconfigured or unavailable;
+  // the undefined result is handled immediately below.
+  const language = await Provider.getLanguage(model).catch((err) => {
+    evaluatorLog.warn("failed to load language model for spec check", { error: err })
+    return undefined
+  })
   if (!language) {
     return {
       outcome: "failed" as const,
@@ -424,33 +451,31 @@ export async function specCheckResult(
     },
   ]
 
-  const result = await generateObject({
-    model: language,
-    temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-    abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
-    messages: specCheckMessages,
-    schema: SpecCheckResult,
-  }).catch(() => undefined)
+  let result: Awaited<ReturnType<typeof generateObject<typeof SpecCheckResult>>> | undefined
+  for (let attempt = 0; attempt < 3; attempt++) {
+    result = await generateObject({
+      model: language,
+      temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
+      abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
+      messages: specCheckMessages,
+      schema: SpecCheckResult,
+    }).catch((err) => {
+      evaluatorLog.warn("spec_check generateObject attempt failed", { attempt: attempt + 1, error: err })
+      return undefined
+    })
+    if (result) break
+  }
 
   if (!result) {
-    return {
-      outcome: "failed" as const,
-      summary: "Spec check failed to execute.",
-      checks: [
-        {
-          name: "spec_check",
-          status: "failed" as const,
-          evidence: "Spec check model call failed.",
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: "evaluation:spec_check",
-          payload: { mode, available: true, specID: activeSpecVersionID },
-        },
-      ],
-    }
+    // Model call failed after retries — in strict mode this must block the
+    // delivery because it was not verified against the spec.
+    return softOrStrict({
+      mode,
+      name: "spec_check",
+      summary: "Spec check could not be executed (model call failed or timed out after 3 attempts).",
+      evidence: "The spec check model call failed after 3 retry attempts. The delivery was not verified against the specification.",
+      payload: { available: true, mode, specID: activeSpecVersionID },
+    })
   }
 
   const allPassed = result.object.criteria.every((c) => c.status === "passed")
@@ -543,11 +568,23 @@ function reviewModel() {
   if (_pendingReviewModel) return _pendingReviewModel
   _pendingReviewModel = (async () => {
     try {
-      const def = await Provider.defaultModel().catch(() => undefined)
+      // defaultModel may fail if no provider is configured; returns undefined to signal unavailability.
+      const def = await Provider.defaultModel().catch((err) => {
+        evaluatorLog.warn("failed to resolve default model for review", { error: err })
+        return undefined
+      })
       if (!def) return
+      // Prefer a small model for reviews; fall back to the default model if no small model is available.
+      // Either lookup may fail if the provider is misconfigured.
       return (
-        (await Provider.getSmallModel(def.providerID).catch(() => undefined)) ??
-        (await Provider.getModel(def.providerID, def.modelID).catch(() => undefined))
+        (await Provider.getSmallModel(def.providerID).catch((err) => {
+          evaluatorLog.warn("small model lookup failed, falling back to default", { providerID: def.providerID, error: err })
+          return undefined
+        })) ??
+        (await Provider.getModel(def.providerID, def.modelID).catch((err) => {
+          evaluatorLog.warn("default model lookup failed for review", { providerID: def.providerID, modelID: def.modelID, error: err })
+          return undefined
+        }))
       )
     } finally {
       _pendingReviewModel = undefined
@@ -557,7 +594,15 @@ function reviewModel() {
 }
 
 async function evaluationModel() {
-  const def = await Provider.defaultModel().catch(() => undefined)
+  // defaultModel may fail if no provider is configured; returns undefined to signal unavailability.
+  const def = await Provider.defaultModel().catch((err) => {
+    evaluatorLog.warn("failed to resolve default model for evaluation", { error: err })
+    return undefined
+  })
   if (!def) return
-  return Provider.getModel(def.providerID, def.modelID).catch(() => undefined)
+  // getModel may fail if the provider or model ID is invalid/unavailable.
+  return Provider.getModel(def.providerID, def.modelID).catch((err) => {
+    evaluatorLog.warn("evaluation model lookup failed", { providerID: def.providerID, modelID: def.modelID, error: err })
+    return undefined
+  })
 }

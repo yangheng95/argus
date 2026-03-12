@@ -4,6 +4,7 @@
     const dom = deps.dom;
 
     let busy = false;
+    const autoResolveFailed = new Map(); // interactionID → timestamp of last failure
 
     function interactionActions(interaction) {
       if (interaction.type === "permission") {
@@ -90,11 +91,16 @@
     }
 
     function disableInteractionButtons(id) {
-      deps.document?.querySelectorAll(`.interaction-alert button`)?.forEach((btn) => {
+      const alert = deps.document?.querySelector(`.interaction-alert[data-id="${id}"]`);
+      alert?.querySelectorAll("button")?.forEach((btn) => {
         btn.disabled = true;
         btn.style.opacity = "0.5";
       });
-      const alert = deps.document?.querySelector(`.interaction-alert[data-id="${id}"]`);
+      const modal = deps.document?.querySelector(`#interaction-modal[data-interaction-id="${id}"]`);
+      modal?.querySelectorAll("[data-action]")?.forEach((btn) => {
+        btn.disabled = true;
+        btn.style.opacity = "0.5";
+      });
       const title = alert?.querySelector(".interaction-title");
       if (title) title.textContent += deps.t("interaction.processing_suffix");
     }
@@ -112,6 +118,7 @@
     async function resolveInteraction(id, action, input = {}) {
       if (busy) return;
       busy = true;
+      autoResolveFailed.delete(id);
       disableInteractionButtons(id);
       try {
         if (action === "once" || action === "always") {
@@ -155,10 +162,11 @@
       } catch (error) {
         deps.AppLog.error("ui", "Failed to resolve interaction", { error: String(error) });
         showInteractionError(id, error?.message || String(error));
+        autoResolveFailed.set(id, Date.now());
       } finally {
         dismissInteractionModal();
-        await deps.loadBoard();
         busy = false;
+        await deps.loadBoard();
       }
     }
 
@@ -178,8 +186,8 @@
         showInteractionError(id, error?.message || String(error));
       } finally {
         dismissInteractionModal();
-        await deps.loadBoard();
         busy = false;
+        await deps.loadBoard();
       }
     }
 
@@ -204,9 +212,15 @@
       }
 
       if (!busy && shouldAutoResolveInteraction(pending[0])) {
+        const cooldownMs = 10000;
+        const lastFail = autoResolveFailed.get(pending[0].id);
+        if (lastFail && (Date.now() - lastFail) < cooldownMs) {
+          showInteractionModal(pending[0]);
+          return;
+        }
         dismissInteractionModal();
         if (pending[0].type === "permission") {
-          void resolveInteraction(pending[0].id, "always");
+          void resolveInteraction(pending[0].id, state.autoPermissionReply === "always" ? "always" : "once");
           return;
         }
         const answers = autoInteractionAnswers(pending[0]);

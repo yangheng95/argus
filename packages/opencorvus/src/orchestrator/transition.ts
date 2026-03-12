@@ -1516,13 +1516,15 @@ export function createGoalRun(input: {
       })
       .run(),
   )
-  return Database.use((db) =>
+  const row = Database.use((db) =>
     db
       .select()
       .from(OrchestratorGoalRunTable)
       .where(eq(OrchestratorGoalRunTable.id, id))
-      .get()!,
+      .get(),
   )
+  if (!row) throw new Error(`createGoalRun: inserted goal run ${id} not found after insert`)
+  return row
 }
 
 export function updateGoalRun(
@@ -1553,7 +1555,7 @@ export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow,
   const goals = listGoalsBySpec(plan.spec_snapshot_id)
   const routing =
     task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
-      ? task.metadata.routing as any
+      ? (task.metadata.routing as RoutingInput)
       : undefined
   const replanContext = buildReplanContext({
     analysis,
@@ -2038,13 +2040,15 @@ export function ensureExecutorSession(input: {
         .where(eq(OrchestratorExecutorSessionTable.id, existing.id))
         .run(),
     )
-    return Database.use((db) =>
+    const updated = Database.use((db) =>
       db
         .select()
         .from(OrchestratorExecutorSessionTable)
         .where(eq(OrchestratorExecutorSessionTable.id, existing.id))
-        .get()!,
+        .get(),
     )
+    if (!updated) throw new Error(`ensureExecutorSession: executor session ${existing.id} not found after update`)
+    return updated
   }
   const id = Identifier.ascending("executor_session")
   Database.use((db) =>
@@ -2069,13 +2073,15 @@ export function ensureExecutorSession(input: {
       })
       .run(),
   )
-  return Database.use((db) =>
+  const inserted = Database.use((db) =>
     db
       .select()
       .from(OrchestratorExecutorSessionTable)
       .where(eq(OrchestratorExecutorSessionTable.id, id))
-      .get()!,
+      .get(),
   )
+  if (!inserted) throw new Error(`ensureExecutorSession: executor session ${id} not found after insert`)
+  return inserted
 }
 
 export function updateExecutorSessionStatus(runID: string, status: typeof OrchestratorExecutorSessionTable.$inferInsert.status) {

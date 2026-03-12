@@ -776,8 +776,8 @@ export namespace Session {
       const cacheReadInputTokens = safe(input.usage.cachedInputTokens ?? 0)
       const cacheWriteInputTokens = safe(
         (input.metadata?.["anthropic"]?.["cacheCreationInputTokens"] ??
-          (input.metadata?.["bedrock"] as any)?.["usage"]?.["cacheWriteInputTokens"] ??
-          (input.metadata?.["venice"] as any)?.["usage"]?.["cacheCreationInputTokens"] ??
+          (input.metadata?.["bedrock"] as Record<string, Record<string, unknown>> | undefined)?.["usage"]?.["cacheWriteInputTokens"] ??
+          (input.metadata?.["venice"] as Record<string, Record<string, unknown>> | undefined)?.["usage"]?.["cacheCreationInputTokens"] ??
           0) as number,
       )
 

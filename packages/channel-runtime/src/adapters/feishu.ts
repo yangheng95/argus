@@ -184,6 +184,7 @@ export class FeishuAdapter implements ChannelAdapter {
     if (req.method === "GET") return new Response("ok")
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 })
 
+    // Malformed JSON → 400 below
     const body = (await req.json().catch(() => undefined)) as Body | undefined
     if (!body) return Response.json({ error: "invalid body" }, { status: 400 })
 

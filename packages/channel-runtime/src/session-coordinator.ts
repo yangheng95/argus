@@ -80,4 +80,23 @@ export class SessionCoordinator<TSession extends { sessionId: string }, TMessage
       remaining: queue.length,
     }
   }
+
+  release(sessionId: string) {
+    this.sessionProcessing.delete(sessionId)
+    this.sessionQueues.delete(sessionId)
+    const keys = this.sessionIndex.get(sessionId)
+    if (keys) {
+      for (const key of keys) {
+        this.sessions.delete(key)
+      }
+      this.sessionIndex.delete(sessionId)
+    }
+  }
+
+  clear() {
+    this.sessions.clear()
+    this.sessionIndex.clear()
+    this.sessionQueues.clear()
+    this.sessionProcessing.clear()
+  }
 }

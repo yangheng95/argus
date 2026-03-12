@@ -54,6 +54,5 @@ export function installProcessShims() {
 export const installRuntimeShims = installProcessShims
 
 export function muteAISdkWarnings() {
-  // @ts-ignore
-  globalThis.AI_SDK_LOG_WARNINGS = false
+  ;(globalThis as Record<string, unknown>).AI_SDK_LOG_WARNINGS = false
 }

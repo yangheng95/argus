@@ -89,7 +89,9 @@ export interface DeliveryInfo {
 // ---------------------------------------------------------------------------
 
 const MAX_STEPS = 25
-const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS ?? "480000", 10)
+const TIMEOUT_MS = Number.isFinite(parseInt(process.env.OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS ?? "", 10))
+  ? parseInt(process.env.OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS!, 10)
+  : 480000
 
 export namespace EvaluatorAgent {
   export async function analyze(input: {
@@ -117,53 +119,75 @@ export namespace EvaluatorAgent {
       prefetchedContext: context.length > 0,
     })
 
-    const result = await generateText({
-      model: language,
-      stopWhen: stepCountIs(MAX_STEPS),
-      tools,
-      maxOutputTokens: 16384,
-      abortSignal: AbortSignal.timeout(TIMEOUT_MS),
-      system: EVALUATOR_SYSTEM,
-      prompt: userPrompt,
-    })
+    const MAX_RETRIES = 2
+    let parsed: EvaluatorAnalysisType | undefined
+    let lastError: Error | undefined
+    let toolCallCount = 0
 
-    let allText = result.text?.trim() || ""
-    if (!allText || !allText.includes("{")) {
-      allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
-    }
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        log.info("evaluator agent retrying", { attempt, reason: lastError?.message })
+      }
 
-    // Count actual tool calls — an evaluation without investigation is worthless
-    const toolCallCount = result.steps.reduce(
-      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
-      0,
-    )
+      let result: any
+      try {
+        result = await generateText({
+          model: language,
+          stopWhen: stepCountIs(MAX_STEPS),
+          tools,
+          maxOutputTokens: 16384,
+          abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+          system: EVALUATOR_SYSTEM,
+          prompt: userPrompt,
+        })
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        log.warn("evaluator agent generateText failed", { attempt, error: lastError.message })
+        continue
+      }
 
-    log.info("evaluator agent finished", {
-      steps: result.steps.length,
-      toolCalls: toolCallCount,
-      finishReason: result.finishReason,
-      textLength: allText.length,
-    })
+      let allText = result.text?.trim() || ""
+      if (!allText || !allText.includes("{")) {
+        allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
+      }
 
-    let parsed: EvaluatorAnalysisType
-    try {
-      parsed = extractJSON(allText, input.goals.length)
-    } catch (err) {
-      log.warn("evaluator: JSON extraction failed", {
-        error: String(err),
+      toolCallCount = result.steps.reduce(
+        (sum, s) => {
+          const step = s as { toolCalls?: unknown[] }
+          return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
+        },
+        0,
+      )
+
+      log.info("evaluator agent finished", {
+        attempt,
+        steps: result.steps.length,
+        toolCalls: toolCallCount,
+        finishReason: result.finishReason,
         textLength: allText.length,
       })
-      throw new Error(`Evaluator analysis returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`)
+
+      try {
+        parsed = extractJSON(allText, input.goals.length)
+      } catch (err) {
+        lastError = new Error(`Evaluator analysis returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`)
+        log.warn("evaluator: JSON extraction failed, will retry", { attempt, error: String(err), textLength: allText.length })
+        continue
+      }
+
+      const MIN_TOOL_CALLS = 3
+      if (toolCallCount < MIN_TOOL_CALLS) {
+        lastError = new Error(`Evaluator analysis was too shallow (${parsed.verdict}): only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
+        log.warn("evaluator: agent made too few tool calls, will retry", { attempt, verdict: parsed.verdict, toolCalls: toolCallCount })
+        parsed = undefined
+        continue
+      }
+
+      break
     }
 
-    const MIN_TOOL_CALLS = 3
-    if (toolCallCount < MIN_TOOL_CALLS) {
-      log.warn("evaluator: agent made too few tool calls", {
-        verdict: parsed.verdict,
-        toolCalls: toolCallCount,
-        minRequired: MIN_TOOL_CALLS,
-      })
-      throw new Error(`Evaluator analysis was too shallow (${parsed.verdict}): only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
+    if (!parsed) {
+      throw lastError ?? new Error("Evaluator analysis failed after retries")
     }
 
     log.info("evaluator agent output", {
@@ -287,7 +311,7 @@ function repairTruncatedJSON(raw: string): string {
   }
 
   repaired = repaired.replace(/,\s*$/, "")
-  while (stack.length > 0) repaired += stack.pop()
+  while (stack.length > 0) repaired += stack.pop()!
 
   return repaired
 }
@@ -327,7 +351,7 @@ function trimToLastComplete(raw: string): string {
       else if (ch === "[") stack.push("]")
       else if (ch === "}" || ch === "]") stack.pop()
     }
-    while (stack.length > 0) trimmed += stack.pop()
+    while (stack.length > 0) trimmed += stack.pop()!
     return trimmed
   }
 
@@ -356,9 +380,10 @@ async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
     log.info("evaluator: model ready via Provider", { modelId: language.modelId })
     return language
   } catch (err) {
-    log.error("evaluator: model resolution failed", { error: String(err) })
+    log.error("evaluator: model resolution failed — evaluator will be unavailable", { error: String(err) })
     return undefined
   }
+
 }
 
 // ---------------------------------------------------------------------------
@@ -390,8 +415,8 @@ function prefetchEvaluatorContext(input: {
       })
       if (recalled) sections.push(recalled)
     }
-  } catch {
-    // best-effort
+  } catch (err) {
+    log.warn("evaluator: memory prefetch failed", { error: err instanceof Error ? err.message : String(err) })
   }
 
   // 2. Inject active preferences for convention checking
@@ -402,8 +427,8 @@ function prefetchEvaluatorContext(input: {
       const items = prefs.map((p) => `- **${p.key}**: ${p.value}`).join("\n")
       sections.push(`## Active Preferences (BINDING — check compliance)\n\n${items}`)
     }
-  } catch {
-    // best-effort
+  } catch (err) {
+    log.warn("evaluator: preferences prefetch failed", { error: err instanceof Error ? err.message : String(err) })
   }
 
   return sections.length > 0 ? sections.join("\n\n") : ""

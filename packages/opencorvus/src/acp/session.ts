@@ -17,6 +17,14 @@ export class ACPSessionManager {
     return this.sessions.get(sessionId)
   }
 
+  delete(sessionId: string): boolean {
+    return this.sessions.delete(sessionId)
+  }
+
+  clear(): void {
+    this.sessions.clear()
+  }
+
   async create(cwd: string, mcpServers: McpServer[], model?: ACPSessionState["model"]): Promise<ACPSessionState> {
     const session = await this.sdk.session
       .create(

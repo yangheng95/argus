@@ -69,13 +69,21 @@ export class VisionPipeline {
       // Bun on Windows/MINGW may not trust certain CAs — disable strict TLS
       // verification for the vision API if SSL_CERT_FILE is not configured.
       if (process.platform === "win32" && !process.env.SSL_CERT_FILE) {
+        console.warn(
+          "[vision] WARNING: TLS certificate verification is DISABLED for the vision API. " +
+            "This weakens transport security. Set the SSL_CERT_FILE environment variable " +
+            "to a valid CA bundle path to restore full TLS verification.",
+        )
         fetchOpts.tls = { rejectUnauthorized: false }
       }
 
       const res = await fetch(url, fetchOpts)
 
       if (!res.ok) {
-        const text = await res.text().catch(() => "")
+        const text = await res.text().catch((e: unknown) => {
+          console.warn("[vision] failed to read error response body:", e)
+          return ""
+        })
         throw new Error(`Vision API ${res.status}: ${text.slice(0, 200)}`)
       }
 
@@ -94,9 +102,9 @@ export class VisionPipeline {
     } catch (err) {
       // Re-throw with more context for diagnosis
       if (err instanceof DOMException && err.name === "AbortError") {
-        const elapsed = "timeout or SSL handshake failure"
+        const reason = "timeout or SSL handshake failure"
         throw new Error(
-          `Vision API aborted (${elapsed}). URL: ${this.baseURL}. Tip: set SSL_CERT_FILE env var on Windows.`,
+          `Vision API aborted (${reason}). URL: ${this.baseURL}. Tip: set SSL_CERT_FILE env var on Windows.`,
         )
       }
       throw err

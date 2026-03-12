@@ -80,6 +80,10 @@ export const LspTool = Tool.define("lsp", {
           return LSP.incomingCalls(position)
         case "outgoingCalls":
           return LSP.outgoingCalls(position)
+        default: {
+          const _exhaustive: never = args.operation
+          throw new Error(`Unknown LSP operation: ${args.operation}`)
+        }
       }
     })()
 

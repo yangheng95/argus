@@ -131,7 +131,7 @@ export namespace Provider {
     "@ai-sdk/perplexity": createPerplexity,
     "@ai-sdk/vercel": createVercel,
     "@gitlab/gitlab-ai-provider": createGitLab,
-    // @ts-ignore (TODO: kill this code so we dont have to maintain it)
+    // @ts-expect-error createGitHubCopilotOpenAICompatible has a divergent type but is required for Copilot compatibility
     "@ai-sdk/github-copilot": createGitHubCopilotOpenAICompatible,
   }
 
@@ -502,7 +502,7 @@ export namespace Provider {
 
       // Load for the main provider if auth exists
       if (auth) {
-        const options = await plugin.auth.loader(() => Auth.get(providerID) as any, database[plugin.auth.provider])
+        const options = await plugin.auth.loader(() => Auth.get(providerID), database[plugin.auth.provider])
         const opts = options ?? {}
         const patch: Partial<Info> = providers[providerID] ? { options: opts } : { source: "custom", options: opts }
         mergeProvider(providerID, patch)
@@ -515,7 +515,7 @@ export namespace Provider {
           const enterpriseAuth = await Auth.get(enterpriseProviderID)
           if (enterpriseAuth) {
             const enterpriseOptions = await plugin.auth.loader(
-              () => Auth.get(enterpriseProviderID) as any,
+              () => Auth.get(enterpriseProviderID),
               database[enterpriseProviderID],
             )
             const opts = enterpriseOptions ?? {}
@@ -683,7 +683,6 @@ export namespace Provider {
 
         return fetchFn(input, {
           ...opts,
-          // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
           timeout: false,
         })
       }

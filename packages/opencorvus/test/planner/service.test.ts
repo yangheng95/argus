@@ -136,6 +136,49 @@ describe("planner.service", () => {
     expect(plan.prompt).toContain("startup")
   })
 
+  test("keeps heavy command selectors goal-local", async () => {
+    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    const plan = await PlannerService.initial({
+      title: "Dashboard refresh",
+      request: "Improve the dashboard UI/UX and make sure tests pass before delivery.",
+      spec: {
+        ...MOCK_SPEC,
+        goals: [
+          {
+            description: "Refresh dashboard UI",
+            criteria: "The UI review passes.",
+            priority: "blocking",
+          },
+          {
+            description: "Run focused verification",
+            criteria: "The final verification command passes.",
+            priority: "blocking",
+            metadata: {
+              check_selector: ["verify_cmd"],
+            },
+          },
+        ],
+        spec_items: [{
+          title: "Final verification",
+          description: "Run the final verification command",
+          priority: "blocking",
+          check_selector: ["verify_cmd"],
+        }],
+      },
+    })
+
+    const goals = plan.metadata.spec_analysis?.goals ?? []
+    expect(goals).toHaveLength(2)
+    expect(goals[0]?.metadata?.check_selector).toContain("spec_check")
+    expect(goals[0]?.metadata?.check_selector).toContain("ui_review")
+    expect(goals[0]?.metadata?.check_selector).not.toContain("build")
+    expect(goals[0]?.metadata?.check_selector).not.toContain("test")
+    expect(goals[0]?.metadata?.check_selector).not.toContain("lint")
+    expect(goals[0]?.metadata?.check_selector).not.toContain("verify_cmd")
+    expect(goals[1]?.metadata?.check_selector).toContain("verify_cmd")
+    expect(goals[1]?.metadata?.check_selector).toContain("spec_check")
+  })
+
   test("infers code review and dead code selectors for relevant requests", async () => {
     spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
     const plan = await PlannerService.initial({

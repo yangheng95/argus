@@ -98,6 +98,8 @@ export function isPlannerClarification(row: InteractionRow) {
 export async function rejectPlannerClarification(row: InteractionRow, message?: string) {
   const task = requireTask(row.task_id)
   const run = requireRun(row.run_id)
+  if (run.status === "completed" || run.status === "failed" || run.status === "aborted") return
+  if (task.status === "completed" || task.status === "failed" || task.status === "cancelled") return
   const now = Date.now()
   const error = message?.trim() || "Planning clarification was rejected"
   Database.transaction((db) => {

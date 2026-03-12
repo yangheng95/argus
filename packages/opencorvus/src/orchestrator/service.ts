@@ -221,20 +221,25 @@ async function supersedeRunForSpecRewrite(task: TaskRow, run: RunRow, summary: s
     )
   }
   if (target.sessionID || target.queueTaskID) {
+    OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
     await ExecutorRegistry.require(run.executor).abort({
       sessionID: target.sessionID,
       queueTaskID: target.queueTaskID,
     })
   }
   if (target.goalRun) {
-    updateGoalRun(target.goalRun.id, {
+    const goalRun = target.goalRun
+    updateGoalRun(goalRun.id, {
       status: "aborted",
       error: summary,
       blocking_reason: null,
       time_completed: now,
     })
-    updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
-    await cleanupGoalWorkspace(target.goalRun.workspace_dir ?? undefined)
+    updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
+    await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
+    if (goalRun.session_id) await Session.remove(goalRun.session_id).catch((err) => {
+      log.warn("failed to remove goal run session during abort", { sessionID: goalRun.session_id, error: String(err) })
+    })
   }
   await updateRun(
     run,
@@ -315,7 +320,8 @@ export namespace OrchestratorService {
   export function init() {
     const current = orchestratorState()
     if (!current.booted) {
-      OrchestratorInteraction.subscribe(hooks())
+      current.unsubscribe?.()
+      current.unsubscribe = OrchestratorInteraction.subscribe(hooks())
       current.booted = true
     }
     Scheduler.register({
@@ -337,7 +343,9 @@ export namespace OrchestratorService {
     const title = input.title?.trim() || deriveTitle(input.request)
     const executor = input.executor ?? "opencode"
     if (executor !== "opencode" && !ExecutorRegistry.has(executor)) {
-      await ExecutorBootstrap.autoRegister(true).catch(() => undefined)
+      await ExecutorBootstrap.autoRegister(true).catch((err) => {
+        log.warn("executor auto-register failed", { executor, error: String(err) })
+      })
     }
     ExecutorRegistry.require(executor)
     const session = await Session.create({ title })
@@ -496,9 +504,13 @@ export namespace OrchestratorService {
 
   export async function getBrief(input: { taskID: string; runID?: string }) {
     if (input.runID) {
-      await OrchestratorRuntime.syncRun(input.runID, hooks()).catch(() => undefined)
+      await OrchestratorRuntime.syncRun(input.runID, hooks()).catch((err) => {
+        log.warn("syncRun failed in getBrief", { runID: input.runID, error: String(err) })
+      })
     } else {
-      await OrchestratorRuntime.syncTask(input.taskID, hooks()).catch(() => undefined)
+      await OrchestratorRuntime.syncTask(input.taskID, hooks()).catch((err) => {
+        log.warn("syncTask failed in getBrief", { taskID: input.taskID, error: String(err) })
+      })
     }
     const task = requireTask(input.taskID)
     return WorkbenchService.compileBrief({
@@ -511,14 +523,18 @@ export namespace OrchestratorService {
 
   export async function getBoard(taskID: string, input?: { sync?: boolean }) {
     if (input?.sync !== false) {
-      await OrchestratorRuntime.syncTask(taskID, hooks()).catch(() => undefined)
+      await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
+        log.warn("syncTask failed in getBoard", { taskID, error: String(err) })
+      })
     }
     return WorkbenchService.compileBoard({ taskID })
   }
 
   export async function getBoardTag(taskID: string, input?: { sync?: boolean }) {
     if (input?.sync !== false) {
-      await OrchestratorRuntime.syncTask(taskID, hooks()).catch(() => undefined)
+      await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
+        log.warn("syncTask failed in getBoardTag", { taskID, error: String(err) })
+      })
     }
     return WorkbenchService.boardTag({ taskID })
   }
@@ -756,6 +772,7 @@ export namespace OrchestratorService {
     const target = run ? executionTarget(run) : undefined
     if (run) {
       if (target?.sessionID || target?.queueTaskID) {
+        OrchestratorRuntime.stopExecutorEventBridge(target?.sessionID)
         await ExecutorRegistry.require(run.executor).abort({
           sessionID: target.sessionID,
           queueTaskID: target.queueTaskID,
@@ -806,6 +823,9 @@ export namespace OrchestratorService {
 
   export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
     const ids = await sessionTree(sessionID)
+    for (const id of ids) {
+      OrchestratorRuntime.stopExecutorEventBridge(id)
+    }
     const dirs = Database.use((db) =>
       db
         .select({ dir: OrchestratorGoalRunTable.workspace_dir })
@@ -899,11 +919,11 @@ export namespace OrchestratorService {
     if (!run) {
       return { resumed: false, status: task.status }
     }
-    if (["completed", "cancelled"].includes(task.status)) {
+    if (["completed", "cancelled", "failed"].includes(task.status)) {
       return { resumed: false, status: task.status }
     }
     if (
-      ["queued", "running", "blocked", "evaluating", "delivering"].includes(task.status) &&
+      ["queued", "planning", "running", "blocked", "evaluating", "delivering"].includes(task.status) &&
       ["accepted", "running"].includes(run.status)
     ) {
       return { resumed: false, status: run.status }

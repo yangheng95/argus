@@ -53,6 +53,39 @@ const DEFAULT_VARIANT_VALUE = "default"
 export namespace ACP {
   const log = Log.create({ service: "acp-agent" })
 
+  async function sendTodoPlanUpdate(
+    connection: AgentSideConnection,
+    sessionId: string,
+    output: string,
+  ) {
+    let parsed: unknown
+    try { parsed = JSON.parse(output) } catch { return }
+    const result = z.array(Todo.Info).safeParse(parsed)
+    if (!result.success) {
+      log.error("failed to parse todo output", { error: result.error })
+      return
+    }
+    await connection
+      .sessionUpdate({
+        sessionId,
+        update: {
+          sessionUpdate: "plan",
+          entries: result.data.map((todo) => {
+            const status: PlanEntry["status"] =
+              todo.status === "cancelled" ? "completed" : (todo.status as PlanEntry["status"])
+            return {
+              priority: "medium",
+              status,
+              content: todo.content,
+            }
+          }),
+        },
+      })
+      .catch((error) => {
+        log.error("failed to send session update for todo", { error })
+      })
+  }
+
   async function getContextLimit(
     sdk: OpencodeClient,
     providerID: string,
@@ -170,7 +203,7 @@ export namespace ACP {
         })
         for await (const event of events.stream) {
           if (this.eventAbort.signal.aborted) return
-          const payload = (event as any)?.payload
+          const payload = (event as { payload?: Record<string, unknown> })?.payload
           if (!payload) continue
           await this.handleEvent(payload as Event).catch((error) => {
             log.error("failed to handle event", { error, type: payload.type })
@@ -365,30 +398,7 @@ export namespace ACP {
                 }
 
                 if (part.tool === "todowrite") {
-                  const parsedTodos = z.array(Todo.Info).safeParse(JSON.parse(part.state.output))
-                  if (parsedTodos.success) {
-                    await this.connection
-                      .sessionUpdate({
-                        sessionId,
-                        update: {
-                          sessionUpdate: "plan",
-                          entries: parsedTodos.data.map((todo) => {
-                            const status: PlanEntry["status"] =
-                              todo.status === "cancelled" ? "completed" : (todo.status as PlanEntry["status"])
-                            return {
-                              priority: "medium",
-                              status,
-                              content: todo.content,
-                            }
-                          }),
-                        },
-                      })
-                      .catch((error) => {
-                        log.error("failed to send session update for todo", { error })
-                      })
-                  } else {
-                    log.error("failed to parse todo output", { error: parsedTodos.error })
-                  }
+                  await sendTodoPlanUpdate(this.connection, sessionId, part.state.output)
                 }
 
                 await this.connection
@@ -666,7 +676,8 @@ export namespace ACP {
 
     async unstable_listSessions(params: ListSessionsRequest): Promise<ListSessionsResponse> {
       try {
-        const cursor = params.cursor ? Number(params.cursor) : undefined
+        const parsedCursor = params.cursor ? Number(params.cursor) : undefined
+        const cursor = parsedCursor !== undefined && Number.isFinite(parsedCursor) ? parsedCursor : undefined
         const limit = 100
 
         const sessions = await this.sdk.session
@@ -880,30 +891,7 @@ export namespace ACP {
               }
 
               if (part.tool === "todowrite") {
-                const parsedTodos = z.array(Todo.Info).safeParse(JSON.parse(part.state.output))
-                if (parsedTodos.success) {
-                  await this.connection
-                    .sessionUpdate({
-                      sessionId,
-                      update: {
-                        sessionUpdate: "plan",
-                        entries: parsedTodos.data.map((todo) => {
-                          const status: PlanEntry["status"] =
-                            todo.status === "cancelled" ? "completed" : (todo.status as PlanEntry["status"])
-                          return {
-                            priority: "medium",
-                            status,
-                            content: todo.content,
-                          }
-                        }),
-                      },
-                    })
-                    .catch((err) => {
-                      log.error("failed to send session update for todo", { error: err })
-                    })
-                } else {
-                  log.error("failed to parse todo output", { error: parsedTodos.error })
-                }
+                await sendTodoPlanUpdate(this.connection, sessionId, part.state.output)
               }
 
               await this.connection
@@ -1476,6 +1464,7 @@ export namespace ACP {
         },
         { throwOnError: true },
       )
+      this.sessionManager.delete(params.sessionId)
     }
   }
 
@@ -1662,12 +1651,12 @@ export namespace ACP {
   }
 
   function buildAvailableModels(
-    providers: Array<{ id: string; name: string; models: Record<string, any> }>,
+    providers: Array<{ id: string; name: string; models: Record<string, unknown> }>,
     options: { includeVariants?: boolean } = {},
   ): ModelOption[] {
     const includeVariants = options.includeVariants ?? false
     return providers.flatMap((provider) => {
-      const models = Provider.sort(Object.values(provider.models) as any)
+      const models = Provider.sort(Object.values(provider.models) as Provider.Model[])
       return models.flatMap((model) => {
         const base: ModelOption = {
           modelId: `${provider.id}/${model.id}`,

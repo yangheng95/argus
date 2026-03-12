@@ -12,6 +12,7 @@ import { Snapshot } from "@/snapshot"
 import { Database, eq } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { Log } from "@/util/log"
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -33,6 +34,8 @@ const EventResult = z.object({
 })
 
 export namespace OpencodeExecutor {
+  const log = Log.create({ service: "opencode-executor" })
+
   export function capabilities() {
     return {
       submit: true,
@@ -60,7 +63,16 @@ export namespace OpencodeExecutor {
       source: "orchestrator.task",
       priority: input.priority,
     })
-    void TaskQueueService.runNow()
+    // Fire-and-forget: trigger immediate queue processing.  Errors inside
+    // individual task execution are already caught by TaskQueueService (fail()),
+    // but poll() itself can throw on database errors, so we catch here to
+    // prevent an unhandled promise rejection from crashing the process.
+    void TaskQueueService.runNow().catch((error) => {
+      log.error("task queue runNow failed", {
+        sessionID: input.sessionID,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
     return {
       sessionID: input.sessionID,
       queueTaskID,

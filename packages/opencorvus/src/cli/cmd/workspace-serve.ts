@@ -10,7 +10,7 @@ export const WorkspaceServeCommand = cmd({
     const opts = await resolveNetworkOptions(args)
     const server = WorkspaceServer.Listen(opts)
     console.log(`workspace event server listening on http://${server.hostname}:${server.port}/event`)
+    // Block forever — server runs until process is killed
     await new Promise(() => {})
-    await server.stop()
   },
 })

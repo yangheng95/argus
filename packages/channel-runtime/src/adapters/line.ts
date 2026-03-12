@@ -123,7 +123,12 @@ export class LineAdapter implements ChannelAdapter {
       if (!sig || sig !== digest) return Response.json({ error: "invalid signature" }, { status: 401 })
     }
 
-    const body = JSON.parse(raw) as Body
+    let body: Body
+    try {
+      body = JSON.parse(raw) as Body
+    } catch {
+      return Response.json({ error: "malformed JSON" }, { status: 400 })
+    }
     if (!this.handler) return Response.json({ ok: true })
     for (const event of body.events ?? []) {
       if (event.type !== "message") continue

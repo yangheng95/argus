@@ -106,8 +106,8 @@ export namespace Config {
         if (!response.ok) {
           throw new Error(`failed to fetch remote config from ${key}: ${response.status}`)
         }
-        const wellknown = (await response.json()) as any
-        const remoteConfig = wellknown.config ?? {}
+        const wellknown = (await response.json()) as Record<string, unknown>
+        const remoteConfig = (wellknown.config as Record<string, unknown>) ?? {}
         // Add $schema to prevent load() from trying to write back to a non-existent file
         if (!remoteConfig.$schema) remoteConfig.$schema = "https://opencorvus.ai/config.json"
         result = mergeConfigConcatArrays(
@@ -219,9 +219,15 @@ export namespace Config {
     }
 
     if (Flag.OPENCORVUS_PERMISSION) {
+      let parsed: object
+      try {
+        parsed = JSON.parse(Flag.OPENCORVUS_PERMISSION)
+      } catch {
+        throw new Error(`OPENCORVUS_PERMISSION env var contains invalid JSON: ${Flag.OPENCORVUS_PERMISSION.slice(0, 100)}`)
+      }
       result.permission = mergeDeep(
         (result.permission ?? {}) as object,
-        JSON.parse(Flag.OPENCORVUS_PERMISSION),
+        parsed,
       ) as Config.Permission
     }
 
@@ -325,7 +331,10 @@ export namespace Config {
     const pkgExists = await Filesystem.exists(pkg)
     if (!pkgExists) return true
 
-    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch(() => null)
+    const parsed = await Filesystem.readJson<{ dependencies?: Record<string, string> }>(pkg).catch((err) => {
+      log.warn("failed to parse package.json for dependency check", { pkg, error: String(err) })
+      return null
+    })
     const dependencies = parsed?.dependencies ?? {}
     const depVersion = dependencies["@opencorvus-ai/plugin"]
     if (!depVersion) return true
@@ -1253,7 +1262,9 @@ export namespace Config {
           await Filesystem.writeJson(path.join(Global.Path.config, "config.json"), result)
           await fs.unlink(legacy)
         })
-        .catch(() => {})
+        .catch((err) => {
+          log.warn("failed to migrate legacy config", { path: legacy, error: err })
+        })
     }
 
     return result
@@ -1294,7 +1305,9 @@ export namespace Config {
       if (!parsed.data.$schema && isFile) {
         parsed.data.$schema = "https://opencorvus.ai/config.json"
         const updated = original.replace(/^\s*\{/, '{\n  "$schema": "https://opencorvus.ai/config.json",')
-        await Bun.write(options.path, updated).catch(() => {})
+        await Bun.write(options.path, updated).catch((err) => {
+          log.warn("failed to write $schema to config", { path: options.path, error: err })
+        })
       }
       const data = parsed.data
       if (data.plugin && isFile) {
@@ -1453,7 +1466,9 @@ export namespace Config {
 
     global.reset()
 
-    await Instance.disposeAll().catch(() => undefined)
+    await Instance.disposeAll().catch((err) => {
+      log.warn("Instance.disposeAll failed after global config update", { error: String(err) })
+    })
     GlobalBus.emit("event", {
       directory: "global",
       payload: {

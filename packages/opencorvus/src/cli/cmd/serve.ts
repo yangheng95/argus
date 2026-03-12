@@ -22,7 +22,9 @@ function hideConsoleWindow() {
     if (hwnd) user32.symbols.ShowWindow(hwnd, 0) // SW_HIDE
     kernel32.close()
     user32.close()
-  } catch {}
+  } catch {
+    /* best-effort cosmetic: hiding the console window is non-critical */
+  }
 }
 
 /** Check if a port is in use. */
@@ -47,7 +49,9 @@ async function killOldProcess(port: number) {
     // Unix: use fuser
     try {
       Bun.spawnSync(["fuser", "-k", `${port}/tcp`], { stdio: ["ignore", "ignore", "ignore"] })
-    } catch {}
+    } catch {
+      /* fuser may not be installed; safe to ignore since port release is retried */
+    }
     return
   }
   // Windows: netstat → find PID → taskkill
@@ -66,7 +70,9 @@ async function killOldProcess(port: number) {
       if (pid === process.pid || pid <= 0) continue
       Bun.spawnSync(["taskkill", "/F", "/PID", String(pid)], { stdio: ["ignore", "ignore", "ignore"] })
     }
-  } catch {}
+  } catch {
+    /* best-effort cleanup: netstat/taskkill may fail; caller retries port availability */
+  }
 }
 
 export const ServeCommand = cmd({
@@ -90,7 +96,7 @@ export const ServeCommand = cmd({
     const opts = await resolveNetworkOptions(args)
 
     // Resolve --project-dir: CLI arg > env var > process.cwd()
-    const projectDir = (args as any)["project-dir"] || process.env.OPENCORVUS_PROJECT_DIR || undefined
+    const projectDir = (args as Record<string, unknown>)["project-dir"] as string | undefined || process.env.OPENCORVUS_PROJECT_DIR || undefined
     if (projectDir) {
       const resolved = require("path").resolve(projectDir)
       console.log(`Project directory (sandbox): ${resolved}`)
@@ -117,14 +123,14 @@ export const ServeCommand = cmd({
     console.log(`opencorvus server listening on http://${server.hostname}:${server.port}`)
     console.log(`overlay UI available at http://${server.hostname}:${server.port}/ui/`)
 
-    let workspaceSync: Array<ReturnType<typeof Workspace.startSyncing>> = []
     // Only available in development right now
     if (Installation.isLocal()) {
-      workspaceSync = Project.list().map((project) => Workspace.startSyncing(project))
+      for (const project of Project.list()) {
+        Workspace.startSyncing(project)
+      }
     }
 
+    // Block forever — server runs until process is killed.
     await new Promise(() => {})
-    await server.stop()
-    await Promise.all(workspaceSync.map((item) => item.stop()))
   },
 })

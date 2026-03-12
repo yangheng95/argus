@@ -61,6 +61,7 @@ export namespace HeadlessSpecService {
     })
 
     try {
+      let specTimer: ReturnType<typeof setTimeout>
       const output = await Promise.race([
         SpecAgent.initial({
           title: input.title,
@@ -71,10 +72,10 @@ export namespace HeadlessSpecService {
             priority: g.priority,
           })),
           signal,
+        }).finally(() => clearTimeout(specTimer)),
+        new Promise<never>((_, reject) => {
+          specTimer = setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs)
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs),
-        ),
       ])
 
       log.info("spec service initial completed", {
@@ -121,6 +122,7 @@ export namespace HeadlessSpecService {
     })
 
     try {
+      let rewriteTimer: ReturnType<typeof setTimeout>
       const output = await Promise.race([
         SpecAgent.rewrite({
           title: input.title,
@@ -132,10 +134,10 @@ export namespace HeadlessSpecService {
             priority: g.priority,
           })),
           signal,
+        }).finally(() => clearTimeout(rewriteTimer)),
+        new Promise<never>((_, reject) => {
+          rewriteTimer = setTimeout(() => reject(new SpecFailureError(`spec agent rewrite timed out after ${timeoutMs}ms`)), timeoutMs)
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new SpecFailureError(`spec agent rewrite timed out after ${timeoutMs}ms`)), timeoutMs),
-        ),
       ])
 
       log.info("spec service rewrite completed", {

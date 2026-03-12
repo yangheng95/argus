@@ -1,6 +1,9 @@
 import { App } from "@slack/bolt"
 import type { AudioAttachment, ChannelAdapter, MessageHandler } from "../adapter"
 
+const DEDUP_MAX_SIZE = 500
+const DEDUP_TARGET_SIZE = 400
+
 export class SlackAdapter implements ChannelAdapter {
   readonly platform = "slack"
   private app: App
@@ -29,8 +32,9 @@ export class SlackAdapter implements ChannelAdapter {
 
     // Debug: log ALL raw message events before any filtering
     this.app.event("message", async ({ event }) => {
+      const ev = event as unknown as Record<string, unknown>
       console.log(
-        `[Slack][DEBUG] raw event: subtype=${(event as any).subtype ?? "none"} bot_id=${(event as any).bot_id ?? "none"} user=${(event as any).user ?? "none"} text="${((event as any).text ?? "").slice(0, 60)}"`,
+        `[Slack][DEBUG] raw event: subtype=${ev.subtype ?? "none"} bot_id=${ev.bot_id ?? "none"} user=${ev.user ?? "none"} text="${(typeof ev.text === "string" ? ev.text : "").slice(0, 60)}"`,
       )
     })
 
@@ -45,7 +49,8 @@ export class SlackAdapter implements ChannelAdapter {
 
       // Detect audio attachments from message files
       let audio: AudioAttachment | undefined
-      const files = (message as any).files as
+      const msgAny = message as unknown as Record<string, unknown>
+      const files = msgAny.files as
         | Array<{
             mimetype: string
             url_private: string
@@ -91,14 +96,18 @@ export class SlackAdapter implements ChannelAdapter {
       const msgTs = message.ts
       if (this.processedMessages.has(msgTs)) return
       this.processedMessages.add(msgTs)
-      // Prevent unbounded growth
-      if (this.processedMessages.size > 500) {
-        const oldest = this.processedMessages.values().next().value!
-        this.processedMessages.delete(oldest)
+      // Prevent unbounded growth — evict oldest batch when limit reached
+      if (this.processedMessages.size > DEDUP_MAX_SIZE) {
+        const iter = this.processedMessages.values()
+        const evictCount = Math.min(DEDUP_MAX_SIZE - DEDUP_TARGET_SIZE, this.processedMessages.size - DEDUP_TARGET_SIZE)
+        for (let i = 0; i < evictCount; i++) {
+          const val = iter.next().value
+          if (val !== undefined) this.processedMessages.delete(val)
+        }
       }
 
       const channel = message.channel
-      const thread = (message as any).thread_ts || message.ts
+      const thread = (msgAny.thread_ts as string) || message.ts
 
       await this.handler({
         platform: this.platform,

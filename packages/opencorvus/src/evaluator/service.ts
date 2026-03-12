@@ -83,14 +83,16 @@ const evaluatorLog = Log.create({ service: "evaluator" })
 
 function taskRefs(task: EvaluationTask) {
   return {
-    taskID: task.metadata?.taskID as string | undefined,
-    runID: task.metadata?.runID as string | undefined,
+    taskID: typeof task.metadata?.taskID === "string" ? task.metadata.taskID : undefined,
+    runID: typeof task.metadata?.runID === "string" ? task.metadata.runID : undefined,
     request: task.request,
   }
 }
 
 async function publishResult(task: EvaluationTask, output: EvaluationOutput) {
-  await Plugin.trigger("evaluation.result", taskRefs(task), output).catch(() => undefined)
+  await Plugin.trigger("evaluation.result", taskRefs(task), output).catch((err) => {
+    evaluatorLog.warn("evaluation.result plugin trigger failed", { error: String(err) })
+  })
   return output
 }
 
@@ -133,7 +135,9 @@ async function pluginChecks(
   await Plugin.trigger("evaluation.checks", {
     ...taskRefs(task),
     config: (config.custom as Record<string, unknown>) ?? {},
-  }, output).catch(() => undefined)
+  }, output).catch((err) => {
+    evaluatorLog.warn("evaluation.checks plugin trigger failed", { error: String(err) })
+  })
   return Promise.all(output.checks.map((item) => pluginCheck(item, task, delivery)))
 }
 

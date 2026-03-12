@@ -417,9 +417,13 @@ const AppLog = (() => {
     }
   }
 
+  let _flushFailCount = 0;
+  const MAX_FLUSH_FAILURES = 5;
+
   function flush() {
     _flushTimer = null;
     const batch = _flushQueue.splice(0);
+    if (batch.length === 0) return;
     for (const entry of batch) {
       const extraObj = entry.extra && typeof entry.extra === "object" ? entry.extra : undefined;
       const msg = entry.extra && !extraObj ? `${entry.message} ${entry.extra}` : entry.message;
@@ -432,7 +436,14 @@ const AppLog = (() => {
           message: msg,
           extra: extraObj,
         }),
-      }).catch(() => {});
+      }).then(() => {
+        _flushFailCount = 0;
+      }).catch(() => {
+        _flushFailCount++;
+        if (_flushFailCount <= MAX_FLUSH_FAILURES) {
+          _flushQueue.push(entry);
+        }
+      });
     }
   }
 
@@ -809,6 +820,7 @@ function isManagedLocalServerUrl(value) {
     const url = new URL(input);
     return url.protocol.startsWith("http") && ["127.0.0.1", "localhost"].includes(url.hostname);
   } catch {
+    /* invalid URL — not a managed local server address */
     return false;
   }
 }
@@ -1350,7 +1362,9 @@ async function panelMessageStream(text, metadata) {
       headers: { ...apiHeaders(), "Content-Type": "application/json" },
       body,
     });
-  } catch {}
+  } catch (streamErr) {
+    AppLog.debug("panel", "stream endpoint unavailable, falling back to POST", { error: String(streamErr) });
+  }
   if (!res?.ok || !res.body) {
     const result = await apiJson("panel/message", {
       method: "POST",
@@ -1453,7 +1467,8 @@ async function loadExtensions() {
     state.skills = Array.isArray(skills) ? skills : [];
     state.mcp = mcp && typeof mcp === "object" ? mcp : {};
     renderExtensions();
-  } catch {
+  } catch (e) {
+    AppLog.debug("extensions", "loadExtensions failed, resetting to empty", { error: String(e) });
     state.skills = [];
     state.mcp = {};
     renderExtensions();
@@ -2306,7 +2321,7 @@ async function copyText(text) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
-    } catch {}
+    } catch { /* clipboard API not available, fall back to execCommand */ }
   }
   const textarea = document.createElement("textarea");
   textarea.value = text;
@@ -2410,7 +2425,7 @@ async function nativeOpen(target) {
   try {
     const opened = await tauriInvoke("overlay_open_path", { path: target });
     if (opened) return true;
-  } catch {}
+  } catch { /* Tauri not available, try fallback */ }
   if (/^https?:\/\//i.test(target)) {
     window.open(target, "_blank", "noopener");
     return true;
@@ -2422,7 +2437,8 @@ async function nativeOpen(target) {
       body: JSON.stringify({ path: target }),
     });
     return result?.opened === true;
-  } catch {
+  } catch (openErr) {
+    AppLog.debug("ui", "path/open fallback failed", { target, error: String(openErr) });
     return false;
   }
 }
@@ -2608,7 +2624,8 @@ async function loadExecutors() {
   try {
     const data = await apiJson("executor");
     state.executors = Array.isArray(data) ? data : [];
-  } catch {
+  } catch (e) {
+    AppLog.debug("executor", "loadExecutors failed, resetting to empty", { error: String(e) });
     state.executors = [];
   }
   const next = executorSelectable(state.executor)
@@ -2665,7 +2682,8 @@ async function loadMeta() {
       setWorkspaceDirectory(path.directory, "auto");
     }
     renderMeta();
-  } catch {
+  } catch (e) {
+    AppLog.debug("meta", "loadMeta failed, resetting path/vcs", { error: String(e) });
     if (epoch !== state.directoryEpoch) return;
     state.path = null;
     state.vcs = null;
@@ -3175,9 +3193,9 @@ async function loadTasks() {
       enterEmptyWorkspace();
       renderClear();
     }
-  } catch {
+  } catch (e) {
+    AppLog.debug("tasks", "loadTasks failed, keeping current state", { error: String(e) });
     if (epoch !== state.directoryEpoch) return;
-    // silent
   }
 }
 
@@ -3300,7 +3318,9 @@ async function loadConversation() {
           try {
             const sessionMsgs = await apiJson(`session/${sessionID}/message`);
             result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-          } catch {}
+          } catch (fallbackErr) {
+            AppLog.debug("ui", "session message fallback failed", { sessionID, error: String(fallbackErr) });
+          }
         }
       }
 
@@ -3325,7 +3345,9 @@ async function loadConversation() {
             await loadChanges();
           }
           return;
-        } catch {}
+        } catch (fallbackErr2) {
+          AppLog.debug("ui", "session message final fallback failed", { sessionID, error: String(fallbackErr2) });
+        }
       }
       state.session = [];
       state.sessionUpdatedAt = Date.now();
@@ -3422,11 +3444,12 @@ function diffStatus(item) {
 
 // ── SSE Events ──
 
-function startSSE(taskID) {
+function startSSE(taskID, retryCount = 0) {
   stopSSE();
   const controller = new AbortController();
   state.sse = controller;
   state.sseConnected = false;
+  const MAX_SSE_RETRIES = 60;
 
   (async () => {
     try {
@@ -3456,20 +3479,25 @@ function startSSE(taskID) {
           }
         }
       }
-      // Stream ended normally (server restart, timeout, etc.) — reconnect
+      // Stream ended normally — reconnect with reset backoff
       state.sseConnected = false;
-      AppLog.info("sse", "stream ended, reconnecting in 3s", { taskID });
+      const delay = 3000;
+      AppLog.info("sse", `stream ended, reconnecting in ${delay}ms`, { taskID });
       setTimeout(() => {
-        if (state.selectedTaskID === taskID) startSSE(taskID);
-      }, 3000);
+        if (state.selectedTaskID === taskID) startSSE(taskID, 0);
+      }, delay);
     } catch (e) {
       state.sseConnected = false;
       if (e.name === "AbortError") return;
-      AppLog.warn("sse", "disconnected, retrying in 5s", { taskID, error: String(e) });
-      // Retry after delay
+      if (retryCount >= MAX_SSE_RETRIES) {
+        AppLog.error("sse", "max retries reached, giving up", { taskID, retryCount });
+        return;
+      }
+      const delay = Math.min(5000 * Math.pow(1.5, retryCount), 60000);
+      AppLog.warn("sse", `disconnected, retrying in ${Math.round(delay)}ms (attempt ${retryCount + 1})`, { taskID, error: String(e) });
       setTimeout(() => {
-        if (state.selectedTaskID === taskID) startSSE(taskID);
-      }, 5000);
+        if (state.selectedTaskID === taskID) startSSE(taskID, retryCount + 1);
+      }, delay);
     }
   })();
 }
@@ -5035,6 +5063,7 @@ function signText(value) {
   try {
     return JSON.stringify(value) || "";
   } catch {
+    /* value contains circular references or is otherwise non-serializable */
     return String(value ?? "");
   }
 }
@@ -5455,10 +5484,33 @@ function renderMarkdownBlock(text) {
 function inlineMarkdown(text) {
   let s = escapeHtml(text);
   function unescapeUrl(url) { return url.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"'); }
+  function safeUrl(url, image = false) {
+    const value = unescapeUrl(url).trim();
+    if (!value) return null;
+    const lower = value.toLowerCase();
+    if (lower.startsWith("javascript:") || lower.startsWith("vbscript:")) return null;
+    if (lower.startsWith("data:")) return image && lower.startsWith("data:image/") ? value : null;
+    if (
+      lower.startsWith("https://") ||
+      lower.startsWith("http://") ||
+      lower.startsWith("mailto:") ||
+      value.startsWith("/") ||
+      value.startsWith("./") ||
+      value.startsWith("../") ||
+      value.startsWith("#")
+    ) return value;
+    return null;
+  }
   // Images: ![alt](url)
-  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => `<img class="md-img" src="${unescapeUrl(url)}" alt="${alt}" loading="lazy">`);
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    const value = safeUrl(url, true);
+    return value ? `<img class="md-img" src="${value}" alt="${alt}" loading="lazy">` : alt;
+  });
   // Links: [text](url)
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => `<a class="md-link" href="${unescapeUrl(url)}" target="_blank" rel="noopener">${label}</a>`);
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+    const value = safeUrl(url);
+    return value ? `<a class="md-link" href="${value}" target="_blank" rel="noopener">${label}</a>` : label;
+  });
   // Bold: **text**
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   // Italic: *text*
@@ -5893,7 +5945,9 @@ dom.connBadge.addEventListener("dblclick", async () => {
     if (!restarted) {
       await apiFetch("restart", { method: "POST", signal: AbortSignal.timeout(3000) });
     }
-  } catch {}
+  } catch (restartErr) {
+    AppLog.warn("ui", "restart request failed", { error: String(restartErr) });
+  }
   setTimeout(() => location.reload(), 2000);
 });
 
@@ -6623,7 +6677,9 @@ async function currentTauriWindow() {
   if (typeof globalGetCurrentWindow === "function") {
     try {
       return globalGetCurrentWindow();
-    } catch {}
+    } catch (tauriErr) {
+      AppLog.debug("tauri", "getCurrentWindow failed", { error: String(tauriErr) });
+    }
   }
   return null;
 }
@@ -6691,7 +6747,8 @@ async function loadMemory() {
     state.memoryFiles = Array.isArray(files) ? files : [];
     state.memorySearchMode = false;
     renderMemory();
-  } catch {
+  } catch (e) {
+    AppLog.debug("memory", "loadMemory failed, resetting to empty", { error: String(e) });
     if (epoch !== state.directoryEpoch) return;
     state.memoryFiles = [];
     state.memorySearchMode = false;
@@ -6724,8 +6781,9 @@ async function searchMemory(query) {
     }));
     state.memorySearchMode = true;
     renderMemory();
-  } catch {
-    // fallback
+  } catch (searchErr) {
+    AppLog.warn("memory", "searchMemory failed", { error: String(searchErr) });
+    if (epoch !== state.directoryEpoch) return;
   }
 }
 
@@ -6769,6 +6827,7 @@ let _currentMemoryId = "";
 async function openMemoryDetail(fileId) {
   _currentMemoryId = fileId;
   if (!dom.memoryDialog) return;
+  dom.memoryDialog.dataset.memoryId = fileId;
   dom.memoryDialogTitle.textContent = t("common.loading");
   dom.memoryDialogMeta.innerHTML = "";
   dom.memoryDialogContent.textContent = t("common.loading");
@@ -6809,7 +6868,8 @@ async function loadPreferences() {
     if (epoch !== state.directoryEpoch) return;
     state.preferences = Array.isArray(prefs) ? prefs : [];
     renderPreferences();
-  } catch {
+  } catch (e) {
+    AppLog.debug("preferences", "loadPreferences failed, resetting to empty", { error: String(e) });
     if (epoch !== state.directoryEpoch) return;
     state.preferences = [];
     renderPreferences();
@@ -6940,7 +7000,10 @@ if (dom.btnCloseMemory) {
   dom.btnCloseMemory.addEventListener("click", () => dom.memoryDialog?.close());
 }
 if (dom.btnDeleteMemory) {
-  dom.btnDeleteMemory.addEventListener("click", () => deleteMemory(_currentMemoryId));
+  dom.btnDeleteMemory.addEventListener("click", () => {
+    const id = dom.memoryDialog?.dataset?.memoryId || _currentMemoryId;
+    deleteMemory(id);
+  });
 }
 if (dom.btnPreferenceRefresh) {
   dom.btnPreferenceRefresh.addEventListener("click", () => loadPreferences());
@@ -6997,6 +7060,7 @@ function stringifyLogValue(value, space = 0) {
   try {
     return JSON.stringify(value, null, space);
   } catch {
+    /* value contains circular references or is otherwise non-serializable */
     return String(value ?? "");
   }
 }
@@ -7011,7 +7075,7 @@ function parseLogValue(raw) {
   if (/^[\[{"]/.test(text)) {
     try {
       return JSON.parse(text);
-    } catch {}
+    } catch { /* not valid JSON, return as string */ }
   }
   return text;
 }
@@ -7360,19 +7424,26 @@ async function init() {
   }
   // Retry connection periodically
   setInterval(async () => {
-    if (!state.connected) {
-      const ok = await checkConnection();
-      if (ok) {
-        await ensureWorkspaceDirectory();
-        await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
-        await restoreInitialWorkspace();
-        if (state.selectedTaskID) await selectTask(state.selectedTaskID);
+    try {
+      if (!state.connected) {
+        const ok = await checkConnection();
+        if (ok) {
+          await ensureWorkspaceDirectory();
+          await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+          await restoreInitialWorkspace();
+          if (state.selectedTaskID) await selectTask(state.selectedTaskID);
+        }
       }
+    } catch (retryErr) {
+      AppLog.warn("init", "connection retry failed", { error: String(retryErr) });
     }
   }, 10000);
 }
 
-init();
+init().catch((err) => {
+  AppLog.error("init", "fatal initialization error", { error: String(err) });
+  console.error("[OpenCorvus] init() failed:", err);
+});
 
 window.addEventListener("resize", renderScale);
 window.visualViewport?.addEventListener("resize", renderScale);

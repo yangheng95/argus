@@ -30,6 +30,7 @@ function allow(msg: Message): msg is Message<true> {
 export class DiscordAdapter implements ChannelAdapter {
   readonly platform = "discord"
   private client: Client
+  private token: string
   private handler?: MessageHandler
 
   constructor(opts: { token: string }) {
@@ -63,8 +64,6 @@ export class DiscordAdapter implements ChannelAdapter {
     this.token = opts.token
   }
 
-  private token: string
-
   async start(): Promise<void> {
     await this.client.login(this.token)
   }
@@ -75,7 +74,7 @@ export class DiscordAdapter implements ChannelAdapter {
 
   private async textChannel(id: string): Promise<SendChannel> {
     const ch = await this.client.channels.fetch(id)
-    if (!ch || !ch.isTextBased() || typeof (ch as any).send !== "function") {
+    if (!ch || !ch.isTextBased() || !("send" in ch)) {
       throw new Error(`Channel ${id} not found or not text-based`)
     }
     return ch as SendChannel
@@ -96,7 +95,10 @@ export class DiscordAdapter implements ChannelAdapter {
         },
       })
       return
-    } catch {}
+    } catch {
+      // Reply reference may fail if the original message was deleted or the
+      // thread is no longer accessible — fall back to a plain send below.
+    }
 
     await channel.send(opts)
   }
@@ -128,6 +130,8 @@ export class DiscordAdapter implements ChannelAdapter {
       })
       return
     } catch {
+      // Reply reference failed (message deleted / thread inaccessible) —
+      // retry without the reply reference.
       await ch.send({
         content: title,
         files: [file],

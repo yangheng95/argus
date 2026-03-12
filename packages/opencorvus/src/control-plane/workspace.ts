@@ -67,28 +67,26 @@ export namespace Workspace {
         config,
       }
 
-      setTimeout(async () => {
-        await init()
+      await init()
 
-        Database.use((db) => {
-          db.insert(WorkspaceTable)
-            .values({
-              id: info.id,
-              branch: info.branch,
-              project_id: info.projectID,
-              config: info.config,
-            })
-            .run()
-        })
+      Database.use((db) => {
+        db.insert(WorkspaceTable)
+          .values({
+            id: info.id,
+            branch: info.branch,
+            project_id: info.projectID,
+            config: info.config,
+          })
+          .run()
+      })
 
-        GlobalBus.emit("event", {
-          directory: id,
-          payload: {
-            type: Event.Ready.type,
-            properties: {},
-          },
-        })
-      }, 0)
+      GlobalBus.emit("event", {
+        directory: id,
+        payload: {
+          type: Event.Ready.type,
+          properties: {},
+        },
+      })
 
       return info
     },
@@ -122,7 +120,10 @@ export namespace Workspace {
     while (!stop.aborted) {
       const res = await getAdaptor(space.config)
         .request(space.config, "GET", "/event", undefined, stop)
-        .catch(() => undefined)
+        .catch((err) => {
+          log.warn("workspace event request failed", { workspaceID: space.id, error: String(err) })
+          return undefined
+        })
       if (!res || !res.ok || !res.body) {
         await Bun.sleep(1000)
         continue

@@ -174,6 +174,7 @@ export class QQAdapter implements ChannelAdapter {
     const raw = await req.text()
     if (!this.valid(req, raw)) return Response.json({ error: "invalid signature" }, { status: 401 })
 
+    // Malformed JSON → 400 below
     const body = raw ? await new Response(raw).json().catch(() => undefined) : undefined
     if (!body || typeof body !== "object") return Response.json({ error: "invalid body" }, { status: 400 })
 

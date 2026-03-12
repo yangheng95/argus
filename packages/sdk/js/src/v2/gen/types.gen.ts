@@ -990,8 +990,8 @@ export type EventOrchestratorEvaluationCompleted = {
     taskID: string
     runID: string
     evaluationID: string
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
+    status: "pending" | "passed" | "failed"
+    verdict: "accepted" | "rejected"
     summary: string
   }
 }
@@ -1044,6 +1044,21 @@ export type EventVcsBranchUpdated = {
   type: "vcs.branch.updated"
   properties: {
     branch?: string
+  }
+}
+
+export type EventWorktreeReady = {
+  type: "worktree.ready"
+  properties: {
+    name: string
+    branch: string
+  }
+}
+
+export type EventWorktreeFailed = {
+  type: "worktree.failed"
+  properties: {
+    message: string
   }
 }
 
@@ -1195,21 +1210,6 @@ export type EventPtyDeleted = {
   }
 }
 
-export type EventWorktreeReady = {
-  type: "worktree.ready"
-  properties: {
-    name: string
-    branch: string
-  }
-}
-
-export type EventWorktreeFailed = {
-  type: "worktree.failed"
-  properties: {
-    message: string
-  }
-}
-
 export type EventWorkspaceReady = {
   type: "workspace.ready"
   properties: {
@@ -1279,6 +1279,8 @@ export type Event =
   | EventOrchestratorRunOutput
   | EventOrchestratorMessageInjected
   | EventVcsBranchUpdated
+  | EventWorktreeReady
+  | EventWorktreeFailed
   | EventTaskReport
   | EventCommandExecuted
   | EventSessionCreated
@@ -1290,8 +1292,6 @@ export type Event =
   | EventPtyUpdated
   | EventPtyExited
   | EventPtyDeleted
-  | EventWorktreeReady
-  | EventWorktreeFailed
   | EventWorkspaceReady
   | EventWorkspaceFailed
 
@@ -2434,9 +2434,28 @@ export type SubtaskPartInput = {
   command?: string
 }
 
+export type ProviderAuthPrompt =
+  | {
+      type: "text"
+      key: string
+      message: string
+      placeholder?: string
+    }
+  | {
+      type: "select"
+      key: string
+      message: string
+      options: Array<{
+        label: string
+        value: string
+        hint?: string
+      }>
+    }
+
 export type ProviderAuthMethod = {
   type: "oauth" | "api"
   label: string
+  prompts?: Array<ProviderAuthPrompt>
 }
 
 export type ProviderAuthAuthorization = {
@@ -5142,6 +5161,46 @@ export type ProviderAuthResponses = {
 
 export type ProviderAuthResponse = ProviderAuthResponses[keyof ProviderAuthResponses]
 
+export type ProviderAuthPromptsData = {
+  body?: {
+    /**
+     * Auth method index
+     */
+    method: number
+    inputs?: {
+      [key: string]: string
+    }
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/{providerID}/auth/prompts"
+}
+
+export type ProviderAuthPromptsErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderAuthPromptsError = ProviderAuthPromptsErrors[keyof ProviderAuthPromptsErrors]
+
+export type ProviderAuthPromptsResponses = {
+  /**
+   * Resolved auth prompts
+   */
+  200: Array<ProviderAuthPrompt>
+}
+
+export type ProviderAuthPromptsResponse = ProviderAuthPromptsResponses[keyof ProviderAuthPromptsResponses]
+
 export type ProviderTestData = {
   body?: {
     modelID?: string
@@ -5182,12 +5241,92 @@ export type ProviderTestResponses = {
 
 export type ProviderTestResponse = ProviderTestResponses[keyof ProviderTestResponses]
 
+export type ProviderAuthApiData = {
+  body?: {
+    /**
+     * Provider API key
+     */
+    key: string
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/{providerID}/auth/api"
+}
+
+export type ProviderAuthApiErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderAuthApiError = ProviderAuthApiErrors[keyof ProviderAuthApiErrors]
+
+export type ProviderAuthApiResponses = {
+  /**
+   * API key saved
+   */
+  200: boolean
+}
+
+export type ProviderAuthApiResponse = ProviderAuthApiResponses[keyof ProviderAuthApiResponses]
+
+export type ProviderAuthExecuteData = {
+  body?: {
+    /**
+     * Auth method index
+     */
+    method: number
+    inputs?: {
+      [key: string]: string
+    }
+  }
+  path: {
+    /**
+     * Provider ID
+     */
+    providerID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/provider/{providerID}/auth/execute"
+}
+
+export type ProviderAuthExecuteErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+}
+
+export type ProviderAuthExecuteError = ProviderAuthExecuteErrors[keyof ProviderAuthExecuteErrors]
+
+export type ProviderAuthExecuteResponses = {
+  /**
+   * Provider auth method executed
+   */
+  200: boolean
+}
+
+export type ProviderAuthExecuteResponse = ProviderAuthExecuteResponses[keyof ProviderAuthExecuteResponses]
+
 export type ProviderOauthAuthorizeData = {
   body?: {
     /**
      * Auth method index
      */
     method: number
+    inputs?: {
+      [key: string]: string
+    }
   }
   path: {
     /**
@@ -6282,8 +6421,8 @@ export type TaskListResponses = {
         runID: string
         goalRunID?: string
         deliveryID?: string | null
-        status: "pending" | "passed" | "failed" | "inconclusive"
-        verdict: "accepted" | "rejected" | "inconclusive"
+        status: "pending" | "passed" | "failed"
+        verdict: "accepted" | "rejected"
         summary: string
         checks: Array<{
           name: string
@@ -6428,8 +6567,8 @@ export type TaskGlobalListResponses = {
         runID: string
         goalRunID?: string
         deliveryID?: string | null
-        status: "pending" | "passed" | "failed" | "inconclusive"
-        verdict: "accepted" | "rejected" | "inconclusive"
+        status: "pending" | "passed" | "failed"
+        verdict: "accepted" | "rejected"
         summary: string
         checks: Array<{
           name: string
@@ -6779,8 +6918,8 @@ export type TaskProgressResponses = {
       runID: string
       goalRunID?: string
       deliveryID?: string | null
-      status: "pending" | "passed" | "failed" | "inconclusive"
-      verdict: "accepted" | "rejected" | "inconclusive"
+      status: "pending" | "passed" | "failed"
+      verdict: "accepted" | "rejected"
       summary: string
       checks: Array<{
         name: string
@@ -7287,8 +7426,8 @@ export type TaskBoardResponses = {
       runID: string
       goalRunID?: string
       deliveryID?: string | null
-      status: "pending" | "passed" | "failed" | "inconclusive"
-      verdict: "accepted" | "rejected" | "inconclusive"
+      status: "pending" | "passed" | "failed"
+      verdict: "accepted" | "rejected"
       summary: string
       checks: Array<{
         name: string
@@ -8324,8 +8463,8 @@ export type RunEvaluationsResponses = {
     runID: string
     goalRunID?: string
     deliveryID?: string | null
-    status: "pending" | "passed" | "failed" | "inconclusive"
-    verdict: "accepted" | "rejected" | "inconclusive"
+    status: "pending" | "passed" | "failed"
+    verdict: "accepted" | "rejected"
     summary: string
     checks: Array<{
       name: string
@@ -8787,8 +8926,8 @@ export type ExportTaskResponses = {
       runID: string
       goalRunID?: string
       deliveryID?: string | null
-      status: "pending" | "passed" | "failed" | "inconclusive"
-      verdict: "accepted" | "rejected" | "inconclusive"
+      status: "pending" | "passed" | "failed"
+      verdict: "accepted" | "rejected"
       summary: string
       checks: Array<{
         name: string

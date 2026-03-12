@@ -119,8 +119,12 @@ export function buildRetryContext(
   const evaluation = findEvaluationByRun(run.id) ?? (goalRun ? findEvaluationByGoalRun(goalRun.id) : undefined)
   return {
     deliverySummary: delivery?.summary ?? undefined,
-    changedFiles: delivery?.result?.changed_files as string[] | undefined,
-    checks: (evaluation?.checks as Array<{ name: string; status: string; evidence: string }>) ?? undefined,
+    changedFiles: Array.isArray(delivery?.result?.changed_files)
+      ? delivery.result.changed_files.filter((f): f is string => typeof f === "string")
+      : undefined,
+    checks: Array.isArray(evaluation?.checks)
+      ? evaluation.checks as Array<{ name: string; status: string; evidence: string }>
+      : undefined,
     rootCause: analysis?.replan_guidance?.root_cause ?? undefined,
     avoidApproaches: analysis?.replan_guidance?.avoid_approaches ?? undefined,
     suggestedStrategy: analysis?.replan_guidance?.suggested_strategy ?? undefined,

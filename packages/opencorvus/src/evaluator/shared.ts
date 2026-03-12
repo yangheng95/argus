@@ -194,10 +194,16 @@ export async function webPage(url: string, timeoutMs: number) {
     headers: {
       "user-agent": "OpenCorvus evaluator",
     },
-  }).catch(() => undefined)
+  }).catch((err) => {
+    console.warn("[evaluator] web page fetch failed:", url, String(err))
+    return undefined
+  })
   clearTimeout(timer)
   if (!response?.ok) return
-  const content = await response.text().catch(() => "")
+  const content = await response.text().catch((err) => {
+    console.warn("[evaluator] web page response.text() failed:", url, String(err))
+    return ""
+  })
   return {
     content,
     title: titleOf(content),

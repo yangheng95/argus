@@ -8,7 +8,7 @@ import type {
   AppLogErrors,
   AppLogResponses,
   AppSkillsResponses,
-  Auth as Auth3,
+  Auth as Auth4,
   AuthRemoveErrors,
   AuthRemoveResponses,
   AuthSetErrors,
@@ -123,6 +123,12 @@ import type {
   ProjectListResponses,
   ProjectUpdateErrors,
   ProjectUpdateResponses,
+  ProviderAuthApiErrors,
+  ProviderAuthApiResponses,
+  ProviderAuthExecuteErrors,
+  ProviderAuthExecuteResponses,
+  ProviderAuthPromptsErrors,
+  ProviderAuthPromptsResponses,
   ProviderAuthResponses,
   ProviderListResponses,
   ProviderOauthAuthorizeErrors,
@@ -440,7 +446,7 @@ export class Auth extends HeyApiClient {
   public set<ThrowOnError extends boolean = false>(
     parameters: {
       providerID: string
-      auth?: Auth3
+      auth?: Auth4
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2890,17 +2896,20 @@ export class Question extends HeyApiClient {
   }
 }
 
-export class Oauth extends HeyApiClient {
+export class Auth2 extends HeyApiClient {
   /**
-   * OAuth authorize
+   * Resolve provider auth prompts
    *
-   * Initiate OAuth authorization for a specific AI provider to get an authorization URL.
+   * Resolve interactive auth prompts for a specific provider and method using the current partial inputs.
    */
-  public authorize<ThrowOnError extends boolean = false>(
+  public prompts<ThrowOnError extends boolean = false>(
     parameters: {
       providerID: string
       directory?: string
       method?: number
+      inputs?: {
+        [key: string]: string
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -2912,6 +2921,132 @@ export class Oauth extends HeyApiClient {
             { in: "path", key: "providerID" },
             { in: "query", key: "directory" },
             { in: "body", key: "method" },
+            { in: "body", key: "inputs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProviderAuthPromptsResponses, ProviderAuthPromptsErrors, ThrowOnError>(
+      {
+        url: "/provider/{providerID}/auth/prompts",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+
+  /**
+   * Save provider API key
+   *
+   * Store an API key for a specific AI provider.
+   */
+  public api<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+      key?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "key" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProviderAuthApiResponses, ProviderAuthApiErrors, ThrowOnError>({
+      url: "/provider/{providerID}/auth/api",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Execute provider auth method
+   *
+   * Execute a prompt-driven API authentication method for a specific provider.
+   */
+  public execute<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+      method?: number
+      inputs?: {
+        [key: string]: string
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "method" },
+            { in: "body", key: "inputs" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<ProviderAuthExecuteResponses, ProviderAuthExecuteErrors, ThrowOnError>(
+      {
+        url: "/provider/{providerID}/auth/execute",
+        ...options,
+        ...params,
+        headers: {
+          "Content-Type": "application/json",
+          ...options?.headers,
+          ...params.headers,
+        },
+      },
+    )
+  }
+}
+
+export class Oauth extends HeyApiClient {
+  /**
+   * OAuth authorize
+   *
+   * Initiate OAuth authorization for a specific AI provider to get an authorization URL.
+   */
+  public authorize<ThrowOnError extends boolean = false>(
+    parameters: {
+      providerID: string
+      directory?: string
+      method?: number
+      inputs?: {
+        [key: string]: string
+      }
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "providerID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "method" },
+            { in: "body", key: "inputs" },
           ],
         },
       ],
@@ -3050,6 +3185,11 @@ export class Provider extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+
+  private _auth?: Auth2
+  get auth2(): Auth2 {
+    return (this._auth ??= new Auth2({ client: this.client }))
   }
 
   private _oauth?: Oauth
@@ -5103,7 +5243,7 @@ export class File extends HeyApiClient {
   }
 }
 
-export class Auth2 extends HeyApiClient {
+export class Auth3 extends HeyApiClient {
   /**
    * Remove MCP OAuth
    *
@@ -5347,9 +5487,9 @@ export class Mcp extends HeyApiClient {
     })
   }
 
-  private _auth?: Auth2
-  get auth(): Auth2 {
-    return (this._auth ??= new Auth2({ client: this.client }))
+  private _auth?: Auth3
+  get auth(): Auth3 {
+    return (this._auth ??= new Auth3({ client: this.client }))
   }
 }
 

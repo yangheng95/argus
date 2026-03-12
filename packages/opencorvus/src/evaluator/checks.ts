@@ -20,6 +20,9 @@ import {
   softOrStrict,
   webPage,
 } from "./shared"
+import { Log } from "@/util/log"
+
+const evaluatorLog = Log.create({ service: "evaluator-checks" })
 
 export async function commandChecks(
   commands: CommandGroup[],
@@ -33,12 +36,12 @@ export async function commandChecks(
       command,
     })),
   )
-  const results = await Promise.all(
-    tasks.map(async (task) => {
-      const result = await commandResult(task.command, timeout)
-      return { ...task, result }
-    }),
-  )
+  // Run checks sequentially to avoid spawning too many child processes at once
+  const results: Array<typeof tasks[number] & { result: Awaited<ReturnType<typeof commandResult>> }> = []
+  for (const task of tasks) {
+    const result = await commandResult(task.command, timeout)
+    results.push({ ...task, result })
+  }
   const checks = results.map((item) => ({
     ...checkResult({
       name: item.name,
@@ -106,6 +109,10 @@ export async function commandResult(input: string | EvaluatorCommand, timeout: n
     })
   }).finally(() => {
     clearTimeout(timer)
+    // Ensure child process tree is fully killed after completion
+    if (proc.exitCode === null && proc.signalCode === null) {
+      Shell.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null }).catch(() => {})
+    }
   })
 
   return {
@@ -214,6 +221,19 @@ async function waitForStartup(input: {
   while (Date.now() - started < input.timeout) {
     if (typeof input.proc.exitCode === "number" || input.proc.signalCode !== null) {
       const code = input.proc.exitCode ?? 1
+      // requireExitZero: one-shot processes that exit 0 are considered ready,
+      // even when readyURL is configured (the URL can't be checked after exit)
+      if (input.requireExitZero && code === 0) {
+        const textMatch = !input.readyText || input.output().includes(input.readyText)
+        if (textMatch) {
+          return {
+            ok: true,
+            evidence: input.readyText
+              ? `Process exited 0 and output matched "${input.readyText}".`
+              : "Process exited successfully (requireExitZero).",
+          }
+        }
+      }
       if (!input.readyURL && !input.readyText && code === 0) {
         return { ok: true, evidence: "Process exited successfully." }
       }
@@ -501,7 +521,10 @@ export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppe
       height: config.viewport?.height ?? 900,
     },
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  }).catch(() => undefined)
+  }).catch((err) => {
+    evaluatorLog.warn("puppeteer launch failed", { executable, error: String(err) })
+    return undefined
+  })
 
   if (!browser) {
     return softOrStrict({
@@ -536,8 +559,14 @@ export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppe
     }
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const title = await page.title().catch(() => "")
-    const content = await page.content().catch(() => "")
+    const title = await page.title().catch((err) => {
+      evaluatorLog.warn("puppeteer page.title() failed", { url: config.url, error: String(err) })
+      return ""
+    })
+    const content = await page.content().catch((err) => {
+      evaluatorLog.warn("puppeteer page.content() failed", { url: config.url, error: String(err) })
+      return ""
+    })
     const screenshot = await page.screenshot({
       type: "png",
       encoding: "base64",
@@ -637,7 +666,9 @@ export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppe
       },
     })
   } finally {
-    await browser.close().catch(() => undefined)
+    await browser.close().catch((err) => {
+      evaluatorLog.warn("puppeteer browser.close() failed", { error: String(err) })
+    })
   }
 }
 
