@@ -3,6 +3,7 @@ import { which } from "@/util/which"
 import path from "path"
 import { Global } from "../global"
 import fs from "fs/promises"
+import type { Dirent } from "node:fs"
 import z from "zod"
 import { NamedError } from "@opencorvus-ai/util/error"
 import { lazy } from "../util/lazy"
@@ -127,7 +128,7 @@ export namespace Ripgrep {
   )
 
   async function findFile(root: string, name: string): Promise<string | undefined> {
-    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [])
+    const entries = await fs.readdir(root, { withFileTypes: true }).catch(() => [] as Dirent[])
     for (const entry of entries) {
       const full = path.join(root, entry.name)
       if (entry.isFile() && entry.name === name) return full
@@ -186,7 +187,11 @@ export namespace Ripgrep {
           })
         }
         await fs.copyFile(extracted, filepath)
-        await fs.rm(extractDir, { recursive: true, force: true }).catch(() => {})
+        // Best-effort cleanup of the temp extraction directory; failure is
+        // harmless since the rg binary has already been copied to its target.
+        await fs.rm(extractDir, { recursive: true, force: true }).catch((err) => {
+          log.warn("rg extraction temp dir cleanup failed", { extractDir, error: String(err) })
+        })
       }
       if (config.extension === "zip") {
         const zipFileReader = new ZipReader(new BlobReader(new Blob([arrayBuffer])))
@@ -387,8 +392,13 @@ export namespace Ripgrep {
     // Parse JSON lines from ripgrep output
 
     return lines
-      .map((line) => JSON.parse(line))
-      .map((parsed) => Result.parse(parsed))
+      .flatMap((line) => {
+        try {
+          return [Result.parse(JSON.parse(line))]
+        } catch {
+          return []
+        }
+      })
       .filter((r) => r.type === "match")
       .map((r) => r.data)
   }

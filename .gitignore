@@ -26,6 +26,8 @@ dist/
 target/
 .scripts
 .direnv/
+backups/
+code_review.txt
 
 # Local dev files
 .opencorvus/

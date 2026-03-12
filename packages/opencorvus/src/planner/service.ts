@@ -184,6 +184,7 @@ export namespace HeadlessPlannerService {
     const timeoutMs = plannerTimeoutMs()
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let planTimeout: ReturnType<typeof setTimeout>
     const agentResult = await Promise.race([
       PlannerAgent.plan({
         title: input.title,
@@ -197,10 +198,10 @@ export namespace HeadlessPlannerService {
         signal: controller.signal,
       }).catch((error) => {
         throw new PlannerFailureError("planner agent failed", { cause: error })
+      }).finally(() => clearTimeout(planTimeout)),
+      new Promise<never>((_, reject) => {
+        planTimeout = setTimeout(() => reject(new PlannerFailureError(`planner timed out after ${timeoutMs}ms`)), timeoutMs)
       }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new PlannerFailureError(`planner timed out after ${timeoutMs}ms`)), timeoutMs),
-      ),
     ]).finally(() => {
       clearTimeout(timer)
       controller.abort()
@@ -408,11 +409,11 @@ function planSpecMeta(spec?: PlannerSpec, stages?: StageSet) {
   return {
     summary: spec.summary,
     source: stages?.spec,
-    ...("spec_items" in spec ? { spec_items: (spec as any).spec_items } : {}),
-    ...("evidence_sources" in spec ? { evidence_sources: (spec as any).evidence_sources } : {}),
-    ...("unresolved_questions" in spec ? { unresolved_questions: (spec as any).unresolved_questions } : {}),
-    ...("scope" in spec && (spec as any).scope ? { scope: (spec as any).scope } : {}),
-    ...("out_of_scope" in spec && (spec as any).out_of_scope ? { out_of_scope: (spec as any).out_of_scope } : {}),
+    ...("spec_items" in spec ? { spec_items: (spec as Record<string, unknown>).spec_items } : {}),
+    ...("evidence_sources" in spec ? { evidence_sources: (spec as Record<string, unknown>).evidence_sources } : {}),
+    ...("unresolved_questions" in spec ? { unresolved_questions: (spec as Record<string, unknown>).unresolved_questions } : {}),
+    ...("scope" in spec && (spec as Record<string, unknown>).scope ? { scope: (spec as Record<string, unknown>).scope } : {}),
+    ...("out_of_scope" in spec && (spec as Record<string, unknown>).out_of_scope ? { out_of_scope: (spec as Record<string, unknown>).out_of_scope } : {}),
   }
 }
 
@@ -894,11 +895,14 @@ function resolveGoals(request: string, spec?: PlannerSpec, goals?: z.infer<typeo
 }
 
 function goalSelectors(request: string, spec?: PlannerSpec) {
-  const selectors = inferSelectors(request)
+  const selectors = inferSelectors(request).filter((item) =>
+    !["build", "test", "lint", "verify_cmd"].includes(item)
+  )
   if (!spec) return [...new Set(selectors)]
   selectors.push("spec_check")
   for (const item of spec.spec_items ?? []) {
     for (const sel of item.check_selector ?? []) {
+      if (["build", "test", "lint", "verify_cmd"].includes(sel)) continue
       selectors.push(sel)
     }
   }

@@ -41,22 +41,32 @@ const BOARD_SNAPSHOT_LIMIT = 80
 const BOARD_CHANGED_FILE_LIMIT = 80
 const BOARD_SUMMARY_LIMIT = 4000
 
+const BOARD_CACHE_MAX_SIZE = 50
 const boardCache = new Map<string, { tag: string; board: ReturnType<typeof buildBoard> }>()
 
+function requireTask(taskID: string) {
+  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get())
+  if (!task) throw new Error(`Task not found: ${taskID}`)
+  return task
+}
+
 export function compileBoard(input: { taskID: string }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
-  if (!task) throw new Error(`Task not found: ${input.taskID}`)
+  const task = requireTask(input.taskID)
   const tag = boardTagForTask(task)
   const cached = boardCache.get(task.id)
   if (cached?.tag === tag) return cached.board
   const board = buildBoard(task)
+  // Evict oldest entries when cache exceeds limit
+  if (boardCache.size >= BOARD_CACHE_MAX_SIZE) {
+    const firstKey = boardCache.keys().next().value
+    if (firstKey) boardCache.delete(firstKey)
+  }
   boardCache.set(task.id, { tag, board })
   return board
 }
 
 export function boardTag(input: { taskID: string }) {
-  const task = Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, input.taskID)).get())
-  if (!task) throw new Error(`Task not found: ${input.taskID}`)
+  const task = requireTask(input.taskID)
   return boardTagForTask(task)
 }
 

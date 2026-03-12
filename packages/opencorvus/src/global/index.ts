@@ -12,7 +12,9 @@ function resolveHome() {
   try {
     const home = os.homedir()
     if (home) return home
-  } catch {}
+  } catch {
+    // os.homedir() can throw on misconfigured systems (missing $HOME, no passwd entry)
+  }
   return process.env.HOME || process.env.USERPROFILE || os.tmpdir()
 }
 
@@ -79,6 +81,9 @@ if (version !== CACHE_VERSION) {
         }),
       ),
     )
-  } catch (e) {}
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    console.warn(`[global] cache cleanup failed (version ${version} → ${CACHE_VERSION}): ${detail}`)
+  }
   await Filesystem.write(path.join(Global.Path.cache, "version"), CACHE_VERSION)
 }

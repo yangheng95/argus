@@ -160,6 +160,7 @@ export namespace SessionPrompt {
           ? path.join(os.homedir(), name.slice(2))
           : path.resolve(Instance.worktree, name)
 
+        // File may not exist — fall through to agent name lookup below
         const stats = await fs.stat(filepath).catch(() => undefined)
         if (!stats) {
           const agent = await Agent.get(name)
@@ -204,7 +205,7 @@ export namespace SessionPrompt {
     const model = input.model ?? agent.model ?? (await lastModel(input.sessionID))
     const full =
       !input.variant && agent.variant
-        ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined)
+        ? await Provider.getModel(model.providerID, model.modelID).catch(() => undefined) // Model lookup failure → skip variant
         : undefined
     const variant = input.variant ?? (agent.variant && full?.variants?.[agent.variant] ? agent.variant : undefined)
 
@@ -349,8 +350,8 @@ export namespace SessionPrompt {
                 }
                 if (range.start != null) {
                   const filePathURI = part.url.split("?")[0]
-                  let start = parseInt(range.start)
-                  let end = range.end ? parseInt(range.end) : undefined
+                  let start = parseInt(range.start, 10)
+                  let end = range.end ? parseInt(range.end, 10) : undefined
                   if (start === end) {
                     const symbols = await LSP.documentSymbol(filePathURI).catch(() => [])
                     for (const symbol of symbols) {

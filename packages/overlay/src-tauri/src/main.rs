@@ -249,10 +249,20 @@ fn next_server_port() -> Result<u16, String> {
 
 fn stop_server<R: Runtime>(app: &AppHandle<R>) {
     let state = app.state::<Server>();
-    let mut lock = state.0.lock().unwrap();
+    let mut lock = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("overlay: server mutex poisoned in stop_server, recovering");
+            poisoned.into_inner()
+        }
+    };
     if let Some(mut child) = lock.child.take() {
-        let _ = child.kill();
-        let _ = child.wait();
+        if let Err(err) = child.kill() {
+            eprintln!("overlay: failed to kill server process: {err}");
+        }
+        if let Err(err) = child.wait() {
+            eprintln!("overlay: failed to wait on server process: {err}");
+        }
     }
     lock.port = None;
 }
@@ -282,7 +292,13 @@ fn start_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, Str
     let child = cmd.spawn().map_err(|err| err.to_string())?;
     let info = server_info(port);
     let state = app.state::<Server>();
-    let mut lock = state.0.lock().unwrap();
+    let mut lock = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("overlay: server mutex poisoned in start_server, recovering");
+            poisoned.into_inner()
+        }
+    };
     lock.child = Some(child);
     lock.port = Some(port);
     Ok(info)
@@ -296,7 +312,13 @@ fn restart_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, S
 fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, String> {
     {
         let state = app.state::<Server>();
-        let mut lock = state.0.lock().unwrap();
+        let mut lock = match state.0.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                eprintln!("overlay: server mutex poisoned in ensure_server, recovering");
+                poisoned.into_inner()
+            }
+        };
         if let Some(child) = lock.child.as_mut() {
             match child.try_wait() {
                 Ok(None) => {

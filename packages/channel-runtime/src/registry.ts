@@ -98,7 +98,7 @@ export type AdapterFactory = {
 }
 
 export const READY_CHANNELS = ChannelCatalog.map((item) => item.id)
-export const PLANNED_CHANNELS: ChannelName[] = []
+export const PLANNED_CHANNELS: readonly ChannelName[] = []
 
 function parsePort(value?: string) {
   if (!value) return undefined
@@ -117,10 +117,12 @@ function need(id: ChannelName) {
     .join(", ")
 }
 
-function bool(value?: string) {
+function bool(value?: string): boolean | undefined {
   if (!value) return undefined
   const text = value.trim().toLowerCase()
-  return text === "1" || text === "true" || text === "yes" || text === "on"
+  if (text === "1" || text === "true" || text === "yes" || text === "on") return true
+  if (text === "0" || text === "false" || text === "no" || text === "off") return false
+  return undefined
 }
 
 function build(id: ChannelName, create: AdapterFactory, values: Values) {
@@ -227,7 +229,6 @@ function build(id: ChannelName, create: AdapterFactory, values: Values) {
         sandbox: bool(values.sandbox),
       })
   }
-  throw new Error(`Unsupported channel: ${id}`)
 }
 
 export function registerAdapters(

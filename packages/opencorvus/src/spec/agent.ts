@@ -17,6 +17,7 @@ import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import fs from "fs"
 import path from "path"
 
 const log = Log.create({ service: "spec-agent" })
@@ -192,6 +193,7 @@ async function run(input: {
 }): Promise<SpecOutputType> {
   if (input.signal?.aborted) throw new Error("spec agent aborted before model resolution")
 
+  // No model configured → throw below with clear error
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for spec agent")
   const model = await Provider.getModel(def.providerID, def.modelID)
@@ -267,7 +269,10 @@ async function run(input: {
     })
 
     const toolCallCount = result.steps.reduce(
-      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
+      (sum, s) => {
+        const step = s as { toolCalls?: unknown[] }
+        return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
+      },
       0,
     )
 
@@ -845,7 +850,6 @@ async function resolveFileReferences(
 
 function readFileSafe(absPath: string, maxLen = 6000): string | null {
   try {
-    const fs = require("fs")
     const content = fs.readFileSync(absPath, "utf-8")
     if (!content) return null
     return content.length > maxLen ? content.slice(0, maxLen) + "\n... (truncated)" : content

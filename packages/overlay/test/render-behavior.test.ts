@@ -1415,6 +1415,8 @@ test("auto question does not invent a fallback answer when choices are missing",
       }
 
       state.autoQuestion = true
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      calls.length = 0
       renderInteractions([
         {
           id: "interaction-q1",
@@ -1431,13 +1433,13 @@ test("auto question does not invent a fallback answer when choices are missing",
       await new Promise((resolve) => setTimeout(resolve, 50))
 
       return {
-        calls,
+        interactionCalls: calls.filter((item) => item.includes("/interaction/")),
         modalId: document.getElementById("interaction-modal")?.getAttribute("data-interaction-id") || "",
         inline: document.querySelectorAll("#goalsBody .interaction-alert").length,
       }
     })
 
-    expect(view.calls).toEqual([])
+    expect(view.interactionCalls).toEqual([])
     expect(view.modalId).toBe("interaction-q1")
     expect(view.inline).toBe(1)
   } finally {

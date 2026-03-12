@@ -24,6 +24,8 @@ export namespace SessionPromptState {
     async (current) => {
       for (const item of Object.values(current)) {
         item.abort.abort()
+        for (const q of item.callbacks) q.reject(new Error("Instance disposed"))
+        item.callbacks = []
       }
     },
   )
@@ -59,6 +61,8 @@ export namespace SessionPromptState {
       return
     }
     match.abort.abort()
+    for (const q of match.callbacks) q.reject(new Error("Session cancelled"))
+    match.callbacks = []
     delete s[sessionID]
     SessionStatus.set(sessionID, { type: "idle" })
     return

@@ -71,7 +71,7 @@ export function win32InstallCtrlCGuard() {
   if (!load()) return
   if (unhook) return unhook
 
-  const stdin = process.stdin as any
+  const stdin = process.stdin as typeof process.stdin & { setRawMode?: (mode: boolean) => void }
   const original = stdin.setRawMode
 
   const handle = k32!.symbols.GetStdHandle(STD_INPUT_HANDLE)
@@ -102,6 +102,7 @@ export function win32InstallCtrlCGuard() {
       return result
     }
 
+    // @ts-expect-error wrapped is a drop-in replacement for setRawMode but TS can't reconcile the return type
     stdin.setRawMode = wrapped
   }
 

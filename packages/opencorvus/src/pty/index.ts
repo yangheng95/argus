@@ -208,7 +208,9 @@ export namespace Pty {
       for (const session of sessions.values()) {
         try {
           session.process.kill()
-        } catch {}
+        } catch {
+          // Process may have already exited
+        }
         for (const [key, sub] of session.subscribers.entries()) {
           if (!current(sub)) {
             session.subscribers.delete(key)
@@ -338,7 +340,9 @@ export namespace Pty {
     log.info("removing session", { id })
     try {
       session.process.kill()
-    } catch {}
+    } catch {
+      // Process may have already exited — kill failure is expected
+    }
     for (const [key, sub] of session.subscribers.entries()) {
       if (!current(sub)) {
         session.subscribers.delete(key)

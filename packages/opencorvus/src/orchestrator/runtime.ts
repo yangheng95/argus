@@ -16,6 +16,7 @@ import {
   applyGoalDelivery,
   buildGoalPrompt,
   cleanupGoalWorkspace,
+  cleanupStaleGoalWorkspaces,
   createGoalSession,
   createGoalWorkspace,
   currentGoal,
@@ -81,16 +82,24 @@ import {
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator-runtime" })
+
+function safeParseInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const n = parseInt(value, 10)
+  return Number.isFinite(n) ? n : fallback
+}
 const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
 const finalizingRuns = new Set<string>() // guards against concurrent finalizeCoordinatorRun for the same run
 const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
+const finalizingGoalRuns = new Set<string>() // guards against concurrent finalizeGoalRun for the same goal run
+const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
 // Unattended-mode safeguards
-const INTERACTION_STALE_MS = parseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS || "30000", 10) // auto-reject stale interactions (30s default)
-const RUN_MAX_EXECUTION_MS = parseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS || String(2 * 60 * 60 * 1000), 10) // max run execution time (2h default)
+const INTERACTION_STALE_MS = safeParseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS, 30_000) // auto-reject stale interactions (30s default)
+const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
 // Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
 // Default is off so automated pipelines continue without interruption.
 const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
@@ -136,7 +145,10 @@ async function provideWorkspace<R>(directory: string | undefined, fn: () => Prom
 
 async function taskDirectory(task: TaskRow) {
   if (!task.session_id) return Instance.directory
-  const session = await Session.get(task.session_id).catch(() => undefined)
+  const session = await Session.get(task.session_id).catch((err) => {
+    log.warn("failed to get session for task directory", { taskID: task.id, sessionID: task.session_id, error: String(err) })
+    return undefined
+  })
   return session?.directory ?? Instance.directory
 }
 
@@ -334,7 +346,9 @@ async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: Runtim
       changedFiles: delivery.diffs.map((item) => item.file),
       diffs: delivery.diffs,
     },
-  }, { actions: [] }).catch(() => undefined)
+  }, { actions: [] }).catch((err) => {
+    log.warn("delivery.ready plugin trigger failed", { taskID: task.id, runID: run.id, deliveryID, error: String(err) })
+  })
   const goals = goalsForRun(run)
   const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
   const phase1Failed = result.status === "failed"
@@ -372,6 +386,20 @@ async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: Runtim
 }
 
 async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
+  if (finalizingGoalRuns.has(goalRun.id)) {
+    log.info("already finalizing goal run, skipping concurrent call", { goalRunID: goalRun.id })
+    return
+  }
+  finalizingGoalRuns.add(goalRun.id)
+  try {
+    await _finalizeGoalRun(task, run, goalRun, hooks)
+  } finally {
+    finalizingGoalRuns.delete(goalRun.id)
+  }
+}
+
+async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
+  OrchestratorRuntime.stopExecutorEventBridge(goalRun.session_id ?? undefined)
   const goals = goalsForRun(run)
   const goal = currentGoal(goalRun, goals)
   if (!goal) throw new Error(`Goal ${goalRun.goal_id} not found for run ${run.id}`)
@@ -470,6 +498,14 @@ async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined,
 }
 
 export namespace OrchestratorRuntime {
+  export function stopExecutorEventBridge(sessionID?: string) {
+    if (!sessionID) return
+    const controller = executorEventBridges.get(sessionID)
+    if (!controller) return
+    executorEventBridges.delete(sessionID)
+    controller.abort()
+  }
+
   export async function poll(hooks: RuntimeHooks) {
     const current = orchestratorState()
     if (current.syncing) return
@@ -610,7 +646,9 @@ export namespace OrchestratorRuntime {
       const started = run.time_started ?? run.time_created
       if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
         log.warn("run exceeded max execution time", { runID: run.id, maxMs: RUN_MAX_EXECUTION_MS, elapsedMs: Date.now() - started })
-        try { await executor.abort({ sessionID: target.sessionID, queueTaskID }) } catch {}
+        try { await executor.abort({ sessionID: target.sessionID, queueTaskID }) } catch (abortErr) {
+          log.warn("failed to abort timed-out executor", { runID: run.id, error: String(abortErr) })
+        }
         await failRun(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
         return
       }
@@ -728,6 +766,7 @@ async function _completeRun(run: RunRow, hooks: RuntimeHooks) {
   installRuntimeShims()
   const task = requireTask(run.task_id)
   const goalRun = latestGoalRun(run)
+  OrchestratorRuntime.stopExecutorEventBridge(goalRun?.session_id ?? run.session_id ?? undefined)
   if (goalRun?.status === "completed" && !findDeliveryByRun(run.id)) {
     updateGoalRunExecutorSessionStatus(goalRun.id, "completed")
     await finalizeGoalRun(task, run, goalRun, hooks)
@@ -808,12 +847,16 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
       blocking_reason: null,
       time_completed: now,
     }, error).catch((err) => log.error("failed to recover stranded task", { taskID: task.id, error: String(err) }))
+    cleanupStaleGoalWorkspaces(task.id).catch((err) =>
+      log.warn("failed to clean up stale goal workspaces", { taskID: task.id, error: String(err) }),
+    )
   }
 }
 
 async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   const task = requireTask(run.task_id)
   const goalRun = activeGoalRun(run)
+  OrchestratorRuntime.stopExecutorEventBridge(goalRun?.session_id ?? run.session_id ?? undefined)
   const now = Date.now()
   if (goalRun) {
     updateGoalRunExecutorSessionStatus(goalRun.id, "failed")
@@ -822,6 +865,9 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     }
     updateGoalRun(goalRun.id, { status: "failed", error, blocking_reason: null, time_completed: now })
     await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
+    if (goalRun.session_id) await Session.remove(goalRun.session_id).catch((err) => {
+      log.warn("failed to remove goal run session", { sessionID: goalRun.session_id, error: String(err) })
+    })
     const goal = currentGoal(goalRun, goalsForRun(run))
     if (goal?.priority === "advisory") {
       await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, error)
@@ -861,11 +907,12 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateTask(task, { status: "delivering", blocking_reason: null, error: null }, "Publishing accepted delivery")
   markDeliveryPublishing(delivery.id, now)
 
+  let deliveryTimer: ReturnType<typeof setTimeout>
   const result = await Promise.race([
-    DeliveryService.deliver({ task, run, delivery }),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("DeliveryService.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS),
-    ),
+    DeliveryService.deliver({ task, run, delivery }).finally(() => clearTimeout(deliveryTimer)),
+    new Promise<never>((_, reject) => {
+      deliveryTimer = setTimeout(() => reject(new Error("DeliveryService.deliver() timeout")), DELIVERY_SERVICE_TIMEOUT_MS)
+    }),
   ]).catch((error) => ({
     status: "failed" as const,
     summary: String(error),
@@ -1047,43 +1094,54 @@ function consumeExecutorEvents(
 ) {
   const executor = ExecutorRegistry.require(executorName)
   if (!executor.capabilities().events) return
+  OrchestratorRuntime.stopExecutorEventBridge(sessionID)
+  const controller = new AbortController()
+  executorEventBridges.set(sessionID, controller)
   // 异步消费 — 不阻塞 dispatch 返回
   ;(async () => {
     try {
-      for await (const event of executor.events({ sessionID })) {
-        upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
-        appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
-          provider: executorName,
-          kind: protocolEventKind(event.type),
-          summary: event.summary ?? event.type,
-          payload: event.payload,
-          raw: {
-            type: event.type,
-            summary: event.summary,
-            payload: event.payload,
-          },
-        })
-        if (event.type === "text_delta") {
-          Bus.publish(Event.RunOutput, {
-            taskID,
-            runID,
-            type: "text_delta",
-            text: event.summary ?? "",
-          })
-        } else {
-          Bus.publish(Event.RunProgress, {
-            taskID,
-            runID,
-            type: event.type,
+      for await (const event of executor.events({ sessionID, signal: controller.signal })) {
+        try {
+          upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
+          appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
+            provider: executorName,
+            kind: protocolEventKind(event.type),
             summary: event.summary ?? event.type,
             payload: event.payload,
+            raw: {
+              type: event.type,
+              summary: event.summary,
+              payload: event.payload,
+            },
           })
+          if (event.type === "text_delta") {
+            Bus.publish(Event.RunOutput, {
+              taskID,
+              runID,
+              type: "text_delta",
+              text: event.summary ?? "",
+            })
+          } else {
+            Bus.publish(Event.RunProgress, {
+              taskID,
+              runID,
+              type: event.type,
+              summary: event.summary ?? event.type,
+              payload: event.payload,
+            })
+          }
+        } catch (eventErr) {
+          log.warn("executor event handler failed, continuing", { taskID, runID, error: String(eventErr) })
         }
       }
     } catch (err) {
       log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
+    } finally {
+      if (executorEventBridges.get(sessionID) === controller) {
+        executorEventBridges.delete(sessionID)
+      }
     }
-  })()
+  })().catch((err) => log.error("executor event bridge crashed", { taskID, runID, error: String(err) }))
 }
 
 type RuntimeHooks = {

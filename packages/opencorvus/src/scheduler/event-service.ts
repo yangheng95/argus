@@ -107,7 +107,7 @@ export namespace EventService {
         .set({
           last_run: now,
           last_event: type,
-          enabled: job.one_shot ? false : true,
+          enabled: !job.one_shot,
         })
         .where(eq(EventJobTable.id, job.id))
         .run(),

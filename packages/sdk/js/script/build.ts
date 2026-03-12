@@ -14,6 +14,7 @@ import { createClient } from "@hey-api/openapi-ts"
 
 await $`bun dev generate > ${openapi}`.cwd(path.resolve(dir, "../../opencorvus"))
 await Bun.write(rootOpenapi, await Bun.file(openapi).text())
+await $`rm -rf src/gen dist`
 
 const generate = async (output: string) =>
   createClient({
@@ -50,6 +51,5 @@ const generate = async (output: string) =>
 await generate("./src/v2/gen")
 
 await $`bun prettier --write src/v2`
-await $`rm -rf dist`
 await $`bun tsc`
 await $`rm openapi.json`

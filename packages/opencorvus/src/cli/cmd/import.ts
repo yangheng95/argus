@@ -30,15 +30,10 @@ export const ImportCommand = cmd({
           }
         | undefined
 
+      // Parse failure handled below with user-facing error message
       exportData = await Filesystem.readJson<NonNullable<typeof exportData>>(args.file).catch(() => undefined)
       if (!exportData) {
-        process.stdout.write(`File not found: ${args.file}`)
-        process.stdout.write(EOL)
-        return
-      }
-
-      if (!exportData) {
-        process.stdout.write(`Failed to read session data`)
+        process.stdout.write(`Failed to read or parse session data from: ${args.file}`)
         process.stdout.write(EOL)
         return
       }

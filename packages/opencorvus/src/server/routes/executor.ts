@@ -48,6 +48,7 @@ export const ExecutorRoutes = lazy(() =>
       },
     }),
     async (c) => {
+      // Auto-register is best-effort — discovery continues regardless
       await ExecutorBootstrap.autoRegister(true).catch(() => undefined)
       const found = await ExecutorDiscovery.scan()
       const opencode = protocolInfo("opencode")

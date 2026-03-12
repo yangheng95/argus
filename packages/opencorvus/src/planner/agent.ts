@@ -192,7 +192,10 @@ export namespace HeadlessPlannerAgent {
 
       // Count actual tool calls
       const toolCallCount = result.steps.reduce(
-        (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
+        (sum, s) => {
+          const step = s as { toolCalls?: unknown[] }
+          return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
+        },
         0,
       )
 

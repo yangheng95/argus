@@ -111,10 +111,15 @@ export class ChannelRuntime {
   private server?: { url: string; close(): void }
   /** Buffer assistant text per messageID until message.updated signals completion */
   private textBuffers = new Map<string, string>()
+  private static readonly TEXT_BUF_MAX = 200
   /** Track user message IDs to skip their parts */
   private userMessageIds = new Set<string>()
+  private static readonly USER_MSG_MAX = 500
+  private static readonly USER_MSG_TARGET = 400
   /** Buffer text captured from message.part.updated before we know the message role */
   private pendingPartTexts = new Map<string, string>()
+  private static readonly PENDING_PART_MAX = 200
+  private static readonly PENDING_PART_TARGET = 150
   /** Set to false by stop() to terminate the reconnect loop */
   private running = false
   private stt?: STTPipeline
@@ -128,6 +133,8 @@ export class ChannelRuntime {
   /** Active channel-runtime jobs keyed by sessionID */
   private jobs = new Map<string, Job>()
   private pending = new Map<string, PendingTask>()
+  /** Guard against concurrent releaseSession() calls for the same session */
+  private releasing = new Set<string>()
   private taskBindings = new Map<string, SessionEntry[]>()
   private taskByThread = new Map<string, string>()
   private pendingWatch: ReturnType<typeof setInterval> | null = null
@@ -149,6 +156,13 @@ export class ChannelRuntime {
   register(adapter: ChannelAdapter): this {
     this.adapters.push(adapter)
     return this
+  }
+
+  /** Send a message to a channel adapter with error logging (non-throwing). */
+  private async safeSend(adapter: ChannelAdapter, channel: string, thread: string, message: string): Promise<void> {
+    await adapter.sendMessage(channel, thread, message).catch((err) => {
+      console.warn(`[ChannelRuntime] sendMessage failed (${adapter.platform ?? "unknown"} ${channel}):`, String(err))
+    })
   }
 
   async start(): Promise<void> {
@@ -210,6 +224,8 @@ export class ChannelRuntime {
     this.userMessageIds.clear()
     this.pendingPartTexts.clear()
     this.jobs.clear()
+    this.releasing.clear()
+    this.session.clear()
     for (const adapter of this.adapters) {
       await adapter.stop()
     }
@@ -728,6 +744,7 @@ export class ChannelRuntime {
 
   private async readSharedSessionFile() {
     const file = this.sharedFile()
+    // File may not exist or contain invalid JSON on first startup
     const raw = (await Bun.file(file)
       .json()
       .catch(() => undefined)) as { session_id?: unknown } | undefined
@@ -847,6 +864,10 @@ export class ChannelRuntime {
   }
 
   private releaseSession(sessionId: string) {
+    // Guard: prevent concurrent release for the same session (e.g. session.idle + expirePending)
+    if (this.releasing.has(sessionId)) return
+    this.releasing.add(sessionId)
+
     this.clearPending(sessionId)
     const job = this.jobs.get(sessionId)
 
@@ -869,22 +890,24 @@ export class ChannelRuntime {
             system: this.buildSystemPrompt(job.platform),
           })
           .then((result) => {
+            this.releasing.delete(sessionId)
             if (result.error) {
               console.error("[ChannelRuntime] loop continuation API error:", JSON.stringify(result.error).slice(0, 500))
               this.jobs.delete(sessionId)
               this.session.stop(sessionId)
               const next = this.session.dequeue(sessionId)
-              if (next.item) this.handleMessage(next.item.msg).catch(() => {})
+              if (next.item) this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
             } else {
               this.markPending(sessionId, this.taskId(sessionId))
             }
           })
           .catch((err) => {
+            this.releasing.delete(sessionId)
             console.error("[ChannelRuntime] loop continuation error:", err)
             this.jobs.delete(sessionId)
             this.session.stop(sessionId)
             const next = this.session.dequeue(sessionId)
-            if (next.item) this.handleMessage(next.item.msg).catch(() => {})
+            if (next.item) this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
           })
         return
       }
@@ -893,6 +916,7 @@ export class ChannelRuntime {
         // Stop processing so the next user message is treated as an answer
         job.status = "waiting_user"
         this.session.stop(sessionId)
+        this.releasing.delete(sessionId)
         return
       }
 
@@ -904,6 +928,7 @@ export class ChannelRuntime {
     }
 
     this.session.stop(sessionId)
+    this.releasing.delete(sessionId)
     const next = this.session.dequeue(sessionId)
     if (!next.item) return
     this.handleMessage(next.item.msg).catch((err) => console.error("[ChannelRuntime] dequeue handleMessage error:", err))
@@ -932,7 +957,6 @@ export class ChannelRuntime {
   }
 
   private async expirePending() {
-    if (!this.running) return
     if (this.pending.size === 0) return
     const now = Date.now()
     const timeout = this.pendingTimeout()
@@ -950,7 +974,7 @@ export class ChannelRuntime {
         const msg = status.error ? `Task failed (${item.taskId}): ${status.error}` : `Task failed (${item.taskId}).`
         this.mirrorSessions("system", msg, sessionId, sessions)
         for (const session of sessions) {
-          await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
+          await this.safeSend(session.adapter, session.channel, session.thread, msg)
         }
         continue
       }
@@ -962,7 +986,7 @@ export class ChannelRuntime {
       const msg = `Task timed out after ${sec}s (${item.taskId}). Queue released.`
       this.mirrorSessions("system", msg, sessionId, sessions)
       for (const session of sessions) {
-        await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
+        await this.safeSend(session.adapter, session.channel, session.thread, msg)
       }
     }
   }
@@ -1112,7 +1136,7 @@ export class ChannelRuntime {
       if (sessions.length === 0) return
       const msg = `Evaluation ${info.verdict}: ${info.summary}`
       for (const session of sessions) {
-        await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
+        await this.safeSend(session.adapter, session.channel, session.thread, msg)
       }
       return
     }
@@ -1134,8 +1158,9 @@ export class ChannelRuntime {
     }
 
     // task.report: agent signals loop status via the task_report tool
-    if ((event as any).type === "task.report") {
-      const report = (event as any).properties as TaskReportProperties
+    const eventObj = event as { type?: string; properties?: unknown }
+    if (eventObj.type === "task.report") {
+      const report = eventObj.properties as TaskReportProperties
       const job = this.jobs.get(report.sessionID)
       if (!job) return
 
@@ -1146,20 +1171,20 @@ export class ChannelRuntime {
 
       if (report.status === "progress") {
         const msg = `[Turn ${job.turn}] ${report.summary}`
-        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        await this.safeSend(job.adapter, job.channel, job.thread, msg)
         this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
       } else if (report.status === "need_input") {
         const msg = `? ${report.question ?? report.summary}`
-        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        await this.safeSend(job.adapter, job.channel, job.thread, msg)
         this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
       } else if (report.status === "done") {
         const artifactsLine = report.artifacts?.length ? `\nFiles: ${report.artifacts.join(", ")}` : ""
         const msg = `Done (${job.turn + 1} turns): ${report.summary}${artifactsLine}`
-        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        await this.safeSend(job.adapter, job.channel, job.thread, msg)
         this.mirrorSessions("assistant", msg, report.sessionID, this.findSessions(report.sessionID))
       } else if (report.status === "failed") {
         const msg = `Failed: ${report.error ?? report.summary}`
-        await job.adapter.sendMessage(job.channel, job.thread, msg).catch(() => {})
+        await this.safeSend(job.adapter, job.channel, job.thread, msg)
         this.mirrorSessions("system", msg, report.sessionID, this.findSessions(report.sessionID))
       }
       return
@@ -1183,9 +1208,7 @@ export class ChannelRuntime {
           sessions,
         )
         for (const session of sessions) {
-          await session.adapter
-            .sendMessage(session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
-            .catch(() => {})
+          await this.safeSend(session.adapter, session.channel, session.thread, `Failed to reply permission request: ${asked.permission}`)
         }
         return
       }
@@ -1197,13 +1220,12 @@ export class ChannelRuntime {
       )
       for (const session of sessions) {
         const patterns = asked.patterns.length > 0 ? asked.patterns.join(", ") : "*"
-        await session.adapter
-          .sendMessage(
-            session.channel,
-            session.thread,
-            `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
-          )
-          .catch(() => {})
+        await this.safeSend(
+          session.adapter,
+          session.channel,
+          session.thread,
+          `Auto-replied permission (${reply}): ${asked.permission} [${patterns}]`,
+        )
       }
       console.log(`[ChannelRuntime] Auto-replied permission ${asked.id} with ${reply}`)
       return
@@ -1238,7 +1260,7 @@ export class ChannelRuntime {
       })()
       this.mirrorSessions("system", msg, sessionId, sessions)
       for (const session of sessions) {
-        await session.adapter.sendMessage(session.channel, session.thread, msg).catch(() => {})
+        await this.safeSend(session.adapter, session.channel, session.thread, msg)
       }
       return
     }
@@ -1252,6 +1274,15 @@ export class ChannelRuntime {
         // Track on first event only; message.updated fires twice for the same user message
         const isNew = !this.userMessageIds.has(info.id)
         this.userMessageIds.add(info.id)
+        // Prevent unbounded growth — evict oldest entries when limit reached
+        if (this.userMessageIds.size > ChannelRuntime.USER_MSG_MAX) {
+          const iter = this.userMessageIds.values()
+          const evictCount = this.userMessageIds.size - ChannelRuntime.USER_MSG_TARGET
+          for (let i = 0; i < evictCount; i++) {
+            const val = iter.next().value
+            if (val !== undefined) this.userMessageIds.delete(val)
+          }
+        }
 
         // In shared mode, mirror the user's overlay prompt to Slack.
         // message.part.updated arrives BEFORE this event and pre-captured the text in pendingPartTexts.
@@ -1264,7 +1295,7 @@ export class ChannelRuntime {
             let sessions = this.findSessions(info.sessionID)
             if (sessions.length === 0) sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
             for (const session of sessions) {
-              await session.adapter.sendMessage(session.channel, session.thread, `> ${userText.trim()}`).catch(() => {})
+              await this.safeSend(session.adapter, session.channel, session.thread, `> ${userText.trim()}`)
             }
           }
         }
@@ -1273,14 +1304,18 @@ export class ChannelRuntime {
 
       // Flush buffered text when assistant message (one agentic step) completes
       if (info.role === "assistant" && info.time.completed) {
+        const text = this.textBuffers.get(info.id)
+        this.textBuffers.delete(info.id)
+        if (info.parentID) {
+          this.userMessageIds.delete(info.parentID)
+          this.pendingPartTexts.delete(info.parentID)
+          this.textBuffers.delete(info.parentID)
+        }
         let sessions = this.findSessions(info.sessionID)
         if (sessions.length === 0 && this.sharedMode() && info.sessionID === this.sharedSessionId) {
           sessions = await this.bindOverlayMirrorIfNeeded(info.sessionID)
         }
         if (sessions.length === 0) return
-
-        const text = this.textBuffers.get(info.id)
-        this.textBuffers.delete(info.id)
 
         if (text) {
           const polished = this.polish(text)
@@ -1288,7 +1323,7 @@ export class ChannelRuntime {
             for (const part of this.split(polished, BOT_MESSAGE_LIMIT)) {
               this.mirrorSessions("assistant", part, info.sessionID, sessions)
               for (const session of sessions) {
-                await session.adapter.sendMessage(session.channel, session.thread, part).catch(() => {})
+                await this.safeSend(session.adapter, session.channel, session.thread, part)
               }
             }
           }
@@ -1296,10 +1331,11 @@ export class ChannelRuntime {
         }
 
         if (info.error) {
-          const errMsg = "error" in info.error ? (info.error as any).error : JSON.stringify(info.error)
+          const errObj = info.error as Record<string, unknown>
+          const errMsg = typeof errObj?.error === "string" ? errObj.error : JSON.stringify(info.error)
           this.mirrorSessions("system", `Error: ${errMsg}`, info.sessionID, sessions)
           for (const session of sessions) {
-            await session.adapter.sendMessage(session.channel, session.thread, `Error: ${errMsg}`).catch(() => {})
+            await this.safeSend(session.adapter, session.channel, session.thread, `Error: ${errMsg}`)
           }
         }
       }
@@ -1314,6 +1350,15 @@ export class ChannelRuntime {
       // the text here and consume it when message.updated confirms role=user.
       if (this.sharedMode() && part.sessionID === this.sharedSessionId && part.type === "text" && part.text?.trim()) {
         this.pendingPartTexts.set(part.messageID, part.text)
+        // Prevent unbounded growth — evict oldest entries when limit reached
+        if (this.pendingPartTexts.size > ChannelRuntime.PENDING_PART_MAX) {
+          const iter = this.pendingPartTexts.keys()
+          const evictCount = this.pendingPartTexts.size - ChannelRuntime.PENDING_PART_TARGET
+          for (let i = 0; i < evictCount; i++) {
+            const key = iter.next().value
+            if (key !== undefined) this.pendingPartTexts.delete(key)
+          }
+        }
       }
 
       // Skip parts belonging to user messages
@@ -1328,6 +1373,12 @@ export class ChannelRuntime {
       // Buffer text parts keyed by messageID (flushed on message.updated)
       if (part.type === "text") {
         this.textBuffers.set(part.messageID, part.text)
+        // Safety cap — entries are normally flushed on message.updated but may leak on abort
+        if (this.textBuffers.size > ChannelRuntime.TEXT_BUF_MAX) {
+          const iter = this.textBuffers.keys()
+          const val = iter.next().value
+          if (val !== undefined) this.textBuffers.delete(val)
+        }
       }
 
       // Post tool progress for key tools so remote channel users can see what happened.
@@ -1364,7 +1415,7 @@ export class ChannelRuntime {
           if (statusMsg) {
             this.mirrorSessions("assistant", statusMsg, part.sessionID, sessions)
             for (const session of sessions) {
-              await session.adapter.sendMessage(session.channel, session.thread, statusMsg).catch(() => {})
+              await this.safeSend(session.adapter, session.channel, session.thread, statusMsg)
             }
           }
         }
@@ -1374,9 +1425,7 @@ export class ChannelRuntime {
           const err = String(part.state.error ?? "Unknown tool error")
           this.mirrorSessions("system", `${statusMsg} failed: ${err}`, part.sessionID, sessions)
           for (const session of sessions) {
-            await session.adapter
-              .sendMessage(session.channel, session.thread, `${statusMsg} failed: ${err}`)
-              .catch(() => {})
+            await this.safeSend(session.adapter, session.channel, session.thread, `${statusMsg} failed: ${err}`)
           }
         }
       }

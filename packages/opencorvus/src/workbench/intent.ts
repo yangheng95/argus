@@ -229,6 +229,7 @@ Rules:
 }
 
 async function workbenchModel() {
+  // No model configured or model lookup fails → workbench operates without LLM
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) return undefined
   return Provider.getModel(def.providerID, def.modelID).catch(() => undefined)

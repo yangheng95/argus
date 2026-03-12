@@ -48,7 +48,7 @@ function mockSpec() {
 }
 
 test(
-  "task fails when evaluator analysis rejects a blocking goal after automated checks pass",
+  "task fails when evaluator analysis rejects a blocking goal after automated checks pass and replanning is disabled",
   async () => {
     await using tmp = await tmpdir({ git: true })
     mockSpec()
@@ -136,6 +136,9 @@ test(
           body: JSON.stringify({
             project: Instance.project.id,
             request: "complete task with rejected evaluator analysis",
+            budget: {
+              maxReplans: 0,
+            },
             checks: {
               verify_cmd: [`"${process.execPath}" -e "process.exit(0)"`],
             },

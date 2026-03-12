@@ -181,6 +181,7 @@ export namespace MCP {
             return
           }
 
+          // MCP server connection failure is non-fatal — other servers continue
           const result = await create(key, mcp).catch(() => undefined)
           if (!result) return
 

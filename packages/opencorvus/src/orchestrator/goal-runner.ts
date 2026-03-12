@@ -4,6 +4,7 @@ import { Global } from "@/global"
 import { Env } from "@/env"
 import { git } from "@/util/git"
 import { Filesystem } from "@/util/filesystem"
+import { Log } from "@/util/log"
 import { inferFamily, selectorList } from "@/check/policy"
 import { EvaluatorService } from "@/evaluator/service"
 import { Instance } from "@/project/instance"
@@ -14,7 +15,9 @@ import { type EvaluationOutput } from "@/evaluator/shared"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
 import z from "zod"
-import { type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
+import { listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
+
+const log = Log.create({ service: "goal-runner" })
 
 function dict(input: unknown) {
   return input && typeof input === "object" && !Array.isArray(input)
@@ -155,7 +158,9 @@ export async function createGoalWorkspace(input: {
     const detail = [created.stderr.toString().trim(), created.stdout.toString().trim()].filter(Boolean).join("\n")
     throw new Error(detail || `Failed to create goal workspace for ${input.goal.id}`)
   }
-  await Project.addSandbox(Instance.project.id, directory).catch(() => undefined)
+  await Project.addSandbox(Instance.project.id, directory).catch((err) => {
+    log.warn("addSandbox failed for goal workspace", { directory, error: String(err) })
+  })
   await Instance.provide({
     directory,
     fn: async () => {
@@ -175,7 +180,9 @@ export async function cleanupGoalWorkspace(directory?: string) {
   if (!Filesystem.contains(root, directory)) return
   const projectID = Instance.project.id
   if (!(await Filesystem.exists(directory))) {
-    await Project.removeSandbox(projectID, directory).catch(() => undefined)
+    await Project.removeSandbox(projectID, directory).catch((err) => {
+      log.warn("removeSandbox failed for missing directory", { directory, error: String(err) })
+    })
     return
   }
   const drop = () =>
@@ -184,17 +191,46 @@ export async function cleanupGoalWorkspace(directory?: string) {
       force: true,
       maxRetries: 50,
       retryDelay: 100,
-    }).catch(() => undefined)
+    }).catch((err) => {
+      log.warn("force rm failed during goal workspace cleanup", { directory, error: String(err) })
+    })
   await Instance.provide({
     directory,
     fn: () => Instance.dispose(),
-  }).catch(() => undefined)
+  }).catch((err) => {
+    log.warn("Instance.dispose failed during goal workspace cleanup", { directory, error: String(err) })
+  })
   if (Instance.project.vcs !== "git") {
     await drop()
   } else {
     await Worktree.remove({ directory }).catch(drop)
   }
-  await Project.removeSandbox(projectID, directory).catch(() => undefined)
+  await Project.removeSandbox(projectID, directory).catch((err) => {
+    log.warn("removeSandbox failed during goal workspace cleanup", { directory, error: String(err) })
+  })
+}
+
+export async function cleanupStaleGoalWorkspaces(taskID: string) {
+  const root = path.join(Global.Path.data, "goal-workspace", Instance.project.id, taskID)
+  const exists = await fs.stat(root).then(() => true, () => false)
+  if (!exists) return
+  const activeGoalRuns = listGoalRunsByTask(taskID)
+  const activeDirs = new Set(
+    activeGoalRuns
+      .filter((gr) => gr.status === "running" || gr.status === "accepted" || gr.status === "queued")
+      .map((gr) => gr.workspace_dir)
+      .filter(Boolean),
+  )
+  const entries = await fs.readdir(root).catch((err) => {
+    log.warn("failed to read goal workspace directory for cleanup", { root, error: String(err) })
+    return [] as string[]
+  })
+  for (const entry of entries) {
+    const dir = path.join(root, entry)
+    if (activeDirs.has(dir)) continue
+    log.info("cleaning up stale goal workspace", { directory: dir, taskID })
+    await cleanupGoalWorkspace(dir)
+  }
 }
 
 export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string) {
@@ -252,7 +288,9 @@ export async function applyGoalDelivery(input: {
   for (const diff of input.delivery.diffs) {
     const file = path.join(input.directory, diff.file)
     if (diff.status === "deleted") {
-      await fs.rm(file, { force: true }).catch(() => undefined)
+      await fs.rm(file, { force: true }).catch((err) => {
+        log.warn("failed to delete file during goal delivery apply", { file, error: String(err) })
+      })
       continue
     }
     await Filesystem.write(file, diff.after ?? "")
@@ -274,6 +312,7 @@ export async function evaluateGoal(input: {
   const result = await EvaluatorService.evaluate(
     {
       taskID: input.task.id,
+      activeSpecVersionID: input.task.active_spec_version_id ?? undefined,
       request: `${input.task.request}\n\nFocused goal:\n${input.goal.description}\n${input.goal.criteria}`,
       metadata: {
         ...(input.task.metadata ?? {}),

@@ -33,7 +33,8 @@ export class SlackGateway {
     this.botUserId = auth.user_id
     this.subscribeEvents()
     this.app.message(async ({ message }) => {
-      await this.handleMessage(message as any).catch((error) => {
+      // Slack bolt message event is a complex union; extract the fields we need
+      await this.handleMessage(message as { subtype?: string; user?: string; text?: string; ts: string; thread_ts?: string; channel: string }).catch((error) => {
         log.error("slack message handler failed", { error })
       })
     })

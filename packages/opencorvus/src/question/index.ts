@@ -97,7 +97,9 @@ export namespace Question {
 
   const QUESTION_MIN_TIMEOUT_MS = 1000
   const QUESTION_AUTO_REJECT_MS = Math.max(
-    parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS || "10000", 10),
+    Number.isFinite(parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS ?? "", 10))
+      ? parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS!, 10)
+      : 10000,
     QUESTION_MIN_TIMEOUT_MS,
   )
 

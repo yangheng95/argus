@@ -342,6 +342,8 @@ export namespace SessionLoop {
       SessionSummary.summarize({
         sessionID: input.sessionID,
         messageID: input.lastUser.id,
+      }).catch(() => {
+        // Non-critical: session summary is best-effort background work
       })
     }
 
@@ -501,12 +503,16 @@ export namespace SessionLoop {
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
     if (!abort) {
       return new Promise<MessageV2.WithParts>((resolve, reject) => {
-        state()[sessionID].callbacks.push({ resolve, reject })
+        const s = state()[sessionID]
+        if (!s) return reject(new Error(`Session ${sessionID} not found`))
+        s.callbacks.push({ resolve, reject })
       })
     }
 
     const firstResult = new Promise<MessageV2.WithParts>((resolve, reject) => {
-      state()[sessionID].callbacks.push({ resolve, reject })
+      const s = state()[sessionID]
+      if (!s) return reject(new Error(`Session ${sessionID} not found after start`))
+      s.callbacks.push({ resolve, reject })
     })
 
     void (async () => {
@@ -657,7 +663,9 @@ export namespace SessionLoop {
             return
           }
         }
-      })()
+      })().catch(() => {
+        settle()
+      })
     })
   }
 
@@ -715,6 +723,7 @@ export namespace SessionLoop {
     )) {
       if (input.tools !== undefined && !input.tools[item.id]) continue
       const schema = ProviderTransform.schema(input.model, z.toJSONSchema(item.parameters))
+      // AI SDK tool() overload doesn't accept `id` field and can't resolve dynamic schema type
       tools[item.id] = tool({
         id: item.id as any,
         description: item.description,
@@ -858,6 +867,7 @@ export namespace SessionLoop {
   }): AITool {
     const { $schema, ...toolSchema } = input.schema
 
+    // AI SDK tool() overload doesn't accept `id` field and can't resolve dynamic schema type
     return tool({
       id: "StructuredOutput" as any,
       description: STRUCTURED_OUTPUT_DESCRIPTION,

@@ -7,6 +7,9 @@ import fs from "fs/promises"
 import path from "path"
 import z from "zod"
 import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "./shared"
+import { Log } from "@/util/log"
+
+const discoveryLog = Log.create({ service: "evaluator-discovery" })
 
 export async function resolveConfig(metadata?: Record<string, unknown>) {
   const configured = CheckConfig.safeParse(metadata?.checks)
@@ -27,9 +30,10 @@ export function resolvedChecks(
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
 ) {
   const next = {
-    ...(Array.isArray(config.build) ? { build: config.build } : discovered.build.length > 0 ? { build: discovered.build.map((item) => item.command) } : {}),
+    // build and lint only run when explicitly configured — not auto-discovered
+    ...(Array.isArray(config.build) ? { build: config.build } : {}),
     ...(Array.isArray(config.test) ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
-    ...(Array.isArray(config.lint) ? { lint: config.lint } : discovered.lint.length > 0 ? { lint: discovered.lint.map((item) => item.command) } : {}),
+    ...(Array.isArray(config.lint) ? { lint: config.lint } : {}),
     ...(Array.isArray(config.verify_cmd) ? { verify_cmd: config.verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
     ...(config.artifact ? { artifact: config.artifact } : {}),
@@ -43,22 +47,15 @@ export function resolvedChecks(
     ...(config.custom ? { custom: config.custom } : {}),
     ...(config.timeout_ms ? { timeout_ms: config.timeout_ms } : {}),
   } as Record<string, unknown>
+  // Named checks: only include explicitly configured ones; discovered ones are opt-in
   const named = {
-    ...Object.fromEntries(
-      Object.entries(discovered.named).map(([key, value]) => [
-        key,
-        {
-          label: value.label ?? checkLabel(key),
-          family: value.family,
-          commands: value.commands.map((item) => item.command),
-          enabled: true,
-        },
-      ]),
-    ),
     ...(config.named ?? {}),
   }
-  for (const key of Object.keys(discovered.named)) {
-    if (named[key]) named[key] = { ...named[key], enabled: true }
+  // Auto-discovered named checks only added if user explicitly enabled them
+  for (const [key, value] of Object.entries(discovered.named)) {
+    if (named[key]?.enabled !== false && named[key]) {
+      named[key] = { ...named[key], label: named[key].label ?? value.label ?? checkLabel(key), family: named[key].family ?? value.family }
+    }
   }
   if (Object.keys(named).length > 0) next.named = named
   return CheckConfig.parse(next)
@@ -75,7 +72,10 @@ function requiredSpecCheck(current: z.infer<typeof CheckConfig>["spec_check"]) {
 export async function discoverChecks(changedFiles?: unknown) {
   const cwd = await discoverPackageRoot(changedFiles)
   const file = Bun.file(path.join(cwd, "package.json"))
-  const json = await file.json().catch(() => undefined) as { scripts?: Record<string, string> } | undefined
+  const json = await file.json().catch((err) => {
+    discoveryLog.warn("failed to parse package.json for check discovery", { cwd, error: String(err) })
+    return undefined
+  }) as { scripts?: Record<string, string> } | undefined
   const scripts = json?.scripts ?? {}
   const run = (name: string): EvaluatorCommand[] => [{ command: `bun run ${name}`, cwd }]
   const files = Array.isArray(changedFiles)
@@ -218,7 +218,10 @@ async function discoverPythonChecks(cwd: string, files: string[]) {
     exists(path.join(cwd, "ruff.toml")),
     exists(path.join(cwd, ".ruff.toml")),
   ])
-  const pyproject = await Bun.file(path.join(cwd, "pyproject.toml")).text().catch(() => "")
+  const pyproject = await Bun.file(path.join(cwd, "pyproject.toml")).text().catch((err) => {
+    discoveryLog.warn("failed to read pyproject.toml", { cwd, error: String(err) })
+    return ""
+  })
   const hasPythonFiles = files.some((item) => item.endsWith(".py")) || (await hasPythonTopLevel(cwd))
   const isPythonProject = hasPythonFiles || markers.some(Boolean)
   if (!isPythonProject) return {}
@@ -269,7 +272,10 @@ async function exists(filepath: string) {
 }
 
 async function hasPythonTopLevel(cwd: string) {
-  const entries = await fs.readdir(cwd).catch(() => [])
+  const entries = await fs.readdir(cwd).catch((err) => {
+    discoveryLog.warn("failed to read directory for Python detection", { cwd, error: String(err) })
+    return [] as string[]
+  })
   return entries.some((item) => item.endsWith(".py"))
 }
 
@@ -306,7 +312,10 @@ async function classifyTests(files: string[], cwd: string) {
   const items = await Promise.all(
     files.map(async (file) => ({
       file,
-      text: await Bun.file(path.join(cwd, file)).text().catch(() => ""),
+      text: await Bun.file(path.join(cwd, file)).text().catch((err) => {
+        discoveryLog.warn("failed to read test file for classification", { file, error: String(err) })
+        return ""
+      }),
     })),
   )
   return {
@@ -337,8 +346,9 @@ async function discoverPackageRoot(changedFiles?: unknown) {
   }
 
   if (candidates.size === 0) return root
-  return [...candidates.entries()]
-    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]![0]
+  const sorted = [...candidates.entries()]
+    .sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)
+  return sorted[0]?.[0] ?? root
 }
 
 function quote(input: string) {

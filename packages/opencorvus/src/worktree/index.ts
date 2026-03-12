@@ -244,6 +244,7 @@ export namespace Worktree {
         const target = await canonical(path.resolve(root, entry))
         if (target === base) return
         if (!target.startsWith(`${base}${path.sep}`)) return
+        // Best-effort cleanup — directory may already be removed by git
         await fs.rm(target, { recursive: true, force: true }).catch(() => undefined)
       }),
     )
@@ -292,6 +293,7 @@ export namespace Worktree {
       base.slice(index + 1)
     const probe = path.join(parent, toggled)
 
+    // Stat failure means path doesn't exist → filesystem is case-sensitive
     const insensitive = await Promise.all([
       fs.stat(dir).catch(() => undefined),
       fs.stat(probe).catch(() => undefined),
@@ -389,6 +391,7 @@ export namespace Worktree {
       throw new CreateFailedError({ message: errorText(created) || "Failed to create git worktree" })
     }
 
+    // Best-effort sandbox registration — worktree is usable even if this fails
     await Project.addSandbox(Instance.project.id, info.directory).catch(() => undefined)
 
     const projectID = Instance.project.id

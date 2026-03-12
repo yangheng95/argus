@@ -34,7 +34,7 @@ async function handlePluginAuth(plugin: { auth: PluginAuth }, provider: string):
       ],
     })
     if (prompts.isCancel(method)) throw new UI.CancelledError()
-    index = parseInt(method)
+    index = parseInt(method, 10)
   }
   const method = plugin.auth.methods[index]
 
@@ -264,7 +264,7 @@ export const AuthLoginCommand = cmd({
         UI.empty()
         prompts.intro("Add credential")
         if (args.url) {
-          const wellknown = await fetch(`${args.url}/.well-known/opencorvus`).then((x) => x.json() as any)
+          const wellknown = (await fetch(`${args.url}/.well-known/opencorvus`).then((x) => x.json())) as { auth: { command: string[]; env: string } }
           prompts.log.info(`Running \`${wellknown.auth.command.join(" ")}\``)
           const proc = Process.spawn(wellknown.auth.command, {
             stdout: "pipe",
@@ -289,7 +289,9 @@ export const AuthLoginCommand = cmd({
           prompts.outro("Done")
           return
         }
-        await ModelsDev.refresh().catch(() => {})
+        await ModelsDev.refresh().catch((err) => {
+          console.warn("[auth] models.dev refresh failed:", String(err))
+        })
 
         const config = await Config.get()
 

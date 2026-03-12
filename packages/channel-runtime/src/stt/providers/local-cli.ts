@@ -68,18 +68,24 @@ export class LocalCLIProvider implements STTProvider {
         durationMs: Math.round(performance.now() - start),
       }
     } finally {
-      // Cleanup temp files
+      // Cleanup temp files — errors are non-fatal; the OS will reclaim tmpdir contents
       try {
         unlinkSync(mediaPath)
         const txtPath = join(outputDir, "input.txt")
         try {
           unlinkSync(txtPath)
-        } catch {}
+        } catch {
+          // txt file may not exist if the CLI failed before producing output
+        }
         // Remove the temp directory (may fail if other files exist, that's ok)
         try {
           Bun.spawn(["rm", "-rf", outputDir])
-        } catch {}
-      } catch {}
+        } catch {
+          // spawn can throw if rm is unavailable (e.g. Windows); directory will be cleaned by OS
+        }
+      } catch {
+        // unlinkSync(mediaPath) failed — file may already be removed or inaccessible
+      }
     }
   }
 }

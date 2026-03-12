@@ -10,6 +10,8 @@ export async function parseSSE(
   let retry = 1000
 
   const abort = () => {
+    // Best-effort cancel on abort — the stream may already be closed or
+    // errored, so we swallow any rejection to avoid unhandled-promise noise.
     void reader.cancel().catch(() => undefined)
   }
 

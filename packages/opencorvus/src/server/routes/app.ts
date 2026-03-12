@@ -10,6 +10,7 @@ import { Format } from "@/format"
 import { Log } from "@/util/log"
 import { Process } from "@/util/process"
 import { Hono } from "hono"
+import { HTTPException } from "hono/http-exception"
 import { describeRoute, openAPIRouteHandler, resolver, validator } from "hono-openapi"
 import { streamSSE } from "hono/streaming"
 import z from "zod"
@@ -215,8 +216,7 @@ export function AppRoutes(root: Hono) {
           timeout: 1_000,
         })
         if (result.code !== 0) {
-          const detail = result.stderr.toString().trim() || `Failed to open path: ${target}`
-          throw new Error(detail)
+          throw new HTTPException(500, { message: "Failed to open path" })
         }
         return c.json({ opened: true })
       },

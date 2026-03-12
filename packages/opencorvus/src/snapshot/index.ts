@@ -159,6 +159,9 @@ export namespace Snapshot {
             })
           } else {
             log.info("file did not exist in snapshot, deleting", { file })
+            // Best-effort deletion: the file may already be gone or locked.
+            // Failure is non-critical since the revert goal is to match the
+            // snapshot state, and a missing file satisfies that.
             await fs.unlink(file).catch(() => {})
           }
         }
@@ -228,7 +231,9 @@ export namespace Snapshot {
       .nothrow()
       .lines()) {
       if (!line) continue
-      const [additions, deletions, file] = line.split("\t")
+      const parts = line.split("\t")
+      if (parts.length < 3) continue
+      const [additions, deletions, file] = parts
       const isBinaryFile = additions === "-" && deletions === "-"
       const before = isBinaryFile
         ? ""
@@ -242,8 +247,8 @@ export namespace Snapshot {
             .quiet()
             .nothrow()
             .text()
-      const added = isBinaryFile ? 0 : parseInt(additions)
-      const deleted = isBinaryFile ? 0 : parseInt(deletions)
+      const added = isBinaryFile ? 0 : parseInt(additions, 10)
+      const deleted = isBinaryFile ? 0 : parseInt(deletions, 10)
       result.push({
         file,
         before,

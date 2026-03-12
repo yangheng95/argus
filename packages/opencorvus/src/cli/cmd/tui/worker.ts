@@ -67,7 +67,7 @@ const startEventStream = (directory: string) => {
             signal,
           },
         ),
-      ).catch(() => undefined)
+      ).catch(() => undefined) // Subscribe failure triggers reconnect below
 
       if (!events) {
         await Bun.sleep(250)
@@ -105,7 +105,9 @@ export const rpc = {
       directory: input.directory,
       init: InstanceBootstrap,
       fn: async () => {
-        await upgrade().catch(() => {})
+        await upgrade().catch((err) => {
+          console.warn("[worker] upgrade check failed:", String(err))
+        })
       },
     })
   },
@@ -116,10 +118,11 @@ export const rpc = {
   async shutdown() {
     Log.Default.info("worker shutting down")
     if (eventStream.abort) eventStream.abort.abort()
+    let shutdownTimer: ReturnType<typeof setTimeout>
     await Promise.race([
-      Instance.disposeAll(),
+      Instance.disposeAll().finally(() => clearTimeout(shutdownTimer)),
       new Promise((resolve) => {
-        setTimeout(resolve, 5000)
+        shutdownTimer = setTimeout(resolve, 5000)
       }),
     ])
     if (server) server.stop(true)

@@ -79,9 +79,12 @@ function dataUrlToBuffer(url: string): Buffer | null {
           ? process.env.LOCALAPPDATA || path.join(require("os").homedir(), "AppData", "Local")
           : path.join(require("os").homedir(), ".local", "share"))
       const rel = url.slice("opencorvus://screenshot/".length)
+      // Guard against path traversal (e.g. "../../etc/passwd")
+      if (rel.includes("..")) return null
       const filepath = path.join(dataDir, "opencorvus", "screenshots", rel)
       return fs.readFileSync(filepath)
     } catch {
+      // screenshot file missing or unreadable — return null so callers skip this attachment
       return null
     }
   }

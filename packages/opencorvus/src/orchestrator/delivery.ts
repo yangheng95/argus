@@ -200,11 +200,12 @@ export namespace DeliveryService {
 
     for (const adapter of registry) {
       try {
+        let timer: ReturnType<typeof setTimeout>
         const result = await Promise.race([
-          adapter.execute(input),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error(`adapter ${adapter.id} timeout (${ADAPTER_TIMEOUT_MS}ms)`)), ADAPTER_TIMEOUT_MS),
-          ),
+          adapter.execute(input).finally(() => clearTimeout(timer)),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error(`adapter ${adapter.id} timeout (${ADAPTER_TIMEOUT_MS}ms)`)), ADAPTER_TIMEOUT_MS)
+          }),
         ])
         artifacts.push(...result.artifacts)
         publish.adapters.push({

@@ -1,7 +1,10 @@
 import { Identifier } from "@/id/id"
+import { Log } from "@/util/log"
 import { Snapshot } from "@/snapshot"
 import { PlanningCapabilities, type CodingEventInfo, type CodingProvider, type CodingToolInfo, type ExecutorStatusInfo } from "./compat"
 import type { ExecutorAdapter } from "./compat"
+
+const log = Log.create({ service: "executor.managed" })
 
 type Status = Exclude<ExecutorStatusInfo, "blocked">
 type Notify = {
@@ -66,7 +69,15 @@ export const ManagedCodingExecutor = {
         },
       })
 
-      void consume(stream, state, latest)
+      void consume(stream, state, latest).catch((err) => {
+        const message = err instanceof Error ? err.message : String(err)
+        if (state.status === "running" || state.status === "retrying") {
+          state.status = "failed"
+          state.error = message
+        } else {
+          log.warn("executor stream error after terminal state", { status: state.status, error: message })
+        }
+      })
     }
 
     return {
@@ -82,6 +93,11 @@ export const ManagedCodingExecutor = {
       },
       async submit(input) {
         const id = Identifier.ascending("task")
+        // Snapshot.track() is best-effort: it captures a git tree hash so delivery()
+        // can later compute file diffs.  Failures are safe to ignore because delivery()
+        // guards with `state.startHash && currentHash` and returns an empty diff array
+        // when either hash is missing (e.g. non-git project, snapshots disabled, or
+        // git index locked by a concurrent process).
         const startHash = await Snapshot.track().catch(() => undefined)
         const state: State = {
           id,
@@ -140,6 +156,9 @@ export const ManagedCodingExecutor = {
       async delivery(input) {
         const state = pick(tasks, latest, { sessionID: input.sessionID })
         if (!state) return { summary: "", diffs: [] }
+        // Best-effort: capture current working tree so we can diff against startHash.
+        // If this fails the guard below produces an empty diff array, which is acceptable
+        // because the text summary is still returned and diffs are supplementary.
         const currentHash = await Snapshot.track().catch(() => undefined)
         const diffs = state.startHash && currentHash
           ? await Snapshot.diffFull(state.startHash, currentHash).catch(() => [])
@@ -297,6 +316,10 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
   if (!state.abort.signal.aborted && (state.status === "running" || state.status === "retrying" || state.status === "queued")) {
     state.status = "completed"
   }
+
+  // Free event buffers after stream finishes to prevent unbounded memory growth.
+  // Status/delivery queries still work since they read state.output/state.status, not events.
+  state.events.length = 0
 }
 
 function pick(tasks: Map<string, State>, latest: Map<string, string>, input: { sessionID?: string; queueTaskID?: string }) {

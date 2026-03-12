@@ -9,13 +9,18 @@ import { Identifier } from "@/id/id"
 import { OrchestratorRuntime } from "./runtime"
 
 export namespace OrchestratorInteraction {
-  export function subscribe(hooks: RuntimeHooks) {
+  export function subscribe(hooks: RuntimeHooks): () => void {
     const uses = () => hooks
-    Bus.subscribe(PermissionNext.Event.Asked, ({ properties }) => upsertPermission(properties, uses()))
-    Bus.subscribe(PermissionNext.Event.Replied, ({ properties }) => resolvePermission(properties, uses()))
-    Bus.subscribe(Question.Event.Asked, ({ properties }) => upsertQuestion(properties, uses()))
-    Bus.subscribe(Question.Event.Replied, ({ properties }) => resolveQuestion(properties, uses()))
-    Bus.subscribe(Question.Event.Rejected, ({ properties }) => rejectQuestion(properties, uses()))
+    const unsubs = [
+      Bus.subscribe(PermissionNext.Event.Asked, ({ properties }) => upsertPermission(properties, uses())),
+      Bus.subscribe(PermissionNext.Event.Replied, ({ properties }) => resolvePermission(properties, uses())),
+      Bus.subscribe(Question.Event.Asked, ({ properties }) => upsertQuestion(properties, uses())),
+      Bus.subscribe(Question.Event.Replied, ({ properties }) => resolveQuestion(properties, uses())),
+      Bus.subscribe(Question.Event.Rejected, ({ properties }) => rejectQuestion(properties, uses())),
+    ]
+    return () => {
+      for (const unsub of unsubs) unsub()
+    }
   }
 }
 

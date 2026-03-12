@@ -200,7 +200,12 @@ export namespace Installation {
       const formula = await getBrewFormula()
       if (formula.includes("/")) {
         const infoJson = await $`brew info --json=v2 ${formula}`.quiet().text()
-        const info = JSON.parse(infoJson)
+        let info: Record<string, unknown>
+        try {
+          info = JSON.parse(infoJson)
+        } catch {
+          throw new Error(`Failed to parse brew info JSON for: ${formula}`)
+        }
         const version = info.formulae?.[0]?.versions?.stable
         if (!version) throw new Error(`Could not detect version for tap formula: ${formula}`)
         return version

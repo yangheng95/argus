@@ -58,6 +58,7 @@ export class SignalAdapter implements ChannelAdapter {
 
   async stop(): Promise<void> {
     this.running = false
+    // Poll loop may reject during shutdown — expected
     if (this.loop) await this.loop.catch(() => undefined)
   }
 
@@ -112,7 +113,7 @@ export class SignalAdapter implements ChannelAdapter {
     while (this.running) {
       const res = await fetch(`${this.service}/v1/receive/${encodeURIComponent(this.account)}?timeout=5`, {
         signal: AbortSignal.timeout(20_000),
-      }).catch(() => undefined)
+      }).catch(() => undefined) // Network failure → retry after sleep below
       if (!res || !res.ok) {
         await Bun.sleep(1000)
         continue

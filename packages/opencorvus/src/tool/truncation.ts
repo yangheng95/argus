@@ -38,6 +38,8 @@ export namespace Truncate {
     const entries = await Glob.scan("tool_*", { cwd: DIR, include: "file" }).catch(() => [] as string[])
     for (const entry of entries) {
       if (Identifier.timestamp(entry) >= cutoff) continue
+      // Best-effort cleanup of expired tool output files.
+      // Failure is non-critical; the file will be retried on the next cycle.
       await fs.unlink(path.join(DIR, entry)).catch(() => {})
     }
   }

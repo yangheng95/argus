@@ -77,9 +77,9 @@ async function getTerminalBackgroundColor(): Promise<"dark" | "light"> {
           b = parseInt(color.substring(5, 7), 16)
         } else if (color.startsWith("rgb(")) {
           const parts = color.substring(4, color.length - 1).split(",")
-          r = parseInt(parts[0])
-          g = parseInt(parts[1])
-          b = parseInt(parts[2])
+          r = parseInt(parts[0], 10)
+          g = parseInt(parts[1], 10)
+          b = parseInt(parts[2], 10)
         }
 
         // Calculate luminance using relative luminance formula

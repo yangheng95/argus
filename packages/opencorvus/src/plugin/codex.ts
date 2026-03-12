@@ -545,7 +545,7 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               user_code: string
               interval: string
             }
-            const interval = Math.max(parseInt(deviceData.interval) || 5, 1) * 1000
+            const interval = Math.max(parseInt(deviceData.interval, 10) || 5, 1) * 1000
 
             return {
               url: `${ISSUER}/codex/device`,

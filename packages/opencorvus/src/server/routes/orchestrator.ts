@@ -94,7 +94,8 @@ export const OrchestratorRoutes = lazy(() =>
       async (c) => {
         const query = c.req.query("q") || undefined
         const status = c.req.query("status") || undefined
-        const limit = c.req.query("limit") ? parseInt(c.req.query("limit")!, 10) : undefined
+        const limitRaw = c.req.query("limit")
+        const limit = limitRaw ? (() => { const n = parseInt(limitRaw, 10); return Number.isFinite(n) && n > 0 ? n : undefined })() : undefined
         return c.json(await OrchestratorService.getProjectBoard({ query, status, limit }))
       },
     )

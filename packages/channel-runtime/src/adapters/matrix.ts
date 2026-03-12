@@ -51,6 +51,7 @@ export class MatrixAdapter implements ChannelAdapter {
   async start(): Promise<void> {
     if (this.running) return
     this.running = true
+    // whoami may fail if token is invalid — userId stays undefined (messages still processed)
     this.userId = await this.whoami().catch(() => undefined)
     this.loop = this.syncLoop()
     console.log("[Matrix] Sync loop started")
@@ -58,6 +59,7 @@ export class MatrixAdapter implements ChannelAdapter {
 
   async stop(): Promise<void> {
     this.running = false
+    // Sync loop may reject when running flag becomes false — expected during shutdown
     if (this.loop) await this.loop.catch(() => undefined)
   }
 
@@ -153,7 +155,7 @@ export class MatrixAdapter implements ChannelAdapter {
           Authorization: `Bearer ${this.token}`,
         },
         signal: AbortSignal.timeout(35_000),
-      }).catch(() => undefined)
+      }).catch(() => undefined) // Network failure → retry in next sync iteration
       if (!res || !res.ok) {
         await Bun.sleep(1000)
         continue

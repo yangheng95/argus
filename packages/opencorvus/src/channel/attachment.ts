@@ -50,9 +50,11 @@ export namespace ChannelAttachment {
   }
 
   export async function get(id: string) {
-    const raw = await Bun.file(path.join(dir, `${id}.json`)).text().catch(() => undefined)
+    const raw = await Bun.file(path.join(dir, `${id}.json`)).text().catch(() => undefined)  // attachment not found is expected
     if (!raw) return
-    const meta = Meta.parse(JSON.parse(raw))
+    let parsed: unknown
+    try { parsed = JSON.parse(raw) } catch { return }
+    const meta = Meta.parse(parsed)
     return {
       ...meta,
       path: path.join(dir, meta.file),
@@ -74,7 +76,7 @@ export namespace ChannelAttachment {
 async function publicUrl() {
   const direct = text(process.env.OPENCORVUS_PUBLIC_URL)
   if (direct) return trim(direct)
-  const config = await Config.get().catch(() => undefined)
+  const config = await Config.get().catch(() => undefined)  // config unavailable is non-fatal for URL resolution
   const configured = text(config?.server?.publicUrl)
   if (configured) return trim(configured)
   const current = text(process.env.OPENCORVUS_SERVER_URL)

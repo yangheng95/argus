@@ -39,6 +39,7 @@ export namespace Project {
   }
 
   async function text(args: string[], cwd: string) {
+    // git may not be available or cwd may not be a repo — checked below
     const result = await git(args, { cwd }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return
     const value = result.text().trim()
@@ -47,6 +48,7 @@ export namespace Project {
   }
 
   async function roots(cwd: string) {
+    // Not a git repo → return empty list
     const result = await git(["rev-list", "--max-parents=0", "--all"], { cwd }).catch(() => undefined)
     if (!result || result.exitCode !== 0) return []
     return result
@@ -58,12 +60,14 @@ export namespace Project {
   }
 
   async function identify(cwd: string, common: string) {
+    // Marker file may not exist yet on first run
     const cached = await Filesystem.readText(marker(common))
       .then((x) => x.trim())
       .catch(() => undefined)
     if (cached) return cached
 
     const next = (await roots(cwd))[0] || generated(common)
+    // Best-effort cache write — failure is non-fatal, next call will regenerate
     await Filesystem.write(marker(common), next).catch(() => undefined)
     return next
   }
@@ -151,6 +155,7 @@ export namespace Project {
           }
         }
 
+        // Marker file may not exist on first run → fall back to generated ID
         const id =
           (await Filesystem.readText(marker(dotgit))
             .then((x) => x.trim())

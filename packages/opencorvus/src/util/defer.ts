@@ -1,12 +1,17 @@
-export function defer<T extends () => void | Promise<void>>(
-  fn: T,
-): T extends () => Promise<void> ? { [Symbol.asyncDispose]: () => Promise<void> } : { [Symbol.dispose]: () => void } {
+export function defer(
+  fn: () => void | Promise<void>,
+): Disposable & AsyncDisposable {
   return {
     [Symbol.dispose]() {
-      fn()
+      const result = fn()
+      if (result && typeof (result as Promise<void>).catch === "function") {
+        (result as Promise<void>).catch((err) => {
+          console.error("[defer] async cleanup failed in synchronous dispose:", err)
+        })
+      }
     },
     [Symbol.asyncDispose]() {
       return Promise.resolve(fn())
     },
-  } as any
+  }
 }

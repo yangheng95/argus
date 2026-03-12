@@ -3,9 +3,10 @@
  *
  * 无任何 mock。全链路：
  *   createTask → plan (real LLM) → execute (real opencorvus session) → verify (bun test) → evaluate (real LLM)
- *   → retry/replan (budget: maxRuns=3, maxReplans=1) → assert final state
+ *   → retry/replan (budget: maxRuns=5, maxReplans=2) → assert final state
  *
- * 任务: 根据 Moment Diary PRD（specs/prd.txt 第14节），实现 DiaryEntry 数据模型与内存 CRUD store，用 bun test 验证。
+ * 任务: 根据 Moment Diary 完整 PRD（specs/prd.txt 全部 22 节），实现 V1.0 MVP 后端核心层：
+ *   3 个数据模型 + 8 个 Store/Service + 全覆盖测试。
  * Slack: 任务状态变更通知到 #argus-opencode 频道（Bus.subscribe + chat.postMessage）。
  *
  * 运行: bun test test/e2e/full-pipeline.test.ts
@@ -58,25 +59,25 @@ const HAS_LIVE_CREDS = !!(
 )
 const liveTest = RUN_LIVE_E2E && HAS_LIVE_CREDS ? test : test.skip
 
-const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "1800000", 10) // 30 分钟
+const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "3600000", 10) // 60 分钟
 const AUTO_REPLY = "Use reasonable defaults consistent with the task request, keep the scope minimal, continue execution, and do not ask again unless absolutely necessary."
 const STATUS_LOG_INTERVAL_MS = parseInt(process.env.OPENCORVUS_E2E_STATUS_LOG_INTERVAL_MS ?? "60000", 10)
 
 // ---------------------------------------------------------------------------
-// 任务内容（来自 specs/prd.txt 第14节，字段完整）
+// 任务内容（完整 PRD V1.0 MVP 后端实现）
 // ---------------------------------------------------------------------------
 
-const TASK_TITLE = "实现 Moment Diary DiaryEntry 数据模型与 CRUD Store"
+const TASK_TITLE = "实现 Moment Diary V1.0 MVP 完整后端"
 
 const TASK_REQUEST = `
 # 项目背景
 
 Moment Diary 是一款个人日记 App（PRD V1.0，2026-03-10）。
-本任务要求用 TypeScript 实现后端核心数据层。
+本任务要求用 TypeScript 实现 V1.0 MVP 的完整后端核心层（内存存储，无需数据库）。
 
 ---
 
-# PRD 第14节 —— 数据结构设计
+# 一、数据结构设计（PRD 第14节）
 
 ## 14.1 日记实体 DiaryEntry
 
@@ -100,7 +101,7 @@ Moment Diary 是一款个人日记 App（PRD V1.0，2026-03-10）。
 | diary_at | number | 日记记录时间戳（ms） |
 | updated_at | number | 更新时间戳（ms） |
 | deleted_at | number \\| null | 软删除时间戳（ms），null 表示未删除 |
-| sync_status | string | 同步状态 |
+| sync_status | string | 同步状态（local/synced/syncing/conflict） |
 
 ## 14.2 标签实体 Tag
 
@@ -112,42 +113,172 @@ Moment Diary 是一款个人日记 App（PRD V1.0，2026-03-10）。
 | color | string | 标签颜色（hex） |
 | created_at | number | 创建时间戳（ms） |
 
+## 14.3 用户实体 User
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | string | 用户 ID |
+| nickname | string | 昵称 |
+| avatar | string | 头像 URL |
+| email | string | 邮箱 |
+| phone | string | 手机号 |
+| password_hash | string | 密码哈希（简单 hash 即可） |
+| login_type | string | 登录方式（email/phone/guest） |
+| is_vip | boolean | 是否会员 |
+| lock_enabled | boolean | 是否开启应用锁 |
+| lock_pin | string | 锁屏 PIN（4-6位） |
+| biometric_enabled | boolean | 是否开启生物识别 |
+| reminder_enabled | boolean | 是否开启提醒 |
+| reminder_time | string | 提醒时间（HH:mm 格式） |
+| theme_mode | string | 主题模式（light/dark/system） |
+| created_at | number | 创建时间戳（ms） |
+| updated_at | number | 更新时间戳（ms） |
+
 ---
 
-# 本次实现任务
+# 二、要求创建的文件（全部在 src/ 下）
 
-## 要求创建的文件
+## 1. src/types.ts — 类型定义
+导出以下 TypeScript interface 和类型：
+- \`DiaryEntry\` — 字段与 14.1 完全一致
+- \`Tag\` — 字段与 14.2 完全一致
+- \`User\` — 字段与 14.3 完全一致
+- \`Mood\` 类型或常量 — "very_happy" | "happy" | "calm" | "sad" | "anxious" | "angry"
+- \`SyncStatus\` 类型 — "local" | "synced" | "syncing" | "conflict"
+- \`DiaryTemplate\` interface — { id: string, name: string, prompts: string[] }
+- \`SearchFilter\` interface — { keyword?: string, mood?: string, tag?: string, startDate?: number, endDate?: number, hasFavorite?: boolean, hasImages?: boolean, hasLocation?: boolean }
+- \`CalendarDay\` interface — { date: string(YYYY-MM-DD), count: number, moods: string[] }
+- \`MoodStat\` interface — { mood: string, count: number, percentage: number }
+- \`DiaryStats\` interface — { totalEntries: number, totalDays: number, currentStreak: number, longestStreak: number, moodDistribution: MoodStat[], topTags: Array<{tag: string, count: number}>, averageEntriesPerWeek: number }
 
-### src/types.ts
-导出 \`DiaryEntry\` 和 \`Tag\` 两个 TypeScript interface，字段与上表完全一致。
+## 2. src/diary-store.ts — 日记 CRUD 存储
+\`DiaryStore\` class（内存 Map）：
+- \`create(entry)\` — 自动 id/created_at/updated_at/deleted_at=null，tags>10 抛错，每个 tag 长度>20 字抛错
+- \`get(id)\` — 返回日记或 undefined
+- \`update(id, patch)\` — 更新 updated_at，返回日记或 undefined
+- \`delete(id)\` — 软删除（deleted_at = Date.now()），返回 boolean
+- \`hardDelete(id)\` — 彻底删除（从 Map 移除），返回 boolean
+- \`restore(id)\` — 恢复软删除（deleted_at = null），返回日记或 undefined
+- \`list(userId)\` — 返回该用户未删除日记，按 diary_at 降序
+- \`listDeleted(userId)\` — 返回该用户已软删除日记，按 deleted_at 降序
+- \`toggleFavorite(id)\` — 切换 is_favorite，返回日记或 undefined
 
-### src/diary-store.ts
-实现 \`DiaryStore\` class（内存存储，用 Map），导出如下方法：
-- \`create(entry: Omit<DiaryEntry, "id" | "created_at" | "updated_at">): DiaryEntry\`
-  — 自动生成 id（crypto.randomUUID()）、created_at、updated_at（Date.now()）
-  — tags 超过 10 个时抛出错误
-- \`get(id: string): DiaryEntry | undefined\`
-- \`update(id: string, patch: Partial<Omit<DiaryEntry, "id" | "created_at">>): DiaryEntry | undefined\`
-  — 更新 updated_at
-- \`delete(id: string): boolean\`
-  — 软删除：设 deleted_at = Date.now()，返回 true；不存在返回 false
-- \`list(userId: string): DiaryEntry[]\`
-  — 返回该用户未软删除的日记，按 diary_at 降序
+## 3. src/tag-store.ts — 标签 CRUD 存储
+\`TagStore\` class（内存 Map）：
+- \`create(tag)\` — 自动 id/created_at，name 长度>20 字抛错，同用户重名抛错
+- \`get(id)\` — 返回 Tag 或 undefined
+- \`update(id, patch)\` — 返回 Tag 或 undefined
+- \`delete(id)\` — 硬删除，返回 boolean
+- \`listByUser(userId)\` — 返回该用户所有标签，按 created_at 降序
+- \`findByName(userId, name)\` — 按名称查找
 
-### src/diary-store.test.ts
-用 bun:test 编写以下测试（必须全部通过）：
-1. create 返回含 id 和 timestamps 的完整日记（含 audios、sync_status 等新字段）
-2. get 可以取到刚创建的日记
+## 4. src/user-store.ts — 用户存储与认证
+\`UserStore\` class（内存 Map）：
+- \`register(input: {nickname, email?, phone?, password})\` — 创建用户，密码用简单 hash（如 btoa 或自定义），邮箱/手机号已存在则抛错
+- \`login(input: {email?: string, phone?: string, password: string})\` — 验证密码，返回 User 或 null
+- \`get(id)\` — 返回 User 或 undefined
+- \`update(id, patch)\` — 更新 updated_at，返回 User 或 undefined
+- \`setLock(id, pin)\` — 设置应用锁 PIN
+- \`verifyLock(id, pin)\` — 验证 PIN
+- \`setReminder(id, enabled, time?)\` — 设置提醒
+
+## 5. src/search-service.ts — 搜索与筛选
+\`SearchService\` class（依赖 DiaryStore）：
+- \`search(userId, filter: SearchFilter)\` — 全文搜索（keyword 匹配 title/content/tags/location_name），支持心情/标签/时间/收藏/图片/位置筛选
+- 搜索结果按 diary_at 降序
+
+## 6. src/calendar-service.ts — 日历视图
+\`CalendarService\` class（依赖 DiaryStore）：
+- \`getMonthView(userId, year, month)\` — 返回 CalendarDay[]，含每天日记数量和心情列表
+- \`getEntriesByDate(userId, date: string)\` — 返回某天所有日记
+
+## 7. src/statistics-service.ts — 数据统计
+\`StatisticsService\` class（依赖 DiaryStore）：
+- \`getStats(userId)\` — 返回 DiaryStats：总日记数、总天数、当前连续天数、最长连续天数、心情分布、热门标签 Top10、周均日记数
+- \`getMoodTrend(userId, days: number)\` — 返回最近 N 天每天的主心情
+
+## 8. src/template-service.ts — 模板写作
+\`TemplateService\` class：
+- 内置模板列表（至少 8 个）：自由日记、三句话日记、感恩日记、情绪日记、旅行日记、梦境记录、工作复盘、今日小确幸
+- \`list()\` — 返回所有内置模板
+- \`get(id)\` — 返回模板或 undefined
+- \`applyTemplate(templateId)\` — 返回 { title: string, contentPrompt: string } 供前端填充
+
+## 9. src/export-service.ts — 导出功能
+\`ExportService\` class（依赖 DiaryStore）：
+- \`exportToMarkdown(userId)\` — 导出该用户所有未删除日记为 Markdown 格式字符串
+- \`exportEntry(entryId)\` — 导出单篇日记为 Markdown 字符串
+
+---
+
+# 三、测试文件（全部在 src/ 下，用 bun:test）
+
+每个 Store/Service 必须有对应测试文件，覆盖核心功能：
+
+## src/diary-store.test.ts
+1. create 返回含完整字段的日记（含 audios、sync_status 等）
+2. get 可取到刚创建的日记
 3. update 更新字段并刷新 updated_at
 4. delete 软删除后 deleted_at 不为 null
-5. list 只返回未删除日记，按 diary_at 降序排序
-6. tags 超过 10 个时 create 抛出错误
+5. hardDelete 彻底删除后 get 返回 undefined
+6. restore 恢复软删除后 deleted_at 为 null
+7. list 只返回未删除日记，按 diary_at 降序
+8. listDeleted 返回已删除日记
+9. toggleFavorite 切换收藏状态
+10. tags 超过 10 个时 create 抛错
+11. tag 长度超过 20 字时 create 抛错
+
+## src/tag-store.test.ts
+1. create 返回含 id 和 created_at 的标签
+2. 同用户重名标签 create 抛错
+3. name 超过 20 字 create 抛错
+4. listByUser 返回该用户标签
+5. findByName 正确查找
+6. delete 后 get 返回 undefined
+
+## src/user-store.test.ts
+1. register 创建用户成功
+2. 重复邮箱 register 抛错
+3. login 正确密码返回 User
+4. login 错误密码返回 null
+5. setLock 和 verifyLock 正确工作
+6. setReminder 正确工作
+
+## src/search-service.test.ts
+1. keyword 搜索匹配 title
+2. keyword 搜索匹配 content
+3. keyword 搜索匹配 tags
+4. mood 筛选正确
+5. 时间范围筛选正确
+6. 收藏筛选正确
+
+## src/calendar-service.test.ts
+1. getMonthView 返回正确天数和心情
+2. getEntriesByDate 返回指定日期的日记
+
+## src/statistics-service.test.ts
+1. getStats 返回正确的总数和心情分布
+2. 连续天数计算正确
+3. topTags 排序正确
+
+## src/template-service.test.ts
+1. list 返回至少 8 个模板
+2. get 返回正确模板
+3. applyTemplate 返回非空的 title 和 contentPrompt
+
+## src/export-service.test.ts
+1. exportToMarkdown 返回含所有日记的 Markdown
+2. exportEntry 返回含标题和内容的 Markdown
+3. exportToMarkdown 不含已删除日记
 
 ---
 
-# 约束
+# 四、约束
 - 只创建/修改 src/ 下的文件，不修改 package.json / tsconfig.json
 - 不引入任何第三方依赖
+- 所有 Store/Service 均使用内存存储（Map），无需数据库
+- 所有 ID 用 crypto.randomUUID() 生成
+- 所有时间戳均为 ms 级 number（Date.now()）
 `.trim()
 
 // ---------------------------------------------------------------------------
@@ -295,13 +426,13 @@ async function waitForFinal(taskID: string, maxWaitMs: number) {
 // 测试
 // ---------------------------------------------------------------------------
 
-describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluator", () => {
+describe("Full E2E: Moment Diary MVP — real Planner + Executor + Checks + Evaluator", () => {
   afterEach(async () => {
     await resetDatabase()
   })
 
   liveTest(
-    "DiaryEntry CRUD store: submit → plan → execute → bun test → evaluate",
+    "Moment Diary V1.0 MVP 完整后端: submit → plan → execute → bun test → evaluate",
     async () => {
       await using tmp = await tmpdir({ git: true })
       await scaffoldProject(tmp.path)
@@ -311,6 +442,8 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
       let slackThreadTs: string | undefined
       // SlackGateway 实例（双向通信：事件推送 + 接收用户查询）
       let gateway: SlackGateway | undefined
+      // taskID 提升到外部作用域，供 finally 块清理
+      let taskID: string | undefined
 
       try { await Instance.provide({
         directory: tmp.path,
@@ -358,15 +491,15 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
 
           // ── 提交任务 ────────────────────────────────────────────────────
           console.log("\n[E2E] ─── 提交任务 ───")
-          const taskID = await OrchestratorService.createTask({
+          taskID = await OrchestratorService.createTask({
             title: TASK_TITLE,
             request: TASK_REQUEST,
-            budget: { maxRuns: 3, maxReplans: 1 },
+            budget: { maxRuns: 5, maxReplans: 2 },
             checks: {
               build: false,
               lint: false,
               test: false,
-              verify_cmd: ["bun test src/diary-store.test.ts"],
+              verify_cmd: ["bun test"],
             },
             channelBinding: {
               platform: "slack",
@@ -378,7 +511,7 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
           await slackPost(`📌 task_id = \`${taskID}\``, slackThreadTs)
 
           // ── 轮询终态 ────────────────────────────────────────────────────
-          console.log("[E2E] 等待任务完成（最长 29m45s）...")
+          console.log("[E2E] 等待任务完成（最长 59m45s）...")
           const progress = await waitForFinal(taskID, TIMEOUT_MS - 15_000)
 
           // ── 结果报告 ────────────────────────────────────────────────────
@@ -471,14 +604,10 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
           expect(planDocs.length, "plans/ 应有至少 1 个文档").toBeGreaterThan(0)
 
           for (const d of prdDocs) {
-            // ── PRD 详细程度 ──────────────────────────────────────────────
             expect(d.length, `PRD 文档 ${d.name} 长度应 > 200`).toBeGreaterThan(200)
-            // 必须包含的结构化章节
             expect(d.content, "PRD 应含 # PRD 标题").toMatch(/# PRD/)
             expect(d.content, "PRD 应含 ## Request 节").toMatch(/## Request/)
             expect(d.content, "PRD 应含 ## Summary 节").toMatch(/## Summary/)
-            // ## Content 由 spec_analysis.expanded_spec 填充，部分 LLM 可能不生成
-            // 各节内容不能是空壳（至少 10 字符的实际内容）
             const prdRequestBody = d.content.split("## Request")[1]?.split("##")[0]?.trim() ?? ""
             expect(prdRequestBody.length, "PRD ## Request 节内容不能为空").toBeGreaterThan(10)
             const prdSummaryBody = d.content.split("## Summary")[1]?.split("##")[0]?.trim() ?? ""
@@ -489,43 +618,35 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
                 console.log(`[E2E] ⚠ PRD ${d.name} ## Content 节为空（LLM 未生成 expanded_spec）`)
               }
             }
-
-            // ── PRD ↔ 会话一致性 ──────────────────────────────────────────
-            // 文件名和正文都含 taskID
             expect(d.name, "PRD 文件名应含 taskID").toContain(taskID)
             expect(d.content, "PRD 正文应含 taskID").toContain(taskID)
-            // 文档内记录的请求与原始请求关键词一致
-            expect(d.content, "PRD 应含任务标题关键词 DiaryEntry").toMatch(/DiaryEntry/)
-            expect(d.content, "PRD 应含任务标题关键词 CRUD").toMatch(/CRUD|create|update|delete/i)
+            // MVP 完整 PRD 关键词
+            expect(d.content, "PRD 应含 DiaryEntry 关键词").toMatch(/DiaryEntry/)
+            expect(d.content, "PRD 应含 MVP 或 Moment Diary 关键词").toMatch(/MVP|Moment Diary/i)
           }
 
           for (const d of planDocs) {
-            // ── Plan 详细程度 ─────────────────────────────────────────────
             expect(d.length, `Plan 文档 ${d.name} 长度应 > 200`).toBeGreaterThan(200)
             expect(d.content, "Plan 应含 # Plan Graph Snapshot 标题").toMatch(/# Plan Graph Snapshot/)
             expect(d.content, "Plan 应含 ## Request 节").toMatch(/## Request/)
             expect(d.content, "Plan 应含 ## Summary 节").toMatch(/## Summary/)
             expect(d.content, "Plan 应含 ## Execution Prompt 节").toMatch(/## Execution Prompt/)
-            // Execution Prompt 节应有代码围栏且内容非空
             expect(d.content, "Plan 应含代码围栏").toContain("````text")
             const promptBody = d.content.split("````text")[1]?.split("````")[0]?.trim() ?? ""
             expect(promptBody.length, "Plan Execution Prompt 内容不能为空").toBeGreaterThan(20)
-            // Steps 节（如果存在）应有编号步骤
             if (d.content.includes("## Steps")) {
               expect(d.content, "Plan Steps 节应有编号步骤").toMatch(/1\. /)
             }
-
-            // ── Plan ↔ 会话一致性 ─────────────────────────────────────────
             expect(d.name, "Plan 文件名应含 taskID").toContain(taskID)
             expect(d.content, "Plan 正文应含 taskID").toContain(taskID)
-            // Request 节应含原始请求关键词
             expect(d.content, "Plan 应含 DiaryEntry 关键词").toMatch(/DiaryEntry/)
           }
 
           if (progress.task.status === "completed") {
             // 有交付物且改了文件
             expect(progress.delivery).toBeDefined()
-            expect((progress.delivery!.result?.changedFiles ?? []).length).toBeGreaterThan(0)
+            const changedFiles = progress.delivery!.result?.changedFiles ?? []
+            expect(changedFiles.length, "交付物应含多个文件").toBeGreaterThan(5)
 
             // 评估通过
             expect(progress.evaluation?.verdict).toBe("accepted")
@@ -537,24 +658,17 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
               expect(d.content, "Goals 应含 # Spec Goals Snapshot 标题").toMatch(/# Spec Goals Snapshot/)
               expect(d.content, "Goals 应含 ## Goals 节").toMatch(/## Goals/)
               expect(d.content, "Goals 应含 ## Plan Summary 节").toMatch(/## Plan Summary/)
-              // 每个 goal 列表项应含 Criteria
               expect(d.content, "Goals 应含 - Criteria: 详情").toContain("- Criteria:")
-              // 应含 goal 统计计数
               expect(d.content, "Goals 应含 Total Goals 计数").toMatch(/Total Goals: \d+/)
-
-              // ── Goals ↔ 会话一致性 ──────────────────────────────────────
               expect(d.name, "Goals 文件名应含 taskID").toContain(taskID)
               expect(d.content, "Goals 正文应含 taskID").toContain(taskID)
-              // goals 文档中的目标描述与 API 返回一致
               for (const goal of progress.goals ?? []) {
                 const snippet = goal.description.slice(0, 30)
                 expect(d.content, `Goals 文档应含目标描述片段: "${snippet}"`).toContain(snippet)
               }
             }
-            // 最终 goals 快照应反映评估后的状态（passed）
             const lastGoalDoc = goalDocs.at(-1)!
             expect(lastGoalDoc.content, "最终 Goals 快照应含 Passed 计数 > 0").toMatch(/Passed: [1-9]/)
-            // 初始 goals 快照应含 pending 状态
             const firstGoalDoc = goalDocs[0]!
             expect(firstGoalDoc.content, "初始 Goals 快照应含 Pending 状态").toMatch(/Pending: [1-9]/)
 
@@ -562,29 +676,22 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
             expect(evalDocs.length, "evaluations/ 应有至少 1 个文档").toBeGreaterThan(0)
             for (const d of evalDocs) {
               expect(d.length, `Evaluation 文档 ${d.name} 长度应 > 200`).toBeGreaterThan(200)
-              // 评估类型：Coordinator 或 Goal Run
               expect(d.content, "Evaluation 应含标题").toMatch(/# (Coordinator|Goal Run) Evaluation Snapshot/)
               expect(d.content, "Evaluation 应含 ## Request 节").toMatch(/## Request/)
               expect(d.content, "Evaluation 应含 ## Summary 节").toMatch(/## Summary/)
               expect(d.content, "Evaluation 应含 ## Checks 节").toMatch(/## Checks/)
-              // Summary 节内容非空
               const evalSummaryBody = d.content.split("## Summary")[1]?.split("##")[0]?.trim() ?? ""
               expect(evalSummaryBody.length, "Evaluation Summary 节不能为空").toBeGreaterThan(5)
-              // Checks 节应含至少一个检查项 [status]
               expect(d.content, "Evaluation Checks 应含状态标记").toMatch(/\[(passed|failed)\]/)
-              // Analysis 和 Goal Assessment（LLM analyzeDelivery 产出）
               if (d.content.includes("## Analysis")) {
                 expect(d.content, "Analysis 应含 Classification").toContain("Classification:")
               }
               if (d.content.includes("## Goal Assessment")) {
                 expect(d.content, "Goal Assessment 应含状态标记").toMatch(/\[(passed|failed|pending)\]/)
               }
-              // Delivery 节（如果存在）
               if (d.content.includes("## Delivery")) {
                 expect(d.content, "Delivery 应含 Summary").toContain("Summary:")
               }
-
-              // ── Evaluation ↔ 会话一致性 ──────────────────────────────────
               expect(d.name, "Evaluation 文件名应含 taskID").toContain(taskID)
               expect(d.content, "Evaluation 正文应含 taskID").toContain(taskID)
             }
@@ -592,20 +699,16 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
             const coordinatorEvalDocs = evalDocs.filter((d) => d.content.includes("# Coordinator Evaluation Snapshot"))
             expect(coordinatorEvalDocs.length, "evaluations/ 应至少包含 1 个 Coordinator evaluation 文档").toBeGreaterThan(0)
             for (const d of coordinatorEvalDocs) {
-              // verdict 与 API 返回一致
               const verdict = progress.evaluation!.verdict
               expect(d.content, `Coordinator Evaluation 文档 verdict 应为 ${verdict}`).toContain(`Verdict: ${verdict}`)
-              // evaluation summary 片段出现在文档中
               const summarySnippet = progress.evaluation!.summary.slice(0, 40)
               expect(d.content, "Coordinator Evaluation 文档摘要应与 API 返回一致").toContain(summarySnippet)
-              // 各 check 名称出现在文档中
               for (const chk of progress.evaluation!.checks ?? []) {
                 expect(d.content, `Coordinator Evaluation 应含 check: ${chk.name}`).toMatch(new RegExp(`\\[${chk.status}\\].*${chk.name}|\\[${chk.status}\\].*${chk.label ?? chk.name}`, "i"))
               }
             }
 
             // ── 跨文档一致性 ──────────────────────────────────────────────
-            // 所有文档都引用同一个 taskID
             const allDocContents = [
               ...prdDocs.map((d) => d.content),
               ...planDocs.map((d) => d.content),
@@ -615,39 +718,143 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
             for (const content of allDocContents) {
               expect(content, "所有文档应含 taskID").toContain(taskID)
             }
-            // 目标描述在 PRD、Goals、Evaluation 三类文档中一致
             for (const goal of progress.goals ?? []) {
               const snippet = goal.description.slice(0, 30)
               expect(prdDocs[0]!.content, `PRD 应含目标 "${snippet}"`).toContain(snippet)
               expect(lastGoalDoc.content, `Goals 应含目标 "${snippet}"`).toContain(snippet)
-              // evaluation 中的 Goal Assessment 也应引用该目标
-              const evalWithGoals = evalDocs.find((d) => d.content.includes("## Goal Assessment"))
-              if (evalWithGoals) {
-                expect(evalWithGoals.content, `Evaluation Goal Assessment 应含 "${snippet}"`).toContain(snippet)
+              const evalWithGoals = evalDocs.filter((d) => d.content.includes("## Goal Assessment"))
+              if (evalWithGoals.length > 0) {
+                const found = evalWithGoals.some((d) => d.content.includes(snippet))
+                expect(found, `至少一个 Evaluation Goal Assessment 应含 "${snippet}"`).toBe(true)
               }
             }
 
-            // 三个源文件物理存在
-            for (const file of ["src/types.ts", "src/diary-store.ts", "src/diary-store.test.ts"]) {
+            // ══════════════════════════════════════════════════════════════
+            // 交付物文件验证 — 完整 MVP 后端
+            // ══════════════════════════════════════════════════════════════
+
+            // ── 源文件必须存在 ──────────────────────────────────────────
+            const requiredSrcFiles = [
+              "src/types.ts",
+              "src/diary-store.ts",
+              "src/tag-store.ts",
+              "src/user-store.ts",
+              "src/search-service.ts",
+              "src/calendar-service.ts",
+              "src/statistics-service.ts",
+              "src/template-service.ts",
+              "src/export-service.ts",
+            ]
+            for (const file of requiredSrcFiles) {
               const exists = await Bun.file(path.join(tmp.path, file)).exists()
-              expect(exists).toBe(true)
+              expect(exists, `源文件 ${file} 应存在`).toBe(true)
             }
 
-            // types.ts 包含完整的 DiaryEntry interface（含 PRD 新增字段）
+            // ── 测试文件必须存在 ────────────────────────────────────────
+            const requiredTestFiles = [
+              "src/diary-store.test.ts",
+              "src/tag-store.test.ts",
+              "src/user-store.test.ts",
+              "src/search-service.test.ts",
+              "src/calendar-service.test.ts",
+              "src/statistics-service.test.ts",
+              "src/template-service.test.ts",
+              "src/export-service.test.ts",
+            ]
+            for (const file of requiredTestFiles) {
+              const exists = await Bun.file(path.join(tmp.path, file)).exists()
+              expect(exists, `测试文件 ${file} 应存在`).toBe(true)
+            }
+
+            // ── types.ts 完整性检查 ─────────────────────────────────────
             const types = await Bun.file(path.join(tmp.path, "src/types.ts")).text()
-            expect(types).toMatch(/DiaryEntry/)
-            expect(types).toMatch(/Tag/)
-            expect(types).toMatch(/audios/)       // 语音列表（PRD 14.1）
-            expect(types).toMatch(/latitude/)     // 纬度（PRD 14.1）
-            expect(types).toMatch(/longitude/)    // 经度（PRD 14.1）
-            expect(types).toMatch(/weather/)      // 天气（PRD 14.1）
-            expect(types).toMatch(/sync_status/)  // 同步状态（PRD 14.1）
+            // 三大数据模型
+            expect(types, "types.ts 应含 DiaryEntry").toMatch(/DiaryEntry/)
+            expect(types, "types.ts 应含 Tag interface").toMatch(/Tag/)
+            expect(types, "types.ts 应含 User interface").toMatch(/User/)
+            // DiaryEntry 关键字段
+            expect(types, "types.ts 应含 mood 字段").toMatch(/mood/)
+            expect(types, "types.ts 应含 mood_tags 字段").toMatch(/mood_tags/)
+            expect(types, "types.ts 应含 tags 字段").toMatch(/tags/)
+            expect(types, "types.ts 应含 images 字段").toMatch(/images/)
+            expect(types, "types.ts 应含 audios 字段").toMatch(/audios/)
+            expect(types, "types.ts 应含 latitude 字段").toMatch(/latitude/)
+            expect(types, "types.ts 应含 longitude 字段").toMatch(/longitude/)
+            expect(types, "types.ts 应含 weather 字段").toMatch(/weather/)
+            expect(types, "types.ts 应含 is_favorite 字段").toMatch(/is_favorite/)
+            expect(types, "types.ts 应含 sync_status 字段").toMatch(/sync_status/)
+            expect(types, "types.ts 应含 diary_at 字段").toMatch(/diary_at/)
+            expect(types, "types.ts 应含 deleted_at 字段").toMatch(/deleted_at/)
+            // User 关键字段
+            expect(types, "types.ts 应含 nickname 字段").toMatch(/nickname/)
+            expect(types, "types.ts 应含 lock_enabled 字段").toMatch(/lock_enabled/)
+            expect(types, "types.ts 应含 reminder_enabled 字段").toMatch(/reminder_enabled/)
+            expect(types, "types.ts 应含 reminder_time 字段").toMatch(/reminder_time/)
+            expect(types, "types.ts 应含 theme_mode 字段").toMatch(/theme_mode/)
+            // 辅助类型
+            expect(types, "types.ts 应含 SearchFilter").toMatch(/SearchFilter/)
+            expect(types, "types.ts 应含 DiaryTemplate").toMatch(/DiaryTemplate/)
+            expect(types, "types.ts 应含 CalendarDay").toMatch(/CalendarDay/)
+            expect(types, "types.ts 应含 DiaryStats 或 MoodStat").toMatch(/DiaryStats|MoodStat/)
 
-            // diary-store.ts 导出 DiaryStore
-            const store = await Bun.file(path.join(tmp.path, "src/diary-store.ts")).text()
-            expect(store).toMatch(/DiaryStore/)
+            // ── diary-store.ts 完整性检查 ────────────────────────────────
+            const diaryStore = await Bun.file(path.join(tmp.path, "src/diary-store.ts")).text()
+            expect(diaryStore, "diary-store 应含 DiaryStore class").toMatch(/DiaryStore/)
+            expect(diaryStore, "diary-store 应含 create 方法").toMatch(/create/)
+            expect(diaryStore, "diary-store 应含 delete 方法").toMatch(/delete/)
+            expect(diaryStore, "diary-store 应含 list 方法").toMatch(/list/)
+            expect(diaryStore, "diary-store 应含软删除逻辑").toMatch(/deleted_at/)
+            expect(diaryStore, "diary-store 应含 toggleFavorite 或 favorite 方法").toMatch(/favorite/i)
+            expect(diaryStore, "diary-store 应含 restore 或 hardDelete 方法").toMatch(/restore|hardDelete|hard_delete/i)
 
-            console.log("\n[E2E] ✓ 全链路端到端测试通过！")
+            // ── tag-store.ts 完整性检查 ──────────────────────────────────
+            const tagStore = await Bun.file(path.join(tmp.path, "src/tag-store.ts")).text()
+            expect(tagStore, "tag-store 应含 TagStore class").toMatch(/TagStore/)
+            expect(tagStore, "tag-store 应含 create 方法").toMatch(/create/)
+            expect(tagStore, "tag-store 应含 listByUser 或 list 方法").toMatch(/list/i)
+
+            // ── user-store.ts 完整性检查 ─────────────────────────────────
+            const userStore = await Bun.file(path.join(tmp.path, "src/user-store.ts")).text()
+            expect(userStore, "user-store 应含 UserStore class").toMatch(/UserStore/)
+            expect(userStore, "user-store 应含 register 方法").toMatch(/register/)
+            expect(userStore, "user-store 应含 login 方法").toMatch(/login/)
+            expect(userStore, "user-store 应含 lock 或 pin 验证").toMatch(/lock|pin|verify/i)
+
+            // ── search-service.ts 完整性检查 ─────────────────────────────
+            const searchSvc = await Bun.file(path.join(tmp.path, "src/search-service.ts")).text()
+            expect(searchSvc, "search-service 应含 SearchService class").toMatch(/SearchService/)
+            expect(searchSvc, "search-service 应含 search 方法").toMatch(/search/)
+
+            // ── calendar-service.ts 完整性检查 ───────────────────────────
+            const calendarSvc = await Bun.file(path.join(tmp.path, "src/calendar-service.ts")).text()
+            expect(calendarSvc, "calendar-service 应含 CalendarService class").toMatch(/CalendarService/)
+            expect(calendarSvc, "calendar-service 应含 month 或 getMonth 方法").toMatch(/month|getMonth/i)
+
+            // ── statistics-service.ts 完整性检查 ─────────────────────────
+            const statsSvc = await Bun.file(path.join(tmp.path, "src/statistics-service.ts")).text()
+            expect(statsSvc, "statistics-service 应含 StatisticsService class").toMatch(/StatisticsService/)
+            expect(statsSvc, "statistics-service 应含 streak 或连续天数逻辑").toMatch(/streak|consecutive|连续/i)
+            expect(statsSvc, "statistics-service 应含 mood 统计").toMatch(/mood/i)
+
+            // ── template-service.ts 完整性检查 ───────────────────────────
+            const templateSvc = await Bun.file(path.join(tmp.path, "src/template-service.ts")).text()
+            expect(templateSvc, "template-service 应含 TemplateService class").toMatch(/TemplateService/)
+            expect(templateSvc, "template-service 应含 list 方法").toMatch(/list/)
+            // 至少应包含几种内置模板名称
+            expect(templateSvc, "template-service 应含感恩日记模板").toMatch(/感恩|gratitude/i)
+
+            // ── export-service.ts 完整性检查 ─────────────────────────────
+            const exportSvc = await Bun.file(path.join(tmp.path, "src/export-service.ts")).text()
+            expect(exportSvc, "export-service 应含 ExportService class").toMatch(/ExportService/)
+            expect(exportSvc, "export-service 应含 markdown 或 export 方法").toMatch(/markdown|export/i)
+
+            // ── 文件总数检查 ─────────────────────────────────────────────
+            const allSrcFiles = changedFiles.filter((f: string) => f.startsWith("src/") && f.endsWith(".ts"))
+            console.log(`[E2E] 交付源文件数: ${allSrcFiles.length}`)
+            console.log(`[E2E] 交付文件列表: ${allSrcFiles.join(", ")}`)
+            expect(allSrcFiles.length, "交付应含至少 15 个 .ts 文件（9 源 + 8 测试）").toBeGreaterThanOrEqual(15)
+
+            console.log("\n[E2E] ✓ Moment Diary V1.0 MVP 全链路端到端测试通过！")
           } else {
             // budget 耗尽属合法结果，不算测试框架失败
             console.log(`\n[E2E] 任务因 budget 耗尽或不可恢复错误而失败（不强制断言 completed）`)
@@ -656,6 +863,13 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
           }
         },
       }) } finally {
+        // 清理：取消正在运行的任务（终止 executor session + 清理 worktree）
+        if (taskID) {
+          await OrchestratorService.cancelTask(taskID).catch((err) => {
+            console.log(`[E2E] cancelTask 失败（可能已完成）: ${err}`)
+          })
+          console.log("[E2E] 任务已取消/清理")
+        }
         // 停止 SlackGateway（断开 Socket Mode 连接）
         await gateway?.stop().catch(() => {})
         console.log("[E2E] SlackGateway 已停止")

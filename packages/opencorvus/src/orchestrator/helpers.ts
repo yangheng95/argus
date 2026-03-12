@@ -4,13 +4,21 @@ import { Budget } from "./model"
 import type { OrchestratorBudget, OrchestratorTaskStatus } from "./orchestrator.sql"
 
 export const ORCHESTRATOR_POLL_INTERVAL_MS = 1500
-export const SAME_PLAN_RETRY_LIMIT = parseInt(process.env.OPENCORVUS_SAME_PLAN_RETRY_LIMIT || "1", 10)
-export const DEFAULT_MAX_RUNS = parseInt(process.env.OPENCORVUS_MAX_RUNS || "10", 10)
-export const DEFAULT_MAX_REPLANS = parseInt(process.env.OPENCORVUS_MAX_REPLANS || "3", 10)
+
+function safeInt(value: string | undefined, fallback: number): number {
+  if (!value) return fallback
+  const n = parseInt(value, 10)
+  return Number.isFinite(n) ? n : fallback
+}
+
+export const SAME_PLAN_RETRY_LIMIT = safeInt(process.env.OPENCORVUS_SAME_PLAN_RETRY_LIMIT, 1)
+export const DEFAULT_MAX_RUNS = safeInt(process.env.OPENCORVUS_MAX_RUNS, 10)
+export const DEFAULT_MAX_REPLANS = safeInt(process.env.OPENCORVUS_MAX_REPLANS, 3)
 
 export const orchestratorState = Instance.state(() => ({
   booted: false,
   syncing: false,
+  unsubscribe: undefined as (() => void) | undefined,
 }))
 
 export function deriveTitle(request: string) {
@@ -90,11 +98,26 @@ export function buildOperatorPrompt(note: string) {
 }
 
 export function progressStatus(status: OrchestratorTaskStatus) {
-  if (status === "blocked") return "blocked" as const
-  if (status === "completed") return "completed" as const
-  if (status === "cancelled") return "cancelled" as const
-  if (status === "failed") return "failed" as const
-  return "running" as const
+  switch (status) {
+    case "blocked":
+      return "blocked" as const
+    case "completed":
+      return "completed" as const
+    case "cancelled":
+      return "cancelled" as const
+    case "failed":
+      return "failed" as const
+    case "queued":
+    case "planning":
+    case "running":
+    case "evaluating":
+    case "delivering":
+      return "running" as const
+    default: {
+      const _exhaustive: never = status
+      return "running" as const
+    }
+  }
 }
 
 export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | undefined {

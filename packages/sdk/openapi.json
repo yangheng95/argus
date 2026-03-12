@@ -5910,6 +5910,89 @@
         ]
       }
     },
+    "/provider/{providerID}/auth/prompts": {
+      "post": {
+        "operationId": "provider.auth.prompts",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Provider ID"
+          }
+        ],
+        "summary": "Resolve provider auth prompts",
+        "description": "Resolve interactive auth prompts for a specific provider and method using the current partial inputs.",
+        "responses": {
+          "200": {
+            "description": "Resolved auth prompts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderAuthPrompt"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "description": "Auth method index",
+                    "type": "number"
+                  },
+                  "inputs": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "method"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.auth.prompts({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/provider/{providerID}/test": {
       "post": {
         "operationId": "provider.test",
@@ -6005,6 +6088,158 @@
         ]
       }
     },
+    "/provider/{providerID}/auth/api": {
+      "post": {
+        "operationId": "provider.auth.api",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Provider ID"
+          }
+        ],
+        "summary": "Save provider API key",
+        "description": "Store an API key for a specific AI provider.",
+        "responses": {
+          "200": {
+            "description": "API key saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "description": "Provider API key",
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "key"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.auth.api({\n  ...\n})"
+          }
+        ]
+      }
+    },
+    "/provider/{providerID}/auth/execute": {
+      "post": {
+        "operationId": "provider.auth.execute",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "directory",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "providerID",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "description": "Provider ID"
+          }
+        ],
+        "summary": "Execute provider auth method",
+        "description": "Execute a prompt-driven API authentication method for a specific provider.",
+        "responses": {
+          "200": {
+            "description": "Provider auth method executed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BadRequestError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "method": {
+                    "description": "Auth method index",
+                    "type": "number"
+                  },
+                  "inputs": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "method"
+                ]
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "js",
+            "source": "import { createOpenCorvusClient } from \"@opencorvus-ai/sdk/v2\"\n\nconst client = createOpenCorvusClient()\nawait client.provider.auth.execute({\n  ...\n})"
+          }
+        ]
+      }
+    },
     "/provider/{providerID}/oauth/authorize": {
       "post": {
         "operationId": "provider.oauth.authorize",
@@ -6059,6 +6294,15 @@
                   "method": {
                     "description": "Auth method index",
                     "type": "number"
+                  },
+                  "inputs": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -8246,7 +8490,7 @@
                       },
                       "maxReplans": {
                         "type": "integer",
-                        "exclusiveMinimum": 0,
+                        "minimum": 0,
                         "maximum": 9007199254740991
                       },
                       "maxEvaluations": {
@@ -9076,7 +9320,7 @@
                                   },
                                   "maxReplans": {
                                     "type": "integer",
-                                    "exclusiveMinimum": 0,
+                                    "minimum": 0,
                                     "maximum": 9007199254740991
                                   },
                                   "maxEvaluations": {
@@ -9384,16 +9628,14 @@
                                 "enum": [
                                   "pending",
                                   "passed",
-                                  "failed",
-                                  "inconclusive"
+                                  "failed"
                                 ]
                               },
                               "verdict": {
                                 "type": "string",
                                 "enum": [
                                   "accepted",
-                                  "rejected",
-                                  "inconclusive"
+                                  "rejected"
                                 ]
                               },
                               "summary": {
@@ -9711,7 +9953,7 @@
                                   },
                                   "maxReplans": {
                                     "type": "integer",
-                                    "exclusiveMinimum": 0,
+                                    "minimum": 0,
                                     "maximum": 9007199254740991
                                   },
                                   "maxEvaluations": {
@@ -10019,16 +10261,14 @@
                                 "enum": [
                                   "pending",
                                   "passed",
-                                  "failed",
-                                  "inconclusive"
+                                  "failed"
                                 ]
                               },
                               "verdict": {
                                 "type": "string",
                                 "enum": [
                                   "accepted",
-                                  "rejected",
-                                  "inconclusive"
+                                  "rejected"
                                 ]
                               },
                               "summary": {
@@ -10264,7 +10504,7 @@
                         },
                         "maxReplans": {
                           "type": "integer",
-                          "exclusiveMinimum": 0,
+                          "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "maxEvaluations": {
@@ -10478,7 +10718,7 @@
                             },
                             "maxReplans": {
                               "type": "integer",
-                              "exclusiveMinimum": 0,
+                              "minimum": 0,
                               "maximum": 9007199254740991
                             },
                             "maxEvaluations": {
@@ -11406,16 +11646,14 @@
                           "enum": [
                             "pending",
                             "passed",
-                            "failed",
-                            "inconclusive"
+                            "failed"
                           ]
                         },
                         "verdict": {
                           "type": "string",
                           "enum": [
                             "accepted",
-                            "rejected",
-                            "inconclusive"
+                            "rejected"
                           ]
                         },
                         "summary": {
@@ -11907,7 +12145,7 @@
                             },
                             "maxReplans": {
                               "type": "integer",
-                              "exclusiveMinimum": 0,
+                              "minimum": 0,
                               "maximum": 9007199254740991
                             },
                             "maxEvaluations": {
@@ -13475,16 +13713,14 @@
                           "enum": [
                             "pending",
                             "passed",
-                            "failed",
-                            "inconclusive"
+                            "failed"
                           ]
                         },
                         "verdict": {
                           "type": "string",
                           "enum": [
                             "accepted",
-                            "rejected",
-                            "inconclusive"
+                            "rejected"
                           ]
                         },
                         "summary": {
@@ -14747,7 +14983,7 @@
                         },
                         "maxReplans": {
                           "type": "integer",
-                          "exclusiveMinimum": 0,
+                          "minimum": 0,
                           "maximum": 9007199254740991
                         },
                         "maxEvaluations": {
@@ -16816,16 +17052,14 @@
                         "enum": [
                           "pending",
                           "passed",
-                          "failed",
-                          "inconclusive"
+                          "failed"
                         ]
                       },
                       "verdict": {
                         "type": "string",
                         "enum": [
                           "accepted",
-                          "rejected",
-                          "inconclusive"
+                          "rejected"
                         ]
                       },
                       "summary": {
@@ -17488,7 +17722,7 @@
                             },
                             "maxReplans": {
                               "type": "integer",
-                              "exclusiveMinimum": 0,
+                              "minimum": 0,
                               "maximum": 9007199254740991
                             },
                             "maxEvaluations": {
@@ -18609,16 +18843,14 @@
                             "enum": [
                               "pending",
                               "passed",
-                              "failed",
-                              "inconclusive"
+                              "failed"
                             ]
                           },
                           "verdict": {
                             "type": "string",
                             "enum": [
                               "accepted",
-                              "rejected",
-                              "inconclusive"
+                              "rejected"
                             ]
                           },
                           "summary": {
@@ -24712,16 +24944,14 @@
                 "enum": [
                   "pending",
                   "passed",
-                  "failed",
-                  "inconclusive"
+                  "failed"
                 ]
               },
               "verdict": {
                 "type": "string",
                 "enum": [
                   "accepted",
-                  "rejected",
-                  "inconclusive"
+                  "rejected"
                 ]
               },
               "summary": {
@@ -24925,6 +25155,58 @@
                 "type": "string"
               }
             }
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.worktree.ready": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "worktree.ready"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "branch"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "properties"
+        ]
+      },
+      "Event.worktree.failed": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "worktree.failed"
+          },
+          "properties": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "message"
+            ]
           }
         },
         "required": [
@@ -25467,58 +25749,6 @@
           "properties"
         ]
       },
-      "Event.worktree.ready": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "worktree.ready"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "branch": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name",
-              "branch"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
-      "Event.worktree.failed": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "const": "worktree.failed"
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "message": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "message"
-            ]
-          }
-        },
-        "required": [
-          "type",
-          "properties"
-        ]
-      },
       "Event.workspace.ready": {
         "type": "object",
         "properties": {
@@ -25732,6 +25962,12 @@
             "$ref": "#/components/schemas/Event.vcs.branch.updated"
           },
           {
+            "$ref": "#/components/schemas/Event.worktree.ready"
+          },
+          {
+            "$ref": "#/components/schemas/Event.worktree.failed"
+          },
+          {
             "$ref": "#/components/schemas/Event.task.report"
           },
           {
@@ -25763,12 +25999,6 @@
           },
           {
             "$ref": "#/components/schemas/Event.pty.deleted"
-          },
-          {
-            "$ref": "#/components/schemas/Event.worktree.ready"
-          },
-          {
-            "$ref": "#/components/schemas/Event.worktree.failed"
           },
           {
             "$ref": "#/components/schemas/Event.workspace.ready"
@@ -28266,6 +28496,75 @@
           "agent"
         ]
       },
+      "ProviderAuthPrompt": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "key": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "placeholder": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "key",
+              "message"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "select"
+              },
+              "key": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "hint": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "value"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "type",
+              "key",
+              "message",
+              "options"
+            ]
+          }
+        ]
+      },
       "ProviderAuthMethod": {
         "type": "object",
         "properties": {
@@ -28283,6 +28582,12 @@
           },
           "label": {
             "type": "string"
+          },
+          "prompts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderAuthPrompt"
+            }
           }
         },
         "required": [

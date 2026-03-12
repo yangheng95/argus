@@ -80,7 +80,8 @@ export function ExperimentalToolWorktreeRoutes() {
             id: t.id,
             description: t.description,
             // Handle both Zod schemas and plain JSON schemas
-            parameters: (t.parameters as any)?._def ? zodToJsonSchema(t.parameters as any) : t.parameters,
+            // Check for Zod schema (_def is a Zod internal) vs plain JSON schema
+            parameters: "_def" in t.parameters ? zodToJsonSchema(t.parameters as Parameters<typeof zodToJsonSchema>[0]) : t.parameters,
           })),
         )
       },

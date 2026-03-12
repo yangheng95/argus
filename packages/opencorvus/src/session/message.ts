@@ -905,7 +905,9 @@ export namespace MessageV2 {
               },
             ).toObject()
           }
-        } catch {}
+        } catch {
+          // Stream error parsing itself failed; fall through to generic Unknown error
+        }
         return new NamedError.Unknown({ message: JSON.stringify(e) }, { cause: e }).toObject()
     }
   }

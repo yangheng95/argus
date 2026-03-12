@@ -75,6 +75,10 @@ export default {
       entry: ["src/index.ts", "src/tool.ts"],
       project: ["src/**/*.ts"],
     },
+    "packages/script": {
+      entry: ["src/index.ts"],
+      project: ["src/**/*.ts"],
+    },
     "packages/sdk/js": {
       entry: [
         "src/index.ts",
@@ -86,15 +90,6 @@ export default {
         "src/v2/gen/client/index.ts",
       ],
       project: ["src/**/*.ts"],
-    },
-    "packages/supervisor": {
-      entry: ["src/index.ts", "src/main.ts"],
-      project: ["src/**/*.ts"],
-      ignoreDependencies: [
-        "@opencorvus-ai/sdk",
-        "ulid",
-        "zod",
-      ],
     },
     "packages/util": {
       entry: ["src/**/*.ts"],

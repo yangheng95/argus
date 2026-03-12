@@ -1,7 +1,10 @@
 import { eq, and } from "drizzle-orm"
 import { Database } from "@/storage/db"
+import { Log } from "@/util/log"
 import { ControlAccountTable } from "./control.sql"
 import z from "zod"
+
+const log = Log.create({ service: "control" })
 
 export * from "./control.sql"
 export * from "./message"
@@ -45,7 +48,10 @@ export namespace Control {
       }).toString(),
     })
 
-    if (!res.ok) return
+    if (!res.ok) {
+      log.warn("token refresh failed", { status: res.status, url: row.url })
+      return
+    }
 
     const json = (await res.json()) as {
       access_token: string
