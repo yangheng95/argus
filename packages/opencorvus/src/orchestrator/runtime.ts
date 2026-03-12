@@ -406,62 +406,69 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
   const workspaceDir = goalRun.workspace_dir ?? undefined
   const existingDelivery = findDeliveryByGoalRun(goalRun.id)
   const existingEvaluation = findEvaluationByGoalRun(goalRun.id)
+  let disposed = false
+  const dispose = async () => {
+    if (disposed) return
+    disposed = true
+    await cleanupGoalWorkspace(workspaceDir)
+    await removeGoalRunSession(goalRun)
+  }
   if (existingEvaluation) {
     if (existingEvaluation.status === "passed" || goal.priority === "advisory") {
-      await cleanupGoalWorkspace(workspaceDir)
+      await dispose()
       await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
       return
     }
-    await cleanupGoalWorkspace(workspaceDir)
+    await dispose()
     await handleEvaluationFailure(requireTask(task.id), run, existingEvaluation.summary, hooks)
     return
   }
-  const deliveryID = existingDelivery?.id ?? Identifier.ascending("delivery")
-  const evaluationID = Identifier.ascending("evaluation")
-  const goalDir = workspaceDir ?? Instance.directory
-  const deliveredInfo = existingDelivery
-    ? {
-        mergeRef: goalRun.merge_ref,
-        delivery: {
-          summary: existingDelivery.summary,
-          diffs: storedDiffs(existingDelivery),
-        },
-      }
-    : await provideWorkspace(goalDir, () =>
-        deliveryFromSnapshot(goalRun.base_ref ?? undefined, `Goal delivery: ${goal.description}`)
-      )
-  const delivered = deliveredInfo.delivery
-  if (!existingDelivery) {
-    persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery: delivered, now: Date.now() })
-  }
-  const { result, analysis, analysisError } = await provideWorkspace(goalDir, () =>
-    evaluateGoal({ task, goal, delivery: delivered })
-  )
-  const outcome = goalEvaluationOutcome(result, analysis)
-  persistEvaluation({
-    task,
-    run,
-    goalRunID: goalRun.id,
-    deliveryID,
-    evaluationID,
-    delivery: delivered,
-    result,
-    analysis,
-    finalVerdict: outcome.verdict,
-    finalStatus: outcome.status,
-    finalSummary: outcome.summary,
-    goals: [goal],
-    finalizeSpec: false,
-    analysisError,
-  })
-  updateGoalRun(goalRun.id, {
-    status: outcome.status === "passed" ? "completed" : "failed",
-    error: outcome.status === "passed" ? null : outcome.summary,
-    blocking_reason: null,
-    merge_ref: deliveredInfo.mergeRef ?? goalRun.merge_ref,
-    time_completed: Date.now(),
-  })
   try {
+    const deliveryID = existingDelivery?.id ?? Identifier.ascending("delivery")
+    const evaluationID = Identifier.ascending("evaluation")
+    const goalDir = workspaceDir ?? Instance.directory
+    const deliveredInfo = existingDelivery
+      ? {
+          mergeRef: goalRun.merge_ref,
+          delivery: {
+            summary: existingDelivery.summary,
+            diffs: storedDiffs(existingDelivery),
+          },
+        }
+      : await provideWorkspace(goalDir, () =>
+          deliveryFromSnapshot(goalRun.base_ref ?? undefined, `Goal delivery: ${goal.description}`)
+        )
+    const delivered = deliveredInfo.delivery
+    if (!existingDelivery) {
+      persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery: delivered, now: Date.now() })
+    }
+    const { result, analysis, analysisError } = await provideWorkspace(goalDir, () =>
+      evaluateGoal({ task, goal, delivery: delivered })
+    )
+    const outcome = goalEvaluationOutcome(result, analysis)
+    persistEvaluation({
+      task,
+      run,
+      goalRunID: goalRun.id,
+      deliveryID,
+      evaluationID,
+      delivery: delivered,
+      result,
+      analysis,
+      finalVerdict: outcome.verdict,
+      finalStatus: outcome.status,
+      finalSummary: outcome.summary,
+      goals: [goal],
+      finalizeSpec: false,
+      analysisError,
+    })
+    updateGoalRun(goalRun.id, {
+      status: outcome.status === "passed" ? "completed" : "failed",
+      error: outcome.status === "passed" ? null : outcome.summary,
+      blocking_reason: null,
+      merge_ref: deliveredInfo.mergeRef ?? goalRun.merge_ref,
+      time_completed: Date.now(),
+    })
     if (outcome.status === "passed" || (goal.priority === "advisory" && delivered.diffs.length > 0)) {
       await provideWorkspace(await taskDirectory(task), () =>
         applyGoalDelivery({
@@ -470,15 +477,22 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
         })
       )
     }
+    if (outcome.status === "passed" || goal.priority === "advisory") {
+      await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, `Goal finished: ${goal.description}`)
+      await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
+      return
+    }
+    await handleEvaluationFailure(requireTask(task.id), run, outcome.summary, hooks, analysis)
   } finally {
-    await cleanupGoalWorkspace(workspaceDir)
+    await dispose()
   }
-  if (outcome.status === "passed" || goal.priority === "advisory") {
-    await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, `Goal finished: ${goal.description}`)
-    await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
-    return
-  }
-  await handleEvaluationFailure(requireTask(task.id), run, outcome.summary, hooks, analysis)
+}
+
+async function removeGoalRunSession(goalRun: GoalRunRow) {
+  if (!goalRun.session_id) return
+  await Session.remove(goalRun.session_id).catch((err) => {
+    log.warn("failed to remove goal run session", { sessionID: goalRun.session_id, error: String(err) })
+  })
 }
 
 async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
@@ -865,9 +879,7 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     }
     updateGoalRun(goalRun.id, { status: "failed", error, blocking_reason: null, time_completed: now })
     await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
-    if (goalRun.session_id) await Session.remove(goalRun.session_id).catch((err) => {
-      log.warn("failed to remove goal run session", { sessionID: goalRun.session_id, error: String(err) })
-    })
+    await removeGoalRunSession(goalRun)
     const goal = currentGoal(goalRun, goalsForRun(run))
     if (goal?.priority === "advisory") {
       await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, error)
