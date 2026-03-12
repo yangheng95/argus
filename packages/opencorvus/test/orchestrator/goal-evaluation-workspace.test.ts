@@ -7,8 +7,11 @@ import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
+import { OrchestratorGoalRunTable } from "../../src/orchestrator/orchestrator.sql"
 import { Session } from "../../src/session"
+import { SessionTable } from "../../src/session/session.sql"
 import { SpecService } from "../../src/spec/service"
+import { Database, eq } from "../../src/storage/db"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -160,6 +163,15 @@ describe("orchestrator.goal evaluation workspace", () => {
         expect(dirs[0]).not.toBe(tmp.path)
         expect(dirs[1]).toBe(tmp.path)
         expect(await Bun.file(path.join(tmp.path, "src", "from-goal.ts")).text()).toBe("export const goal = true\n")
+        const goalRun = Database.use((db) =>
+          db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.task_id, taskID)).get(),
+        )
+        expect(goalRun?.session_id).toBeNull()
+        expect(Database.use((db) =>
+          goalRun?.session_id
+            ? db.select().from(SessionTable).where(eq(SessionTable.id, goalRun.session_id)).get()
+            : undefined,
+        )).toBeUndefined()
       },
     })
   }, 20_000)

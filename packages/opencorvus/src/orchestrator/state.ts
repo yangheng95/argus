@@ -1,5 +1,5 @@
 import { Bus } from "@/bus"
-import { Database, eq } from "@/storage/db"
+import { Database, and, eq } from "@/storage/db"
 import { Event } from "./model"
 import { progressStatus } from "./helpers"
 import { OrchestratorProgressSnapshotTable, OrchestratorRunTable, OrchestratorTaskTable } from "./orchestrator.sql"
@@ -77,20 +77,25 @@ export async function updateRun(
   ) {
     return row
   }
+  const now = Date.now()
   Database.transaction((db) => {
     db.update(OrchestratorRunTable)
       .set({
         ...values,
-        time_updated: Date.now(),
+        time_updated: now,
       })
       .where(eq(OrchestratorRunTable.id, row.id))
       .run()
     db.update(OrchestratorTaskTable)
       .set({
-        active_run_id: row.id,
-        time_updated: Date.now(),
+        time_updated: now,
       })
-      .where(eq(OrchestratorTaskTable.id, row.task_id))
+      .where(
+        and(
+          eq(OrchestratorTaskTable.id, row.task_id),
+          eq(OrchestratorTaskTable.active_run_id, row.id),
+        ),
+      )
       .run()
     Database.effect(() => Bus.publish(Event.RunUpdated, { taskID: row.task_id, runID: row.id, status: nextStatus, summary }))
   })
