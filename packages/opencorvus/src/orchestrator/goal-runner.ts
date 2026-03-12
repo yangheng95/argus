@@ -11,11 +11,11 @@ import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
-import { type EvaluationOutput } from "@/evaluator/shared"
+import { type EvaluationDelivery, type EvaluationOutput } from "@/evaluator/shared"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
 import z from "zod"
-import { listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
+import { findRun, listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
 
 const log = Log.create({ service: "goal-runner" })
 
@@ -38,6 +38,93 @@ function summary(prefix: string, files: string[]) {
   return files.length <= 3
     ? `${prefix}. Changed files: ${sample}.`
     : `${prefix}. Changed files: ${sample} and ${files.length - 3} more.`
+}
+
+function strings(input: unknown) {
+  return [...new Set(Array.isArray(input) ? input.filter((item): item is string => typeof item === "string" && item.length > 0) : [])]
+}
+
+function retryFiles(task: TaskRow) {
+  const seen = new Set<string>()
+  let runID = task.active_run_id ?? undefined
+  while (runID && !seen.has(runID)) {
+    seen.add(runID)
+    const run = findRun(runID)
+    if (!run) return []
+    const context = dict(run.metadata?.retry_context)
+    const files = strings(context.changedFiles)
+    if (files.length > 0) return files
+    runID = typeof run.metadata?.previous_run_id === "string" ? run.metadata.previous_run_id : undefined
+  }
+  return []
+}
+
+function retrySummary(prefix: string, files: string[]) {
+  const sample = files.slice(0, 3).join(", ")
+  if (files.length <= 3) {
+    return `${prefix} No new file changes were detected in this retry; re-evaluating previously changed files: ${sample}.`
+  }
+  return `${prefix} No new file changes were detected in this retry; re-evaluating previously changed files: ${sample} and ${files.length - 3} more.`
+}
+
+async function evaluationDelivery(task: TaskRow, delivery: { summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] }): Promise<EvaluationDelivery> {
+  if (delivery.diffs.length > 0) {
+    return {
+      summary: delivery.summary,
+      diffs: delivery.diffs,
+      changedFiles: delivery.diffs.map((item) => item.file),
+    }
+  }
+  const files = retryFiles(task)
+  if (files.length === 0) {
+    return {
+      summary: delivery.summary,
+      diffs: delivery.diffs,
+      changedFiles: [],
+    }
+  }
+  const diffs = (await Promise.all(files.map(materializeDiff))).flatMap((item) => item ? [item] : [])
+  if (diffs.length === 0) {
+    return {
+      summary: delivery.summary,
+      diffs: delivery.diffs,
+      changedFiles: [],
+    }
+  }
+  return {
+    summary: retrySummary(delivery.summary, diffs.map((item) => item.file)),
+    diffs,
+    changedFiles: diffs.map((item) => item.file),
+  }
+}
+
+async function materializeDiff(file: string) {
+  if (!file || path.isAbsolute(file)) return
+  const base = path.resolve(Instance.directory)
+  const resolved = path.resolve(base, file)
+  const relative = path.relative(base, resolved)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return
+  const next = relative.replace(/\\/g, "/")
+  const stat = await fs.stat(resolved).catch(() => undefined)
+  if (!stat?.isFile()) {
+    return {
+      file: next,
+      before: "",
+      after: "",
+      additions: 0,
+      deletions: 0,
+      status: "deleted" as const,
+    }
+  }
+  const after = await Bun.file(resolved).text()
+  return {
+    file: next,
+    before: "",
+    after,
+    additions: after ? after.split("\n").length : 0,
+    deletions: 0,
+    status: "modified" as const,
+  }
 }
 
 function localSelectors(goal: GoalRow) {
@@ -309,6 +396,7 @@ export async function evaluateGoal(input: {
   analysis: EvaluatorAnalysisType
   analysisError?: string
 }> {
+  const delivery = await evaluationDelivery(input.task, input.delivery)
   const result = await EvaluatorService.evaluate(
     {
       taskID: input.task.id,
@@ -317,14 +405,10 @@ export async function evaluateGoal(input: {
       metadata: {
         ...(input.task.metadata ?? {}),
         checks: goalChecks(input.goal, input.task),
-        delivery_changed_files: input.delivery.diffs.map((item) => item.file),
+        delivery_changed_files: delivery.changedFiles,
       },
     },
-    {
-      summary: input.delivery.summary,
-      diffs: input.delivery.diffs,
-      changedFiles: input.delivery.diffs.map((item) => item.file),
-    },
+    delivery,
   )
   const selectors = localSelectors(input.goal)
   const matched = selectors.flatMap((selector) =>
@@ -355,9 +439,9 @@ export async function evaluateGoal(input: {
       check_selector: selectors,
     }],
     delivery: {
-      summary: input.delivery.summary,
-      changedFiles: input.delivery.diffs.map((item) => item.file),
-      diffs: input.delivery.diffs,
+      summary: delivery.summary,
+      changedFiles: delivery.changedFiles ?? [],
+      diffs: delivery.diffs ?? [],
     },
     checkResults: checked.checks.map((item) => ({
       name: item.name,
@@ -389,6 +473,7 @@ export async function evaluateTask(input: {
   analysis: EvaluatorAnalysisType
   analysisError?: string
 }> {
+  const delivery = await evaluationDelivery(input.task, input.delivery)
   const result = await EvaluatorService.evaluate(
     {
       taskID: input.task.id,
@@ -396,14 +481,10 @@ export async function evaluateTask(input: {
       request: input.task.request,
       metadata: {
         ...(input.task.metadata ?? {}),
-        delivery_changed_files: input.delivery.diffs.map((item) => item.file),
+        delivery_changed_files: delivery.changedFiles,
       },
     },
-    {
-      summary: input.delivery.summary,
-      diffs: input.delivery.diffs,
-      changedFiles: input.delivery.diffs.map((item) => item.file),
-    },
+    delivery,
   )
   const analysisInput = {
     task: {
@@ -418,9 +499,9 @@ export async function evaluateTask(input: {
       check_selector: selectorList(goal.metadata),
     })),
     delivery: {
-      summary: input.delivery.summary,
-      changedFiles: input.delivery.diffs.map((item) => item.file),
-      diffs: input.delivery.diffs,
+      summary: delivery.summary,
+      changedFiles: delivery.changedFiles ?? [],
+      diffs: delivery.diffs ?? [],
     },
     checkResults: result.checks.map((item) => ({
       name: item.name,

@@ -17,6 +17,11 @@ import path from "path"
 import { SlackGateway } from "../../src/channel/slack"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
+import {
+  DEFAULT_OPENAI_CODEX_MODEL,
+  hasOpenAICodexAuth,
+  normalizeOpenAICodexModel,
+} from "../../src/provider/codex-live"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -30,29 +35,20 @@ function env(...keys: string[]) {
   }
 }
 
-function model(input: string) {
-  return input.includes("/") ? input : `alibaba-cn/${input}`
-}
-
 // ---------------------------------------------------------------------------
 // 凭证 & 配置（硬编码）
 // ---------------------------------------------------------------------------
 
-const DASHSCOPE_KEY = env("OPENCORVUS_E2E_DASHSCOPE_KEY", "CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY") ?? "test-dashscope-key"
-const DASHSCOPE_BASE_URL =
-  env("OPENCORVUS_E2E_DASHSCOPE_API_URL", "CODING_DASHSCOPE_API_URL")
-  ?? (DASHSCOPE_KEY.startsWith("sk-sp-")
-    ? "https://coding.dashscope.aliyuncs.com/v1"
-    : "https://dashscope.aliyuncs.com/compatible-mode/v1")
-const MODEL = model(env("OPENCORVUS_E2E_MODEL", "CODING_MODEL") ?? "qwen3.5-plus")
-const MODEL_ID = MODEL.split("/").at(-1) ?? MODEL
+const MODEL = normalizeOpenAICodexModel(env("OPENCORVUS_E2E_MODEL", "CODING_MODEL") ?? DEFAULT_OPENAI_CODEX_MODEL)
+const MODEL_PROVIDER_ID = MODEL.split("/")[0] ?? "openai"
+const HAS_OPENAI_OAUTH = await hasOpenAICodexAuth()
 
 const SLACK_BOT_TOKEN = env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN") ?? "test-slack-bot-token"
 const SLACK_APP_TOKEN = env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN") ?? "test-slack-app-token"
 const SLACK_CHANNEL_ID = env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID") ?? "test-slack-channel"
 const RUN_LIVE_E2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
 const HAS_LIVE_CREDS = !!(
-  env("OPENCORVUS_E2E_DASHSCOPE_KEY", "CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY")
+  HAS_OPENAI_OAUTH
   && env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN")
   && env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN")
   && env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID")
@@ -60,6 +56,10 @@ const HAS_LIVE_CREDS = !!(
 const liveTest = RUN_LIVE_E2E && HAS_LIVE_CREDS ? test : test.skip
 
 const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "3600000", 10) // 60 分钟
+const MODEL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_MODEL_TIMEOUT_MS ?? "900000", 10) // 15 minutes
+const SPEC_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_SPEC_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)
+const PLANNER_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_PLANNER_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)
+const EVALUATOR_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_EVALUATOR_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)
 const AUTO_REPLY = "Use reasonable defaults consistent with the task request, keep the scope minimal, continue execution, and do not ask again unless absolutely necessary."
 const STATUS_LOG_INTERVAL_MS = parseInt(process.env.OPENCORVUS_E2E_STATUS_LOG_INTERVAL_MS ?? "60000", 10)
 
@@ -313,15 +313,9 @@ const PROJECT_CONFIG = JSON.stringify(
     $schema: "https://opencorvus.ai/config.json",
     model: MODEL,
     provider: {
-      "alibaba-cn": {
-        options: { baseURL: DASHSCOPE_BASE_URL },
-        models: {
-          [MODEL_ID]: {
-            tool_call: true,
-            attachment: MODEL_ID.includes("qwen"),
-            reasoning: true,
-            family: MODEL_ID.includes("qwen") ? "qwen" : "minimax",
-          },
+      [MODEL_PROVIDER_ID]: {
+        options: {
+          timeout: MODEL_TIMEOUT_MS,
         },
       },
     },
@@ -449,10 +443,9 @@ describe("Full E2E: Moment Diary MVP — real Planner + Executor + Checks + Eval
         directory: tmp.path,
         init: async () => {
           const { Env } = await import("../../src/env/index")
-          // LLM API key（Planner + Executor session 均读取此 key）
-          Env.set("DASHSCOPE_API_KEY", DASHSCOPE_KEY)
-          Env.set("CODING_DASHSCOPE_API_KEY", DASHSCOPE_KEY)
-          Env.set("ALIBABA_CODING_PLAN_API_KEY", DASHSCOPE_KEY)
+          Env.set("OPENCORVUS_SPEC_TIMEOUT_MS", String(SPEC_TIMEOUT_MS))
+          Env.set("OPENCORVUS_PLANNER_TIMEOUT_MS", String(PLANNER_TIMEOUT_MS))
+          Env.set("OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS", String(EVALUATOR_TIMEOUT_MS))
           // Slack
           Env.set("SLACK_BOT_TOKEN", SLACK_BOT_TOKEN)
           Env.set("SLACK_APP_TOKEN", SLACK_APP_TOKEN)

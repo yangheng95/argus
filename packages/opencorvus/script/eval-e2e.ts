@@ -18,6 +18,7 @@
 
 import fs from "fs"
 import path from "path"
+import { DEFAULT_OPENAI_CODEX_MODEL, normalizeOpenAICodexModel } from "../src/provider/codex-live"
 
 /** Normalize Windows backslashes to forward slashes for shell commands */
 function toUnixPath(p: string): string {
@@ -36,6 +37,7 @@ const DRY_RUN = process.argv.includes("--dry-run")
 const START_SERVER = process.argv.includes("--start-server")
 const CASE_FILTER = process.argv.find((a) => a.startsWith("--case="))?.split("=")[1]
 const VERBOSE = process.argv.includes("--verbose") || process.argv.includes("-v")
+const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_E2E_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
 
 // ---------------------------------------------------------------------------
 // Types (aligned with orchestrator/model.ts Progress schema)
@@ -1330,7 +1332,7 @@ function printReport(results: EvalResult[]) {
   console.log(c("=".repeat(80), color.bold))
   console.log(`  ${c("Date:", color.dim)} ${new Date().toISOString()}`)
   console.log(`  ${c("Server:", color.dim)} ${SERVER}`)
-  console.log(`  ${c("Model:", color.dim)} qwen3.5-plus (alibaba-cn)`)
+  console.log(`  ${c("Model:", color.dim)} ${MODEL}`)
   console.log(`  ${c("Cases:", color.dim)} ${results.length}`)
   console.log("")
 
@@ -1577,7 +1579,7 @@ async function runCase(evalCase: EvalCase): Promise<EvalResult> {
 async function main() {
   console.log(c("OpenCorvus E2E Evaluation", color.bold + color.cyan))
   console.log(`${c("Server:", color.dim)} ${SERVER}`)
-  console.log(`${c("Model:", color.dim)} qwen3.5-plus`)
+  console.log(`${c("Model:", color.dim)} ${MODEL}`)
   console.log(`${c("Dry run:", color.dim)} ${DRY_RUN}`)
   console.log(`${c("Auto-start:", color.dim)} ${START_SERVER}`)
 

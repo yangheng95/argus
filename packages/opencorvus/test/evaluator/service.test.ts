@@ -205,7 +205,7 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("honors build, test, and lint being explicitly disabled", async () => {
+  test("preserves explicitly disabled core checks", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -222,6 +222,19 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const resolved = await EvaluatorService.resolveChecks({
+          checks: {
+            build: false,
+            test: false,
+            lint: false,
+            verify_cmd: false,
+          },
+        })
+        expect(resolved.build).toBe(false)
+        expect(resolved.test).toBe(false)
+        expect(resolved.lint).toBe(false)
+        expect(resolved.verify_cmd).toBe(false)
+
         const result = await EvaluatorService.evaluate(
           {
             metadata: {
@@ -229,16 +242,16 @@ describe("evaluator.service", () => {
                 build: false,
                 test: false,
                 lint: false,
+                verify_cmd: false,
               },
             },
           },
           { summary: "delivery ready" },
         )
-        expect(result.status).toBe("failed")
-        expect(result.verdict).toBe("rejected")
         expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
         expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
         expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "verify_cmd")).toBeUndefined()
       },
     })
   })

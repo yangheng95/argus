@@ -1016,6 +1016,16 @@ async function executeDecision(
 
   if (decision.action === "retry") {
     const nextRunID = createRetryRun(task, run, decision.summary, decision.retryContext)
+    await hooks.updateRun(
+      run,
+      {
+        status: "failed",
+        error: decision.summary,
+        blocking_reason: null,
+        time_completed: Date.now(),
+      },
+      decision.summary,
+    )
     await OrchestratorRuntime.dispatch(nextRunID, hooks)
     return true
   }
@@ -1029,6 +1039,16 @@ async function executeDecision(
     const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
     if (!next.queued) return false
     if (!next.runID) return false
+    await hooks.updateRun(
+      run,
+      {
+        status: "failed",
+        error: decision.summary,
+        blocking_reason: null,
+        time_completed: Date.now(),
+      },
+      decision.summary,
+    )
     await OrchestratorRuntime.dispatch(next.runID, hooks)
     return true
   }

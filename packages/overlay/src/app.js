@@ -2422,11 +2422,14 @@ function showAppDialog(options = {}) {
 
 async function nativeOpen(target) {
   if (!target) return false;
+  const url = /^https?:\/\//i.test(target);
   try {
-    const opened = await tauriInvoke("overlay_open_path", { path: target });
+    const opened = url
+      ? await tauriInvoke("overlay_open_url", { url: target })
+      : await tauriInvoke("overlay_open_path", { path: target });
     if (opened) return true;
   } catch { /* Tauri not available, try fallback */ }
-  if (/^https?:\/\//i.test(target)) {
+  if (url) {
     window.open(target, "_blank", "noopener");
     return true;
   }

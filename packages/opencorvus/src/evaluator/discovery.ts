@@ -29,12 +29,16 @@ export function resolvedChecks(
   config: z.infer<typeof CheckConfig>,
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
 ) {
+  const build = explicitCommands(config.build)
+  const test = explicitCommands(config.test)
+  const lint = explicitCommands(config.lint)
+  const verify_cmd = explicitCommands(config.verify_cmd)
   const next = {
     // build and lint only run when explicitly configured — not auto-discovered
-    ...(Array.isArray(config.build) ? { build: config.build } : {}),
-    ...(Array.isArray(config.test) ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
-    ...(Array.isArray(config.lint) ? { lint: config.lint } : {}),
-    ...(Array.isArray(config.verify_cmd) ? { verify_cmd: config.verify_cmd } : {}),
+    ...(build !== undefined ? { build } : {}),
+    ...(test !== undefined ? { test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
+    ...(lint !== undefined ? { lint } : {}),
+    ...(verify_cmd !== undefined ? { verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
     ...(config.artifact ? { artifact: config.artifact } : {}),
     ...(config.visual ? { visual: config.visual } : {}),
@@ -150,6 +154,12 @@ export function commandGroups(
     ),
     ...namedGroups(config.named, discovered.named),
   ].flatMap((item) => item ?? [])
+}
+
+function explicitCommands(configured?: string[] | false) {
+  if (configured === false) return false
+  if (Array.isArray(configured)) return configured
+  return
 }
 
 function commandSpecs(configured?: string[] | false, discovered: EvaluatorCommand[] = []) {

@@ -12,6 +12,7 @@ import {
   findEvaluationByGoalRun,
   findEvaluationByRun,
   findPlans,
+  findRun,
   findRuns,
   latestGoalRunByCoordinator,
   type RunRow,
@@ -117,11 +118,10 @@ export function buildRetryContext(
   const goalRun = latestGoalRunByCoordinator(run.id)
   const delivery = findDeliveryByRun(run.id) ?? (goalRun ? findDeliveryByGoalRun(goalRun.id) : undefined)
   const evaluation = findEvaluationByRun(run.id) ?? (goalRun ? findEvaluationByGoalRun(goalRun.id) : undefined)
+  const files = deliveryChangedFiles(delivery?.result?.changed_files) ?? inheritedChangedFiles(run)
   return {
     deliverySummary: delivery?.summary ?? undefined,
-    changedFiles: Array.isArray(delivery?.result?.changed_files)
-      ? delivery.result.changed_files.filter((f): f is string => typeof f === "string")
-      : undefined,
+    changedFiles: files,
     checks: Array.isArray(evaluation?.checks)
       ? evaluation.checks as Array<{ name: string; status: string; evidence: string }>
       : undefined,
@@ -129,5 +129,28 @@ export function buildRetryContext(
     avoidApproaches: analysis?.replan_guidance?.avoid_approaches ?? undefined,
     suggestedStrategy: analysis?.replan_guidance?.suggested_strategy ?? undefined,
     classification: analysis?.classification ?? undefined,
+  }
+}
+
+function deliveryChangedFiles(input: unknown) {
+  if (!Array.isArray(input)) return
+  const files = [...new Set(input.filter((item): item is string => typeof item === "string" && item.length > 0))]
+  if (files.length === 0) return
+  return files
+}
+
+function inheritedChangedFiles(run: RunRow) {
+  const seen = new Set<string>()
+  let current: RunRow | undefined = run
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id)
+    const meta =
+      current.metadata?.retry_context && typeof current.metadata.retry_context === "object" && !Array.isArray(current.metadata.retry_context)
+        ? current.metadata.retry_context as RetryContext
+        : undefined
+    const files = deliveryChangedFiles(meta?.changedFiles)
+    if (files) return files
+    const previous = typeof current.metadata?.previous_run_id === "string" ? current.metadata.previous_run_id : undefined
+    current = previous ? findRun(previous) ?? undefined : undefined
   }
 }

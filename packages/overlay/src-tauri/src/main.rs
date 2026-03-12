@@ -140,6 +140,18 @@ fn overlay_open_path<R: Runtime>(app: AppHandle<R>, path: String) -> Result<bool
 }
 
 #[tauri::command]
+fn overlay_open_url<R: Runtime>(app: AppHandle<R>, url: String) -> Result<bool, String> {
+    if url.trim().is_empty() {
+        return Ok(false);
+    }
+
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map(|_| true)
+        .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 fn overlay_create_dir(path: String) -> Result<bool, String> {
     let path = path.trim();
     if path.is_empty() {
@@ -507,6 +519,7 @@ fn main() {
             overlay_server_info,
             overlay_server_restart,
             overlay_open_path,
+            overlay_open_url,
             overlay_create_dir,
             overlay_create_temp_dir,
             overlay_pick_dir

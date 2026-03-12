@@ -24,35 +24,36 @@
  *     E4. Evidence specificity — references files, tests, error messages (not vague)
  *     E5. Replan guidance quality — root cause is specific, strategy is actionable
  *
- * Requires DASHSCOPE_API_KEY in environment.
- * Run: DASHSCOPE_API_KEY=sk-sp-xxx bun test test/benchmark/agent-quality.test.ts --timeout 300000
+ * Requires OpenAI OAuth credentials in auth.json.
+ * Run once: bun run packages/opencorvus/src/index.ts auth login
+ * Run: bun test test/benchmark/agent-quality.test.ts --timeout 300000
  */
 import { describe, test, expect } from "bun:test"
 import { generateText, stepCountIs } from "ai"
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import z from "zod"
 import { PlannerOutput, type PlannerOutputType } from "@/planner/agent"
 import { EvaluatorAnalysis, type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
+import {
+  DEFAULT_OPENAI_CODEX_MODEL,
+  getOpenAICodexLanguage,
+  hasOpenAICodexAuth,
+  normalizeOpenAICodexModel,
+} from "@/provider/codex-live"
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
-const DASHSCOPE_API_KEY = process.env.DASHSCOPE_API_KEY
-const HAS_LLM = !!DASHSCOPE_API_KEY
+const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_BENCHMARK_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
+const HAS_LLM = await hasOpenAICodexAuth()
 const TIMEOUT = 180_000
 
 function createModel() {
-  const baseURL = DASHSCOPE_API_KEY?.startsWith("sk-sp-")
-    ? "https://coding.dashscope.aliyuncs.com/v1"
-    : "https://dashscope.aliyuncs.com/compatible-mode/v1"
-  const provider = createOpenAICompatible({
-    name: "dashscope",
-    baseURL,
-    apiKey: DASHSCOPE_API_KEY!,
+  return getOpenAICodexLanguage({
+    directory: process.cwd(),
+    model: MODEL,
   })
-  return provider.languageModel("qwen3.5-plus")
 }
 
 // System prompts (same as production agents)
@@ -221,7 +222,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B1: Simple task — should produce concise, accurate plan
   // ═══════════════════════════════════════════════════
   test("B1: Simple task — concise plan with correct scope", async () => {
-    const model = createModel()
+    const model = await createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -299,7 +300,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B2: Complex task — should produce thorough, multi-goal plan
   // ═══════════════════════════════════════════════════
   test("B2: Complex task — thorough multi-goal plan", async () => {
-    const model = createModel()
+    const model = await createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -395,7 +396,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B3: Chinese task — should respond in Chinese
   // ═══════════════════════════════════════════════════
   test("B3: Chinese task — responds in Chinese", async () => {
-    const model = createModel()
+    const model = await createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -436,7 +437,7 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
   // B4: Replan differentiation — new plan vs failed approach
   // ═══════════════════════════════════════════════════
   test("B4: Replan — produces different approach after failure", async () => {
-    const model = createModel()
+    const model = await createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const replanPrompt = `# Task
@@ -518,7 +519,7 @@ describe.skipIf(!HAS_LLM)("Evaluator Agent Quality", () => {
   // B5: All checks pass — should accept
   // ═══════════════════════════════════════════════════
   test("B5: All pass — verdict accepted with correct goal assessment", async () => {
-    const model = createModel()
+    const model = await createModel()
 
     const result = await generateText({
       model,
@@ -600,7 +601,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
   // B6: Test failure — should reject with evaluation classification
   // ═══════════════════════════════════════════════════
   test("B6: Test failure — correct rejection with replan guidance", async () => {
-    const model = createModel()
+    const model = await createModel()
     const tools = createCodebaseTools(process.cwd())
 
     const result = await generateText({
@@ -705,7 +706,7 @@ Analyze the results. Investigate the failure using tools. Then produce your anal
   // B7: Wrong framework — should classify as strategy failure
   // ═══════════════════════════════════════════════════
   test("B7: Wrong framework — strategy classification with avoid guidance", async () => {
-    const model = createModel()
+    const model = await createModel()
 
     const result = await generateText({
       model,
@@ -783,7 +784,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
   // B8: Flaky test — should classify as transient
   // ═══════════════════════════════════════════════════
   test("B8: Flaky test — transient classification", async () => {
-    const model = createModel()
+    const model = await createModel()
 
     const result = await generateText({
       model,
@@ -868,7 +869,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
   // B9: Mixed results — partial goal success
   // ═══════════════════════════════════════════════════
   test("B9: Mixed results — partial goals with accurate per-goal assessment", async () => {
-    const model = createModel()
+    const model = await createModel()
 
     const result = await generateText({
       model,

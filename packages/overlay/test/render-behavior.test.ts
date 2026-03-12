@@ -372,6 +372,140 @@ test("planner turn refreshes when synthetic board content changes", async () => 
   }
 }, { timeout: 20_000 })
 
+test("main right-rail sections do not clip long panel content", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderSpec") === "function"
+          && typeof window.eval("renderPlan") === "function"
+          && typeof window.eval("renderGoals") === "function"
+          && typeof window.eval("renderEvaluation") === "function"
+          && typeof window.eval("renderChanges") === "function"
+          && typeof window.eval("renderOverview") === "function"
+          && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const renderSpec = window.eval("renderSpec")
+      const renderPlan = window.eval("renderPlan")
+      const renderGoals = window.eval("renderGoals")
+      const renderCriteria = window.eval("renderCriteria")
+      const renderEvaluation = window.eval("renderEvaluation")
+      const renderChanges = window.eval("renderChanges")
+      const renderOverview = window.eval("renderOverview")
+      const state = window.eval("state")
+
+      for (const id of ["specSection", "planSection", "goalsSection", "criteriaSection", "changesSection", "overviewSection"]) {
+        const section = document.querySelector(`#${id}`)
+        if (!(section instanceof HTMLDetailsElement)) throw new Error(`Missing section: ${id}`)
+        section.open = true
+      }
+
+      renderSpec({
+        content: Array.from({ length: 24 }, (_, i) => `Spec line ${i + 1}: ` + "detail ".repeat(8)).join("\n\n"),
+        time: { created: 1 },
+      })
+      renderPlan({
+        version: 3,
+        summary: Array.from({ length: 18 }, (_, i) => `Plan step ${i + 1}: ` + "detail ".repeat(8)).join("\n\n"),
+        time: { created: 2 },
+      })
+      renderGoals(
+        Array.from({ length: 12 }, (_, i) => ({
+          id: `goal-${i + 1}`,
+          title: `Goal ${i + 1}`,
+          detail: "Goal detail ".repeat(10),
+          status: i % 2 === 0 ? "passed" : "pending",
+          metadata: {},
+        })),
+      )
+
+      const task = {
+        status: "running",
+        metadata: {
+          checks: {
+            spec_check: { enabled: true },
+          },
+        },
+      }
+      const evaluation = {
+        verdict: "rejected",
+        summary: "Long evaluation summary",
+        time: { created: 1 },
+        checks: Array.from({ length: 18 }, (_, i) => ({
+          name: `custom_check_${i + 1}`,
+          label: `Custom Check ${i + 1}`,
+          family: i > 8 ? "review" : "custom",
+          status: i % 3 === 0 ? "failed" : "passed",
+          evidence: `Evidence ${i + 1}: ` + "detail ".repeat(20),
+        })),
+      }
+
+      renderCriteria(task, evaluation)
+      renderEvaluation(evaluation, null)
+
+      state.changes = Array.from({ length: 14 }, (_, i) => ({
+        file: `src/file-${i + 1}.ts`,
+        before: "before",
+        after: "after",
+        additions: i + 1,
+        deletions: i,
+        status: i % 3 === 0 ? "added" : i % 3 === 1 ? "modified" : "deleted",
+      }))
+      renderChanges()
+
+      renderOverview(
+        {
+          headline: "Overview headline",
+          summary: Array.from({ length: 16 }, (_, i) => `Overview item ${i + 1}: ` + "detail ".repeat(8)).join("\n\n"),
+          nextStep: {
+            title: "Next step",
+            detail: "Execute the next step with enough detail to overflow the old inner cap.",
+          },
+          controls: {},
+        },
+        task,
+      )
+
+      const panels = ["specBody", "planBody", "goalsBody", "criteriaBody", "changesBody", "overviewBody"]
+        .map((id) => {
+          const body = document.querySelector(`#${id}`)
+          if (!(body instanceof HTMLElement)) throw new Error(`Missing body: ${id}`)
+          return {
+            id,
+            maxHeight: getComputedStyle(body).maxHeight,
+            overflow: getComputedStyle(body).overflowY,
+            clipped: body.scrollHeight > body.clientHeight + 1,
+            scrollHeight: body.scrollHeight,
+          }
+        })
+
+      return { panels }
+    })
+
+    expect(result.panels.every((item) => item.maxHeight === "none")).toBe(true)
+    expect(result.panels.every((item) => item.overflow === "visible")).toBe(true)
+    expect(result.panels.some((item) => item.scrollHeight > 260)).toBe(true)
+    expect(result.panels.every((item) => item.clipped === false)).toBe(true)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
 test("live planner agent marks the plan section active", async () => {
   const exe = await browser()
   const server = serve()
