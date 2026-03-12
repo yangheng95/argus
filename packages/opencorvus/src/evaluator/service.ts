@@ -23,6 +23,7 @@ import {
   initBuiltinCheckIndex,
   checkBase,
   checkResult,
+  emptyOptional,
   normalizeArtifacts,
   softOrStrict,
 } from "./shared"
@@ -93,13 +94,30 @@ async function publishResult(task: EvaluationTask, output: EvaluationOutput) {
   return output
 }
 
+const LOCAL_CHECK_NAMES = new Set(["startup", "artifact", "visual", "puppeteer"])
+
 async function optionalChecks(
   config: z.infer<typeof CheckConfig>,
   task: EvaluationTask,
   delivery: EvaluationDelivery,
 ) {
-  const builtin = await Promise.all(OPTIONAL_CHECK_DEFS.map((item) => item.run(config, task, delivery)))
-  const plugins = await pluginChecks(config, task, delivery)
+  // Phase 1: run local (non-LLM) checks concurrently
+  const phase1 = await Promise.all(
+    OPTIONAL_CHECK_DEFS.map((item) =>
+      LOCAL_CHECK_NAMES.has(item.name) ? item.run(config, task, delivery) : undefined,
+    ),
+  )
+  // If any local check failed strictly, skip LLM review checks and plugins
+  const strictLocalFailed = phase1.some((item) => item !== undefined && item.outcome === "failed")
+  // Phase 2: run LLM review checks (skip if strict local failure)
+  const builtin = await Promise.all(
+    OPTIONAL_CHECK_DEFS.map(async (item, i) => {
+      if (phase1[i] !== undefined) return phase1[i]!
+      if (strictLocalFailed) return emptyOptional()
+      return item.run(config, task, delivery)
+    }),
+  )
+  const plugins = strictLocalFailed ? [] : await pluginChecks(config, task, delivery)
   return [...builtin, ...plugins].map((item) => ({
     ...item,
     checks: item.checks.map(checkResult),

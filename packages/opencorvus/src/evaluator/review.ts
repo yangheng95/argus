@@ -19,6 +19,7 @@ import {
 
 const evaluatorLog = Log.create({ service: "evaluator" })
 const REVIEW_TIMEOUT_MS = 120_000
+const SPEC_CHECK_MAX_TOTAL = 80_000
 
 export async function uiReviewResult(
   config: z.infer<typeof CheckConfig>["ui_review"],
@@ -248,27 +249,13 @@ function reviewOutcome(
   extra: Record<string, unknown>,
 ): EvaluationOutcome {
   if (!result.ok) {
-    return {
-      outcome: "failed" as const,
+    return softOrStrict({
+      mode,
+      name,
       summary: result.summary,
-      checks: [
-        {
-          name,
-          status: "failed" as const,
-          evidence: result.evidence,
-        },
-      ],
-      artifacts: [
-        {
-          kind: "report" as const,
-          label: `evaluation:${name}`,
-          payload: {
-            ...extra,
-            ...result.payload,
-          },
-        },
-      ],
-    }
+      evidence: result.evidence,
+      payload: { ...extra, ...result.payload },
+    })
   }
 
   return result.object.verdict === "accepted"
@@ -313,6 +300,15 @@ export async function specCheckResult(
 ): Promise<EvaluationOutcome> {
   if (!config?.enabled) return emptyOptional()
   const mode = config.mode ?? "strict"
+  if (!activeSpecVersionID) {
+    return softOrStrict({
+      mode,
+      name: "spec_check",
+      summary: "Spec check: no active spec version available.",
+      evidence: "Cannot verify delivery against spec: no active spec version.",
+      payload: { available: false },
+    })
+  }
 
   let specContent = ""
   let specItemsSection = ""
@@ -338,6 +334,23 @@ export async function specCheckResult(
       summary: "No spec found in database.",
       evidence: "Cannot verify delivery against spec: no spec exists.",
       payload: { available: false },
+    })
+  }
+
+  const fileCount = delivery.diffs?.length ?? 0
+  const perFileLimit = fileCount <= 1 ? 60000 : fileCount <= 3 ? 20000 : 8000
+  const payload = specCheckPayload(delivery.diffs ?? [], perFileLimit)
+  if (payload.error) {
+    return softOrStrict({
+      mode,
+      name: "spec_check",
+      summary: "Spec check skipped because the delivery is too large for reliable model review.",
+      evidence: payload.error,
+      payload: {
+        available: true,
+        specID: activeSpecVersionID,
+        per_file_limit: perFileLimit,
+      },
     })
   }
 
@@ -385,17 +398,6 @@ export async function specCheckResult(
     }
   }
 
-  const fileCount = delivery.diffs?.length ?? 0
-  const perFileLimit = fileCount <= 1 ? 60000 : fileCount <= 3 ? 20000 : 8000
-  const diffsSection = delivery.diffs?.length
-    ? delivery.diffs.map((d) => {
-        const content = d.status === "deleted"
-          ? `[DELETED] ${d.file}`
-          : `--- ${d.file} ---\n${clip(d.after, perFileLimit)}`
-        return content
-      }).join("\n\n")
-    : "(no diffs available)"
-
   const specCheckMessages = [
     {
       role: "system" as const,
@@ -415,7 +417,7 @@ export async function specCheckResult(
         `Specification (source of truth):\n${specContent}${specItemsSection}`,
         request ? `Task request:\n${request}` : "",
         `Delivery summary:\n${delivery.summary}`,
-        `File contents after changes:\n${diffsSection}`,
+        `File contents after changes:\n${payload.text}`,
       ]
         .filter(Boolean)
         .join("\n\n"),
@@ -505,13 +507,53 @@ function diffDigest(diffs: Snapshot.FileDiff[], limit: number) {
     .join("\n\n---\n\n")
 }
 
-async function reviewModel() {
-  const def = await Provider.defaultModel().catch(() => undefined)
-  if (!def) return
-  return (
-    (await Provider.getSmallModel(def.providerID).catch(() => undefined)) ??
-    (await Provider.getModel(def.providerID, def.modelID).catch(() => undefined))
-  )
+function specCheckPayload(diffs: Snapshot.FileDiff[], perFileLimit: number) {
+  const oversized = diffs
+    .filter((item) => item.status !== "deleted")
+    .flatMap((item) =>
+      (item.after ?? "").length > perFileLimit
+        ? [`${item.file} (${(item.after ?? "").length} chars > ${perFileLimit})`]
+        : [],
+    )
+  if (oversized.length > 0) {
+    return {
+      error: `Changed files exceed the safe per-file review limit: ${oversized.join(", ")}.`,
+    }
+  }
+  const total = diffs.reduce((sum, item) => sum + (item.status === "deleted" ? item.file.length : (item.after ?? "").length), 0)
+  if (total > SPEC_CHECK_MAX_TOTAL) {
+    return {
+      error: `Changed file content totals ${total} chars, which exceeds the safe review limit of ${SPEC_CHECK_MAX_TOTAL}.`,
+    }
+  }
+  return {
+    text: diffs.length > 0
+      ? diffs.map((item) =>
+          item.status === "deleted"
+            ? `[DELETED] ${item.file}`
+            : `--- ${item.file} ---\n${item.after ?? ""}`,
+        ).join("\n\n")
+      : "(no diffs available)",
+  }
+}
+
+let _pendingReviewModel: Promise<Awaited<ReturnType<typeof Provider.getModel>> | undefined> | undefined
+
+function reviewModel() {
+  if (_pendingReviewModel) return _pendingReviewModel
+  _pendingReviewModel = (async () => {
+    try {
+      const def = await Provider.defaultModel().catch(() => undefined)
+      if (!def) return
+      return (
+        (await Provider.getSmallModel(def.providerID).catch(() => undefined)) ??
+        (await Provider.getModel(def.providerID, def.modelID).catch(() => undefined))
+      )
+    } finally {
+      _pendingReviewModel = undefined
+    }
+  })()
+  return _pendingReviewModel
 }
 
 async function evaluationModel() {

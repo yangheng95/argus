@@ -206,6 +206,10 @@ export class ChannelRuntime {
     this.pending.clear()
     this.taskBindings.clear()
     this.taskByThread.clear()
+    this.textBuffers.clear()
+    this.userMessageIds.clear()
+    this.pendingPartTexts.clear()
+    this.jobs.clear()
     for (const adapter of this.adapters) {
       await adapter.stop()
     }
@@ -404,11 +408,10 @@ export class ChannelRuntime {
   }
 
   private async submitTask(sessionID: string, text: string, platform: string) {
-    const fastMode = this.taskMode() === "tui-runtime"
-    if (fastMode) {
+    if (this.taskMode() === "tui-runtime") {
       const runtimeReady = await this.startRuntime(sessionID)
       if (!runtimeReady) {
-        console.warn(`[ChannelRuntime] tui.runtime.start failed, fallback submit path for session ${sessionID}`)
+        return "failed" as const
       }
       const result = await this.client.tui.runtime.submitTask({
         sessionID,
@@ -438,9 +441,9 @@ export class ChannelRuntime {
         )
       }
       console.error("[ChannelRuntime] tui.runtime.submitTask error:", JSON.stringify(result.error).slice(0, 500))
+      return "failed" as const
     }
 
-    // Fallback for compatibility or when tui runtime submission fails.
     const result = await this.client.session.promptAsync({
       sessionID,
       parts: [{ type: "text", text }],
@@ -865,7 +868,24 @@ export class ChannelRuntime {
             parts: [{ type: "text", text: continuationText }],
             system: this.buildSystemPrompt(job.platform),
           })
-          .catch((err) => console.error("[ChannelRuntime] loop continuation error:", err))
+          .then((result) => {
+            if (result.error) {
+              console.error("[ChannelRuntime] loop continuation API error:", JSON.stringify(result.error).slice(0, 500))
+              this.jobs.delete(sessionId)
+              this.session.stop(sessionId)
+              const next = this.session.dequeue(sessionId)
+              if (next.item) this.handleMessage(next.item.msg).catch(() => {})
+            } else {
+              this.markPending(sessionId, this.taskId(sessionId))
+            }
+          })
+          .catch((err) => {
+            console.error("[ChannelRuntime] loop continuation error:", err)
+            this.jobs.delete(sessionId)
+            this.session.stop(sessionId)
+            const next = this.session.dequeue(sessionId)
+            if (next.item) this.handleMessage(next.item.msg).catch(() => {})
+          })
         return
       }
 
@@ -1408,4 +1428,3 @@ function sameEntry(left: SessionEntry, right: SessionEntry) {
     left.channel === right.channel &&
     left.thread === right.thread
 }
-

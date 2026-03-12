@@ -1,0 +1,186 @@
+最终综合排查报告：OpenCorvus 工作流 + Overlay 面板  
+  所有发现按严重性排列，去重后合并。                
+                                                    
+  ---                                               
+  CRITICAL (4 个)                                   
+
+  #: C1
+  文件: runtime.ts
+  行号: 85, 778
+  问题: evaluatingRuns map 从未被填充 — 声明了但无  
+    .set() 调用。recoverStrandedTasks()
+    的保护检查永远返回 false，评估超过 ~11min 的    
+  task
+     会被误杀
+  来源: 我 + orchestrator agent
+  ────────────────────────────────────────
+  #: C2
+  文件: runtime.ts
+  行号: 958
+  问题: executeDecision replan 失败返回 true —      
+  return
+     !!next.error 把失败当成功，caller 提前
+    return，run 被孤立（无 time_completed、无       
+    failGoals、无 bus 事件）
+  来源: orchestrator agent
+  ────────────────────────────────────────
+  #: C3
+  文件: overlay/app.js
+  行号: 3448-3472
+  问题: SSE stream 正常结束不重连 — done===true     
+    跳出循环后不重连也不重置
+    sseConnected。服务器重启后 Overlay 变僵尸       
+  来源: 我 + overlay agent
+  ────────────────────────────────────────
+  #: C4
+  文件: evaluator/review.ts
+  行号: 251-272
+  问题: reviewOutcome 在 review model 不可用时硬编码
+   
+    "failed" — 不尊重 mode="soft" 设置，导致没配    
+    review model 的项目所有 goal 永远 fail
+  来源: evaluator agent
+
+  HIGH (6 个)
+
+  #: H1
+  文件: channel-runtime/core.ts
+  行号: 861-868
+  问题: task_report progress 续传 fire-and-forget — 
+    promptAsync 失败后 session 永久处于 processing  
+    状态，线程死锁
+  ────────────────────────────────────────
+  #: H2
+  文件: transition.ts
+  行号: 1960-1968
+  问题: failGoals 盲目将所有 goals（含已
+    passed）更新为 failed — SQL 无 status !=        
+  'passed'
+     过滤
+  ────────────────────────────────────────
+  #: H3
+  文件: runtime.ts
+  行号: 287-354, 544
+  问题: finalizeCoordinatorRun 可被
+    syncRun/finalizeGoalRun 路径并发进入 — 绕过     
+    completingRuns guard，可导致双重 evaluation     
+  ────────────────────────────────────────
+  #: H4
+  文件: transition.ts
+  行号: 1399-1410
+  问题: retry 重置所有 failed goals 为 pending —    
+    包括因环境/权限等不可恢复原因失败的
+    goal，浪费执行预算
+  ────────────────────────────────────────
+  #: H5
+  文件: evaluator/checks.ts
+  行号: 210-218
+  问题: waitForStartup 对一次性进程的 ready_text    
+    匹配需要额外的 require_exit_zero 标志 —
+    逻辑不对称，进程打印 ready_text 后正常退出 0    
+    却被判为失败
+  ────────────────────────────────────────
+  #: H6
+  文件: overlay/app.js
+  行号: 4938
+  问题: 早期 return 后的死代码引用未声明的
+    _interactionBusy — 当前因 early return
+    安全，但重构时会触发 ReferenceError
+
+  MEDIUM (10 个)
+
+  #: M1
+  文件: goal-runner.ts:87-113
+  问题: Goal worktree 从未清理，磁盘泄漏
+  ────────────────────────────────────────
+  #: M2
+  文件: strategy.ts:55-89
+  问题: maxReplans 预算被 maxRuns 静默饥饿（高      
+    SAME_PLAN_RETRY_LIMIT 时 replan 永远不触发）    
+  ────────────────────────────────────────
+  #: M3
+  文件: runtime.ts:416-427
+  问题: Advisory goal 失败时 delivery 不被 apply —  
+    后续 blocking goal 看到的是过时 workspace       
+  ────────────────────────────────────────
+  #: M4
+  文件: check/policy.ts:56-59
+  问题: soft mode 下所有 selector 匹配的 check 被   
+    skip 后，goal 空虚通过（relevant.length === 0 → 
+    true）
+  ────────────────────────────────────────
+  #: M5
+  文件: evaluator/agent.ts:159-166
+  问题: 浅评估保护只检查 accepted verdict —
+    fabricated rejection（0 tool calls）直接放行    
+  ────────────────────────────────────────
+  #: M6
+  文件: overlay/app.js:5520-5532
+  问题: inlineMarkdown 在 escapeHtml
+    后做正则替换，URL 中的 & 变成 &amp;，链接断裂   
+  ────────────────────────────────────────
+  #: M7
+  文件: overlay/app.js:3260
+  问题: loadBoard() 失败完全静默（catch {}
+    无日志），UI 展示过期数据最长 15s
+  ────────────────────────────────────────
+  #: M8
+  文件: interactions.js:206-228
+  问题: auto-resolve 后 busy=false 先于 loadBoard() 
+    重渲染执行，可能触发重复 API 调用
+  ────────────────────────────────────────
+  #: M9
+  文件: channel-runtime/core.ts
+  问题: userMessageIds / textBuffers /
+    pendingPartTexts 无清理策略，长期运行内存泄漏   
+  ────────────────────────────────────────
+  #: M10
+  文件: runtime.ts:692
+  问题: console.log 调试语句应改用结构化 log        
+
+  LOW (5 个)
+
+  ┌─────┬────────────────┬───────────────────────┐  
+  │  #  │      文件      │         问题          │  
+  ├─────┼────────────────┼───────────────────────┤  
+  │     │                │ channel protocol      │  
+  │ L1  │ core.ts:589    │ 模式用 task_id 当     │  
+  │     │                │ sessionId             │  
+  ├─────┼────────────────┼───────────────────────┤  
+  │     │ overlay-ui.ts: │ 目录遍历检查缺少尾部  │  
+  │ L2  │ 38             │ 分隔符（/foo/ui       │  
+  │     │                │ 能匹配 /foo/ui-evil） │  
+  ├─────┼────────────────┼───────────────────────┤  
+  │     │ spec/agent.ts: │ readFileSafe 用 requi │  
+  │ L3  │ 846            │ re("fs").readFileSync │  
+  │     │                │  绕过 Filesystem 抽象 │  
+  ├─────┼────────────────┼───────────────────────┤  
+  │     │ planner/agent. │ 质量评分阈值 0.5      │  
+  │ L4  │ ts:597         │ 太容易达到，不强制验  │  
+  │     │                │ 证语言                │  
+  ├─────┼────────────────┼───────────────────────┤  
+  │ L5  │ overlay/app.js │ extensionsBadge 和    │  
+  │     │ :1469,1478     │ skillList 重复写入    │  
+  └─────┴────────────────┴───────────────────────┘  
+
+  ---
+  推荐修复顺序
+
+  第一批 (Critical + 高影响 High):
+  1. C1: evaluatingRuns — 在
+  finalizeCoordinatorRun/runEvaluation 入口
+  set，出口 delete
+  2. C2: executeDecision — return !!next.error 改为 
+  return false（让 caller 走 fail 路径）
+  3. C3: SSE 重连 — stream 正常结束后也要重连 + 重置
+   sseConnected
+  4. C4: reviewOutcome — 模型不可用时尊重 mode，soft
+   mode 返回 "skipped"
+  5. H1: 续传 promptAsync — await 或在 catch 中     
+  session.stop() + cleanup
+  6. H2: failGoals — SQL 加 AND status = 'pending'  
+
+  第二批 (其余 High + 关键 Medium):
+  7. H3-H6, M1-M5
+
+  需要我开始修复哪些？可以按批次来。

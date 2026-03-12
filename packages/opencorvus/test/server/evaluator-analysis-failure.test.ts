@@ -94,8 +94,6 @@ test(
         },
       },
     })
-    spyOn(SpecService, "initial").mockResolvedValue(undefined as never)
-    spyOn(SpecService, "rewrite").mockResolvedValue(undefined as never)
     spyOn(DeliveryService, "deliver").mockResolvedValue({
       status: "delivered",
       summary: "Delivery published.",

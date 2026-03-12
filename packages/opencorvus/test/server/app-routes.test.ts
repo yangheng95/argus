@@ -18,13 +18,20 @@ describe("app routes", () => {
     expect(cmd.at(-1)).toBe("C:\\repo")
   })
 
-  test("GET /ui/ serves the overlay shell", async () => {
+  test("GET /ui/ reports missing overlay assets when packaged UI is unavailable", async () => {
     const app = Server.App()
     const response = await app.request("/ui/")
 
-    expect(response.status).toBe(200)
-    expect(response.headers.get("content-type")).toContain("text/html")
-    expect(await response.text()).toContain('data-page="overlay"')
+    expect(response.status).toBe(404)
+    expect(await response.text()).toContain("Overlay UI not found")
+  })
+
+  test("GET /ui/missing.js returns 404 instead of falling back to index.html", async () => {
+    const app = Server.App()
+    const response = await app.request("/ui/missing.js")
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).not.toContain("data-page=\"overlay\"")
   })
 
   test("POST /path/open validates non-empty input", async () => {

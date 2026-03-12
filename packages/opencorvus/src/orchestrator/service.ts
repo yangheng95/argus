@@ -22,6 +22,7 @@ import {
   OrchestratorDeliveryTable,
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
+  OrchestratorGoalRunTable,
   OrchestratorInteractionRequestTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
@@ -56,6 +57,14 @@ import { mergeTaskChecks, writeTaskChecks } from "./checks"
 import { OrchestratorInteraction } from "./interaction"
 import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
+import {
+  isPlannerClarification,
+  markInteraction,
+  rejectPlannerClarification,
+  rejectProtocolInteraction,
+  rejectReplanConfirmation,
+} from "./interaction-actions"
+import { cleanupGoalWorkspace } from "./goal-runner"
 import {
   compileTransition,
   createReplanRun,
@@ -225,6 +234,7 @@ async function supersedeRunForSpecRewrite(task: TaskRow, run: RunRow, summary: s
       time_completed: now,
     })
     updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
+    await cleanupGoalWorkspace(target.goalRun.workspace_dir ?? undefined)
   }
   await updateRun(
     run,
@@ -719,17 +729,7 @@ export namespace OrchestratorService {
     }
     // Replan confirmation: user rejected the spec rewrite → fail the task
     if (row.payload?.replan_confirm === true) {
-      Database.use((db) =>
-        db.update(OrchestratorInteractionRequestTable)
-          .set({ status: "rejected", response: { approved: false }, time_resolved: Date.now(), time_updated: Date.now() })
-          .where(eq(OrchestratorInteractionRequestTable.id, interactionID))
-          .run(),
-      )
-      const task = requireTask(row.task_id)
-      const run = requireRun(row.run_id)
-      const reason = input.message ?? "Replan rejected by user"
-      await updateRun(run, { status: "failed", error: reason, blocking_reason: null, time_completed: Date.now() }, reason)
-      await updateTask(task, { status: "failed", error: reason, blocking_reason: null, time_completed: Date.now() }, reason)
+      await rejectReplanConfirmation(row, input.message)
       return viewInteraction(requireInteraction(interactionID))
     }
     if (row.request_type === "permission") {
@@ -769,6 +769,7 @@ export namespace OrchestratorService {
           time_completed: Date.now(),
         })
         updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
+        await cleanupGoalWorkspace(target.goalRun.workspace_dir ?? undefined)
       }
     }
     if (run) {
@@ -805,6 +806,15 @@ export namespace OrchestratorService {
 
   export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
     const ids = await sessionTree(sessionID)
+    const dirs = Database.use((db) =>
+      db
+        .select({ dir: OrchestratorGoalRunTable.workspace_dir })
+        .from(OrchestratorGoalRunTable)
+        .where(inArray(OrchestratorGoalRunTable.session_id, ids))
+        .all(),
+    )
+      .flatMap((item) => typeof item.dir === "string" && item.dir ? [item.dir] : [])
+      .filter((item, index, all) => all.indexOf(item) === index)
     if (input?.deleteTasks) {
       const tasks = Database.use((db) =>
         db
@@ -833,6 +843,9 @@ export namespace OrchestratorService {
           )
           .run(),
       )
+    }
+    for (const dir of dirs) {
+      await cleanupGoalWorkspace(dir)
     }
     await Session.remove(sessionID)
     return true
@@ -1115,7 +1128,7 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
         decision: input.reply === "always" ? "acceptForSession" : "accept",
       },
     })
-    markProtocolInteraction(row, "answered", {
+    markInteraction(row, "answered", {
       reply: input.reply ?? "once",
       message: input.message,
     }, now)
@@ -1144,76 +1157,10 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
       answers: response,
     },
   })
-  markProtocolInteraction(row, "answered", {
+  markInteraction(row, "answered", {
     answers: response,
     message: input.message,
   }, now)
-}
-
-async function rejectProtocolInteraction(row: InteractionRow, message?: string) {
-  const run = requireRun(row.run_id)
-  const executor = ExecutorRegistry.require(run.executor)
-  if (!executor.resolve) throw new Error(`executor ${run.executor} does not support interaction resolution`)
-  const payload = row.payload ?? {}
-  const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
-  const now = Date.now()
-  const target = executionTarget(run)
-  if (row.request_type === "permission") {
-    await executor.resolve({
-      sessionID: target.sessionID,
-      queueTaskID: target.queueTaskID,
-      requestID,
-      kind: "approval",
-      response: {
-        decision: "decline",
-      },
-    })
-    markProtocolInteraction(row, "rejected", { message }, now)
-    return
-  }
-  await executor.resolve({
-    sessionID: target.sessionID,
-    queueTaskID: target.queueTaskID,
-    requestID,
-    kind: "input",
-    error: {
-      code: -32000,
-      message: message?.trim() || "Rejected by operator",
-    },
-  })
-  markProtocolInteraction(row, "rejected", { message }, now)
-}
-
-function markProtocolInteraction(
-  row: InteractionRow,
-  status: OrchestratorInteractionStatus,
-  response: Record<string, unknown>,
-  now: number,
-) {
-  Database.transaction((db) => {
-    db.update(OrchestratorInteractionRequestTable)
-      .set({
-        status,
-        response,
-        time_resolved: now,
-        time_updated: now,
-      })
-      .where(eq(OrchestratorInteractionRequestTable.id, row.id))
-      .run()
-    Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
-        taskID: row.task_id,
-        runID: row.run_id,
-        interactionID: row.id,
-        status,
-        summary: status === "answered" ? "Interaction answered" : "Interaction rejected",
-      }),
-    )
-  })
-}
-
-function isPlannerClarification(row: InteractionRow) {
-  return row.payload?.planner_clarification === true
 }
 
 async function answerPlannerClarification(row: InteractionRow, answers: string[][]) {
@@ -1508,68 +1455,6 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
     createdAt: now,
   })
   await OrchestratorRuntime.dispatch(run.id, hooks())
-}
-
-async function rejectPlannerClarification(row: InteractionRow, message?: string) {
-  const task = requireTask(row.task_id)
-  const run = requireRun(row.run_id)
-  const now = Date.now()
-  const error = message?.trim() || "Planning clarification was rejected"
-  Database.transaction((db) => {
-    db.update(OrchestratorInteractionRequestTable)
-      .set({
-        status: "rejected",
-        response: message?.trim() ? { message: message.trim() } : {},
-        time_resolved: now,
-        time_updated: now,
-      })
-      .where(eq(OrchestratorInteractionRequestTable.id, row.id))
-      .run()
-    db.update(OrchestratorRunTable)
-      .set({
-        status: "failed",
-        blocking_reason: null,
-        error,
-        time_completed: now,
-        time_updated: now,
-      })
-      .where(eq(OrchestratorRunTable.id, run.id))
-      .run()
-    db.update(OrchestratorTaskTable)
-      .set({
-        status: "failed",
-        blocking_reason: null,
-        error,
-        time_completed: now,
-        time_updated: now,
-      })
-      .where(eq(OrchestratorTaskTable.id, task.id))
-      .run()
-    db.insert(OrchestratorProgressSnapshotTable)
-      .values({
-        id: Identifier.ascending("progress"),
-        task_id: task.id,
-        status: "failed",
-        summary: "Clarification rejected; task stopped",
-        payload: {
-          message: message?.trim() || undefined,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
-        taskID: task.id,
-        runID: run.id,
-        interactionID: row.id,
-        status: "rejected",
-        summary: "Clarification rejected",
-      }),
-    )
-    Database.effect(() => Bus.publish(Event.RunUpdated, { taskID: task.id, runID: run.id, status: "failed", summary: error }))
-    Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID: task.id, status: "failed", summary: error }))
-  })
 }
 
 function appendClarification(request: string, rawQuestions: unknown, answers: string[][]) {

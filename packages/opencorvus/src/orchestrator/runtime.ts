@@ -15,6 +15,7 @@ import { DeliveryService } from "./delivery"
 import {
   applyGoalDelivery,
   buildGoalPrompt,
+  cleanupGoalWorkspace,
   createGoalSession,
   createGoalWorkspace,
   currentGoal,
@@ -26,6 +27,7 @@ import {
 import { nextGoalNode, pendingBlockingGoals } from "./goal-scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
+import { autoRejectInteraction } from "./interaction-actions"
 import {
   OrchestratorInteractionRequestTable,
   OrchestratorRunTable,
@@ -80,9 +82,9 @@ import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 const EVALUATION_HARD_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes total for entire evaluation phase
-const DELIVERY_FETCH_TIMEOUT_MS = 120_000 // 120 seconds for executor.delivery() (git operations can be slow on Windows)
 const DELIVERY_SERVICE_TIMEOUT_MS = 60_000 // 60 seconds for DeliveryService.deliver()
 const evaluatingRuns = new Map<string, number>() // runID → start timestamp, guards against concurrent re-evaluation
+const finalizingRuns = new Set<string>() // guards against concurrent finalizeCoordinatorRun for the same run
 const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
@@ -150,6 +152,12 @@ function storedDiffs(delivery: DeliveryRow) {
   })
 }
 
+function planPrompt(plan: PlanRow, run: RunRow) {
+  const override = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override.trim() : ""
+  if (!override) return plan.prompt
+  return [plan.prompt, "## Run Context", override].join("\n\n")
+}
+
 async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
   const goals = listGoalsBySpec(plan.spec_snapshot_id)
   const next = nextGoalNode(listPlanNodesByPlan(plan.id), goals)
@@ -186,7 +194,7 @@ async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks
     brief: brief.content,
     plan: {
       ...plan,
-      prompt: typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override : plan.prompt,
+      prompt: planPrompt(plan, run),
     },
     goal: next.goal,
   })
@@ -279,6 +287,21 @@ async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHo
 }
 
 async function finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
+  if (finalizingRuns.has(run.id)) {
+    log.info("already finalizing run, skipping concurrent call", { runID: run.id })
+    return
+  }
+  finalizingRuns.add(run.id)
+  evaluatingRuns.set(run.id, Date.now())
+  try {
+    await _finalizeCoordinatorRun(task, run, hooks)
+  } finally {
+    finalizingRuns.delete(run.id)
+    evaluatingRuns.delete(run.id)
+  }
+}
+
+async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
   const existingDelivery = findDeliveryByRun(run.id)
   if (existingDelivery) {
     const evaluation = findEvaluationByRun(run.id)
@@ -352,19 +375,22 @@ async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, 
   const goals = goalsForRun(run)
   const goal = currentGoal(goalRun, goals)
   if (!goal) throw new Error(`Goal ${goalRun.goal_id} not found for run ${run.id}`)
+  const workspaceDir = goalRun.workspace_dir ?? undefined
   const existingDelivery = findDeliveryByGoalRun(goalRun.id)
   const existingEvaluation = findEvaluationByGoalRun(goalRun.id)
   if (existingEvaluation) {
     if (existingEvaluation.status === "passed" || goal.priority === "advisory") {
+      await cleanupGoalWorkspace(workspaceDir)
       await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
       return
     }
+    await cleanupGoalWorkspace(workspaceDir)
     await handleEvaluationFailure(requireTask(task.id), run, existingEvaluation.summary, hooks)
     return
   }
   const deliveryID = existingDelivery?.id ?? Identifier.ascending("delivery")
   const evaluationID = Identifier.ascending("evaluation")
-  const workspaceDir = goalRun.workspace_dir ?? Instance.directory
+  const goalDir = workspaceDir ?? Instance.directory
   const deliveredInfo = existingDelivery
     ? {
         mergeRef: goalRun.merge_ref,
@@ -373,14 +399,16 @@ async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, 
           diffs: storedDiffs(existingDelivery),
         },
       }
-    : await provideWorkspace(workspaceDir, () =>
+    : await provideWorkspace(goalDir, () =>
         deliveryFromSnapshot(goalRun.base_ref ?? undefined, `Goal delivery: ${goal.description}`)
       )
   const delivered = deliveredInfo.delivery
   if (!existingDelivery) {
     persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery: delivered, now: Date.now() })
   }
-  const { result, analysis, analysisError } = await evaluateGoal({ task, goal, delivery: delivered })
+  const { result, analysis, analysisError } = await provideWorkspace(goalDir, () =>
+    evaluateGoal({ task, goal, delivery: delivered })
+  )
   const outcome = goalEvaluationOutcome(result, analysis)
   persistEvaluation({
     task,
@@ -405,13 +433,17 @@ async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, 
     merge_ref: deliveredInfo.mergeRef ?? goalRun.merge_ref,
     time_completed: Date.now(),
   })
-  if (outcome.status === "passed") {
-    await provideWorkspace(await taskDirectory(task), () =>
-      applyGoalDelivery({
-        directory: Instance.directory,
-        delivery: delivered,
-      })
-    )
+  try {
+    if (outcome.status === "passed" || (goal.priority === "advisory" && delivered.diffs.length > 0)) {
+      await provideWorkspace(await taskDirectory(task), () =>
+        applyGoalDelivery({
+          directory: Instance.directory,
+          delivery: delivered,
+        })
+      )
+    }
+  } finally {
+    await cleanupGoalWorkspace(workspaceDir)
   }
   if (outcome.status === "passed" || goal.priority === "advisory") {
     await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, `Goal finished: ${goal.description}`)
@@ -490,9 +522,9 @@ export namespace OrchestratorRuntime {
   }
 
   export async function syncRun(runID: string, hooks: RuntimeHooks) {
-    const run = findRun(runID)
+    let run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
-    const task = requireTask(run.task_id)
+    let task = requireTask(run.task_id)
     const delivery = findDeliveryByRun(run.id)
     const goalRun = activeGoalRun(run)
     const latest = goalRun ?? latestGoalRun(run)
@@ -505,22 +537,13 @@ export namespace OrchestratorRuntime {
       if (stale.length > 0) {
         for (const interaction of stale) {
           log.info("auto-rejecting stale interaction", { id: interaction.id, type: interaction.request_type, ageMs: now - (interaction.time_created ?? 0) })
-          Database.use((db) =>
-            db.update(OrchestratorInteractionRequestTable)
-              .set({ status: "rejected", time_resolved: now, time_updated: now })
-              .where(eq(OrchestratorInteractionRequestTable.id, interaction.id))
-              .run(),
-          )
+          await autoRejectInteraction(interaction, "Timed out waiting for operator response")
         }
+        run = requireRun(runID)
+        task = requireTask(run.task_id)
         // Re-check after auto-rejection
         const stillPending = findPendingInteractions(run.id)
         if (stillPending.length === 0) {
-          if (run.status === "blocked") {
-            await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Stale interactions auto-rejected")
-          }
-          if (task.status === "blocked") {
-            await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Stale interactions auto-rejected")
-          }
           // Fall through to continue sync
         } else {
           if (run.status !== "blocked") {
@@ -561,6 +584,16 @@ export namespace OrchestratorRuntime {
     if (!queueTaskID) return
     const executor = ExecutorRegistry.require(run.executor)
     const queue = await executor.status(queueTaskID)
+
+    if (queue.status === "blocked") {
+      if (run.status !== "blocked") {
+        await hooks.updateRun(run, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
+      }
+      if (task.status !== "blocked") {
+        await hooks.updateTask(task, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
+      }
+      return
+    }
 
     if (queue.status === "queued" || queue.status === "retrying") {
       if (run.status === "blocked") {
@@ -680,7 +713,7 @@ export namespace OrchestratorRuntime {
 
 async function completeRun(run: RunRow, hooks: RuntimeHooks) {
   if (completingRuns.has(run.id)) {
-    console.log(`[completeRun] already completing run ${run.id}, skipping concurrent call`)
+    log.info("already completing run, skipping concurrent call", { runID: run.id })
     return
   }
   completingRuns.add(run.id)
@@ -788,6 +821,7 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
       persistFailedRunEvaluation({ task, run, goalRunID: goalRun.id, error, now })
     }
     updateGoalRun(goalRun.id, { status: "failed", error, blocking_reason: null, time_completed: now })
+    await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
     const goal = currentGoal(goalRun, goalsForRun(run))
     if (goal?.priority === "advisory") {
       await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, error)
@@ -946,7 +980,7 @@ async function executeDecision(
   // Spec rewrite silently overwrites the original requirements, so confirmation protects user intent.
   if (!REQUIRE_REPLAN_CONFIRM) {
     const next = await createReplanRun(task, currentPlan, run, decision.summary, decision.analysis)
-    if (!next.queued) return !!next.error
+    if (!next.queued) return false
     if (!next.runID) return false
     await OrchestratorRuntime.dispatch(next.runID, hooks)
     return true

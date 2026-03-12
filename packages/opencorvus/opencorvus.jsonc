@@ -3,8 +3,25 @@
   "skills": {
     "paths": [
       "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-vmkqato5jum\\skill-e2e",
-      "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\skills-market\\github.com-openai-skills"
-    ]
+      "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\skills-market\\github.com-openai-skills",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-mxg860gy7ve\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-xct756wglyl\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-gftixkoy2pq\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-8x4t9gcfmft\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-48g6s3sw0lq\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-szkgfw4ofvq\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-63o8ycitv0a\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-y1d3lmt9oxf\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-12qcwsl61ksd\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-cf5vko7d6ri\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-q55usq62epg\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-m8yeoot77s\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-m655vgjd8n\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-c0zq0865ffu\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-vuapmxe0ohq\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-p7hzc065vw\\skill-e2e"
+    ],
+    "urls": []
   },
   "permission": {
     "skill": {
@@ -45,7 +62,9 @@
       "gh-address-comments": "ask",
       "chatgpt-apps": "ask",
       "gh-fix-ci": "ask",
-      "figma": "ask"
+      "figma": "ask",
+      "local-review": "ask",
+      "local-note": "deny"
     }
   }
 }

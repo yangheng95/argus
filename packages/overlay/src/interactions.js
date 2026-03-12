@@ -30,13 +30,13 @@
     function autoInteractionAnswers(interaction) {
       const payload = deps.record(interaction?.payload) ? interaction.payload : null;
       const questions = Array.isArray(payload?.questions) ? payload.questions : [];
-      if (questions.length === 0) return [[deps.t("titlebar.auto_question_fallback")]];
+      if (questions.length === 0) return null;
       return questions.map((item) => {
         const question = deps.record(item) ? item : null;
         const options = Array.isArray(question?.options) ? question.options : [];
         const selected = options.find((option) => deps.record(option) && typeof option.label === "string" && option.label.trim());
         if (selected && typeof selected.label === "string") return [selected.label.trim()];
-        return [deps.t("titlebar.auto_question_fallback")];
+        return null;
       });
     }
 
@@ -156,9 +156,9 @@
         deps.AppLog.error("ui", "Failed to resolve interaction", { error: String(error) });
         showInteractionError(id, error?.message || String(error));
       } finally {
-        busy = false;
         dismissInteractionModal();
         await deps.loadBoard();
+        busy = false;
       }
     }
 
@@ -177,9 +177,9 @@
         deps.AppLog.error("ui", "Failed to reject interaction", { error: String(error) });
         showInteractionError(id, error?.message || String(error));
       } finally {
-        busy = false;
         dismissInteractionModal();
         await deps.loadBoard();
+        busy = false;
       }
     }
 
@@ -209,8 +209,16 @@
           void resolveInteraction(pending[0].id, "always");
           return;
         }
+        const answers = autoInteractionAnswers(pending[0]);
+        if (!answers || answers.some((item) => !Array.isArray(item) || item.length === 0)) {
+          deps.AppLog.warn("ui", "Skipping automatic question reply due to missing structured options", {
+            interactionID: pending[0].id,
+          });
+          showInteractionModal(pending[0]);
+          return;
+        }
         void resolveInteraction(pending[0].id, "answer", {
-          answers: autoInteractionAnswers(pending[0]),
+          answers,
         });
         return;
       }

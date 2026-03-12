@@ -140,9 +140,9 @@ describe("evaluator.service", () => {
           { summary: "delivery ready" },
         )
         const elapsed = Date.now() - started
-        expect(result.status).toBe("passed")
-        expect(result.checks.map((item) => item.name)).toEqual(["alpha", "beta"])
-        expect(elapsed).toBeLessThan(1600)
+        expect(result.status).toBe("failed")
+        expect(result.checks.map((item) => item.name)).toEqual(["spec_check", "alpha", "beta"])
+        expect(elapsed).toBeLessThan(3000)
       },
     })
   })
@@ -169,9 +169,9 @@ describe("evaluator.service", () => {
           { summary: "delivery ready" },
         )
         const elapsed = Date.now() - started
-        expect(result.status).toBe("passed")
-        expect(result.checks.map((item) => item.name)).toEqual(["lint#1", "lint#2"])
-        expect(elapsed).toBeLessThan(1600)
+        expect(result.status).toBe("failed")
+        expect(result.checks.map((item) => item.name)).toEqual(["lint#1", "lint#2", "spec_check"])
+        expect(elapsed).toBeLessThan(3000)
       },
     })
   })
@@ -391,7 +391,81 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("skips spec check when no active spec exists", async () => {
+  test("fails spec check closed when changed files exceed the reliable review size", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const defaultModel = spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
+    const taskID = Identifier.ascending("task")
+    const specID = Identifier.ascending("spec")
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        Database.use((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "implement feature",
+              request: "implement feature",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorSpecSnapshotTable)
+            .values({
+              id: specID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: "Compiled spec",
+              content: "# Scope\n\nImplement feature",
+              scope: "Implement feature",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "implement feature",
+            activeSpecVersionID: specID,
+            metadata: {
+              checks: {
+                spec_check: {
+                  enabled: true,
+                },
+              },
+            },
+          },
+          {
+            summary: "delivery ready",
+            changedFiles: ["big.ts"],
+            diffs: [
+              {
+                file: "big.ts",
+                before: "",
+                after: "a".repeat(61_000),
+                additions: 61_000,
+                deletions: 0,
+                status: "added",
+              },
+            ],
+          },
+        )
+
+        expect(result.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "spec_check")).toMatchObject({
+          status: "failed",
+        })
+        expect(result.checks.find((item) => item.name === "spec_check")?.evidence).toContain("safe per-file review limit")
+        expect(defaultModel).not.toHaveBeenCalled()
+      },
+    })
+  })
+
+  test("fails spec check when no active spec exists", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -412,9 +486,13 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: [], diffs: [] },
         )
-        expect(result.status).toBe("passed")
-        expect(result.verdict).toBe("accepted")
-        expect(result.checks.find((item) => item.name === "spec_check")).toBeUndefined()
+        expect(result.status).toBe("failed")
+        expect(result.verdict).toBe("rejected")
+        expect(result.checks.find((item) => item.name === "spec_check")).toMatchObject({
+          status: "failed",
+          label: "Spec Check",
+          family: "acceptance",
+        })
       },
     })
   })
@@ -542,7 +620,7 @@ describe("evaluator.service", () => {
     }
   })
 
-  test("ui review fails when no review model is available", async () => {
+  test("ui review skips when no review model is available in soft mode", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -564,12 +642,12 @@ describe("evaluator.service", () => {
           { summary: "Updated the dashboard layout.", changedFiles: ["ui.tsx"], diffs: [] },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "ui_review")?.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "ui_review")?.status).toBe("skipped")
       },
     })
   })
 
-  test("code quality review fails when no review model is available", async () => {
+  test("code quality review skips when no review model is available in soft mode", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -604,12 +682,12 @@ describe("evaluator.service", () => {
           },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "code_quality")?.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "code_quality")?.status).toBe("skipped")
       },
     })
   })
 
-  test("code review fails when no review model is available", async () => {
+  test("code review skips when no review model is available in soft mode", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -644,12 +722,12 @@ describe("evaluator.service", () => {
           },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "code_review")?.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "code_review")?.status).toBe("skipped")
       },
     })
   })
 
-  test("dead code review fails when no review model is available", async () => {
+  test("dead code review skips when no review model is available in soft mode", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
 
@@ -684,7 +762,7 @@ describe("evaluator.service", () => {
           },
         )
         expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("failed")
+        expect(result.checks.find((item) => item.name === "dead_code_review")?.status).toBe("skipped")
       },
     })
   })
@@ -733,11 +811,48 @@ describe("evaluator.service", () => {
         )
         expect(result.status).toBe("failed")
         expect(defaultModel).toHaveBeenCalledTimes(1)
-        expect(result.checks.filter((item) => item.name !== "evaluation_config").map((item) => item.name)).toEqual([
+        expect(
+          result.checks
+            .filter((item) => item.name === "code_quality" || item.name === "code_review" || item.name === "dead_code_review")
+            .map((item) => item.name),
+        ).toEqual([
           "code_quality",
           "code_review",
           "dead_code_review",
         ])
+        expect(
+          result.checks
+            .filter((item) => item.name === "code_quality" || item.name === "code_review" || item.name === "dead_code_review")
+            .every((item) => item.status === "skipped"),
+        ).toBe(true)
+      },
+    })
+  })
+
+  test("startup check passes when a one-shot process prints ready text then exits zero", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await Bun.write(path.join(tmp.path, "ready-once.ts"), `console.log("ready once")\n`)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await EvaluatorService.evaluate(
+          {
+            request: "run the startup command once",
+            metadata: {
+              checks: {
+                startup: {
+                  command: `"${BunProc.which()}" ready-once.ts`,
+                  ready_text: "ready once",
+                  timeout_ms: 5_000,
+                  mode: "strict",
+                },
+              },
+            },
+          },
+          { summary: "delivery ready", changedFiles: [], diffs: [] },
+        )
+        expect(result.checks.find((item) => item.name === "startup")?.status).toBe("passed")
       },
     })
   })

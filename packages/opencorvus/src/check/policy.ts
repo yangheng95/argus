@@ -1,6 +1,6 @@
 import { z } from "zod"
 
-export const CheckSelector = z.enum([
+const CheckSelector = z.enum([
   "build",
   "test",
   "lint",
@@ -12,10 +12,10 @@ export const CheckSelector = z.enum([
   "startup",
   "spec_check",
 ])
-export type CheckSelector = z.infer<typeof CheckSelector>
+type CheckSelector = z.infer<typeof CheckSelector>
 
-export const CheckFamily = z.enum(["build", "test", "lint", "verify_cmd"])
-export type CheckFamily = z.infer<typeof CheckFamily>
+const CheckFamily = z.enum(["build", "test", "lint", "verify_cmd"])
+type CheckFamily = z.infer<typeof CheckFamily>
 
 export function inferSelectors(text: string): CheckSelector[] {
   const lower = text.toLowerCase()
@@ -43,15 +43,6 @@ export function inferFamily(key: string): CheckFamily {
   return "build"
 }
 
-export function matchSelectors<T extends { name: string; status: string }>(
-  selectors: string[],
-  checks: T[],
-): T[] {
-  return checks.filter((check) =>
-    selectors.some((selector) => matches(selector, check.name)),
-  )
-}
-
 export function selectorsSatisfied(
   selectors: string[],
   checks: Array<{ name: string; status: string }>,
@@ -65,7 +56,14 @@ export function selectorsSatisfied(
   const relevant = selectors.filter((selector) =>
     activeChecks.some((check) => matches(selector, check.name)),
   )
-  if (relevant.length === 0) return true
+  if (relevant.length === 0) {
+    // If selectors matched checks in the original list but all were skipped,
+    // treat as unsatisfied rather than vacuously passing
+    const hadRelevant = selectors.some((selector) =>
+      checks.some((check) => matches(selector, check.name)),
+    )
+    return !hadRelevant
+  }
   return relevant.every((selector) =>
     activeChecks.some(
       (check) =>
