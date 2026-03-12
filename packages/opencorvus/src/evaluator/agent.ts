@@ -89,7 +89,7 @@ export interface DeliveryInfo {
 // ---------------------------------------------------------------------------
 
 const MAX_STEPS = 25
-const TIMEOUT_MS = 240_000
+const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS ?? "480000", 10)
 
 export namespace EvaluatorAgent {
   export async function analyze(input: {
@@ -157,12 +157,13 @@ export namespace EvaluatorAgent {
     }
 
     const MIN_TOOL_CALLS = 3
-    if (parsed.verdict === "accepted" && toolCallCount < MIN_TOOL_CALLS) {
-      log.warn("evaluator: agent accepted but made too few tool calls", {
+    if (toolCallCount < MIN_TOOL_CALLS) {
+      log.warn("evaluator: agent made too few tool calls", {
+        verdict: parsed.verdict,
         toolCalls: toolCallCount,
         minRequired: MIN_TOOL_CALLS,
       })
-      throw new Error(`Evaluator analysis was too shallow: only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
+      throw new Error(`Evaluator analysis was too shallow (${parsed.verdict}): only ${toolCallCount}/${MIN_TOOL_CALLS} required tool calls`)
     }
 
     log.info("evaluator agent output", {

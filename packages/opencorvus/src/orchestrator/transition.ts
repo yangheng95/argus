@@ -11,8 +11,8 @@ import { PlannerFailureError, PlannerService, type PlanDraft } from "@/planner/s
 import { installRuntimeShims } from "@/runtime/shims"
 import { writeEvaluationSnapshot, writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "@/orchestrator/docs"
 import { writeSpec } from "@/orchestrator/spec"
-import { SpecService } from "@/spec/service"
-import { Database, and, desc, eq, isNull } from "@/storage/db"
+import { SpecFailureError, SpecService } from "@/spec/service"
+import { Database, and, desc, eq, isNull, ne } from "@/storage/db"
 import { Log } from "@/util/log"
 import { budgetRow, buildRetryPrompt, type RetryContext } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
@@ -107,31 +107,6 @@ export type CompileTransitionResult = {
 
 type PlannerFailureWithSpec = PlannerFailureError & {
   specDraft?: SpecDraft
-}
-
-function fallbackSpecDraft(draft: Awaited<ReturnType<typeof SpecService.initial>>, input: CompileTransitionInput): SpecDraft {
-  if (draft) return draft
-  const goals = (input.goals && input.goals.length > 0 ? input.goals : [{
-    description: input.request,
-    criteria: "The requested change is implemented and acceptance checks pass.",
-    priority: "blocking" as const,
-  }]).map((goal) => ({
-    description: goal.description,
-    criteria: goal.criteria,
-    priority: goal.priority ?? "blocking",
-    metadata: goal.metadata,
-  }))
-  return {
-    summary: `Spec: ${input.title}`,
-    content: input.request,
-    goals,
-    assumptions: [],
-    risks: [],
-    clarifications: [],
-    spec_items: [],
-    evidence_sources: [],
-    unresolved_questions: [],
-  }
 }
 
 type PersistInitialInput = {
@@ -305,7 +280,10 @@ function blockedPlanDraft(input: {
 
 export async function compileTransition(input: CompileTransitionInput): Promise<CompileTransitionResult> {
   installRuntimeShims()
-  const specDraft = fallbackSpecDraft(await compileSpec(input), input)
+  const specDraft = await compileSpec(input).catch((error) => {
+    if (!(error instanceof SpecFailureError)) throw error
+    throw new PlannerFailureError(error.message, { cause: error })
+  })
   const specBlock = specClarification(specDraft)
   const planDraft = await (
     specBlock
@@ -1986,7 +1964,10 @@ export function failGoals(run: RunRow, summary: string) {
         status: "failed",
         time_updated: now,
       })
-      .where(eq(OrchestratorGoalTable.spec_snapshot_id, plan.spec_snapshot_id))
+      .where(and(
+        eq(OrchestratorGoalTable.spec_snapshot_id, plan.spec_snapshot_id),
+        ne(OrchestratorGoalTable.status, "passed"),
+      ))
       .run(),
   )
   const task = findTask(run.task_id)

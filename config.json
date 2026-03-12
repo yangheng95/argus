@@ -1,5 +1,67 @@
 {
   "$schema": "https://opencorvus.ai/config.json",
+  "skills": {
+    "paths": [
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-oeclfeekcvn\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-fqesd9493f6\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-wxy93p78wu\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-mk69ykcdpeo\\skill-e2e",
+      "D:\\myhexin-local\\argus-opencode\\skills-market\\github.com-openai-skills",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-n7t931yq1xk\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-aypgs2licc\\skill-e2e",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-t11wog1v9e\\local-skill",
+      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-7z8lgewzc7o\\skill-e2e"
+    ],
+    "urls": []
+  },
+  "disabled_providers": [
+    "moonshotai",
+    "evroc",
+    "openrouter"
+  ],
   "model": "alibaba-cn/qwen3.5-plus",
-  "disabled_providers": ["moonshotai", "evroc", "openrouter"]
+  "permission": {
+    "skill": {
+      "local-review": "ask",
+      "local-note": "deny",
+      "route-installed-skill": "ask",
+      "skill-installer": "ask",
+      "skill-creator": "ask",
+      "openai-docs": "ask",
+      "yeet": "ask",
+      "winui-app": "ask",
+      "transcribe": "ask",
+      "spreadsheet": "ask",
+      "sentry": "ask",
+      "slides": "ask",
+      "vercel-deploy": "ask",
+      "security-ownership-map": "ask",
+      "sora": "ask",
+      "security-threat-model": "ask",
+      "speech": "ask",
+      "screenshot": "ask",
+      "playwright": "ask",
+      "security-best-practices": "ask",
+      "playwright-interactive": "ask",
+      "pdf": "ask",
+      "render-deploy": "ask",
+      "notion-research-documentation": "ask",
+      "notion-knowledge-capture": "ask",
+      "jupyter-notebook": "ask",
+      "linear": "ask",
+      "notion-spec-to-implementation": "ask",
+      "netlify-deploy": "ask",
+      "imagegen": "ask",
+      "notion-meeting-intelligence": "ask",
+      "gh-fix-ci": "ask",
+      "figma-implement-design": "ask",
+      "gh-address-comments": "ask",
+      "cloudflare-deploy": "ask",
+      "develop-web-game": "ask",
+      "figma": "ask",
+      "aspnet-core": "ask",
+      "doc": "ask",
+      "chatgpt-apps": "ask"
+    }
+  }
 }

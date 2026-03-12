@@ -115,6 +115,102 @@ describe("protocol interaction resolution", () => {
       },
     })
   })
+
+  test("stale protocol approvals are rejected in the executor before the run resumes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const resolve = spyOn(adapter, "resolve").mockResolvedValue(true)
+    spyOn(adapter, "status").mockResolvedValue({
+      queueTaskID: "queue_1",
+      status: "queued",
+      error: null,
+    })
+    ExecutorRegistry.register("codex", adapter)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "protocol-timeout" })
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const interactionID = Identifier.ascending("interaction")
+        const now = Date.now()
+
+        Database.use((db) =>
+          db.insert(OrchestratorTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: session.id,
+            active_run_id: runID,
+            source: "test",
+            title: "protocol timeout",
+            request: "protocol timeout",
+            status: "blocked",
+            priority: "normal",
+            blocking_reason: "permission",
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+        Database.use((db) =>
+          db.insert(OrchestratorRunTable).values({
+            id: runID,
+            task_id: taskID,
+            session_id: session.id,
+            executor: "codex",
+            status: "blocked",
+            phase: "dispatch",
+            blocking_reason: "permission",
+            retry_count: 0,
+            executor_ref: {
+              session_id: "thr_1:turn_1",
+              queue_task_id: "queue_1",
+            },
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+        Database.use((db) =>
+          db.insert(OrchestratorInteractionRequestTable).values({
+            id: interactionID,
+            task_id: taskID,
+            run_id: runID,
+            session_id: session.id,
+            external_id: "protocol:executor_session:9",
+            request_type: "permission",
+            status: "pending",
+            title: "Executor approval",
+            body: "git push",
+            payload: {
+              protocol_request: true,
+              request_id: "9",
+              request_kind: "approval_request",
+            },
+            time_created: now - 60_000,
+            time_updated: now - 60_000,
+          }).run(),
+        )
+
+        const progress = await OrchestratorService.getProgress(taskID)
+
+        expect(resolve).toHaveBeenCalledWith({
+          sessionID: session.id,
+          queueTaskID: "queue_1",
+          requestID: "9",
+          kind: "approval",
+          response: {
+            decision: "decline",
+          },
+        })
+        expect(progress.task.status).toBe("running")
+        expect(progress.run?.status).toBe("accepted")
+
+        const row = Database.use((db) =>
+          db.select().from(OrchestratorInteractionRequestTable).where(eq(OrchestratorInteractionRequestTable.id, interactionID)).get(),
+        )
+        expect(row?.status).toBe("rejected")
+      },
+    })
+  })
 })
 
 const adapter: ExecutorAdapter = {

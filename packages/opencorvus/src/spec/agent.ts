@@ -176,6 +176,7 @@ export namespace HeadlessSpecAgent {
 }
 
 export { HeadlessSpecAgent as SpecAgent }
+export const parseSpecOutput = extractJSON
 
 // ---------------------------------------------------------------------------
 // Internal implementation
@@ -232,7 +233,6 @@ async function run(input: {
 
   const context = prefetchContext(input.title, input.request)
 
-  let lastParsed: SpecOutputType | undefined
   let lastQuality: { score: number; reasons: string[] } | undefined
 
   for (let attempt = 0; attempt < MAX_SPEC_ATTEMPTS; attempt++) {
@@ -316,15 +316,6 @@ async function run(input: {
       parsed = extractJSON(allText)
     }
 
-    // If output was truncated or empty, synthesize from exploration
-    if (parsed.content.length < 100 || parsed.spec_items.length < 1) {
-      log.warn("spec: output seems truncated, synthesizing from exploration", {
-        contentLength: parsed.content.length,
-        specItemsCount: parsed.spec_items.length,
-      })
-      parsed = synthesizeFromExploration(parsed, input, result.steps)
-    }
-
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
     const specQuality = validateSpecQuality(parsed, input.request, toolCallCount)
@@ -338,14 +329,22 @@ async function run(input: {
       attempt: attempt + 1,
     })
 
-    lastParsed = parsed
     lastQuality = specQuality
 
-    if (specQuality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_SPEC_ATTEMPTS - 1) {
-      if (specQuality.score < 0.3) {
-        log.warn("spec: final spec quality is very low", { ...specQuality, attempt: attempt + 1 })
-      }
+    if (specQuality.score >= QUALITY_RETRY_THRESHOLD) {
       return parsed
+    }
+
+    if (attempt >= MAX_SPEC_ATTEMPTS - 1) {
+      log.error("spec: output quality below threshold", {
+        score: specQuality.score,
+        threshold: QUALITY_RETRY_THRESHOLD,
+        reasons: specQuality.reasons,
+        attempt: attempt + 1,
+      })
+      throw new Error(
+        `spec output quality below threshold (${specQuality.score.toFixed(2)} < ${QUALITY_RETRY_THRESHOLD}): ${specQuality.reasons.join("; ") || "unknown quality failure"}`,
+      )
     }
 
     log.warn("spec: spec quality below threshold, retrying", {
@@ -357,7 +356,7 @@ async function run(input: {
     })
   }
 
-  return lastParsed!
+  throw new Error("spec exhausted retries without producing a valid specification")
 }
 
 // ---------------------------------------------------------------------------
@@ -525,7 +524,7 @@ function extractJSON(text: string): SpecOutputType {
         error: String(parseErr.error),
         rawLength: raw.length,
       })
-      obj = { summary: "", content: "", scope: "", goals: [], spec_items: [], assumptions: [], risks: [], evidence_sources: [], unresolved_questions: [] }
+      throw new Error(`spec output invalid JSON: ${parseErr.error instanceof Error ? parseErr.error.message : String(parseErr.error)}`)
     }
   }
 
@@ -554,6 +553,10 @@ function extractJSON(text: string): SpecOutputType {
     obj.clarifications = obj.clarifications.filter((c: any) => c && typeof c === "object" && c.question)
   }
 
+  if (!obj || typeof obj !== "object" || Array.isArray(obj) || Object.keys(obj).length === 0) {
+    throw new Error("spec output invalid JSON: parsed object is empty")
+  }
+
   if (!obj.summary) obj.summary = ""
   if (!obj.content) obj.content = ""
   if (!obj.scope) obj.scope = ""
@@ -567,18 +570,8 @@ function extractJSON(text: string): SpecOutputType {
   try {
     return SpecOutput.parse(obj)
   } catch (zodErr) {
-    log.error("spec: Zod validation failed, returning with defaults", { error: String(zodErr) })
-    return SpecOutput.parse({
-      summary: obj.summary || "",
-      content: obj.content || "",
-      scope: obj.scope || "",
-      goals: Array.isArray(obj.goals) ? obj.goals : [],
-      spec_items: [],
-      assumptions: [],
-      risks: Array.isArray(obj.risks) ? obj.risks : [],
-      evidence_sources: [],
-      unresolved_questions: [],
-    })
+    log.error("spec: Zod validation failed", { error: String(zodErr) })
+    throw new Error(`spec output failed schema validation: ${zodErr instanceof Error ? zodErr.message : String(zodErr)}`)
   }
 }
 
@@ -806,73 +799,6 @@ function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string
   if (/^#+\s/.test(trimmed)) return fallbackTitle
   if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return fallbackTitle
   return trimmed
-}
-
-// ---------------------------------------------------------------------------
-// Synthesis fallback
-// ---------------------------------------------------------------------------
-
-function synthesizeFromExploration(
-  partial: SpecOutputType,
-  input: { title: string; request: string },
-  steps: any[],
-): SpecOutputType {
-  const result = { ...partial }
-
-  const discoveredFiles = new Set<string>()
-  const explorationNotes: string[] = []
-
-  for (const step of steps) {
-    if (!step.toolCalls) continue
-    for (let i = 0; i < step.toolCalls.length; i++) {
-      const call = step.toolCalls[i]
-      if (call.toolName === "read_file" && call.args?.path) {
-        discoveredFiles.add(call.args.path)
-      }
-      const toolResult = step.toolResults?.[i]
-      if (toolResult?.result && typeof toolResult.result === "string") {
-        const preview = toolResult.result.slice(0, 200)
-        if (call.toolName === "read_file") {
-          explorationNotes.push(`Read ${call.args.path}: ${preview}`)
-        } else if (call.toolName === "search_code") {
-          explorationNotes.push(`Search "${call.args.pattern}": ${preview}`)
-        }
-      }
-    }
-  }
-
-  if (result.content.length < 200) {
-    const parts: string[] = []
-    parts.push(`## Scope\n\n${input.request.split("\n")[0]}`)
-    if (discoveredFiles.size > 0) {
-      parts.push(`## Relevant Files\n\n${Array.from(discoveredFiles).slice(0, 10).map(f => `- ${f}`).join("\n")}`)
-    }
-    if (explorationNotes.length > 0) {
-      parts.push(`## Exploration Notes\n\n${explorationNotes.slice(0, 5).map(n => `- ${n}`).join("\n")}`)
-    }
-    const existing = result.content.trim()
-    result.content = existing ? existing + "\n\n" + parts.join("\n\n") : parts.join("\n\n")
-  }
-
-  if (!result.scope) {
-    result.scope = input.request.split("\n").find(l => l.trim())?.trim() || input.title
-  }
-
-  if (result.evidence_sources.length === 0 && discoveredFiles.size > 0) {
-    result.evidence_sources = Array.from(discoveredFiles).slice(0, 15)
-  }
-
-  if (result.goals.length === 0) {
-    result.goals = input.request.trim()
-      ? [{
-          description: input.request.split("\n")[0]!,
-          criteria: "The requested change is implemented and acceptance checks pass.",
-          priority: "blocking",
-        }]
-      : []
-  }
-
-  return result
 }
 
 // ---------------------------------------------------------------------------

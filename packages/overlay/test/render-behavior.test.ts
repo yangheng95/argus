@@ -1097,6 +1097,153 @@ test("api requests always use the control directory instead of hidden path fallb
   }
 }, { timeout: 20_000 })
 
+test("session diff failures do not fall back to board diffs", async () => {
+  const exe = await browser()
+  const send = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+    })
+  const server = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const url = new URL(req.url)
+      const path = url.pathname.replace(/\/+$/, "") || "/"
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/experimental/session") return send([])
+      if (path === "/path") {
+        const directory = url.searchParams.get("directory") || ""
+        return send({
+          home: "C:/Users/test",
+          state: "C:/Users/test/.opencorvus/state",
+          config: "C:/Users/test/.opencorvus/config",
+          worktree: directory,
+          directory,
+        })
+      }
+      if (path === "/vcs") {
+        return send({
+          branch: "",
+          clean: false,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/config") return send({})
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/session/session-1/diff") return new Response("boom", { status: 500 })
+      if (path === "/log" && req.method === "POST") return send(true)
+
+      const name = path === "/" ? "index.html" : path.slice(1)
+      const file = Bun.file(new URL(name, src))
+      const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
+      return file.exists().then((ok) => (ok ? new Response(file, { headers: { "content-type": type } }) : new Response("not found", { status: 404 })))
+    },
+  })
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    const serverUrl = `http://127.0.0.1:${server.port}`
+    await tab.evaluateOnNewDocument((value) => {
+      let settings = {
+        serverUrl: value,
+        autoServer: false,
+      }
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string, args: Record<string, unknown> = {}) => {
+            if (command === "overlay_settings_load") return settings
+            if (command === "overlay_settings_save") {
+              settings = { ...((args.settings as Record<string, unknown>) || {}) }
+              return true
+            }
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              setAlwaysOnTop: async () => undefined,
+              isAlwaysOnTop: async () => false,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
+    }, serverUrl)
+
+    await tab.goto(serverUrl, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadChanges") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.chatSessionID = "session-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+        },
+        candidateDelivery: {
+          result: {
+            diffs: [
+              {
+                file: "src/app.js",
+                before: "const value = 1\n",
+                after: "const value = 2\n",
+                additions: 1,
+                deletions: 1,
+                status: "modified",
+              },
+            ],
+          },
+        },
+      }
+      await window.eval("loadChanges")()
+      return {
+        changes: state.changes,
+        text: document.querySelector("#changesBody")?.textContent || "",
+      }
+    })
+
+    expect(result.changes).toEqual([])
+    expect(result.text.trim().length).toBeGreaterThan(0)
+    expect(result.text).not.toContain("src/app.js")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
 test("workspace bootstrap resolves the control directory before scoped loads run", async () => {
   const exe = await browser()
   const server = serve()
@@ -1222,6 +1369,77 @@ test("pending interactions render through extracted helpers without blocking the
     expect(view.overlayPointer).toBe("none")
     expect(view.modalPointer).toBe("auto")
     expect(view.dismissed).toBe(true)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("auto question does not invent a fallback answer when choices are missing", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderInteractions") === "function"
+          && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const view = await tab.evaluate(async () => {
+      const renderInteractions = window.eval("renderInteractions")
+      const state = window.eval("state")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls = []
+
+      root.__overlayCalls = calls
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json; charset=utf-8" },
+        })
+      }
+
+      state.autoQuestion = true
+      renderInteractions([
+        {
+          id: "interaction-q1",
+          status: "pending",
+          type: "question",
+          title: "Need clarification",
+          body: "Pick one option.",
+          payload: {
+            questions: [],
+          },
+        },
+      ])
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      return {
+        calls,
+        modalId: document.getElementById("interaction-modal")?.getAttribute("data-interaction-id") || "",
+        inline: document.querySelectorAll("#goalsBody .interaction-alert").length,
+      }
+    })
+
+    expect(view.calls).toEqual([])
+    expect(view.modalId).toBe("interaction-q1")
+    expect(view.inline).toBe(1)
   } finally {
     await page.close()
     server.stop(true)

@@ -27,10 +27,10 @@ export function resolvedChecks(
   discovered: Awaited<ReturnType<typeof discoverChecks>>,
 ) {
   const next = {
-    ...(config.build !== undefined ? { build: config.build } : discovered.build.length > 0 ? { build: discovered.build.map((item) => item.command) } : {}),
-    ...(config.test !== undefined ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
-    ...(config.lint !== undefined ? { lint: config.lint } : discovered.lint.length > 0 ? { lint: discovered.lint.map((item) => item.command) } : {}),
-    ...(config.verify_cmd !== undefined ? { verify_cmd: config.verify_cmd } : {}),
+    ...(Array.isArray(config.build) ? { build: config.build } : discovered.build.length > 0 ? { build: discovered.build.map((item) => item.command) } : {}),
+    ...(Array.isArray(config.test) ? { test: config.test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
+    ...(Array.isArray(config.lint) ? { lint: config.lint } : discovered.lint.length > 0 ? { lint: discovered.lint.map((item) => item.command) } : {}),
+    ...(Array.isArray(config.verify_cmd) ? { verify_cmd: config.verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
     ...(config.artifact ? { artifact: config.artifact } : {}),
     ...(config.visual ? { visual: config.visual } : {}),
@@ -56,6 +56,9 @@ export function resolvedChecks(
       ]),
     ),
     ...(config.named ?? {}),
+  }
+  for (const key of Object.keys(discovered.named)) {
+    if (named[key]) named[key] = { ...named[key], enabled: true }
   }
   if (Object.keys(named).length > 0) next.named = named
   return CheckConfig.parse(next)

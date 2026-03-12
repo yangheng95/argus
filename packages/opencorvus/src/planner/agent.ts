@@ -157,7 +157,6 @@ export namespace HeadlessPlannerAgent {
     // Quality-gated retry loop: if the first plan attempt scores below
     // QUALITY_RETRY_THRESHOLD, retry once with enhanced prompt that includes
     // quality feedback from the previous attempt.
-    let lastParsed: PlannerOutputType | undefined
     let lastQuality: { score: number; reasons: string[] } | undefined
 
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
@@ -238,15 +237,6 @@ export namespace HeadlessPlannerAgent {
         parsed = extractJSON(allText)
       }
 
-      // If plan was truncated, synthesize from exploration + request
-      if (parsed.prd.length < 100 || parsed.subtasks.length < 2) {
-        log.warn("planner: plan seems truncated, synthesizing from exploration", {
-          prdLength: parsed.prd.length,
-          subtasksCount: parsed.subtasks.length,
-        })
-        parsed = synthesizeFromExploration(parsed, input, result.steps)
-      }
-
       // Ensure summary is meaningful (not garbage like "## heading" or empty)
       parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
@@ -262,15 +252,22 @@ export namespace HeadlessPlannerAgent {
         attempt: attempt + 1,
       })
 
-      lastParsed = parsed
       lastQuality = planQuality
 
-      // If quality is acceptable or we've exhausted retries, return
-      if (planQuality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_PLAN_ATTEMPTS - 1) {
-        if (planQuality.score < 0.3) {
-          log.warn("planner: final plan quality is very low", { ...planQuality, attempt: attempt + 1 })
-        }
+      if (planQuality.score >= QUALITY_RETRY_THRESHOLD) {
         return parsed
+      }
+
+      if (attempt >= MAX_PLAN_ATTEMPTS - 1) {
+        log.error("planner: output quality below threshold", {
+          score: planQuality.score,
+          threshold: QUALITY_RETRY_THRESHOLD,
+          reasons: planQuality.reasons,
+          attempt: attempt + 1,
+        })
+        throw new Error(
+          `planner output quality below threshold (${planQuality.score.toFixed(2)} < ${QUALITY_RETRY_THRESHOLD}): ${planQuality.reasons.join("; ") || "unknown quality failure"}`,
+        )
       }
 
       // Quality too low -- retry with feedback
@@ -283,8 +280,7 @@ export namespace HeadlessPlannerAgent {
       })
     }
 
-    // Should never reach here, but satisfy TypeScript
-    return lastParsed!
+    throw new Error("planner exhausted retries without producing a valid plan")
   }
 }
 
@@ -364,15 +360,13 @@ function extractJSON(text: string): PlannerOutputType {
       })
       obj = retryErr.value
     } else {
-      // Last resort: return a minimal plan instead of throwing.
-      // The caller will synthesize from exploration data.
-      log.error("planner: JSON parse failed after all repair attempts, returning minimal plan", {
+      log.error("planner: JSON parse failed after all repair attempts", {
         error: String(parseErr.error),
         rawLength: raw.length,
         rawHead: raw.slice(0, 500),
         rawTail: raw.slice(-300),
       })
-      obj = { prd: "", summary: "", subtasks: [], risks: [] }
+      throw new Error(`planner output invalid JSON: ${parseErr.error instanceof Error ? parseErr.error.message : String(parseErr.error)}`)
     }
   }
 
@@ -396,6 +390,10 @@ function extractJSON(text: string): PlannerOutputType {
     obj.assumptions = obj.assumptions.filter((a: any) => a && typeof a === "object" && a.question && a.assumption)
   }
 
+  if (!obj || typeof obj !== "object" || Array.isArray(obj) || Object.keys(obj).length === 0) {
+    throw new Error("planner output invalid JSON: parsed object is empty")
+  }
+
   // Fill in missing required fields when the JSON was truncated
   if (!obj.prd) obj.prd = ""
   if (!obj.summary) obj.summary = ""
@@ -405,21 +403,11 @@ function extractJSON(text: string): PlannerOutputType {
   try {
     return PlannerOutput.parse(obj)
   } catch (zodErr) {
-    log.error("planner: Zod validation failed, returning with defaults", {
+    log.error("planner: Zod validation failed", {
       error: String(zodErr),
       subtasksCount: obj.subtasks?.length,
     })
-    // Return a minimal valid plan rather than crashing.
-    // Coerce risks to string[] to avoid secondary Zod failure.
-    const safeRisks = Array.isArray(obj.risks)
-      ? obj.risks.filter((r: unknown) => typeof r === "string")
-      : []
-    return PlannerOutput.parse({
-      prd: typeof obj.prd === "string" ? obj.prd : "",
-      summary: typeof obj.summary === "string" ? obj.summary : "",
-      subtasks: [],
-      risks: safeRisks,
-    })
+    throw new Error(`planner output failed schema validation: ${zodErr instanceof Error ? zodErr.message : String(zodErr)}`)
   }
 }
 
@@ -593,137 +581,6 @@ function trimToLastComplete(raw: string): string {
   }
 
   return repairTruncatedJSON(raw)
-}
-
-/**
- * Synthesize a complete plan from partial LLM output + tool exploration results + user request.
- * Called when the LLM's JSON output was truncated and critical fields are missing/incomplete.
- */
-function synthesizeFromExploration(
-  partial: PlannerOutputType,
-  input: { title: string; request: string },
-  steps: any[],
-): PlannerOutputType {
-  const result = { ...partial }
-
-  // Collect file paths discovered during exploration
-  const discoveredFiles = new Set<string>()
-  const explorationNotes: string[] = []
-  for (const step of steps) {
-    if (!step.toolCalls) continue
-    for (let i = 0; i < step.toolCalls.length; i++) {
-      const call = step.toolCalls[i]
-      if (call.toolName === "read_file" && call.args?.path) {
-        discoveredFiles.add(call.args.path)
-      }
-      if (call.toolName === "list_directory" && call.args?.path) {
-        discoveredFiles.add(call.args.path + "/")
-      }
-      // Collect tool result summaries for PRD synthesis
-      const toolResult = step.toolResults?.[i]
-      if (toolResult?.result && typeof toolResult.result === "string") {
-        const preview = toolResult.result.slice(0, 200)
-        if (call.toolName === "read_file") {
-          explorationNotes.push(`Read ${call.args.path}: ${preview}`)
-        } else if (call.toolName === "search_code") {
-          explorationNotes.push(`Search "${call.args.pattern}": ${preview}`)
-        }
-      }
-    }
-  }
-
-  // Extract requirements from request text for subtask synthesis
-  const requirements: string[] = []
-  const CN_ACTION = /^(?:添加|修改|删除|创建|导出|导入|确保|实现|重构|优化|移除|更新|替换|支持|使用)/
-  const EN_ACTION = /^(?:add|create|modify|delete|remove|implement|ensure|replace|fix|refactor|export|import)\s/i
-  for (const line of input.request.split("\n")) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.length < 4) continue
-    if (/^[-*•]\s+/.test(trimmed)) requirements.push(trimmed.replace(/^[-*•]\s+/, ""))
-    else if (/^\d+[.、)）]\s+/.test(trimmed)) requirements.push(trimmed.replace(/^\d+[.、)）]\s+/, ""))
-    else if (CN_ACTION.test(trimmed) || EN_ACTION.test(trimmed)) requirements.push(trimmed)
-  }
-
-  // Extract file references from request
-  const FILE_EXTS = "ts|tsx|js|jsx|py|rs|go|java|json|yaml|yml|toml|md|css|html|sql"
-  const fileRefs = new Set<string>()
-  const btPat = new RegExp("`([./]?(?:[\\w@-]+[/\\\\])*[\\w.-]+\\.(?:" + FILE_EXTS + "))`", "g")
-  let m: RegExpExecArray | null
-  while ((m = btPat.exec(input.request)) !== null) fileRefs.add(m[1])
-  const barePat = new RegExp(
-    "(?:^|[\\s,;，；（(])(\\.?(?:[\\w@-]+[/\\\\])+[\\w.-]+\\.(?:" + FILE_EXTS + "))(?=[\\s,;，；）)。:：]|$)", "gm",
-  )
-  while ((m = barePat.exec(input.request)) !== null) fileRefs.add(m[1].trim())
-
-  // Synthesize PRD if too short
-  if (result.prd.length < 200) {
-    const prdParts: string[] = []
-    if (fileRefs.size > 0) prdParts.push(`**Files**: ${Array.from(fileRefs).join(", ")}`)
-    if (discoveredFiles.size > 0) {
-      const relevant = Array.from(discoveredFiles).filter(f => !f.endsWith("/")).slice(0, 10)
-      if (relevant.length > 0) prdParts.push(`**Explored**: ${relevant.join(", ")}`)
-    }
-    if (requirements.length > 0) {
-      prdParts.push(`**Requirements**:\n${requirements.map(r => `- ${r}`).join("\n")}`)
-    }
-    if (explorationNotes.length > 0) {
-      prdParts.push(`**Exploration Notes**:\n${explorationNotes.slice(0, 5).map(n => `- ${n}`).join("\n")}`)
-    }
-    // Prepend any partial PRD content we already have
-    const existingPrd = result.prd.trim()
-    result.prd = existingPrd
-      ? existingPrd + "\n\n" + prdParts.join("\n\n")
-      : prdParts.join("\n\n")
-  }
-
-  // Synthesize subtasks from requirements if missing
-  if (result.subtasks.length < 2 && requirements.length > 0) {
-    const files = Array.from(fileRefs)
-    const synthSubtasks: PlannerOutputType["subtasks"] = []
-    if (files.length > 0) {
-      synthSubtasks.push({
-        title: `Analyze ${files.slice(0, 3).join(", ")}`,
-        description: `Read and understand the source files: ${files.join(", ")}. Identify types, exports, and patterns.`,
-        order: 1,
-      })
-    }
-    for (let i = 0; i < requirements.length; i++) {
-      synthSubtasks.push({
-        title: requirements[i].slice(0, 80),
-        description: requirements[i],
-        order: (files.length > 0 ? 2 : 1) + i,
-      })
-    }
-    synthSubtasks.push({
-      title: "Verify changes",
-      description: "Run build, test, and lint checks to ensure all changes work correctly.",
-      order: synthSubtasks.length + 1,
-    })
-    // Merge: keep any existing subtasks, add synthesized ones for gaps
-    if (result.subtasks.length === 0) {
-      result.subtasks = synthSubtasks
-    } else {
-      // Keep existing, add verification if missing
-      const hasVerify = result.subtasks.some(s => /verify|test|check|验证|测试/.test(s.title.toLowerCase()))
-      if (!hasVerify) {
-        result.subtasks.push(synthSubtasks[synthSubtasks.length - 1])
-      }
-    }
-  }
-
-  // Ensure summary
-  if (!result.summary || result.summary.length < 10) {
-    result.summary = input.title
-  }
-
-  log.info("planner: synthesized plan from exploration", {
-    prdLength: result.prd.length,
-    subtasks: result.subtasks.length,
-    discoveredFiles: discoveredFiles.size,
-    requirements: requirements.length,
-  })
-
-  return result
 }
 
 /**

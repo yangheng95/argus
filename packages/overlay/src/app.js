@@ -1466,7 +1466,6 @@ function renderExtensions() {
   const builtin = state.skills.length - custom.length;
   const mcpEntries = Object.entries(state.mcp || {});
 
-  dom.extensionsBadge.textContent = `${custom.length} skill · ${mcpEntries.length} mcp`;
   if (dom.btnDeleteAllSkills) dom.btnDeleteAllSkills.disabled = removable.length === 0;
   if (dom.btnDeleteAllMcp) dom.btnDeleteAllMcp.disabled = mcpEntries.length === 0;
   dom.extensionsBadge.textContent = t("extensions.badge", {
@@ -1476,9 +1475,6 @@ function renderExtensions() {
   renderConfigToggleMeta();
 
   if (!custom.length) {
-    dom.skillList.innerHTML = `<div class="empty-hint">${escapeHtml(
-      builtin > 0 ? t("skill.none_custom_with_builtin", { count: builtin }) : t("skill.none_custom"),
-    )}</div>`;
     dom.skillList.innerHTML = `<div class="empty-hint">${escapeHtml(
       builtin > 0 ? t("skill.none_custom_with_builtin", { count: builtin }) : t("skill.none_custom"),
     )}</div>`;
@@ -3257,8 +3253,8 @@ async function loadBoard() {
       renderBoard();
       await loadChanges();
       if (!state.chatSessionID) await syncManagedSession(currentTaskSessionID());
-    } catch {
-      // silent
+    } catch (e) {
+      AppLog.warn("board", "loadBoard failed", { error: String(e) });
     } finally {
       state.boardLoading = null;
       if (state.boardQueued) {
@@ -3379,11 +3375,11 @@ function conversationTargetKey(target = conversationTarget()) {
 
 async function loadChanges() {
   const sessionID = currentSessionID();
-  const requestKey = sessionID || `fallback:${state.selectedTaskID || state.chatSessionID || "none"}`;
+  const requestKey = sessionID || `changes:${state.selectedTaskID || state.chatSessionID || "none"}`;
   state.changeKey = requestKey;
 
   if (!sessionID) {
-    state.changes = normalizeDiffs(fallbackBoardDiffs());
+    state.changes = [];
     renderChanges();
     return;
   }
@@ -3391,23 +3387,14 @@ async function loadChanges() {
   try {
     const diff = await apiJson(`session/${sessionID}/diff`);
     if (state.changeKey !== requestKey) return;
-    state.changes = normalizeDiffs(diff.length ? diff : fallbackBoardDiffs());
+    state.changes = normalizeDiffs(diff);
     renderChanges();
   } catch (e) {
     AppLog.error("ui", "Failed to load session diff", { error: String(e) });
     if (state.changeKey !== requestKey) return;
-    state.changes = normalizeDiffs(fallbackBoardDiffs());
+    state.changes = [];
     renderChanges();
   }
-}
-
-function fallbackBoardDiffs() {
-  return (
-    state.board?.candidateDelivery?.result?.diffs ||
-    state.board?.delivery?.result?.diffs ||
-    state.board?.acceptedDelivery?.result?.diffs ||
-    []
-  );
 }
 
 function normalizeDiffs(list) {
@@ -3469,6 +3456,12 @@ function startSSE(taskID) {
           }
         }
       }
+      // Stream ended normally (server restart, timeout, etc.) — reconnect
+      state.sseConnected = false;
+      AppLog.info("sse", "stream ended, reconnecting in 3s", { taskID });
+      setTimeout(() => {
+        if (state.selectedTaskID === taskID) startSSE(taskID);
+      }, 3000);
     } catch (e) {
       state.sseConnected = false;
       if (e.name === "AbortError") return;
@@ -4946,77 +4939,10 @@ async function openManagedSession(sessionID, input) {
 
 async function resolveInteraction(id, action, input = {}) {
   return resolveInteractionHelper(id, action, input);
-  try {
-    if (action === "once" || action === "always") {
-      // Direct API call — bypasses the panel agent for faster, more reliable resolution
-      await apiJson(`interaction/${id}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reply: action }),
-        signal: AbortSignal.timeout(30000),
-      });
-    } else {
-      const answers = Array.isArray(input.answers) ? input.answers : null;
-      const message = typeof input.message === "string" && input.message.trim() ? input.message.trim() : "";
-      if (!answers && !message) {
-        const answer = await nativePrompt(t("interaction.reply_prompt"), {
-          title: t("interaction.reply_title"),
-          okLabel: t("common.submit"),
-          cancelLabel: t("common.cancel"),
-          inputLabel: t("interaction.answer_label"),
-        });
-        if (answer == null) {
-          // User cancelled the prompt
-          _interactionBusy = false;
-          await loadBoard();
-          return;
-        }
-        await apiJson(`interaction/${id}/reply`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: answer }),
-          signal: AbortSignal.timeout(30000),
-        });
-      } else {
-        await apiJson(`interaction/${id}/reply`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            answers: answers || undefined,
-            message: message || undefined,
-          }),
-          signal: AbortSignal.timeout(30000),
-        });
-      }
-    }
-  } catch (e) {
-    AppLog.error("ui", "Failed to resolve interaction", { error: String(e) });
-    showInteractionError(id, e.message);
-  } finally {
-    _interactionBusy = false;
-    dismissInteractionModal();
-    await loadBoard();
-  }
 }
 
 async function rejectInteraction(id) {
   return rejectInteractionHelper(id);
-  try {
-    // Direct API call — bypasses the panel agent for faster, more reliable rejection
-    await apiJson(`interaction/${id}/reject`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-      signal: AbortSignal.timeout(30000),
-    });
-  } catch (e) {
-    AppLog.error("ui", "Failed to reject interaction", { error: String(e) });
-    showInteractionError(id, e.message);
-  } finally {
-    _interactionBusy = false;
-    dismissInteractionModal();
-    await loadBoard();
-  }
 }
 
 function showInteractionError(id, msg) {
@@ -5528,10 +5454,11 @@ function renderMarkdownBlock(text) {
 
 function inlineMarkdown(text) {
   let s = escapeHtml(text);
+  function unescapeUrl(url) { return url.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"'); }
   // Images: ![alt](url)
-  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img class="md-img" src="$2" alt="$1" loading="lazy">');
+  s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => `<img class="md-img" src="${unescapeUrl(url)}" alt="${alt}" loading="lazy">`);
   // Links: [text](url)
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a class="md-link" href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => `<a class="md-link" href="${unescapeUrl(url)}" target="_blank" rel="noopener">${label}</a>`);
   // Bold: **text**
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   // Italic: *text*

@@ -139,7 +139,7 @@ describe("channel runtime submit mode", () => {
     expect(promptCalls).toHaveLength(0)
   })
 
-  test("falls back to session.promptAsync when tui runtime submit fails", async () => {
+  test("fails when tui runtime submit fails instead of falling back", async () => {
     const startCalls: Array<{
       mode: "spawn"
       query_directory: string
@@ -147,9 +147,15 @@ describe("channel runtime submit mode", () => {
       sessionID: string
       bin?: string
     }> = []
+    const sent: string[] = []
     const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
     const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
-    const a = adapter()
+    const a: ChannelAdapter = {
+      ...adapter(),
+      sendMessage: async (_channel, _thread, text) => {
+        sent.push(text)
+      },
+    }
     const core = new ChannelRuntime() as unknown as {
       adapters: ChannelAdapter[]
       session: SessionCoordinator<
@@ -218,10 +224,95 @@ describe("channel runtime submit mode", () => {
     expect(startCalls[0]?.mode).toBe("spawn")
     expect(startCalls[0]?.sessionID).toBe("session_1")
     expect(submitCalls).toHaveLength(1)
-    expect(promptCalls).toHaveLength(1)
-    expect(promptCalls[0]?.sessionID).toBe("session_1")
-    expect(promptCalls[0]?.parts[0]?.text).toBe("fallback")
-    expect(promptCalls[0]?.system.length).toBeGreaterThan(0)
+    expect(promptCalls).toHaveLength(0)
+    expect(sent.at(-1)).toBe("Failed to send prompt.")
+  })
+
+  test("fails when tui runtime start fails instead of falling back", async () => {
+    const startCalls: Array<{
+      mode: "spawn"
+      query_directory: string
+      body_directory: string
+      sessionID: string
+      bin?: string
+    }> = []
+    const sent: string[] = []
+    const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
+    const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
+    const a: ChannelAdapter = {
+      ...adapter(),
+      sendMessage: async (_channel, _thread, text) => {
+        sent.push(text)
+      },
+    }
+    const core = new ChannelRuntime() as unknown as {
+      adapters: ChannelAdapter[]
+      session: SessionCoordinator<
+        { sessionId: string; adapter: ChannelAdapter; channel: string; thread: string },
+        IncomingMessage
+      >
+      client: {
+        tui: {
+          runtime: {
+            start(input: {
+              mode: "spawn"
+              query_directory: string
+              body_directory: string
+              sessionID: string
+              bin?: string
+            }): Promise<{ error?: unknown }>
+            submitTask(input: {
+              sessionID: string
+              text: string
+              wait: boolean
+            }): Promise<{ error?: unknown; data?: Record<string, unknown> }>
+          }
+        }
+        session: {
+          promptAsync(input: {
+            sessionID: string
+            parts: Array<{ type: "text"; text: string }>
+            system: string
+          }): Promise<{ error?: unknown }>
+        }
+      }
+      handleMessage(msg: IncomingMessage): Promise<void>
+    }
+
+    core.adapters = [a]
+    core.session.bind("slack:C1:T1", {
+      sessionId: "session_1",
+      adapter: a,
+      channel: "C1",
+      thread: "T1",
+    })
+    core.client = {
+      tui: {
+        runtime: {
+          start: async (input) => {
+            startCalls.push(input)
+            return { error: { message: "start failed" } }
+          },
+          submitTask: async (input) => {
+            submitCalls.push(input)
+            return {}
+          },
+        },
+      },
+      session: {
+        promptAsync: async (input) => {
+          promptCalls.push(input)
+          return {}
+        },
+      },
+    }
+
+    await core.handleMessage(incoming("start failure"))
+
+    expect(startCalls).toHaveLength(1)
+    expect(submitCalls).toHaveLength(0)
+    expect(promptCalls).toHaveLength(0)
+    expect(sent.at(-1)).toBe("Failed to send prompt.")
   })
 
   test("keeps processing until session.idle after async submit", async () => {
@@ -612,6 +703,113 @@ describe("channel runtime submit mode", () => {
     expect(sendCalls.at(-1)).toContain("Task timed out")
   })
 
+  test("releases the queue when loop continuation promptAsync returns an API error", async () => {
+    const sent: string[] = []
+    const submitCalls: Array<{ sessionID: string; text: string; wait: boolean }> = []
+    const promptCalls: Array<{ sessionID: string; parts: Array<{ type: "text"; text: string }>; system: string }> = []
+    const a: ChannelAdapter = {
+      ...adapter(),
+      sendMessage: async (_channel, _thread, text) => {
+        sent.push(text)
+      },
+    }
+    const core = new ChannelRuntime() as unknown as {
+      adapters: ChannelAdapter[]
+      session: SessionCoordinator<
+        { sessionId: string; adapter: ChannelAdapter; channel: string; thread: string },
+        IncomingMessage
+      >
+      client: {
+        tui: {
+          runtime: {
+            start(input: {
+              mode: "spawn"
+              query_directory: string
+              body_directory: string
+              sessionID: string
+              bin?: string
+            }): Promise<{ error?: unknown }>
+            submitTask(input: {
+              sessionID: string
+              text: string
+              wait: boolean
+            }): Promise<{ error?: unknown; data?: Record<string, unknown> }>
+          }
+        }
+        session: {
+          promptAsync(input: {
+            sessionID: string
+            parts: Array<{ type: "text"; text: string }>
+            system: string
+          }): Promise<{ error?: unknown }>
+        }
+      }
+      handleMessage(msg: IncomingMessage): Promise<void>
+      handleEvent(event: unknown): Promise<void>
+    }
+
+    core.adapters = [a]
+    core.session.bind("slack:C1:T1", {
+      sessionId: "session_1",
+      adapter: a,
+      channel: "C1",
+      thread: "T1",
+    })
+    core.client = {
+      tui: {
+        runtime: {
+          start: async () => {
+            return {}
+          },
+          submitTask: async (input) => {
+            submitCalls.push(input)
+            return {
+              data: {
+                accepted: true,
+                sessionID: input.sessionID,
+                taskID: `task_${submitCalls.length}`,
+                waited: false,
+                completed: false,
+                message: null,
+              },
+            }
+          },
+        },
+      },
+      session: {
+        promptAsync: async (input) => {
+          promptCalls.push(input)
+          return { error: { message: "loop failed" } }
+        },
+      },
+    }
+
+    await core.handleMessage(incoming("loop-start"))
+    await core.handleMessage(incoming("queued-after-failure"))
+    await core.handleEvent({
+      type: "task.report",
+      properties: {
+        sessionID: "session_1",
+        status: "progress",
+        summary: "Still working",
+        next_plan: "Finish the next step",
+      },
+    })
+    await core.handleEvent({
+      type: "session.idle",
+      properties: {
+        sessionID: "session_1",
+      },
+    })
+    await Bun.sleep(0)
+    await Bun.sleep(0)
+
+    expect(promptCalls).toHaveLength(1)
+    expect(submitCalls).toHaveLength(2)
+    expect(submitCalls[1]?.text).toBe("queued-after-failure")
+    expect(sent.some((item) => item.includes("queued (#1)"))).toBe(true)
+  })
+
   test("supports OPENCORVUS_CHANNEL_TASK_MODE=session-async", async () => {
     process.env.OPENCORVUS_CHANNEL_TASK_MODE = "session-async"
     const startCalls: Array<{
@@ -741,5 +939,3 @@ describe("channel runtime submit mode", () => {
     expect(sent.at(-1)).toBe("Session failed: runtime stopped")
   })
 })
-
-

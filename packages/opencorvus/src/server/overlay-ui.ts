@@ -13,16 +13,9 @@ const MIME: Record<string, string> = {
 }
 
 function resolveOverlayDir(): string | undefined {
-  // 1. Compiled binary: look for ui/ next to the executable
   const binDir = path.dirname(process.execPath)
   const distUi = path.join(binDir, "ui")
   if (fs.existsSync(path.join(distUi, "index.html"))) return distUi
-
-  // 2. Source fallback: works in dev (any CHANNEL) when no compiled ui/ exists
-  // import.meta.dir = .../packages/opencorvus/src/server
-  const pkgRoot = import.meta.dir.replace(/[/\\]src[/\\]server$/, "")
-  const devUi = path.resolve(pkgRoot, "../overlay/src")
-  if (fs.existsSync(path.join(devUi, "index.html"))) return devUi
 
   return undefined
 }
@@ -34,7 +27,7 @@ export namespace OverlayUI {
     const handle = async (c: Context) => {
       const dir = resolveOverlayDir()
       if (!dir) {
-        return c.text("Overlay UI not found. Run build with overlay assets or start in dev mode.", 404)
+        return c.text("Overlay UI not found. Run build with overlay assets.", 404)
       }
 
       let reqPath = c.req.path.replace(/^\/ui/, "") || "/"
@@ -42,12 +35,13 @@ export namespace OverlayUI {
 
       const filePath = path.join(dir, reqPath)
       // Prevent directory traversal
-      if (!filePath.startsWith(dir)) return c.text("Forbidden", 403)
+      if (!filePath.startsWith(dir + path.sep) && filePath !== dir) return c.text("Forbidden", 403)
 
       try {
         const file = Bun.file(filePath)
         if (!(await file.exists())) {
-          // SPA fallback
+          if (path.extname(filePath)) return c.text("Not Found", 404)
+          // SPA fallback for client-side routes only
           const index = Bun.file(path.join(dir, "index.html"))
           return c.body(await index.arrayBuffer(), 200, {
             "Content-Type": "text/html; charset=utf-8",

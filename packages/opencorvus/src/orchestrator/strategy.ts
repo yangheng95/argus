@@ -7,10 +7,13 @@ import {
   type RetryContext,
 } from "./helpers"
 import {
+  findDeliveryByGoalRun,
   findDeliveryByRun,
+  findEvaluationByGoalRun,
   findEvaluationByRun,
   findPlans,
   findRuns,
+  latestGoalRunByCoordinator,
   type RunRow,
   type TaskRow,
 } from "./store"
@@ -49,8 +52,18 @@ export function decideRetryOrReplan(
     maxRuns: task.budget?.max_runs ?? DEFAULT_MAX_RUNS,
     maxReplans: task.budget?.max_replans ?? DEFAULT_MAX_REPLANS,
   }
-  const totalRuns = findRuns(task.id).length
-  if (totalRuns >= limits.maxRuns) {
+  const allRuns = findRuns(task.id)
+  const samePlanRuns = allRuns.filter((r) => r.plan_version_id === run.plan_version_id).length
+  if (samePlanRuns >= limits.maxRuns) {
+    // Check if replanning is still possible before giving up
+    const replans = findPlans(task.id).length - 1
+    if (replans >= limits.maxReplans) {
+      return { action: "fail", summary, retryContext: ctx }
+    }
+    log.info("same-plan run budget exhausted, trying replan", { samePlanRuns, maxRuns: limits.maxRuns, taskID: task.id })
+    return { action: "replan", summary, analysis }
+  }
+  if (allRuns.length >= limits.maxRuns * (limits.maxReplans + 1)) {
     return { action: "fail", summary, retryContext: ctx }
   }
 
@@ -63,6 +76,15 @@ export function decideRetryOrReplan(
   if (classification === "environment") {
     log.info("failure classified as environment -> fail", { classification, taskID: task.id })
     return { action: "fail", summary, retryContext: ctx }
+  }
+
+  if (ctx.changedFiles?.length === 0) {
+    log.info("empty delivery detected -> replanning", { classification, taskID: task.id })
+    const replans = findPlans(task.id).length - 1
+    if (replans >= limits.maxReplans) {
+      return { action: "fail", summary, retryContext: ctx }
+    }
+    return { action: "replan", summary, analysis }
   }
 
   if (classification === "strategy") {
@@ -92,8 +114,9 @@ export function buildRetryContext(
   summary: string,
   analysis?: EvaluatorAnalysisType,
 ): RetryContext {
-  const delivery = findDeliveryByRun(run.id)
-  const evaluation = findEvaluationByRun(run.id)
+  const goalRun = latestGoalRunByCoordinator(run.id)
+  const delivery = findDeliveryByRun(run.id) ?? (goalRun ? findDeliveryByGoalRun(goalRun.id) : undefined)
+  const evaluation = findEvaluationByRun(run.id) ?? (goalRun ? findEvaluationByGoalRun(goalRun.id) : undefined)
   return {
     deliverySummary: delivery?.summary ?? undefined,
     changedFiles: delivery?.result?.changed_files as string[] | undefined,

@@ -22,27 +22,45 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: true })
 
+function env(...keys: string[]) {
+  for (const key of keys) {
+    const value = process.env[key]?.trim()
+    if (value) return value
+  }
+}
+
+function model(input: string) {
+  return input.includes("/") ? input : `alibaba-cn/${input}`
+}
+
 // ---------------------------------------------------------------------------
 // 凭证 & 配置（硬编码）
 // ---------------------------------------------------------------------------
 
-const DASHSCOPE_KEY = process.env.OPENCORVUS_E2E_DASHSCOPE_KEY ?? "test-dashscope-key"
-const DASHSCOPE_BASE_URL = "https://coding.dashscope.aliyuncs.com/v1"
-const MODEL = "alibaba-cn/MiniMax-M2.5"
+const DASHSCOPE_KEY = env("OPENCORVUS_E2E_DASHSCOPE_KEY", "CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY") ?? "test-dashscope-key"
+const DASHSCOPE_BASE_URL =
+  env("OPENCORVUS_E2E_DASHSCOPE_API_URL", "CODING_DASHSCOPE_API_URL")
+  ?? (DASHSCOPE_KEY.startsWith("sk-sp-")
+    ? "https://coding.dashscope.aliyuncs.com/v1"
+    : "https://dashscope.aliyuncs.com/compatible-mode/v1")
+const MODEL = model(env("OPENCORVUS_E2E_MODEL", "CODING_MODEL") ?? "qwen3.5-plus")
+const MODEL_ID = MODEL.split("/").at(-1) ?? MODEL
 
-const SLACK_BOT_TOKEN = process.env.OPENCORVUS_E2E_SLACK_BOT_TOKEN ?? "test-slack-bot-token"
-const SLACK_APP_TOKEN = process.env.OPENCORVUS_E2E_SLACK_APP_TOKEN ?? "test-slack-app-token"
-const SLACK_CHANNEL_ID = process.env.OPENCORVUS_E2E_SLACK_CHANNEL_ID ?? "test-slack-channel"
-const RUN_LIVE_E2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1"
+const SLACK_BOT_TOKEN = env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN") ?? "test-slack-bot-token"
+const SLACK_APP_TOKEN = env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN") ?? "test-slack-app-token"
+const SLACK_CHANNEL_ID = env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID") ?? "test-slack-channel"
+const RUN_LIVE_E2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
 const HAS_LIVE_CREDS = !!(
-  process.env.OPENCORVUS_E2E_DASHSCOPE_KEY
-  && process.env.OPENCORVUS_E2E_SLACK_BOT_TOKEN
-  && process.env.OPENCORVUS_E2E_SLACK_APP_TOKEN
-  && process.env.OPENCORVUS_E2E_SLACK_CHANNEL_ID
+  env("OPENCORVUS_E2E_DASHSCOPE_KEY", "CODING_DASHSCOPE_API_KEY", "DASHSCOPE_API_KEY")
+  && env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN")
+  && env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN")
+  && env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID")
 )
 const liveTest = RUN_LIVE_E2E && HAS_LIVE_CREDS ? test : test.skip
 
-const TIMEOUT_MS = 1_800_000 // 30 分钟
+const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "1800000", 10) // 30 分钟
+const AUTO_REPLY = "Use reasonable defaults consistent with the task request, keep the scope minimal, continue execution, and do not ask again unless absolutely necessary."
+const STATUS_LOG_INTERVAL_MS = parseInt(process.env.OPENCORVUS_E2E_STATUS_LOG_INTERVAL_MS ?? "60000", 10)
 
 // ---------------------------------------------------------------------------
 // 任务内容（来自 specs/prd.txt 第14节，字段完整）
@@ -167,12 +185,11 @@ const PROJECT_CONFIG = JSON.stringify(
       "alibaba-cn": {
         options: { baseURL: DASHSCOPE_BASE_URL },
         models: {
-          "MiniMax-M2.5": {
+          [MODEL_ID]: {
             tool_call: true,
-            attachment: false,
+            attachment: MODEL_ID.includes("qwen"),
             reasoning: true,
-            family: "minimax",
-            interleaved: { field: "reasoning_content" },
+            family: MODEL_ID.includes("qwen") ? "qwen" : "minimax",
           },
         },
       },
@@ -219,20 +236,55 @@ async function scaffoldProject(dir: string) {
 
 const FINAL = new Set(["completed", "failed", "cancelled"])
 
+function answers(payload: Record<string, unknown> | undefined) {
+  const questions = Array.isArray(payload?.questions) ? payload.questions : []
+  const items = questions.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const row = item as Record<string, unknown>
+    const assumed =
+      typeof row.default_assumption === "string" && row.default_assumption.trim()
+        ? row.default_assumption.trim()
+        : AUTO_REPLY
+    return [[assumed]]
+  })
+  return items.length > 0 ? items : [[AUTO_REPLY]]
+}
+
+async function settle(taskID: string, progress: Awaited<ReturnType<typeof OrchestratorService.getProgress>>) {
+  const pending = progress.pendingInteractions.filter((item) => item.status === "pending")
+  if (pending.length === 0) return progress
+  for (const item of pending) {
+    console.log(`[E2E] 自动处理交互: type=${item.type} id=${item.id} title=${item.title ?? "(无标题)"}`)
+    if (item.type === "permission") {
+      await OrchestratorService.replyInteraction(item.id, {
+        reply: "always",
+        message: "Live E2E auto-approved",
+      })
+      continue
+    }
+    await OrchestratorService.replyInteraction(item.id, {
+      answers: answers(item.payload),
+      message: AUTO_REPLY,
+    })
+  }
+  return OrchestratorService.getProgress(taskID)
+}
+
 async function waitForFinal(taskID: string, maxWaitMs: number) {
   const deadline = Date.now() + maxWaitMs
   let lastStatus = ""
-  let tick = 0
+  let lastLogAt = 0
   while (Date.now() < deadline) {
-    const progress = await OrchestratorService.getProgress(taskID)
+    let progress = await OrchestratorService.getProgress(taskID)
+    progress = await settle(taskID, progress)
     if (FINAL.has(progress.task.status)) return progress
-    // 每 10 次轮询（~20 秒）打印一次状态
-    if (++tick % 10 === 0 || progress.task.status !== lastStatus) {
+    if (lastLogAt === 0 || Date.now() - lastLogAt >= STATUS_LOG_INTERVAL_MS || progress.task.status !== lastStatus) {
       const elapsed = Math.round((Date.now() - (deadline - maxWaitMs)) / 1000)
       const runs = await OrchestratorService.listRuns(taskID).catch(() => [])
       const runInfo = runs.map((r) => `${r.id.slice(-6)}:${r.status}`).join(",") || "none"
       console.log(`[E2E] ${elapsed}s  status=${progress.task.status}  runs=[${runInfo}]`)
       lastStatus = progress.task.status
+      lastLogAt = Date.now()
     }
     await Bun.sleep(2_000)
   }
@@ -253,6 +305,7 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
     async () => {
       await using tmp = await tmpdir({ git: true })
       await scaffoldProject(tmp.path)
+      console.log(`[E2E] workspace = ${tmp.path}`)
 
       // Slack thread ts（在 fn 里创建初始消息后赋值）
       let slackThreadTs: string | undefined
@@ -265,6 +318,8 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
           const { Env } = await import("../../src/env/index")
           // LLM API key（Planner + Executor session 均读取此 key）
           Env.set("DASHSCOPE_API_KEY", DASHSCOPE_KEY)
+          Env.set("CODING_DASHSCOPE_API_KEY", DASHSCOPE_KEY)
+          Env.set("ALIBABA_CODING_PLAN_API_KEY", DASHSCOPE_KEY)
           // Slack
           Env.set("SLACK_BOT_TOKEN", SLACK_BOT_TOKEN)
           Env.set("SLACK_APP_TOKEN", SLACK_APP_TOKEN)
@@ -332,9 +387,19 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
           if (progress.task.error) console.log(`[E2E] 错误信息: ${progress.task.error}`)
 
           const runs = await OrchestratorService.listRuns(taskID)
+          const interactions = await OrchestratorService.listTaskInteractions(taskID)
           console.log(`[E2E] 执行轮次: ${runs.length}`)
           for (const r of runs) {
             console.log(`[E2E]   run=${r.id}  status=${r.status}  retry=${r.retryCount}  executor=${r.executor}`)
+            const events = await OrchestratorService.listExecutorEvents(r.id).catch(() => [])
+            console.log(`[E2E]     executor_events=${events.length}`)
+            for (const event of events.slice(-12)) {
+              console.log(`[E2E]       #${event.sequence} ${event.kind}: ${event.summary ?? "(无摘要)"}`)
+            }
+          }
+          console.log(`[E2E] 交互数: ${interactions.length}`)
+          for (const item of interactions) {
+            console.log(`[E2E]   interaction=${item.id}  type=${item.type}  status=${item.status}  title=${item.title ?? "(无标题)"}`)
           }
 
           if (progress.delivery) {
@@ -522,15 +587,20 @@ describe("Full E2E: Moment Diary — real Planner + Executor + Checks + Evaluato
               // ── Evaluation ↔ 会话一致性 ──────────────────────────────────
               expect(d.name, "Evaluation 文件名应含 taskID").toContain(taskID)
               expect(d.content, "Evaluation 正文应含 taskID").toContain(taskID)
+            }
+
+            const coordinatorEvalDocs = evalDocs.filter((d) => d.content.includes("# Coordinator Evaluation Snapshot"))
+            expect(coordinatorEvalDocs.length, "evaluations/ 应至少包含 1 个 Coordinator evaluation 文档").toBeGreaterThan(0)
+            for (const d of coordinatorEvalDocs) {
               // verdict 与 API 返回一致
               const verdict = progress.evaluation!.verdict
-              expect(d.content, `Evaluation 文档 verdict 应为 ${verdict}`).toContain(`Verdict: ${verdict}`)
+              expect(d.content, `Coordinator Evaluation 文档 verdict 应为 ${verdict}`).toContain(`Verdict: ${verdict}`)
               // evaluation summary 片段出现在文档中
               const summarySnippet = progress.evaluation!.summary.slice(0, 40)
-              expect(d.content, "Evaluation 文档摘要应与 API 返回一致").toContain(summarySnippet)
+              expect(d.content, "Coordinator Evaluation 文档摘要应与 API 返回一致").toContain(summarySnippet)
               // 各 check 名称出现在文档中
               for (const chk of progress.evaluation!.checks ?? []) {
-                expect(d.content, `Evaluation 应含 check: ${chk.name}`).toMatch(new RegExp(`\\[${chk.status}\\].*${chk.name}|\\[${chk.status}\\].*${chk.label ?? chk.name}`, "i"))
+                expect(d.content, `Coordinator Evaluation 应含 check: ${chk.name}`).toMatch(new RegExp(`\\[${chk.status}\\].*${chk.name}|\\[${chk.status}\\].*${chk.label ?? chk.name}`, "i"))
               }
             }
 

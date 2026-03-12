@@ -1,9 +1,10 @@
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "@/global"
+import { Env } from "@/env"
 import { git } from "@/util/git"
 import { Filesystem } from "@/util/filesystem"
-import { selectorList } from "@/check/policy"
+import { inferFamily, selectorList } from "@/check/policy"
 import { EvaluatorService } from "@/evaluator/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -11,6 +12,7 @@ import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
 import { type EvaluationOutput } from "@/evaluator/shared"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { Worktree } from "@/worktree"
 import z from "zod"
 import { type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
 
@@ -18,6 +20,13 @@ function dict(input: unknown) {
   return input && typeof input === "object" && !Array.isArray(input)
     ? input as Record<string, unknown>
     : {}
+}
+
+function item(input: Record<string, unknown>, key: string) {
+  const value = input[key]
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : undefined
 }
 
 function summary(prefix: string, files: string[]) {
@@ -61,18 +70,66 @@ function goalChecks(goal: GoalRow, task: TaskRow) {
   const selectors = localSelectors(goal)
   const base = dict(task.metadata?.checks)
   const next: Record<string, unknown> = {
-    ...base,
     spec_check: { enabled: false, mode: "strict" },
     build: selectors.includes("build") ? base.build : false,
     test: selectors.includes("test") ? base.test : false,
     lint: selectors.includes("lint") ? base.lint : false,
     verify_cmd: selectors.includes("verify_cmd") ? base.verify_cmd : false,
   }
-  if (selectors.includes("startup")) next.startup = { enabled: true, mode: "strict" }
-  if (selectors.includes("ui_review")) next.ui_review = { enabled: true, mode: "strict" }
-  if (selectors.includes("code_quality")) next.code_quality = { enabled: true, mode: "strict" }
-  if (selectors.includes("code_review")) next.code_review = { enabled: true, mode: "strict" }
-  if (selectors.includes("dead_code_review")) next.dead_code_review = { enabled: true, mode: "strict" }
+  const named =
+    base.named && typeof base.named === "object" && !Array.isArray(base.named)
+      ? Object.fromEntries(
+          Object.entries(base.named as Record<string, unknown>).flatMap(([name, raw]) => {
+            if (!raw || typeof raw !== "object" || Array.isArray(raw)) return []
+            const value = raw as Record<string, unknown>
+            if (value.enabled === false) return []
+            const family = typeof value.family === "string" ? value.family : inferFamily(name)
+            return selectors.includes(family) ? [[name, { ...value, enabled: true }]] : []
+          }),
+        )
+      : undefined
+  if (named && Object.keys(named).length > 0) next.named = named
+  if (typeof base.timeout_ms === "number") next.timeout_ms = base.timeout_ms
+  if (base.custom && typeof base.custom === "object" && !Array.isArray(base.custom)) next.custom = base.custom
+  const startup = item(base, "startup")
+  if (selectors.includes("startup") && typeof startup?.command === "string" && startup.command) {
+    next.startup = {
+      ...startup,
+      mode: typeof startup.mode === "string" ? startup.mode : "strict",
+    }
+  }
+  if (selectors.includes("ui_review")) {
+    const value = item(base, "ui_review")
+    next.ui_review = {
+      ...value,
+      target: "web",
+      mode: typeof value?.mode === "string" ? value.mode : "strict",
+    }
+  }
+  if (selectors.includes("code_quality")) {
+    const value = item(base, "code_quality")
+    next.code_quality = {
+      ...value,
+      enabled: true,
+      mode: typeof value?.mode === "string" ? value.mode : "strict",
+    }
+  }
+  if (selectors.includes("code_review")) {
+    const value = item(base, "code_review")
+    next.code_review = {
+      ...value,
+      enabled: true,
+      mode: typeof value?.mode === "string" ? value.mode : "strict",
+    }
+  }
+  if (selectors.includes("dead_code_review")) {
+    const value = item(base, "dead_code_review")
+    next.dead_code_review = {
+      ...value,
+      enabled: true,
+      mode: typeof value?.mode === "string" ? value.mode : "strict",
+    }
+  }
   return next
 }
 
@@ -82,6 +139,7 @@ export async function createGoalWorkspace(input: {
   snapshot: string | undefined
 }) {
   if (!input.snapshot || Instance.project.vcs !== "git") return Instance.directory
+  const env = { ...Env.all() }
   const directory = path.join(
     Global.Path.data,
     "goal-workspace",
@@ -101,10 +159,42 @@ export async function createGoalWorkspace(input: {
   await Instance.provide({
     directory,
     fn: async () => {
+      for (const [key, value] of Object.entries(env)) {
+        if (value === undefined) continue
+        Env.set(key, value)
+      }
       await Snapshot.restore(input.snapshot!)
     },
   })
   return directory
+}
+
+export async function cleanupGoalWorkspace(directory?: string) {
+  if (!directory) return
+  const root = path.join(Global.Path.data, "goal-workspace")
+  if (!Filesystem.contains(root, directory)) return
+  const projectID = Instance.project.id
+  if (!(await Filesystem.exists(directory))) {
+    await Project.removeSandbox(projectID, directory).catch(() => undefined)
+    return
+  }
+  const drop = () =>
+    fs.rm(directory, {
+      recursive: true,
+      force: true,
+      maxRetries: 50,
+      retryDelay: 100,
+    }).catch(() => undefined)
+  await Instance.provide({
+    directory,
+    fn: () => Instance.dispose(),
+  }).catch(() => undefined)
+  if (Instance.project.vcs !== "git") {
+    await drop()
+  } else {
+    await Worktree.remove({ directory }).catch(drop)
+  }
+  await Project.removeSandbox(projectID, directory).catch(() => undefined)
 }
 
 export async function createGoalSession(task: TaskRow, goal: GoalRow, directory?: string) {
@@ -201,23 +291,18 @@ export async function evaluateGoal(input: {
   const matched = selectors.flatMap((selector) =>
     result.checks.filter((item) => item.name === selector || item.name.startsWith(`${selector}#`)),
   )
-  if (result.status === "passed" && matched.length === 0) {
-    return {
-      result,
-      analysis: {
+  const analysisOnly =
+    result.status === "failed" &&
+    matched.length === 0 &&
+    result.summary === "No blocking evaluator checks ran."
+  const checked = analysisOnly
+    ? {
+        ...result,
+        status: "passed" as const,
         verdict: "accepted" as const,
-        classification: "unknown" as const,
-        summary: result.summary,
-        goal_statuses: [{
-          goal_index: 0,
-          status: "passed" as const,
-          evidence: result.summary,
-          reasoning: "Goal-local evaluator checks passed and no goal-specific selector matched, so the delivery is accepted for this goal.",
-        }],
-        replan_guidance: null,
-      },
-    }
-  }
+        summary: "No goal-local automated checks ran; deferring to goal analysis.",
+      }
+    : result
   const analysisInput = {
     task: {
       title: input.task.title,
@@ -235,7 +320,7 @@ export async function evaluateGoal(input: {
       changedFiles: input.delivery.diffs.map((item) => item.file),
       diffs: input.delivery.diffs,
     },
-    checkResults: result.checks.map((item) => ({
+    checkResults: checked.checks.map((item) => ({
       name: item.name,
       status: item.status,
       evidence: item.evidence,
@@ -246,11 +331,11 @@ export async function evaluateGoal(input: {
     .catch((error) => {
       const message = error instanceof Error ? error.message : String(error)
       return {
-        analysis: analysisFailure(result, [input.goal], message),
+        analysis: analysisFailure(checked, [input.goal], message),
         analysisError: message,
       }
     })
-  return { result, ...analyzed }
+  return { result: checked, ...analyzed }
 }
 
 export async function evaluateTask(input: {

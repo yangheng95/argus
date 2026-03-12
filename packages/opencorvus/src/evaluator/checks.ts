@@ -1,6 +1,6 @@
+import { Env } from "@/env"
 import { Instance } from "@/project/instance"
 import { Shell } from "@/shell/shell"
-import { Shell as ShellUtil } from "@/shell/shell"
 import { CheckConfig } from "@/orchestrator/model"
 import { Snapshot } from "@/snapshot"
 import { Filesystem } from "@/util/filesystem"
@@ -26,34 +26,38 @@ export async function commandChecks(
   timeout: number,
   delivery: EvaluationDelivery,
 ) {
-  const checks: { name: string; label?: string; family?: string; status: "passed" | "failed" | "skipped"; evidence?: string }[] = []
-  const artifacts: EvaluationArtifact[] = []
-
-  for (const group of commands) {
-    for (const [index, command] of group.commands.entries()) {
-      const name = group.commands.length === 1 ? group.name : `${group.name}#${index + 1}`
-      const result = await commandResult(command, timeout)
-      artifacts.push({
-        kind: "log",
-        label: `evaluation:${name}`,
-        payload: {
-          command: result.command,
-          cwd: result.cwd,
-          code: result.code,
-          output: clip(result.output),
-        },
-      })
-      checks.push({
-        ...checkResult({
-          name,
-          label: group.label,
-          family: group.family,
-          status: result.code === 0 ? "passed" : "failed",
-          evidence: clip(result.output) || `${command} ${result.code === 0 ? "passed" : "failed"}`,
-        }),
-      })
-    }
-  }
+  const tasks = commands.flatMap((group) =>
+    group.commands.map((command, index) => ({
+      group,
+      name: group.commands.length === 1 ? group.name : `${group.name}#${index + 1}`,
+      command,
+    })),
+  )
+  const results = await Promise.all(
+    tasks.map(async (task) => {
+      const result = await commandResult(task.command, timeout)
+      return { ...task, result }
+    }),
+  )
+  const checks = results.map((item) => ({
+    ...checkResult({
+      name: item.name,
+      label: item.group.label,
+      family: item.group.family,
+      status: item.result.code === 0 ? "passed" : "failed",
+      evidence: clip(item.result.output) || `${typeof item.command === "string" ? item.command : item.command.command} ${item.result.code === 0 ? "passed" : "failed"}`,
+    }),
+  }))
+  const artifacts: EvaluationArtifact[] = results.map((item) => ({
+    kind: "log",
+    label: `evaluation:${item.name}`,
+    payload: {
+      command: item.result.command,
+      cwd: item.result.cwd,
+      code: item.result.code,
+      output: clip(item.result.output),
+    },
+  }))
 
   if (commands.length === 0) {
     checks.push(checkResult({
@@ -73,7 +77,7 @@ export async function commandResult(input: string | EvaluatorCommand, timeout: n
   const proc = spawn(command, {
     shell,
     cwd,
-    env: process.env,
+    env: Env.all(),
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   })
@@ -87,7 +91,7 @@ export async function commandResult(input: string | EvaluatorCommand, timeout: n
   })
 
   const timer = setTimeout(() => {
-    void ShellUtil.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
+    void Shell.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
   }, timeout)
   timer.unref()
 
@@ -121,7 +125,7 @@ export async function startupResult(config: z.infer<typeof CheckConfig>["startup
   const proc = spawn(config.command, {
     shell,
     cwd: Instance.directory,
-    env: process.env,
+    env: Env.all(),
     stdio: ["ignore", "pipe", "pipe"],
     detached: process.platform !== "win32",
   })
@@ -150,7 +154,7 @@ export async function startupResult(config: z.infer<typeof CheckConfig>["startup
   })
 
   if (proc.exitCode === null && proc.signalCode === null) {
-    await ShellUtil.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
+    await Shell.killTree(proc, { exited: () => proc.exitCode !== null || proc.signalCode !== null })
   }
 
   if (readiness.ok) {
@@ -213,7 +217,7 @@ async function waitForStartup(input: {
       if (!input.readyURL && !input.readyText && code === 0) {
         return { ok: true, evidence: "Process exited successfully." }
       }
-      if (input.requireExitZero && code === 0 && input.readyText && input.output().includes(input.readyText)) {
+      if (code === 0 && input.readyText && input.output().includes(input.readyText)) {
         return { ok: true, evidence: `Process output matched "${input.readyText}".` }
       }
       return { ok: false, evidence: `Process exited before becoming ready (code ${code}).` }
