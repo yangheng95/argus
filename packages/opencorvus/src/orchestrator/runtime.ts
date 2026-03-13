@@ -110,6 +110,7 @@ const completingRuns = new Set<string>() // guards against concurrent completeRu
 const finalizingGoalRuns = new Set<string>() // guards against concurrent finalizeGoalRun for the same goal run
 const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
+const FOLLOWUP_RUN_SYNC_GRACE_MS = 250
 
 // Unattended-mode safeguards
 const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
@@ -764,6 +765,12 @@ export namespace OrchestratorRuntime {
 
     if (run.status === "failed" || run.status === "aborted") {
       return
+    }
+    if (run.status === "accepted" && typeof run.metadata?.previous_run_id === "string") {
+      const started = run.time_started ?? run.time_created ?? 0
+      if (started > 0 && (Date.now() - started) < FOLLOWUP_RUN_SYNC_GRACE_MS) {
+        return
+      }
     }
 
     const target = runExecutionTarget(run, goalRun)

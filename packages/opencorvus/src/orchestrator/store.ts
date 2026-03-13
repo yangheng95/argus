@@ -354,7 +354,7 @@ export function activeGoalRunByCoordinator(runID: string) {
           inArray(OrchestratorGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
         ),
       )
-      .orderBy(desc(OrchestratorGoalRunTable.time_created))
+      .orderBy(desc(OrchestratorGoalRunTable.time_created), desc(OrchestratorGoalRunTable.id))
       .get(),
   )
 }
@@ -365,7 +365,7 @@ export function latestGoalRunByCoordinator(runID: string) {
       .select()
       .from(OrchestratorGoalRunTable)
       .where(eq(OrchestratorGoalRunTable.coordinator_run_id, runID))
-      .orderBy(desc(OrchestratorGoalRunTable.time_created))
+      .orderBy(desc(OrchestratorGoalRunTable.time_created), desc(OrchestratorGoalRunTable.id))
       .get(),
   )
 }

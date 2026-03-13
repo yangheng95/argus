@@ -43,12 +43,7 @@ function summary(prefix: string, files: string[]) {
 }
 
 function includeDeliveryFile(file: string) {
-  return ![
-    ".opencorvus/goals/",
-    ".opencorvus/evaluations/",
-    ".opencorvus/prds/",
-    ".opencorvus/plans/",
-  ].some((prefix) => file.startsWith(prefix))
+  return !file.startsWith(".opencorvus/")
 }
 
 function filterDeliveryDiffs(diffs: z.infer<typeof Snapshot.FileDiff>[]) {
