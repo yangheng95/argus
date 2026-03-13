@@ -35,6 +35,10 @@ export const ManagedCodingExecutor = {
       system?: string | (() => string | undefined)
       maxTurns?: number | (() => number | undefined)
       tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
+      planning?: {
+        spec: boolean
+        plan: boolean
+      }
     },
   ): ExecutorAdapter {
     const tasks = new Map<string, State>()
@@ -244,9 +248,9 @@ export const ManagedCodingExecutor = {
         }
       },
       planningCapabilities() {
-        return PlanningCapabilities.parse({
-          spec: true,
-          plan: true,
+        return PlanningCapabilities.parse(options.planning ?? {
+          spec: false,
+          plan: false,
         })
       },
       async generatePlanning(input) {
@@ -256,6 +260,7 @@ export const ManagedCodingExecutor = {
           cwd: input.cwd ?? value(options.cwd),
           system: input.system ?? value(options.system),
           maxTurns: input.maxTurns ?? value(options.maxTurns) ?? 4,
+          ...(input.outputSchema ? { outputSchema: input.outputSchema } : {}),
           sandbox: input.sandbox ?? "read-only",
           ...(input.toolMode ? { toolMode: input.toolMode } : {}),
           ...(input.toolMode === "none" ? { tools: [] } : {}),
@@ -314,7 +319,17 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
   }
 
   if (!state.abort.signal.aborted && (state.status === "running" || state.status === "retrying" || state.status === "queued")) {
-    state.status = "completed"
+    state.status = "failed"
+    state.error = "executor stream ended unexpectedly"
+    push(state, {
+      type: "session.error",
+      summary: "executor stream ended unexpectedly",
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        error: "executor stream ended unexpectedly",
+      },
+    })
   }
 
   // Free event buffers after stream finishes to prevent unbounded memory growth.

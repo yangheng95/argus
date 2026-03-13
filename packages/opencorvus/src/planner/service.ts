@@ -164,6 +164,7 @@ export namespace HeadlessPlannerService {
         request: input.request,
         spec,
         goals,
+        signal: AbortSignal.timeout(plannerTimeoutMs()),
       }).catch((error) => {
         throw new PlannerFailureError("executor-native planner failed", { cause: error })
       })
@@ -289,6 +290,7 @@ export namespace HeadlessPlannerService {
         spec,
         goals,
         replanContext: replanCtx,
+        signal: AbortSignal.timeout(plannerTimeoutMs()),
       }).catch((error) => {
         throw new PlannerFailureError("executor-native planner replan failed", { cause: error })
       })
@@ -309,13 +311,26 @@ export namespace HeadlessPlannerService {
       )
     }
 
-    const agentResult = await PlannerAgent.plan({
-      title: input.title,
-      request: input.request,
-      replanContext: replanCtx,
-      spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
-    }).catch((error) => {
-      throw new PlannerFailureError("planner agent replan failed", { cause: error })
+    const timeoutMs = plannerTimeoutMs()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    let replanTimeout: ReturnType<typeof setTimeout>
+    const agentResult = await Promise.race([
+      PlannerAgent.plan({
+        title: input.title,
+        request: input.request,
+        replanContext: replanCtx,
+        spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+        signal: controller.signal,
+      }).catch((error) => {
+        throw new PlannerFailureError("planner agent replan failed", { cause: error })
+      }).finally(() => clearTimeout(replanTimeout)),
+      new Promise<never>((_, reject) => {
+        replanTimeout = setTimeout(() => reject(new PlannerFailureError(`planner timed out after ${timeoutMs}ms`)), timeoutMs)
+      }),
+    ]).finally(() => {
+      clearTimeout(timer)
+      controller.abort()
     })
     return agentOutputToDraft(
       input.title,

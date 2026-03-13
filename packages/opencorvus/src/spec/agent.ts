@@ -19,6 +19,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
+import { Env } from "@/env"
 import fs from "fs"
 import path from "path"
 
@@ -144,11 +145,15 @@ export interface SpecRewriteContext {
 // HeadlessSpecAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 45
 const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.4
 const MAX_SPEC_ATTEMPTS = 2
+
+function maxSteps() {
+  const value = Number.parseInt(Env.get("OPENCORVUS_SPEC_AGENT_MAX_STEPS") ?? "", 10)
+  return Number.isFinite(value) && value > 0 ? value : 20
+}
 
 export namespace HeadlessSpecAgent {
   /**
@@ -208,8 +213,13 @@ async function run(input: {
     input.request.match(/(?:绝对路径|absolute path)[：:\s]*([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i) ??
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
+  const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
+  if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
 
-  const explorationTools = createPlannerTools(taskWorkDir)
+  const context = prefetchContext(input.title, input.request)
+  const recallEnabled = context.length === 0
+  const explorationTools = createPlannerTools(taskWorkDir, { recall: recallEnabled })
+  const unattended = await unattendedProject()
 
   // -----------------------------------------------------------------------
   // submit_spec tool — the model calls this to deliver structured spec data.
@@ -229,16 +239,12 @@ async function run(input: {
         submittedSpec = args as SpecOutputType
         return "Specification submitted successfully."
       },
-    }),
+      }),
   }
 
-  const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
-  if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
-
-  const context = prefetchContext(input.title, input.request)
-  const unattended = await unattendedProject()
-
   let lastQuality: { score: number; reasons: string[] } | undefined
+  let lastSteps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }> | undefined
+  let lastToolCallCount = 0
 
   for (let attempt = 0; attempt < MAX_SPEC_ATTEMPTS; attempt++) {
     if (input.signal?.aborted) throw new Error("spec agent aborted before attempt " + (attempt + 1))
@@ -248,6 +254,8 @@ async function run(input: {
       ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
       : undefined
     const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, unattended)
+    const stepLimit = maxSteps()
+    const consolidationOnly = attempt > 0 && !!lastSteps && lastToolCallCount >= MIN_TOOL_CALLS
 
     log.info("spec agent starting", {
       title: input.title,
@@ -257,29 +265,62 @@ async function run(input: {
       fileRefsFound: fileRefs.length,
       taskWorkDir,
       toolCount: Object.keys(allTools).length,
+      recallEnabled,
       unattended,
       attempt: attempt + 1,
+      maxSteps: stepLimit,
+      consolidationOnly,
       retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
-    const result = await generateText({
-      model: language,
-      stopWhen: stepCountIs(MAX_STEPS),
-      tools: allTools,
-      toolChoice: "required",
-      maxOutputTokens: 32768,
-      abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-      system: SPEC_SYSTEM,
-      prompt: userPrompt,
-    })
+    let result: {
+      text?: string
+      finishReason?: string
+      steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
+    }
+    let toolCallCount: number
 
-    const toolCallCount = result.steps.reduce(
-      (sum, s) => {
-        const step = s as { toolCalls?: unknown[] }
-        return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
-      },
-      0,
-    )
+    if (consolidationOnly) {
+      const forced = await finalizeSpec(language, input, lastSteps!, input.signal, retryContext)
+      if (forced.submittedSpec) submittedSpec = forced.submittedSpec
+      result = forced.result
+      toolCallCount = lastToolCallCount
+      log.info("spec agent retrying via consolidation", {
+        attempt: attempt + 1,
+        stepCount: result.steps.length,
+        reusedToolCalls: toolCallCount,
+      })
+    } else {
+      result = await generateText({
+        model: language,
+        stopWhen: stepCountIs(stepLimit),
+        tools: allTools,
+        toolChoice: "auto",
+        maxOutputTokens: 32768,
+        abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+        system: SPEC_SYSTEM,
+        prompt: userPrompt,
+      })
+
+      toolCallCount = result.steps.reduce(
+        (sum, s) => {
+          const step = s as { toolCalls?: unknown[] }
+          return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
+        },
+        0,
+      )
+      lastSteps = result.steps
+      lastToolCallCount = toolCallCount
+      const toolUsage = summarizeToolUsage(result.steps)
+      log.info("spec agent tool usage", {
+        attempt: attempt + 1,
+        finishReason: result.finishReason,
+        stepCount: result.steps.length,
+        toolCallCount,
+        submitSpecCalls: toolUsage["submit_spec"] ?? 0,
+        toolUsage,
+      })
+    }
 
     // -----------------------------------------------------------------------
     // Priority 1: extract from submit_spec tool call (guaranteed valid JSON)
@@ -303,7 +344,6 @@ async function run(input: {
       if (!allText || !allText.includes("{")) {
         allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
       }
-
       if (!allText.trim()) {
         log.warn("spec: primary run produced no final text or submit_spec call, forcing consolidation", {
           steps: result.steps.length,
@@ -542,6 +582,7 @@ async function finalizeSpec(
   },
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   signal?: AbortSignal,
+  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -577,12 +618,39 @@ async function finalizeSpec(
     maxOutputTokens: 16384,
     abortSignal: signal ?? AbortSignal.timeout(120_000),
     system:
-      "You are finalizing a specification after exploration is already complete. " +
-      "Do not explore again. Use the transcript provided, then call submit_spec exactly once.",
+      "You are finalizing a specification after an exploration attempt. " +
+      "Do not explore again. Use the transcript if it is helpful, but do not claim that a missing or weak transcript blocks you. " +
+      "If the repository is greenfield or nearly empty, use the task request as the primary source of truth and produce a concrete technical design. " +
+      "Never return a placeholder saying more context is required when the request already contains implementation requirements. " +
+      "Call submit_spec exactly once.",
     prompt: [
       `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
+      input.goals && input.goals.length > 0
+        ? `# Requested Goals\n\n${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"}] ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n")}`
+        : "",
+      input.rewriteContext
+        ? [
+            "# Rewrite Context",
+            "",
+            `Previous Spec:\n${input.rewriteContext.previousSpec}`,
+            "",
+            `Failure: ${input.rewriteContext.failureAnalysis.summary}`,
+            `Root Cause: ${input.rewriteContext.failureAnalysis.rootCause}`,
+            `Suggested Strategy: ${input.rewriteContext.failureAnalysis.suggestedStrategy}`,
+          ].join("\n")
+        : "",
+      retryContext
+        ? [
+            "# Quality Retry Feedback",
+            "",
+            `Previous score: ${retryContext.previousScore.toFixed(2)}`,
+            ...retryContext.reasons.map((reason) => `- ${reason}`),
+          ].join("\n")
+        : "",
       "# Exploration Transcript",
       transcript || "(no transcript captured)",
+      "If the transcript is sparse, repetitive, or mostly memory lookups, synthesize a concrete greenfield specification from the request instead of reporting missing context.",
+      "For greenfield tasks, define modules, data structures, APIs, tests, constraints, and acceptance criteria in detail.",
       "Now synthesize the final specification and call submit_spec exactly once.",
     ].join("\n\n"),
   })
@@ -709,6 +777,20 @@ function normalizeSpecOutput(input: SpecOutputType): SpecOutputType {
     evidence_sources: Array.isArray(input.evidence_sources) ? input.evidence_sources : [],
     unresolved_questions: Array.isArray(input.unresolved_questions) ? input.unresolved_questions : [],
   }
+}
+
+function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
+  const map: Record<string, number> = {}
+  for (const step of steps) {
+    const calls = Array.isArray(step.toolCalls) ? step.toolCalls : []
+    for (const call of calls) {
+      if (!call || typeof call !== "object" || !("toolName" in call)) continue
+      const name = String((call as { toolName?: unknown }).toolName || "")
+      if (!name) continue
+      map[name] = (map[name] ?? 0) + 1
+    }
+  }
+  return map
 }
 
 function tryExtractSpecOutput(text: string): { ok: true; value: SpecOutputType } | { ok: false; error: Error } {
@@ -936,6 +1018,16 @@ function validateSpecQuality(
     reasons.push("Spec content lacks specific file paths or detailed technical design keywords")
   }
 
+  const nonTrivial = request.trim().length >= 200 || request.includes("\n")
+  if (nonTrivial && spec.content.length < 500) {
+    score = Math.min(score, QUALITY_RETRY_THRESHOLD - 0.01)
+    reasons.push("Non-trivial task requires spec content >= 500 chars")
+  }
+  if (nonTrivial && spec.spec_items.length < 2) {
+    score = Math.min(score, QUALITY_RETRY_THRESHOLD - 0.01)
+    reasons.push("Non-trivial task requires at least 2 spec items")
+  }
+
   return { score: Math.min(score, 1), reasons }
 }
 
@@ -1109,6 +1201,8 @@ The submit_spec tool accepts these fields:
 ## Rules
 
 - ALWAYS explore the codebase before writing the spec. No exceptions.
+- If a recall tool response contains \`RECALL_COMPLETE\`, stop recall immediately and do not call memory_search, memory_get, or preference_list again in this run.
+- Do not spam identical exploration calls. Repeating the same tool with the same arguments more than twice is invalid; switch tools or submit_spec.
 - Every file path in the spec MUST come from actual tool results or pre-read files.
 - spec_items must be verifiable — each should have clear success/failure criteria.
 - spec_items.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check

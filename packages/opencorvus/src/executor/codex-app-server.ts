@@ -61,7 +61,7 @@ export namespace CodexAppServerExecutor {
   export function capabilities() {
     return CodingCapabilities.parse({
       builtinTools: true,
-      customTools: true,
+      customTools: false,
       stream: true,
       resume: true,
       interrupt: true,
@@ -330,7 +330,7 @@ function* notification(threadID: string, turnID: string, method: string, params?
       const adapter = ToolAdapterRegistry.classify(String(item.tool || ""))
       yield {
         type: "tool_result",
-        id: typeof item.id === "string" ? item.id : currentTurn,
+        id: toolID(item) || currentTurn,
         output: text(item.contentItems ?? item),
         meta: {
           tool_name: String(item.tool || ""),
@@ -429,7 +429,7 @@ function* request(item: Extract<CodexInbound, { type: "request" }>): Generator<C
       const adapter = ToolAdapterRegistry.classify(name)
       yield {
         type: "tool_call",
-        id: String(data.callId || item.id),
+        id: toolID(data) || String(item.id),
         name,
         input: text(data.arguments),
         meta: {
@@ -503,6 +503,7 @@ function turnStart(threadID: string, input: z.input<typeof CodingRunInput>) {
     approvalPolicy: approvalPolicy(),
     sandboxPolicy: sandboxPolicy(next.cwd, next.sandbox),
     model: next.model,
+    ...(next.outputSchema ? { outputSchema: next.outputSchema } : {}),
   }
 }
 
@@ -573,6 +574,13 @@ function number(input: unknown) {
   const next = Number(input)
   if (!Number.isFinite(next) || next < 0) return undefined
   return next
+}
+
+function toolID(input: Record<string, unknown>) {
+  if (typeof input.callId === "string" && input.callId) return input.callId
+  if (typeof input.call_id === "string" && input.call_id) return input.call_id
+  if (typeof input.id === "string" && input.id) return input.id
+  return ""
 }
 
 function requestID(input: string) {

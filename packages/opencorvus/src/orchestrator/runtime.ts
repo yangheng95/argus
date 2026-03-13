@@ -10,6 +10,7 @@ import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
+import { withTimeout } from "@/util/timeout"
 import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
 import {
@@ -36,6 +37,7 @@ import { autoRejectInteraction } from "./interaction-actions"
 import { UNATTENDED_AUTO_REPLY, unattendedProject } from "./unattended"
 import {
   OrchestratorGoalRunTable,
+  OrchestratorEvaluationTable,
   OrchestratorInteractionRequestTable,
   OrchestratorRunTable,
   OrchestratorTaskTable,
@@ -47,6 +49,7 @@ import {
 } from "./helpers"
 import {
   appendExecutorEvent,
+  beginEvaluation,
   createGoalRun,
   createReplanRun,
   createRetryRun,
@@ -57,6 +60,7 @@ import {
   persistDelivery,
   persistEvaluation,
   persistFailedRunEvaluation,
+  renewExecutorSessionLease,
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
   updateExecutorSessionStatus,
@@ -68,6 +72,8 @@ import {
   findDeliveryByRun,
   findEvaluationByGoalRun,
   findEvaluationByRun,
+  findExecutorSessionByGoalRun,
+  findExecutorSessionByRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
@@ -87,6 +93,7 @@ import {
   type TaskRow,
 } from "./store"
 import { Identifier } from "@/id/id"
+import { EXECUTOR_LEASE_MS, executorLeaseOwner } from "./lease"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 
@@ -106,12 +113,13 @@ const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stal
 
 // Unattended-mode safeguards
 const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
+const EXECUTOR_STATUS_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EXECUTOR_STATUS_TIMEOUT_MS, 15_000)
 // Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
 // Default is off so automated pipelines continue without interruption.
 const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
 
 function interactionStaleMs() {
-  return safeParseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS, 5 * 60 * 1000)
+  return safeParseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS, 60_000)
 }
 
 function goalsForRun(run: RunRow) {
@@ -134,6 +142,10 @@ function taskBaselineRef(task: TaskRow) {
 
 function activeGoalRun(run: RunRow) {
   return activeGoalRunByCoordinator(run.id)
+}
+
+function activeExecutorSession(run: RunRow, goalRun = activeGoalRun(run)) {
+  return goalRun ? findExecutorSessionByGoalRun(goalRun.id) : findExecutorSessionByRun(run.id)
 }
 
 function latestGoalRun(run: RunRow) {
@@ -202,6 +214,15 @@ function planPrompt(plan: PlanRow, run: RunRow) {
   const override = typeof run.metadata?.prompt_override === "string" ? run.metadata.prompt_override.trim() : ""
   if (!override) return plan.prompt
   return [plan.prompt, "## Run Context", override].join("\n\n")
+}
+
+function evaluationTimedOut(time: number | null | undefined) {
+  const started = time ?? 0
+  return started > 0 && (Date.now() - started) >= EVALUATION_HARD_TIMEOUT_MS
+}
+
+function stalledEvaluationSummary() {
+  return `Evaluation stalled after ${Math.round(EVALUATION_HARD_TIMEOUT_MS / 60000)}min without completion`
 }
 
 async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
@@ -355,6 +376,32 @@ async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: Runtim
       await runEvaluation(task, run, existingDelivery, hooks)
       return
     }
+    if (evaluation.status === "pending") {
+      if (!evaluationTimedOut(evaluation.time_updated ?? evaluation.time_created)) return
+      const summary = stalledEvaluationSummary()
+      const now = Date.now()
+      Database.use((db) =>
+        db
+          .update(OrchestratorEvaluationTable)
+          .set({
+            status: "failed",
+            verdict: "rejected",
+            summary,
+            checks: [{
+              name: "evaluation_timeout",
+              status: "failed",
+              evidence: summary,
+            }],
+            time_completed: now,
+            time_updated: now,
+          })
+          .where(eq(OrchestratorEvaluationTable.id, evaluation.id))
+          .run(),
+      )
+      await hooks.updateRun(run, { status: "failed", error: summary, blocking_reason: null, time_completed: now }, summary)
+      await hooks.updateTask(task, { status: "failed", error: summary, blocking_reason: null, time_completed: now }, summary)
+      return
+    }
     if (evaluation.status === "passed") {
       await publishAcceptedDelivery(task, run, existingDelivery, hooks)
       return
@@ -371,6 +418,14 @@ async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: Runtim
   const deliveryID = Identifier.ascending("delivery")
   const evaluationID = Identifier.ascending("evaluation")
   persistDelivery({ task, run, deliveryID, delivery, now: Date.now() })
+  beginEvaluation({
+    task,
+    run,
+    deliveryID,
+    evaluationID,
+    now: Date.now(),
+    summary: "Evaluating task delivery",
+  })
   await Plugin.trigger("delivery.ready", {
     taskID: task.id,
     runID: run.id,
@@ -448,6 +503,38 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
     await removeGoalRunSession(goalRun)
   }
   if (existingEvaluation) {
+    if (existingEvaluation.status === "pending") {
+      if (!evaluationTimedOut(existingEvaluation.time_updated ?? existingEvaluation.time_created)) return
+      const summary = stalledEvaluationSummary()
+      const now = Date.now()
+      Database.use((db) =>
+        db
+          .update(OrchestratorEvaluationTable)
+          .set({
+            status: "failed",
+            verdict: "rejected",
+            summary,
+            checks: [{
+              name: "evaluation_timeout",
+              status: "failed",
+              evidence: summary,
+            }],
+            time_completed: now,
+            time_updated: now,
+          })
+          .where(eq(OrchestratorEvaluationTable.id, existingEvaluation.id))
+          .run(),
+      )
+      updateGoalRun(goalRun.id, { status: "failed", error: summary, blocking_reason: null, time_completed: now })
+      if (goal.priority === "advisory") {
+        await dispose()
+        await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
+        return
+      }
+      await dispose()
+      await handleEvaluationFailure(requireTask(task.id), run, summary, hooks)
+      return
+    }
     if (existingEvaluation.status === "passed" || goal.priority === "advisory") {
       await dispose()
       await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
@@ -476,6 +563,15 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
     if (!existingDelivery) {
       persistDelivery({ task, run, goalRunID: goalRun.id, deliveryID, delivery: delivered, now: Date.now() })
     }
+    beginEvaluation({
+      task,
+      run,
+      goalRunID: goalRun.id,
+      deliveryID,
+      evaluationID,
+      now: Date.now(),
+      summary: `Evaluating goal delivery: ${goal.description}`,
+    })
     const { result, analysis, analysisError } = await provideWorkspace(goalDir, () =>
       evaluateGoal({ task, goal, delivery: delivered })
     )
@@ -673,8 +769,37 @@ export namespace OrchestratorRuntime {
     const target = runExecutionTarget(run, goalRun)
     const queueTaskID = target.queueTaskID
     if (!queueTaskID) return
+    const executorSession = activeExecutorSession(run, goalRun)
+    const now = Date.now()
+    if (executorSession?.status === "active") {
+      if (executorSession.lease_owner && executorSession.lease_owner !== executorLeaseOwner()) {
+        await handleExecutionFailure(
+          run,
+          `Executor lease belongs to a different runtime: ${executorSession.lease_owner}`,
+          hooks,
+        )
+        return
+      }
+      if ((executorSession.lease_until ?? 0) > 0 && (executorSession.lease_until ?? 0) < now) {
+        await handleExecutionFailure(
+          run,
+          `Executor lease expired after ${Math.round(EXECUTOR_LEASE_MS / 1000)}s without renewal`,
+          hooks,
+        )
+        return
+      }
+    }
     const executor = ExecutorRegistry.require(run.executor)
-    const queue = await executor.status(queueTaskID)
+    let queue
+    try {
+      queue = await withTimeout(executor.status(queueTaskID), EXECUTOR_STATUS_TIMEOUT_MS)
+    } catch (error) {
+      await handleExecutionFailure(run, `Executor status unavailable: ${String(error)}`, hooks)
+      return
+    }
+    if (executorSession?.id) {
+      renewExecutorSessionLease({ executorSessionID: executorSession.id })
+    }
 
     if (queue.status === "blocked") {
       if (run.status !== "blocked") {
@@ -704,7 +829,7 @@ export namespace OrchestratorRuntime {
         try { await executor.abort({ sessionID: target.sessionID, queueTaskID }) } catch (abortErr) {
           log.warn("failed to abort timed-out executor", { runID: run.id, error: String(abortErr) })
         }
-        await failRun(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
+        await handleExecutionFailure(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
         return
       }
       if (run.status !== "running") {
@@ -720,7 +845,7 @@ export namespace OrchestratorRuntime {
     }
 
     if (queue.status === "failed") {
-      await failRun(run, queue.error ?? "Executor run failed", hooks)
+      await handleExecutionFailure(run, queue.error ?? "Executor run failed", hooks)
       return
     }
 
@@ -838,6 +963,14 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   }
   const deliveryID = existingDelivery.id
   const evaluationID = Identifier.ascending("evaluation")
+  beginEvaluation({
+    task,
+    run,
+    deliveryID,
+    evaluationID,
+    now: Date.now(),
+    summary: "Evaluating task delivery",
+  })
   const goals = goalsForRun(run)
   const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
   const phase1Failed = result.status === "failed"
@@ -966,6 +1099,32 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   if (task.active_run_id === run.id) {
     await hooks.updateTask(task, { status: "failed", error, blocking_reason: null, time_completed: now }, error)
   }
+}
+
+async function handleExecutionFailure(run: RunRow, summary: string, hooks: RuntimeHooks) {
+  const task = requireTask(run.task_id)
+  const goalRun = activeGoalRun(run)
+  const goal = goalRun ? currentGoal(goalRun, goalsForRun(run)) : undefined
+  const target = runExecutionTarget(run, goalRun)
+  try {
+    const executor = ExecutorRegistry.require(run.executor)
+    await withTimeout(
+      executor.abort({
+        sessionID: target.sessionID,
+        queueTaskID: target.queueTaskID,
+      }),
+      5_000,
+    ).catch(() => false)
+  } catch (error) {
+    log.warn("failed to abort executor after execution failure", { runID: run.id, error: String(error) })
+  }
+  await failRun(run, summary, hooks)
+  if (goal?.priority === "advisory") return
+  const failedTask = requireTask(task.id)
+  const failedRun = requireRun(run.id)
+  const retryContext = buildRetryContext(failedRun, summary)
+  const decision = decideRetryOrReplan(failedTask, failedRun, summary, undefined, retryContext)
+  await executeDecision(failedTask, failedRun, decision, hooks)
 }
 
 async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: DeliveryRow, hooks: RuntimeHooks) {

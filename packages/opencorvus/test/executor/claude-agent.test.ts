@@ -57,6 +57,98 @@ describe("claude agent executor", () => {
     expect(events.at(-1)?.type).toBe("done")
   })
 
+  test("buffers streamed tool input and avoids duplicate assistant tool replay", async () => {
+    const provider = ClaudeAgentExecutor.create(client([
+      {
+        type: "system",
+        subtype: "init",
+        session_id: "claude_session",
+      },
+      {
+        type: "stream_event",
+        session_id: "claude_session",
+        event: {
+          type: "content_block_start",
+          index: 1,
+          content_block: {
+            type: "tool_use",
+            id: "tool_1",
+            name: "Bash",
+            input: {},
+          },
+        },
+      },
+      {
+        type: "stream_event",
+        session_id: "claude_session",
+        event: {
+          type: "content_block_delta",
+          index: 1,
+          delta: {
+            type: "input_json_delta",
+            partial_json: "{\"command\":\"pwd\"}",
+          },
+        },
+      },
+      {
+        type: "stream_event",
+        session_id: "claude_session",
+        event: {
+          type: "content_block_stop",
+          index: 1,
+        },
+      },
+      {
+        type: "assistant",
+        session_id: "claude_session",
+        message: {
+          content: [
+            { type: "tool_use", id: "tool_1", name: "Bash", input: { command: "pwd" } },
+          ],
+        },
+      },
+      {
+        type: "user",
+        session_id: "claude_session",
+        message: {
+          content: [
+            { type: "tool_result", tool_use_id: "tool_1", content: [{ type: "text", text: "/repo" }] },
+          ],
+        },
+      },
+      {
+        type: "result",
+        subtype: "success",
+        session_id: "claude_session",
+        result: "done",
+        total_cost_usd: 0,
+        num_turns: 1,
+        usage: {
+          input_tokens: 1,
+          output_tokens: 1,
+        },
+      },
+    ]))
+
+    const events = await collect(provider.run({ prompt: "test" }))
+    const calls = events.filter((item) => item.type === "tool_call")
+    const results = events.filter((item) => item.type === "tool_result")
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0]).toMatchObject({
+      type: "tool_call",
+      id: "tool_1",
+      name: "Bash",
+      input: "{\"command\":\"pwd\"}",
+    })
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({
+      type: "tool_result",
+      id: "tool_1",
+      output: "/repo",
+    })
+  })
+
   test("respond resolves pending approval callbacks", async () => {
     const requests: Array<{ id: string }> = []
     const adapter = ManagedCodingExecutor.create(ClaudeAgentExecutor.create({

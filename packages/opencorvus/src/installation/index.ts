@@ -6,6 +6,7 @@ import { NamedError } from "@opencorvus-ai/util/error"
 import { Log } from "../util/log"
 import { iife } from "@/util/iife"
 import { Flag } from "../flag/flag"
+import { fileURLToPath } from "url"
 
 declare global {
   const OPENCORVUS_VERSION: string
@@ -262,5 +263,41 @@ export namespace Installation {
         return res.json()
       })
       .then((data: any) => data.tag_name.replace(/^v/, ""))
+  }
+
+  export function command(args: string[] = [], options?: { cwd?: string }): {
+    command: string
+    args: string[]
+    env: Record<string, string>
+  } {
+    const base = path
+      .basename(process.execPath)
+      .toLowerCase()
+      .replace(/\.exe$/, "")
+    if (base === "bun") {
+      const root = options?.cwd ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..")
+      return {
+        command: process.execPath,
+        args: ["--cwd", root, path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "index.ts"), ...args],
+        env: {
+          BUN_BE_BUN: "1",
+        } satisfies Record<string, string>,
+      }
+    }
+
+    const entry = process.argv[1]
+    if (entry && path.isAbsolute(entry)) {
+      return {
+        command: process.execPath,
+        args: [entry, ...args],
+        env: {},
+      }
+    }
+
+    return {
+      command: process.execPath,
+      args,
+      env: {},
+    }
   }
 }

@@ -41,6 +41,10 @@ export namespace ExecutorRegistry {
       system?: string | (() => string | undefined)
       maxTurns?: number | (() => number | undefined)
       tools?: CodingToolInfo[] | (() => CodingToolInfo[] | undefined)
+      planning?: {
+        spec: boolean
+        plan: boolean
+      }
     },
   ) {
     return register(name, ManagedCodingExecutor.create(provider, options))

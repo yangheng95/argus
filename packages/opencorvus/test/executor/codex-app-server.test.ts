@@ -217,6 +217,76 @@ describe("codex app server executor", () => {
     })
   })
 
+  test("passes outputSchema through turn/start when provided", async () => {
+    let turn: Record<string, unknown> | null = null
+    const provider = CodexAppServerExecutor.create({
+      async initialize() {
+        return {}
+      },
+      async threadStart() {
+        return {
+          thread: {
+            id: "thr_schema",
+          },
+        }
+      },
+      async threadResume() {
+        return {
+          thread: {
+            id: "thr_schema",
+          },
+        }
+      },
+      async turnStart(input) {
+        turn = input
+        return {
+          turn: {
+            id: "turn_schema",
+          },
+        }
+      },
+      async turnInterrupt() {
+        return true
+      },
+      async *events() {
+        yield {
+          type: "notification",
+          method: "turn/completed",
+          params: {
+            threadId: "thr_schema",
+            turn: {
+              id: "turn_schema",
+              items: [],
+              status: "completed",
+              error: null,
+            },
+          },
+        }
+      },
+    })
+
+    await collect(provider.run({
+      prompt: "return json",
+      outputSchema: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+        },
+        required: ["ok"],
+        additionalProperties: false,
+      },
+    }))
+
+    expect(turn?.["outputSchema"]).toEqual({
+      type: "object",
+      properties: {
+        ok: { type: "boolean" },
+      },
+      required: ["ok"],
+      additionalProperties: false,
+    })
+  })
+
   test("maps server requests to approval and input events", async () => {
     const provider = CodexAppServerExecutor.create(client([
       {
@@ -275,6 +345,62 @@ describe("codex app server executor", () => {
     const result = await collect(provider.run({ prompt: "test" }))
     expect(result.some((item) => item.type === "approval_request")).toBe(true)
     expect(result.filter((item) => item.type === "input_request").length).toBe(2)
+  })
+
+  test("uses callId to match dynamic tool completion events", async () => {
+    const provider = CodexAppServerExecutor.create(client([
+      {
+        type: "request",
+        id: 11,
+        method: "item/tool/call",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          itemId: "item_write",
+          callId: "call_write",
+          tool: "write",
+          arguments: {
+            filePath: "a.txt",
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "item/completed",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          item: {
+            id: "item_write",
+            callId: "call_write",
+            type: "dynamicToolCall",
+            tool: "write",
+            contentItems: "Wrote file successfully.",
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/completed",
+        params: {
+          threadId: "thr_1",
+          turn: {
+            id: "turn_1",
+            items: [],
+            status: "completed",
+            error: null,
+          },
+        },
+      },
+    ]))
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    const call = result.find((item): item is Extract<CodingEventInfo, { type: "tool_call" }> => item.type === "tool_call")
+    const done = result.find((item): item is Extract<CodingEventInfo, { type: "tool_result" }> => item.type === "tool_result")
+
+    expect(call?.id).toBe("call_write")
+    expect(done?.id).toBe("call_write")
+    expect(done?.output).toBe("Wrote file successfully.")
   })
 
   test("stops streaming once the current turn completes", async () => {

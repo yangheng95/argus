@@ -51,6 +51,9 @@ const DEFAULT_OVERLAY_SETTINGS = {
   locale: DEFAULT_LOCALE,
   directoryMode: "temp",
   directory: "",
+  workspaceTaskID: "",
+  workspaceSessionID: "",
+  workspaceDirectory: "",
 };
 const OVERLAY_VERSION = "0.0.1-alpha";
 const OVERLAY_AUTHOR_URL = "https://github.com/yangheng95";
@@ -96,6 +99,9 @@ const state = {
   directory: DEFAULT_OVERLAY_SETTINGS.directory,
   savedDirectory: DEFAULT_OVERLAY_SETTINGS.directory,
   tempDirectory: "",
+  workspaceTaskID: DEFAULT_OVERLAY_SETTINGS.workspaceTaskID,
+  workspaceSessionID: DEFAULT_OVERLAY_SETTINGS.workspaceSessionID,
+  workspaceDirectory: DEFAULT_OVERLAY_SETTINGS.workspaceDirectory,
   directoryEpoch: 0,
   localeSeq: 0,
   i18n: {},
@@ -136,6 +142,8 @@ const state = {
   chatRequest: null,
   sse: null,
   sseConnected: false,
+  eventStream: null,
+  eventConnected: false,
   pollTimer: null,
   sessionTimer: null,
   elapsedTimer: null,
@@ -358,8 +366,10 @@ const workspace = window.createOverlayWorkspace?.({
   document,
   stopPolling,
   stopSSE,
+  stopEventStream,
   stopChatRequest,
   renderChatComposer,
+  renderMeta,
   renderManagedSessionList,
   onDirectoryChange() {
     void persistOverlaySettings();
@@ -799,10 +809,10 @@ const reducedMotionMedia =
 
 const techFx = {
   colors: {
-    end: "#31c7ec",
-    ghost: "#97a9e2",
-    mid: "#5888ff",
-    start: "#7368ff",
+    end: "#c6af72",
+    ghost: "#93a39c",
+    mid: "#71b3a8",
+    start: "#cf8b57",
   },
   ctx: null,
   dpr: 1,
@@ -826,10 +836,10 @@ function techColor(name, fallback) {
 
 function refreshTechFxPalette() {
   techFx.colors = {
-    end: techColor("--accent-end", "#31c7ec"),
-    ghost: techColor("--text-soft", "#97a9e2"),
-    mid: techColor("--accent-mid", "#5888ff"),
-    start: techColor("--accent-start", "#7368ff"),
+    end: techColor("--accent-end", "#c6af72"),
+    ghost: techColor("--text-soft", "#93a39c"),
+    mid: techColor("--accent-mid", "#71b3a8"),
+    start: techColor("--accent-start", "#cf8b57"),
   };
 }
 
@@ -1246,6 +1256,9 @@ function browserOverlaySettings() {
     theme: sanitizeTheme(localStorage.getItem("oc_theme")),
     locale: sanitizeLocale(localStorage.getItem("oc_locale") || DEFAULT_OVERLAY_SETTINGS.locale),
     directory,
+    workspaceTaskID: localStorage.getItem("oc_workspace_task") || DEFAULT_OVERLAY_SETTINGS.workspaceTaskID,
+    workspaceSessionID: localStorage.getItem("oc_workspace_session") || DEFAULT_OVERLAY_SETTINGS.workspaceSessionID,
+    workspaceDirectory: localStorage.getItem("oc_workspace_directory") || DEFAULT_OVERLAY_SETTINGS.workspaceDirectory,
   };
 }
 
@@ -1277,6 +1290,16 @@ function applyOverlaySettings(settings, options = {}) {
   state.zoom = sanitizeZoom(settings?.zoom);
   state.theme = sanitizeTheme(settings?.theme);
   state.locale = sanitizeLocale(settings?.locale || DEFAULT_OVERLAY_SETTINGS.locale);
+  state.workspaceTaskID =
+    typeof settings?.workspaceTaskID === "string" ? settings.workspaceTaskID.trim() : DEFAULT_OVERLAY_SETTINGS.workspaceTaskID;
+  state.workspaceSessionID =
+    typeof settings?.workspaceSessionID === "string"
+      ? settings.workspaceSessionID.trim()
+      : DEFAULT_OVERLAY_SETTINGS.workspaceSessionID;
+  state.workspaceDirectory =
+    typeof settings?.workspaceDirectory === "string"
+      ? settings.workspaceDirectory.trim()
+      : DEFAULT_OVERLAY_SETTINGS.workspaceDirectory;
   state.savedDirectory = directory;
   if (options.resetTemp === true) state.tempDirectory = "";
   if (options.preserveDirectory !== true || !state.directory) state.directory = directory;
@@ -1304,7 +1327,27 @@ function bootstrapOverlaySettings(input = state) {
     locale: input.locale,
     directoryMode: input.savedDirectory ? "custom" : "temp",
     directory: input.savedDirectory || undefined,
+    workspaceTaskID: input.workspaceTaskID || undefined,
+    workspaceSessionID: input.workspaceSessionID || undefined,
+    workspaceDirectory: input.workspaceDirectory || undefined,
   };
+}
+
+function rememberWorkspace(input = {}) {
+  const taskID = typeof input.taskID === "string" ? input.taskID.trim() : state.selectedTaskID || "";
+  const sessionID = typeof input.sessionID === "string" ? input.sessionID.trim() : currentSessionID() || "";
+  const directory = typeof input.directory === "string"
+    ? input.directory.trim()
+    : activeDirectory() || state.directory || "";
+  state.workspaceTaskID = taskID;
+  state.workspaceSessionID = sessionID;
+  state.workspaceDirectory = taskID || sessionID ? directory : "";
+}
+
+function clearWorkspaceMemory() {
+  state.workspaceTaskID = "";
+  state.workspaceSessionID = "";
+  state.workspaceDirectory = "";
 }
 
 function sessionOverlaySettings(input = state) {
@@ -1360,7 +1403,8 @@ async function loadOverlaySettings() {
   applyOverlaySettings(bootstrapSettings, { resetTemp: true });
 }
 
-async function persistOverlaySettings() {
+async function persistOverlaySettings(options = {}) {
+  rememberWorkspace();
   const sessionID = currentSessionID() || "";
   const settings = bootstrapOverlaySettings();
   bootstrapSettings = {
@@ -1386,6 +1430,12 @@ async function persistOverlaySettings() {
   localStorage.setItem("oc_zoom", String(settings.zoom ?? DEFAULT_OVERLAY_SETTINGS.zoom));
   localStorage.setItem("oc_theme", settings.theme || DEFAULT_OVERLAY_SETTINGS.theme);
   localStorage.setItem("oc_locale", settings.locale || DEFAULT_OVERLAY_SETTINGS.locale);
+  if (settings.workspaceTaskID) localStorage.setItem("oc_workspace_task", settings.workspaceTaskID);
+  else localStorage.removeItem("oc_workspace_task");
+  if (settings.workspaceSessionID) localStorage.setItem("oc_workspace_session", settings.workspaceSessionID);
+  else localStorage.removeItem("oc_workspace_session");
+  if (settings.workspaceDirectory) localStorage.setItem("oc_workspace_directory", settings.workspaceDirectory);
+  else localStorage.removeItem("oc_workspace_directory");
   if (settings.directory) localStorage.setItem("oc_directory", settings.directory);
   else localStorage.removeItem("oc_directory");
   localStorage.removeItem("oc_directory_mode");
@@ -1393,7 +1443,7 @@ async function persistOverlaySettings() {
     settings,
     directory: settingsDirectory(settings) || undefined,
   }).catch(() => undefined);
-  if (sessionID) {
+  if (sessionID && options.includeSession !== false) {
     await saveSessionOverlaySettings(sessionID, sessionOverlaySettings()).catch(() => undefined);
   }
   if (saved) return;
@@ -1730,6 +1780,93 @@ async function stopChatRequest(options = {}) {
   }
 }
 
+function chatPlaceholder() {
+  return state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……")
+    || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "...")
+    || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === t("chat.thinking"));
+}
+
+function setChatPlaceholderText(text) {
+  const part = chatPlaceholder()?.parts?.[0];
+  if (!part || part.type !== "text") return false;
+  part.text = text;
+  renderSession();
+  return true;
+}
+
+function isPendingPlaceholderPart(part) {
+  return part?.type === "text" && !part.id && ["……", "...", t("chat.thinking")].includes(part.text);
+}
+
+async function abortableDelay(ms, signal) {
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+async function sessionMessage(text, signal) {
+  const sessionID = currentSessionID();
+  if (!sessionID) throw new Error("No active session");
+  startEventStream();
+  const queued = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      parts: [
+        {
+          type: "text",
+          text,
+        },
+      ],
+      extra: {
+        surface: "panel",
+        source: "panel",
+      },
+    }),
+    signal,
+  });
+  const taskID = typeof queued?.taskID === "string" ? queued.taskID : "";
+  if (!taskID) throw new Error("Missing session prompt task ID");
+  let refreshed = 0;
+  while (true) {
+    const status = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async/${encodeURIComponent(taskID)}`, {
+      signal,
+    });
+    if (status?.status === "queued") {
+      setChatPlaceholderText("...");
+    }
+    if (status?.status === "running" || status?.status === "retrying") {
+      setChatPlaceholderText(t("chat.thinking"));
+      if (!state.eventConnected && currentSessionID() === sessionID && Date.now() - refreshed >= 600) {
+        refreshed = Date.now();
+        await loadConversation();
+      }
+    }
+    if (status?.status === "completed") {
+      if (currentSessionID() === sessionID) {
+        await loadConversation();
+      }
+      return status;
+    }
+    if (status?.status === "failed") {
+      if (currentSessionID() === sessionID) {
+        await loadConversation().catch(() => undefined);
+      }
+      throw new Error(status?.error || "Session prompt failed");
+    }
+    await abortableDelay(500, signal);
+  }
+}
+
 function panelRequestBody(text, metadata = {}) {
   const taskID = state.selectedTaskID || undefined;
   const selectedSessionID = currentSessionID() || undefined;
@@ -1741,7 +1878,7 @@ function panelRequestBody(text, metadata = {}) {
     sessionID,
     executor: state.executor,
     allow_create: false,
-    allow_session_mutation: false,
+    allow_session_mutation: true,
     metadata: {
       selectedTaskID: taskID,
       selectedSessionID,
@@ -1785,7 +1922,9 @@ async function applyPanelResult(result) {
   }
   if (result?.session_id && !state.selectedTaskID) {
     if (currentSessionID() === result.session_id) {
-      await Promise.all([loadConversation(), loadManagedSessions(), loadMemory()]);
+      await loadConversation();
+      void loadManagedSessions();
+      void loadMemory();
       return;
     }
     await openManagedSession(result.session_id);
@@ -3938,6 +4077,8 @@ async function selectTask(taskID, options = {}) {
     renderSession();
     await syncManagedSession("");
     await syncSessionOverlaySettings("");
+    clearWorkspaceMemory();
+    await persistOverlaySettings({ includeSession: false });
     return;
   }
 
@@ -3945,6 +4086,11 @@ async function selectTask(taskID, options = {}) {
   await loadConversation();
   await loadMeta();
   await syncSessionOverlaySettings(currentSessionID());
+  rememberWorkspace({
+    taskID: nextTaskID,
+    sessionID: nextSessionID || currentSessionID(),
+  });
+  await persistOverlaySettings({ includeSession: false });
   startPolling();
 
   // Start SSE for running tasks
@@ -4028,6 +4174,15 @@ async function loadConversation() {
   }
   state.sessionLoading = (async () => {
     try {
+      if (target.sessionID && !target.taskID) {
+        const sessionMsgs = await apiJson(`session/${target.sessionID}/message`);
+        if (targetKey !== conversationTargetKey(conversationTarget())) return;
+        state.session = Array.isArray(sessionMsgs) ? sessionMsgs : [];
+        state.sessionUpdatedAt = Date.now();
+        renderSession();
+        await loadChanges();
+        return;
+      }
       const params = new URLSearchParams();
       if (target.taskID) params.set("taskID", target.taskID);
       else if (target.sessionID) params.set("sessionID", target.sessionID);
@@ -4243,6 +4398,79 @@ function stopSSE() {
   state.sseConnected = false;
 }
 
+function startEventStream(retryCount = 0) {
+  if (!state.connected) return;
+  if (state.selectedTaskID) return;
+  if (!currentSessionID()) return;
+  if (state.eventStream) return;
+  const controller = new AbortController();
+  state.eventStream = controller;
+  state.eventConnected = false;
+  const MAX_RETRIES = 60;
+
+  (async () => {
+    try {
+      const res = await fetch(apiUrl("event"), {
+        headers: apiHeaders(),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) throw new Error(`API ${res.status}: ${res.statusText}`);
+      state.eventConnected = true;
+      AppLog.info("event", "connected");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          try {
+            const event = JSON.parse(line.slice(5).trim());
+            handleEventStreamEvent(event);
+          } catch (e) {
+            AppLog.debug("event", "malformed event: " + line, { error: String(e) });
+          }
+        }
+      }
+      state.eventConnected = false;
+      state.eventStream = null;
+      if (!state.selectedTaskID && currentSessionID()) {
+        const delay = 3000;
+        AppLog.info("event", `stream ended, reconnecting in ${delay}ms`);
+        setTimeout(() => {
+          if (!state.selectedTaskID && currentSessionID()) startEventStream(0);
+        }, delay);
+      }
+    } catch (e) {
+      state.eventConnected = false;
+      state.eventStream = null;
+      if (e.name === "AbortError") return;
+      if (retryCount >= MAX_RETRIES) {
+        AppLog.error("event", "max retries reached, giving up", { retryCount });
+        return;
+      }
+      const delay = Math.min(5000 * Math.pow(1.5, retryCount), 60000);
+      AppLog.warn("event", `disconnected, retrying in ${Math.round(delay)}ms (attempt ${retryCount + 1})`, { error: String(e) });
+      setTimeout(() => {
+        if (!state.selectedTaskID && currentSessionID()) startEventStream(retryCount + 1);
+      }, delay);
+    }
+  })();
+}
+
+function stopEventStream() {
+  if (state.eventStream) {
+    state.eventStream.abort();
+    state.eventStream = null;
+  }
+  state.eventConnected = false;
+}
+
 function eventData(event) {
   if (record(event?.properties)) return event.properties;
   if (record(event?.payload)) return event.payload;
@@ -4269,7 +4497,19 @@ function handleEventStreamEvent(event) {
     const info = record(properties.info) ? properties.info : null;
     if (info?.sessionID !== currentSessionID()) return;
     const existing = state.session.find((item) => item.info?.id === info.id);
-    if (!existing) {
+    if (existing) {
+      existing.info = info;
+    } else if (state.chatRequest && !state.selectedTaskID) {
+      const placeholder = chatPlaceholder();
+      if (placeholder) {
+        placeholder.info = { ...placeholder.info, ...info };
+      } else {
+        state.session.push({
+          info,
+          parts: [],
+        });
+      }
+    } else {
       state.session.push({
         info,
         parts: [],
@@ -4287,6 +4527,8 @@ function handleEventStreamEvent(event) {
     const index = message.parts.findIndex((item) => item.id === part.id);
     if (index >= 0) {
       message.parts[index] = part;
+    } else if (message.parts.length === 1 && isPendingPlaceholderPart(message.parts[0])) {
+      message.parts = [part];
     } else {
       message.parts.push(part);
     }
@@ -4353,6 +4595,9 @@ function handleSSEEvent(event) {
 
 function startPolling() {
   stopPolling();
+  if (!state.selectedTaskID && currentSessionID()) {
+    startEventStream();
+  }
   state.pollTimer = setInterval(() => {
     if (!state.sseConnected || Date.now() - state.boardUpdatedAt > SSE_BACKSTOP) {
       loadBoard();
@@ -4372,6 +4617,7 @@ function stopPolling() {
   if (state.elapsedTimer) { clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
   if (state.boardKick) { clearTimeout(state.boardKick); state.boardKick = null; }
   if (state.sessionKick) { clearTimeout(state.sessionKick); state.sessionKick = null; }
+  stopEventStream();
 }
 
 // ── Rendering: Board ──
@@ -5580,13 +5826,15 @@ async function selectManagedSession(sessionID, input = {}) {
     renderWorkspaceState();
     renderManagedSessionList();
     await syncSessionOverlaySettings("");
+    clearWorkspaceMemory();
+    await persistOverlaySettings({ includeSession: false });
     return;
   }
   const session = input.session || sessionItem(sessionID);
   const dir =
     typeof input.directory === "string" && input.directory
       ? input.directory
-      : session?.directory || state.directory;
+      : session?.directory || activeDirectory() || state.savedDirectory || state.tempDirectory || state.path?.directory || "";
   const settings = syncSessionOverlaySettings(sessionID);
   if (session?.id) storeManagedSession(session);
   try {
@@ -5622,20 +5870,24 @@ function renderManagedSessionList() {
 
 async function createManagedSession() {
   try {
+    const current = activeDirectory() || state.savedDirectory || state.tempDirectory || state.path?.directory || "";
     const session = await apiJson("session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    const dir = session?.directory || activeDirectory();
+    const dir = session?.directory || current;
     storeManagedSession(session);
     enterSessionWorkspace(session?.id || "", { directory: dir, managedSession: session || null });
     renderClear();
+    startEventStream();
     await Promise.all([
       selectManagedSession(session?.id || "", { session, directory: dir }),
       loadConversation(),
       loadMemory(),
     ]);
+    rememberWorkspace({ sessionID: session?.id || "", directory: dir });
+    await persistOverlaySettings({ includeSession: false });
   } catch (e) {
     AppLog.error("ui", "Failed to create session", { error: String(e) });
     await nativeMessage(errorText("session.create_failed", e), {
@@ -5812,15 +6064,20 @@ async function openManagedSession(sessionID, input) {
   if (task?.task?.id) {
     await selectTask(task.task.id, { sessionID, managedSession: session });
     await Promise.all([selectManagedSession(sessionID, { session, directory: dir }), loadMemory()]);
+    rememberWorkspace({ taskID: task.task.id, sessionID, directory: activeDirectory() || dir });
+    await persistOverlaySettings({ includeSession: false });
     return;
   }
   enterSessionWorkspace(sessionID, { managedSession: session });
   renderClear();
+  startEventStream();
   await Promise.all([
     selectManagedSession(sessionID, { session, directory: dir }),
     loadConversation(),
     loadMemory(),
   ]);
+  rememberWorkspace({ sessionID, directory: activeDirectory() || dir });
+  await persistOverlaySettings({ includeSession: false });
 }
 
 // ── Interactions ──
@@ -7065,10 +7322,14 @@ dom.chatForm.addEventListener("submit", async (e) => {
   renderSession();
 
   try {
-    await panelMessage(text, undefined, request.controller.signal);
+    if (state.selectedTaskID) {
+      await panelMessage(text, undefined, request.controller.signal);
+    } else {
+      await sessionMessage(text, request.controller.signal);
+    }
   } catch (err) {
     if (request.aborted || isAbortError(err)) {
-      const ph = state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……");
+      const ph = chatPlaceholder();
       if (ph) ph.parts[0].text = t("chat.interrupted_notice");
       renderSession();
       return;
@@ -8592,6 +8853,34 @@ async function loadConfigInfo() {
 
 async function restoreInitialWorkspace() {
   if (hasWorkspaceSelection()) return false;
+  const base = activeDirectory() || "";
+  const taskID = state.workspaceTaskID || "";
+  const sessionID = state.workspaceSessionID || "";
+  const directory = state.workspaceDirectory || "";
+  const moved = !!directory && !!base && directory !== base;
+  if (moved) {
+    await setActiveDirectory(directory, {
+      persist: false,
+      restoreWorkspace: false,
+    });
+  }
+  if (sessionID) {
+    const session = displaySessions().find((item) => item?.id === sessionID) || sessionItem(sessionID);
+    if (session?.id) {
+      await openManagedSession(sessionID, session);
+      return true;
+    }
+  }
+  if (taskID && state.tasks.some((item) => item?.task?.id === taskID)) {
+    await selectTask(taskID);
+    return true;
+  }
+  if (moved && activeDirectory() !== base) {
+    await setActiveDirectory(base, {
+      persist: false,
+      restoreWorkspace: false,
+    });
+  }
   if (await ensureTaskSelection()) return true;
   const dir = activeDirectory();
   const sessions = displaySessions();

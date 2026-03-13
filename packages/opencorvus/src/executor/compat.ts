@@ -36,6 +36,7 @@ export const CodingRunInput = z.object({
   system: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
   tools: CodingTool.array().optional(),
+  outputSchema: z.record(z.string(), z.unknown()).optional(),
   toolMode: ToolMode.optional(),
   sandbox: SandboxMode.optional(),
 })
@@ -62,6 +63,7 @@ export const PlanningInput = z.object({
   cwd: z.string().optional(),
   system: z.string().optional(),
   maxTurns: z.number().int().positive().optional(),
+  outputSchema: z.record(z.string(), z.unknown()).optional(),
   toolMode: ToolMode.optional(),
   sandbox: SandboxMode.optional(),
 })

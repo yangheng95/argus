@@ -76,6 +76,9 @@ struct OverlaySettings {
     locale: Option<String>,
     directory_mode: Option<String>,
     directory: Option<String>,
+    workspace_task_id: Option<String>,
+    workspace_session_id: Option<String>,
+    workspace_directory: Option<String>,
 }
 
 fn overlay_directory(directory: Option<String>) -> Option<PathBuf> {

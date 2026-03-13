@@ -20,6 +20,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
+import { Env } from "@/env"
 import path from "path"
 
 const log = Log.create({ service: "planner-agent" })
@@ -94,11 +95,15 @@ export interface ReplanContext {
 // HeadlessPlannerAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 45
 const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.5
 const MAX_PLAN_ATTEMPTS = 2
+
+function maxSteps() {
+  const value = Number.parseInt(Env.get("OPENCORVUS_PLANNER_AGENT_MAX_STEPS") ?? "", 10)
+  return Number.isFinite(value) && value > 0 ? value : 20
+}
 
 export namespace HeadlessPlannerAgent {
   export async function plan(input: {
@@ -123,11 +128,16 @@ export namespace HeadlessPlannerAgent {
       input.request.match(/(?:绝对路径|absolute path)[：:\s]*([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i) ??
       input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
     const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
+    const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
+    if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
 
+    const context = prefetchContext(input.title, input.request)
+    const recallEnabled = context.length === 0
     // Create tools with the correct working directory for the task.
     // Without this, the codebase tools use Instance.directory (project root)
     // instead of the task's working directory (e.g., eval workspace).
-    const explorationTools = createPlannerTools(taskWorkDir)
+    const explorationTools = createPlannerTools(taskWorkDir, { recall: recallEnabled })
+    const unattended = await unattendedProject()
 
     // -----------------------------------------------------------------------
     // submit_plan tool — the model calls this to deliver structured plan data.
@@ -147,19 +157,15 @@ export namespace HeadlessPlannerAgent {
           submittedPlan = args as PlannerOutputType
           return "Plan submitted successfully."
         },
-      }),
+        }),
     }
-
-    const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
-    if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
-
-    const context = prefetchContext(input.title, input.request)
-    const unattended = await unattendedProject()
 
     // Quality-gated retry loop: if the first plan attempt scores below
     // QUALITY_RETRY_THRESHOLD, retry once with enhanced prompt that includes
     // quality feedback from the previous attempt.
     let lastQuality: { score: number; reasons: string[] } | undefined
+    let lastSteps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }> | undefined
+    let lastToolCallCount = 0
 
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
       if (input.signal?.aborted) throw new Error("planner aborted before attempt " + (attempt + 1))
@@ -169,6 +175,8 @@ export namespace HeadlessPlannerAgent {
         ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
         : undefined
       const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, unattended)
+      const stepLimit = maxSteps()
+      const consolidationOnly = attempt > 0 && !!lastSteps && lastToolCallCount >= MIN_TOOL_CALLS
 
       log.info("planner agent starting", {
         title: input.title,
@@ -178,30 +186,62 @@ export namespace HeadlessPlannerAgent {
         fileRefsFound: fileRefs.length,
         taskWorkDir,
         toolCount: Object.keys(allTools).length,
+        recallEnabled,
         unattended,
         attempt: attempt + 1,
+        maxSteps: stepLimit,
+        consolidationOnly,
         retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
 
-      const result = await generateText({
-        model: language,
-        stopWhen: stepCountIs(MAX_STEPS),
-        tools: allTools,
-        toolChoice: "required",
-        maxOutputTokens: 32768,
-        abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-        system: PLANNER_SYSTEM,
-        prompt: userPrompt,
-      })
+      let result: {
+        text?: string
+        finishReason?: string
+        steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
+      }
+      let toolCallCount: number
 
-      // Count actual tool calls
-      const toolCallCount = result.steps.reduce(
-        (sum, s) => {
-          const step = s as { toolCalls?: unknown[] }
-          return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
-        },
-        0,
-      )
+      if (consolidationOnly) {
+        const forced = await finalizePlan(language, input, lastSteps!, input.signal, retryContext)
+        if (forced.submittedPlan) submittedPlan = forced.submittedPlan
+        result = forced.result
+        toolCallCount = lastToolCallCount
+        log.info("planner agent retrying via consolidation", {
+          attempt: attempt + 1,
+          stepCount: result.steps.length,
+          reusedToolCalls: toolCallCount,
+        })
+      } else {
+        result = await generateText({
+          model: language,
+          stopWhen: stepCountIs(stepLimit),
+          tools: allTools,
+          toolChoice: "auto",
+          maxOutputTokens: 32768,
+          abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+          system: PLANNER_SYSTEM,
+          prompt: userPrompt,
+        })
+
+        toolCallCount = result.steps.reduce(
+          (sum, s) => {
+            const step = s as { toolCalls?: unknown[] }
+            return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
+          },
+          0,
+        )
+        lastSteps = result.steps
+        lastToolCallCount = toolCallCount
+        const toolUsage = summarizeToolUsage(result.steps)
+        log.info("planner agent tool usage", {
+          attempt: attempt + 1,
+          finishReason: result.finishReason,
+          stepCount: result.steps.length,
+          toolCallCount,
+          submitPlanCalls: toolUsage["submit_plan"] ?? 0,
+          toolUsage,
+        })
+      }
 
       // -----------------------------------------------------------------------
       // Priority 1: extract from submit_plan tool call (guaranteed valid JSON)
@@ -271,7 +311,27 @@ export namespace HeadlessPlannerAgent {
             attempt: attempt + 1,
           })
 
-          parsed = extractJSON(allText)
+          const extracted = tryExtractPlannerOutput(allText)
+          if (extracted.ok) {
+            parsed = extracted.value
+          } else {
+            log.warn("planner: text output was not valid JSON, forcing consolidation", {
+              error: extracted.error.message,
+              steps: result.steps.length,
+              finishReason: result.finishReason,
+              textLength: allText.length,
+              attempt: attempt + 1,
+            })
+            const forced = await finalizePlan(language, input, result.steps, input.signal, retryContext)
+            if (forced.submittedPlan) {
+              parsed = normalizePlanOutput(forced.submittedPlan)
+            } else {
+              const forcedText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
+              const forcedExtracted = tryExtractPlannerOutput(forcedText)
+              if (!forcedExtracted.ok) throw forcedExtracted.error
+              parsed = forcedExtracted.value
+            }
+          }
         }
       }
 
@@ -341,6 +401,7 @@ async function finalizePlan(
   },
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   signal?: AbortSignal,
+  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -376,13 +437,26 @@ async function finalizePlan(
     maxOutputTokens: 16384,
     abortSignal: signal ?? AbortSignal.timeout(120_000),
     system:
-      "You are finalizing a plan after exploration is already complete. " +
-      "Do not explore again. Use the transcript provided, then call submit_plan exactly once.",
+      "You are finalizing a plan after an exploration attempt. " +
+      "Do not explore again. Use the transcript if it is helpful, but do not claim that a weak transcript prevents planning. " +
+      "If the repository is greenfield or nearly empty, use the task request and approved specification as the primary source of truth and produce a concrete implementation plan. " +
+      "Never output a placeholder saying more context is required when the request already defines implementation work. " +
+      "Call submit_plan exactly once.",
     prompt: [
       `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
       input.spec ? `# Spec Context\n\n${input.spec.content}` : "",
+      retryContext
+        ? [
+            "# Quality Retry Feedback",
+            "",
+            `Previous score: ${retryContext.previousScore.toFixed(2)}`,
+            ...retryContext.reasons.map((reason) => `- ${reason}`),
+          ].join("\n")
+        : "",
       "# Exploration Transcript",
       transcript || "(no transcript captured)",
+      "If the transcript is sparse, repetitive, or mostly memory lookups, synthesize a concrete greenfield implementation plan from the request and spec instead of reporting missing context.",
+      "Subtasks must reference exact file paths, include explicit verification steps, and may introduce small supporting src/ helper files when justified.",
       "Now synthesize the final plan and call submit_plan exactly once.",
     ].filter(Boolean).join("\n\n"),
   })
@@ -577,6 +651,42 @@ function tryParse(text: string): { ok: true; value: any } | { ok: false; error: 
   }
 }
 
+function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
+  const map: Record<string, number> = {}
+  for (const step of steps) {
+    const calls = Array.isArray(step.toolCalls) ? step.toolCalls : []
+    for (const call of calls) {
+      if (!call || typeof call !== "object" || !("toolName" in call)) continue
+      const name = String((call as { toolName?: unknown }).toolName || "")
+      if (!name) continue
+      map[name] = (map[name] ?? 0) + 1
+    }
+  }
+  return map
+}
+
+function normalizePlanOutput(input: PlannerOutputType): PlannerOutputType {
+  return {
+    ...input,
+    summary: input.summary ?? "",
+    prd: input.prd ?? "",
+    subtasks: Array.isArray(input.subtasks) ? input.subtasks : [],
+    risks: Array.isArray(input.risks) ? input.risks : [],
+    assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
+  }
+}
+
+function tryExtractPlannerOutput(text: string): { ok: true; value: PlannerOutputType } | { ok: false; error: Error } {
+  try {
+    return { ok: true, value: extractJSON(text) }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+    }
+  }
+}
+
 /**
  * Attempt to repair truncated JSON from LLM output.
  * When the LLM hits the output token limit, JSON is cut off mid-value.
@@ -716,11 +826,16 @@ function validatePlanQuality(
   const requestPaths = new Set(Array.from(request.matchAll(FILE_PAT)).map((m) => m[0]))
   const prdPaths = new Set(Array.from(plan.prd.matchAll(FILE_PAT)).map((m) => m[0]))
   const newPaths = [...prdPaths].filter((p) => !requestPaths.has(p))
+  const greenfieldLayout = requestPaths.size >= 6
   if (newPaths.length >= 2) {
+    score += 0.25
+  } else if (greenfieldLayout && prdPaths.size >= 4) {
     score += 0.25
   } else if (newPaths.length === 1) {
     score += 0.12
     reasons.push("PRD has only 1 file path beyond the request")
+  } else if (greenfieldLayout) {
+    reasons.push("PRD does not reference enough concrete file paths for this greenfield file-layout request")
   } else {
     reasons.push("PRD contains no file paths discovered from exploration")
   }
@@ -1083,6 +1198,8 @@ The submit_plan tool accepts these fields:
 ## Rules
 
 - ALWAYS explore the codebase before planning. No exceptions. Plans without tool calls score 0.
+- If a recall tool response contains \`RECALL_COMPLETE\`, stop recall immediately and do not call memory_search, memory_get, or preference_list again in this run.
+- Do not spam identical exploration calls. Repeating the same tool with the same arguments more than twice is invalid; switch tools or submit_plan.
 - Every file path in your plan MUST come from actual tool results or pre-read files -- never guess paths.
 - Goals are authoritative input from the specification. The planner must not redefine or mutate them.
 - Clarifications are only for execution-strategy blockers. Do NOT ask for missing scope, requirements, or acceptance criteria; that belongs to the spec stage.

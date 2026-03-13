@@ -4,7 +4,7 @@ import { Database } from "../../src/storage/db"
 
 function normal() {
   const live = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
-  return live && process.env.OPENCORVUS_LIVE_E2E_USE_NORMAL_PATHS !== "0"
+  return live && process.env.OPENCORVUS_LIVE_E2E_USE_NORMAL_PATHS === "1"
 }
 
 export async function resetDatabase() {

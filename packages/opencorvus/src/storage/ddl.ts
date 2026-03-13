@@ -639,6 +639,8 @@ CREATE TABLE IF NOT EXISTS orchestrator_executor_session (
   refs             text,
   capabilities     text,
   settings         text,
+  lease_owner      text,
+  lease_until      integer NOT NULL DEFAULT 0,
   time_started     integer,
   time_completed   integer,
   time_created     integer NOT NULL,
@@ -651,6 +653,7 @@ CREATE INDEX IF NOT EXISTS orchestrator_executor_session_task_idx ON orchestrato
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_run_idx ON orchestrator_executor_session (run_id);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_goal_run_idx ON orchestrator_executor_session (goal_run_id);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_session_status_idx ON orchestrator_executor_session (status);
+CREATE INDEX IF NOT EXISTS orchestrator_executor_session_lease_until_idx ON orchestrator_executor_session (lease_until);
 
 CREATE TABLE IF NOT EXISTS orchestrator_executor_event (
   id                  text PRIMARY KEY,
@@ -756,8 +759,3 @@ CREATE INDEX IF NOT EXISTS workbench_brief_task_idx ON workbench_brief_snapshot 
 CREATE INDEX IF NOT EXISTS workbench_brief_run_idx  ON workbench_brief_snapshot (run_id);
 
 `
-
-// ---------------------------------------------------------------------------
-// Migrations — each statement is attempted once at startup.
-// Failures are silently ignored (idempotent: column already exists, etc.).
-// ---------------------------------------------------------------------------

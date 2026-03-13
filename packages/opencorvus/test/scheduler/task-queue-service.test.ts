@@ -113,6 +113,88 @@ describe("scheduler.task-queue-service", () => {
     expect(prompt).toHaveBeenCalledTimes(2)
   })
 
+  test("retries reuse the same prompt ids", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const calls: Array<Parameters<typeof SessionPrompt.prompt>[0]> = []
+    spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+      calls.push(input)
+      throw new Error("boom")
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "retry me twice",
+              },
+            ],
+          },
+          maxRetries: 1,
+          source: "test",
+        })
+
+        await TaskQueueService.runNow()
+        await TaskQueueService.runNow()
+      },
+    })
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0]?.messageID).toBeTruthy()
+    expect(calls[1]?.messageID).toBe(calls[0]?.messageID)
+    expect(calls[1]?.parts.map((part) => part.id)).toEqual(calls[0]?.parts.map((part) => part.id))
+  })
+
+  test("recover cancels stale running sessions before retry", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => undefined)
+    const prompt = spyOn(SessionPrompt, "prompt").mockResolvedValue(result())
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const id = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "resume after stale run",
+              },
+            ],
+          },
+          source: "test",
+        })
+        const past = Date.now() - 31 * 60 * 1000
+        Database.use((db) =>
+          db
+            .update(TaskQueueTable)
+            .set({
+              status: "running",
+              time_started: past,
+              time_updated: past,
+            })
+            .where(eq(TaskQueueTable.id, id))
+            .run(),
+        )
+
+        await TaskQueueService.runNow()
+
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("completed")
+        expect(row?.retry_count).toBe(1)
+        expect(cancel).toHaveBeenCalledWith(session.id)
+        expect(prompt).toHaveBeenCalledTimes(1)
+      },
+    })
+  })
+
   test("poll only processes tasks for current project", async () => {
     await using one = await tmpdir({ git: true })
     await using two = await tmpdir({ git: true })

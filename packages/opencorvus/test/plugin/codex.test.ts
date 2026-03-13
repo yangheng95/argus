@@ -305,5 +305,46 @@ describe("plugin.codex", () => {
       expect(body.id).toBe("resp_1")
       expect(body.status).toBe("completed")
     })
+
+    test("prefers failed terminal responses over created payloads and normalizes errors", () => {
+      const body = parseCodexSSE([
+        "event: response.created",
+        'data: {"type":"response.created","response":{"id":"resp_1","status":"in_progress","usage":null}}',
+        "",
+        "event: error",
+        'data: {"type":"error","error":{"type":"server_error","code":"server_error","message":"boom","param":null}}',
+        "",
+        "event: response.failed",
+        'data: {"type":"response.failed","response":{"id":"resp_1","status":"failed","error":{"code":"server_error","message":"boom"},"usage":null}}',
+        "",
+      ].join("\n")) as Record<string, unknown>
+
+      expect(body.id).toBe("resp_1")
+      expect(body.status).toBe("failed")
+      expect(body.usage).toBeUndefined()
+      expect(body.error).toEqual({
+        type: "server_error",
+        code: "server_error",
+        message: "boom",
+        param: null,
+      })
+    })
+
+    test("synthesizes a parseable error payload when codex emits only an error event", () => {
+      const body = parseCodexSSE([
+        "event: error",
+        'data: {"type":"error","error":{"type":"server_error","code":"server_error","message":"boom","param":null}}',
+        "",
+      ].join("\n")) as Record<string, unknown>
+
+      expect(body).toEqual({
+        error: {
+          type: "server_error",
+          code: "server_error",
+          message: "boom",
+          param: null,
+        },
+      })
+    })
   })
 })

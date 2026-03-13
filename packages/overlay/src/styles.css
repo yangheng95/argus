@@ -1547,11 +1547,11 @@ body[data-theme="light"] .msg {
   --msg-shadow: none;
 }
 body[data-theme="light"] .msg[data-role="user"] {
-  --msg-surface: linear-gradient(180deg, rgba(80, 123, 183, 0.96), rgba(60, 96, 148, 0.98));
-  --msg-border: rgba(61, 118, 187, 0.24);
+  --msg-surface: linear-gradient(180deg, rgba(88, 144, 131, 0.96), rgba(63, 117, 106, 0.98));
+  --msg-border: rgba(79, 149, 136, 0.24);
   --msg-role-bg: rgba(255, 255, 255, 0.22);
-  --msg-role-border: rgba(61, 118, 187, 0.16);
-  --msg-role-tone: #f8fbff;
+  --msg-role-border: rgba(79, 149, 136, 0.16);
+  --msg-role-tone: #f7fffc;
 }
 body[data-theme="light"] .msg[data-role="assistant"] {
   --msg-surface: #fafbfc;
@@ -2506,11 +2506,11 @@ body[data-theme="light"] .section-badge {
 
 .msg[data-role="user"] {
   align-items: flex-end;
-  --msg-surface: linear-gradient(180deg, rgba(83, 112, 159, 0.96), rgba(56, 79, 118, 0.98));
-  --msg-border: rgba(152, 183, 238, 0.28);
+  --msg-surface: linear-gradient(180deg, rgba(101, 134, 122, 0.96), rgba(73, 98, 89, 0.98));
+  --msg-border: rgba(160, 203, 190, 0.24);
   --msg-role-bg: rgba(255, 255, 255, 0.08);
-  --msg-role-border: rgba(152, 183, 238, 0.18);
-  --msg-role-tone: #e8f0ff;
+  --msg-role-border: rgba(160, 203, 190, 0.18);
+  --msg-role-tone: #effbf7;
 }
 
 .msg[data-role="assistant"] {
@@ -2650,6 +2650,7 @@ body[data-theme="light"] .section-badge {
 
 .msg[data-role="user"] .msg-bubble {
   border-bottom-right-radius: calc(6px * var(--ui-scale));
+  color: #f2fbf8;
 }
 
 .msg[data-role="assistant"] .msg-bubble {
@@ -6727,126 +6728,126 @@ body[data-theme="light"] {
   max-width: 100%;
 }
 
-/* Indigo atmosphere */
+/* Graphite atmosphere */
 :root {
-  --bg: rgba(18, 24, 58, 0.9);
-  --surface: rgba(28, 36, 78, 0.74);
-  --surface-hover: rgba(34, 45, 92, 0.82);
-  --surface-inset: rgba(19, 26, 64, 0.8);
-  --surface-strong: rgba(31, 40, 88, 0.88);
-  --chrome: rgba(24, 32, 74, 0.82);
-  --border: rgba(138, 162, 255, 0.18);
-  --border-hover: rgba(138, 162, 255, 0.32);
-  --border-strong: rgba(218, 231, 255, 0.24);
-  --text: #d7e1ff;
-  --text-strong: #f4f8ff;
-  --text-soft: #97a9e2;
-  --text-muted: #6d7db6;
-  --accent-start: #7368ff;
-  --accent-mid: #5888ff;
-  --accent-end: #31c7ec;
-  --accent: #8ea8ff;
-  --accent-dim: linear-gradient(135deg, rgba(115, 104, 255, 0.2), rgba(49, 199, 236, 0.1));
-  --accent-hover: #a8beff;
-  --hover-accent-border: rgba(109, 149, 255, 0.34);
+  --bg: rgba(17, 19, 21, 0.88);
+  --surface: rgba(29, 33, 35, 0.56);
+  --surface-hover: rgba(35, 40, 43, 0.66);
+  --surface-inset: rgba(21, 25, 27, 0.72);
+  --surface-strong: rgba(32, 36, 39, 0.8);
+  --chrome: rgba(23, 26, 29, 0.76);
+  --border: rgba(221, 227, 222, 0.14);
+  --border-hover: rgba(113, 179, 168, 0.28);
+  --border-strong: rgba(234, 238, 233, 0.22);
+  --text: #d7ddd7;
+  --text-strong: #f4f7f2;
+  --text-soft: #93a39c;
+  --text-muted: #6b7972;
+  --accent-start: #cf8b57;
+  --accent-mid: #71b3a8;
+  --accent-end: #c6af72;
+  --accent: #8bc1b5;
+  --accent-dim: linear-gradient(135deg, rgba(207, 139, 87, 0.18), rgba(113, 179, 168, 0.1) 52%, rgba(198, 175, 114, 0.08));
+  --accent-hover: #a4d0c6;
+  --hover-accent-border: rgba(113, 179, 168, 0.32);
   --hover-accent-wash:
-    linear-gradient(135deg, rgba(115, 104, 255, 0.16), rgba(88, 136, 255, 0.08) 48%, rgba(49, 199, 236, 0.06));
-  --hover-accent-shadow: 0 16px 36px rgba(4, 8, 24, 0.36);
-  --guide-card-border: rgba(110, 152, 255, 0.24);
+    linear-gradient(135deg, rgba(207, 139, 87, 0.14), rgba(113, 179, 168, 0.08) 48%, rgba(198, 175, 114, 0.05));
+  --hover-accent-shadow: 0 16px 34px rgba(5, 10, 11, 0.34);
+  --guide-card-border: rgba(113, 179, 168, 0.22);
   --guide-card-bg:
-    linear-gradient(135deg, rgba(115, 104, 255, 0.16), rgba(88, 136, 255, 0.08) 46%, rgba(49, 199, 236, 0.04)),
+    linear-gradient(135deg, rgba(207, 139, 87, 0.14), rgba(113, 179, 168, 0.08) 46%, rgba(198, 175, 114, 0.04)),
     var(--surface-strong);
-  --shadow: 0 18px 42px rgba(2, 7, 22, 0.46), 0 2px 8px rgba(2, 7, 22, 0.32);
-  --shadow-md: 0 10px 24px rgba(2, 7, 22, 0.36);
-  --shadow-lg: 0 20px 48px rgba(2, 7, 22, 0.5);
-  --accent-glow: rgba(87, 147, 255, 0.34);
-  --accent-gradient: linear-gradient(135deg, rgba(115, 104, 255, 0.98), rgba(88, 136, 255, 0.97) 54%, rgba(49, 199, 236, 0.97));
-  --accent-gradient-hover: linear-gradient(135deg, rgba(125, 116, 255, 1), rgba(98, 146, 255, 0.99) 54%, rgba(63, 209, 238, 0.98));
-  --accent-shadow: 0 16px 30px rgba(27, 52, 121, 0.24), 0 8px 22px rgba(16, 119, 191, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  --accent-ring: rgba(97, 151, 255, 0.28);
-  --scrollbar-thumb: rgba(177, 198, 255, 0.22);
-  --scrollbar-thumb-hover: rgba(194, 215, 255, 0.3);
-  --session-scrollbar-track: rgba(155, 182, 255, 0.06);
-  --subtle-1: rgba(255, 255, 255, 0.038);
-  --subtle-2: rgba(255, 255, 255, 0.055);
-  --subtle-3: rgba(255, 255, 255, 0.08);
-  --subtle-4: rgba(255, 255, 255, 0.1);
-  --subtle-5: rgba(255, 255, 255, 0.14);
-  --dialog-backdrop: rgba(7, 10, 24, 0.52);
-  --dialog-bg: rgba(16, 21, 49, 0.92);
-  --divider-soft: rgba(184, 202, 255, 0.08);
+  --shadow: 0 18px 40px rgba(5, 8, 10, 0.42), 0 2px 8px rgba(5, 8, 10, 0.28);
+  --shadow-md: 0 10px 24px rgba(5, 8, 10, 0.34);
+  --shadow-lg: 0 20px 46px rgba(4, 7, 9, 0.46);
+  --accent-glow: rgba(113, 179, 168, 0.3);
+  --accent-gradient: linear-gradient(135deg, rgba(207, 139, 87, 0.98), rgba(113, 179, 168, 0.97) 54%, rgba(198, 175, 114, 0.97));
+  --accent-gradient-hover: linear-gradient(135deg, rgba(216, 148, 96, 1), rgba(123, 189, 178, 0.99) 54%, rgba(208, 185, 124, 0.98));
+  --accent-shadow: 0 16px 28px rgba(37, 59, 49, 0.18), 0 8px 20px rgba(138, 103, 62, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --accent-ring: rgba(113, 179, 168, 0.24);
+  --scrollbar-thumb: rgba(197, 207, 202, 0.22);
+  --scrollbar-thumb-hover: rgba(214, 223, 219, 0.3);
+  --session-scrollbar-track: rgba(186, 196, 191, 0.06);
+  --subtle-1: rgba(255, 255, 255, 0.03);
+  --subtle-2: rgba(255, 255, 255, 0.048);
+  --subtle-3: rgba(255, 255, 255, 0.072);
+  --subtle-4: rgba(255, 255, 255, 0.096);
+  --subtle-5: rgba(255, 255, 255, 0.13);
+  --dialog-backdrop: rgba(8, 10, 11, 0.5);
+  --dialog-bg: rgba(18, 21, 23, 0.9);
+  --divider-soft: rgba(223, 228, 223, 0.08);
   --panel-fill:
-    linear-gradient(145deg, rgba(115, 104, 255, 0.14), rgba(88, 136, 255, 0.08) 42%, rgba(49, 199, 236, 0.06) 100%),
+    linear-gradient(145deg, rgba(207, 139, 87, 0.11), rgba(113, 179, 168, 0.06) 42%, rgba(198, 175, 114, 0.05) 100%),
     var(--surface);
   --panel-fill-hover:
-    linear-gradient(145deg, rgba(115, 104, 255, 0.18), rgba(88, 136, 255, 0.1) 42%, rgba(49, 199, 236, 0.08) 100%),
+    linear-gradient(145deg, rgba(207, 139, 87, 0.15), rgba(113, 179, 168, 0.08) 42%, rgba(198, 175, 114, 0.06) 100%),
     var(--surface-hover);
   --card-fill:
-    linear-gradient(145deg, rgba(115, 104, 255, 0.09), rgba(88, 136, 255, 0.045) 48%, rgba(49, 199, 236, 0.035)),
+    linear-gradient(145deg, rgba(207, 139, 87, 0.06), rgba(113, 179, 168, 0.035) 52%, rgba(198, 175, 114, 0.028)),
     var(--subtle-1);
   --card-fill-hover:
-    linear-gradient(145deg, rgba(115, 104, 255, 0.12), rgba(88, 136, 255, 0.07) 48%, rgba(49, 199, 236, 0.05)),
+    linear-gradient(145deg, rgba(207, 139, 87, 0.09), rgba(113, 179, 168, 0.05) 52%, rgba(198, 175, 114, 0.04)),
     var(--surface-inset);
 }
 
 body[data-theme="light"] {
-  --bg: rgba(236, 241, 255, 0.98);
-  --surface: rgba(244, 247, 255, 0.94);
-  --surface-hover: rgba(238, 243, 255, 0.98);
-  --surface-inset: rgba(231, 237, 255, 0.94);
-  --surface-strong: rgba(248, 250, 255, 0.98);
-  --chrome: rgba(240, 245, 255, 0.96);
-  --border: rgba(96, 114, 210, 0.16);
-  --border-hover: rgba(96, 126, 234, 0.28);
-  --border-strong: rgba(86, 98, 182, 0.22);
-  --text: #2c3971;
-  --text-strong: #171f4a;
-  --text-soft: #5a6da4;
-  --text-muted: #7b88b8;
-  --accent-start: #6d62f6;
-  --accent-mid: #5c86ff;
-  --accent-end: #2ebee8;
-  --accent: #657dff;
-  --accent-dim: linear-gradient(135deg, rgba(109, 98, 246, 0.14), rgba(46, 190, 232, 0.08));
-  --accent-hover: #5672f2;
-  --hover-accent-border: rgba(91, 126, 244, 0.24);
+  --bg: rgba(245, 240, 233, 0.98);
+  --surface: rgba(251, 247, 241, 0.76);
+  --surface-hover: rgba(255, 251, 246, 0.86);
+  --surface-inset: rgba(248, 243, 236, 0.8);
+  --surface-strong: rgba(255, 251, 246, 0.88);
+  --chrome: rgba(248, 244, 238, 0.84);
+  --border: rgba(95, 79, 59, 0.14);
+  --border-hover: rgba(79, 149, 136, 0.24);
+  --border-strong: rgba(95, 79, 59, 0.2);
+  --text: #3c342b;
+  --text-strong: #1d1913;
+  --text-soft: #6e786d;
+  --text-muted: #8b8175;
+  --accent-start: #b87848;
+  --accent-mid: #4f9588;
+  --accent-end: #9f8d5a;
+  --accent: #5d968b;
+  --accent-dim: linear-gradient(135deg, rgba(184, 120, 72, 0.12), rgba(79, 149, 136, 0.07) 52%, rgba(159, 141, 90, 0.05));
+  --accent-hover: #447d73;
+  --hover-accent-border: rgba(79, 149, 136, 0.22);
   --hover-accent-wash:
-    linear-gradient(135deg, rgba(109, 98, 246, 0.12), rgba(92, 134, 255, 0.06) 48%, rgba(46, 190, 232, 0.04));
-  --hover-accent-shadow: 0 16px 28px rgba(74, 93, 202, 0.14);
-  --guide-card-border: rgba(91, 126, 244, 0.18);
+    linear-gradient(135deg, rgba(184, 120, 72, 0.1), rgba(79, 149, 136, 0.05) 48%, rgba(159, 141, 90, 0.04));
+  --hover-accent-shadow: 0 16px 28px rgba(125, 104, 72, 0.12);
+  --guide-card-border: rgba(79, 149, 136, 0.18);
   --guide-card-bg:
-    linear-gradient(135deg, rgba(109, 98, 246, 0.12), rgba(92, 134, 255, 0.06) 48%, rgba(46, 190, 232, 0.04)),
+    linear-gradient(135deg, rgba(184, 120, 72, 0.1), rgba(79, 149, 136, 0.05) 48%, rgba(159, 141, 90, 0.04)),
     var(--surface-strong);
-  --shadow: 0 16px 34px rgba(76, 98, 190, 0.12), 0 2px 8px rgba(76, 98, 190, 0.08);
-  --shadow-md: 0 8px 18px rgba(76, 98, 190, 0.12);
-  --shadow-lg: 0 18px 38px rgba(76, 98, 190, 0.16);
-  --accent-glow: rgba(92, 134, 255, 0.22);
-  --accent-gradient: linear-gradient(135deg, rgba(109, 98, 246, 0.98), rgba(92, 134, 255, 0.97) 54%, rgba(46, 190, 232, 0.97));
-  --accent-gradient-hover: linear-gradient(135deg, rgba(117, 108, 248, 1), rgba(101, 143, 255, 0.99) 54%, rgba(57, 198, 237, 0.98));
-  --accent-shadow: 0 16px 28px rgba(74, 93, 202, 0.16), 0 8px 20px rgba(46, 190, 232, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.24);
-  --accent-ring: rgba(92, 134, 255, 0.24);
-  --scrollbar-thumb: rgba(112, 132, 212, 0.2);
-  --scrollbar-thumb-hover: rgba(112, 132, 212, 0.28);
-  --session-scrollbar-track: rgba(112, 132, 212, 0.05);
-  --subtle-1: rgba(71, 82, 156, 0.03);
-  --subtle-2: rgba(71, 82, 156, 0.05);
-  --subtle-3: rgba(71, 82, 156, 0.075);
-  --subtle-4: rgba(71, 82, 156, 0.095);
-  --subtle-5: rgba(71, 82, 156, 0.13);
-  --dialog-backdrop: rgba(84, 102, 186, 0.16);
-  --dialog-bg: rgba(247, 248, 255, 0.98);
-  --divider-soft: rgba(86, 108, 198, 0.08);
+  --shadow: 0 16px 32px rgba(125, 104, 72, 0.12), 0 2px 8px rgba(125, 104, 72, 0.08);
+  --shadow-md: 0 8px 18px rgba(125, 104, 72, 0.12);
+  --shadow-lg: 0 18px 36px rgba(125, 104, 72, 0.16);
+  --accent-glow: rgba(79, 149, 136, 0.2);
+  --accent-gradient: linear-gradient(135deg, rgba(184, 120, 72, 0.98), rgba(79, 149, 136, 0.97) 54%, rgba(159, 141, 90, 0.97));
+  --accent-gradient-hover: linear-gradient(135deg, rgba(193, 130, 83, 1), rgba(88, 158, 145, 0.99) 54%, rgba(168, 151, 101, 0.98));
+  --accent-shadow: 0 14px 24px rgba(125, 104, 72, 0.12), 0 8px 20px rgba(79, 149, 136, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  --accent-ring: rgba(79, 149, 136, 0.22);
+  --scrollbar-thumb: rgba(114, 104, 87, 0.2);
+  --scrollbar-thumb-hover: rgba(114, 104, 87, 0.28);
+  --session-scrollbar-track: rgba(114, 104, 87, 0.05);
+  --subtle-1: rgba(90, 79, 59, 0.03);
+  --subtle-2: rgba(90, 79, 59, 0.05);
+  --subtle-3: rgba(90, 79, 59, 0.075);
+  --subtle-4: rgba(90, 79, 59, 0.095);
+  --subtle-5: rgba(90, 79, 59, 0.13);
+  --dialog-backdrop: rgba(90, 79, 59, 0.14);
+  --dialog-bg: rgba(252, 248, 242, 0.92);
+  --divider-soft: rgba(95, 79, 59, 0.08);
   --panel-fill:
-    linear-gradient(145deg, rgba(109, 98, 246, 0.12), rgba(92, 134, 255, 0.07) 42%, rgba(46, 190, 232, 0.05) 100%),
+    linear-gradient(145deg, rgba(184, 120, 72, 0.1), rgba(79, 149, 136, 0.05) 42%, rgba(159, 141, 90, 0.04) 100%),
     var(--surface);
   --panel-fill-hover:
-    linear-gradient(145deg, rgba(109, 98, 246, 0.16), rgba(92, 134, 255, 0.09) 42%, rgba(46, 190, 232, 0.06) 100%),
+    linear-gradient(145deg, rgba(184, 120, 72, 0.13), rgba(79, 149, 136, 0.07) 42%, rgba(159, 141, 90, 0.05) 100%),
     var(--surface-hover);
   --card-fill:
-    linear-gradient(145deg, rgba(109, 98, 246, 0.08), rgba(92, 134, 255, 0.04) 52%, rgba(46, 190, 232, 0.03)),
+    linear-gradient(145deg, rgba(184, 120, 72, 0.05), rgba(79, 149, 136, 0.025) 52%, rgba(159, 141, 90, 0.02)),
     var(--subtle-1);
   --card-fill-hover:
-    linear-gradient(145deg, rgba(109, 98, 246, 0.11), rgba(92, 134, 255, 0.06) 52%, rgba(46, 190, 232, 0.04)),
+    linear-gradient(145deg, rgba(184, 120, 72, 0.08), rgba(79, 149, 136, 0.04) 52%, rgba(159, 141, 90, 0.03)),
     var(--surface-inset);
 }
 
@@ -6869,45 +6870,45 @@ body::after {
 body::before {
   inset: -18%;
   z-index: -3;
-  opacity: 0.9;
+  opacity: 0.94;
   background:
-    radial-gradient(32% 34% at 11% 15%, rgba(124, 111, 255, 0.28), transparent 72%),
-    radial-gradient(24% 28% at 82% 17%, rgba(54, 193, 238, 0.24), transparent 70%),
-    radial-gradient(26% 28% at 66% 74%, rgba(75, 132, 255, 0.22), transparent 74%),
-    radial-gradient(18% 24% at 28% 72%, rgba(173, 155, 255, 0.14), transparent 76%),
-    linear-gradient(180deg, rgba(22, 29, 68, 0.98), rgba(27, 36, 82, 0.96) 54%, rgba(24, 34, 76, 0.96));
-  filter: blur(32px) saturate(122%);
+    radial-gradient(32% 34% at 10% 16%, rgba(207, 139, 87, 0.22), transparent 72%),
+    radial-gradient(26% 28% at 82% 18%, rgba(113, 179, 168, 0.2), transparent 70%),
+    radial-gradient(24% 26% at 64% 74%, rgba(198, 175, 114, 0.14), transparent 74%),
+    radial-gradient(18% 22% at 30% 76%, rgba(144, 162, 153, 0.1), transparent 76%),
+    linear-gradient(180deg, rgba(18, 21, 24, 0.98), rgba(20, 24, 27, 0.96) 54%, rgba(16, 19, 22, 0.96));
+  filter: blur(30px) saturate(114%);
 }
 
 body::after {
   inset: 0;
   z-index: -2;
-  opacity: 0.6;
+  opacity: 0.48;
   background:
-    radial-gradient(18% 22% at 18% 58%, rgba(125, 145, 255, 0.12), transparent 72%),
-    radial-gradient(22% 20% at 72% 44%, rgba(53, 191, 236, 0.1), transparent 70%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.045), transparent 24%, transparent 72%, rgba(255, 255, 255, 0.02)),
-    repeating-linear-gradient(90deg, transparent 0, transparent 92px, rgba(126, 154, 255, 0.04) 92px, rgba(126, 154, 255, 0.04) 93px);
+    radial-gradient(18% 22% at 18% 58%, rgba(207, 139, 87, 0.08), transparent 72%),
+    radial-gradient(22% 20% at 72% 44%, rgba(113, 179, 168, 0.08), transparent 70%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04), transparent 24%, transparent 72%, rgba(255, 255, 255, 0.018)),
+    repeating-linear-gradient(90deg, transparent 0, transparent 92px, rgba(193, 204, 197, 0.028) 92px, rgba(193, 204, 197, 0.028) 93px);
 }
 
 body[data-theme="light"]::before {
-  opacity: 0.92;
+  opacity: 0.98;
   background:
-    radial-gradient(32% 36% at 12% 16%, rgba(120, 110, 247, 0.17), transparent 72%),
-    radial-gradient(24% 28% at 84% 18%, rgba(46, 190, 232, 0.14), transparent 70%),
-    radial-gradient(28% 30% at 62% 78%, rgba(92, 134, 255, 0.12), transparent 74%),
-    radial-gradient(18% 24% at 28% 72%, rgba(179, 170, 255, 0.09), transparent 76%),
-    linear-gradient(180deg, rgba(234, 239, 255, 1), rgba(238, 243, 255, 0.98) 54%, rgba(231, 237, 255, 0.98));
-  filter: blur(28px) saturate(118%);
+    radial-gradient(32% 36% at 12% 16%, rgba(184, 120, 72, 0.16), transparent 72%),
+    radial-gradient(24% 28% at 84% 18%, rgba(79, 149, 136, 0.14), transparent 70%),
+    radial-gradient(28% 30% at 62% 78%, rgba(159, 141, 90, 0.1), transparent 74%),
+    radial-gradient(18% 24% at 28% 72%, rgba(156, 168, 154, 0.08), transparent 76%),
+    linear-gradient(180deg, rgba(245, 240, 233, 1), rgba(241, 236, 228, 0.98) 54%, rgba(236, 230, 220, 0.98));
+  filter: blur(22px) saturate(108%);
 }
 
 body[data-theme="light"]::after {
-  opacity: 0.44;
+  opacity: 0.56;
   background:
-    radial-gradient(18% 22% at 18% 58%, rgba(109, 98, 246, 0.1), transparent 72%),
-    radial-gradient(22% 20% at 72% 44%, rgba(46, 190, 232, 0.08), transparent 70%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.34), transparent 24%, transparent 72%, rgba(255, 255, 255, 0.12)),
-    repeating-linear-gradient(90deg, transparent 0, transparent 104px, rgba(116, 136, 245, 0.035) 104px, rgba(116, 136, 245, 0.035) 105px);
+    radial-gradient(18% 22% at 18% 58%, rgba(184, 120, 72, 0.08), transparent 72%),
+    radial-gradient(22% 20% at 72% 44%, rgba(79, 149, 136, 0.07), transparent 70%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.28), transparent 24%, transparent 72%, rgba(255, 255, 255, 0.1)),
+    repeating-linear-gradient(90deg, transparent 0, transparent 104px, rgba(126, 136, 118, 0.035) 104px, rgba(126, 136, 118, 0.035) 105px);
 }
 
 .tech-atlas {
@@ -6916,7 +6917,7 @@ body[data-theme="light"]::after {
   z-index: -4;
   overflow: hidden;
   pointer-events: none;
-  opacity: 0.78;
+  opacity: 0.74;
 }
 
 .tech-atlas-canvas,
@@ -6930,8 +6931,8 @@ body[data-theme="light"]::after {
 .tech-atlas-canvas {
   width: 100%;
   height: 100%;
-  opacity: 0.76;
-  filter: saturate(118%);
+  opacity: 0.82;
+  filter: saturate(112%);
 }
 
 .tech-grid {
@@ -6945,10 +6946,10 @@ body[data-theme="light"]::after {
   position: absolute;
   inset: -14%;
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(100% - 1px), rgba(135, 162, 255, 0.15) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(100% - 1px), rgba(60, 199, 236, 0.12) 100%);
+    linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(100% - 1px), rgba(207, 139, 87, 0.13) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(100% - 1px), rgba(113, 179, 168, 0.12) 100%);
   background-size: 88px 88px;
-  opacity: 0.28;
+  opacity: 0.34;
   transform: perspective(920px) rotateX(74deg) translateY(18%);
   transform-origin: center bottom;
   animation: techGridDrift 28s linear infinite;
@@ -6956,21 +6957,21 @@ body[data-theme="light"]::after {
 
 .tech-sweep {
   inset: -22%;
-  opacity: 0.22;
+  opacity: 0.24;
   background:
-    radial-gradient(24% 26% at 20% 28%, rgba(115, 104, 255, 0.18), transparent 72%),
-    linear-gradient(116deg, rgba(0, 0, 0, 0) 28%, rgba(115, 104, 255, 0.16) 46%, rgba(88, 136, 255, 0.12) 52%, rgba(49, 199, 236, 0.14) 58%, rgba(0, 0, 0, 0) 72%);
-  filter: blur(20px);
+    radial-gradient(24% 26% at 20% 28%, rgba(207, 139, 87, 0.16), transparent 72%),
+    linear-gradient(116deg, rgba(0, 0, 0, 0) 28%, rgba(207, 139, 87, 0.14) 46%, rgba(113, 179, 168, 0.12) 54%, rgba(198, 175, 114, 0.12) 60%, rgba(0, 0, 0, 0) 72%);
+  filter: blur(18px);
   animation: techSweep 22s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
 .tech-orbit {
   inset: auto;
-  border: 1px solid rgba(146, 170, 255, 0.16);
+  border: 1px solid rgba(208, 216, 211, 0.14);
   border-radius: 50%;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 0 0 1px rgba(115, 104, 255, 0.04);
+    0 0 0 1px rgba(113, 179, 168, 0.05);
 }
 
 .tech-orbit::before,
@@ -6985,7 +6986,7 @@ body[data-theme="light"]::after {
 .tech-orbit::after {
   inset: calc(28px * var(--ui-scale));
   border-style: solid;
-  border-color: rgba(49, 199, 236, 0.08);
+  border-color: rgba(198, 175, 114, 0.08);
 }
 
 .tech-orbit-a {
@@ -7042,24 +7043,24 @@ body[data-theme="light"]::after {
   inset: 1px;
   z-index: 0;
   border-radius: inherit;
-  opacity: 0.16;
+  opacity: 0.18;
   background:
-    linear-gradient(118deg, rgba(0, 0, 0, 0) 18%, rgba(115, 104, 255, 0.05) 36%, rgba(88, 136, 255, 0.08) 46%, rgba(49, 199, 236, 0.06) 52%, rgba(0, 0, 0, 0) 68%);
+    linear-gradient(118deg, rgba(0, 0, 0, 0) 18%, rgba(207, 139, 87, 0.045) 36%, rgba(113, 179, 168, 0.075) 46%, rgba(198, 175, 114, 0.06) 56%, rgba(0, 0, 0, 0) 68%);
   transform: translateX(-62%);
   animation: panelSweep 18s linear infinite;
 }
 
 .chat::after {
-  opacity: 0.2;
+  opacity: 0.22;
   animation-duration: 16s;
 }
 
 .sections-header::after {
   z-index: 0;
   border-radius: inherit;
-  opacity: 0.28;
+  opacity: 0.3;
   background:
-    linear-gradient(112deg, rgba(0, 0, 0, 0) 12%, rgba(115, 104, 255, 0.08) 34%, rgba(88, 136, 255, 0.1) 48%, rgba(49, 199, 236, 0.08) 56%, rgba(0, 0, 0, 0) 76%);
+    linear-gradient(112deg, rgba(0, 0, 0, 0) 12%, rgba(207, 139, 87, 0.06) 34%, rgba(113, 179, 168, 0.09) 48%, rgba(198, 175, 114, 0.08) 58%, rgba(0, 0, 0, 0) 76%);
   transform: translateX(-54%);
   animation: panelSweep 20s linear infinite;
 }
@@ -7067,9 +7068,9 @@ body[data-theme="light"]::after {
 .section[data-phase-state="active"] > .section-head::after {
   inset: 0;
   z-index: 0;
-  opacity: 0.42;
+  opacity: 0.4;
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(255, 255, 255, 0.02) 22%, rgba(88, 136, 255, 0.14) 46%, rgba(49, 199, 236, 0.12) 58%, rgba(0, 0, 0, 0) 82%);
+    linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(255, 255, 255, 0.02) 22%, rgba(113, 179, 168, 0.13) 46%, rgba(198, 175, 114, 0.1) 60%, rgba(0, 0, 0, 0) 82%);
   transform: translateX(-72%);
   animation: sectionScan 4.6s linear infinite;
 }
@@ -7094,15 +7095,15 @@ body[data-connection="offline"] .sections-header::after {
 }
 
 body[data-theme="light"] .tech-atlas {
-  opacity: 0.58;
+  opacity: 0.72;
 }
 
 body[data-theme="light"] .tech-grid::before {
-  opacity: 0.16;
+  opacity: 0.26;
 }
 
 body[data-theme="light"] .tech-sweep {
-  opacity: 0.14;
+  opacity: 0.2;
 }
 
 @keyframes techGridDrift {
@@ -7213,9 +7214,9 @@ body[data-theme="light"] .tech-sweep {
   z-index: 0;
   opacity: 0.9;
   background:
-    radial-gradient(22% 26% at 18% 24%, rgba(145, 134, 255, 0.14), transparent 70%),
-    radial-gradient(28% 24% at 78% 70%, rgba(49, 199, 236, 0.12), transparent 72%),
-    radial-gradient(16% 18% at 54% 38%, rgba(88, 136, 255, 0.08), transparent 74%);
+    radial-gradient(22% 26% at 18% 24%, rgba(207, 139, 87, 0.12), transparent 70%),
+    radial-gradient(28% 24% at 78% 70%, rgba(113, 179, 168, 0.11), transparent 72%),
+    radial-gradient(16% 18% at 54% 38%, rgba(198, 175, 114, 0.08), transparent 74%);
   filter: blur(24px);
 }
 

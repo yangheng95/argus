@@ -5,6 +5,7 @@ import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ToolAdapterRegistry, protocolInfo } from "@/executor/protocol"
 import { ExecutorDiscovery } from "@/executor/discovery"
 import { ExecutorRegistry } from "@/executor/registry"
+import { MCPServe } from "@/mcp/serve"
 import { lazy } from "../../util/lazy"
 
 const ExecutorToolInfo = z.object({
@@ -54,10 +55,27 @@ export const ExecutorRoutes = lazy(() =>
       const opencode = protocolInfo("opencode")
       const codex = protocolInfo("codex")
       const claude = protocolInfo("claude-code")
+      const mcpTools = await MCPServe.toolDefinitions("executor")
       const tools = {
         opencode: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "opencode", capabilities: opencode.capabilities })),
-        codex: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "codex", capabilities: codex.capabilities })),
-        claude: await ToolAdapterRegistry.declare(ToolAdapterRegistry.context({ provider: "claude-code", capabilities: claude.capabilities })),
+        codex: [
+          ...mcpTools,
+          ...(codex.capabilities.structured_output
+            ? [{
+                name: "structured_output",
+                description: "Return the final response as structured JSON matching the requested schema.",
+                inputSchema: {
+                  type: "object",
+                  properties: {},
+                  additionalProperties: true,
+                },
+                metadata: {
+                  surface: "native",
+                },
+              }]
+            : []),
+        ],
+        claude: mcpTools,
       }
       return c.json([
         {

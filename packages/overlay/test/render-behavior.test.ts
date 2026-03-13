@@ -2030,7 +2030,7 @@ test("selected task panel requests keep task context instead of binding the task
   }
 }, { timeout: 20_000 })
 
-test("panel request body never enables create actions from chat input", async () => {
+test("panel request body enables session mutations for panel chat input", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2056,15 +2056,18 @@ test("panel request body never enables create actions from chat input", async ()
         help: panelRequestBody("What can you do?"),
         task: panelRequestBody("Fix the login race condition"),
         session: panelRequestBody("Create a new session"),
+        sessionZh: panelRequestBody("创建一个新会话"),
       }
     })
 
     expect(result.help.allow_create).toBe(false)
-    expect(result.help.allow_session_mutation).toBe(false)
+    expect(result.help.allow_session_mutation).toBe(true)
     expect(result.task.allow_create).toBe(false)
-    expect(result.task.allow_session_mutation).toBe(false)
+    expect(result.task.allow_session_mutation).toBe(true)
     expect(result.session.allow_create).toBe(false)
-    expect(result.session.allow_session_mutation).toBe(false)
+    expect(result.session.allow_session_mutation).toBe(true)
+    expect(result.sessionZh.allow_create).toBe(false)
+    expect(result.sessionZh.allow_session_mutation).toBe(true)
   } finally {
     await page.close()
     server.stop(true)
@@ -2155,6 +2158,9 @@ test("chat stays disabled until a session is created from the sidebar button", a
 
       state.connected = true
       state.globalView = false
+      state.directory = "D:/overlay/current"
+      state.savedDirectory = "D:/overlay/current"
+      state.directoryMode = "custom"
       state.selectedTaskID = ""
       state.chatSessionID = "session-1"
       state.managedSession = {
@@ -2202,6 +2208,7 @@ test("chat stays disabled until a session is created from the sidebar button", a
     const result = await tab.evaluate(() => ({
       calls: window.__overlayCalls || [],
       workspace: document.body.dataset.workspace || "",
+      taskDir: document.querySelector("#taskDir")?.getAttribute("title") || "",
       placeholder: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.placeholder || "",
       enabledPlaceholder: window.eval("t")("chat.placeholder"),
       textareaDisabled: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.disabled ?? false,
@@ -2210,6 +2217,7 @@ test("chat stays disabled until a session is created from the sidebar button", a
     }))
 
     expect(result.workspace).toBe("session")
+    expect(result.taskDir).toBe("D:/overlay/current")
     expect(result.placeholder).toBe(result.enabledPlaceholder)
     expect(result.textareaDisabled).toBe(false)
     expect(result.sendDisabled).toBe(false)
@@ -2218,6 +2226,118 @@ test("chat stays disabled until a session is created from the sidebar button", a
     expect(result.calls).toContain("GET /session/session-9/panel-settings")
     expect(result.calls).toContain("GET /session/session-9/message")
     expect(result.sessions).toContain("session-9")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("creating a blank session preserves the current directory across transient request resets", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("createManagedSession") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const createManagedSession = window.eval("createManagedSession")
+      const renderMeta = window.eval("renderMeta")
+      const renderClear = window.eval("renderClear")
+      const renderWorkspaceState = window.eval("renderWorkspaceState")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls: string[] = []
+      const json = (value: unknown) => new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      })
+
+      root.__overlayCalls = calls
+      state.connected = true
+      state.directory = "D:/overlay/current"
+      state.savedDirectory = ""
+      state.tempDirectory = ""
+      state.path = { directory: "D:/overlay/current" }
+      state.vcs = {
+        branch: "",
+        clean: false,
+        dirty: false,
+        staged: 0,
+        modified: 0,
+        untracked: 0,
+        conflicts: 0,
+        ahead: 0,
+        behind: 0,
+      }
+      state.chatSessionID = ""
+      state.selectedTaskID = ""
+      state.managedSession = null
+      state.sessions = []
+      renderWorkspaceState()
+      renderMeta()
+      renderClear()
+
+      root.fetch = async (input, init) => {
+        const raw = typeof input === "string" ? input : input.url
+        const method = (init?.method || "GET").toUpperCase()
+        const url = new URL(raw, root.location.origin)
+        calls.push(`${method} ${url.pathname}${url.search}`)
+
+        if (url.pathname === "/session" && method === "POST") {
+          state.directory = ""
+          renderMeta()
+          return json({
+            id: "session-9",
+            title: "Created session",
+            directory: "",
+            time: { created: 1, updated: 2 },
+          })
+        }
+        if (url.pathname === "/session/session-9/panel-settings" && method === "GET") return json({})
+        if (url.pathname === "/session/session-9" && method === "GET") {
+          return json({
+            id: "session-9",
+            title: "Created session",
+            directory: "",
+            time: { created: 1, updated: 2 },
+          })
+        }
+        if (url.pathname === "/control/timeline" && method === "GET") return json([])
+        if (url.pathname === "/session/session-9/message" && method === "GET") return json([])
+        if (url.pathname === "/panel/knowledge/memory" && method === "GET") return json([])
+        if (url.pathname === "/panel/knowledge/preference" && method === "GET") return json([])
+        return new Response("not found", { status: 404 })
+      }
+
+      await createManagedSession()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      return {
+        calls,
+        directory: state.directory,
+        taskDir: document.querySelector("#taskDir")?.getAttribute("title") || "",
+        workspace: document.body.dataset.workspace || "",
+      }
+    })
+
+    expect(result.workspace).toBe("session")
+    expect(result.directory).toBe("D:/overlay/current")
+    expect(result.taskDir).toBe("D:/overlay/current")
+    expect(result.calls).toContain("POST /session?directory=D%3A%2Foverlay%2Fcurrent")
+    expect(result.calls).toContain("GET /session/session-9?directory=D%3A%2Foverlay%2Fcurrent")
   } finally {
     await page.close()
     server.stop(true)
@@ -2250,7 +2370,6 @@ test("chat stop aborts the active session request", async () => {
       const renderManagedSessionList = window.eval("renderManagedSessionList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
-      const encoder = new TextEncoder()
       const calls = []
       const session = {
         id: "session-1",
@@ -2276,20 +2395,14 @@ test("chat stop aborts the active session request", async () => {
         const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
         calls.push(`${method} ${url.pathname}`)
 
-        if (url.pathname === "/panel/message/stream" && method === "POST") {
-          const stream = new ReadableStream({
-            start(controller) {
-              init.signal?.addEventListener("abort", () => {
-                controller.error(new DOMException("Aborted", "AbortError"))
-              }, { once: true })
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
-            },
-          })
-          return new Response(stream, {
-            status: 200,
-            headers: {
-              "content-type": "text/event-stream; charset=utf-8",
-            },
+        if (url.pathname === "/session/session-1/prompt_async" && method === "POST") {
+          return json({ taskID: "task-1" }, 202)
+        }
+        if (url.pathname === "/session/session-1/prompt_async/task-1" && method === "GET") {
+          return new Promise((_resolve, reject) => {
+            init.signal?.addEventListener("abort", () => {
+              reject(new DOMException("Aborted", "AbortError"))
+            }, { once: true })
           })
         }
         if (url.pathname === "/session/session-1/abort" && method === "POST") {
@@ -2348,7 +2461,7 @@ test("chat stop aborts the active session request", async () => {
     expect(result.mode).toBe("send")
     expect(result.label).toBe(result.sendLabel)
     expect(result.assistant).toContain(result.interrupted)
-    expect(result.calls).toContain("POST /panel/message/stream")
+    expect(result.calls).toContain("POST /session/session-1/prompt_async")
     expect(result.calls).toContain("POST /session/session-1/abort")
   } finally {
     await page.close()
@@ -2429,7 +2542,7 @@ test("empty workspace send stays disabled and does not post panel requests", asy
   }
 }, { timeout: 20_000 })
 
-test("panel stream applies live assistant deltas before the final result", async () => {
+test("session prompt polling applies live assistant updates before completion", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2455,8 +2568,16 @@ test("panel stream applies live assistant deltas before the final result", async
       const renderManagedSessionList = window.eval("renderManagedSessionList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
-      const encoder = new TextEncoder()
       const calls = []
+      let statusCalls = 0
+      let assistant = ""
+      const json = (value: unknown, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
 
       root.__overlayCalls = calls
       root.fetch = async (input, init = {}) => {
@@ -2465,26 +2586,27 @@ test("panel stream applies live assistant deltas before the final result", async
         const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
         calls.push(`${method} ${url.pathname}`)
 
-        if (url.pathname === "/panel/message/stream" && method === "POST") {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "message_delta", delta: "Streaming " })}\n\n`))
-              setTimeout(() => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "message_delta", delta: "live" })}\n\n`))
-              }, 25)
-              setTimeout(() => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", result: { kind: "panel_response", message: "Streaming live output." } })}\n\n`))
-                controller.close()
-              }, 800)
-            },
-          })
-          return new Response(stream, {
-            status: 200,
-            headers: {
-              "content-type": "text/event-stream; charset=utf-8",
-            },
-          })
+        if (url.pathname === "/session/session-1/prompt_async" && method === "POST") {
+          return json({ taskID: "task-1" }, 202)
+        }
+        if (url.pathname === "/session/session-1/prompt_async/task-1" && method === "GET") {
+          statusCalls += 1
+          if (statusCalls === 1) {
+            assistant = "Streaming "
+            return json({ taskID: "task-1", sessionID: "session-1", status: "running" })
+          }
+          if (statusCalls === 2) {
+            assistant = "Streaming live"
+            return json({ taskID: "task-1", sessionID: "session-1", status: "running" })
+          }
+          assistant = "Streaming live output."
+          return json({ taskID: "task-1", sessionID: "session-1", status: "completed" })
+        }
+        if (url.pathname === "/session/session-1/message" && method === "GET") {
+          return json([
+            { info: { id: "user-1", role: "user", time: { created: 1 } }, parts: [{ id: "part-user-1", type: "text", text: "Stream live output" }] },
+            { info: { id: "assistant-1", role: "assistant", time: { created: 2 } }, parts: [{ id: "part-assistant-1", type: "text", text: assistant }] },
+          ])
         }
 
         return new Response("not found", { status: 404 })
@@ -2532,14 +2654,14 @@ test("panel stream applies live assistant deltas before the final result", async
     }))
 
     expect(result.assistant).toContain("Streaming live output.")
-    expect(result.calls).toContain("POST /panel/message/stream")
+    expect(result.calls).toContain("POST /session/session-1/prompt_async")
   } finally {
     await page.close()
     server.stop(true)
   }
 }, { timeout: 20_000 })
 
-test("panel stream consumes the trailing done event without a final blank line", async () => {
+test("session prompt polling applies the final transcript after completion", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2565,8 +2687,16 @@ test("panel stream consumes the trailing done event without a final blank line",
       const renderManagedSessionList = window.eval("renderManagedSessionList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
-      const encoder = new TextEncoder()
       const calls = []
+      let statusCalls = 0
+      let assistant = ""
+      const json = (value: unknown, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
 
       root.__overlayCalls = calls
       root.fetch = async (input, init = {}) => {
@@ -2575,20 +2705,22 @@ test("panel stream consumes the trailing done event without a final blank line",
         const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
         calls.push(`${method} ${url.pathname}`)
 
-        if (url.pathname === "/panel/message/stream" && method === "POST") {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", result: { kind: "panel_response", message: "Done from tail flush." } })}`))
-              controller.close()
-            },
-          })
-          return new Response(stream, {
-            status: 200,
-            headers: {
-              "content-type": "text/event-stream; charset=utf-8",
-            },
-          })
+        if (url.pathname === "/session/session-1/prompt_async" && method === "POST") {
+          return json({ taskID: "task-1" }, 202)
+        }
+        if (url.pathname === "/session/session-1/prompt_async/task-1" && method === "GET") {
+          statusCalls += 1
+          if (statusCalls === 1) {
+            return json({ taskID: "task-1", sessionID: "session-1", status: "queued" })
+          }
+          assistant = "Done from prompt polling."
+          return json({ taskID: "task-1", sessionID: "session-1", status: "completed" })
+        }
+        if (url.pathname === "/session/session-1/message" && method === "GET") {
+          return json([
+            { info: { id: "user-1", role: "user", time: { created: 1 } }, parts: [{ id: "part-user-1", type: "text", text: "Stream parser regression" }] },
+            { info: { id: "assistant-1", role: "assistant", time: { created: 2 } }, parts: [{ id: "part-assistant-1", type: "text", text: assistant }] },
+          ])
         }
 
         return new Response("not found", { status: 404 })
@@ -2618,7 +2750,7 @@ test("panel stream consumes the trailing done event without a final blank line",
 
     await tab.waitForFunction(() => {
       const text = document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || ""
-      return text.includes("Done from tail flush.")
+      return text.includes("Done from prompt polling.")
     })
 
     const result = await tab.evaluate(() => ({
@@ -2626,15 +2758,15 @@ test("panel stream consumes the trailing done event without a final blank line",
       calls: window.__overlayCalls || [],
     }))
 
-    expect(result.assistant).toContain("Done from tail flush.")
-    expect(result.calls).toContain("POST /panel/message/stream")
+    expect(result.assistant).toContain("Done from prompt polling.")
+    expect(result.calls).toContain("POST /session/session-1/prompt_async")
   } finally {
     await page.close()
     server.stop(true)
   }
 }, { timeout: 20_000 })
 
-test("panel stream does not expose internal tool ids in the loading placeholder", async () => {
+test("session prompt polling keeps the loading placeholder generic", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2660,8 +2792,16 @@ test("panel stream does not expose internal tool ids in the loading placeholder"
       const renderManagedSessionList = window.eval("renderManagedSessionList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
-      const encoder = new TextEncoder()
       const calls = []
+      let statusCalls = 0
+      let assistant = ""
+      const json = (value: unknown, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
 
       root.__overlayCalls = calls
       root.fetch = async (input, init = {}) => {
@@ -2670,22 +2810,25 @@ test("panel stream does not expose internal tool ids in the loading placeholder"
         const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
         calls.push(`${method} ${url.pathname}`)
 
-        if (url.pathname === "/panel/message/stream" && method === "POST") {
-          const stream = new ReadableStream({
-            start(controller) {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
-              setTimeout(() => {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", result: { kind: "panel_response", message: "Finished without panel placeholder." } })}\n\n`))
-                controller.close()
-              }, 200)
-            },
-          })
-          return new Response(stream, {
-            status: 200,
-            headers: {
-              "content-type": "text/event-stream; charset=utf-8",
-            },
-          })
+        if (url.pathname === "/session/session-1/prompt_async" && method === "POST") {
+          return json({ taskID: "task-1" }, 202)
+        }
+        if (url.pathname === "/session/session-1/prompt_async/task-1" && method === "GET") {
+          statusCalls += 1
+          if (statusCalls === 1) {
+            return json({ taskID: "task-1", sessionID: "session-1", status: "queued" })
+          }
+          if (statusCalls === 2) {
+            return json({ taskID: "task-1", sessionID: "session-1", status: "running" })
+          }
+          assistant = "Finished without session placeholder."
+          return json({ taskID: "task-1", sessionID: "session-1", status: "completed" })
+        }
+        if (url.pathname === "/session/session-1/message" && method === "GET") {
+          return json([
+            { info: { id: "user-1", role: "user", time: { created: 1 } }, parts: [{ id: "part-user-1", type: "text", text: "Hide internal tool ids" }] },
+            { info: { id: "assistant-1", role: "assistant", time: { created: 2 } }, parts: [{ id: "part-assistant-1", type: "text", text: assistant }] },
+          ])
         }
 
         return new Response("not found", { status: 404 })
@@ -2719,11 +2862,11 @@ test("panel stream does not expose internal tool ids in the loading placeholder"
     })
 
     const loading = await tab.evaluate(() => document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "")
-    expect(loading).not.toContain("panel...")
+    expect(loading).not.toContain("session...")
 
     await tab.waitForFunction(() => {
       const text = document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || ""
-      return text.includes("Finished without panel placeholder.")
+      return text.includes("Finished without session placeholder.")
     })
 
     const result = await tab.evaluate(() => ({
@@ -2731,8 +2874,8 @@ test("panel stream does not expose internal tool ids in the loading placeholder"
       calls: window.__overlayCalls || [],
     }))
 
-    expect(result.assistant).toContain("Finished without panel placeholder.")
-    expect(result.calls).toContain("POST /panel/message/stream")
+    expect(result.assistant).toContain("Finished without session placeholder.")
+    expect(result.calls).toContain("POST /session/session-1/prompt_async")
   } finally {
     await page.close()
     server.stop(true)
@@ -3310,6 +3453,106 @@ test("workspace bootstrap resolves the control directory before scoped loads run
 
     expect(result.directory).toBe("D:/overlay/bootstrap")
     expect(result.calls[0]).toBe("/path")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("workspace restore prefers the saved session snapshot over task heuristics", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("restoreInitialWorkspace") === "function"
+          && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const restoreInitialWorkspace = window.eval("restoreInitialWorkspace")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls: string[] = []
+      const json = (value: unknown) => new Response(JSON.stringify(value), {
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      })
+
+      root.__overlayCalls = calls
+      root.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        calls.push(url.pathname + (url.search ? url.search : ""))
+
+        if (url.pathname === "/session/session-9" && url.searchParams.get("directory") === "D:/overlay/current") {
+          return json({
+            id: "session-9",
+            title: "Recovered session",
+            directory: "D:/overlay/current",
+            time: { created: 1, updated: 2 },
+          })
+        }
+        if (url.pathname === "/session/session-9/panel-settings") return json({})
+        if (url.pathname === "/session/session-9/message") return json([])
+        if (url.pathname === "/panel/knowledge/memory" && url.searchParams.get("sessionID") === "session-9") return json([])
+        return new Response("not found", { status: 404 })
+      }
+
+      state.connected = true
+      state.directory = "D:/overlay/current"
+      state.savedDirectory = "D:/overlay/current"
+      state.workspaceTaskID = ""
+      state.workspaceSessionID = "session-9"
+      state.workspaceDirectory = "D:/overlay/current"
+      state.selectedTaskID = ""
+      state.chatSessionID = ""
+      state.managedSession = null
+      state.tasks = [
+        {
+          task: {
+            id: "task-1",
+            sessionID: "session-1",
+            directory: "D:/overlay/current",
+          },
+        },
+      ]
+      state.sessions = [
+        {
+          id: "session-9",
+          title: "Recovered session",
+          directory: "D:/overlay/current",
+          time: { created: 1, updated: 2 },
+        },
+      ]
+
+      const restored = await restoreInitialWorkspace()
+
+      return {
+        restored,
+        workspace: document.body.dataset.workspace || "",
+        selectedTaskID: state.selectedTaskID,
+        chatSessionID: state.chatSessionID,
+        calls,
+      }
+    })
+
+    expect(result.restored).toBe(true)
+    expect(result.workspace).toBe("session")
+    expect(result.selectedTaskID).toBe("")
+    expect(result.chatSessionID).toBe("session-9")
+    expect(result.calls).toContain("/session/session-9?directory=D%3A%2Foverlay%2Fcurrent")
   } finally {
     await page.close()
     server.stop(true)
