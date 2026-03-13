@@ -1,5 +1,7 @@
+import { GlobalBus } from "../../src/bus/global"
 import { rm } from "fs/promises"
 import { Instance } from "../../src/project/instance"
+import { Scheduler } from "../../src/scheduler"
 import { Database } from "../../src/storage/db"
 
 function normal() {
@@ -9,6 +11,8 @@ function normal() {
 
 export async function resetDatabase() {
   await Instance.disposeAll().catch(() => undefined)
+  Scheduler.reset()
+  GlobalBus.removeAllListeners()
   Database.close()
   if (normal()) return
   await rm(Database.Path, { force: true }).catch(() => undefined)

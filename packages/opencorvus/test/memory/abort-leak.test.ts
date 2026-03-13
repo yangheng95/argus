@@ -26,20 +26,31 @@ const getHeapMB = () => {
 
 describe("memory: abort controller leak", () => {
   test("webfetch does not leak memory over many invocations", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch() {
+        return new Response("ok", {
+          headers: {
+            "content-type": "text/plain; charset=utf-8",
+          },
+        })
+      },
+    })
     await Instance.provide({
       directory: projectRoot,
       fn: async () => {
         const tool = await WebFetchTool.init()
+        const url = `http://127.0.0.1:${server.port}`
 
         // Warm up
-        await tool.execute({ url: "https://example.com", format: "text" }, ctx).catch(() => {})
+        await tool.execute({ url, format: "text" }, ctx).catch(() => {})
 
         Bun.gc(true)
         const baseline = getHeapMB()
 
         // Run many fetches
         for (let i = 0; i < ITERATIONS; i++) {
-          await tool.execute({ url: "https://example.com", format: "text" }, ctx).catch(() => {})
+          await tool.execute({ url, format: "text" }, ctx).catch(() => {})
         }
 
         Bun.gc(true)
@@ -55,6 +66,7 @@ describe("memory: abort controller leak", () => {
         expect(growth).toBeLessThan(ITERATIONS / 10)
       },
     })
+    server.stop(true)
   }, 60000)
 
   test("compare closure vs bind pattern directly", async () => {

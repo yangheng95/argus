@@ -2,7 +2,6 @@ import { Installation } from "@/installation"
 import { Provider } from "@/provider/provider"
 import { Log } from "@/util/log"
 import {
-  streamText,
   wrapLanguageModel,
   type ModelMessage,
   type StreamTextResult,
@@ -23,6 +22,7 @@ import { Flag } from "@/flag/flag"
 import { PermissionNext } from "@/permission/next"
 import { LLMTrace } from "./llm-trace"
 import { ulid } from "ulid"
+import { streamText } from "@/llm/api"
 
 export namespace LLM {
   const log = Log.create({ service: "llm" })
@@ -268,9 +268,10 @@ export namespace LLM {
       tools,
       toolChoice: input.toolChoice,
       maxOutputTokens,
+      timeoutMs: false,
       abortSignal: input.abort,
       headers: requestHeaders,
-      maxRetries: input.retries ?? 0,
+      retries: input.retries ?? 0,
       messages: requestMessages,
       model: wrapLanguageModel({
         model: language,

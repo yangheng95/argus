@@ -10,7 +10,7 @@
  * 5. Structured output — scope, requirements, acceptance criteria, spec items
  * 6. Rewrite — receives failure analysis and revises spec for replan
  */
-import { generateText, stepCountIs, tool } from "ai"
+import { stepCountIs, tool } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
@@ -20,6 +20,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
 import { Env } from "@/env"
+import { generateText } from "@/llm/api"
 import fs from "fs"
 import path from "path"
 
@@ -297,6 +298,7 @@ async function run(input: {
         tools: allTools,
         toolChoice: "auto",
         maxOutputTokens: 32768,
+        timeoutMs: TIMEOUT_MS,
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
         system: SPEC_SYSTEM,
         prompt: userPrompt,
@@ -616,6 +618,7 @@ async function finalizeSpec(
     tools: summaryTool,
     toolChoice: "required",
     maxOutputTokens: 16384,
+    timeoutMs: Math.min(120_000, TIMEOUT_MS),
     abortSignal: signal ?? AbortSignal.timeout(120_000),
     system:
       "You are finalizing a specification after an exploration attempt. " +

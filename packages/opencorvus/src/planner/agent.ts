@@ -11,7 +11,7 @@
  * 5. Structured output — PRD, milestones, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
-import { generateText, stepCountIs, tool } from "ai"
+import { stepCountIs, tool } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
@@ -21,6 +21,7 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
 import { Env } from "@/env"
+import { generateText } from "@/llm/api"
 import path from "path"
 
 const log = Log.create({ service: "planner-agent" })
@@ -218,6 +219,7 @@ export namespace HeadlessPlannerAgent {
           tools: allTools,
           toolChoice: "auto",
           maxOutputTokens: 32768,
+          timeoutMs: TIMEOUT_MS,
           abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
           system: PLANNER_SYSTEM,
           prompt: userPrompt,
@@ -435,6 +437,7 @@ async function finalizePlan(
     tools: summaryTool,
     toolChoice: "required",
     maxOutputTokens: 16384,
+    timeoutMs: 120_000,
     abortSignal: signal ?? AbortSignal.timeout(120_000),
     system:
       "You are finalizing a plan after an exploration attempt. " +

@@ -2,7 +2,7 @@ import { findSpecSnapshot, findSpecItems } from "@/orchestrator/store"
 import { Provider } from "@/provider/provider"
 import { CheckConfig } from "@/orchestrator/model"
 import { Snapshot } from "@/snapshot"
-import { generateObject } from "ai"
+import { generateObject } from "@/llm/api"
 import z from "zod"
 import { Log } from "@/util/log"
 import {
@@ -203,41 +203,38 @@ async function reviewResult(input: {
     }
   }
 
-  let result: Awaited<ReturnType<typeof generateObject<typeof ReviewResultSchema>>> | undefined
-  for (let attempt = 0; attempt < 3; attempt++) {
-    result = await generateObject({
-      model: language,
-      temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-      abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
-      messages: [
-        {
-          role: "system",
-          content: input.prompt,
-        },
-        {
-          role: "user",
-          content: [
-            input.request ? `Task request:\n${input.request}` : "",
-            `Delivery summary:\n${input.delivery.summary}`,
-            input.context,
-          ]
-            .filter(Boolean)
-            .join("\n\n"),
-        },
-      ],
-      schema: ReviewResultSchema,
-    }).catch((err) => {
-      evaluatorLog.warn("review generateObject attempt failed", { name: input.name, attempt: attempt + 1, error: err })
-      return undefined
-    })
-    if (result) break
-  }
+  const result = await generateObject({
+    model: language,
+    temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
+    timeoutMs: REVIEW_TIMEOUT_MS,
+    abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
+    messages: [
+      {
+        role: "system",
+        content: input.prompt,
+      },
+      {
+        role: "user",
+        content: [
+          input.request ? `Task request:\n${input.request}` : "",
+          `Delivery summary:\n${input.delivery.summary}`,
+          input.context,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      },
+    ],
+    schema: ReviewResultSchema,
+  }).catch((err) => {
+    evaluatorLog.warn("review generateObject failed", { name: input.name, error: err })
+    return undefined
+  })
 
   if (!result) {
     return {
       ok: false as const,
-      summary: `${input.name} failed to execute after 3 attempts.`,
-      evidence: "Review model call failed after 3 retry attempts.",
+      summary: `${input.name} failed to execute after retries.`,
+      evidence: "Review model call failed after retries.",
       payload: {
         available: true,
         mode: input.mode,
@@ -247,7 +244,7 @@ async function reviewResult(input: {
 
   return {
     ok: true as const,
-    object: result.object,
+    object: result.object as z.infer<typeof ReviewResultSchema>,
   }
 }
 
@@ -435,20 +432,17 @@ export async function specCheckResult(
     },
   ]
 
-  let result: Awaited<ReturnType<typeof generateObject<typeof SpecCheckResult>>> | undefined
-  for (let attempt = 0; attempt < 3; attempt++) {
-    result = await generateObject({
-      model: language,
-      temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-      abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
-      messages: specCheckMessages,
-      schema: SpecCheckResult,
-    }).catch((err) => {
-      evaluatorLog.warn("spec_check generateObject attempt failed", { attempt: attempt + 1, error: err })
-      return undefined
-    })
-    if (result) break
-  }
+  const result = await generateObject({
+    model: language,
+    temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
+    timeoutMs: REVIEW_TIMEOUT_MS,
+    abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
+    messages: specCheckMessages,
+    schema: SpecCheckResult,
+  }).catch((err) => {
+    evaluatorLog.warn("spec_check generateObject failed", { error: err })
+    return undefined
+  })
 
   if (!result) {
     // Model call failed after retries — in strict mode this must block the
@@ -456,14 +450,15 @@ export async function specCheckResult(
     return softOrStrict({
       mode,
       name: "spec_check",
-      summary: "Spec check could not be executed (model call failed or timed out after 3 attempts).",
-      evidence: "The spec check model call failed after 3 retry attempts. The delivery was not verified against the specification.",
+      summary: "Spec check could not be executed (model call failed or timed out after retries).",
+      evidence: "The spec check model call failed after retries. The delivery was not verified against the specification.",
       payload: { available: true, mode, specID: activeSpecVersionID },
     })
   }
 
-  const allPassed = result.object.criteria.every((c) => c.status === "passed")
-  if (allPassed && result.object.verdict === "accepted") {
+  const object = result.object as z.infer<typeof SpecCheckResult>
+  const allPassed = object.criteria.every((c) => c.status === "passed")
+  if (allPassed && object.verdict === "accepted") {
     return {
       outcome: "passed" as const,
       summary: "Spec check: all criteria passed.",
@@ -471,7 +466,7 @@ export async function specCheckResult(
         {
           name: "spec_check",
           status: "passed" as const,
-          evidence: clip(result.object.rationale),
+          evidence: clip(object.rationale),
         },
       ],
       artifacts: [
@@ -480,14 +475,14 @@ export async function specCheckResult(
           label: "evaluation:spec_check",
           payload: {
             specID: activeSpecVersionID,
-            ...result.object,
+            ...object,
           },
         },
       ],
     }
   }
 
-  const failedCriteria = result.object.criteria.filter((c) => c.status !== "passed")
+  const failedCriteria = object.criteria.filter((c) => c.status !== "passed")
   return softOrStrict({
     mode,
     name: "spec_check",
@@ -497,7 +492,7 @@ export async function specCheckResult(
     ),
     payload: {
       specID: activeSpecVersionID,
-      ...result.object,
+      ...object,
     },
   })
 }

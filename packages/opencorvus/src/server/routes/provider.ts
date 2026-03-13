@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { generateText } from "ai"
+import { generateText } from "@/llm/api"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
@@ -195,6 +195,7 @@ export const ProviderRoutes = lazy(() =>
           await generateText({
             model: language,
             maxOutputTokens: 1,
+            timeoutMs: 20_000,
             abortSignal: AbortSignal.timeout(20_000),
             messages: [
               {
