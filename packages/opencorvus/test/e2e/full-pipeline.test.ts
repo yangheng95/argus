@@ -17,9 +17,9 @@ import path from "path"
 import { SlackGateway } from "../../src/channel/slack"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
 import {
   DEFAULT_OPENAI_CODEX_MODEL,
-  hasOpenAICodexAuth,
   normalizeOpenAICodexModel,
 } from "../../src/provider/codex-live"
 import { Log } from "../../src/util/log"
@@ -41,7 +41,25 @@ function env(...keys: string[]) {
 
 const MODEL = normalizeOpenAICodexModel(env("OPENCORVUS_E2E_MODEL", "CODING_MODEL") ?? DEFAULT_OPENAI_CODEX_MODEL)
 const MODEL_PROVIDER_ID = MODEL.split("/")[0] ?? "openai"
-const HAS_OPENAI_OAUTH = await hasOpenAICodexAuth()
+
+async function hasLiveModel(model: string) {
+  try {
+    await Instance.provide({
+      directory: path.resolve(import.meta.dir, "../.."),
+      fn: async () => {
+        const parsed = Provider.parseModel(model)
+        const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
+        await Provider.getLanguage(resolved)
+      },
+    })
+    return true
+  } catch (error) {
+    console.warn(`[E2E] live model unavailable for ${model}: ${String(error)}`)
+    return false
+  }
+}
+
+const HAS_LIVE_MODEL = await hasLiveModel(MODEL)
 
 const SLACK_BOT_TOKEN = env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN") ?? "test-slack-bot-token"
 const SLACK_APP_TOKEN = env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN") ?? "test-slack-app-token"
@@ -52,7 +70,7 @@ const HAS_SLACK_CREDS = !!(
   && env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN")
   && env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID")
 )
-const liveTest = RUN_LIVE_E2E && HAS_OPENAI_OAUTH ? test : test.skip
+const liveTest = RUN_LIVE_E2E && HAS_LIVE_MODEL ? test : test.skip
 
 const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "3600000", 10) // 60 分钟
 const MODEL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_MODEL_TIMEOUT_MS ?? "900000", 10) // 15 minutes
