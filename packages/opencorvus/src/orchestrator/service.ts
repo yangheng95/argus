@@ -64,7 +64,7 @@ import {
   rejectProtocolInteraction,
   rejectReplanConfirmation,
 } from "./interaction-actions"
-import { cleanupGoalWorkspace } from "./goal-runner"
+import { cleanupGoalWorkspace, removeGoalRunSession } from "./goal-runner"
 import {
   compileTransition,
   createReplanRun,
@@ -237,9 +237,7 @@ async function supersedeRunForSpecRewrite(task: TaskRow, run: RunRow, summary: s
     })
     updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
     await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
-    if (goalRun.session_id) await Session.remove(goalRun.session_id).catch((err) => {
-      log.warn("failed to remove goal run session during abort", { sessionID: goalRun.session_id, error: String(err) })
-    })
+    await removeGoalRunSession(goalRun)
   }
   await updateRun(
     run,
@@ -787,6 +785,7 @@ export namespace OrchestratorService {
         })
         updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
         await cleanupGoalWorkspace(target.goalRun.workspace_dir ?? undefined)
+        await removeGoalRunSession(target.goalRun)
       }
     }
     if (run) {
@@ -1078,6 +1077,8 @@ export namespace OrchestratorService {
         time_completed: Date.now(),
       })
       updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
+      await cleanupGoalWorkspace(target.goalRun.workspace_dir ?? undefined)
+      await removeGoalRunSession(target.goalRun)
     }
     await updateRun(
       run,

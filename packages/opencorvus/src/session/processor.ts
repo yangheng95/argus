@@ -126,6 +126,17 @@ export namespace SessionProcessor {
                   break
 
                 case "tool-input-delta":
+                  const match = toolcalls[value.id]
+                  if (match?.state.status === "pending") {
+                    match.state.raw += value.delta
+                    await Session.updatePartDelta({
+                      sessionID: match.sessionID,
+                      messageID: match.messageID,
+                      partID: match.id,
+                      field: "raw",
+                      delta: value.delta,
+                    })
+                  }
                   break
 
                 case "tool-input-end":

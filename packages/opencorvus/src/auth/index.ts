@@ -5,6 +5,8 @@ import z from "zod"
 import { Filesystem } from "../util/filesystem"
 
 export const OAUTH_DUMMY_KEY = "opencorvus-oauth-dummy-key"
+const OPENAI_PROVIDER = "openai"
+const OPENAI_CODEX_PROVIDER = "openai-codex"
 
 export namespace Auth {
   export const Oauth = z
@@ -94,9 +96,20 @@ export namespace Auth {
     return !process.env.OPENCORVUS_TEST_HOME
   }
 
+  function migrateLegacyCodexAuth(input: Record<string, Info>) {
+    const legacy = input[OPENAI_PROVIDER]
+    if (legacy?.type !== "oauth") return input
+    const result = { ...input }
+    if (!result[OPENAI_CODEX_PROVIDER]) {
+      result[OPENAI_CODEX_PROVIDER] = legacy
+    }
+    delete result[OPENAI_PROVIDER]
+    return result
+  }
+
   async function stored(): Promise<Record<string, Info>> {
     const data = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
-    return Object.entries(data).reduce(
+    const parsed = Object.entries(data).reduce(
       (acc, [key, value]) => {
         const parsed = Info.safeParse(value)
         if (!parsed.success) return acc
@@ -105,6 +118,7 @@ export namespace Auth {
       },
       {} as Record<string, Info>,
     )
+    return migrateLegacyCodexAuth(parsed)
   }
 
   export async function get(providerID: string) {
@@ -128,7 +142,7 @@ export namespace Auth {
     const expires = parseExpiry(access) ?? parseExpiry(typeof tokens.id_token === "string" ? tokens.id_token : undefined)
 
     return {
-      openai: {
+      [OPENAI_CODEX_PROVIDER]: {
         type: "oauth",
         access,
         refresh,

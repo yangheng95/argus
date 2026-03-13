@@ -266,6 +266,7 @@ async function run(input: {
       model: language,
       stopWhen: stepCountIs(MAX_STEPS),
       tools: allTools,
+      toolChoice: "required",
       maxOutputTokens: 32768,
       abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
       system: SPEC_SYSTEM,
@@ -295,18 +296,7 @@ async function run(input: {
         attempt: attempt + 1,
       })
       // Normalize arrays — tool call args may not have Zod defaults applied
-      parsed = {
-        ...submitted,
-        summary: submitted.summary ?? "",
-        content: submitted.content ?? "",
-        scope: submitted.scope ?? "",
-        goals: Array.isArray(submitted.goals) ? submitted.goals : [],
-        spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
-        assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
-        risks: Array.isArray(submitted.risks) ? submitted.risks : [],
-        evidence_sources: Array.isArray(submitted.evidence_sources) ? submitted.evidence_sources : [],
-        unresolved_questions: Array.isArray(submitted.unresolved_questions) ? submitted.unresolved_questions : [],
-      }
+      parsed = normalizeSpecOutput(submitted)
     } else {
       // Fallback: parse from text output
       let allText = result.text?.trim() || ""
@@ -335,28 +325,36 @@ async function run(input: {
           contentLength: submitted.content?.length ?? 0,
           attempt: attempt + 1,
         })
-        parsed = {
-          ...submitted,
-          summary: submitted.summary ?? "",
-          content: submitted.content ?? "",
-          scope: submitted.scope ?? "",
-          goals: Array.isArray(submitted.goals) ? submitted.goals : [],
-          spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
-          assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
-          risks: Array.isArray(submitted.risks) ? submitted.risks : [],
-          evidence_sources: Array.isArray(submitted.evidence_sources) ? submitted.evidence_sources : [],
-          unresolved_questions: Array.isArray(submitted.unresolved_questions) ? submitted.unresolved_questions : [],
-        }
+        parsed = normalizeSpecOutput(submitted)
       } else {
-      log.info("spec agent finished via text output (no submit_spec call)", {
-        steps: result.steps.length,
-        finishReason: result.finishReason,
-        textLength: allText.length,
-        textPreview: allText.slice(0, 200),
-        attempt: attempt + 1,
-      })
-
-        parsed = extractJSON(allText)
+        log.info("spec agent finished via text output (no submit_spec call)", {
+          steps: result.steps.length,
+          finishReason: result.finishReason,
+          textLength: allText.length,
+          textPreview: allText.slice(0, 200),
+          attempt: attempt + 1,
+        })
+        const extracted = tryExtractSpecOutput(allText)
+        if (extracted.ok) {
+          parsed = extracted.value
+        } else {
+          log.warn("spec: text output was not valid JSON, forcing consolidation", {
+            error: extracted.error.message,
+            steps: result.steps.length,
+            finishReason: result.finishReason,
+            textLength: allText.length,
+            attempt: attempt + 1,
+          })
+          const forced = await finalizeSpec(language, input, result.steps, input.signal)
+          if (forced.submittedSpec) {
+            parsed = normalizeSpecOutput(forced.submittedSpec)
+          } else {
+            const forcedText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
+            const forcedExtracted = tryExtractSpecOutput(forcedText)
+            if (!forcedExtracted.ok) throw forcedExtracted.error
+            parsed = forcedExtracted.value
+          }
+        }
       }
     }
 
@@ -427,9 +425,9 @@ function buildUserPrompt(
       [
         "# Unattended Execution Policy",
         "",
-        "This project is unattended.",
-        "When details are missing but a reasonable default can unblock progress, do not ask for confirmation.",
-        "Instead, record the choice in assumptions and continue execution.",
+        "This project runs unattended by default.",
+        "Complete the task end-to-end autonomously.",
+        "When details are missing but a reasonable default can unblock progress, choose it, record it in assumptions, and continue execution.",
         "Only emit clarifications when the request is contradictory or impossible to execute safely without explicit human input.",
       ].join("\n"),
     )
@@ -575,6 +573,7 @@ async function finalizeSpec(
     model: language,
     stopWhen: stepCountIs(8),
     tools: summaryTool,
+    toolChoice: "required",
     maxOutputTokens: 16384,
     abortSignal: signal ?? AbortSignal.timeout(120_000),
     system:
@@ -694,6 +693,32 @@ function extractJSON(text: string): SpecOutputType {
   } catch (zodErr) {
     log.error("spec: Zod validation failed", { error: String(zodErr) })
     throw new Error(`spec output failed schema validation: ${zodErr instanceof Error ? zodErr.message : String(zodErr)}`)
+  }
+}
+
+function normalizeSpecOutput(input: SpecOutputType): SpecOutputType {
+  return {
+    ...input,
+    summary: input.summary ?? "",
+    content: input.content ?? "",
+    scope: input.scope ?? "",
+    goals: Array.isArray(input.goals) ? input.goals : [],
+    spec_items: Array.isArray(input.spec_items) ? input.spec_items : [],
+    assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
+    risks: Array.isArray(input.risks) ? input.risks : [],
+    evidence_sources: Array.isArray(input.evidence_sources) ? input.evidence_sources : [],
+    unresolved_questions: Array.isArray(input.unresolved_questions) ? input.unresolved_questions : [],
+  }
+}
+
+function tryExtractSpecOutput(text: string): { ok: true; value: SpecOutputType } | { ok: false; error: Error } {
+  try {
+    return { ok: true, value: extractJSON(text) }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error : new Error(String(error)),
+    }
   }
 }
 

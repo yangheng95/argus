@@ -96,12 +96,16 @@ export namespace Question {
   })
 
   const QUESTION_MIN_TIMEOUT_MS = 1000
-  const QUESTION_AUTO_REJECT_MS = Math.max(
-    Number.isFinite(parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS ?? "", 10))
-      ? parseInt(process.env.OPENCORVUS_QUESTION_TIMEOUT_MS!, 10)
-      : 10000,
-    QUESTION_MIN_TIMEOUT_MS,
-  )
+  const QUESTION_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
+  function questionTimeoutMs() {
+    const raw = process.env.OPENCORVUS_QUESTION_TIMEOUT_MS ?? process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS
+    return Math.max(
+      Number.isFinite(parseInt(raw ?? "", 10))
+        ? parseInt(raw!, 10)
+        : QUESTION_DEFAULT_TIMEOUT_MS,
+      QUESTION_MIN_TIMEOUT_MS,
+    )
+  }
 
   export async function ask(input: {
     sessionID: string
@@ -137,7 +141,7 @@ export namespace Question {
           })
           reject(new RejectedError())
         }
-      }, QUESTION_AUTO_REJECT_MS)
+      }, questionTimeoutMs())
     })
   }
 

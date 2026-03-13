@@ -288,6 +288,50 @@ export namespace Provider {
     return m
   }
 
+  function zeroCost(model: Model): Model["cost"] {
+    return {
+      input: 0,
+      output: 0,
+      cache: { read: 0, write: 0 },
+      ...(model.cost.experimentalOver200K
+        ? {
+            experimentalOver200K: {
+              input: 0,
+              output: 0,
+              cache: { read: 0, write: 0 },
+            },
+          }
+        : {}),
+    }
+  }
+
+  function isOpenAICodexModel(modelID: string) {
+    return modelID.startsWith("gpt-5") || modelID.includes("codex")
+  }
+
+  function createOpenAICodexProvider(provider?: Info): Info | undefined {
+    if (!provider) return
+    const models = Object.fromEntries(
+      entries(provider.models).flatMap(([modelID, model]) => {
+        if (!isOpenAICodexModel(modelID)) return []
+        const next: Model = {
+          ...structuredClone(model),
+          providerID: "openai-codex",
+          cost: zeroCost(model),
+        }
+        next.variants = mapValues(ProviderTransform.variants(next), (variant) => variant)
+        return [[modelID, next] as const]
+      }),
+    )
+    return {
+      ...provider,
+      id: "openai-codex",
+      name: "OpenAI Codex",
+      env: [],
+      models,
+    }
+  }
+
   export function fromModelsDevProvider(provider: ModelsDev.Provider): Info {
     return {
       id: provider.id,
@@ -304,6 +348,10 @@ export namespace Provider {
     const config = await Config.get()
     const modelsDev = await ModelsDev.get()
     const database = mapValues(modelsDev, fromModelsDevProvider)
+    const openAICodex = createOpenAICodexProvider(database["openai"])
+    if (openAICodex) {
+      database["openai-codex"] = openAICodex
+    }
 
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : null

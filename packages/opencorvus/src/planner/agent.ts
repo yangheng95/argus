@@ -187,6 +187,7 @@ export namespace HeadlessPlannerAgent {
         model: language,
         stopWhen: stepCountIs(MAX_STEPS),
         tools: allTools,
+        toolChoice: "required",
         maxOutputTokens: 32768,
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
         system: PLANNER_SYSTEM,
@@ -371,6 +372,7 @@ async function finalizePlan(
     model: language,
     stopWhen: stepCountIs(8),
     tools: summaryTool,
+    toolChoice: "required",
     maxOutputTokens: 16384,
     abortSignal: signal ?? AbortSignal.timeout(120_000),
     system:
@@ -871,9 +873,9 @@ function buildUserPrompt(
       [
         "# Unattended Execution Policy",
         "",
-        "This project is unattended.",
-        "When a reasonable default keeps the task moving, do not ask for clarification.",
-        "Document the choice in assumptions or risk notes and continue execution.",
+        "This project runs unattended by default.",
+        "Complete the task end-to-end autonomously.",
+        "When a reasonable default keeps the task moving, choose it, document it in assumptions or risk notes, and continue execution.",
         "Only emit clarifications when the request is contradictory or impossible to execute safely without explicit human input.",
       ].join("\n"),
     )

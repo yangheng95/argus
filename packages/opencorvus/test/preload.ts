@@ -5,13 +5,19 @@ import path from "path"
 import fs from "fs/promises"
 import { afterAll } from "bun:test"
 
-// Set XDG env vars FIRST, before any src/ imports
-const dir = path.join(os.tmpdir(), "opencorvus-test-data-" + process.pid)
-await fs.mkdir(dir, { recursive: true })
+const liveE2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
+const normal = liveE2E && process.env.OPENCORVUS_LIVE_E2E_USE_NORMAL_PATHS !== "0"
+const dir = normal ? undefined : path.join(os.tmpdir(), "opencorvus-test-data-" + process.pid)
+
+if (dir) {
+  await fs.mkdir(dir, { recursive: true })
+}
+
 afterAll(async () => {
   const { Database } = await import("../src/storage/db")
-  const { Log } = await import("../src/util/log")
   Database.close()
+  if (!dir) return
+  const { Log } = await import("../src/util/log")
   const busy = (error: unknown) =>
     typeof error === "object" && error !== null && "code" in error && error.code === "EBUSY"
   const rm = async (left: number): Promise<void> => {
@@ -32,35 +38,36 @@ afterAll(async () => {
   await rm(30)
 })
 
-process.env["XDG_DATA_HOME"] = path.join(dir, "share")
-process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
-process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
-process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 process.env["OPENCORVUS_MODELS_PATH"] = path.join(import.meta.dir, "tool", "fixtures", "models-api.json")
 
-// Set test home directory to isolate tests from user's actual home directory
-// This prevents tests from picking up real user configs/skills from ~/.claude/skills
-const testHome = path.join(dir, "home")
-await fs.mkdir(testHome, { recursive: true })
-process.env["OPENCORVUS_TEST_HOME"] = testHome
+if (dir) {
+  process.env["XDG_DATA_HOME"] = path.join(dir, "share")
+  process.env["XDG_CACHE_HOME"] = path.join(dir, "cache")
+  process.env["XDG_CONFIG_HOME"] = path.join(dir, "config")
+  process.env["XDG_STATE_HOME"] = path.join(dir, "state")
 
-// Set test managed config directory to isolate tests from system managed settings
-const testManagedConfigDir = path.join(dir, "managed")
-process.env["OPENCORVUS_TEST_MANAGED_CONFIG_DIR"] = testManagedConfigDir
+  // Set test home directory to isolate tests from user's actual home directory
+  // This prevents tests from picking up real user configs/skills from ~/.claude/skills
+  const testHome = path.join(dir, "home")
+  await fs.mkdir(testHome, { recursive: true })
+  process.env["OPENCORVUS_TEST_HOME"] = testHome
 
-// Write the cache version file to prevent global/index.ts from clearing the cache
-const cacheDir = path.join(dir, "cache", "opencorvus")
-await fs.mkdir(cacheDir, { recursive: true })
-await fs.writeFile(path.join(cacheDir, "version"), "14")
+  // Set test managed config directory to isolate tests from system managed settings
+  const testManagedConfigDir = path.join(dir, "managed")
+  process.env["OPENCORVUS_TEST_MANAGED_CONFIG_DIR"] = testManagedConfigDir
 
-const liveE2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
+  // Write the cache version file to prevent global/index.ts from clearing the cache
+  const cacheDir = path.join(dir, "cache", "opencorvus")
+  await fs.mkdir(cacheDir, { recursive: true })
+  await fs.writeFile(path.join(cacheDir, "version"), "21")
+}
 
 if (liveE2E) {
   const { Auth } = await import("../src/auth")
   const fallback = await Auth.codexFallback()
-  const openai = fallback.openai
-  if (openai?.type === "oauth") {
-    await Auth.set("openai", openai)
+  const openaiCodex = fallback["openai-codex"]
+  if (openaiCodex?.type === "oauth") {
+    await Auth.set("openai-codex", openaiCodex)
   }
 }
 

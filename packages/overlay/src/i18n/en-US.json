@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "7ab3af4b9e06656d"
+    "panel_revision": "1629685e33917abb"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left sets scope, center drives the session, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -70,6 +70,7 @@
   "chat.role.user": "User",
   "chat.send_label": "Send",
   "chat.send_title": "Send message. Enter to send, Shift+Enter for newline.",
+  "chat.thinking": "Thinking...",
   "chat.tip": "Enter to send · Shift+Enter for newline",
   "chat.title": "Session",
   "checks.artifact": "Artifacts",
@@ -496,6 +497,7 @@
   "llm.auth_method": "Authentication Method",
   "llm.auth_type_api": "Enter a code or API token manually",
   "llm.auth_type_oauth": "Continue in the browser sign-in flow",
+  "sections.title": "Inspector",
   "titlebar.full_transcript": "Show full transcript",
   "titlebar.full_transcript_hint": "Reveal hidden control text, internal tool steps, and raw assistant details."
 }

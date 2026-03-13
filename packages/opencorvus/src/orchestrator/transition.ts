@@ -1550,7 +1550,13 @@ export function createGoalRun(input: {
         workspace_dir: input.workspaceDir,
         base_ref: input.baseRef,
         merge_ref: input.mergeRef,
-        metadata: input.metadata,
+        metadata:
+          input.metadata || input.sessionID
+            ? {
+                ...(input.metadata ?? {}),
+                ...(input.sessionID ? { local_session_id: input.sessionID } : {}),
+              }
+            : undefined,
         time_created: now,
         time_updated: now,
       })

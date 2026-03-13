@@ -3,20 +3,47 @@ import { Log } from "../util/log"
 import { Installation } from "../installation"
 import { Auth, OAUTH_DUMMY_KEY } from "../auth"
 import os from "os"
-import { ProviderTransform } from "@/provider/transform"
 
 const log = Log.create({ service: "plugin.codex" })
 
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 const ISSUER = "https://auth.openai.com"
 const CODEX_API_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses"
+const OPENAI_CODEX_PROVIDER = "openai-codex"
 const OAUTH_PORT = 1455
 const OAUTH_POLLING_SAFETY_MARGIN_MS = 3000
+const TLS_CERT_ERROR_CODES = new Set([
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "CERT_HAS_EXPIRED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+])
+const TLS_CERT_ERROR_PATTERNS = [
+  /unable to get local issuer certificate/i,
+  /unable to verify the first certificate/i,
+  /self[- ]signed certificate/i,
+  /certificate has expired/i,
+]
+const OPENAI_AUTH_PROBE_URL =
+  `${ISSUER}/oauth/authorize?response_type=code&client_id=opencorvus-preflight&redirect_uri=` +
+  encodeURIComponent(`http://localhost:${OAUTH_PORT}/auth/callback`) +
+  "&scope=openid+profile+email"
 
 interface PkceCodes {
   verifier: string
   challenge: string
 }
+
+export type OpenAIOAuthTlsPreflightResult =
+  | { ok: true }
+  | {
+      ok: false
+      kind: "tls-cert" | "network"
+      code?: string
+      message: string
+    }
 
 async function generatePKCE(): Promise<PkceCodes> {
   const verifier = generateRandomString(43)
@@ -43,6 +70,77 @@ function base64UrlEncode(buffer: ArrayBuffer): string {
 
 function generateState(): string {
   return base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)).buffer)
+}
+
+function oauthCallbackUrl() {
+  return `http://localhost:${OAUTH_PORT}/auth/callback`
+}
+
+function oauthErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function oauthFailure(error: unknown) {
+  const root = error && typeof error === "object" ? (error as Record<string, unknown>) : {}
+  const cause =
+    root.cause && typeof root.cause === "object"
+      ? (root.cause as Record<string, unknown>)
+      : undefined
+  const code = typeof cause?.code === "string" ? cause.code : undefined
+  const message =
+    typeof cause?.message === "string"
+      ? cause.message
+      : typeof root.message === "string"
+        ? root.message
+        : oauthErrorMessage(error)
+  const kind =
+    (code ? TLS_CERT_ERROR_CODES.has(code) : false) ||
+      TLS_CERT_ERROR_PATTERNS.some((pattern) => pattern.test(message))
+      ? "tls-cert"
+      : "network"
+  return {
+    code,
+    message,
+    kind,
+  } as const
+}
+
+export async function runOpenAIOAuthTlsPreflight(options: {
+  timeoutMs?: number
+  fetchImpl?: typeof fetch
+} = {}): Promise<OpenAIOAuthTlsPreflightResult> {
+  const timeoutMs = options.timeoutMs ?? 5000
+  const fetchImpl = options.fetchImpl ?? fetch
+  try {
+    await fetchImpl(OPENAI_AUTH_PROBE_URL, {
+      method: "GET",
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      ...oauthFailure(error),
+    }
+  }
+}
+
+export function formatOpenAIOAuthTlsPreflightFix(
+  result: Exclude<OpenAIOAuthTlsPreflightResult, { ok: true }>,
+) {
+  if (result.kind !== "tls-cert") {
+    return [
+      "OpenAI OAuth prerequisites check failed before the browser flow.",
+      `Cause: ${result.message}`,
+      "Verify DNS, firewall, proxy, or TLS interception settings for auth.openai.com and try again.",
+    ].join("\n")
+  }
+  return [
+    "OpenAI OAuth prerequisites check failed: Bun/Node cannot validate TLS certificates for auth.openai.com.",
+    `Cause: ${result.code ? `${result.code} (${result.message})` : result.message}`,
+    "Fix your local certificate chain or corporate MITM root store, then retry OAuth.",
+  ].join("\n")
 }
 
 export interface IdTokenClaims {
@@ -429,75 +527,119 @@ interface PendingOAuth {
 let oauthServer: ReturnType<typeof Bun.serve> | undefined
 let pendingOAuth: PendingOAuth | undefined
 
-async function startOAuthServer(): Promise<{ port: number; redirectUri: string }> {
-  if (oauthServer) {
-    return { port: OAUTH_PORT, redirectUri: `http://localhost:${OAUTH_PORT}/auth/callback` }
+function finishPendingOAuth(error?: Error) {
+  const current = pendingOAuth
+  pendingOAuth = undefined
+  if (!current || !error) return current
+  current.reject(error)
+  return current
+}
+
+function callbackParams(value: string) {
+  const text = value.trim()
+  if (!text) return new URLSearchParams()
+  if (text.includes("://")) return new URL(text).searchParams
+  if (text.startsWith("/")) return new URL(text, oauthCallbackUrl()).searchParams
+  if (text.startsWith("?")) return new URLSearchParams(text.slice(1))
+  if (text.includes("=")) return new URLSearchParams(text.replace(/^[?#]/, ""))
+  return new URLSearchParams({ code: text })
+}
+
+export function parseOAuthCallbackInput(input: string, expectedState?: string) {
+  const params = callbackParams(input)
+  const error = params.get("error")
+  const errorDescription = params.get("error_description")
+  if (error) throw new Error(errorDescription || error)
+
+  const code = params.get("code")
+  if (!code) throw new Error("Missing authorization code")
+
+  const state = params.get("state")
+  if (expectedState && state && state !== expectedState) {
+    throw new Error("Invalid state - potential CSRF attack")
   }
 
-  oauthServer = Bun.serve({
-    port: OAUTH_PORT,
-    fetch(req) {
-      const url = new URL(req.url)
+  return code
+}
 
-      if (url.pathname === "/auth/callback") {
-        const code = url.searchParams.get("code")
-        const state = url.searchParams.get("state")
-        const error = url.searchParams.get("error")
-        const errorDescription = url.searchParams.get("error_description")
+async function startOAuthServer(): Promise<{ port: number; redirectUri: string; listening: boolean }> {
+  const redirectUri = oauthCallbackUrl()
+  if (oauthServer) {
+    return { port: OAUTH_PORT, redirectUri, listening: true }
+  }
 
-        if (error) {
-          const errorMsg = errorDescription || error
-          pendingOAuth?.reject(new Error(errorMsg))
-          pendingOAuth = undefined
-          return new Response(HTML_ERROR(errorMsg), {
+  try {
+    oauthServer = Bun.serve({
+      port: OAUTH_PORT,
+      fetch(req) {
+        const url = new URL(req.url)
+
+        if (url.pathname === "/auth/callback") {
+          const code = url.searchParams.get("code")
+          const state = url.searchParams.get("state")
+          const error = url.searchParams.get("error")
+          const errorDescription = url.searchParams.get("error_description")
+
+          if (error) {
+            const errorMsg = errorDescription || error
+            finishPendingOAuth(new Error(errorMsg))
+            return new Response(HTML_ERROR(errorMsg), {
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          if (!code) {
+            const errorMsg = "Missing authorization code"
+            finishPendingOAuth(new Error(errorMsg))
+            return new Response(HTML_ERROR(errorMsg), {
+              status: 400,
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          if (!pendingOAuth || state !== pendingOAuth.state) {
+            const errorMsg = "Invalid state - potential CSRF attack"
+            finishPendingOAuth(new Error(errorMsg))
+            return new Response(HTML_ERROR(errorMsg), {
+              status: 400,
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          const current = finishPendingOAuth()
+          if (!current) {
+            return new Response(HTML_ERROR("Missing pending OAuth flow"), {
+              status: 400,
+              headers: { "Content-Type": "text/html" },
+            })
+          }
+
+          exchangeCodeForTokens(code, redirectUri, current.pkce)
+            .then((tokens) => current.resolve(tokens))
+            .catch((err) => current.reject(err))
+
+          return new Response(HTML_SUCCESS, {
             headers: { "Content-Type": "text/html" },
           })
         }
 
-        if (!code) {
-          const errorMsg = "Missing authorization code"
-          pendingOAuth?.reject(new Error(errorMsg))
-          pendingOAuth = undefined
-          return new Response(HTML_ERROR(errorMsg), {
-            status: 400,
-            headers: { "Content-Type": "text/html" },
-          })
+        if (url.pathname === "/cancel") {
+          finishPendingOAuth(new Error("Login cancelled"))
+          return new Response("Login cancelled", { status: 200 })
         }
 
-        if (!pendingOAuth || state !== pendingOAuth.state) {
-          const errorMsg = "Invalid state - potential CSRF attack"
-          pendingOAuth?.reject(new Error(errorMsg))
-          pendingOAuth = undefined
-          return new Response(HTML_ERROR(errorMsg), {
-            status: 400,
-            headers: { "Content-Type": "text/html" },
-          })
-        }
+        return new Response("Not found", { status: 404 })
+      },
+    })
 
-        const current = pendingOAuth
-        pendingOAuth = undefined
-
-        exchangeCodeForTokens(code, `http://localhost:${OAUTH_PORT}/auth/callback`, current.pkce)
-          .then((tokens) => current.resolve(tokens))
-          .catch((err) => current.reject(err))
-
-        return new Response(HTML_SUCCESS, {
-          headers: { "Content-Type": "text/html" },
-        })
-      }
-
-      if (url.pathname === "/cancel") {
-        pendingOAuth?.reject(new Error("Login cancelled"))
-        pendingOAuth = undefined
-        return new Response("Login cancelled", { status: 200 })
-      }
-
-      return new Response("Not found", { status: 404 })
-    },
-  })
-
-  log.info("codex oauth server started", { port: OAUTH_PORT })
-  return { port: OAUTH_PORT, redirectUri: `http://localhost:${OAUTH_PORT}/auth/callback` }
+    log.info("codex oauth server started", { port: OAUTH_PORT })
+    return { port: OAUTH_PORT, redirectUri, listening: true }
+  } catch (error) {
+    log.warn("codex oauth server unavailable, falling back to manual redirect capture", {
+      error: oauthErrorMessage(error),
+    })
+    return { port: OAUTH_PORT, redirectUri, listening: false }
+  }
 }
 
 function stopOAuthServer() {
@@ -510,6 +652,7 @@ function stopOAuthServer() {
 
 function waitForOAuthCallback(pkce: PkceCodes, state: string): Promise<TokenResponse> {
   return new Promise((resolve, reject) => {
+    finishPendingOAuth(new Error("OAuth flow restarted"))
     const timeout = setTimeout(
       () => {
         if (pendingOAuth) {
@@ -540,57 +683,10 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
   const previousCalls = new Map<string, Map<string, Record<string, unknown>>>()
   return {
     auth: {
-      provider: "openai",
+      provider: OPENAI_CODEX_PROVIDER,
       async loader(getAuth, provider) {
         const auth = await getAuth()
         if (auth.type !== "oauth") return {}
-
-        // Filter models to only allowed Codex models for OAuth
-        const allowedModels = new Set([
-          "gpt-5.1-codex-max",
-          "gpt-5.1-codex-mini",
-          "gpt-5.2",
-          "gpt-5.2-codex",
-          "gpt-5.3-codex",
-          "gpt-5.1-codex",
-        ])
-        for (const modelId of Object.keys(provider.models)) {
-          if (modelId.includes("codex")) continue
-          if (allowedModels.has(modelId)) continue
-          delete provider.models[modelId]
-        }
-
-        if (!provider.models["gpt-5.3-codex"]) {
-          const model = {
-            id: "gpt-5.3-codex",
-            providerID: "openai",
-            api: {
-              id: "gpt-5.3-codex",
-              url: "https://chatgpt.com/backend-api/codex",
-              npm: "@ai-sdk/openai",
-            },
-            name: "GPT-5.3 Codex",
-            capabilities: {
-              temperature: false,
-              reasoning: true,
-              attachment: true,
-              toolcall: true,
-              input: { text: true, audio: false, image: true, video: false, pdf: false },
-              output: { text: true, audio: false, image: false, video: false, pdf: false },
-              interleaved: false,
-            },
-            cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
-            limit: { context: 400_000, input: 272_000, output: 128_000 },
-            status: "active" as const,
-            options: {},
-            headers: {},
-            release_date: "2026-02-05",
-            variants: {} as Record<string, Record<string, any>>,
-            family: "gpt-codex",
-          }
-          model.variants = ProviderTransform.variants(model)
-          provider.models["gpt-5.3-codex"] = model
-        }
 
         // Zero out costs for Codex (included with ChatGPT subscription)
         for (const model of Object.values(provider.models)) {
@@ -598,6 +694,15 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
             input: 0,
             output: 0,
             cache: { read: 0, write: 0 },
+            ...(model.cost.experimentalOver200K
+              ? {
+                  experimentalOver200K: {
+                    input: 0,
+                    output: 0,
+                    cache: { read: 0, write: 0 },
+                  },
+                }
+              : {}),
           }
         }
 
@@ -617,9 +722,10 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               }
             }
 
-            const currentAuth = await getAuth().catch(() => undefined) ?? await Auth.get("openai").catch(() => undefined)
+            const currentAuth =
+              await getAuth().catch(() => undefined) ?? await Auth.get(OPENAI_CODEX_PROVIDER).catch(() => undefined)
             if (!currentAuth || currentAuth.type !== "oauth") {
-              throw new Error("OpenAI OAuth credentials not available for Codex request")
+              throw new Error("OpenAI Codex OAuth credentials not available for request")
             }
 
             // Cast to include accountId field
@@ -631,7 +737,7 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               const tokens = await refreshAccessToken(currentAuth.refresh)
               const newAccountId = extractAccountId(tokens) || authWithAccount.accountId
               await input.client.auth.set({
-                providerID: "openai",
+                providerID: OPENAI_CODEX_PROVIDER,
                 auth: {
                   type: "oauth",
                   refresh: tokens.refresh_token,
@@ -674,7 +780,7 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
                 ? requestInput
                 : new URL(typeof requestInput === "string" ? requestInput : requestInput.url)
             const url =
-              parsed.pathname.includes("/v1/responses") || parsed.pathname.includes("/chat/completions")
+              parsed.pathname.endsWith("/responses") || parsed.pathname.endsWith("/chat/completions")
                 ? new URL(CODEX_API_ENDPOINT)
                 : parsed
 
@@ -717,27 +823,47 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
           label: "ChatGPT Pro/Plus (browser)",
           type: "oauth",
           authorize: async () => {
-            const { redirectUri } = await startOAuthServer()
+            const preflight = await runOpenAIOAuthTlsPreflight()
+            if (!preflight.ok && preflight.kind === "tls-cert") {
+              throw new Error(formatOpenAIOAuthTlsPreflightFix(preflight))
+            }
+
+            const { redirectUri, listening } = await startOAuthServer()
             const pkce = await generatePKCE()
             const state = generateState()
             const authUrl = buildAuthorizeUrl(redirectUri, pkce, state)
-
-            const callbackPromise = waitForOAuthCallback(pkce, state)
+            const callbackPromise = listening ? waitForOAuthCallback(pkce, state) : undefined
 
             return {
               url: authUrl,
-              instructions: "Complete authorization in your browser. This window will close automatically.",
-              method: "auto" as const,
-              callback: async () => {
-                const tokens = await callbackPromise
-                stopOAuthServer()
-                const accountId = extractAccountId(tokens)
-                return {
-                  type: "success" as const,
-                  refresh: tokens.refresh_token,
-                  access: tokens.access_token,
-                  expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
-                  accountId,
+              instructions: [
+                "Complete OpenAI authorization in your local browser.",
+                listening
+                  ? "If localhost callback does not finish automatically, paste the full redirect URL or authorization code back here. If it does finish automatically, you can leave the field blank and submit."
+                  : "After sign-in, paste the full redirect URL or authorization code back here.",
+                `OpenAI OAuth uses ${redirectUri} for the callback.`,
+              ].join("\n"),
+              method: "code" as const,
+              callback: async (code) => {
+                const text = code.trim()
+                try {
+                  const tokens = text
+                    ? await exchangeCodeForTokens(parseOAuthCallbackInput(text, state), redirectUri, pkce)
+                    : await callbackPromise
+                  if (!tokens) {
+                    throw new Error("Paste the full redirect URL or authorization code to finish OpenAI OAuth")
+                  }
+                  const accountId = extractAccountId(tokens)
+                  return {
+                    type: "success" as const,
+                    refresh: tokens.refresh_token,
+                    access: tokens.access_token,
+                    expires: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+                    accountId,
+                  }
+                } finally {
+                  finishPendingOAuth()
+                  stopOAuthServer()
                 }
               },
             }
@@ -833,7 +959,7 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
       ],
     },
     "chat.headers": async (input, output) => {
-      if (input.model.providerID !== "openai") return
+      if (input.model.providerID !== OPENAI_CODEX_PROVIDER) return
       output.headers.originator = "opencorvus"
       output.headers["User-Agent"] =
         `opencorvus/${Installation.VERSION} (${os.platform()} ${os.release()}; ${os.arch()})`

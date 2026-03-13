@@ -12,20 +12,36 @@ type Assumption = {
   assumption: string
 }
 
+function normalized(value: string | undefined) {
+  const next = value?.trim().toLowerCase()
+  return next ? next : undefined
+}
+
 function enabled(value: string | undefined) {
-  return value === "1" || value === "true"
+  const next = normalized(value)
+  return next === "1" || next === "true"
+}
+
+function disabled(value: string | undefined) {
+  const next = normalized(value)
+  return next === "0" || next === "false"
 }
 
 export async function unattendedProject() {
+  if (disabled(process.env.OPENCORVUS_UNATTENDED)) return false
   if (enabled(process.env.OPENCORVUS_UNATTENDED)) return true
   const config = await Config.get().catch(() => undefined)
-  return config?.experimental?.unattended === true
+  if (config?.experimental?.unattended === false) return false
+  return true
 }
+
+export const UNATTENDED_AUTO_REPLY =
+  "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
 
 function assumptionText(item: ClarificationQuestion) {
   const text = item.default_assumption?.trim()
   if (text) return text
-  return "Use reasonable defaults consistent with the task request, continue execution, and document the assumption."
+  return `${UNATTENDED_AUTO_REPLY} Document the assumption you used.`
 }
 
 export function clarificationAssumptions(questions: ClarificationQuestion[]) {

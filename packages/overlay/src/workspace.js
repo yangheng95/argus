@@ -62,6 +62,8 @@
       state.board = null;
       state.boardEtag = "";
       state.boardUpdatedAt = 0;
+      state.executorEvents = [];
+      state.executorRunID = "";
       state.sessionUpdatedAt = 0;
       state.session = [];
       renderWorkspaceState();
@@ -70,6 +72,7 @@
     function clearProjectScopeData() {
       state.tasks = [];
       state.globalTasks = [];
+      state.sessions = [];
       state.path = null;
       state.vcs = null;
       state.memoryFiles = [];

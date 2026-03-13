@@ -149,6 +149,47 @@ describe("panel routes", () => {
     })
   })
 
+  test("POST /panel/message/stream emits live message deltas from structured output", async () => {
+    await using tmp = await tmpdir({ git: true })
+    installControlModel()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/panel/message/stream", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            surface: "panel",
+            text: "Create new session",
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.text()
+        const events = body
+          .split(/\r?\n\r?\n/)
+          .flatMap((block) => {
+            const data = block
+              .split(/\r?\n/)
+              .filter((line) => line.startsWith("data:"))
+              .map((line) => line.slice(5).trim())
+              .join("\n")
+            if (!data) return []
+            return [JSON.parse(data) as { type: string; delta?: string; result?: { message?: string } }]
+          })
+
+        expect(events.some((item) => item.type === "message_delta" && item.delta?.includes("Session created:"))).toBe(true)
+        expect(events.at(-1)?.type).toBe("done")
+        expect(events.at(-1)?.result?.message).toContain("Session created:")
+      },
+    })
+  })
+
   test("panel knowledge memory respects session-aware recall", async () => {
     await using tmp = await tmpdir({ git: true })
 

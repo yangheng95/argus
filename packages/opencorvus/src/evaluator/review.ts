@@ -19,7 +19,6 @@ import {
 
 const evaluatorLog = Log.create({ service: "evaluator" })
 const REVIEW_TIMEOUT_MS = 120_000
-const SPEC_CHECK_MAX_TOTAL = 80_000
 
 export async function uiReviewResult(
   config: z.infer<typeof CheckConfig>["ui_review"],
@@ -359,22 +358,7 @@ export async function specCheckResult(
     }
   }
 
-  const fileCount = delivery.diffs?.length ?? 0
-  const perFileLimit = fileCount <= 1 ? 60000 : fileCount <= 3 ? 20000 : 8000
-  const payload = specCheckPayload(delivery.diffs ?? [], perFileLimit)
-  if (payload.error) {
-    return softOrStrict({
-      mode,
-      name: "spec_check",
-      summary: "Spec check skipped because the delivery is too large for reliable model review.",
-      evidence: payload.error,
-      payload: {
-        available: true,
-        specID: activeSpecVersionID,
-        per_file_limit: perFileLimit,
-      },
-    })
-  }
+  const payload = specCheckPayload(delivery.diffs ?? [])
 
   const model = await evaluationModel()
   if (!model) {
@@ -532,25 +516,7 @@ function diffDigest(diffs: Snapshot.FileDiff[], limit: number) {
     .join("\n\n---\n\n")
 }
 
-function specCheckPayload(diffs: Snapshot.FileDiff[], perFileLimit: number) {
-  const oversized = diffs
-    .filter((item) => item.status !== "deleted")
-    .flatMap((item) =>
-      (item.after ?? "").length > perFileLimit
-        ? [`${item.file} (${(item.after ?? "").length} chars > ${perFileLimit})`]
-        : [],
-    )
-  if (oversized.length > 0) {
-    return {
-      error: `Changed files exceed the safe per-file review limit: ${oversized.join(", ")}.`,
-    }
-  }
-  const total = diffs.reduce((sum, item) => sum + (item.status === "deleted" ? item.file.length : (item.after ?? "").length), 0)
-  if (total > SPEC_CHECK_MAX_TOTAL) {
-    return {
-      error: `Changed file content totals ${total} chars, which exceeds the safe review limit of ${SPEC_CHECK_MAX_TOTAL}.`,
-    }
-  }
+function specCheckPayload(diffs: Snapshot.FileDiff[]) {
   return {
     text: diffs.length > 0
       ? diffs.map((item) =>

@@ -1,12 +1,12 @@
 import { Hono } from "hono"
 import { lazy } from "../../util/lazy"
 import { ExperimentalToolWorktreeRoutes } from "./experimental-tool-worktree"
-import { ExperimentalSessionResourceRoutes } from "./experimental-session-resource"
+import { ExperimentalResourceRoutes } from "./experimental-session-resource"
 import { ExperimentalScheduleRoutes } from "./experimental-schedule"
 
 export const ExperimentalRoutes = lazy(() =>
   new Hono()
     .route("/", ExperimentalToolWorktreeRoutes())
-    .route("/", ExperimentalSessionResourceRoutes())
+    .route("/", ExperimentalResourceRoutes())
     .route("/", ExperimentalScheduleRoutes()),
 )

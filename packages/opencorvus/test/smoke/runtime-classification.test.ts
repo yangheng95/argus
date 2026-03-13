@@ -4,7 +4,7 @@
  */
 import { describe, test, expect } from "bun:test"
 import type { EvaluatorAnalysisType } from "@/evaluator/agent"
-import { FailureClassification, EvaluatorAnalysis, GoalAssessment, ReplanGuidance } from "@/evaluator/agent"
+import { FailureClassification, EvaluatorAnalysis, GoalAssessment, ReplanGuidance, parseEvaluatorAnalysis } from "@/evaluator/agent"
 
 describe("FailureClassification enum", () => {
   test("all classification values are valid", () => {
@@ -78,6 +78,38 @@ describe("EvaluatorAnalysis schema validation", () => {
         goal_statuses: [],
       }),
     ).toThrow()
+  })
+
+  test("repairs truncated evaluator JSON and fills missing goal assessments", () => {
+    const raw = [
+      "```json",
+      "{",
+      '  "verdict": "rejected",',
+      '  "classification": "evaluation",',
+      '  "summary": "Evaluator output was cut off",',
+      '  "goal_statuses": [',
+      "    {",
+      '      "goal_index": 0,',
+      '      "status": "failed",',
+      '      "evidence": "src\\\\service.ts:12\\\\nAssertion failed",',
+      '      "reasoning": "Implementation does not satisfy the goal"',
+      "    }",
+      "  ],",
+      '  "replan_guidance": {',
+      '    "root_cause": "src\\\\service.ts returns the wrong value",',
+      '    "what_failed": "unit.test.ts assertion failed",',
+      '    "suggested_strategy": "Fix the return value and re-run bun test",',
+      '    "avoid_approaches": ["Do not change the test expectation"]',
+      "  }",
+    ].join("\n")
+
+    const parsed = parseEvaluatorAnalysis(raw, 2)
+    expect(parsed.verdict).toBe("rejected")
+    expect(parsed.goal_statuses).toHaveLength(2)
+    expect(parsed.goal_statuses[0]?.status).toBe("failed")
+    expect(parsed.goal_statuses[1]?.status).toBe("failed")
+    expect(parsed.goal_statuses[1]?.evidence).toContain("truncated")
+    expect(parsed.replan_guidance?.suggested_strategy).toContain("bun test")
   })
 })
 

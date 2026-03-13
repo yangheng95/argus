@@ -15,7 +15,7 @@ const SESSION_EVENT_DEBOUNCE = 150;
 const ZOOM_STEP = 0.1;
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
-const MIN_WINDOW_OPACITY = 0.3;
+const MIN_WINDOW_OPACITY = 0.5;
 const CLOSE_HINT_KEY = "oc_close_hint_seen";
 const OPACITY_MIGRATION_KEY = "oc_opacity_migrated_v1";
 const LEGACY_WINDOW_OPACITY = 0.3;
@@ -126,6 +126,8 @@ const state = {
   sessions: [],
   managedSession: null,
   session: [],
+  executorEvents: [],
+  executorRunID: "",
   sessionLoading: null,
   sessionQueued: false,
   sessionKick: null,
@@ -776,7 +778,8 @@ function sanitizeOpacity(value) {
 function shouldMigrateOpacity(value) {
   if (typeof localStorage === "undefined") return false;
   if (localStorage.getItem(OPACITY_MIGRATION_KEY) === "true") return false;
-  return sanitizeOpacity(value) === LEGACY_WINDOW_OPACITY;
+  const next = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  return Number.isFinite(next) && next <= LEGACY_WINDOW_OPACITY;
 }
 
 const systemThemeMedia =
@@ -1133,15 +1136,7 @@ async function loadOverlaySettings() {
 
 async function persistOverlaySettings() {
   const sessionID = currentSessionID() || "";
-  const settings = sessionID
-    ? {
-        ...bootstrapSettings,
-        serverUrl: state.serverUrl,
-        autoServer: state.autoServer,
-        password: state.password,
-        username: state.username,
-      }
-    : bootstrapOverlaySettings();
+  const settings = bootstrapOverlaySettings();
   bootstrapSettings = {
     ...bootstrapSettings,
     ...settings,
@@ -1412,8 +1407,9 @@ async function deleteSessionApi(sessionID, opts = {}, input) {
 }
 
 function panelRequestBody(text, metadata = {}) {
-  const sessionID = currentSessionID() || undefined;
-  const taskID = sessionID ? undefined : state.selectedTaskID || undefined;
+  const taskID = state.selectedTaskID || undefined;
+  const selectedSessionID = currentSessionID() || undefined;
+  const sessionID = taskID ? undefined : selectedSessionID;
   return {
     surface: "panel",
     text,
@@ -1423,10 +1419,19 @@ function panelRequestBody(text, metadata = {}) {
     allow_create: true,
     metadata: {
       selectedTaskID: taskID,
-      selectedSessionID: sessionID,
+      selectedSessionID,
       ...metadata,
     },
   };
+}
+
+function panelResultNavigates(result) {
+  if (!result || typeof result !== "object") return false;
+  const action = result.local_action?.type;
+  if (action === "select_task" || action === "select_session") return true;
+  if (result.task_id) return true;
+  if (result.session_id && !state.selectedTaskID) return true;
+  return false;
 }
 
 async function applyPanelResult(result) {
@@ -1517,6 +1522,8 @@ async function panelMessageStream(text, metadata) {
   const decoder = new TextDecoder();
   let buf = "";
   let result = null;
+  let live = "";
+  let streamed = false;
   const consume = (chunk, flush = false) => {
     buf += chunk;
     const blocks = buf.split(/\r?\n\r?\n/);
@@ -1534,8 +1541,18 @@ async function panelMessageStream(text, metadata) {
       if (!data) continue;
       try {
         const ev = JSON.parse(data);
-        if (ev.type === "tool" && placeholder) {
-          placeholder.parts[0].text = `${ev.tool}...`;
+        if (ev.type === "tool" && placeholder && !streamed) {
+          placeholder.parts[0].text = t("chat.thinking");
+          renderSession();
+        } else if (ev.type === "message_delta" && placeholder && typeof ev.delta === "string") {
+          streamed = true;
+          live += ev.delta;
+          placeholder.parts[0].text = live;
+          renderSession();
+        } else if (ev.type === "message_replace" && placeholder && typeof ev.text === "string") {
+          streamed = true;
+          live = ev.text;
+          placeholder.parts[0].text = live;
           renderSession();
         } else if (ev.type === "done") {
           result = ev.result;
@@ -1555,20 +1572,30 @@ async function panelMessageStream(text, metadata) {
 
   if (!result) return null;
 
+  if (panelResultNavigates(result)) {
+    await applyPanelResult(result);
+    return result;
+  }
+
   // Show final message with typewriter, then apply side-effects
   if (placeholder && result.message) {
-    const msg = result.message;
-    let i = 0;
-    await new Promise((resolve) => {
-      const step = () => {
-        i = Math.min(i + 2 + Math.floor(Math.random() * 2), msg.length);
-        placeholder.parts[0].text = msg.slice(0, i);
-        renderSession();
-        if (i >= msg.length) { resolve(); return; }
+    if (streamed) {
+      placeholder.parts[0].text = result.message;
+      renderSession();
+    } else {
+      const msg = result.message;
+      let i = 0;
+      await new Promise((resolve) => {
+        const step = () => {
+          i = Math.min(i + 2 + Math.floor(Math.random() * 2), msg.length);
+          placeholder.parts[0].text = msg.slice(0, i);
+          renderSession();
+          if (i >= msg.length) { resolve(); return; }
+          requestAnimationFrame(step);
+        };
         requestAnimationFrame(step);
-      };
-      requestAnimationFrame(step);
-    });
+      });
+    }
   }
 
   await applyPanelResult(result);
@@ -1965,6 +1992,66 @@ function providerAuthMethods(providerID) {
   });
 }
 
+function providerAuthPrompt(prompt) {
+  if (!record(prompt) || typeof prompt.key !== "string" || typeof prompt.message !== "string") return null;
+  if (prompt.type === "text") {
+    return {
+      type: "text",
+      key: prompt.key,
+      message: prompt.message,
+      placeholder: typeof prompt.placeholder === "string" ? prompt.placeholder : "",
+    };
+  }
+  if (prompt.type !== "select" || !Array.isArray(prompt.options)) return null;
+  const options = prompt.options.flatMap((item) => {
+    if (!record(item) || typeof item.label !== "string" || typeof item.value !== "string") return [];
+    return [{
+      label: item.label,
+      value: item.value,
+      ...(typeof item.hint === "string" ? { hint: item.hint } : {}),
+    }];
+  });
+  if (!options.length) return null;
+  return {
+    type: "select",
+    key: prompt.key,
+    message: prompt.message,
+    options,
+  };
+}
+
+async function providerAuthInputs(providerID, methodIndex) {
+  const inputs = {};
+  while (true) {
+    const prompts = await apiJson(`provider/${providerID}/auth/prompts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ method: methodIndex, inputs }),
+      signal: AbortSignal.timeout(300000),
+    });
+    const list = Array.isArray(prompts) ? prompts.map(providerAuthPrompt).filter(Boolean) : [];
+    const prompt = list.find((item) => !Object.hasOwn(inputs, item.key));
+    if (!prompt) return inputs;
+    const value = prompt.type === "select"
+      ? await nativeSelect(prompt.message, {
+        title: providerLabel(providerID),
+        selectLabel: prompt.message,
+        options: prompt.options,
+        okLabel: t("common.ok"),
+        cancelLabel: t("common.cancel"),
+      })
+      : await nativePrompt(prompt.message, {
+        title: providerLabel(providerID),
+        inputLabel: prompt.message,
+        inputPlaceholder: prompt.placeholder || "",
+        okLabel: t("common.submit"),
+        cancelLabel: t("common.cancel"),
+      });
+    if (value == null) return null;
+    inputs[prompt.key] = String(value).trim();
+  }
+}
+
 function providerPreferredOauthMethod(providerID) {
   const methods = providerAuthMethods(providerID)
     .map((item, index) => ({ ...item, index }))
@@ -1991,10 +2078,16 @@ async function authorizeProvider(providerID, methodIndex) {
     return false;
   }
 
+  const inputs = await providerAuthInputs(providerID, match.index);
+  if (inputs == null) {
+    state.providerAuthDismissed[providerID] = true;
+    return false;
+  }
+
   const authorization = await apiJson(`provider/${providerID}/oauth/authorize`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ method: match.index }),
+    body: JSON.stringify({ method: match.index, inputs }),
     signal: AbortSignal.timeout(300000),
   });
   if (!record(authorization) || typeof authorization.url !== "string" || typeof authorization.method !== "string") {
@@ -2009,7 +2102,7 @@ async function authorizeProvider(providerID, methodIndex) {
       {
         title: t("llm.title"),
         inputLabel: match.label,
-        inputPlaceholder: "Authorization code",
+        inputPlaceholder: "Redirect URL or authorization code (leave blank if it auto-completes)",
         okLabel: t("common.submit"),
         cancelLabel: t("common.cancel"),
       },
@@ -2039,6 +2132,28 @@ async function authorizeProvider(providerID, methodIndex) {
   return true;
 }
 
+async function executeProviderAuth(providerID, methodIndex, inputs) {
+  await apiJson(`provider/${providerID}/auth/execute`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method: methodIndex, inputs }),
+    signal: AbortSignal.timeout(300000),
+  });
+  delete state.providerAuthDismissed[providerID];
+  return true;
+}
+
+async function runProviderAuthMethod(providerID, method) {
+  if (method.type === "oauth") return authorizeProvider(providerID, method.index);
+  const inputs = await providerAuthInputs(providerID, method.index);
+  if (inputs == null) return false;
+  if (Object.keys(inputs).length === 0) {
+    dom.llmApiKey?.focus();
+    return "input";
+  }
+  return executeProviderAuth(providerID, method.index, inputs);
+}
+
 function renderLlmAuthAction(providerID) {
   if (!dom.btnLlmAuthAction) return;
   const methods = providerAuthMethods(providerID);
@@ -2055,9 +2170,7 @@ async function authenticateSelectedProvider() {
   const providerID = dom.llmProvider?.value?.trim() || "";
   const methods = providerAuthMethods(providerID).map((item, index) => ({ ...item, index }));
   if (!providerID || methods.length === 0) return false;
-  if (methods.length === 1 && methods[0]?.type === "oauth") {
-    return authorizeProvider(providerID, methods[0].index);
-  }
+  if (methods.length === 1 && methods[0]) return runProviderAuthMethod(providerID, methods[0]);
   const value = await nativeSelect(t("llm.auth_choose_method"), {
     title: providerLabel(providerID),
     selectLabel: t("llm.auth_method"),
@@ -2070,9 +2183,7 @@ async function authenticateSelectedProvider() {
   if (value == null) return false;
   const method = methods.find((item) => String(item.index) === value);
   if (!method) return false;
-  if (method.type === "oauth") return authorizeProvider(providerID, method.index);
-  dom.llmApiKey?.focus();
-  return true;
+  return runProviderAuthMethod(providerID, method);
 }
 
 function providerState(providerID, configOverride) {
@@ -2834,6 +2945,9 @@ async function loadMeta() {
     const [path, vcs] = await Promise.all([apiJson("path"), apiJson("vcs")]);
     if (epoch !== state.directoryEpoch) return;
     state.path = path;
+    if (!state.directory && typeof path?.directory === "string" && path.directory.trim()) {
+      setWorkspaceDirectory(path.directory.trim(), "auto");
+    }
     state.vcs = vcs;
     renderMeta();
   } catch (e) {
@@ -2968,7 +3082,7 @@ function resetProjectScope() {
 }
 
 async function reloadProjectScope(options = {}) {
-  const includeSessions = options.includeSessions === true;
+  const includeSessions = options.includeSessions !== false;
   const restoreWorkspace = options.restoreWorkspace !== false;
   await ensureWorkspaceDirectory();
   const jobs = [loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()];
@@ -2980,6 +3094,7 @@ async function reloadProjectScope(options = {}) {
 async function ensureWorkspaceDirectory() {
   if (activeDirectory()) return activeDirectory();
   await loadMeta();
+  if (!state.directory && state.path?.directory) state.directory = state.path.directory;
   return activeDirectory();
 }
 
@@ -3201,6 +3316,26 @@ function clipText(value, limit = 80) {
   return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
 }
 
+function clipBlock(value, limit = 280) {
+  const text = String(value || "").replace(/\r\n?/g, "\n").trim();
+  if (!text) return "";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
+}
+
+function shellQuote(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (/^[\w./:=@-]+$/.test(text)) return text;
+  return JSON.stringify(text);
+}
+
+function commandLine(value) {
+  if (Array.isArray(value)) return value.map(shellQuote).filter(Boolean).join(" ").trim();
+  if (typeof value === "string") return value.trim();
+  return "";
+}
+
 function sortedTasks(data) {
   return [...(Array.isArray(data?.tasks) ? data.tasks : [])]
     .sort((a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0));
@@ -3230,22 +3365,28 @@ function visibleSession(session) {
   if (session.parentID) return false;
   if (isPanelControlSession(session)) return false;
   if (isDefaultSessionTitle(session.title) && isUnusedSession(session)) return false;
+  if (isDeletingManagedSession(session.id)) return false;
   return true;
 }
 
 function displaySessions() {
   const list = state.sessions.filter(visibleSession);
   const current = state.managedSession;
-  if (!current?.id || list.some((item) => item?.id === current.id)) return list;
+  if (!current?.id || !visibleSession(current) || list.some((item) => item?.id === current.id)) return list;
   return [current, ...list];
 }
 
 const SESSION_DELETE_CONFIRM_MS = 2500;
 let pendingSessionDeleteID = "";
 let pendingSessionDeleteTimer = null;
+const deletingSessionIDs = new Set();
 
 function isPendingSessionDelete(sessionID) {
   return !!sessionID && pendingSessionDeleteID === sessionID;
+}
+
+function isDeletingManagedSession(sessionID) {
+  return !!sessionID && deletingSessionIDs.has(sessionID);
 }
 
 function clearPendingSessionDelete(sessionID) {
@@ -3299,14 +3440,18 @@ function sessionRow(item, meta = "") {
       title="${escapeHtml(deleteLabel)}"
       aria-label="${escapeHtml(deleteLabel)}"
     >
-      <span class="session-row-delete-icon" aria-hidden="true">
+      <span class="session-row-delete-icon" data-icon="delete" aria-hidden="true">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M3.5 4.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           <path d="M6.5 2.75h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           <path d="M5.25 4.5v7.25a1 1 0 001 1h3.5a1 1 0 001-1V4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </span>
-      <span class="session-row-delete-label">${escapeHtml(deleteLabel)}</span>
+      <span class="session-row-delete-icon" data-icon="confirm" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M4 8.25l2.5 2.5L12 5.25" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
     </button>
   </div>`;
 }
@@ -3433,7 +3578,7 @@ async function loadTasks() {
   try {
     const data = await apiJson("tasks");
     if (epoch !== state.directoryEpoch) return;
-    state.tasks = sortedTasks(data);
+    state.tasks = sortedTasks(data).filter((item) => !isDeletingManagedSession(item?.task?.sessionID));
     if (state.selectedTaskID && !state.tasks.some((item) => item.task.id === state.selectedTaskID)) {
       enterEmptyWorkspace();
       renderClear();
@@ -3516,8 +3661,11 @@ async function loadBoard() {
       state.board = await res.json();
       state.boardUpdatedAt = Date.now();
       renderBoard();
-      await loadChanges();
-      if (!state.chatSessionID) await syncManagedSession(currentTaskSessionID());
+      await Promise.all([
+        loadChanges(),
+        loadExecutorEvents(state.board?.task?.activeRunID || ""),
+        !state.chatSessionID ? syncManagedSession(currentTaskSessionID()) : Promise.resolve(),
+      ]);
     } catch (e) {
       AppLog.warn("board", "loadBoard failed", { error: String(e) });
     } finally {
@@ -3825,6 +3973,28 @@ function handleEventStreamEvent(event) {
     part.text += properties.delta;
     state.sessionUpdatedAt = Date.now();
     renderSession();
+    return;
+  }
+  if (type === "run.progress") {
+    appendExecutorEvent({
+      id: event.event_id,
+      runID: event.run_id || properties.runID,
+      type: properties.type,
+      summary: event.summary || properties.summary,
+      payload: properties,
+      timestamp: event.timestamp,
+    });
+    return;
+  }
+  if (type === "run.output") {
+    appendExecutorEvent({
+      id: event.event_id,
+      runID: event.run_id || properties.runID,
+      type: "message_delta",
+      summary: typeof properties.text === "string" ? properties.text : event.summary,
+      payload: properties,
+      timestamp: event.timestamp,
+    });
     return;
   }
   if (
@@ -4204,8 +4374,8 @@ function overviewActionsHtml(controls) {
 
 function overviewFailureHtml(failure) {
   if (!failure) return "";
-  return `<div class="interaction-alert" style="border-color:rgba(248,113,113,0.15);background:var(--bad-dim)">
-    <div class="interaction-title" style="color:var(--bad)">${escapeHtml(failure.title)}</div>
+  return `<div class="interaction-alert overview-failure">
+    <div class="interaction-title">${escapeHtml(failure.title)}</div>
     <div class="interaction-body md-content">${renderMarkdown(failure.summary)}</div>
   </div>`;
 }
@@ -4229,10 +4399,10 @@ function renderOverview(overview, task) {
 
   body.innerHTML = `
     <div class="plan-summary md-content">${renderMarkdown(overview.headline)}</div>
-    <div class="md-content" style="font-size:var(--ui-font-meta);color:var(--text);margin-top:4px;line-height:1.5">${renderMarkdown(overview.summary)}</div>
-    ${overview.nextStep ? `<div style="margin-top:6px;padding:5px 8px;border-radius:var(--radius);background:var(--accent-dim);border-left:2px solid var(--accent);font-size:var(--ui-font-small);color:var(--text)">
-      <strong style="color:var(--text-strong)">${escapeHtml(overview.nextStep.title)}</strong>
-      ${overview.nextStep.detail ? `<div class="md-content" style="margin-top:2px;color:var(--text-soft)">${renderMarkdown(overview.nextStep.detail)}</div>` : ""}
+    <div class="overview-summary md-content">${renderMarkdown(overview.summary)}</div>
+    ${overview.nextStep ? `<div class="overview-next-step">
+      <strong class="overview-next-step-title">${escapeHtml(overview.nextStep.title)}</strong>
+      ${overview.nextStep.detail ? `<div class="overview-next-step-detail md-content">${renderMarkdown(overview.nextStep.detail)}</div>` : ""}
     </div>` : ""}
     ${overviewFailureHtml(overview.currentFailure)}
     ${overviewActionsHtml(overview.controls || {})}
@@ -4578,19 +4748,13 @@ function renderGoals(cards) {
   const total = cards.length;
   if (total === 0) {
     dom.goalsBadge.textContent = "";
-    dom.goalsBody.innerHTML = `${goalToolbar()}<p class="empty-hint">${escapeHtml(t("empty.goals"))}</p>`;
+    dom.goalsBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.goals"))}</p>`;
     return;
   }
   dom.goalsBadge.textContent = `${passed}/${total}`;
   dom.goalsBadge.dataset.tone = passed === total ? "good" : passed > 0 ? "warn" : "";
 
-  dom.goalsBody.innerHTML = `${goalToolbar()}<div class="goals-list">${goalItemsHtml(cards)}</div>`;
-}
-
-function goalToolbar() {
-  return `<div class="section-actions compact">
-    <button type="button" class="btn btn-primary mini" data-goal-action="create">${escapeHtml(t("goal.new"))}</button>
-  </div>`;
+  dom.goalsBody.innerHTML = `<div class="goals-list">${goalItemsHtml(cards)}</div>`;
 }
 
 function goalIcon(status) {
@@ -5042,34 +5206,19 @@ function isCriteriaEnabled(item) {
 // ── Session Manager ──
 
 async function listManagedSessions(limit = 200) {
-  const out = [];
-  const seen = new Set();
-  let cursor = "";
-  while (out.length < limit) {
-    const params = new URLSearchParams();
-    params.set("roots", "true");
-    params.set("limit", String(Math.min(100, limit - out.length)));
-    if (cursor) params.set("cursor", cursor);
-    const res = await apiFetch(`experimental/session?${params.toString()}`, undefined, { directory: false });
-    const data = await res.json();
-    const list = Array.isArray(data) ? data : [];
-    for (const item of list) {
-      const id = item?.id;
-      if (id && seen.has(id)) continue;
-      if (id) seen.add(id);
-      out.push(item);
-    }
-    const next = res.headers.get("x-next-cursor");
-    if (!next || list.length === 0) break;
-    cursor = next;
-  }
-  return out;
+  const params = new URLSearchParams();
+  params.set("roots", "true");
+  params.set("limit", String(limit));
+  const data = await apiJson(`session?${params.toString()}`);
+  return Array.isArray(data) ? data.filter((item) => !item?.time?.archived) : [];
 }
 
 async function loadManagedSessions() {
   try {
     const data = await listManagedSessions();
-    state.sessions = [...data].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
+    state.sessions = [...data]
+      .filter((item) => !isDeletingManagedSession(item?.id))
+      .sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
     if (pendingSessionDeleteID && !displaySessions().some((item) => item?.id === pendingSessionDeleteID)) {
       clearPendingSessionDelete();
       return;
@@ -5078,6 +5227,20 @@ async function loadManagedSessions() {
   } catch (e) {
     AppLog.error("ui", "Failed to load sessions", { error: String(e) });
   }
+}
+
+function storeManagedSession(session, options = {}) {
+  if (!session?.id) return;
+  state.sessions = [session, ...state.sessions.filter((item) => item?.id !== session.id)]
+    .filter((item) => !isDeletingManagedSession(item?.id))
+    .sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
+  if (options.select === false) {
+    renderManagedSessionList();
+    return;
+  }
+  state.managedSession = session;
+  renderWorkspaceState();
+  renderManagedSessionList();
 }
 
 async function selectManagedSession(sessionID, input = {}) {
@@ -5093,21 +5256,19 @@ async function selectManagedSession(sessionID, input = {}) {
     typeof input.directory === "string" && input.directory
       ? input.directory
       : session?.directory || state.directory;
+  const settings = syncSessionOverlaySettings(sessionID);
+  if (session?.id) storeManagedSession(session);
   try {
-    state.managedSession = await apiJson(`session/${sessionID}`, undefined, { directory: dir });
+    const next = await apiJson(`session/${sessionID}`, undefined, { directory: dir });
+    storeManagedSession(next);
     AppLog.info("session", "Loaded managed session", {
       sessionID,
-      session: state.managedSession,
+      session: next,
     });
-    renderWorkspaceState();
-    renderManagedSessionList();
-    await syncSessionOverlaySettings(sessionID);
+    await settings;
   } catch (e) {
     if (session) {
-      state.managedSession = session;
-      renderWorkspaceState();
-      renderManagedSessionList();
-      await syncSessionOverlaySettings(sessionID);
+      await settings;
       return;
     }
     AppLog.error("ui", "Failed to load managed session", { error: String(e) });
@@ -5135,8 +5296,15 @@ async function createManagedSession() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    await openManagedSession(session?.id || "", session || null);
-    await loadManagedSessions();
+    const dir = session?.directory || activeDirectory();
+    storeManagedSession(session);
+    enterSessionWorkspace(session?.id || "", { directory: dir, managedSession: session || null });
+    renderClear();
+    await Promise.all([
+      selectManagedSession(session?.id || "", { session, directory: dir }),
+      loadConversation(),
+      loadMemory(),
+    ]);
   } catch (e) {
     AppLog.error("ui", "Failed to create session", { error: String(e) });
     await nativeMessage(errorText("session.create_failed", e), {
@@ -5146,20 +5314,67 @@ async function createManagedSession() {
   }
 }
 
+function managedSessionDeleteSnapshot(sessionID, session) {
+  return {
+    active: false,
+    sessionID,
+    session: session || null,
+    selectedTaskID: state.selectedTaskID || "",
+    selectedSessionID: currentSessionID(),
+  };
+}
+
+async function settleManagedSessionDelete() {
+  if (state.sessions[0]?.id) {
+    await openManagedSession(state.sessions[0].id);
+    return;
+  }
+  await selectTask("");
+}
+
+async function restoreManagedSessionDelete(snapshot) {
+  deletingSessionIDs.delete(snapshot.sessionID);
+  await Promise.all([loadTasks(), loadManagedSessions()]);
+  if (!snapshot.active) return;
+  if (snapshot.selectedTaskID && state.tasks.some((item) => item?.task?.id === snapshot.selectedTaskID)) {
+    await selectTask(snapshot.selectedTaskID, {
+      sessionID: snapshot.selectedSessionID,
+      managedSession: snapshot.session,
+    });
+    return;
+  }
+  if (snapshot.selectedSessionID && displaySessions().some((item) => item?.id === snapshot.selectedSessionID)) {
+    await openManagedSession(snapshot.selectedSessionID, snapshot.session);
+    return;
+  }
+  if (state.sessions[0]?.id) {
+    await openManagedSession(state.sessions[0].id);
+    return;
+  }
+  await selectTask("");
+}
+
 async function deleteManagedSession(sessionID = state.managedSession?.id) {
-  if (!sessionID) return;
+  if (!sessionID || isDeletingManagedSession(sessionID)) return;
   const session = sessionItem(sessionID);
+  const snapshot = managedSessionDeleteSnapshot(sessionID, session);
+  const dir = session?.directory || state.directory;
   clearPendingSessionDelete(sessionID);
+  deletingSessionIDs.add(sessionID);
+  const active = removeManagedSession(sessionID);
+  snapshot.active = active;
   try {
-    await deleteSessionApi(sessionID, { deleteTasks: true }, { directory: session?.directory || state.directory });
-    if (!removeManagedSession(sessionID)) return;
-    if (state.sessions[0]?.id) {
-      await openManagedSession(state.sessions[0].id);
-      return;
-    }
-    await selectTask("");
+    const request = deleteSessionApi(sessionID, { deleteTasks: true }, { directory: dir }).then(
+      () => null,
+      (error) => error,
+    );
+    if (active) await settleManagedSessionDelete();
+    const error = await request;
+    deletingSessionIDs.delete(sessionID);
+    if (error) throw error;
   } catch (e) {
     AppLog.error("ui", "Failed to delete session", { error: String(e) });
+    await restoreManagedSessionDelete(snapshot);
     await nativeMessage(errorText("session.delete_failed", e), {
       title: t("session.delete_title"),
       kind: "error",
@@ -5168,7 +5383,7 @@ async function deleteManagedSession(sessionID = state.managedSession?.id) {
 }
 
 async function requestManagedSessionDelete(sessionID) {
-  if (!sessionID) return;
+  if (!sessionID || isDeletingManagedSession(sessionID)) return;
   if (!isPendingSessionDelete(sessionID)) {
     armPendingSessionDelete(sessionID);
     return;
@@ -5265,14 +5480,16 @@ async function openManagedSession(sessionID, input) {
   }
   if (task?.task?.id) {
     await selectTask(task.task.id, { sessionID, managedSession: session });
-    await selectManagedSession(sessionID, { session, directory: dir });
-    await loadMemory();
+    await Promise.all([selectManagedSession(sessionID, { session, directory: dir }), loadMemory()]);
     return;
   }
   enterSessionWorkspace(sessionID, { managedSession: session });
   renderClear();
-  await selectManagedSession(sessionID, { session, directory: dir });
-  await Promise.all([loadConversation(), loadMemory()]);
+  await Promise.all([
+    selectManagedSession(sessionID, { session, directory: dir }),
+    loadConversation(),
+    loadMemory(),
+  ]);
 }
 
 // ── Interactions ──
@@ -5313,7 +5530,10 @@ function showInteractionError(id, msg) {
 function detectSource(msg) {
   const parts = msg.parts || [];
   for (const part of parts) {
-    if (part.type === "text" && part.source) return part.source;
+    if (part.type !== "text") continue;
+    if (part.audience && part.audience.ui === false) continue;
+    if (part.kind === "trace" && !part.audience?.ui) continue;
+    if (part.source) return part.source;
   }
   return undefined;
 }
@@ -5425,6 +5645,255 @@ function syntheticTextMessage(role, time, text) {
     info: { role, time: { created: Number.isFinite(time) ? time : Date.now() } },
     parts: [{ type: "text", text }],
   };
+}
+
+function executorEventKind(type) {
+  const text = String(type || "").trim().toLowerCase();
+  if (!text) return "status";
+  if (text.includes("tool")) return text.includes("result") ? "tool_result" : "tool_call";
+  if (text.includes("reason")) return "reasoning_delta";
+  if (text.includes("plan")) return "plan_delta";
+  if (text.includes("diff")) return "diff_delta";
+  if (text.includes("approval")) return "approval_request";
+  if (text.includes("input")) return "input_request";
+  if (text.includes("mcp")) return "mcp";
+  if (text.includes("command")) return "command";
+  if (text.includes("error")) return "error";
+  if (text.includes("done") || text.includes("completed")) return "done";
+  if (text.includes("delta") || text.includes("message")) return "message_delta";
+  return "status";
+}
+
+function executorEventEntry(raw) {
+  const kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind(raw?.type);
+  const payload =
+    record(raw?.payload) && record(raw.payload.payload)
+      ? { ...raw.payload, ...raw.payload.payload }
+      : record(raw?.payload)
+        ? raw.payload
+        : {};
+  const summary = typeof raw?.summary === "string"
+    ? raw.summary.trim()
+    : typeof raw?.text === "string"
+      ? raw.text.trim()
+      : typeof payload.summary === "string"
+        ? payload.summary.trim()
+        : typeof payload.text === "string"
+          ? payload.text.trim()
+      : "";
+  const created = Number(raw?.time?.created || raw?.timestamp || Date.now());
+  if (!summary && Object.keys(payload).length === 0) return null;
+  const marker =
+    typeof payload.id === "string" && payload.id
+      ? payload.id
+      : typeof payload.name === "string" && payload.name
+        ? payload.name
+        : typeof raw?.type === "string" && raw.type
+          ? raw.type
+          : "event";
+  return {
+    id: typeof raw?.id === "string" && raw.id ? raw.id : `executor:${kind}:${created}:${summary || marker}`,
+    runID: typeof raw?.runID === "string"
+      ? raw.runID
+      : typeof raw?.run_id === "string"
+        ? raw.run_id
+        : typeof raw?.payload?.runID === "string"
+          ? raw.payload.runID
+          : "",
+    kind,
+    summary,
+    payload,
+    time: { created: Number.isFinite(created) ? created : Date.now() },
+  };
+}
+
+function genericExecutorSummary(event) {
+  const summary = String(event?.summary || "").trim().toLowerCase();
+  if (!summary) return true;
+  if (event.kind === "tool_call") return /^(tool call|shell command):\s*\S+$/.test(summary);
+  if (event.kind === "tool_result") {
+    return summary.startsWith("tool result:") ||
+      [
+        "shell command completed",
+        "structured output returned",
+        "approval resolved",
+        "user input received",
+      ].includes(summary);
+  }
+  if (event.kind === "command") {
+    return [
+      "command",
+      "running command",
+      "command started",
+      "command completed",
+    ].includes(summary);
+  }
+  return false;
+}
+
+function executorCommand(event) {
+  if (!record(event?.payload)) return "";
+  const input = record(event.payload.input) ? event.payload.input : {};
+  return commandLine(
+    event.payload.command ??
+    event.payload.argv ??
+    event.payload.cmd ??
+    input.command ??
+    input.argv ??
+    input.cmd ??
+    "",
+  );
+}
+
+function executorOutput(event) {
+  if (!record(event?.payload)) return "";
+  const output = event.payload.output;
+  if (typeof output === "string") return clipBlock(output);
+  if (record(output)) {
+    const text = [
+      output.output,
+      output.stdout,
+      output.stderr,
+      output.result,
+      output.message,
+      output.content,
+    ]
+      .filter((item) => typeof item === "string" && item.trim())
+      .join("\n");
+    if (text) return clipBlock(text);
+    return clipBlock(stringifyLogValue(output, 2));
+  }
+  if (typeof event.payload.text === "string") return clipBlock(event.payload.text);
+  return "";
+}
+
+function executorCall(events, index, event) {
+  const id = typeof event?.payload?.id === "string" ? event.payload.id : "";
+  if (!id || !Array.isArray(events) || index <= 0) return null;
+  return [...events.slice(0, index)]
+    .reverse()
+    .find((item) =>
+      item?.kind === "tool_call" &&
+      item?.payload?.id === id &&
+      (!item.runID || !event.runID || item.runID === event.runID),
+    ) || null;
+}
+
+function executorText(event, events = [], index = -1) {
+  const summary = String(event?.summary || "").trim();
+  const command = executorCommand(event);
+  const output = executorOutput(event);
+
+  if (event?.kind === "tool_call") {
+    if (!command) return summary;
+    if (genericExecutorSummary(event)) return command;
+    if (summary.includes(command)) return summary;
+    return [summary, command].filter(Boolean).join("\n");
+  }
+
+  if (event?.kind === "command") {
+    const lines = [];
+    if (summary && (!genericExecutorSummary(event) || !command)) lines.push(summary);
+    if (command && !lines.some((item) => item.includes(command))) lines.push(command);
+    if (output) lines.push(output);
+    if (lines.length > 0) return lines.join("\n");
+    return summary;
+  }
+
+  if (event?.kind === "tool_result") {
+    const call = executorCall(events, index, event);
+    const linked = command || executorCommand(call);
+    const lines = [];
+    if (summary && (!genericExecutorSummary(event) || (!linked && !output))) lines.push(summary);
+    if (linked && !lines.some((item) => item.includes(linked))) lines.push(linked);
+    if (output) lines.push(output);
+    if (lines.length > 0) return lines.join("\n");
+    return summary;
+  }
+
+  return summary;
+}
+
+function visibleExecutorEvent(event) {
+  if (!event) return false;
+  if (event.kind === "tool_call") return !!executorText(event);
+  if (event.kind === "tool_result") return !!executorText(event);
+  if (event.kind === "command") return !!executorText(event);
+  if (event.kind === "approval_request") return !!executorText(event);
+  if (event.kind === "input_request") return !!executorText(event);
+  if (event.kind === "error") return !!executorText(event);
+  if (event.kind === "mcp") return !!executorText(event);
+  if (event.kind === "status") {
+    return !["queued", "running", "retrying", "session idle", "completed"].includes(String(event.summary || "").trim().toLowerCase());
+  }
+  return false;
+}
+
+function executorMessage(event, events = [], index = -1) {
+  const text = executorText(event, events, index);
+  if (!text || !visibleExecutorEvent(event)) return null;
+  return {
+    _synthetic: true,
+    info: {
+      id: event.id,
+      role: "task_tool",
+      time: { created: event.time?.created || Date.now() },
+    },
+    parts: [{ type: "text", text }],
+  };
+}
+
+function buildExecutorMessages() {
+  if (!state.selectedTaskID) return [];
+  const events = Array.isArray(state.executorEvents) ? state.executorEvents : [];
+  return events
+    .map((event, index) => executorMessage(event, events, index))
+    .filter(Boolean);
+}
+
+async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") {
+  const next = typeof runID === "string" ? runID : "";
+  if (!state.selectedTaskID) {
+    state.executorEvents = [];
+    state.executorRunID = "";
+    return [];
+  }
+  if (!next) {
+    state.executorEvents = [];
+    state.executorRunID = "";
+    renderSession();
+    return [];
+  }
+  if (state.executorRunID === next) return state.executorEvents;
+  try {
+    const events = await apiJson(`run/${encodeURIComponent(next)}/executor-events`);
+    if (state.selectedTaskID !== state.board?.task?.id) return state.executorEvents;
+    if ((state.board?.task?.activeRunID || "") !== next) return state.executorEvents;
+    state.executorEvents = (Array.isArray(events) ? events : [])
+      .map(executorEventEntry)
+      .filter((item) => !!item);
+    state.executorRunID = next;
+    renderSession();
+    return state.executorEvents;
+  } catch (e) {
+    AppLog.debug("executor", "loadExecutorEvents failed", { runID: next, error: String(e) });
+    if ((state.board?.task?.activeRunID || "") !== next) return state.executorEvents;
+    state.executorEvents = [];
+    state.executorRunID = next;
+    renderSession();
+    return [];
+  }
+}
+
+function appendExecutorEvent(raw) {
+  const event = executorEventEntry(raw);
+  if (!event || !visibleExecutorEvent(event)) return;
+  if (state.executorEvents.some((item) => item.id === event.id)) return;
+  if (event.runID && state.executorRunID && state.executorRunID !== event.runID) return;
+  if (event.runID && !state.executorRunID) state.executorRunID = event.runID;
+  state.executorEvents = [...state.executorEvents, event].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  state.sessionUpdatedAt = Date.now();
+  renderSession();
 }
 
 function gitCheckpointTitle(stage, mode) {
@@ -5580,7 +6049,7 @@ function buildBoardContextMessages() {
   const { task, plan, evaluation, delivery, lanes } = board;
 
   // 1. User request — show the original task request as a "user" turn
-  if (task?.request) {
+  if (task?.request && !hasConversationRequest(state.session || [], task.request)) {
     messages.push({
       _synthetic: true,
       info: { role: "user", time: { created: (task.time?.created || 0) - 2 } },
@@ -5656,8 +6125,37 @@ function buildBoardContextMessages() {
   return messages;
 }
 
+function normalizeConversationText(text) {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function messageConversationText(message) {
+  const role = effectiveRole(message);
+  return normalizeConversationText((message.parts || [])
+    .flatMap((part) => {
+      if (part?.type !== "text") return [];
+      if (part.audience && part.audience.ui === false) return [];
+      if (part.kind === "trace" && !part.audience?.ui) return [];
+      const text = typeof part.text === "string" ? part.text : "";
+      if (!text.trim()) return [];
+      if (["user", "planner", "scheduler", "system"].includes(role) && text.includes("<assistant-brief>")) {
+        const cleaned = stripAssistantBrief(text);
+        return cleaned ? [cleaned] : [];
+      }
+      return [text];
+    })
+    .join("\n"));
+}
+
+function hasConversationRequest(messages, request) {
+  const target = normalizeConversationText(request);
+  if (!target) return false;
+  return messages.some((message) => effectiveRole(message) === "user" && messageConversationText(message) === target);
+}
+
 function conversationMessages() {
   const boardMsgs = buildBoardContextMessages();
+  const executorMsgs = buildExecutorMessages();
   let realMessages = state.session || [];
   if (boardMsgs.length > 0 && realMessages.length > 0) {
     realMessages = realMessages.filter((message) => {
@@ -5665,7 +6163,7 @@ function conversationMessages() {
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
     });
   }
-  return [...realMessages, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+  return [...realMessages, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
 }
 
 function renderFilePart(part) {
@@ -6205,6 +6703,7 @@ dom.chatForm.addEventListener("submit", async (e) => {
   const text = dom.chatTextarea.value.trim();
   if (!text) return;
 
+  const emptyStart = workspaceMode() === "empty";
   dom.chatSend.disabled = true;
   dom.chatTextarea.value = "";
   sizeChat();
@@ -6226,6 +6725,11 @@ dom.chatForm.addEventListener("submit", async (e) => {
   try {
     await panelMessage(text);
   } catch (err) {
+    if (emptyStart && workspaceMode() === "empty") {
+      enterEmptyWorkspace();
+      renderClear();
+      return;
+    }
     const ph = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
     const msg = t("interaction.error", { message: err?.message || err });
     if (ph) ph.parts[0].text = msg;
@@ -6832,7 +7336,19 @@ dom.btnLlmApiKeyCopy?.addEventListener("click", async () => {
 dom.btnLlmAuthAction?.addEventListener("click", async (event) => {
   event.preventDefault();
   event.stopPropagation();
-  await authenticateSelectedProvider();
+  try {
+    const authenticated = await authenticateSelectedProvider();
+    if (authenticated !== true) return;
+    await loadConfigInfo();
+    llmSavedValue = "";
+    queueLlmSync(0);
+  } catch (e) {
+    AppLog.error("ui", "Provider auth failed", { error: String(e) });
+    await nativeMessage(String(e instanceof Error ? e.message : e), {
+      title: t("llm.title"),
+      kind: "error",
+    });
+  }
 });
 
 dom.localeMode?.addEventListener("change", async () => {

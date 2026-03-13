@@ -714,7 +714,7 @@ export namespace ProviderTransform {
       }
     }
 
-    if (input.model.providerID === "openai" || input.providerOptions?.setCacheKey) {
+    if (["openai", "openai-codex"].includes(input.model.providerID) || input.providerOptions?.setCacheKey) {
       result["promptCacheKey"] = input.sessionID
     }
 
@@ -874,6 +874,71 @@ export namespace ProviderTransform {
   }
 
   export function schema(model: Provider.Model, schema: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 {
+    const clone = <T>(value: T): T => structuredClone(value)
+    const mergeProperty = (left: JSONSchema7 | undefined, right: JSONSchema7): JSONSchema7 => {
+      if (!left) return clone(right)
+      const lhs = clone(left)
+      const rhs = clone(right)
+
+      const leftConst = "const" in lhs ? lhs.const : undefined
+      const rightConst = "const" in rhs ? rhs.const : undefined
+      const leftEnum = Array.isArray(lhs.enum) ? lhs.enum : leftConst === undefined ? undefined : [leftConst]
+      const rightEnum = Array.isArray(rhs.enum) ? rhs.enum : rightConst === undefined ? undefined : [rightConst]
+      const leftType = typeof lhs.type === "string" ? lhs.type : undefined
+      const rightType = typeof rhs.type === "string" ? rhs.type : undefined
+
+      if (leftEnum && rightEnum && leftType === rightType) {
+        const merged = [...new Set([...leftEnum, ...rightEnum])]
+        return {
+          ...lhs,
+          ...rhs,
+          type: leftType,
+          enum: merged,
+        }
+      }
+
+      if (JSON.stringify(lhs) === JSON.stringify(rhs)) return lhs
+      return lhs
+    }
+
+    const flattenRootObjectUnion = (value: JSONSchema.BaseSchema | JSONSchema7): JSONSchema7 => {
+      if (!value || typeof value !== "object" || Array.isArray(value) || "type" in value) return value as JSONSchema7
+      const variants = "anyOf" in value && Array.isArray(value.anyOf)
+        ? value.anyOf
+        : "oneOf" in value && Array.isArray(value.oneOf)
+          ? value.oneOf
+          : undefined
+      if (!variants?.length) return value as JSONSchema7
+      const objects = variants.filter(
+        (item): item is JSONSchema7 =>
+          !!item && typeof item === "object" && !Array.isArray(item) && "type" in item && item.type === "object",
+      )
+      if (objects.length !== variants.length) return value as JSONSchema7
+
+      const properties = new Map<string, JSONSchema7>()
+      const required = objects
+        .map((item) => new Set(Array.isArray(item.required) ? item.required : []))
+        .reduce((shared, item) => new Set([...shared].filter((key) => item.has(key))))
+
+      for (const item of objects) {
+        const entries = Object.entries(item.properties ?? {}) as Array<[string, JSONSchema7]>
+        for (const [key, prop] of entries) {
+          if (!prop || typeof prop !== "object" || Array.isArray(prop)) continue
+          properties.set(key, mergeProperty(properties.get(key), prop))
+        }
+      }
+
+      return {
+        ...("description" in value && value.description ? { description: value.description } : {}),
+        type: "object",
+        properties: Object.fromEntries(properties),
+        required: [...required],
+        additionalProperties: false,
+      } satisfies JSONSchema7
+    }
+
+    schema = flattenRootObjectUnion(schema)
+
     // Convert integer enums to string enums for Google/Gemini
     if (model.providerID === "google" || model.api.id.includes("gemini")) {
       const sanitizeGemini = (obj: unknown): unknown => {
