@@ -147,7 +147,7 @@ export interface SpecRewriteContext {
 const MAX_STEPS = 45
 const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
-const QUALITY_RETRY_THRESHOLD = 0.6
+const QUALITY_RETRY_THRESHOLD = 0.4
 const MAX_SPEC_ATTEMPTS = 2
 
 export namespace HeadlessSpecAgent {

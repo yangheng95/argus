@@ -4437,7 +4437,7 @@ select.field-input {
 
 /* ── Config Area (bottom of right column) ── */
 .config-area {
-  margin-top: calc(4px * var(--ui-scale));
+  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: calc(6px * var(--ui-scale));
@@ -4453,8 +4453,8 @@ select.field-input {
   align-items: center;
   justify-content: center;
   gap: calc(1px * var(--ui-scale));
-  min-height: calc(54px * var(--ui-scale));
-  padding: calc(4px * var(--ui-scale)) var(--section-head-padding-x);
+  min-height: 0;
+  padding: calc(4.75px * var(--ui-scale)) var(--section-head-padding-x);
   border: 1px solid var(--border);
   border-radius: var(--section-corner);
   background:
@@ -4696,9 +4696,14 @@ select.field-input {
   margin-left: 0;
   min-width: 0;
   max-width: 100%;
+  min-height: calc(1.2em);
   font-size: var(--ui-font-small);
   font-weight: 500;
   text-align: center;
+}
+
+.config-toggle-meta:empty::before {
+  content: "\00a0";
 }
 
 .config-section-summary {
@@ -5867,6 +5872,14 @@ body[data-resizing="true"] * {
   word-break: break-word;
 }
 
+.sidebar-version:empty {
+  display: none;
+}
+
+.sidebar-footer:has(.sidebar-version:empty) {
+  display: none;
+}
+
 .sidebar-list {
   display: flex;
   flex-direction: column;
@@ -6716,12 +6729,12 @@ body[data-theme="light"] {
 
 /* Indigo atmosphere */
 :root {
-  --bg: rgba(7, 10, 26, 0.95);
-  --surface: rgba(16, 19, 46, 0.8);
-  --surface-hover: rgba(21, 28, 64, 0.88);
-  --surface-inset: rgba(10, 13, 36, 0.86);
-  --surface-strong: rgba(19, 24, 58, 0.92);
-  --chrome: rgba(12, 16, 40, 0.88);
+  --bg: rgba(18, 24, 58, 0.9);
+  --surface: rgba(28, 36, 78, 0.74);
+  --surface-hover: rgba(34, 45, 92, 0.82);
+  --surface-inset: rgba(19, 26, 64, 0.8);
+  --surface-strong: rgba(31, 40, 88, 0.88);
+  --chrome: rgba(24, 32, 74, 0.82);
   --border: rgba(138, 162, 255, 0.18);
   --border-hover: rgba(138, 162, 255, 0.32);
   --border-strong: rgba(218, 231, 255, 0.24);
@@ -6856,20 +6869,20 @@ body::after {
 body::before {
   inset: -18%;
   z-index: -3;
-  opacity: 0.96;
+  opacity: 0.9;
   background:
     radial-gradient(32% 34% at 11% 15%, rgba(124, 111, 255, 0.28), transparent 72%),
     radial-gradient(24% 28% at 82% 17%, rgba(54, 193, 238, 0.24), transparent 70%),
     radial-gradient(26% 28% at 66% 74%, rgba(75, 132, 255, 0.22), transparent 74%),
     radial-gradient(18% 24% at 28% 72%, rgba(173, 155, 255, 0.14), transparent 76%),
-    linear-gradient(180deg, rgba(6, 9, 22, 1), rgba(10, 13, 32, 0.98) 54%, rgba(11, 16, 36, 0.98));
-  filter: blur(36px) saturate(126%);
+    linear-gradient(180deg, rgba(22, 29, 68, 0.98), rgba(27, 36, 82, 0.96) 54%, rgba(24, 34, 76, 0.96));
+  filter: blur(32px) saturate(122%);
 }
 
 body::after {
   inset: 0;
   z-index: -2;
-  opacity: 0.7;
+  opacity: 0.6;
   background:
     radial-gradient(18% 22% at 18% 58%, rgba(125, 145, 255, 0.12), transparent 72%),
     radial-gradient(22% 20% at 72% 44%, rgba(53, 191, 236, 0.1), transparent 70%),
@@ -6897,15 +6910,265 @@ body[data-theme="light"]::after {
     repeating-linear-gradient(90deg, transparent 0, transparent 104px, rgba(116, 136, 245, 0.035) 104px, rgba(116, 136, 245, 0.035) 105px);
 }
 
+.tech-atlas {
+  position: fixed;
+  inset: 0;
+  z-index: -4;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.78;
+}
+
+.tech-atlas-canvas,
+.tech-grid,
+.tech-sweep,
+.tech-orbit {
+  position: absolute;
+  inset: 0;
+}
+
+.tech-atlas-canvas {
+  width: 100%;
+  height: 100%;
+  opacity: 0.76;
+  filter: saturate(118%);
+}
+
+.tech-grid {
+  opacity: 0.26;
+  mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.98), transparent 94%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.98), transparent 94%);
+}
+
+.tech-grid::before {
+  content: "";
+  position: absolute;
+  inset: -14%;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(100% - 1px), rgba(135, 162, 255, 0.15) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0) calc(100% - 1px), rgba(60, 199, 236, 0.12) 100%);
+  background-size: 88px 88px;
+  opacity: 0.28;
+  transform: perspective(920px) rotateX(74deg) translateY(18%);
+  transform-origin: center bottom;
+  animation: techGridDrift 28s linear infinite;
+}
+
+.tech-sweep {
+  inset: -22%;
+  opacity: 0.22;
+  background:
+    radial-gradient(24% 26% at 20% 28%, rgba(115, 104, 255, 0.18), transparent 72%),
+    linear-gradient(116deg, rgba(0, 0, 0, 0) 28%, rgba(115, 104, 255, 0.16) 46%, rgba(88, 136, 255, 0.12) 52%, rgba(49, 199, 236, 0.14) 58%, rgba(0, 0, 0, 0) 72%);
+  filter: blur(20px);
+  animation: techSweep 22s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.tech-orbit {
+  inset: auto;
+  border: 1px solid rgba(146, 170, 255, 0.16);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 0 0 1px rgba(115, 104, 255, 0.04);
+}
+
+.tech-orbit::before,
+.tech-orbit::after {
+  content: "";
+  position: absolute;
+  inset: calc(12px * var(--ui-scale));
+  border: 1px dashed rgba(146, 170, 255, 0.14);
+  border-radius: inherit;
+}
+
+.tech-orbit::after {
+  inset: calc(28px * var(--ui-scale));
+  border-style: solid;
+  border-color: rgba(49, 199, 236, 0.08);
+}
+
+.tech-orbit-a {
+  top: calc(-120px * var(--ui-scale));
+  right: calc(-96px * var(--ui-scale));
+  width: clamp(260px, 42vw, 540px);
+  height: clamp(260px, 42vw, 540px);
+  opacity: 0.24;
+  animation: techOrbitSpin 42s linear infinite;
+}
+
+.tech-orbit-b {
+  left: calc(-112px * var(--ui-scale));
+  bottom: calc(-140px * var(--ui-scale));
+  width: clamp(220px, 34vw, 420px);
+  height: clamp(220px, 34vw, 420px);
+  opacity: 0.18;
+  animation: techOrbitSpinReverse 34s linear infinite;
+}
+
+.sidebar-header,
+.chat-header,
+.sections-header,
+.section-head {
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-header > *,
+.chat-header > *,
+.sections-header > *,
+.section-head > * {
+  position: relative;
+  z-index: 1;
+}
+
+.section-head::before {
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar::after,
+.chat::after,
+.sections-header::after,
+.section[data-phase-state="active"] > .section-head::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sidebar::after,
+.chat::after {
+  inset: 1px;
+  z-index: 0;
+  border-radius: inherit;
+  opacity: 0.16;
+  background:
+    linear-gradient(118deg, rgba(0, 0, 0, 0) 18%, rgba(115, 104, 255, 0.05) 36%, rgba(88, 136, 255, 0.08) 46%, rgba(49, 199, 236, 0.06) 52%, rgba(0, 0, 0, 0) 68%);
+  transform: translateX(-62%);
+  animation: panelSweep 18s linear infinite;
+}
+
+.chat::after {
+  opacity: 0.2;
+  animation-duration: 16s;
+}
+
+.sections-header::after {
+  z-index: 0;
+  border-radius: inherit;
+  opacity: 0.28;
+  background:
+    linear-gradient(112deg, rgba(0, 0, 0, 0) 12%, rgba(115, 104, 255, 0.08) 34%, rgba(88, 136, 255, 0.1) 48%, rgba(49, 199, 236, 0.08) 56%, rgba(0, 0, 0, 0) 76%);
+  transform: translateX(-54%);
+  animation: panelSweep 20s linear infinite;
+}
+
+.section[data-phase-state="active"] > .section-head::after {
+  inset: 0;
+  z-index: 0;
+  opacity: 0.42;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(255, 255, 255, 0.02) 22%, rgba(88, 136, 255, 0.14) 46%, rgba(49, 199, 236, 0.12) 58%, rgba(0, 0, 0, 0) 82%);
+  transform: translateX(-72%);
+  animation: sectionScan 4.6s linear infinite;
+}
+
+body[data-task-status="running"] .tech-sweep {
+  opacity: 0.32;
+  animation-duration: 16s;
+}
+
+body[data-task-status="running"] .chat::after,
+body[data-task-status="running"] .sections-header::after,
+body[data-task-status="running"] .section[data-phase-state="active"] > .section-head::after {
+  opacity: 0.34;
+}
+
+body[data-connection="offline"] .tech-grid,
+body[data-connection="offline"] .tech-sweep,
+body[data-connection="offline"] .sidebar::after,
+body[data-connection="offline"] .chat::after,
+body[data-connection="offline"] .sections-header::after {
+  opacity: 0.12;
+}
+
+body[data-theme="light"] .tech-atlas {
+  opacity: 0.58;
+}
+
+body[data-theme="light"] .tech-grid::before {
+  opacity: 0.16;
+}
+
+body[data-theme="light"] .tech-sweep {
+  opacity: 0.14;
+}
+
+@keyframes techGridDrift {
+  0% { transform: perspective(920px) rotateX(74deg) translate3d(-1%, 16%, 0); }
+  50% { transform: perspective(920px) rotateX(74deg) translate3d(1.5%, 20%, 0); }
+  100% { transform: perspective(920px) rotateX(74deg) translate3d(-1%, 16%, 0); }
+}
+
+@keyframes techSweep {
+  0% {
+    transform: translate3d(-16%, -3%, 0) rotate(-6deg);
+  }
+
+  50% {
+    transform: translate3d(10%, 3%, 0) rotate(3deg);
+  }
+
+  100% {
+    transform: translate3d(-16%, -3%, 0) rotate(-6deg);
+  }
+}
+
+@keyframes techOrbitSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes techOrbitSpinReverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+@keyframes panelSweep {
+  0% { transform: translateX(-62%); }
+  100% { transform: translateX(62%); }
+}
+
+@keyframes sectionScan {
+  0% { transform: translateX(-72%); }
+  100% { transform: translateX(72%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tech-grid::before,
+  .tech-sweep,
+  .tech-orbit,
+  .sidebar::after,
+  .chat::after,
+  .sections-header::after,
+  .section[data-phase-state="active"] > .section-head::after {
+    animation: none !important;
+  }
+}
+
 .titlebar,
 .task-bar,
 .sidebar,
 .chat,
 .sections,
 .section,
-.dialog-form,
-.titlebar-menu-panel {
+.dialog-form {
   position: relative;
+  isolation: isolate;
+}
+
+.titlebar-menu-panel {
   isolation: isolate;
 }
 

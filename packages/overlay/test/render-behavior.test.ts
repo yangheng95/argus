@@ -902,6 +902,7 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
       const renderGoals = window.eval("renderGoals")
       const renderVersions = window.eval("renderVersions")
       const sanitizeOpacity = window.eval("sanitizeOpacity")
+      const setTitlebarMenu = window.eval("setTitlebarMenu")
 
       renderVersions("1.2.3")
       renderGoals([
@@ -920,6 +921,13 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
       }
 
       const size = (selector: string) => pick(selector).getBoundingClientRect()
+      const techCanvas = document.querySelector("#techAtlasCanvas")
+      if (!(techCanvas instanceof HTMLCanvasElement)) throw new Error("Missing tech atlas canvas")
+      const titlebarHeight = size(".titlebar").height
+      setTitlebarMenu(true)
+      const menu = pick("#titlebarMenu")
+      const sectionsBox = size(".sections")
+      const configAreaBox = size("#configArea")
 
       return {
         opacityMin: Number((pick("#opacityRange") as HTMLInputElement).min),
@@ -935,6 +943,16 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
         sectionsGap: Number.parseFloat(getComputedStyle(pick(".sections-stack")).rowGap),
         engineRadius: Number.parseFloat(getComputedStyle(pick("#engineBar")).borderRadius),
         channelRadius: Number.parseFloat(getComputedStyle(pick("#brandVersion .brand-channel-group")).borderRadius),
+        techCanvasWidth: techCanvas.width,
+        techCanvasHeight: techCanvas.height,
+        techSweepAnimation: getComputedStyle(pick(".tech-sweep")).animationName,
+        titlebarHeight,
+        titlebarHeightWithMenu: size(".titlebar").height,
+        titlebarMenuPosition: getComputedStyle(menu).position,
+        configBottomGap: sectionsBox.bottom - configAreaBox.bottom,
+        sidebarFooterDisplay: getComputedStyle(pick(".sidebar-footer")).display,
+        llmSummaryHeight: size("#llmSection").height,
+        configToggleHeight: size("#btnConfigToggle").height,
       }
     })
 
@@ -951,6 +969,14 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
     expect(result.sectionsGap).toBeLessThanOrEqual(6)
     expect(result.engineRadius).toBeGreaterThanOrEqual(100)
     expect(result.channelRadius).toBeGreaterThanOrEqual(100)
+    expect(result.techCanvasWidth).toBeGreaterThan(0)
+    expect(result.techCanvasHeight).toBeGreaterThan(0)
+    expect(result.techSweepAnimation).toBe("techSweep")
+    expect(Math.abs(result.titlebarHeightWithMenu - result.titlebarHeight)).toBeLessThanOrEqual(1)
+    expect(result.titlebarMenuPosition).toBe("absolute")
+    expect(result.configBottomGap).toBeLessThanOrEqual(12)
+    expect(result.sidebarFooterDisplay).toBe("none")
+    expect(Math.abs(result.llmSummaryHeight - result.configToggleHeight)).toBeLessThanOrEqual(1)
   } finally {
     await page.close()
     server.stop(true)
@@ -2004,7 +2030,48 @@ test("selected task panel requests keep task context instead of binding the task
   }
 }, { timeout: 20_000 })
 
-test("first empty chat send opens the session-backed panel conversation", async () => {
+test("panel request body never enables create actions from chat input", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("panelRequestBody") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const panelRequestBody = window.eval("panelRequestBody")
+      return {
+        help: panelRequestBody("What can you do?"),
+        task: panelRequestBody("Fix the login race condition"),
+        session: panelRequestBody("Create a new session"),
+      }
+    })
+
+    expect(result.help.allow_create).toBe(false)
+    expect(result.help.allow_session_mutation).toBe(false)
+    expect(result.task.allow_create).toBe(false)
+    expect(result.task.allow_session_mutation).toBe(false)
+    expect(result.session.allow_create).toBe(false)
+    expect(result.session.allow_session_mutation).toBe(false)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("chat stays disabled until a session is created from the sidebar button", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2059,29 +2126,17 @@ test("first empty chat send opens the session-backed panel conversation", async 
         if (url.pathname === "/panel/message/stream" && method === "POST") {
           return new Response("missing", { status: 404 })
         }
-        if (url.pathname === "/panel/message" && method === "POST") {
-          const body = JSON.parse(String(init.body || "{}"))
-          const text = String(body.text || "")
-          messages.splice(
-            0,
-            messages.length,
-            {
-              parts: [{ type: "text", text }],
-              info: { id: "msg-user-1", role: "user", sessionID: "session-9", time: { created: 10 } },
-            },
-            {
-              parts: [{ type: "text", text: `Handled: ${text}` }],
-              info: { id: "msg-assistant-1", role: "assistant", sessionID: "session-9", time: { created: 11 } },
-            },
-          )
-          return json({
-            kind: "panel_response",
-            session_id: "session-9",
-            message: `Handled: ${text}`,
-          })
+        if (url.pathname === "/session" && method === "POST") {
+          return json(session)
         }
         if (url.pathname === "/session/session-9" && method === "GET") {
           return json(session)
+        }
+        if (url.pathname === "/session/session-9/panel-settings" && method === "GET") {
+          return json({})
+        }
+        if (url.pathname === "/control/timeline" && method === "GET" && url.searchParams.get("sessionID") === "session-9") {
+          return json([])
         }
         if (url.pathname === "/session/session-9/message" && method === "GET") {
           return json(messages)
@@ -2101,9 +2156,14 @@ test("first empty chat send opens the session-backed panel conversation", async 
       state.connected = true
       state.globalView = false
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
-      state.sessions = []
+      state.chatSessionID = "session-1"
+      state.managedSession = {
+        id: "session-1",
+        title: "Streaming session",
+        directory: "",
+        time: { created: 1, updated: 2 },
+      }
+      state.sessions = [state.managedSession]
       state.session = []
       state.sessionSource = ""
       renderWorkspaceState()
@@ -2111,37 +2171,51 @@ test("first empty chat send opens the session-backed panel conversation", async 
       renderClear()
     })
 
-    await tab.click("#chatTextarea")
-    await tab.type("#chatTextarea", "Start a new workspace chat")
-    await tab.click("#chatSend")
+    const initial = await tab.evaluate(() => ({
+      placeholder: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.placeholder || "",
+      textareaDisabled: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.disabled ?? false,
+      sendDisabled: (document.querySelector("#chatSend") as HTMLButtonElement)?.disabled ?? false,
+      disabledPlaceholder: window.eval("t")("chat.placeholder_disabled"),
+    }))
+
+    expect(initial.textareaDisabled).toBe(true)
+    expect(initial.sendDisabled).toBe(true)
+    expect(initial.placeholder).toBe(initial.disabledPlaceholder)
+
+    await tab.click("#btnCreateSession")
 
     await tab.waitForFunction(() => {
       try {
-        const state = window.eval("state")
         return (
-          state.chatSessionID === "session-9" &&
+          window.eval("state").chatSessionID === "session-9" &&
           document.body.dataset.workspace === "session" &&
-          (document.querySelector("#chatCount")?.textContent || "") !== ""
+          !(document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.disabled
         )
       } catch {
         return false
       }
     })
 
+    await tab.click("#chatTextarea")
+    await tab.type("#chatTextarea", "Session is ready")
+
     const result = await tab.evaluate(() => ({
       calls: window.__overlayCalls || [],
       workspace: document.body.dataset.workspace || "",
-      count: document.querySelector("#chatCount")?.textContent || "",
-      assistant: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
+      placeholder: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.placeholder || "",
+      enabledPlaceholder: window.eval("t")("chat.placeholder"),
+      textareaDisabled: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.disabled ?? false,
+      sendDisabled: (document.querySelector("#chatSend") as HTMLButtonElement)?.disabled ?? false,
       sessions: [...document.querySelectorAll(".session-row-main[data-session-id]")].map((node) => node.getAttribute("data-session-id")),
     }))
 
     expect(result.workspace).toBe("session")
-    expect(result.count).not.toBe("")
-    expect(result.assistant).toContain("Handled: Start a new workspace chat")
-    expect(result.calls).toContain("POST /panel/message/stream")
-    expect(result.calls).toContain("POST /panel/message")
+    expect(result.placeholder).toBe(result.enabledPlaceholder)
+    expect(result.textareaDisabled).toBe(false)
+    expect(result.sendDisabled).toBe(false)
+    expect(result.calls).toContain("POST /session")
     expect(result.calls).toContain("GET /session/session-9")
+    expect(result.calls).toContain("GET /session/session-9/panel-settings")
     expect(result.calls).toContain("GET /session/session-9/message")
     expect(result.sessions).toContain("session-9")
   } finally {
@@ -2150,125 +2224,7 @@ test("first empty chat send opens the session-backed panel conversation", async 
   }
 }, { timeout: 20_000 })
 
-test("empty workspace panel failure clears the transient transcript", async () => {
-  const exe = await browser()
-  const server = serve()
-  const page = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox"],
-  })
-
-  try {
-    const tab = await page.newPage()
-    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
-    await tab.waitForFunction(() => {
-      try {
-        return typeof window.eval("renderWorkspaceState") === "function" && !!window.eval("state").i18nReady
-      } catch {
-        return false
-      }
-    })
-
-    await tab.evaluate(() => {
-      const state = window.eval("state")
-      const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const renderManagedSessionList = window.eval("renderManagedSessionList")
-      const renderClear = window.eval("renderClear")
-      const root = window as Window & { __overlayCalls?: string[] }
-      const calls = []
-
-      root.__overlayCalls = calls
-      root.fetch = async (input, init = {}) => {
-        const raw = typeof input === "string" ? input : input.url
-        const url = new URL(raw, root.location.origin)
-        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
-        calls.push(`${method} ${url.pathname}`)
-
-        if (url.pathname === "/panel/message/stream" && method === "POST") {
-          return new Response("missing", { status: 404 })
-        }
-        if (url.pathname === "/panel/message" && method === "POST") {
-          return new Response("panel failed", { status: 500 })
-        }
-        if (url.pathname === "/session" && method === "GET") {
-          return new Response(JSON.stringify([]), {
-            headers: {
-              "content-type": "application/json; charset=utf-8",
-            },
-          })
-        }
-        if (url.pathname === "/global/tasks" && method === "GET") {
-          return new Response(JSON.stringify({ tasks: [] }), {
-            headers: {
-              "content-type": "application/json; charset=utf-8",
-            },
-          })
-        }
-        if (url.pathname === "/panel/knowledge/memory" && method === "GET") {
-          return new Response(JSON.stringify([]), {
-            headers: {
-              "content-type": "application/json; charset=utf-8",
-            },
-          })
-        }
-        return new Response("not found", { status: 404 })
-      }
-
-      state.connected = true
-      state.globalView = false
-      state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
-      state.sessions = []
-      state.session = []
-      state.sessionSource = ""
-      renderWorkspaceState()
-      renderManagedSessionList()
-      renderClear()
-    })
-
-    await tab.click("#chatTextarea")
-    await tab.type("#chatTextarea", "Start a broken workspace chat")
-    await tab.click("#chatSend")
-
-    await tab.waitForFunction(() => {
-      try {
-        const state = window.eval("state")
-        return (
-          document.body.dataset.workspace === "empty" &&
-          state.session.length === 0 &&
-          document.querySelectorAll(".turn").length === 0 &&
-          (document.querySelector(".chat-empty")?.textContent || "") === window.eval("t")("chat.empty")
-        )
-      } catch {
-        return false
-      }
-    })
-
-    const result = await tab.evaluate(() => ({
-      calls: (window as Window & { __overlayCalls?: string[] }).__overlayCalls || [],
-      workspace: document.body.dataset.workspace || "",
-      count: document.querySelector("#chatCount")?.textContent || "",
-      chat: document.querySelector(".chat-empty")?.textContent || "",
-      turns: document.querySelectorAll(".turn").length,
-      sessionLength: window.eval("state").session.length,
-    }))
-
-    expect(result.workspace).toBe("empty")
-    expect(result.count).toBe("")
-    expect(result.turns).toBe(0)
-    expect(result.sessionLength).toBe(0)
-    expect(result.chat).toBeTruthy()
-    expect(result.calls).toContain("POST /panel/message/stream")
-    expect(result.calls).toContain("POST /panel/message")
-  } finally {
-    await page.close()
-    server.stop(true)
-  }
-}, { timeout: 60_000 })
-
-test("task creation switches into the live task transcript without waiting for the control summary", async () => {
+test("chat stop aborts the active session request", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2296,21 +2252,9 @@ test("task creation switches into the live task transcript without waiting for t
       const root = window as Window & { __overlayCalls?: string[] }
       const encoder = new TextEncoder()
       const calls = []
-      const task = {
-        id: "task-1",
-        title: "Build visible transcript",
-        request: "Expose the coding process.",
-        status: "running",
-        sessionID: "session-1",
-        time: {
-          created: 1,
-          updated: 2,
-          started: 2,
-        },
-      }
       const session = {
         id: "session-1",
-        title: "Task session",
+        title: "Abortable session",
         directory: "",
         time: {
           created: 1,
@@ -2335,9 +2279,10 @@ test("task creation switches into the live task transcript without waiting for t
         if (url.pathname === "/panel/message/stream" && method === "POST") {
           const stream = new ReadableStream({
             start(controller) {
+              init.signal?.addEventListener("abort", () => {
+                controller.error(new DOMException("Aborted", "AbortError"))
+              }, { once: true })
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", result: { kind: "created", task_id: "task-1", message: "Task accepted: task-1" } })}\n\n`))
-              controller.close()
             },
           })
           return new Response(stream, {
@@ -2347,66 +2292,104 @@ test("task creation switches into the live task transcript without waiting for t
             },
           })
         }
-        if (url.pathname === "/tasks" && method === "GET") {
-          return json({ tasks: [{ task, updated_at: 2 }] })
+        if (url.pathname === "/session/session-1/abort" && method === "POST") {
+          return json(true)
         }
-        if (url.pathname === "/task/task-1/board" && method === "GET") {
-          return json({
-            task,
-            overview: null,
-            plan: null,
-            lanes: [],
-            evaluation: null,
-            delivery: null,
-            acceptedDelivery: null,
-            interactions: [],
-            spec: null,
-          })
-        }
-        if (url.pathname === "/control/timeline" && method === "GET" && url.searchParams.get("taskID") === "task-1") {
-          return json([])
-        }
-        if (url.pathname === "/session/session-1/message" && method === "GET") {
-          return json([
-            {
-              info: {
-                id: "msg-1",
-                role: "assistant",
-                sessionID: "session-1",
-                time: { created: 3 },
-              },
-              parts: [{ type: "text", text: "Working on it." }],
-            },
-          ])
-        }
-        if (url.pathname === "/session/session-1" && method === "GET") {
-          return json(session)
-        }
-        if (url.pathname === "/session/session-1/panel-settings" && method === "GET") {
-          return json({})
-        }
-        if (url.pathname === "/path" && method === "GET") {
-          return json({
-            home: "C:/Users/test",
-            state: "C:/Users/test/.opencorvus/state",
-            config: "C:/Users/test/.opencorvus/config",
-            worktree: "",
-            directory: "",
-          })
-        }
-        if (url.pathname === "/vcs" && method === "GET") {
-          return json({
-            branch: "",
-            clean: false,
-            dirty: false,
-            staged: 0,
-            modified: 0,
-            untracked: 0,
-            conflicts: 0,
-            ahead: 0,
-            behind: 0,
-          })
-        }
+        return new Response("not found", { status: 404 })
+      }
+
+      state.connected = true
+      state.globalView = false
+      state.selectedTaskID = ""
+      state.chatSessionID = session.id
+      state.managedSession = session
+      state.sessions = [session]
+      state.session = []
+      state.sessionSource = ""
+      renderWorkspaceState()
+      renderManagedSessionList()
+      renderClear()
+    })
+
+    await tab.click("#chatTextarea")
+    await tab.type("#chatTextarea", "Please stop me")
+    await tab.click("#chatSend")
+
+    await tab.waitForFunction(() => {
+      try {
+        return (document.querySelector("#chatSend") as HTMLButtonElement)?.dataset.mode === "stop"
+      } catch {
+        return false
+      }
+    })
+
+    await tab.click("#chatSend")
+
+    await tab.waitForFunction(() => {
+      try {
+        return (
+          (document.querySelector("#chatSend") as HTMLButtonElement)?.dataset.mode === "send" &&
+          (document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "").includes(window.eval("t")("chat.interrupted_notice"))
+        )
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => ({
+      assistant: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
+      calls: (window as Window & { __overlayCalls?: string[] }).__overlayCalls || [],
+      mode: (document.querySelector("#chatSend") as HTMLButtonElement)?.dataset.mode || "",
+      label: document.querySelector("#chatSend .chat-send-label")?.textContent || "",
+      sendLabel: window.eval("t")("chat.send_label"),
+      interrupted: window.eval("t")("chat.interrupted_notice"),
+    }))
+
+    expect(result.mode).toBe("send")
+    expect(result.label).toBe(result.sendLabel)
+    expect(result.assistant).toContain(result.interrupted)
+    expect(result.calls).toContain("POST /panel/message/stream")
+    expect(result.calls).toContain("POST /session/session-1/abort")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("empty workspace send stays disabled and does not post panel requests", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderWorkspaceState") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    await tab.evaluate(() => {
+      const state = window.eval("state")
+      const renderWorkspaceState = window.eval("renderWorkspaceState")
+      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderClear = window.eval("renderClear")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls = []
+
+      root.__overlayCalls = calls
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
 
         return new Response("not found", { status: 404 })
       }
@@ -2426,34 +2409,20 @@ test("task creation switches into the live task transcript without waiting for t
       renderClear()
     })
 
-    await tab.click("#chatTextarea")
-    await tab.type("#chatTextarea", "Expose the coding process.")
-    await tab.click("#chatSend")
-
-    await tab.waitForFunction(() => {
-      try {
-        return (
-          document.body.dataset.workspace === "task" &&
-          window.eval("state").selectedTaskID === "task-1" &&
-          (document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "").includes("Working on it.")
-        )
-      } catch {
-        return false
-      }
-    })
-
     const result = await tab.evaluate(() => ({
       calls: window.__overlayCalls || [],
+      placeholder: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.placeholder || "",
+      disabledPlaceholder: window.eval("t")("chat.placeholder_disabled"),
+      textareaDisabled: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.disabled ?? false,
+      sendDisabled: (document.querySelector("#chatSend") as HTMLButtonElement)?.disabled ?? false,
       workspace: document.body.dataset.workspace || "",
-      assistant: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
-      body: document.querySelector("#chatScroll")?.textContent || "",
     }))
 
-    expect(result.workspace).toBe("task")
-    expect(result.assistant).toContain("Working on it.")
-    expect(result.body).not.toContain("Task accepted: task-1")
-    expect(result.calls).toContain("POST /panel/message/stream")
-    expect(result.calls).toContain("GET /task/task-1/board")
+    expect(result.workspace).toBe("empty")
+    expect(result.textareaDisabled).toBe(true)
+    expect(result.sendDisabled).toBe(true)
+    expect(result.placeholder).toBe(result.disabledPlaceholder)
+    expect(result.calls).toHaveLength(0)
   } finally {
     await page.close()
     server.stop(true)
@@ -2524,9 +2493,14 @@ test("panel stream applies live assistant deltas before the final result", async
       state.connected = true
       state.globalView = false
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
-      state.sessions = []
+      state.chatSessionID = "session-1"
+      state.managedSession = {
+        id: "session-1",
+        title: "Streaming session",
+        directory: "",
+        time: { created: 1, updated: 2 },
+      }
+      state.sessions = [state.managedSession]
       state.session = []
       state.sessionSource = ""
       renderWorkspaceState()
@@ -2623,9 +2597,14 @@ test("panel stream consumes the trailing done event without a final blank line",
       state.connected = true
       state.globalView = false
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
-      state.sessions = []
+      state.chatSessionID = "session-1"
+      state.managedSession = {
+        id: "session-1",
+        title: "Streaming session",
+        directory: "",
+        time: { created: 1, updated: 2 },
+      }
+      state.sessions = [state.managedSession]
       state.session = []
       state.sessionSource = ""
       renderWorkspaceState()
@@ -2715,9 +2694,14 @@ test("panel stream does not expose internal tool ids in the loading placeholder"
       state.connected = true
       state.globalView = false
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
-      state.sessions = []
+      state.chatSessionID = "session-1"
+      state.managedSession = {
+        id: "session-1",
+        title: "Streaming session",
+        directory: "",
+        time: { created: 1, updated: 2 },
+      }
+      state.sessions = [state.managedSession]
       state.session = []
       state.sessionSource = ""
       renderWorkspaceState()

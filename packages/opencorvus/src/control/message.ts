@@ -146,6 +146,8 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     const extra = {
       surface: input.surface,
       source: input.source ?? defaultSource(input.surface),
+      allowCreate: input.allow_create,
+      allowSessionMutation: input.allow_session_mutation,
       ...(input.request_id ? { requestID: input.request_id } : {}),
     }
 
@@ -373,12 +375,20 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
     "Never bypass the panel tool or rely on local UI shortcuts.",
     "Treat metadata as explicit UI context. When metadata provides concrete IDs or target values, prefer those targets over guessing from the text.",
     "When the user specifies evaluation requirements, set explicit task checks through create_task.checks or update_checks instead of relying on planner goals alone.",
+    "Only create a new task when allow_create is true and the user explicitly asked you to start or execute work.",
+    "Only create, fork, or delete sessions when allow_session_mutation is true and the user explicitly asked to manage sessions.",
     "When a panel action returns file or image attachments, copy them into the structured result attachments field.",
     "",
     `Surface: ${input.surface}`,
     input.surface === "panel"
       ? "Local panel actions are allowed."
       : "Local panel focus actions are NOT allowed on this surface.",
+    input.allow_create
+      ? "Task creation is allowed for this request."
+      : "Do not create a new task for this request.",
+    input.allow_session_mutation
+      ? "Session mutation is allowed for this request."
+      : "Do not create, fork, or delete sessions for this request.",
     "",
     "Available panel actions on this surface:",
     panelCapabilityPrompt(input.surface),
@@ -407,6 +417,7 @@ function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
         thread: input.thread,
         source: input.source,
         allow_create: input.allow_create,
+        allow_session_mutation: input.allow_session_mutation,
         metadata: input.metadata,
         request_id: input.request_id,
       }),

@@ -133,6 +133,7 @@ const state = {
   sessionKick: null,
   sessionUpdatedAt: 0,
   changes: [],
+  chatRequest: null,
   sse: null,
   sseConnected: false,
   pollTimer: null,
@@ -154,6 +155,7 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 const dom = {
+  techAtlasCanvas: $("#techAtlasCanvas"),
   titlebar: $("#titlebar"),
   connBadge: $("#connBadge"),
   brandLogo: $(".brand-logo"),
@@ -242,6 +244,7 @@ const dom = {
   btnChatCopyAll: $("#btnChatCopyAll"),
   chatForm: $("#chatForm"),
   chatTextarea: $("#chatTextarea"),
+  btnTaskInterrupt: $("#btnTaskInterrupt"),
   chatSend: $("#chatSend"),
   sessionListPanel: $("#sessionListPanel"),
   btnRefreshSessions: $("#btnRefreshSessions"),
@@ -355,6 +358,8 @@ const workspace = window.createOverlayWorkspace?.({
   document,
   stopPolling,
   stopSSE,
+  stopChatRequest,
+  renderChatComposer,
   renderManagedSessionList,
   onDirectoryChange() {
     void persistOverlaySettings();
@@ -748,6 +753,7 @@ function refreshLocalizedState() {
     renderChanges();
   }
   renderSession();
+  renderChatComposer();
   if (dom.skillMarketDialog?.open) renderSkillMarket();
 }
 
@@ -786,6 +792,226 @@ const systemThemeMedia =
   typeof window !== "undefined" && typeof window.matchMedia === "function"
     ? window.matchMedia("(prefers-color-scheme: light)")
     : null;
+const reducedMotionMedia =
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-reduced-motion: reduce)")
+    : null;
+
+const techFx = {
+  colors: {
+    end: "#31c7ec",
+    ghost: "#97a9e2",
+    mid: "#5888ff",
+    start: "#7368ff",
+  },
+  ctx: null,
+  dpr: 1,
+  frame: 0,
+  height: 0,
+  last: 0,
+  points: [],
+  running: false,
+  width: 0,
+};
+
+function reduceMotion() {
+  return reducedMotionMedia?.matches === true;
+}
+
+function techColor(name, fallback) {
+  if (typeof document === "undefined") return fallback;
+  const node = document.body || document.documentElement;
+  return getComputedStyle(node).getPropertyValue(name).trim() || fallback;
+}
+
+function refreshTechFxPalette() {
+  techFx.colors = {
+    end: techColor("--accent-end", "#31c7ec"),
+    ghost: techColor("--text-soft", "#97a9e2"),
+    mid: techColor("--accent-mid", "#5888ff"),
+    start: techColor("--accent-start", "#7368ff"),
+  };
+}
+
+function createTechPoint(width, height) {
+  const angle = Math.random() * Math.PI * 2;
+  const speed = 0.08 + Math.random() * 0.12;
+  return {
+    phase: Math.random() * Math.PI * 2,
+    r: 0.9 + Math.random() * 1.8,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    x: Math.random() * width,
+    y: Math.random() * height,
+  };
+}
+
+function rebuildTechFxPoints() {
+  const total = clampNumber(Math.round((techFx.width * techFx.height) / 48000), 14, 34);
+  const count = reduceMotion() ? Math.max(8, Math.round(total * 0.45)) : total;
+  techFx.points = Array.from({ length: count }, () => createTechPoint(techFx.width, techFx.height));
+}
+
+function drawTechPolygon(ctx, x, y, radius, sides, rotation, color, alpha) {
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i < sides; i++) {
+    const angle = rotation + ((Math.PI * 2) / sides) * i;
+    const px = x + Math.cos(angle) * radius;
+    const py = y + Math.sin(angle) * radius;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTechBeacon(ctx, x, y, radius, color, ts) {
+  const pulse = radius + Math.sin(ts * 0.0011 + x * 0.01) * 3;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.1;
+  ctx.beginPath();
+  ctx.arc(x, y, pulse, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.06;
+  ctx.beginPath();
+  ctx.arc(x, y, pulse * 1.55, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 0.12;
+  ctx.beginPath();
+  ctx.moveTo(x - pulse * 0.65, y);
+  ctx.lineTo(x + pulse * 0.65, y);
+  ctx.moveTo(x, y - pulse * 0.65);
+  ctx.lineTo(x, y + pulse * 0.65);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function syncTechFxSize(force = false) {
+  if (!(dom.techAtlasCanvas instanceof HTMLCanvasElement)) return false;
+  const width = Math.max(1, Math.round(window.innerWidth || window.visualViewport?.width || 1));
+  const height = Math.max(1, Math.round(window.innerHeight || window.visualViewport?.height || 1));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const resized =
+    force
+    || !techFx.ctx
+    || techFx.width !== width
+    || techFx.height !== height
+    || techFx.dpr !== dpr;
+  if (!resized) return false;
+  const ctx = dom.techAtlasCanvas.getContext("2d");
+  if (!ctx) return false;
+  dom.techAtlasCanvas.width = Math.round(width * dpr);
+  dom.techAtlasCanvas.height = Math.round(height * dpr);
+  dom.techAtlasCanvas.style.width = `${width}px`;
+  dom.techAtlasCanvas.style.height = `${height}px`;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  techFx.ctx = ctx;
+  techFx.dpr = dpr;
+  techFx.width = width;
+  techFx.height = height;
+  rebuildTechFxPoints();
+  return true;
+}
+
+function drawTechFx(ts = performance.now(), staticMode = false) {
+  if (!techFx.ctx || !techFx.width || !techFx.height) return;
+  const ctx = techFx.ctx;
+  const width = techFx.width;
+  const height = techFx.height;
+  const dt = techFx.last ? Math.min(32, ts - techFx.last) : 16;
+  techFx.last = ts;
+  ctx.clearRect(0, 0, width, height);
+
+  if (!staticMode) {
+    const drift = dt * 0.04;
+    techFx.points.forEach((point) => {
+      point.x += point.vx * drift + Math.cos(ts * 0.00035 + point.phase) * 0.06;
+      point.y += point.vy * drift + Math.sin(ts * 0.00028 + point.phase) * 0.05;
+      if (point.x <= -12 || point.x >= width + 12) point.vx *= -1;
+      if (point.y <= -12 || point.y >= height + 12) point.vy *= -1;
+    });
+  }
+
+  const maxDist = clampNumber(width * 0.12, 110, 180);
+  for (let i = 0; i < techFx.points.length; i++) {
+    const a = techFx.points[i];
+    for (let j = i + 1; j < techFx.points.length; j++) {
+      const b = techFx.points[j];
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > maxDist) continue;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = (i + j) % 2 === 0 ? techFx.colors.mid : techFx.colors.end;
+      ctx.globalAlpha = (1 - dist / maxDist) * 0.16;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  techFx.points.forEach((point, index) => {
+    const glow = 1 + Math.sin(ts * 0.0022 + point.phase) * 0.32;
+    ctx.save();
+    ctx.beginPath();
+    ctx.fillStyle =
+      index % 3 === 0
+        ? techFx.colors.end
+        : index % 2 === 0
+          ? techFx.colors.mid
+          : techFx.colors.start;
+    ctx.globalAlpha = 0.16 + glow * 0.08;
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = techFx.colors.end;
+    ctx.arc(point.x, point.y, point.r * glow, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  drawTechBeacon(ctx, width * 0.18, height * 0.66, 24, techFx.colors.start, ts);
+  drawTechBeacon(ctx, width * 0.7, height * 0.3, 28, techFx.colors.mid, ts);
+  drawTechPolygon(ctx, width * 0.74, height * 0.2, 52, 6, ts * 0.00022, techFx.colors.end, 0.11);
+  drawTechPolygon(ctx, width * 0.12, height * 0.24, 34, 3, -ts * 0.00028, techFx.colors.start, 0.08);
+  drawTechPolygon(ctx, width * 0.58, height * 0.76, 42, 5, ts * 0.00016, techFx.colors.ghost, 0.06);
+}
+
+function stopTechFx() {
+  if (techFx.frame) cancelAnimationFrame(techFx.frame);
+  techFx.frame = 0;
+  techFx.last = 0;
+  techFx.running = false;
+}
+
+function techFxStep(ts) {
+  if (!techFx.running) return;
+  drawTechFx(ts);
+  techFx.frame = requestAnimationFrame(techFxStep);
+}
+
+function syncTechFx(force = false) {
+  if (!(dom.techAtlasCanvas instanceof HTMLCanvasElement)) return;
+  syncTechFxSize(force);
+  refreshTechFxPalette();
+  if (document.visibilityState === "hidden" || reduceMotion()) {
+    stopTechFx();
+    drawTechFx(performance.now(), true);
+    return;
+  }
+  if (techFx.running && !force) return;
+  stopTechFx();
+  techFx.running = true;
+  techFx.frame = requestAnimationFrame(techFxStep);
+}
 
 function resolvedTheme() {
   const theme = sanitizeTheme(state.theme);
@@ -1253,6 +1479,7 @@ function renderTheme() {
     dom.themeMode.value = theme;
   }
   renderTitlebarMenu();
+  syncTechFx(true);
 }
 
 function setTitlebarMenu(open) {
@@ -1324,6 +1551,7 @@ function renderScale() {
   fitBrandVersion();
   sizeChat();
   renderExecutor({ measure: true });
+  syncTechFx();
 }
 
 function setZoom(value) {
@@ -1406,6 +1634,102 @@ async function deleteSessionApi(sessionID, opts = {}, input) {
   }, input);
 }
 
+function canComposeChat() {
+  if (!state.connected) return false;
+  const mode = workspaceMode();
+  return mode === "session" || mode === "task" || mode === "task-session";
+}
+
+function chatInputText() {
+  return dom.chatTextarea?.value?.trim() || "";
+}
+
+function isAbortError(error) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+function chatAbortTarget() {
+  if (state.selectedTaskID) {
+    const runID = state.board?.task?.activeRunID || state.executorRunID || "";
+    if (runID) {
+      return {
+        kind: "run",
+        runID,
+      };
+    }
+    return null;
+  }
+  const sessionID = currentSessionID();
+  if (!sessionID) return null;
+  return {
+    kind: "session",
+    sessionID,
+  };
+}
+
+async function abortChatTarget(target) {
+  if (!target) return false;
+  if (target.kind === "run") {
+    await apiJson(`run/${encodeURIComponent(target.runID)}/abort`, {
+      method: "POST",
+    });
+    return true;
+  }
+  await apiJson(`session/${encodeURIComponent(target.sessionID)}/abort`, {
+    method: "POST",
+  });
+  return true;
+}
+
+function renderChatComposer() {
+  if (!dom.chatTextarea || !dom.chatSend) return;
+  const request = state.chatRequest;
+  const busy = !!request;
+  const enabled = canComposeChat();
+  const hasText = !!chatInputText();
+  const label = dom.chatSend.querySelector(".chat-send-label");
+  const icon = dom.chatSend.querySelector(".chat-send-icon");
+  dom.chatTextarea.disabled = !enabled;
+  dom.chatTextarea.setAttribute("placeholder", enabled ? t("chat.placeholder") : t("chat.placeholder_disabled"));
+  if (dom.btnTaskInterrupt) dom.btnTaskInterrupt.hidden = true;
+  dom.chatSend.classList.toggle("chat-interrupt", busy);
+  dom.chatSend.dataset.mode = busy ? "stop" : "send";
+  dom.chatSend.type = busy ? "button" : "submit";
+  dom.chatSend.disabled = busy ? request.stopping === true : !enabled || !hasText;
+  dom.chatSend.title = busy ? t("chat.stop_title") : t("chat.send_title");
+  dom.chatSend.setAttribute("aria-label", busy ? t("chat.stop_label") : t("chat.send_label"));
+  if (label) {
+    label.textContent = busy ? t("chat.stop_label") : t("chat.send_label");
+  }
+  if (icon) {
+    icon.innerHTML = busy
+      ? '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="4.25" y="4.25" width="7.5" height="7.5" rx="1.2" fill="currentColor"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8l10-5-3 5 3 5z" fill="currentColor"/></svg>';
+  }
+}
+
+async function stopChatRequest(options = {}) {
+  const request = state.chatRequest;
+  if (!request || request.stopping) return false;
+  request.aborted = true;
+  request.stopping = true;
+  renderChatComposer();
+  request.controller.abort();
+  if (options.remote === false) return true;
+  const target = request.target ?? chatAbortTarget();
+  if (!target) return true;
+  try {
+    await abortChatTarget(target);
+    return true;
+  } catch (e) {
+    AppLog.warn("chat", "Failed to abort active conversation", { error: String(e), target });
+    return false;
+  } finally {
+    request.stopping = false;
+    renderChatComposer();
+  }
+}
+
 function panelRequestBody(text, metadata = {}) {
   const taskID = state.selectedTaskID || undefined;
   const selectedSessionID = currentSessionID() || undefined;
@@ -1416,7 +1740,8 @@ function panelRequestBody(text, metadata = {}) {
     taskID,
     sessionID,
     executor: state.executor,
-    allow_create: true,
+    allow_create: false,
+    allow_session_mutation: false,
     metadata: {
       selectedTaskID: taskID,
       selectedSessionID,
@@ -1475,31 +1800,35 @@ async function applyPanelResult(result) {
   }
 }
 
-async function panelMessage(text, metadata) {
+async function panelMessage(text, metadata, signal) {
   AppLog.debug("panel", "message: " + text.slice(0, 80));
+  const requestSignal = signal ?? AbortSignal.timeout(120000);
   if (!state.selectedTaskID) {
-    return panelMessageStream(text, metadata);
+    return panelMessageStream(text, metadata, requestSignal);
   }
   const result = await apiJson("panel/message", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(panelRequestBody(text, metadata)),
-    signal: AbortSignal.timeout(120000),
+    signal: requestSignal,
   });
   await applyPanelResult(result);
   return result;
 }
 
-async function panelMessageStream(text, metadata) {
+async function panelMessageStream(text, metadata, signal) {
   const body = JSON.stringify(panelRequestBody(text, metadata));
+  const requestSignal = signal ?? AbortSignal.timeout(120000);
   let res;
   try {
     res = await fetch(apiUrl("panel/message/stream"), {
       method: "POST",
       headers: { ...apiHeaders(), "Content-Type": "application/json" },
       body,
+      signal: requestSignal,
     });
   } catch (streamErr) {
+    if (isAbortError(streamErr)) throw streamErr;
     AppLog.debug("panel", "stream endpoint unavailable, falling back to POST", { error: String(streamErr) });
   }
   if (!res?.ok || !res.body) {
@@ -1507,7 +1836,7 @@ async function panelMessageStream(text, metadata) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
-      signal: AbortSignal.timeout(120000),
+      signal: requestSignal,
     });
     await applyPanelResult(result);
     return result;
@@ -2770,6 +3099,7 @@ async function checkConnection() {
 }
 
 function setConnStatus(status) {
+  document.body.dataset.connection = status;
   dom.connBadge.dataset.status = status;
   dom.connBadge.textContent =
     status === "online"
@@ -4088,6 +4418,7 @@ function renderBoard() {
 function setTaskStatus(status, options = {}) {
   const visible = options.visible ?? true;
   const next = status || "idle";
+  document.body.dataset.taskStatus = next;
   if (dom.taskStatus) dom.taskStatus.hidden = !visible;
   if (dom.taskStatus) dom.taskStatus.dataset.status = next;
   dom.statusDot.dataset.status = next;
@@ -6676,6 +7007,7 @@ function renderClear() {
   dom.chatCount.textContent = "";
   dom.elapsed.textContent = "";
   state._renderedGroupKey = "";
+  renderChatComposer();
   renderExecutor();
 }
 
@@ -6700,20 +7032,30 @@ function sizeChat() {
 
 dom.chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const text = dom.chatTextarea.value.trim();
+  if (state.chatRequest) return;
+  if (!canComposeChat()) return;
+  const text = chatInputText();
   if (!text) return;
 
   const emptyStart = workspaceMode() === "empty";
-  dom.chatSend.disabled = true;
+  const request = {
+    controller: new AbortController(),
+    target: chatAbortTarget(),
+    aborted: false,
+    stopping: false,
+  };
+  const timeout = setTimeout(() => {
+    request.controller.abort(new DOMException("Timed out", "AbortError"));
+  }, 120000);
+  state.chatRequest = request;
   dom.chatTextarea.value = "";
   sizeChat();
+  renderChatComposer();
 
-  // When no task is selected, each exchange is isolated — clear previous messages
   if (!state.selectedTaskID) {
     state.session = [];
   }
 
-  // Immediately show user message + thinking indicator
   const now = Date.now();
   state.session = [
     ...state.session,
@@ -6723,35 +7065,56 @@ dom.chatForm.addEventListener("submit", async (e) => {
   renderSession();
 
   try {
-    await panelMessage(text);
+    await panelMessage(text, undefined, request.controller.signal);
   } catch (err) {
+    if (request.aborted || isAbortError(err)) {
+      const ph = state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……");
+      if (ph) ph.parts[0].text = t("chat.interrupted_notice");
+      renderSession();
+      return;
+    }
     if (emptyStart && workspaceMode() === "empty") {
       enterEmptyWorkspace();
       renderClear();
       return;
     }
-    const ph = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
+    const ph = state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……");
     const msg = t("interaction.error", { message: err?.message || err });
     if (ph) ph.parts[0].text = msg;
     else state.session.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
     renderSession();
   } finally {
-    dom.chatSend.disabled = false;
+    clearTimeout(timeout);
+    if (state.chatRequest === request) {
+      state.chatRequest = null;
+    }
+    renderChatComposer();
   }
 });
 
 // Enter to send, Shift+Enter for newline
 dom.chatTextarea.addEventListener("keydown", (e) => {
   if (e.isComposing) return;
+  if (state.chatRequest) return;
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
+    if (!canComposeChat()) return;
     dom.chatForm.requestSubmit();
   }
 });
 
-dom.chatTextarea.addEventListener("input", sizeChat);
+dom.chatTextarea.addEventListener("input", () => {
+  sizeChat();
+  renderChatComposer();
+});
+dom.chatSend.addEventListener("click", async (e) => {
+  if (!state.chatRequest) return;
+  e.preventDefault();
+  await stopChatRequest();
+});
 dom.btnChatCopyAll?.addEventListener("click", () => copyChatConversation());
 sizeChat();
+renderChatComposer();
 
 // ── Connection Badge: double-click to restart core ──
 
@@ -8287,6 +8650,7 @@ async function init() {
       AppLog.warn("init", "connection retry failed", { error: String(retryErr) });
     }
   }, 10000);
+  syncTechFx(true);
 }
 
 init().catch((err) => {
@@ -8306,6 +8670,7 @@ window.addEventListener("blur", () => {
   void refreshInteractionAttention?.();
 });
 document.addEventListener("visibilitychange", () => {
+  syncTechFx();
   void refreshInteractionAttention?.();
 });
 
@@ -8318,5 +8683,16 @@ if (systemThemeMedia) {
     systemThemeMedia.addEventListener("change", onThemeChange);
   } else if (typeof systemThemeMedia.addListener === "function") {
     systemThemeMedia.addListener(onThemeChange);
+  }
+}
+
+if (reducedMotionMedia) {
+  const onMotionChange = () => {
+    syncTechFx(true);
+  };
+  if (typeof reducedMotionMedia.addEventListener === "function") {
+    reducedMotionMedia.addEventListener("change", onMotionChange);
+  } else if (typeof reducedMotionMedia.addListener === "function") {
+    reducedMotionMedia.addListener(onMotionChange);
   }
 }
