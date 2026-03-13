@@ -48,5 +48,6 @@ export const ControlMessageInput = z.object({
   request_id: z.string().optional(),
   source: z.string().optional(),
   allow_create: z.boolean().default(true),
+  allow_session_mutation: z.boolean().default(false),
   metadata: z.record(z.string(), z.any()).optional(),
 })

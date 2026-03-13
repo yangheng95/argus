@@ -166,6 +166,7 @@ describe("panel routes", () => {
           body: JSON.stringify({
             surface: "panel",
             text: "Create new session",
+            allow_session_mutation: true,
           }),
         })
 
@@ -186,6 +187,76 @@ describe("panel routes", () => {
         expect(events.some((item) => item.type === "message_delta" && item.delta?.includes("Session created:"))).toBe(true)
         expect(events.at(-1)?.type).toBe("done")
         expect(events.at(-1)?.result?.message).toContain("Session created:")
+      },
+    })
+  })
+
+  test("POST /panel/message does not create a blank session without explicit permission", async () => {
+    await using tmp = await tmpdir({ git: true })
+    installControlModel()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/panel/message", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            surface: "panel",
+            text: "Create new session",
+            allow_session_mutation: false,
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as {
+          kind: string
+          message: string
+        }
+        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Panel control ("))
+
+        expect(body.kind).toBe("panel_response")
+        expect(body.message).not.toContain("Task accepted:")
+        expect(sessions).toHaveLength(0)
+      },
+    })
+  })
+
+  test("POST /panel/message does not create a task session without explicit permission", async () => {
+    await using tmp = await tmpdir({ git: true })
+    installControlModel()
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/panel/message", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            surface: "panel",
+            text: "Fix the login race condition",
+            allow_create: false,
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as {
+          kind: string
+          message: string
+        }
+        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Panel control ("))
+
+        expect(body.kind).toBe("panel_response")
+        expect(body.message).not.toContain("Task accepted:")
+        expect(sessions).toHaveLength(0)
       },
     })
   })

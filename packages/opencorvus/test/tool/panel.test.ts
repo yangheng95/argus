@@ -286,4 +286,39 @@ describe("panel tool", () => {
       },
     })
   })
+
+  test("call_panel_api blocks session mutations without explicit permission", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await PanelTool.init()
+        const result = await tool.execute(
+          {
+            action: "call_panel_api",
+            method: "POST",
+            path: "session",
+            body: {},
+          },
+          {
+            sessionID: Identifier.ascending("session"),
+            messageID: Identifier.ascending("message"),
+            agent: "panel-test",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: { surface: "panel", allowSessionMutation: false },
+          },
+        )
+        const output = JSON.parse(result.output)
+        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Panel control ("))
+
+        expect(output.kind).toBe("panel_response")
+        expect(output.message).toContain("explicit user request")
+        expect(sessions).toHaveLength(0)
+      },
+    })
+  })
 })

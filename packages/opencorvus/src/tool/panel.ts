@@ -13,6 +13,27 @@ import { Server } from "@/server/server"
 import { Instance } from "@/project/instance"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
+const allowTaskCreate = (ctx: Tool.Context) => ctx.extra?.allowCreate !== false
+const allowSessionMutation = (ctx: Tool.Context) => ctx.extra?.allowSessionMutation !== false
+
+function ignored(message: string) {
+  return {
+    title: "Ignored",
+    output: JSON.stringify({
+      kind: "panel_response",
+      message,
+    }),
+    metadata: {},
+  }
+}
+
+function sessionMutationRoute(method: string, path: string) {
+  const nextMethod = method.trim().toUpperCase()
+  const nextPath = path.replace(/^\/+/, "").replace(/\?.*$/, "")
+  if (nextMethod === "POST" && nextPath === "session") return true
+  if ((nextMethod === "PATCH" || nextMethod === "DELETE") && /^session\/[^/]+$/.test(nextPath)) return true
+  return false
+}
 
 export const PanelTool = Tool.define("panel", {
   description: "Operate the OpenCorvus control plane: inspect specs, plans, and task boards, manage task state, reply to interactions, and manage sessions.",
@@ -95,12 +116,8 @@ export const PanelTool = Tool.define("panel", {
         }
       }
       case "create_task": {
-        if (params.allow_create === false) {
-          return {
-            title: "Ignored",
-            output: "No task is bound to this thread.",
-            metadata: {},
-          }
+        if (params.allow_create === false || !allowTaskCreate(ctx)) {
+          return ignored("Task creation requires an explicit user request.")
         }
         const taskID = await OrchestratorService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
@@ -247,6 +264,9 @@ export const PanelTool = Tool.define("panel", {
       case "call_panel_api": {
         const query = new URLSearchParams(params.query ?? {}).toString()
         const target = params.path.replace(/^\/+/, "")
+        if (sessionMutationRoute(params.method, target) && !allowSessionMutation(ctx)) {
+          return ignored("Session changes require an explicit user request.")
+        }
         if (!PanelApi.allow(params.method, target)) {
           return {
             title: "Panel API blocked",
@@ -319,6 +339,9 @@ export const PanelTool = Tool.define("panel", {
           metadata: {},
         }
       case "create_session": {
+        if (!allowSessionMutation(ctx)) {
+          return ignored("Session creation requires an explicit user request.")
+        }
         const session = await Session.create({})
         return {
           title: "Session created",
@@ -339,6 +362,9 @@ export const PanelTool = Tool.define("panel", {
         }
       }
       case "fork_session": {
+        if (!allowSessionMutation(ctx)) {
+          return ignored("Session changes require an explicit user request.")
+        }
         const session = await Session.fork({ sessionID: params.sessionID })
         return {
           title: "Session forked",
@@ -359,6 +385,9 @@ export const PanelTool = Tool.define("panel", {
         }
       }
       case "delete_session": {
+        if (!allowSessionMutation(ctx)) {
+          return ignored("Session changes require an explicit user request.")
+        }
         await OrchestratorService.deleteSession(params.sessionID, { deleteTasks: true })
         return {
           title: "Session deleted",

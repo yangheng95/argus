@@ -7,22 +7,30 @@ export namespace Env {
     return { ...process.env } as Record<string, string | undefined>
   })
 
+  function current() {
+    try {
+      return state()
+    } catch {
+      return process.env as Record<string, string | undefined>
+    }
+  }
+
   export function get(key: string) {
-    const env = state()
+    const env = current()
     return env[key]
   }
 
   export function all() {
-    return state()
+    return current()
   }
 
   export function set(key: string, value: string) {
-    const env = state()
+    const env = current()
     env[key] = value
   }
 
   export function remove(key: string) {
-    const env = state()
+    const env = current()
     delete env[key]
   }
 }

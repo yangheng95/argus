@@ -42,6 +42,7 @@
       if (deps.document?.body) {
         deps.document.body.dataset.workspace = workspaceMode();
       }
+      if (typeof deps.renderChatComposer === "function") deps.renderChatComposer();
     }
 
     function hasWorkspaceSelection() {
@@ -51,6 +52,7 @@
     function clearWorkspaceRuntime() {
       deps.stopPolling();
       deps.stopSSE();
+      if (typeof deps.stopChatRequest === "function") void deps.stopChatRequest();
       if (state.boardKick) clearTimeout(state.boardKick);
       if (state.sessionKick) clearTimeout(state.sessionKick);
       state.boardKick = null;
