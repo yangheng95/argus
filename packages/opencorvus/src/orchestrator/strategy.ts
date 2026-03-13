@@ -116,9 +116,11 @@ export function buildRetryContext(
   analysis?: EvaluatorAnalysisType,
 ): RetryContext {
   const goalRun = latestGoalRunByCoordinator(run.id)
-  const delivery = findDeliveryByRun(run.id) ?? (goalRun ? findDeliveryByGoalRun(goalRun.id) : undefined)
+  const runDelivery = findDeliveryByRun(run.id)
+  const goalDelivery = goalRun ? findDeliveryByGoalRun(goalRun.id) : undefined
+  const delivery = runDelivery ?? goalDelivery
   const evaluation = findEvaluationByRun(run.id) ?? (goalRun ? findEvaluationByGoalRun(goalRun.id) : undefined)
-  const files = deliveryChangedFiles(delivery?.result?.changed_files) ?? inheritedChangedFiles(run)
+  const files = deliveryChangedFiles(delivery?.result?.changed_files, !!runDelivery) ?? inheritedChangedFiles(run)
   return {
     deliverySummary: delivery?.summary ?? undefined,
     changedFiles: files,
@@ -132,10 +134,10 @@ export function buildRetryContext(
   }
 }
 
-function deliveryChangedFiles(input: unknown) {
+function deliveryChangedFiles(input: unknown, preserveEmpty = false) {
   if (!Array.isArray(input)) return
   const files = [...new Set(input.filter((item): item is string => typeof item === "string" && item.length > 0))]
-  if (files.length === 0) return
+  if (files.length === 0) return preserveEmpty ? [] : undefined
   return files
 }
 

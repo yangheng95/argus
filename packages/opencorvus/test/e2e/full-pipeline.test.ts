@@ -15,6 +15,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import * as fs from "fs/promises"
 import path from "path"
 import { SlackGateway } from "../../src/channel/slack"
+import { ExecutorBootstrap } from "../../src/executor/bootstrap"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
@@ -91,6 +92,7 @@ async function resolveModel() {
 
 const MODEL = await resolveModel()
 const MODEL_PROVIDER_ID = MODEL.split("/")[0] ?? "openai"
+const EXECUTOR = (process.env.OPENCORVUS_E2E_EXECUTOR ?? "opencode") as "opencode" | "codex" | "claude-code"
 
 async function hasLiveModel(model: string) {
   try {
@@ -341,6 +343,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
           Env.set("OPENCORVUS_INTERACTION_TIMEOUT_MS", String(TIMEOUT_MS))
           Env.set("OPENCORVUS_SPEC_AGENT_MAX_STEPS", "10")
           Env.set("OPENCORVUS_PLANNER_AGENT_MAX_STEPS", "10")
+          await ExecutorBootstrap.autoRegister(true)
           // 启动 orchestrator 轮询调度
           OrchestratorService.init()
 
@@ -388,7 +391,7 @@ describe("Full E2E: NoteStore Minimal — real Planner + Executor + Checks + Eva
           // ── 提交任务 ────────────────────────────────────────────────────
           console.log("\n[E2E] ─── 提交任务 ───")
           taskID = await OrchestratorService.createTask({
-            executor: "opencode",
+            executor: EXECUTOR,
             title: TASK_TITLE,
             request: TASK_REQUEST,
             budget: { maxRuns: 2, maxReplans: 1 },

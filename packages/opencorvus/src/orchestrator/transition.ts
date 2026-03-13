@@ -1432,6 +1432,22 @@ function inferGoalMetadata(description: string, criteria: string) {
 }
 
 export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retryContext?: RetryContext) {
+  const existing = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorRunTable)
+      .where(and(
+        eq(OrchestratorRunTable.task_id, task.id),
+        run.plan_version_id
+          ? eq(OrchestratorRunTable.plan_version_id, run.plan_version_id)
+          : isNull(OrchestratorRunTable.plan_version_id),
+        inArray(OrchestratorRunTable.status, ["queued", "accepted", "running", "blocked"]),
+      ))
+      .orderBy(desc(OrchestratorRunTable.time_created), desc(OrchestratorRunTable.id))
+      .all()
+      .find((item) => item.metadata?.previous_run_id === run.id && item.metadata?.strategy === "retry_same_plan"),
+  )
+  if (existing) return existing.id
   const nextRunID = Identifier.ascending("run")
   const now = Date.now()
   Database.transaction((db) => {

@@ -1,5 +1,6 @@
 import z from "zod"
 import { Bus } from "@/bus"
+import { discoverChecks } from "@/evaluator/discovery"
 import { EvaluatorService } from "@/evaluator/service"
 import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
@@ -375,7 +376,14 @@ export namespace OrchestratorService {
     ExecutorRegistry.require(executor)
     const session = await Session.create({ title })
     const checks = initialTaskChecks(input.checks)
-    const resolvedChecks = await EvaluatorService.resolveChecks(checks ? { checks } : undefined)
+    const [resolvedChecks, discoveredChecks] = await Promise.all([
+      EvaluatorService.resolveChecks(checks ? { checks } : undefined),
+      discoverChecks(),
+    ])
+    const materializedChecks = {
+      ...resolvedChecks,
+      ...(discoveredChecks.lint.length > 0 ? { lint: discoveredChecks.lint.map((item) => item.command) } : {}),
+    }
     const now = Date.now()
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
@@ -383,7 +391,7 @@ export namespace OrchestratorService {
     const metadata = {
       ...(input.metadata ?? {}),
       ...(input.routing ? { routing: input.routing } : {}),
-      ...(Object.keys(resolvedChecks).length > 0 ? { checks: resolvedChecks } : {}),
+      ...(Object.keys(materializedChecks).length > 0 ? { checks: materializedChecks } : {}),
     }
     // Orchestrator-dispatched tasks: auto-approve common tools, ask for external/dangerous operations.
     // When a tool requires "ask" permission, an interaction popup is created for the user.

@@ -1149,7 +1149,12 @@ describe("orchestrator.service", () => {
           },
         })
 
-        const progress = await OrchestratorService.getProgress(taskID)
+        let progress = await OrchestratorService.getProgress(taskID)
+        for (const _ of Array.from({ length: 40 })) {
+          if (progress.task.status === "failed") break
+          await Bun.sleep(50)
+          progress = await OrchestratorService.getProgress(taskID)
+        }
         const task = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
         )
