@@ -275,6 +275,7 @@ function structuredMessageText(input: unknown) {
   if (!input) return undefined
   if (typeof input === "string") return structuredMessageFromRaw(input)
   if (typeof input !== "object" || Array.isArray(input)) return undefined
+  if (!("message" in input)) return undefined
   return typeof input.message === "string" ? input.message : undefined
 }
 
@@ -289,6 +290,7 @@ function structuredMessageFromRaw(raw: string) {
   if (parsed) return structuredMessageText(parsed)
   const match = raw.match(/"message"\s*:\s*"/s)
   if (!match) return undefined
+  if (typeof match.index !== "number") return undefined
   return decodeJsonStringPrefix(raw.slice(match.index + match[0].length))
 }
 
