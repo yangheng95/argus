@@ -4,6 +4,7 @@ import { streamSSE } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { Bus } from "@/bus"
+import { Database, eq } from "@/storage/db"
 import {
   Artifact,
   CreateTaskInput,
@@ -29,6 +30,7 @@ import {
   UpdateTaskChecksInput,
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
+import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
@@ -199,6 +201,7 @@ export const OrchestratorRoutes = lazy(() =>
       validator("param", z.object({ taskID: Task.shape.id })),
       async (c) => {
         const taskID = c.req.valid("param").taskID
+        const sessionID = taskSession(taskID)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
@@ -212,7 +215,7 @@ export const OrchestratorRoutes = lazy(() =>
             })),
           })
           const unsub = Bus.subscribeAll(async (event) => {
-            if (event.properties?.taskID !== taskID) return
+            if (!matchesTaskEvent(event, taskID, sessionID)) return
             await stream.writeSSE({ data: JSON.stringify(taskEvent(taskID, event)) })
           })
           const heartbeat = setInterval(() => {
@@ -733,4 +736,38 @@ function taskEvent(taskID: string, event: { type: string; properties: Record<str
     summary: typeof event.properties.summary === "string" ? event.properties.summary : event.type,
     payload: event.properties,
   }
+}
+
+function taskSession(taskID: string) {
+  const row = Database.use((db) =>
+    db
+      .select({ sessionID: OrchestratorTaskTable.session_id })
+      .from(OrchestratorTaskTable)
+      .where(eq(OrchestratorTaskTable.id, taskID))
+      .get(),
+  )
+  return row?.sessionID ?? undefined
+}
+
+function matchesTaskEvent(
+  event: { type: string; properties: Record<string, unknown> },
+  taskID: string,
+  sessionID?: string,
+) {
+  if (event.properties?.taskID === taskID) return true
+  if (!sessionID) return false
+  return eventSession(event.properties) === sessionID
+}
+
+function eventSession(properties: Record<string, unknown>) {
+  if (typeof properties.sessionID === "string") return properties.sessionID
+  const info = properties.info
+  if (info && typeof info === "object" && "sessionID" in info && typeof info.sessionID === "string") {
+    return info.sessionID
+  }
+  const part = properties.part
+  if (part && typeof part === "object" && "sessionID" in part && typeof part.sessionID === "string") {
+    return part.sessionID
+  }
+  return undefined
 }

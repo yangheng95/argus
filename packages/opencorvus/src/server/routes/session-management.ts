@@ -3,10 +3,12 @@ import { lazy } from "../../util/lazy"
 import { SessionManagementQueryRoutes } from "./session-management-query"
 import { SessionManagementMutateRoutes } from "./session-management-mutate"
 import { SessionManagementShareRoutes } from "./session-management-share"
+import { SessionManagementPanelSettingsRoutes } from "./session-management-panel-settings"
 
 export const SessionManagementRoutes = lazy(() =>
   new Hono()
     .route("/", SessionManagementQueryRoutes())
     .route("/", SessionManagementMutateRoutes())
+    .route("/", SessionManagementPanelSettingsRoutes())
     .route("/", SessionManagementShareRoutes()),
 )

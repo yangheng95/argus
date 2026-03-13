@@ -17,6 +17,7 @@ import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { unattendedProject } from "@/orchestrator/unattended"
 import fs from "fs"
 import path from "path"
 
@@ -142,7 +143,7 @@ export interface SpecRewriteContext {
 // HeadlessSpecAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 30
+const MAX_STEPS = 45
 const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.6
@@ -234,6 +235,7 @@ async function run(input: {
   if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
 
   const context = prefetchContext(input.title, input.request)
+  const unattended = await unattendedProject()
 
   let lastQuality: { score: number; reasons: string[] } | undefined
 
@@ -244,7 +246,7 @@ async function run(input: {
     const retryContext = attempt > 0 && lastQuality
       ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
       : undefined
-    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext)
+    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, unattended)
 
     log.info("spec agent starting", {
       title: input.title,
@@ -254,6 +256,7 @@ async function run(input: {
       fileRefsFound: fileRefs.length,
       taskWorkDir,
       toolCount: Object.keys(allTools).length,
+      unattended,
       attempt: attempt + 1,
       retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
@@ -310,6 +313,40 @@ async function run(input: {
         allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
       }
 
+      if (!allText.trim()) {
+        log.warn("spec: primary run produced no final text or submit_spec call, forcing consolidation", {
+          steps: result.steps.length,
+          finishReason: result.finishReason,
+          attempt: attempt + 1,
+        })
+        const forced = await finalizeSpec(language, input, result.steps, input.signal)
+        if (forced.submittedSpec) {
+          submittedSpec = forced.submittedSpec
+        }
+        allText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
+      }
+
+      if (submittedSpec) {
+        const submitted = submittedSpec as SpecOutputType
+        log.info("spec agent finished via forced submit_spec tool call", {
+          steps: result.steps.length,
+          specItems: submitted.spec_items?.length ?? 0,
+          contentLength: submitted.content?.length ?? 0,
+          attempt: attempt + 1,
+        })
+        parsed = {
+          ...submitted,
+          summary: submitted.summary ?? "",
+          content: submitted.content ?? "",
+          scope: submitted.scope ?? "",
+          goals: Array.isArray(submitted.goals) ? submitted.goals : [],
+          spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
+          assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
+          risks: Array.isArray(submitted.risks) ? submitted.risks : [],
+          evidence_sources: Array.isArray(submitted.evidence_sources) ? submitted.evidence_sources : [],
+          unresolved_questions: Array.isArray(submitted.unresolved_questions) ? submitted.unresolved_questions : [],
+        }
+      } else {
       log.info("spec agent finished via text output (no submit_spec call)", {
         steps: result.steps.length,
         finishReason: result.finishReason,
@@ -318,7 +355,8 @@ async function run(input: {
         attempt: attempt + 1,
       })
 
-      parsed = extractJSON(allText)
+        parsed = extractJSON(allText)
+      }
     }
 
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
@@ -379,8 +417,22 @@ function buildUserPrompt(
   fileRefs: Array<{ ref: string; content: string }>,
   context: string,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
+  unattended = false,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  if (unattended) {
+    sections.push(
+      [
+        "# Unattended Execution Policy",
+        "",
+        "This project is unattended.",
+        "When details are missing but a reasonable default can unblock progress, do not ask for confirmation.",
+        "Instead, record the choice in assumptions and continue execution.",
+        "Only emit clarifications when the request is contradictory or impossible to execute safely without explicit human input.",
+      ].join("\n"),
+    )
+  }
 
   if (retryContext) {
     sections.push(
@@ -479,6 +531,64 @@ function buildUserPrompt(
   return sections.join("\n\n")
 }
 
+async function finalizeSpec(
+  language: LanguageModelV2,
+  input: {
+    title: string
+    request: string
+    mode: "initial" | "rewrite"
+    goals?: Array<{ description: string; criteria: string; priority?: string }>
+    rewriteContext?: SpecRewriteContext
+    signal?: AbortSignal
+  },
+  steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
+  signal?: AbortSignal,
+) {
+  const transcript = steps
+    .flatMap((step, index) => {
+      const calls = Array.isArray(step.toolCalls)
+        ? step.toolCalls.map((item) => `Step ${index + 1} tool_call: ${JSON.stringify(item).slice(0, 1200)}`)
+        : []
+      const results = Array.isArray(step.toolResults)
+        ? step.toolResults.map((item) => `Step ${index + 1} tool_result: ${JSON.stringify(item).slice(0, 4000)}`)
+        : []
+      return [...calls, ...results]
+    })
+    .join("\n\n")
+
+  let submittedSpec: SpecOutputType | undefined
+  const summaryTool = {
+    submit_spec: tool({
+      description:
+        "Submit the final specification after codebase exploration. " +
+        "Call this tool ONCE using the exploration transcript that was already gathered.",
+      inputSchema: SpecOutput,
+      execute: async (args) => {
+        submittedSpec = args as SpecOutputType
+        return "Specification submitted successfully."
+      },
+    }),
+  }
+
+  const result = await generateText({
+    model: language,
+    stopWhen: stepCountIs(8),
+    tools: summaryTool,
+    maxOutputTokens: 16384,
+    abortSignal: signal ?? AbortSignal.timeout(120_000),
+    system:
+      "You are finalizing a specification after exploration is already complete. " +
+      "Do not explore again. Use the transcript provided, then call submit_spec exactly once.",
+    prompt: [
+      `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
+      "# Exploration Transcript",
+      transcript || "(no transcript captured)",
+      "Now synthesize the final specification and call submit_spec exactly once.",
+    ].join("\n\n"),
+  })
+  return { result, submittedSpec }
+}
+
 // ---------------------------------------------------------------------------
 // JSON extraction & repair (mirrors planner/agent.ts logic)
 // ---------------------------------------------------------------------------
@@ -528,7 +638,13 @@ function extractJSON(text: string): SpecOutputType {
       log.error("spec: JSON parse failed after all repair attempts", {
         error: String(parseErr.error),
         rawLength: raw.length,
+        rawHead: process.env.OPENCORVUS_DEBUG_SPEC === "1" ? raw.slice(0, 400) : undefined,
+        rawTail: process.env.OPENCORVUS_DEBUG_SPEC === "1" ? raw.slice(-400) : undefined,
       })
+      if (process.env.OPENCORVUS_DEBUG_SPEC === "1") {
+        console.log("[spec-debug] raw-head:\n" + raw.slice(0, 400))
+        console.log("[spec-debug] raw-tail:\n" + raw.slice(-400))
+      }
       throw new Error(`spec output invalid JSON: ${parseErr.error instanceof Error ? parseErr.error.message : String(parseErr.error)}`)
     }
   }

@@ -4,6 +4,7 @@
     const dom = deps.dom;
 
     let busy = false;
+    let pendingInteraction = null;
     const autoResolveFailed = new Map(); // interactionID → timestamp of last failure
 
     function interactionActions(interaction) {
@@ -44,7 +45,7 @@
     function shouldAutoResolveInteraction(interaction) {
       if (!interaction || interaction.status !== "pending") return false;
       if (interaction.type === "permission") return state.autoPermission;
-      if (interaction.type === "question") return state.autoQuestion;
+      if (interaction.type === "question") return state.autoQuestion || state.unattended;
       return false;
     }
 
@@ -66,12 +67,15 @@
     function dismissInteractionModal() {
       const modal = deps.document?.getElementById("interaction-modal");
       if (modal) modal.remove();
+      pendingInteraction = null;
+      void refreshInteractionAttention();
     }
 
     function showInteractionModal(interaction) {
       let modal = deps.document?.getElementById("interaction-modal");
       if (modal && modal.dataset.interactionId === interaction.id) return;
       dismissInteractionModal();
+      pendingInteraction = interaction;
       const html = `<div id="interaction-modal" class="interaction-modal-overlay" data-interaction-id="${deps.escapeHtml(interaction.id)}">
     <div class="interaction-modal">
       <div class="interaction-modal-title">${interactionIcon(interaction)} ${deps.escapeHtml(interaction.title)}</div>
@@ -88,6 +92,17 @@
           else resolveInteraction(interaction.id, action);
         });
       });
+      void refreshInteractionAttention();
+    }
+
+    function attentionActive() {
+      if (!pendingInteraction) return false;
+      if (!deps.document) return true;
+      return deps.document.visibilityState === "hidden" || !deps.document.hasFocus();
+    }
+
+    async function refreshInteractionAttention() {
+      await deps.setTrayAttention?.(attentionActive());
     }
 
     function disableInteractionButtons(id) {
@@ -215,6 +230,7 @@
         const cooldownMs = 10000;
         const lastFail = autoResolveFailed.get(pending[0].id);
         if (lastFail && (Date.now() - lastFail) < cooldownMs) {
+          pendingInteraction = pending[0];
           showInteractionModal(pending[0]);
           return;
         }
@@ -228,6 +244,7 @@
           deps.AppLog.warn("ui", "Skipping automatic question reply due to missing structured options", {
             interactionID: pending[0].id,
           });
+          pendingInteraction = pending[0];
           showInteractionModal(pending[0]);
           return;
         }
@@ -238,8 +255,13 @@
       }
 
       if (!busy) {
+        pendingInteraction = pending[0];
         showInteractionModal(pending[0]);
+        return;
       }
+
+      pendingInteraction = null;
+      void refreshInteractionAttention();
     }
 
     return {
@@ -250,6 +272,7 @@
       resolveInteraction,
       rejectInteraction,
       isInteractionBusy,
+      refreshInteractionAttention,
     };
   }
 

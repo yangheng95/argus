@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "914f83036721d8ae"
+    "panel_revision": "7ab3af4b9e06656d"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边定工作范围，中间推进会话，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -368,7 +368,6 @@
   "section.plan": "计划",
   "section.spec": "规格",
   "session.create_failed": "创建会话失败",
-  "session.delete_confirm": "确定删除会话 {{name}} 以及其绑定的任务吗？",
   "session.delete_failed": "删除会话失败",
   "session.delete_title": "删除会话",
   "session.new_blank": "新建空白会话",
@@ -465,6 +464,8 @@
   "titlebar.opacity": "窗口透明度",
   "titlebar.opacity_hint": "数值越低，整个 overlay 会越透明。",
   "titlebar.more": "更多操作",
+  "titlebar.unattended": "无人值守",
+  "titlebar.unattended_hint": "优先采用默认假设推进任务，尽量避免人工确认阻塞。",
   "titlebar.auto_permission": "自动确认权限",
   "titlebar.auto_permission_hint": "权限弹窗出现时，自动按持久允许处理。",
   "titlebar.auto_question": "自动确认问题",

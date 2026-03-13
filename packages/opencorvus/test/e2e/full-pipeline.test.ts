@@ -47,13 +47,12 @@ const SLACK_BOT_TOKEN = env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN")
 const SLACK_APP_TOKEN = env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN") ?? "test-slack-app-token"
 const SLACK_CHANNEL_ID = env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID") ?? "test-slack-channel"
 const RUN_LIVE_E2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
-const HAS_LIVE_CREDS = !!(
-  HAS_OPENAI_OAUTH
-  && env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN")
+const HAS_SLACK_CREDS = !!(
+  env("OPENCORVUS_E2E_SLACK_BOT_TOKEN", "SLACK_BOT_TOKEN")
   && env("OPENCORVUS_E2E_SLACK_APP_TOKEN", "SLACK_APP_TOKEN")
   && env("OPENCORVUS_E2E_SLACK_CHANNEL_ID", "SLACK_CHANNEL_ID")
 )
-const liveTest = RUN_LIVE_E2E && HAS_LIVE_CREDS ? test : test.skip
+const liveTest = RUN_LIVE_E2E && HAS_OPENAI_OAUTH ? test : test.skip
 
 const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "3600000", 10) // 60 分钟
 const MODEL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_MODEL_TIMEOUT_MS ?? "900000", 10) // 15 minutes
@@ -286,6 +285,7 @@ Moment Diary 是一款个人日记 App（PRD V1.0，2026-03-10）。
 // ---------------------------------------------------------------------------
 
 async function slackPost(text: string, threadTs?: string): Promise<void> {
+  if (!HAS_SLACK_CREDS) return
   try {
     await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
@@ -446,11 +446,18 @@ describe("Full E2E: Moment Diary MVP — real Planner + Executor + Checks + Eval
           Env.set("OPENCORVUS_SPEC_TIMEOUT_MS", String(SPEC_TIMEOUT_MS))
           Env.set("OPENCORVUS_PLANNER_TIMEOUT_MS", String(PLANNER_TIMEOUT_MS))
           Env.set("OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS", String(EVALUATOR_TIMEOUT_MS))
+          Env.set("OPENCORVUS_INTERACTION_TIMEOUT_MS", String(TIMEOUT_MS))
+          // 启动 orchestrator 轮询调度
+          OrchestratorService.init()
+
+          if (!HAS_SLACK_CREDS) {
+            console.log("[E2E] Slack 未配置，跳过 channel 绑定与网关联动")
+            return
+          }
+
           // Slack
           Env.set("SLACK_BOT_TOKEN", SLACK_BOT_TOKEN)
           Env.set("SLACK_APP_TOKEN", SLACK_APP_TOKEN)
-          // 启动 orchestrator 轮询调度
-          OrchestratorService.init()
 
           // 启动 SlackGateway（Socket Mode 双向通信）：
           //   - 自动推送 TaskUpdated / RunCreated / EvaluationCompleted 事件（含工作目录）
@@ -466,20 +473,22 @@ describe("Full E2E: Moment Diary MVP — real Planner + Executor + Checks + Eval
         },
         fn: async () => {
           // ── 创建 Slack 线程（获取 thread_ts）───────────────────────────
-          const initRes = await fetch("https://slack.com/api/chat.postMessage", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              channel: SLACK_CHANNEL_ID,
-              text: `🎬 [E2E] 开始任务: *${TASK_TITLE}*`,
-            }),
-          }).then((r) => r.json() as Promise<{ ok: boolean; ts?: string; error?: string }>)
+          if (HAS_SLACK_CREDS) {
+            const initRes = await fetch("https://slack.com/api/chat.postMessage", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${SLACK_BOT_TOKEN}`, "Content-Type": "application/json" },
+              body: JSON.stringify({
+                channel: SLACK_CHANNEL_ID,
+                text: `🎬 [E2E] 开始任务: *${TASK_TITLE}*`,
+              }),
+            }).then((r) => r.json() as Promise<{ ok: boolean; ts?: string; error?: string }>)
 
-          if (initRes.ok && initRes.ts) {
-            slackThreadTs = initRes.ts
-            console.log(`[E2E] Slack thread_ts = ${slackThreadTs}`)
-          } else {
-            console.warn(`[E2E] Slack 初始消息发送失败: ${initRes.error ?? "unknown"}`)
+            if (initRes.ok && initRes.ts) {
+              slackThreadTs = initRes.ts
+              console.log(`[E2E] Slack thread_ts = ${slackThreadTs}`)
+            } else {
+              console.warn(`[E2E] Slack 初始消息发送失败: ${initRes.error ?? "unknown"}`)
+            }
           }
 
           // ── 提交任务 ────────────────────────────────────────────────────
@@ -494,11 +503,15 @@ describe("Full E2E: Moment Diary MVP — real Planner + Executor + Checks + Eval
               test: false,
               verify_cmd: ["bun test"],
             },
-            channelBinding: {
-              platform: "slack",
-              channel: SLACK_CHANNEL_ID,
-              thread: slackThreadTs ?? `e2e-diary-${Date.now()}`,
-            },
+            ...(HAS_SLACK_CREDS
+              ? {
+                  channelBinding: {
+                    platform: "slack" as const,
+                    channel: SLACK_CHANNEL_ID,
+                    thread: slackThreadTs ?? `e2e-diary-${Date.now()}`,
+                  },
+                }
+              : {}),
           })
           console.log(`[E2E] task_id = ${taskID}`)
           await slackPost(`📌 task_id = \`${taskID}\``, slackThreadTs)

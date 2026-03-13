@@ -3,6 +3,8 @@ import {
   parseJwtClaims,
   extractAccountIdFromClaims,
   extractAccountId,
+  parseCodexSSE,
+  prepareCodexBody,
   type IdTokenClaims,
 } from "../../src/plugin/codex"
 
@@ -118,6 +120,73 @@ describe("plugin.codex", () => {
           refresh_token: "rt",
         }),
       ).toBe("acc-123")
+    })
+  })
+
+  describe("prepareCodexBody", () => {
+    test("lifts system input into top-level instructions for responses payloads", () => {
+      const body = prepareCodexBody({
+        model: "gpt-5.3-codex",
+        max_output_tokens: 1234,
+        input: [
+          { role: "system", content: "You are a senior engineer." },
+          { role: "user", content: [{ type: "input_text", text: "fix the bug" }] },
+        ],
+      }) as Record<string, unknown>
+
+      expect(body.instructions).toBe("You are a senior engineer.")
+      expect(body.store).toBe(false)
+      expect(body.stream).toBe(true)
+      expect(body.max_output_tokens).toBeUndefined()
+      expect(body.input).toEqual([{ role: "user", content: [{ type: "input_text", text: "fix the bug" }] }])
+    })
+
+    test("preserves existing instructions", () => {
+      const body = prepareCodexBody({
+        instructions: "Keep me",
+        input: [{ role: "assistant", content: [{ type: "output_text", text: "done" }] }],
+      }) as Record<string, unknown>
+
+      expect(body.instructions).toBe("Keep me")
+      expect(body.store).toBe(false)
+      expect(body.stream).toBe(true)
+      expect(body.input).toEqual([{ role: "assistant", content: [{ type: "output_text", text: "done" }] }])
+    })
+
+    test("keeps only trailing delta items on follow-up turns", () => {
+      const body = prepareCodexBody(
+        {
+          input: [
+            { role: "user", content: [{ type: "input_text", text: "first" }] },
+            { role: "assistant", content: [{ type: "output_text", text: "thinking" }] },
+            { type: "function_call", id: "fc_real", call_id: "call_1", name: "read_file", arguments: "{}" },
+            { type: "function_call_output", call_id: "call_1", output: "ok" },
+          ],
+        },
+        "resp_prev",
+      ) as Record<string, unknown>
+
+      expect(body.previous_response_id).toBeUndefined()
+      expect(body.input).toEqual([
+        { type: "function_call", id: "fc_real", call_id: "call_1", name: "read_file", arguments: "{}" },
+        { type: "function_call_output", call_id: "call_1", output: "ok" },
+      ])
+    })
+  })
+
+  describe("parseCodexSSE", () => {
+    test("extracts the final response payload from sse text", () => {
+      const body = parseCodexSSE([
+        "event: response.created",
+        'data: {"type":"response.created","response":{"id":"resp_1","status":"in_progress"}}',
+        "",
+        "event: response.completed",
+        'data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[]}}',
+        "",
+      ].join("\n")) as Record<string, unknown>
+
+      expect(body.id).toBe("resp_1")
+      expect(body.status).toBe("completed")
     })
   })
 })

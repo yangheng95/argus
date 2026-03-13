@@ -1196,6 +1196,10 @@ export namespace Config {
         .optional(),
       experimental: z
         .object({
+          unattended: z
+            .boolean()
+            .optional()
+            .describe("Treat the project as unattended: prefer default assumptions over clarification blocking"),
           disable_paste_summary: z.boolean().optional(),
           batch_tool: z.boolean().optional().describe("Enable the batch tool"),
           openTelemetry: z

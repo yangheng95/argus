@@ -192,4 +192,98 @@ describe("panel tool", () => {
       },
     })
   })
+
+  test("view_panel_settings and update_panel_settings round-trip session settings", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "settings target" })
+        const tool = await PanelTool.init()
+        const ctx = {
+          sessionID: Identifier.ascending("session"),
+          messageID: Identifier.ascending("message"),
+          agent: "panel-test",
+          abort: new AbortController().signal,
+          messages: [],
+          metadata() {},
+          async ask() {},
+          extra: { surface: "panel" },
+        }
+
+        const updated = await tool.execute(
+          {
+            action: "update_panel_settings",
+            sessionID: session.id,
+            settings: {
+              theme: "light",
+              zoom: 1.25,
+            },
+          },
+          ctx,
+        )
+
+        expect(JSON.parse(updated.output)).toMatchObject({
+          session_id: session.id,
+          settings: {
+            theme: "light",
+            zoom: 1.25,
+          },
+        })
+
+        const viewed = await tool.execute(
+          {
+            action: "view_panel_settings",
+            sessionID: session.id,
+          },
+          ctx,
+        )
+
+        expect(JSON.parse(viewed.output)).toMatchObject({
+          session_id: session.id,
+          settings: {
+            theme: "light",
+            zoom: 1.25,
+          },
+        })
+      },
+    })
+  })
+
+  test("call_panel_api can read allowlisted panel routes", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await PanelTool.init()
+        const result = await tool.execute(
+          {
+            action: "call_panel_api",
+            method: "GET",
+            path: "panel/capabilities",
+            query: {
+              surface: "panel",
+            },
+          },
+          {
+            sessionID: Identifier.ascending("session"),
+            messageID: Identifier.ascending("message"),
+            agent: "panel-test",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: { surface: "panel" },
+          },
+        )
+        const output = JSON.parse(result.output)
+
+        expect(output.response.status).toBe(200)
+        expect(Array.isArray(output.response.data.actions)).toBe(true)
+        expect(output.response.data.actions.some((item: { action?: string }) => item.action === "view_spec")).toBe(true)
+      },
+    })
+  })
 })

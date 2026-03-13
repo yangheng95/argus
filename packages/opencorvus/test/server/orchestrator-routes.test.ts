@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { Bus } from "../../src/bus"
+import { parseSSE } from "../../src/control-plane/sse"
 import { Database, eq } from "../../src/storage/db"
 import { type ExecutorAdapter } from "../../src/executor/compat"
 import { EvaluatorService } from "../../src/evaluator/service"
@@ -13,6 +15,7 @@ import { PlannerService } from "../../src/planner/service"
 import { SpecService } from "../../src/spec/service"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { MessageV2 } from "../../src/session/message"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
@@ -545,6 +548,96 @@ describe("orchestrator routes", () => {
 
         expect(second.status).toBe(304)
         expect(second.headers.get("etag")).toBe(etag)
+      },
+    })
+
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  test("GET /task/:id/events forwards session message events for the task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "stream task session updates",
+          }),
+        })
+
+        expect(created.status).toBe(202)
+        const { task_id } = (await created.json()) as { task_id: string }
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, task_id)).get(),
+        )
+
+        expect(task?.session_id).toBeTruthy()
+
+        const stop = new AbortController()
+        const response = await app.request(`/task/${task_id}/events`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+          signal: stop.signal,
+        })
+
+        expect(response.status).toBe(200)
+        expect(response.body).toBeDefined()
+
+        const seen: unknown[] = []
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error("timed out waiting for task session event"))
+            }, 3000)
+
+            void parseSSE(response.body!, stop.signal, (event) => {
+              seen.push(event)
+              const next = event as { type?: string }
+              if (next.type === "task.connected") {
+                void Bus.publish(MessageV2.Event.PartDelta, {
+                  sessionID: task!.session_id!,
+                  messageID: "msg_1",
+                  partID: "part_1",
+                  field: "text",
+                  delta: "Hello from task session",
+                }).catch((error) => {
+                  clearTimeout(timeout)
+                  reject(error)
+                })
+                return
+              }
+              if (next.type !== "message.part.delta") return
+              clearTimeout(timeout)
+              resolve()
+            }).catch((error) => {
+              clearTimeout(timeout)
+              reject(error)
+            })
+          })
+        } finally {
+          stop.abort()
+        }
+
+        expect(seen).toContainEqual(expect.objectContaining({
+          type: "message.part.delta",
+          payload: expect.objectContaining({
+            sessionID: task!.session_id,
+            delta: "Hello from task session",
+          }),
+        }))
       },
     })
 

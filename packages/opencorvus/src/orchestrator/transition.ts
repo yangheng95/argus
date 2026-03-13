@@ -39,6 +39,7 @@ import {
   type OrchestratorArtifactKind,
 } from "./orchestrator.sql"
 import { plannerClarification } from "./planner-clarification"
+import { suppressClarifications, unattendedProject } from "./unattended"
 import { buildSpecReplanInput } from "./spec-goal-service"
 import { findPlan, findSpecItems, findTask, listGoalsBySpec, listMilestonesByPlan, type GoalRow, type PlanRow, type RunRow, type TaskRow } from "./store"
 
@@ -280,12 +281,22 @@ function blockedPlanDraft(input: {
 
 export async function compileTransition(input: CompileTransitionInput): Promise<CompileTransitionResult> {
   installRuntimeShims()
-  const specDraft = await compileSpec(input).catch((error) => {
+  const unattended = await unattendedProject()
+  const rawSpecDraft = await compileSpec(input).catch((error) => {
     if (!(error instanceof SpecFailureError)) throw error
     throw new PlannerFailureError(error.message, { cause: error })
   })
-  const specBlock = specClarification(specDraft)
-  const planDraft = await (
+  const initialSpecClarification = specClarification(rawSpecDraft)
+  if (unattended && initialSpecClarification) {
+    log.info(`${input.mode}: auto-assuming specification clarification for unattended project`, {
+      taskID: input.taskID,
+      reason: initialSpecClarification.reason,
+      questionCount: initialSpecClarification.questions.length,
+    })
+  }
+  const specDraft = unattended ? suppressClarifications(rawSpecDraft) : rawSpecDraft
+  const specBlock = unattended ? undefined : specClarification(specDraft)
+  let planDraft = await (
     specBlock
       ? Promise.resolve(blockedPlanDraft({
           mode: input.mode,
@@ -306,6 +317,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             title: input.title,
             request: input.request,
             spec: specDraft,
+            allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
           })
@@ -317,6 +329,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             previousPlanID: input.previousPlan.id,
             failureSummary: input.failureSummary,
             replanContext: input.replanContext,
+            allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
           })
@@ -326,7 +339,28 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
     next.specDraft = specDraft
     throw next
   })
-  const clarification = plannerClarification(planDraft)
+  let clarification = plannerClarification(planDraft)
+  if (unattended && clarification) {
+    log.info(`${input.mode}: auto-suppressing planner clarification for unattended project`, {
+      taskID: input.taskID,
+      reason: clarification.reason,
+      questionCount: clarification.questions.length,
+    })
+    planDraft = {
+      ...planDraft,
+      metadata: {
+        ...planDraft.metadata,
+        clarification: undefined,
+        planner: {
+          ...(planDraft.metadata?.planner && typeof planDraft.metadata.planner === "object"
+            ? planDraft.metadata.planner as Record<string, unknown>
+            : {}),
+          clarification_source: "suppressed",
+        },
+      },
+    }
+    clarification = undefined
+  }
   if (clarification) {
     const source = planDraft.metadata?.planner?.source === "spec_stage" ? "spec" : "planner"
     log.info(`${input.mode}: ${source} clarification required`, {

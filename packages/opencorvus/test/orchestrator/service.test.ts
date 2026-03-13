@@ -236,6 +236,7 @@ describe("orchestrator.service", () => {
   afterEach(async () => {
     mock.restore()
     ExecutorRegistry.reset()
+    delete process.env.OPENCORVUS_UNATTENDED
     await resetDatabase()
   })
 
@@ -724,6 +725,100 @@ describe("orchestrator.service", () => {
         expect(next.active_spec_version_id).toBeTruthy()
         expect(specItems).toHaveLength(1)
         expect(specItems[0]?.title).toBe("Preserve the acceptance gate")
+      },
+    })
+  })
+
+  test("auto-assumes specification clarification in unattended mode", async () => {
+    process.env.OPENCORVUS_UNATTENDED = "1"
+    await using tmp = await tmpdir({ git: true })
+
+    const planner = spyOn(PlannerService, "initial").mockResolvedValue({
+      summary: "Compiled unattended plan",
+      prompt: "Execute the unattended compiled plan",
+      goals: [{
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+        metadata: {
+          check_selector: ["build", "test", "spec_check"],
+        },
+      }],
+      metadata: {
+        strategy: "initial",
+        steps: ["Implement", "Verify"],
+        planner: {
+          role: "headless_compiler",
+          quality: "compiled",
+          source: "planner_agent",
+          clarification_source: "suppressed",
+        },
+        clarification: undefined,
+        spec_analysis: {
+          expanded_spec: "# Scope\n\nUse the default homepage path.",
+          ambiguities: [],
+          questions: [],
+        },
+      },
+    } as any)
+
+    spyOn(SpecService, "initial").mockResolvedValue({
+      summary: "Spec summary",
+      content: "# Scope\n\nUpdate the landing page hero copy.",
+      scope: "Update the landing page hero copy.",
+      goals: [{
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+        metadata: {
+          check_selector: ["build", "test", "spec_check"],
+        },
+      }],
+      assumptions: [],
+      risks: [],
+      spec_items: [{
+        title: "Update landing page hero copy",
+        description: "Change the homepage hero copy without blocking for clarification.",
+        priority: "blocking",
+        check_selector: ["spec_check"],
+      }],
+      evidence_sources: [],
+      unresolved_questions: [],
+      clarifications: [{
+        header: "Scope",
+        question: "Which page should change first?",
+        context: "The request does not name a specific page.",
+        default_assumption: "Start with the landing page hero section.",
+      }],
+    } as any)
+
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "queued",
+      error: null,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "update the landing page hero copy",
+        })
+
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )
+        const interactions = await OrchestratorService.listTaskInteractions(taskID)
+        const plannerInput = planner.mock.calls[0]?.[0] as { allowClarification?: boolean; spec?: { assumptions?: Array<{ assumption: string }> } }
+
+        expect(task?.status).toBe("queued")
+        expect(interactions).toHaveLength(0)
+        expect(plannerInput.allowClarification).toBe(false)
+        expect(plannerInput.spec?.assumptions?.some((item) => item.assumption.includes("landing page hero section"))).toBe(true)
       },
     })
   })

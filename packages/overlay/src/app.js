@@ -39,6 +39,7 @@ const DEFAULT_OVERLAY_SETTINGS = {
   executor: "opencode",
   initGit: true,
   alwaysOnTop: false,
+  unattended: true,
   autoPermission: false,
   autoQuestion: false,
   sidebarCollapsed: false,
@@ -81,6 +82,7 @@ const state = {
   executor: DEFAULT_OVERLAY_SETTINGS.executor,
   initGit: DEFAULT_OVERLAY_SETTINGS.initGit,
   alwaysOnTop: DEFAULT_OVERLAY_SETTINGS.alwaysOnTop,
+  unattended: DEFAULT_OVERLAY_SETTINGS.unattended,
   autoPermission: DEFAULT_OVERLAY_SETTINGS.autoPermission,
   autoQuestion: DEFAULT_OVERLAY_SETTINGS.autoQuestion,
   sidebarCollapsed: DEFAULT_OVERLAY_SETTINGS.sidebarCollapsed,
@@ -92,6 +94,8 @@ const state = {
   locale: DEFAULT_OVERLAY_SETTINGS.locale,
   directoryMode: DEFAULT_OVERLAY_SETTINGS.directoryMode,
   directory: DEFAULT_OVERLAY_SETTINGS.directory,
+  savedDirectory: DEFAULT_OVERLAY_SETTINGS.directory,
+  tempDirectory: "",
   directoryEpoch: 0,
   localeSeq: 0,
   i18n: {},
@@ -163,6 +167,7 @@ const dom = {
   btnSettings: $("#btnSettings"),
   btnPin: $("#btnPin"),
   btnPinValue: $("#btnPinValue"),
+  chkUnattended: $("#chkUnattended"),
   chkAutoPermission: $("#chkAutoPermission"),
   chkAutoQuestion: $("#chkAutoQuestion"),
   opacityRange: $("#opacityRange"),
@@ -388,6 +393,9 @@ let llmSaveTimer;
 let llmNoticeTimer;
 let llmSyncSerial = 0;
 let llmSavedValue = "";
+let bootstrapSettings = { ...DEFAULT_OVERLAY_SETTINGS };
+let settingsSessionID = "";
+let settingsSeq = 0;
 
 // ── AppLog ──
 
@@ -486,6 +494,7 @@ const interactions = window.createOverlayInteractions?.({
   apiJson,
   loadBoard,
   AppLog,
+  setTrayAttention,
 });
 
 if (!interactions) {
@@ -500,6 +509,7 @@ const {
   resolveInteraction: resolveInteractionHelper,
   rejectInteraction: rejectInteractionHelper,
   isInteractionBusy,
+  refreshInteractionAttention,
 } = interactions;
 
 Object.assign(window, {
@@ -510,6 +520,7 @@ Object.assign(window, {
   resolveInteraction: resolveInteractionHelper,
   rejectInteraction: rejectInteractionHelper,
   isInteractionBusy,
+  refreshInteractionAttention,
 });
 
 function interactionAlertHtml(interaction) {
@@ -793,6 +804,16 @@ function hasTauriRuntime() {
   return typeof window !== "undefined" && typeof window.__TAURI__?.core?.invoke === "function";
 }
 
+let trayAttentionEnabled = false;
+
+async function setTrayAttention(active) {
+  if (!hasTauriRuntime()) return false;
+  if (trayAttentionEnabled === !!active) return true;
+  const result = await tauriInvoke("overlay_attention_set", { active: !!active }).catch(() => false);
+  if (result) trayAttentionEnabled = !!active;
+  return !!result;
+}
+
 function normalizeUrl(value, fallback = DEFAULT_SERVER) {
   const input = typeof value === "string" && value.trim() ? value.trim() : fallback;
   return input.replace(/\/+$/, "");
@@ -880,8 +901,13 @@ function sanitizeDirectoryMode(value, directory) {
   return typeof directory === "string" && directory.trim() ? "custom" : DEFAULT_OVERLAY_SETTINGS.directoryMode;
 }
 
+function savedDirectoryValue(directory, mode) {
+  const next = typeof directory === "string" ? directory.trim() : "";
+  if (!next) return "";
+  return sanitizeDirectoryMode(mode, next) === "custom" ? next : "";
+}
+
 function settingsDirectory(settings) {
-  if (sanitizeDirectoryMode(settings?.directoryMode, settings?.directory) !== "custom") return "";
   return typeof settings?.directory === "string" ? settings.directory.trim() : "";
 }
 
@@ -968,7 +994,10 @@ function renderPaneLayout() {
 function browserOverlaySettings() {
   const serverUrl = localStorage.getItem("oc_server_url") || DEFAULT_OVERLAY_SETTINGS.serverUrl;
   const autoServer = localStorage.getItem("oc_auto_server");
-  const directory = localStorage.getItem("oc_directory") || DEFAULT_OVERLAY_SETTINGS.directory;
+  const directory = savedDirectoryValue(
+    localStorage.getItem("oc_directory") || DEFAULT_OVERLAY_SETTINGS.directory,
+    localStorage.getItem("oc_directory_mode"),
+  );
   return {
     serverUrl,
     autoServer: autoServer === null ? defaultAutoServer(serverUrl) : autoServer !== "false",
@@ -977,6 +1006,7 @@ function browserOverlaySettings() {
     executor: localStorage.getItem("oc_executor") || DEFAULT_OVERLAY_SETTINGS.executor,
     initGit: true,
     alwaysOnTop: localStorage.getItem("oc_always_on_top") === "true",
+    unattended: localStorage.getItem("oc_unattended") !== "false",
     autoPermission: localStorage.getItem("oc_auto_permission") === "true",
     autoQuestion: localStorage.getItem("oc_auto_question") === "true",
     sidebarCollapsed: localStorage.getItem("oc_sidebar_collapsed") === "true",
@@ -986,12 +1016,12 @@ function browserOverlaySettings() {
     zoom: sanitizeZoom(localStorage.getItem("oc_zoom")),
     theme: sanitizeTheme(localStorage.getItem("oc_theme")),
     locale: sanitizeLocale(localStorage.getItem("oc_locale") || DEFAULT_OVERLAY_SETTINGS.locale),
-    directoryMode: sanitizeDirectoryMode(localStorage.getItem("oc_directory_mode"), directory),
     directory,
   };
 }
 
-function applyOverlaySettings(settings) {
+function applyOverlaySettings(settings, options = {}) {
+  const directory = savedDirectoryValue(settings?.directory, settings?.directoryMode);
   state.serverUrl =
     typeof settings?.serverUrl === "string" && settings.serverUrl.trim()
       ? settings.serverUrl.trim()
@@ -1008,6 +1038,7 @@ function applyOverlaySettings(settings) {
       : DEFAULT_OVERLAY_SETTINGS.executor;
   state.initGit = true;
   state.alwaysOnTop = settings?.alwaysOnTop === true;
+  state.unattended = settings?.unattended !== false;
   state.autoPermission = settings?.autoPermission === true;
   state.autoQuestion = settings?.autoQuestion === true;
   state.sidebarCollapsed = settings?.sidebarCollapsed === true;
@@ -1017,11 +1048,68 @@ function applyOverlaySettings(settings) {
   state.zoom = sanitizeZoom(settings?.zoom);
   state.theme = sanitizeTheme(settings?.theme);
   state.locale = sanitizeLocale(settings?.locale || DEFAULT_OVERLAY_SETTINGS.locale);
-  state.directoryMode = sanitizeDirectoryMode(settings?.directoryMode, settings?.directory);
-  state.directory =
-    state.directoryMode === "custom" && typeof settings?.directory === "string"
-      ? settings.directory.trim()
-      : DEFAULT_OVERLAY_SETTINGS.directory;
+  state.savedDirectory = directory;
+  if (options.resetTemp === true) state.tempDirectory = "";
+  if (options.preserveDirectory !== true || !state.directory) state.directory = directory;
+  state.directoryMode = directory ? "custom" : "temp";
+}
+
+function bootstrapOverlaySettings(input = state) {
+  return {
+    serverUrl: input.serverUrl,
+    autoServer: input.autoServer,
+    password: input.password,
+    username: input.username,
+    executor: input.executor,
+    initGit: true,
+    alwaysOnTop: input.alwaysOnTop,
+    unattended: input.unattended,
+    autoPermission: input.autoPermission,
+    autoQuestion: input.autoQuestion,
+    sidebarCollapsed: input.sidebarCollapsed,
+    sidebarWidth: input.sidebarWidth || undefined,
+    sectionsWidth: input.sectionsWidth || undefined,
+    opacity: input.opacity,
+    zoom: input.zoom,
+    theme: input.theme,
+    locale: input.locale,
+    directoryMode: input.savedDirectory ? "custom" : "temp",
+    directory: input.savedDirectory || undefined,
+  };
+}
+
+function sessionOverlaySettings(input = state) {
+  return {
+    executor: input.executor,
+    alwaysOnTop: input.alwaysOnTop,
+    unattended: input.unattended,
+    autoPermission: input.autoPermission,
+    autoQuestion: input.autoQuestion,
+    sidebarCollapsed: input.sidebarCollapsed,
+    sidebarWidth: input.sidebarWidth ?? null,
+    sectionsWidth: input.sectionsWidth ?? null,
+    opacity: input.opacity,
+    zoom: input.zoom,
+    theme: input.theme,
+    locale: input.locale,
+    directory: input.savedDirectory || "",
+  };
+}
+
+async function loadSessionOverlaySettings(sessionID) {
+  if (!sessionID || !state.connected) return {};
+  return apiJson(`session/${encodeURIComponent(sessionID)}/panel-settings`, undefined, { directory: false })
+    .catch(() => ({}));
+}
+
+async function saveSessionOverlaySettings(sessionID, settings) {
+  if (!sessionID || !state.connected) return false;
+  await apiJson(`session/${encodeURIComponent(sessionID)}/panel-settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  }, { directory: false });
+  return true;
 }
 
 async function loadOverlaySettings() {
@@ -1032,62 +1120,92 @@ async function loadOverlaySettings() {
   const next = saved && typeof saved === "object"
     ? { ...browser, ...saved }
     : browser;
+  bootstrapSettings = { ...DEFAULT_OVERLAY_SETTINGS, ...next };
   if (shouldMigrateOpacity(next.opacity)) {
-    applyOverlaySettings({ ...next, opacity: DEFAULT_OVERLAY_SETTINGS.opacity });
+    bootstrapSettings = { ...bootstrapSettings, opacity: DEFAULT_OVERLAY_SETTINGS.opacity };
+    applyOverlaySettings(bootstrapSettings, { resetTemp: true });
     localStorage.setItem(OPACITY_MIGRATION_KEY, "true");
     await persistOverlaySettings();
     return;
   }
-  applyOverlaySettings(next);
+  applyOverlaySettings(bootstrapSettings, { resetTemp: true });
 }
 
 async function persistOverlaySettings() {
-  const settings = {
-    serverUrl: state.serverUrl,
-    autoServer: state.autoServer,
-    password: state.password,
-    username: state.username,
-    executor: state.executor,
-    initGit: true,
-    alwaysOnTop: state.alwaysOnTop,
-    autoPermission: state.autoPermission,
-    autoQuestion: state.autoQuestion,
-    sidebarCollapsed: state.sidebarCollapsed,
-    sidebarWidth: state.sidebarWidth || undefined,
-    sectionsWidth: state.sectionsWidth || undefined,
-    opacity: state.opacity,
-    zoom: state.zoom,
-    theme: state.theme,
-    locale: state.locale,
-    directoryMode: state.directoryMode,
-    directory: state.directoryMode === "custom" && state.directory ? state.directory : undefined,
+  const sessionID = currentSessionID() || "";
+  const settings = sessionID
+    ? {
+        ...bootstrapSettings,
+        serverUrl: state.serverUrl,
+        autoServer: state.autoServer,
+        password: state.password,
+        username: state.username,
+      }
+    : bootstrapOverlaySettings();
+  bootstrapSettings = {
+    ...bootstrapSettings,
+    ...settings,
   };
   localStorage.setItem("oc_server_url", settings.serverUrl);
   localStorage.setItem("oc_auto_server", String(settings.autoServer));
   localStorage.setItem("oc_password", settings.password);
   localStorage.setItem("oc_username", settings.username);
-  localStorage.setItem("oc_executor", settings.executor);
+  localStorage.setItem("oc_executor", settings.executor || DEFAULT_OVERLAY_SETTINGS.executor);
   localStorage.removeItem("oc_init_git");
-  localStorage.setItem("oc_always_on_top", String(settings.alwaysOnTop));
-  localStorage.setItem("oc_auto_permission", String(settings.autoPermission));
-  localStorage.setItem("oc_auto_question", String(settings.autoQuestion));
-  localStorage.setItem("oc_sidebar_collapsed", String(settings.sidebarCollapsed));
+  localStorage.setItem("oc_always_on_top", String(settings.alwaysOnTop ?? DEFAULT_OVERLAY_SETTINGS.alwaysOnTop));
+  localStorage.setItem("oc_unattended", String(settings.unattended ?? DEFAULT_OVERLAY_SETTINGS.unattended));
+  localStorage.setItem("oc_auto_permission", String(settings.autoPermission ?? DEFAULT_OVERLAY_SETTINGS.autoPermission));
+  localStorage.setItem("oc_auto_question", String(settings.autoQuestion ?? DEFAULT_OVERLAY_SETTINGS.autoQuestion));
+  localStorage.setItem("oc_sidebar_collapsed", String(settings.sidebarCollapsed ?? DEFAULT_OVERLAY_SETTINGS.sidebarCollapsed));
   if (settings.sidebarWidth) localStorage.setItem("oc_sidebar_width", String(settings.sidebarWidth));
   else localStorage.removeItem("oc_sidebar_width");
   if (settings.sectionsWidth) localStorage.setItem("oc_sections_width", String(settings.sectionsWidth));
   else localStorage.removeItem("oc_sections_width");
-  localStorage.setItem("oc_opacity", String(settings.opacity));
-  localStorage.setItem("oc_zoom", String(settings.zoom));
-  localStorage.setItem("oc_theme", settings.theme);
-  localStorage.setItem("oc_locale", settings.locale);
-  localStorage.setItem("oc_directory_mode", settings.directoryMode);
+  localStorage.setItem("oc_opacity", String(settings.opacity ?? DEFAULT_OVERLAY_SETTINGS.opacity));
+  localStorage.setItem("oc_zoom", String(settings.zoom ?? DEFAULT_OVERLAY_SETTINGS.zoom));
+  localStorage.setItem("oc_theme", settings.theme || DEFAULT_OVERLAY_SETTINGS.theme);
+  localStorage.setItem("oc_locale", settings.locale || DEFAULT_OVERLAY_SETTINGS.locale);
   if (settings.directory) localStorage.setItem("oc_directory", settings.directory);
   else localStorage.removeItem("oc_directory");
+  localStorage.removeItem("oc_directory_mode");
   const saved = await tauriInvoke("overlay_settings_save", {
     settings,
     directory: settingsDirectory(settings) || undefined,
   }).catch(() => undefined);
+  if (sessionID) {
+    await saveSessionOverlaySettings(sessionID, sessionOverlaySettings()).catch(() => undefined);
+  }
   if (saved) return;
+}
+
+async function applyWindowPin() {
+  const win = await currentTauriWindow();
+  if (!win || typeof win.setAlwaysOnTop !== "function") {
+    renderTitlebarMenu();
+    return;
+  }
+  await win.setAlwaysOnTop(state.alwaysOnTop).catch(() => undefined);
+  if (dom.btnPin) dom.btnPin.dataset.pinned = String(state.alwaysOnTop);
+  renderTitlebarMenu();
+}
+
+async function syncSessionOverlaySettings(sessionID = currentSessionID(), options = {}) {
+  const next = sessionID || "";
+  if (!options.force && settingsSessionID === next) return false;
+  settingsSessionID = next;
+  const seq = ++settingsSeq;
+  const session = next ? await loadSessionOverlaySettings(next) : {};
+  if (seq !== settingsSeq || settingsSessionID !== next) return false;
+  applyOverlaySettings({ ...bootstrapSettings, ...(session && typeof session === "object" ? session : {}) }, {
+    preserveDirectory: !!next,
+  });
+  refreshLocalizedState();
+  renderWorkspaceState();
+  renderScale();
+  await applyWindowPin();
+  await applyWindowOpacity();
+  await syncUnattendedConfig(true);
+  return true;
 }
 
 async function createTempDirectory() {
@@ -1096,12 +1214,23 @@ async function createTempDirectory() {
 }
 
 async function ensureDefaultDirectory() {
-  if (state.directoryMode === "custom" && state.directory) return false;
+  if (state.savedDirectory) {
+    state.directory = state.savedDirectory;
+    state.directoryMode = "custom";
+    return false;
+  }
+  if (state.tempDirectory) {
+    state.directory = state.tempDirectory;
+    state.directoryMode = "temp";
+    return false;
+  }
   if (!hasTauriRuntime()) return false;
   const next = await createTempDirectory();
   if (!next) return false;
-  state.directoryMode = "temp";
+  state.tempDirectory = next;
   state.directory = next;
+  state.savedDirectory = "";
+  state.directoryMode = "temp";
   await persistOverlaySettings();
   return true;
 }
@@ -1154,6 +1283,9 @@ function renderTitlebarMenu() {
   }
   if (dom.btnPinValue) {
     dom.btnPinValue.textContent = state.alwaysOnTop ? t("common.yes") : t("common.no");
+  }
+  if (dom.chkUnattended) {
+    dom.chkUnattended.checked = state.unattended;
   }
   if (dom.chkAutoPermission) {
     dom.chkAutoPermission.checked = state.autoPermission;
@@ -1452,6 +1584,28 @@ async function updateConfig(mutator) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(next),
   });
+}
+
+function configUnattended(config) {
+  const value = config?.experimental?.unattended;
+  return typeof value === "boolean" ? value : null;
+}
+
+async function syncUnattendedConfig(force = false) {
+  if (!state.connected) return false;
+  const remote = configUnattended(state.config);
+  if (!force && remote === state.unattended) return false;
+  try {
+    const saved = await updateConfig((current) => {
+      current.experimental = current.experimental || {};
+      current.experimental.unattended = state.unattended;
+    });
+    state.config = saved;
+    return true;
+  } catch (e) {
+    AppLog.error("ui", "Failed to sync unattended mode", { error: String(e) });
+    return false;
+  }
 }
 
 function dedupe(list) {
@@ -2681,9 +2835,6 @@ async function loadMeta() {
     if (epoch !== state.directoryEpoch) return;
     state.path = path;
     state.vcs = vcs;
-    if (!activeDirectory() && typeof path?.directory === "string" && path.directory.trim()) {
-      setWorkspaceDirectory(path.directory, "auto");
-    }
     renderMeta();
   } catch (e) {
     AppLog.debug("meta", "loadMeta failed, resetting path/vcs", { error: String(e) });
@@ -2816,10 +2967,14 @@ function resetProjectScope() {
   renderManagedSessionList();
 }
 
-async function reloadProjectScope() {
+async function reloadProjectScope(options = {}) {
+  const includeSessions = options.includeSessions === true;
+  const restoreWorkspace = options.restoreWorkspace !== false;
   await ensureWorkspaceDirectory();
-  await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
-  await restoreInitialWorkspace();
+  const jobs = [loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()];
+  if (includeSessions) jobs.push(loadManagedSessions());
+  await Promise.all(jobs);
+  if (restoreWorkspace) await restoreInitialWorkspace();
 }
 
 async function ensureWorkspaceDirectory() {
@@ -2828,36 +2983,57 @@ async function ensureWorkspaceDirectory() {
   return activeDirectory();
 }
 
-async function applyDirectory(next, mode) {
-  if (next === state.directory && mode === state.directoryMode) return;
+async function applyDirectory(next, options = {}) {
+  const save = options.save === true ? next : options.save === false ? "" : null;
+  const temp = options.temp === true ? next : options.temp === false ? "" : null;
+  if (
+    next === state.directory &&
+    (save === null || save === state.savedDirectory) &&
+    (temp === null || temp === state.tempDirectory)
+  ) return;
   state.directoryEpoch += 1;
-  state.directoryMode = mode;
   state.directory = next;
+  if (save !== null) state.savedDirectory = save;
+  if (temp !== null) state.tempDirectory = temp;
+  state.directoryMode = state.savedDirectory ? "custom" : "temp";
   resetProjectScope();
 
-  await persistOverlaySettings();
+  if (options.persist !== false) await persistOverlaySettings();
   const ok = await checkConnection();
   if (!ok) return;
-  await reloadProjectScope();
+  await reloadProjectScope(options);
 }
 
-async function setTempDirectory() {
+async function setTempDirectory(options) {
   if (!hasTauriRuntime()) {
-    await applyDirectory("", "temp");
+    await applyDirectory("", { ...options, save: false, temp: false });
     return;
   }
   const next = await createTempDirectory();
   if (!next) throw new Error(t("cwd.create_unavailable"));
-  await applyDirectory(next, "temp");
+  await applyDirectory(next, { ...options, save: false, temp: true });
 }
 
-async function setDirectory(value) {
+async function setDirectory(value, options) {
   const next = typeof value === "string" ? value.trim() : "";
   if (!next) {
-    await setTempDirectory();
+    if (state.tempDirectory) {
+      await applyDirectory(state.tempDirectory, { ...options, save: false });
+      return;
+    }
+    await setTempDirectory(options);
     return;
   }
-  await applyDirectory(next, "custom");
+  await applyDirectory(next, { ...options, save: true, temp: false });
+}
+
+async function setActiveDirectory(value, options = {}) {
+  const next = typeof value === "string" ? value.trim() : "";
+  if (!next || next === state.directory) return;
+  await applyDirectory(next, {
+    ...options,
+    persist: false,
+  });
 }
 
 async function initGitCurrent(options = {}) {
@@ -3034,6 +3210,66 @@ function sessionTitle(session) {
   return clipText(session?.title || session?.id || "", 72);
 }
 
+function isDefaultSessionTitle(title) {
+  return /^((New session - )|(Child session - ))\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(String(title || ""));
+}
+
+function isPanelControlSession(session) {
+  return typeof session?.title === "string" && session.title.startsWith("Panel control (");
+}
+
+function isUnusedSession(session) {
+  const created = Number(session?.time?.created || 0);
+  const updated = Number(session?.time?.updated || 0);
+  if (!created || !updated) return false;
+  return Math.abs(updated - created) < 1000;
+}
+
+function visibleSession(session) {
+  if (!session || typeof session !== "object") return false;
+  if (session.parentID) return false;
+  if (isPanelControlSession(session)) return false;
+  if (isDefaultSessionTitle(session.title) && isUnusedSession(session)) return false;
+  return true;
+}
+
+function displaySessions() {
+  const list = state.sessions.filter(visibleSession);
+  const current = state.managedSession;
+  if (!current?.id || list.some((item) => item?.id === current.id)) return list;
+  return [current, ...list];
+}
+
+const SESSION_DELETE_CONFIRM_MS = 2500;
+let pendingSessionDeleteID = "";
+let pendingSessionDeleteTimer = null;
+
+function isPendingSessionDelete(sessionID) {
+  return !!sessionID && pendingSessionDeleteID === sessionID;
+}
+
+function clearPendingSessionDelete(sessionID) {
+  if (sessionID && pendingSessionDeleteID !== sessionID) return;
+  pendingSessionDeleteID = "";
+  if (pendingSessionDeleteTimer) {
+    clearTimeout(pendingSessionDeleteTimer);
+    pendingSessionDeleteTimer = null;
+  }
+  renderManagedSessionList();
+}
+
+function armPendingSessionDelete(sessionID) {
+  if (!sessionID) return;
+  pendingSessionDeleteID = sessionID;
+  if (pendingSessionDeleteTimer) clearTimeout(pendingSessionDeleteTimer);
+  pendingSessionDeleteTimer = setTimeout(() => {
+    pendingSessionDeleteID = "";
+    pendingSessionDeleteTimer = null;
+    renderManagedSessionList();
+  }, SESSION_DELETE_CONFIRM_MS);
+  renderManagedSessionList();
+}
+
 function sessionItem(sessionID) {
   if (!sessionID) return null;
   return [state.managedSession, ...state.sessions]
@@ -3044,6 +3280,8 @@ function sessionRow(item, meta = "") {
   const active = currentSessionID() === item.id ? ' data-active="true"' : "";
   const badge = "";
   const title = escapeHtml(item.title || item.id);
+  const confirmDelete = isPendingSessionDelete(item.id);
+  const deleteLabel = confirmDelete ? t("dialog.confirm") : t("common.delete");
   return `<div class="session-row-mini"${active} title="${title}">
     <button type="button" class="session-row-main" data-session-id="${escapeHtml(item.id)}" title="${title}">
       <div class="session-row-head">
@@ -3057,14 +3295,18 @@ function sessionRow(item, meta = "") {
       type="button"
       class="session-row-delete"
       data-session-delete="${escapeHtml(item.id)}"
-      title="${escapeHtml(t("common.delete"))}"
-      aria-label="${escapeHtml(t("common.delete"))}"
+      data-confirm="${confirmDelete ? "true" : "false"}"
+      title="${escapeHtml(deleteLabel)}"
+      aria-label="${escapeHtml(deleteLabel)}"
     >
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M3.5 4.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-        <path d="M6.5 2.75h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-        <path d="M5.25 4.5v7.25a1 1 0 001 1h3.5a1 1 0 001-1V4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
+      <span class="session-row-delete-icon" aria-hidden="true">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path d="M3.5 4.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M6.5 2.75h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          <path d="M5.25 4.5v7.25a1 1 0 001 1h3.5a1 1 0 001-1V4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </span>
+      <span class="session-row-delete-label">${escapeHtml(deleteLabel)}</span>
     </button>
   </div>`;
 }
@@ -3220,12 +3462,14 @@ async function selectTask(taskID, options = {}) {
     state.session = [];
     renderSession();
     await syncManagedSession("");
+    await syncSessionOverlaySettings("");
     return;
   }
 
   await loadBoard();
   await loadConversation();
   await loadMeta();
+  await syncSessionOverlaySettings(currentSessionID());
   startPolling();
 
   // Start SSE for running tasks
@@ -3312,18 +3556,26 @@ async function loadConversation() {
       else params.set("surface", "panel");
       const messages = await apiJson(`control/timeline?${params.toString()}`);
       let result = Array.isArray(messages) ? messages : [];
+      const sessionID = currentSessionID();
 
-      // Fallback: if control timeline is empty, load the underlying session messages
-      // (headless API tasks don't write to the control timeline)
-      if (result.length === 0) {
-        const sessionID = currentSessionID();
-        if (sessionID) {
-          try {
-            const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-            result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-          } catch (fallbackErr) {
-            AppLog.debug("ui", "session message fallback failed", { sessionID, error: String(fallbackErr) });
-          }
+      // Task chats need both control-plane timeline entries and the underlying
+      // task session transcript; otherwise early assistant turns can be missed
+      // before the task SSE stream is connected.
+      if (target.taskID && sessionID) {
+        try {
+          const sessionMsgs = await apiJson(`session/${sessionID}/message`);
+          result = mergeMessages(result, Array.isArray(sessionMsgs) ? sessionMsgs : []);
+        } catch (mergeErr) {
+          AppLog.debug("ui", "task session merge failed", { sessionID, error: String(mergeErr) });
+        }
+      } else if (result.length === 0 && sessionID) {
+        // Fallback: if control timeline is empty, load the underlying session messages
+        // (headless API tasks don't write to the control timeline)
+        try {
+          const sessionMsgs = await apiJson(`session/${sessionID}/message`);
+          result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
+        } catch (fallbackErr) {
+          AppLog.debug("ui", "session message fallback failed", { sessionID, error: String(fallbackErr) });
         }
       }
 
@@ -3513,10 +3765,30 @@ function stopSSE() {
   state.sseConnected = false;
 }
 
+function eventData(event) {
+  if (record(event?.properties)) return event.properties;
+  if (record(event?.payload)) return event.payload;
+  return {};
+}
+
+function mergeMessages(...lists) {
+  const seen = new Set();
+  return lists.flatMap((list) =>
+    (Array.isArray(list) ? list : []).filter((item) => {
+      const id = item?.info?.id;
+      if (!id) return true;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }),
+  );
+}
+
 function handleEventStreamEvent(event) {
   const type = event.type || "";
+  const properties = eventData(event);
   if (type === "message.updated") {
-    const info = event.properties?.info;
+    const info = record(properties.info) ? properties.info : null;
     if (info?.sessionID !== currentSessionID()) return;
     const existing = state.session.find((item) => item.info?.id === info.id);
     if (!existing) {
@@ -3530,7 +3802,7 @@ function handleEventStreamEvent(event) {
     return;
   }
   if (type === "message.part.updated") {
-    const part = event.properties?.part;
+    const part = record(properties.part) ? properties.part : null;
     if (part?.sessionID !== currentSessionID()) return;
     const message = state.session.find((item) => item.info?.id === part.messageID);
     if (!message) return;
@@ -3545,7 +3817,6 @@ function handleEventStreamEvent(event) {
     return;
   }
   if (type === "message.part.delta") {
-    const properties = event.properties || {};
     if (properties.sessionID !== currentSessionID() || properties.field !== "text" || typeof properties.delta !== "string") return;
     const message = state.session.find((item) => item.info?.id === properties.messageID);
     if (!message) return;
@@ -4770,12 +5041,39 @@ function isCriteriaEnabled(item) {
 
 // ── Session Manager ──
 
+async function listManagedSessions(limit = 200) {
+  const out = [];
+  const seen = new Set();
+  let cursor = "";
+  while (out.length < limit) {
+    const params = new URLSearchParams();
+    params.set("roots", "true");
+    params.set("limit", String(Math.min(100, limit - out.length)));
+    if (cursor) params.set("cursor", cursor);
+    const res = await apiFetch(`experimental/session?${params.toString()}`, undefined, { directory: false });
+    const data = await res.json();
+    const list = Array.isArray(data) ? data : [];
+    for (const item of list) {
+      const id = item?.id;
+      if (id && seen.has(id)) continue;
+      if (id) seen.add(id);
+      out.push(item);
+    }
+    const next = res.headers.get("x-next-cursor");
+    if (!next || list.length === 0) break;
+    cursor = next;
+  }
+  return out;
+}
+
 async function loadManagedSessions() {
   try {
-    const data = await apiJson("experimental/session?roots=true&limit=80", undefined, { directory: activeDirectory() });
-    state.sessions = Array.isArray(data)
-      ? [...data].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0))
-      : [];
+    const data = await listManagedSessions();
+    state.sessions = [...data].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
+    if (pendingSessionDeleteID && !displaySessions().some((item) => item?.id === pendingSessionDeleteID)) {
+      clearPendingSessionDelete();
+      return;
+    }
     renderManagedSessionList();
   } catch (e) {
     AppLog.error("ui", "Failed to load sessions", { error: String(e) });
@@ -4787,6 +5085,7 @@ async function selectManagedSession(sessionID, input = {}) {
     state.managedSession = null;
     renderWorkspaceState();
     renderManagedSessionList();
+    await syncSessionOverlaySettings("");
     return;
   }
   const session = input.session || sessionItem(sessionID);
@@ -4802,11 +5101,13 @@ async function selectManagedSession(sessionID, input = {}) {
     });
     renderWorkspaceState();
     renderManagedSessionList();
+    await syncSessionOverlaySettings(sessionID);
   } catch (e) {
     if (session) {
       state.managedSession = session;
       renderWorkspaceState();
       renderManagedSessionList();
+      await syncSessionOverlaySettings(sessionID);
       return;
     }
     AppLog.error("ui", "Failed to load managed session", { error: String(e) });
@@ -4815,9 +5116,10 @@ async function selectManagedSession(sessionID, input = {}) {
 
 function renderManagedSessionList() {
   if (!dom.sessionListPanel) return;
-  const html = !state.sessions.length
+  const items = displaySessions();
+  const html = !items.length
     ? `<div class="empty-hint">${escapeHtml(t("session.none_loaded"))}</div>`
-    : state.sessions
+    : items
       .map((item) => sessionRow(item, joinBullet([stamp(item.time?.updated), shortPath(item.directory || "")])))
       .join("");
   if (dom.sessionListPanel.innerHTML === html) return;
@@ -4847,12 +5149,7 @@ async function createManagedSession() {
 async function deleteManagedSession(sessionID = state.managedSession?.id) {
   if (!sessionID) return;
   const session = sessionItem(sessionID);
-  const accepted = await nativeConfirm(t("session.delete_confirm", { name: session?.title || sessionID }), {
-    title: t("session.delete_title"),
-    okLabel: t("common.delete"),
-    kind: "warning",
-  });
-  if (!accepted) return;
+  clearPendingSessionDelete(sessionID);
   try {
     await deleteSessionApi(sessionID, { deleteTasks: true }, { directory: session?.directory || state.directory });
     if (!removeManagedSession(sessionID)) return;
@@ -4868,6 +5165,15 @@ async function deleteManagedSession(sessionID = state.managedSession?.id) {
       kind: "error",
     });
   }
+}
+
+async function requestManagedSessionDelete(sessionID) {
+  if (!sessionID) return;
+  if (!isPendingSessionDelete(sessionID)) {
+    armPendingSessionDelete(sessionID);
+    return;
+  }
+  await deleteManagedSession(sessionID);
 }
 
 function transcriptRole(role) {
@@ -4947,10 +5253,15 @@ function formatSessionTranscript(messages) {
 async function openManagedSession(sessionID, input) {
   if (!sessionID) return;
   const session = input || sessionItem(sessionID);
-  const task = await resolveTaskForSession(sessionID);
-  const dir = task?.task?.directory || session?.directory || "";
+  let task = await resolveTaskForSession(sessionID);
+  let dir = task?.task?.directory || session?.directory || "";
   if (dir && dir !== activeDirectory()) {
-    await setDirectory(dir);
+    await setActiveDirectory(dir, {
+      restoreWorkspace: false,
+      includeSessions: false,
+    });
+    task = await resolveTaskForSession(sessionID);
+    dir = task?.task?.directory || session?.directory || dir;
   }
   if (task?.task?.id) {
     await selectTask(task.task.id, { sessionID, managedSession: session });
@@ -5973,9 +6284,10 @@ dom.rightPaneResizer?.addEventListener("pointerdown", (event) => {
 dom.sessionListPanel?.addEventListener("click", async (event) => {
   const remove = eventClosest(event, "[data-session-delete]");
   if (remove) {
-    await deleteManagedSession(remove.dataset.sessionDelete || "");
+    await requestManagedSessionDelete(remove.dataset.sessionDelete || "");
     return;
   }
+  clearPendingSessionDelete();
   const button = eventClosest(event, "[data-session-id]");
   if (!button) return;
   await openManagedSession(button.dataset.sessionId || "");
@@ -6395,6 +6707,15 @@ dom.chkAutoPermission?.addEventListener("change", async () => {
   await persistOverlaySettings();
   closeTitlebarMenu();
   if (state.autoPermission) void loadBoard();
+});
+
+dom.chkUnattended?.addEventListener("change", async () => {
+  state.unattended = dom.chkUnattended.checked;
+  renderTitlebarMenu();
+  await persistOverlaySettings();
+  await syncUnattendedConfig(true);
+  closeTitlebarMenu();
+  if (state.unattended) void loadBoard();
 });
 
 dom.chkAutoQuestion?.addEventListener("change", async () => {
@@ -7361,6 +7682,13 @@ async function loadConfigInfo() {
       apiJson("channel"),
     ]);
     state.config = config;
+    const remoteUnattended = configUnattended(config);
+    if (typeof remoteUnattended === "boolean") {
+      state.unattended = remoteUnattended;
+      void persistOverlaySettings();
+    } else {
+      void syncUnattendedConfig();
+    }
     state.providerCatalog = catalog;
     state.providerAuth = auth;
     state.channels = Array.isArray(channels) ? channels : [];
@@ -7376,6 +7704,7 @@ async function loadConfigInfo() {
     }
 
     renderChannels();
+    renderTitlebarMenu();
     renderVersions();
     renderLlmSummary();
     renderLlmApiKeyTools();
@@ -7386,9 +7715,10 @@ async function restoreInitialWorkspace() {
   if (hasWorkspaceSelection()) return false;
   if (await ensureTaskSelection()) return true;
   const dir = activeDirectory();
+  const sessions = displaySessions();
   const session = dir
-    ? state.sessions.find((item) => item.directory === dir)
-    : state.sessions[0];
+    ? sessions.find((item) => item.directory === dir)
+    : sessions[0];
   if (session?.id) {
     await openManagedSession(session.id, session);
     return true;
@@ -7451,8 +7781,16 @@ init().catch((err) => {
 window.addEventListener("resize", renderScale);
 window.visualViewport?.addEventListener("resize", renderScale);
 window.addEventListener("keydown", handleZoomHotkey);
+window.addEventListener("focus", () => {
+  void refreshInteractionAttention?.();
+});
 window.addEventListener("blur", () => {
   stopPaneResize();
+  clearPendingSessionDelete();
+  void refreshInteractionAttention?.();
+});
+document.addEventListener("visibilitychange", () => {
+  void refreshInteractionAttention?.();
 });
 
 if (systemThemeMedia) {

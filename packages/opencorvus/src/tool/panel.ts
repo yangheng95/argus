@@ -7,6 +7,10 @@ import { LLMTrace } from "@/session/llm-trace"
 import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
+import { PanelSettings } from "@/panel/settings"
+import { PanelApi } from "@/panel/api"
+import { Server } from "@/server/server"
+import { Instance } from "@/project/instance"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
 
@@ -204,6 +208,81 @@ export const PanelTool = Tool.define("panel", {
             metadata: {},
           }
         }
+      case "view_panel_settings": {
+        const settings = await PanelSettings.get(params.sessionID)
+        return {
+          title: "Panel settings",
+          output: JSON.stringify({
+            kind: "panel_response",
+            session_id: params.sessionID,
+            message: "Loaded panel settings.",
+            settings,
+          }),
+          metadata: {},
+        }
+      }
+      case "update_panel_settings": {
+        const settings = await PanelSettings.set(params.sessionID, params.settings)
+        return {
+          title: "Panel settings updated",
+          output: JSON.stringify({
+            kind: "panel_response",
+            session_id: params.sessionID,
+            message: "Panel settings updated.",
+            settings,
+          }),
+          metadata: {},
+        }
+      }
+      case "list_panel_api":
+        return {
+          title: "Panel API catalog",
+          output: JSON.stringify({
+            kind: "panel_response",
+            message: "Allowlisted panel API routes.",
+            routes: PanelApi.list(),
+          }),
+          metadata: {},
+        }
+      case "call_panel_api": {
+        const query = new URLSearchParams(params.query ?? {}).toString()
+        const target = params.path.replace(/^\/+/, "")
+        if (!PanelApi.allow(params.method, target)) {
+          return {
+            title: "Panel API blocked",
+            output: JSON.stringify({
+              kind: "panel_response",
+              message: `Panel API route is not allowlisted: ${params.method} ${target}`,
+            }),
+            metadata: {},
+          }
+        }
+        const response = await Server.App().request(`/${target}${query ? `?${query}` : ""}`, {
+          method: params.method,
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": Instance.directory,
+          },
+          ...(params.body ? { body: JSON.stringify(params.body) } : {}),
+        })
+        const type = response.headers.get("content-type") || ""
+        const data = type.includes("application/json")
+          ? await response.json().catch(() => null)
+          : await response.text()
+        return {
+          title: "Panel API response",
+          output: JSON.stringify({
+            kind: "panel_response",
+            message: `${params.method} /${target} -> ${response.status}`,
+            response: {
+              status: response.status,
+              ok: response.ok,
+              data,
+            },
+          }),
+          metadata: {},
+        }
+      }
       case "set_executor":
         if (!localOnly(ctx)) throw new Error("Executor selection is only available in the desktop panel.")
         return {
