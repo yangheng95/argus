@@ -115,8 +115,11 @@ export namespace Auth {
   export async function codexFallback(): Promise<Record<string, Info>> {
     const data = await Filesystem.readJson<Record<string, unknown>>(codexFilepath).catch(() => undefined)
     if (!data || typeof data !== "object") return {}
-    const tokens = data.tokens
-    if (!tokens || typeof tokens !== "object") return {}
+    const tokens =
+      data.tokens && typeof data.tokens === "object"
+        ? data.tokens as Record<string, unknown>
+        : undefined
+    if (!tokens) return {}
     const access = typeof tokens.access_token === "string" && tokens.access_token ? tokens.access_token : undefined
     const refresh = typeof tokens.refresh_token === "string" && tokens.refresh_token ? tokens.refresh_token : undefined
     if (!access || !refresh) return {}
