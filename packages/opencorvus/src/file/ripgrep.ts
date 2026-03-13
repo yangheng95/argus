@@ -141,9 +141,18 @@ export namespace Ripgrep {
   const state = lazy(async () => {
     const system = which("rg")
     if (system) {
-      const stat = await fs.stat(system).catch(() => undefined)
-      if (stat?.isFile()) return { filepath: system }
-      log.warn("bun.which returned invalid rg path", { filepath: system })
+      const resolved = await fs.realpath(system).catch(() => system)
+      const stat = await fs.stat(resolved).catch(() => undefined)
+      if (stat?.isFile()) {
+        const probe = await Process.run([resolved, "--version"], {
+          nothrow: true,
+          timeout: 3_000,
+        }).catch(() => undefined)
+        if (probe?.code === 0) return { filepath: resolved }
+        log.warn("system rg probe failed, falling back to managed binary", { filepath: resolved })
+      } else {
+        log.warn("which returned invalid rg path", { filepath: resolved })
+      }
     }
     const filepath = path.join(Global.Path.bin, "rg" + (process.platform === "win32" ? ".exe" : ""))
 

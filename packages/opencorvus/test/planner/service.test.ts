@@ -268,6 +268,25 @@ describe("planner.service", () => {
     ).rejects.toThrow("planner agent failed")
   })
 
+  test("times out internal replanning instead of hanging indefinitely", async () => {
+    process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = "20"
+    spyOn(PlannerAgent, "plan").mockImplementation(async () => {
+      await new Promise<never>(() => {})
+      throw new Error("unreachable")
+    })
+
+    await expect(
+      PlannerService.replan({
+        title: "Failure",
+        request: "Optimize performance",
+        spec: MOCK_SPEC,
+        previousPrompt: "Old plan",
+        previousPlanID: "pln_previous",
+        failureSummary: "The build is still failing.",
+      }),
+    ).rejects.toThrow("planner timed out after 20ms")
+  })
+
   test("suppresses clarification when allowClarification is false", async () => {
     spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
     const plan = await PlannerService.initial({
@@ -306,6 +325,7 @@ describe("planner.service", () => {
   })
 
   test("uses executor-native plan when configured with spec input", async () => {
+    const seen: Array<Record<string, unknown>> = []
     ExecutorRegistry.register("codex", {
       capabilities() {
         return {
@@ -324,6 +344,7 @@ describe("planner.service", () => {
         }
       },
       async generatePlanning(input) {
+        seen.push(input as Record<string, unknown>)
         // Only plan stage — spec is now pre-resolved by orchestrator
         return {
           output: JSON.stringify({
@@ -382,6 +403,15 @@ describe("planner.service", () => {
     expect((plan.metadata.stage_sources?.plan as { warning?: string })?.warning).toContain("prompt-constrained")
     // PRD from planner agent takes priority over spec content in expanded_spec
     expect(plan.metadata.spec_analysis?.expanded_spec).toContain("Executor PRD")
+    expect(seen[0]?.outputSchema).toMatchObject({
+      type: "object",
+      properties: {
+        prd: expect.any(Object),
+        summary: expect.any(Object),
+        subtasks: expect.any(Object),
+        risks: expect.any(Object),
+      },
+    })
   })
 
   test("falls back to opencorvus planner when executor-native planning is unavailable", async () => {

@@ -321,11 +321,51 @@ export function parseCodexSSE(text: string) {
       }
     })
 
-  const done = events.findLast((event) => event.type === "response.completed")
-  if (done?.response && typeof done.response === "object") return done.response
-  const created = events.findLast((event) => event.type === "response.created")
-  if (created?.response && typeof created.response === "object") return created.response
+  const error = events.findLast((event) => event.type === "error")
+  const detail = error?.error && typeof error.error === "object" ? error.error as Record<string, unknown> : undefined
+  const types = ["response.completed", "response.incomplete", "response.failed"]
+  for (const type of types) {
+    const event = events.findLast((item) => item.type === type)
+    if (!event?.response || typeof event.response !== "object") continue
+    return normalizeCodexResponse(event.response as Record<string, unknown>, detail)
+  }
+  if (detail) {
+    return {
+      error: normalizeCodexError(detail),
+    }
+  }
   return
+}
+
+function normalizeCodexResponse(response: Record<string, unknown>, detail?: Record<string, unknown>) {
+  const next = { ...response }
+  if (next.usage === null) delete next.usage
+
+  const current = next.error && typeof next.error === "object" ? next.error as Record<string, unknown> : undefined
+  const merged = { ...(detail ?? {}), ...(current ?? {}) }
+  if (Object.keys(merged).length === 0) return next
+
+  next.error = normalizeCodexError(merged)
+  return next
+}
+
+function normalizeCodexError(error: Record<string, unknown>) {
+  return {
+    message: typeof error.message === "string" ? error.message : "Codex request failed",
+    type:
+      typeof error.type === "string"
+        ? error.type
+        : typeof error.code === "string"
+          ? error.code
+          : "server_error",
+    param: typeof error.param === "string" ? error.param : null,
+    code:
+      typeof error.code === "string"
+        ? error.code
+        : typeof error.type === "string"
+          ? error.type
+          : "server_error",
+  }
 }
 
 async function codexResponse(response: Response, wantsStream: boolean) {

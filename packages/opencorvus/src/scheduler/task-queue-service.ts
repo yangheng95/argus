@@ -59,7 +59,7 @@ export namespace TaskQueueService {
         source: z.string().optional(),
       })
       .parse(raw)
-    const prompt = promptSchema().parse(input.prompt)
+    const prompt = normalizePrompt(input.prompt)
     return SessionPrompt.prompt({
       sessionID: input.sessionID,
       ...prompt,
@@ -68,7 +68,7 @@ export namespace TaskQueueService {
 
   export function enqueuePrompt(raw: z.input<typeof EnqueuePromptInput>) {
     const input = EnqueuePromptInput.parse(raw)
-    const prompt = promptSchema().parse(input.prompt)
+    const prompt = normalizePrompt(input.prompt)
     const now = Date.now()
     const id = Identifier.ascending("task")
     Database.use((db) =>
@@ -308,6 +308,7 @@ export namespace TaskQueueService {
     )
     if (stale.length === 0) return
     for (const task of stale) {
+      SessionPrompt.cancel(task.session_id)
       const retryCount = task.retry_count + 1
       const failed = retryCount > task.max_retries
       Database.use((db) =>
@@ -401,6 +402,18 @@ function promptSchema() {
   return SessionPrompt.PromptInput.omit({
     sessionID: true,
   })
+}
+
+function normalizePrompt(raw: unknown) {
+  const prompt = promptSchema().parse(raw)
+  return {
+    ...prompt,
+    messageID: prompt.messageID ?? Identifier.ascending("message"),
+    parts: prompt.parts.map((part) => ({
+      ...part,
+      id: part.id ?? Identifier.ascending("part"),
+    })),
+  }
 }
 
 type PromptPart = z.infer<ReturnType<typeof promptSchema>>["parts"][number]

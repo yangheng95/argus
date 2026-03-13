@@ -12,8 +12,6 @@ describe("executor routes", () => {
   afterEach(async () => {
     mock.restore()
     ExecutorRegistry.reset()
-    delete process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL
-    delete process.env.OPENCORVUS_EXECUTOR_CLAUDE_PROTOCOL
     await resetDatabase()
   })
 
@@ -41,8 +39,11 @@ describe("executor routes", () => {
         expect(body.find((item) => item.id === "codex")?.protocolVersion).toBe("v2")
         expect(body.find((item) => item.id === "claude-code")?.protocol).toBe("claude-agent-sdk")
         expect(body.find((item) => item.id === "claude-code")?.transport).toBe("inproc")
+        expect(body.find((item) => item.id === "claude-code")?.features?.plan_generation).toBe(false)
         expect(body.find((item) => item.id === "codex")?.tools.some((item) => item.name === "shell_command")).toBe(true)
-        expect(body.find((item) => item.id === "claude-code")?.tools.some((item) => item.name === "structured_output")).toBe(true)
+        expect(body.find((item) => item.id === "codex")?.tools.some((item) => item.name === "structured_output")).toBe(true)
+        expect(body.find((item) => item.id === "claude-code")?.tools.some((item) => item.name === "shell_command")).toBe(true)
+        expect(body.find((item) => item.id === "claude-code")?.tools.some((item) => item.name === "structured_output")).toBe(false)
       },
     })
   })

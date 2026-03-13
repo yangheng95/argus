@@ -454,6 +454,8 @@ export const OrchestratorExecutorSessionTable = sqliteTable(
     refs: text({ mode: "json" }).$type<OrchestratorExecutorProtocolRef>(),
     capabilities: text({ mode: "json" }).$type<OrchestratorExecutorCapability>(),
     settings: text({ mode: "json" }).$type<OrchestratorExecutorSettings>(),
+    lease_owner: text(),
+    lease_until: integer().notNull().default(0),
     time_started: integer(),
     time_completed: integer(),
     ...Timestamps,
@@ -463,6 +465,7 @@ export const OrchestratorExecutorSessionTable = sqliteTable(
     index("orchestrator_executor_session_run_idx").on(table.run_id),
     index("orchestrator_executor_session_goal_run_idx").on(table.goal_run_id),
     index("orchestrator_executor_session_status_idx").on(table.status),
+    index("orchestrator_executor_session_lease_until_idx").on(table.lease_until),
   ],
 )
 

@@ -13,35 +13,64 @@ Actions:
 - **delete**: Remove an outdated preference by key and scope.
 
 Session preferences override global preferences on the same key for the current session only. Global preferences override project-local cwd preferences on the same key.`
+const List = z.object({
+  action: z.literal("list"),
+  scope: z
+    .enum(["all", "global", "session"])
+    .optional()
+    .describe("Which preference scope to list (default: all)"),
+})
+const Write = z.object({
+  action: z.literal("write"),
+  key: z.string().describe("Preference key, for example 'style' or 'lockfile_policy'"),
+  value: z.string().describe("Preference value"),
+  scope: z
+    .enum(["global", "session"])
+    .optional()
+    .describe("Storage scope (default: global)"),
+})
+const Delete = z.object({
+  action: z.literal("delete"),
+  key: z.string().describe("Preference key to delete"),
+  scope: z
+    .enum(["global", "session"])
+    .optional()
+    .describe("Which scope to delete from (default: global)"),
+})
+const Params = z.discriminatedUnion("action", [List, Write, Delete])
+
+function action(value: unknown) {
+  if (typeof value !== "string") return value
+  const next = value.trim().toLowerCase()
+  if (["read", "get", "browse"].includes(next)) return "list"
+  if (["set", "save", "update"].includes(next)) return "write"
+  if (["remove", "unset"].includes(next)) return "delete"
+  return next
+}
+
+function scope(value: unknown) {
+  if (typeof value !== "string") return value
+  const next = value.trim().toLowerCase()
+  if (["project", "default", "shared"].includes(next)) return "global"
+  if (["local", "current", "this_session"].includes(next)) return "session"
+  return next
+}
+
+function normalize(input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input
+  const row = { ...(input as Record<string, unknown>) }
+  row.action = action(row.action)
+  if (row.scope !== undefined) row.scope = scope(row.scope)
+  if (row.key === undefined) row.key = row.name ?? row.preference_key ?? row.preferenceKey
+  if (row.value === undefined) {
+    row.value = row.instruction ?? row.content ?? row.text ?? row.preference_value ?? row.preferenceValue
+  }
+  return row
+}
 
 export const PreferenceTool = Tool.define("preference", {
   description: DESCRIPTION,
-  parameters: z.discriminatedUnion("action", [
-    z.object({
-      action: z.literal("list"),
-      scope: z
-        .enum(["all", "global", "session"])
-        .optional()
-        .describe("Which preference scope to list (default: all)"),
-    }),
-    z.object({
-      action: z.literal("write"),
-      key: z.string().describe("Preference key, for example 'style' or 'lockfile_policy'"),
-      value: z.string().describe("Preference value"),
-      scope: z
-        .enum(["global", "session"])
-        .optional()
-        .describe("Storage scope (default: global)"),
-    }),
-    z.object({
-      action: z.literal("delete"),
-      key: z.string().describe("Preference key to delete"),
-      scope: z
-        .enum(["global", "session"])
-        .optional()
-        .describe("Which scope to delete from (default: global)"),
-    }),
-  ]),
+  parameters: z.preprocess(normalize, Params),
   async execute(params, ctx) {
     const projectID = Instance.project.id
     const planMode = ctx.extra?.planMode === true || ctx.agent === "plan"

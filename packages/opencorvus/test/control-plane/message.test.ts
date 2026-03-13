@@ -71,6 +71,7 @@ describe("control.message", () => {
         const result = await ControlMessage.handle({
           surface: "panel",
           text: "Create a new session.",
+          allow_session_mutation: true,
           metadata: {
             ui_context: "session_manager",
           },

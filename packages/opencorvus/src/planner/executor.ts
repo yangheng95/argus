@@ -2,10 +2,36 @@ import { ExecutorRegistry } from "@/executor/registry"
 import type { ExecutorNameInfo } from "@/executor/compat"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { Env } from "@/env"
 import { PlannerOutput, parsePlannerOutput, type PlannerOutputType, type ReplanContext } from "./agent"
 import { SpecDraftSchema, type SpecDraft } from "@/spec/agent"
+import z from "zod"
 
 const log = Log.create({ service: "planner.executor" })
+
+function timeout(stage: "spec" | "plan") {
+  if (stage === "spec") return Number(Env.get("OPENCORVUS_SPEC_TIMEOUT_MS")) || 300_000
+  return Number(Env.get("OPENCORVUS_PLANNER_TIMEOUT_MS")) || 300_000
+}
+
+async function run<T>(stage: "spec" | "plan", signal: AbortSignal | undefined, fn: (signal: AbortSignal) => Promise<T>) {
+  const timeoutMs = timeout(stage)
+  const controller = new AbortController()
+  const merged = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  let race: ReturnType<typeof setTimeout>
+  try {
+    return await Promise.race([
+      fn(merged).finally(() => clearTimeout(race)),
+      new Promise<never>((_, reject) => {
+        race = setTimeout(() => reject(new Error(`${stage} executor-native planning timed out after ${timeoutMs}ms`)), timeoutMs)
+      }),
+    ])
+  } finally {
+    clearTimeout(timer)
+    controller.abort()
+  }
+}
 
 export namespace ExecutorPlanner {
   export function supports(executor: ExecutorNameInfo, stage: "spec" | "plan") {
@@ -31,14 +57,17 @@ export namespace ExecutorPlanner {
       executor: input.executor,
       stage: "spec",
     })
-    const result = await adapter.generatePlanning({
-      stage: "spec",
-      cwd: workdir(),
-      maxTurns: 4,
-      system: SPEC_SYSTEM,
-      prompt: specPrompt(input),
-      signal: input.signal,
-    })
+    const result = await run("spec", input.signal, (signal) =>
+      adapter.generatePlanning!({
+        stage: "spec",
+        cwd: workdir(),
+        maxTurns: 4,
+        system: SPEC_SYSTEM,
+        prompt: specPrompt(input),
+        outputSchema: z.toJSONSchema(SpecDraftSchema),
+        signal,
+      })
+    )
     return SpecDraftSchema.parse(extractObject(result.output))
   }
 
@@ -59,14 +88,17 @@ export namespace ExecutorPlanner {
       executor: input.executor,
       stage: "plan",
     })
-    const result = await adapter.generatePlanning({
-      stage: "plan",
-      cwd: workdir(),
-      maxTurns: 4,
-      system: PLAN_SYSTEM,
-      prompt: planPrompt(input),
-      signal: input.signal,
-    })
+    const result = await run("plan", input.signal, (signal) =>
+      adapter.generatePlanning!({
+        stage: "plan",
+        cwd: workdir(),
+        maxTurns: 4,
+        system: PLAN_SYSTEM,
+        prompt: planPrompt(input),
+        outputSchema: z.toJSONSchema(PlannerOutput),
+        signal,
+      })
+    )
     return PlannerOutput.parse(parsePlannerOutput(result.output))
   }
 }

@@ -334,6 +334,11 @@ describe("orchestrator routes", () => {
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "running",
+      error: null,
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -390,6 +395,11 @@ describe("orchestrator routes", () => {
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "running",
+      error: null,
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -452,6 +462,11 @@ describe("orchestrator routes", () => {
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "running",
+      error: null,
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -650,6 +665,11 @@ describe("orchestrator routes", () => {
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "running",
+      error: null,
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -949,6 +969,11 @@ describe("orchestrator routes", () => {
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "running",
+      error: null,
+    })
 
     await Instance.provide({
       directory: tmp.path,
@@ -1031,6 +1056,11 @@ describe("orchestrator routes", () => {
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
+    spyOn(OpencodeExecutor, "status").mockResolvedValue({
+      queueTaskID: Identifier.ascending("task"),
+      status: "running",
+      error: null,
+    })
 
     await Instance.provide({
       directory: tmp.path,

@@ -72,8 +72,8 @@ describe("executor session routes", () => {
             task_id: taskID,
             run_id: runID,
             provider: "codex",
-            protocol: "codex-cli-json",
-            protocol_version: "v1",
+            protocol: "codex-app-server",
+            protocol_version: "v2",
             transport: "stdio",
             status: "completed",
             refs: {
@@ -82,20 +82,20 @@ describe("executor session routes", () => {
             capabilities: {
               stream: true,
               resume: true,
-              interrupt: false,
+              interrupt: true,
               builtin_tools: true,
               custom_tools: false,
-              structured_output: false,
-              approvals: [],
-              reasoning: false,
-              plan_updates: false,
-              diff_updates: false,
-              mcp: false,
-              usage: false,
-              realtime: false,
-              spec_generation: false,
-              plan_generation: false,
-              tool_kinds: ["builtin"],
+              structured_output: true,
+              approvals: ["command", "file_change", "patch", "user_input", "dynamic_tool"],
+              reasoning: true,
+              plan_updates: true,
+              diff_updates: true,
+              mcp: true,
+              usage: true,
+              realtime: true,
+              spec_generation: true,
+              plan_generation: true,
+              tool_kinds: ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output", "unknown"],
             },
             settings: {
               cwd: tmp.path,
@@ -140,7 +140,7 @@ describe("executor session routes", () => {
           status: string
         }
         expect(executorSession.provider).toBe("codex")
-        expect(executorSession.protocol).toBe("codex-cli-json")
+        expect(executorSession.protocol).toBe("codex-app-server")
         expect(["active", "completed"]).toContain(executorSession.status)
 
         const eventsRes = await app.request(`/run/${runID}/executor-events`, {

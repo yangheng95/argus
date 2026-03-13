@@ -112,60 +112,54 @@ export type ProtocolInfo = z.infer<typeof ProtocolInfo>
 
 export function protocolInfo(provider: z.infer<typeof ExecutorName>) {
   if (provider === "codex") {
-    const appServer = process.env.OPENCORVUS_EXECUTOR_CODEX_PROTOCOL !== "cli"
     return ProtocolInfo.parse({
       provider,
-      protocol: appServer ? "codex-app-server" : "codex-cli-json",
-      version: appServer ? "v2" : "v1",
+      protocol: "codex-app-server",
+      version: "v2",
       transport: { kind: "stdio" },
       capabilities: {
         stream: true,
         resume: true,
-        interrupt: appServer,
+        interrupt: true,
         builtin_tools: true,
-        custom_tools: appServer,
-        structured_output: appServer,
-        approvals: appServer ? ["command", "file_change", "patch", "user_input", "dynamic_tool"] : [],
-        reasoning: appServer,
-        plan_updates: appServer,
-        diff_updates: appServer,
-        mcp: appServer,
-        usage: appServer,
-        realtime: appServer,
+        custom_tools: false,
+        structured_output: true,
+        approvals: ["command", "file_change", "patch", "user_input", "dynamic_tool"],
+        reasoning: true,
+        plan_updates: true,
+        diff_updates: true,
+        mcp: true,
+        usage: true,
+        realtime: true,
         spec_generation: true,
         plan_generation: true,
-        tool_kinds: appServer
-          ? ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output"]
-          : ["builtin", "shell", "patch", "read", "unknown"],
+        tool_kinds: ["builtin", "dynamic", "approval", "input", "mcp", "shell", "patch", "read", "review", "plan", "structured_output", "unknown"],
       },
     })
   }
   if (provider === "claude-code") {
-    const sdk = process.env.OPENCORVUS_EXECUTOR_CLAUDE_PROTOCOL !== "cli"
     return ProtocolInfo.parse({
       provider,
-      protocol: sdk ? "claude-agent-sdk" : "claude-cli-stream-json",
-      version: sdk ? "0.2" : "v1",
-      transport: { kind: sdk ? "inproc" : "stdio" },
+      protocol: "claude-agent-sdk",
+      version: "0.2",
+      transport: { kind: "inproc" },
       capabilities: {
         stream: true,
         resume: true,
-        interrupt: sdk,
+        interrupt: true,
         builtin_tools: true,
         custom_tools: false,
-        structured_output: sdk,
-        approvals: sdk ? ["permission", "elicitation"] : [],
-        reasoning: sdk,
+        structured_output: true,
+        approvals: ["permission", "elicitation"],
+        reasoning: true,
         plan_updates: false,
         diff_updates: false,
-        mcp: sdk,
+        mcp: true,
         usage: true,
         realtime: false,
-        spec_generation: true,
-        plan_generation: true,
-        tool_kinds: sdk
-          ? ["builtin", "approval", "input", "mcp", "shell", "patch", "read", "review", "structured_output", "unknown"]
-          : ["builtin", "shell", "patch", "read", "unknown"],
+        spec_generation: false,
+        plan_generation: false,
+        tool_kinds: ["builtin", "approval", "input", "mcp", "shell", "patch", "read", "review", "structured_output", "unknown"],
       },
     })
   }

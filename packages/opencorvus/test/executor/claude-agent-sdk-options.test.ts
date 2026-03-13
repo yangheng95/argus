@@ -60,6 +60,41 @@ describe("claude agent sdk options", () => {
     expect(options?.allowDangerouslySkipPermissions).toBe(false)
     expect(options?.allowedTools).toEqual([])
   })
+
+  test("injects the OpenCorvus MCP server by default", async () => {
+    await collect(ClaudeAgentExecutor.createSdk().run({ prompt: "test", cwd: "/repo" }))
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    const mcp = options?.mcpServers as Record<string, { type?: string; command?: string; args?: string[] }> | undefined
+    expect(mcp?.opencorvus?.type).toBe("stdio")
+    expect(mcp?.opencorvus?.command).toBeTruthy()
+    expect(mcp?.opencorvus?.args?.slice(-6)).toEqual(["mcp", "serve", "--cwd", "/repo", "--toolset", "executor"])
+  })
+
+  test("passes outputSchema as official outputFormat", async () => {
+    await collect(ClaudeAgentExecutor.createSdk().run({
+      prompt: "json",
+      outputSchema: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+        },
+        required: ["ok"],
+      },
+    }))
+
+    const options = calls[0]?.options as Record<string, unknown> | undefined
+    expect(options?.outputFormat).toEqual({
+      type: "json_schema",
+      schema: {
+        type: "object",
+        properties: {
+          ok: { type: "boolean" },
+        },
+        required: ["ok"],
+      },
+    })
+  })
 })
 
 async function collect(input: AsyncIterable<unknown>) {

@@ -6,7 +6,7 @@ import fs from "fs/promises"
 import { afterAll } from "bun:test"
 
 const liveE2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
-const normal = liveE2E && process.env.OPENCORVUS_LIVE_E2E_USE_NORMAL_PATHS !== "0"
+const normal = liveE2E && process.env.OPENCORVUS_LIVE_E2E_USE_NORMAL_PATHS === "1"
 const dir = normal ? undefined : path.join(os.tmpdir(), "opencorvus-test-data-" + process.pid)
 
 if (dir) {
@@ -38,7 +38,9 @@ afterAll(async () => {
   await rm(30)
 })
 
-process.env["OPENCORVUS_MODELS_PATH"] = path.join(import.meta.dir, "tool", "fixtures", "models-api.json")
+if (!liveE2E) {
+  process.env["OPENCORVUS_MODELS_PATH"] = path.join(import.meta.dir, "tool", "fixtures", "models-api.json")
+}
 
 if (dir) {
   process.env["XDG_DATA_HOME"] = path.join(dir, "share")

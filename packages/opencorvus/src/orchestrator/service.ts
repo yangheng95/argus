@@ -138,6 +138,33 @@ import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator" })
 
+function initialTaskChecks(input: z.infer<typeof CreateTaskInput>["checks"]) {
+  if (!input) return
+  const checks = structuredClone(input)
+  if (checks.build === false) delete checks.build
+  if (checks.test === false) delete checks.test
+  if (checks.lint === false) delete checks.lint
+  if (checks.verify_cmd === false) delete checks.verify_cmd
+  if (checks.spec_check) {
+    checks.spec_check = {
+      ...checks.spec_check,
+      enabled: true,
+    }
+  }
+  if (checks.named) {
+    checks.named = Object.fromEntries(
+      Object.entries(checks.named).map(([name, value]) => [
+        name,
+        {
+          ...value,
+          enabled: true,
+        },
+      ]),
+    )
+  }
+  return checks
+}
+
 async function prepareProject(project?: string) {
   if (Instance.project.vcs !== "git") {
     await Project.initGit(Instance.directory)
@@ -347,7 +374,8 @@ export namespace OrchestratorService {
     }
     ExecutorRegistry.require(executor)
     const session = await Session.create({ title })
-    const resolvedChecks = await EvaluatorService.resolveChecks(input.checks ? { checks: input.checks } : undefined)
+    const checks = initialTaskChecks(input.checks)
+    const resolvedChecks = await EvaluatorService.resolveChecks(checks ? { checks } : undefined)
     const now = Date.now()
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
@@ -918,7 +946,7 @@ export namespace OrchestratorService {
     if (!run) {
       return { resumed: false, status: task.status }
     }
-    if (["completed", "cancelled", "failed"].includes(task.status)) {
+    if (task.status === "cancelled") {
       return { resumed: false, status: task.status }
     }
     if (

@@ -12,6 +12,7 @@
         state.directoryMode = next ? "custom" : "temp";
       }
       state.workspaceDirectorySource = source;
+      if (typeof deps.renderMeta === "function") deps.renderMeta();
       if (source === "manual" && typeof deps.onDirectoryChange === "function") deps.onDirectoryChange(next, source);
       return next;
     }
@@ -27,6 +28,7 @@
       state.directory = next;
       state.workspaceDirectorySource = "auto";
       state.directoryMode = state.savedDirectory ? "custom" : "temp";
+      if (typeof deps.renderMeta === "function") deps.renderMeta();
       return next;
     }
 
@@ -52,6 +54,7 @@
     function clearWorkspaceRuntime() {
       deps.stopPolling();
       deps.stopSSE();
+      if (typeof deps.stopEventStream === "function") deps.stopEventStream();
       if (typeof deps.stopChatRequest === "function") void deps.stopChatRequest();
       if (state.boardKick) clearTimeout(state.boardKick);
       if (state.sessionKick) clearTimeout(state.sessionKick);
@@ -89,6 +92,7 @@
       state.managedSession = null;
       if (options.restoreDirectory !== false) restoreWorkspaceDirectory();
       clearWorkspaceRuntime();
+      if (typeof deps.renderMeta === "function") deps.renderMeta();
       deps.renderManagedSessionList();
     }
 
@@ -100,6 +104,7 @@
       state.chatSessionID = options.sessionID || "";
       state.managedSession = options.managedSession || null;
       clearWorkspaceRuntime();
+      if (typeof deps.renderMeta === "function") deps.renderMeta();
       deps.renderManagedSessionList();
     }
 
@@ -111,6 +116,7 @@
       state.chatSessionID = sessionID || "";
       state.managedSession = options.managedSession || null;
       clearWorkspaceRuntime();
+      if (typeof deps.renderMeta === "function") deps.renderMeta();
       deps.renderManagedSessionList();
     }
 

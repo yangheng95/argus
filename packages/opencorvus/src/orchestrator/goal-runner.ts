@@ -42,6 +42,19 @@ function summary(prefix: string, files: string[]) {
     : `${prefix}. Changed files: ${sample} and ${files.length - 3} more.`
 }
 
+function includeDeliveryFile(file: string) {
+  return ![
+    ".opencorvus/goals/",
+    ".opencorvus/evaluations/",
+    ".opencorvus/prds/",
+    ".opencorvus/plans/",
+  ].some((prefix) => file.startsWith(prefix))
+}
+
+function filterDeliveryDiffs(diffs: z.infer<typeof Snapshot.FileDiff>[]) {
+  return diffs.filter((item) => includeDeliveryFile(item.file))
+}
+
 function strings(input: unknown) {
   return [...new Set(Array.isArray(input) ? input.filter((item): item is string => typeof item === "string" && item.length > 0) : [])]
 }
@@ -97,11 +110,12 @@ export async function removeGoalRunSession(goalRun: GoalRunRow) {
 }
 
 async function evaluationDelivery(task: TaskRow, delivery: { summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] }): Promise<EvaluationDelivery> {
-  if (delivery.diffs.length > 0) {
+  const filtered = filterDeliveryDiffs(delivery.diffs)
+  if (filtered.length > 0) {
     return {
       summary: delivery.summary,
-      diffs: delivery.diffs,
-      changedFiles: delivery.diffs.map((item) => item.file),
+      diffs: filtered,
+      changedFiles: filtered.map((item) => item.file),
     }
   }
   const files = retryFiles(task)
@@ -112,8 +126,8 @@ async function evaluationDelivery(task: TaskRow, delivery: { summary: string; di
       changedFiles: [],
     }
   }
-  const diffs = (await Promise.all(files.map(materializeDiff))).flatMap((item) => item ? [item] : [])
-  if (diffs.length === 0) {
+  const replayed = (await Promise.all(files.map(materializeDiff))).flatMap((item) => item ? [item] : [])
+  if (replayed.length === 0) {
     return {
       summary: delivery.summary,
       diffs: delivery.diffs,
@@ -121,9 +135,9 @@ async function evaluationDelivery(task: TaskRow, delivery: { summary: string; di
     }
   }
   return {
-    summary: retrySummary(delivery.summary, diffs.map((item) => item.file)),
-    diffs,
-    changedFiles: diffs.map((item) => item.file),
+    summary: retrySummary(delivery.summary, replayed.map((item) => item.file)),
+    diffs: replayed,
+    changedFiles: replayed.map((item) => item.file),
   }
 }
 
@@ -385,7 +399,7 @@ export function buildGoalPrompt(input: {
 
 export async function deliveryFromSnapshot(baseRef: string | undefined, prefix: string) {
   const mergeRef = await Snapshot.track()
-  const diffs = baseRef && mergeRef ? await Snapshot.diffFull(baseRef, mergeRef) : []
+  const diffs = filterDeliveryDiffs(baseRef && mergeRef ? await Snapshot.diffFull(baseRef, mergeRef) : [])
   return {
     mergeRef,
     delivery: {

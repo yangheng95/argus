@@ -8,6 +8,8 @@ import {
   CallToolResultSchema,
   type Tool as MCPToolDef,
   ToolListChangedNotificationSchema,
+  PromptListChangedNotificationSchema,
+  ResourceListChangedNotificationSchema,
 } from "@modelcontextprotocol/sdk/types.js"
 import { Config } from "../config/config"
 import { Log } from "../util/log"
@@ -42,6 +44,18 @@ export namespace MCP {
 
   export const ToolsChanged = BusEvent.define(
     "mcp.tools.changed",
+    z.object({
+      server: z.string(),
+    }),
+  )
+  export const PromptsChanged = BusEvent.define(
+    "mcp.prompts.changed",
+    z.object({
+      server: z.string(),
+    }),
+  )
+  export const ResourcesChanged = BusEvent.define(
+    "mcp.resources.changed",
     z.object({
       server: z.string(),
     }),
@@ -115,6 +129,14 @@ export namespace MCP {
       log.info("tools list changed notification received", { server: serverName })
       Bus.publish(ToolsChanged, { server: serverName })
     })
+    client.setNotificationHandler(PromptListChangedNotificationSchema, async () => {
+      log.info("prompts list changed notification received", { server: serverName })
+      Bus.publish(PromptsChanged, { server: serverName })
+    })
+    client.setNotificationHandler(ResourceListChangedNotificationSchema, async () => {
+      log.info("resources list changed notification received", { server: serverName })
+      Bus.publish(ResourcesChanged, { server: serverName })
+    })
   }
 
   // Convert MCP tool definition to AI SDK Tool type
@@ -156,6 +178,40 @@ export namespace MCP {
   type PromptInfo = Awaited<ReturnType<MCPClient["listPrompts"]>>["prompts"][number]
 
   type ResourceInfo = Awaited<ReturnType<MCPClient["listResources"]>>["resources"][number]
+  export const ServerTool = z.object({
+    key: z.string(),
+    client: z.string(),
+    name: z.string(),
+    description: z.string().optional(),
+    inputSchema: z.record(z.string(), z.unknown()),
+    annotations: z.record(z.string(), z.unknown()).optional(),
+  })
+  export type ServerTool = z.infer<typeof ServerTool>
+  export const ServerPrompt = z.object({
+    key: z.string(),
+    client: z.string(),
+    name: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    arguments: z.array(
+      z.object({
+        name: z.string(),
+        description: z.string().optional(),
+        required: z.boolean().optional(),
+      }),
+    ).optional(),
+  })
+  export type ServerPrompt = z.infer<typeof ServerPrompt>
+  export const ServerResource = z.object({
+    key: z.string(),
+    client: z.string(),
+    uri: z.string(),
+    name: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    mimeType: z.string().optional(),
+  })
+  export type ServerResource = z.infer<typeof ServerResource>
   type McpEntry = NonNullable<Config.Info["mcp"]>[string]
   function isMcpConfigured(entry: McpEntry): entry is Config.Mcp {
     return typeof entry === "object" && entry !== null && "type" in entry
@@ -565,19 +621,17 @@ export namespace MCP {
     s.status[name] = { status: "disabled" }
   }
 
-  export async function tools() {
-    const result: Record<string, Tool> = {}
+  async function connectedToolEntries() {
     const s = await state()
     const cfg = await Config.get()
     const config = cfg.mcp ?? {}
     const clientsSnapshot = await clients()
     const defaultTimeout = cfg.experimental?.mcp_timeout
-
     const connectedClients = entries(clientsSnapshot).filter(
       ([clientName]) => s.status[clientName]?.status === "connected",
     )
 
-    const toolsResults = await Promise.all(
+    const rows = await Promise.all(
       connectedClients.map(async ([clientName, client]) => {
         const toolsResult = await client.listTools().catch((e) => {
           log.error("failed to get tools", { clientName, error: e.message })
@@ -589,22 +643,63 @@ export namespace MCP {
           delete s.clients[clientName]
           return undefined
         })
-        return { clientName, client, toolsResult }
+        if (!toolsResult) return []
+        const mcpConfig = config[clientName]
+        const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
+        const timeout = entry?.timeout ?? defaultTimeout
+        return toolsResult.tools.map((tool) => ({
+          clientName,
+          client,
+          tool,
+          timeout,
+        }))
       }),
     )
 
-    for (const { clientName, client, toolsResult } of toolsResults) {
-      if (!toolsResult) continue
-      const mcpConfig = config[clientName]
-      const entry = isMcpConfigured(mcpConfig) ? mcpConfig : undefined
-      const timeout = entry?.timeout ?? defaultTimeout
-      for (const mcpTool of toolsResult.tools) {
-        const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
-        const sanitizedToolName = mcpTool.name.replace(/[^a-zA-Z0-9_-]/g, "_")
-        result[sanitizedClientName + "_" + sanitizedToolName] = await convertMcpTool(mcpTool, client, timeout)
-      }
+    return rows.flat()
+  }
+
+  export async function tools() {
+    const result: Record<string, Tool> = {}
+    const rows = await connectedToolEntries()
+
+    for (const { clientName, client, tool, timeout } of rows) {
+      result[toolKey(clientName, tool.name)] = await convertMcpTool(tool, client, timeout)
     }
     return result
+  }
+
+  export async function serverTools() {
+    const rows = await connectedToolEntries()
+    return rows.map(({ clientName, tool }) =>
+      ServerTool.parse({
+        key: toolKey(clientName, tool.name),
+        client: clientName,
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema as Record<string, unknown>,
+        annotations: tool.annotations,
+      }))
+  }
+
+  export async function callTool(input: {
+    key: string
+    args: Record<string, unknown>
+  }) {
+    const rows = await connectedToolEntries()
+    const match = rows.find((item) => toolKey(item.clientName, item.tool.name) === input.key)
+    if (!match) throw new Error(`MCP tool not found: ${input.key}`)
+    return match.client.callTool(
+      {
+        name: match.tool.name,
+        arguments: input.args,
+      },
+      CallToolResultSchema,
+      {
+        resetTimeoutOnProgress: true,
+        timeout: match.timeout,
+      },
+    )
   }
 
   export async function prompts() {
@@ -628,6 +723,19 @@ export namespace MCP {
     return prompts
   }
 
+  export async function serverPrompts() {
+    const items = await prompts()
+    return Object.entries(items).map(([key, value]) =>
+      ServerPrompt.parse({
+        key,
+        client: value.client,
+        name: value.name,
+        title: value.title,
+        description: value.description,
+        arguments: value.arguments,
+      }))
+  }
+
   export async function resources() {
     const s = await state()
     const clientsSnapshot = await clients()
@@ -647,6 +755,20 @@ export namespace MCP {
     ) as Record<string, ResourceInfo & { client: string }>
 
     return result
+  }
+
+  export async function serverResources() {
+    const items = await resources()
+    return Object.entries(items).map(([key, value]) =>
+      ServerResource.parse({
+        key,
+        client: value.client,
+        uri: value.uri,
+        name: value.name,
+        title: value.title,
+        description: value.description,
+        mimeType: value.mimeType,
+      }))
   }
 
   export async function getPrompt(clientName: string, name: string, args?: Record<string, string>) {
@@ -702,6 +824,12 @@ export namespace MCP {
       })
 
     return result
+  }
+
+  function toolKey(clientName: string, toolName: string) {
+    const sanitizedClientName = clientName.replace(/[^a-zA-Z0-9_-]/g, "_")
+    const sanitizedToolName = toolName.replace(/[^a-zA-Z0-9_-]/g, "_")
+    return sanitizedClientName + "_" + sanitizedToolName
   }
 
   /**

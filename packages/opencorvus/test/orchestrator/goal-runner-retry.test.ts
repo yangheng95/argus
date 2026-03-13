@@ -236,4 +236,124 @@ describe("orchestrator.goal runner retry fallback", () => {
       },
     })
   })
+
+  test("evaluateTask ignores generated orchestrator docs in delivery diffs", async () => {
+    await using tmp = await tmpdir({ git: true })
+    let captured:
+      | {
+          task: Parameters<typeof EvaluatorService.evaluate>[0]
+          delivery: Parameters<typeof EvaluatorService.evaluate>[1]
+        }
+      | undefined
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        Database.transaction((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: "task_generated_docs",
+              project_id: Instance.project.id,
+              title: "task",
+              request: "task",
+              status: "running",
+              priority: "normal",
+              active_run_id: "run_generated_docs",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorRunTable)
+            .values({
+              id: "run_generated_docs",
+              task_id: "task_generated_docs",
+              executor: "opencode",
+              status: "running",
+              phase: "dispatch",
+              retry_count: 0,
+              metadata: {},
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        spyOn(EvaluatorService, "evaluate").mockImplementation(async (task, delivery) => {
+          captured = { task, delivery }
+          return {
+            status: "passed",
+            verdict: "accepted",
+            summary: "ok",
+            checks: [],
+            artifacts: [],
+          }
+        })
+        spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue({
+          ...analysis,
+          goal_statuses: [],
+        })
+
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, "task_generated_docs")).get()!,
+        )
+
+        await evaluateTask({
+          task,
+          goals: [
+            {
+              id: "goal_generated_docs",
+              task_id: task.id,
+              spec_snapshot_id: "spec_generated_docs",
+              description: "goal",
+              criteria: "criteria",
+              priority: "blocking",
+              source: "spec",
+              status: "pending",
+              order_index: 0,
+              metadata: {
+                check_selector: ["spec_check"],
+              },
+              time_created: now,
+              time_updated: now,
+            },
+          ],
+          delivery: {
+            summary: "Task delivery. Changed files: docs and src.",
+            diffs: [
+              {
+                file: ".opencorvus/evaluations/example.md",
+                before: "",
+                after: "# generated\n",
+                additions: 1,
+                deletions: 0,
+                status: "added",
+              },
+              {
+                file: ".opencorvus/goals/example.md",
+                before: "",
+                after: "# generated\n",
+                additions: 1,
+                deletions: 0,
+                status: "added",
+              },
+              {
+                file: "src/note-store.ts",
+                before: "",
+                after: "export const ok = true\n",
+                additions: 1,
+                deletions: 0,
+                status: "added",
+              },
+            ],
+          },
+        })
+
+        expect(captured?.task.metadata?.delivery_changed_files).toEqual(["src/note-store.ts"])
+        expect(captured?.delivery.changedFiles).toEqual(["src/note-store.ts"])
+        expect(captured?.delivery.diffs).toHaveLength(1)
+        expect(captured?.delivery.diffs?.[0]?.file).toBe("src/note-store.ts")
+      },
+    })
+  })
 })

@@ -2,6 +2,7 @@ import z from "zod"
 import { Bus } from "@/bus"
 import { inferSelectors, selectorList, selectorsSatisfied } from "@/check/policy"
 import { Identifier } from "@/id/id"
+import { executorLeaseOwner, executorLeaseUntil } from "./lease"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { type EvaluationOutput } from "@/evaluator/shared"
 import { ExecutorPlanner } from "@/planner/executor"
@@ -12,7 +13,7 @@ import { installRuntimeShims } from "@/runtime/shims"
 import { writeEvaluationSnapshot, writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "@/orchestrator/docs"
 import { writeSpec } from "@/orchestrator/spec"
 import { SpecFailureError, SpecService } from "@/spec/service"
-import { Database, and, desc, eq, isNull, ne } from "@/storage/db"
+import { Database, and, desc, eq, inArray, isNull, ne } from "@/storage/db"
 import { Log } from "@/util/log"
 import { budgetRow, buildRetryPrompt, type RetryContext } from "./helpers"
 import { CreateTaskInput, Event } from "./model"
@@ -1530,6 +1531,22 @@ export function createGoalRun(input: {
   metadata?: Record<string, unknown>
   now?: number
 }) {
+  const existing = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalRunTable)
+      .where(and(
+        eq(OrchestratorGoalRunTable.coordinator_run_id, input.coordinatorRunID),
+        eq(OrchestratorGoalRunTable.goal_id, input.goalID),
+        input.planNodeID
+          ? eq(OrchestratorGoalRunTable.plan_node_id, input.planNodeID)
+          : isNull(OrchestratorGoalRunTable.plan_node_id),
+        inArray(OrchestratorGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
+      ))
+      .orderBy(desc(OrchestratorGoalRunTable.time_created))
+      .get(),
+  )
+  if (existing) return existing
   const id = Identifier.ascending("goal_run")
   const now = input.now ?? Date.now()
   Database.use((db) =>
@@ -1650,6 +1667,52 @@ export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow,
 type EvaluationStatus = "passed" | "failed" | "pending"
 type EvaluationVerdict = "accepted" | "rejected"
 
+export function beginEvaluation(input: {
+  task: TaskRow
+  run: RunRow
+  goalRunID?: string
+  deliveryID: string
+  evaluationID: string
+  now: number
+  summary: string
+}) {
+  const existing = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorEvaluationTable)
+      .where(eq(OrchestratorEvaluationTable.id, input.evaluationID))
+      .get(),
+  )
+  if (existing) return existing
+  Database.use((db) =>
+    db
+      .insert(OrchestratorEvaluationTable)
+      .values({
+        id: input.evaluationID,
+        task_id: input.task.id,
+        run_id: input.run.id,
+        goal_run_id: input.goalRunID,
+        delivery_id: input.deliveryID,
+        status: "pending",
+        verdict: "rejected",
+        summary: input.summary,
+        checks: [],
+        time_created: input.now,
+        time_updated: input.now,
+      })
+      .run(),
+  )
+  const row = Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorEvaluationTable)
+      .where(eq(OrchestratorEvaluationTable.id, input.evaluationID))
+      .get(),
+  )
+  if (!row) throw new Error(`beginEvaluation: evaluation ${input.evaluationID} not found after insert`)
+  return row
+}
+
 export function persistEvaluation(input: {
   task: TaskRow
   run: RunRow
@@ -1684,22 +1747,45 @@ export function persistEvaluation(input: {
     })),
   }
   Database.transaction((db) => {
-    db.insert(OrchestratorEvaluationTable)
-      .values({
-        id: input.evaluationID,
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        delivery_id: input.deliveryID,
-        status: input.finalStatus as EvaluationStatus,
-        verdict: input.finalVerdict as EvaluationVerdict,
-        summary: input.finalSummary,
-        checks: input.result.checks,
-        time_completed: now,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    const existing = db
+      .select()
+      .from(OrchestratorEvaluationTable)
+      .where(eq(OrchestratorEvaluationTable.id, input.evaluationID))
+      .get()
+    if (existing) {
+      db.update(OrchestratorEvaluationTable)
+        .set({
+          task_id: input.task.id,
+          run_id: input.run.id,
+          goal_run_id: input.goalRunID,
+          delivery_id: input.deliveryID,
+          status: input.finalStatus as EvaluationStatus,
+          verdict: input.finalVerdict as EvaluationVerdict,
+          summary: input.finalSummary,
+          checks: input.result.checks,
+          time_completed: now,
+          time_updated: now,
+        })
+        .where(eq(OrchestratorEvaluationTable.id, input.evaluationID))
+        .run()
+    } else {
+      db.insert(OrchestratorEvaluationTable)
+        .values({
+          id: input.evaluationID,
+          task_id: input.task.id,
+          run_id: input.run.id,
+          goal_run_id: input.goalRunID,
+          delivery_id: input.deliveryID,
+          status: input.finalStatus as EvaluationStatus,
+          verdict: input.finalVerdict as EvaluationVerdict,
+          summary: input.finalSummary,
+          checks: input.result.checks,
+          time_completed: now,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
     for (const artifact of input.result.artifacts) {
       db.insert(OrchestratorArtifactTable)
         .values({
@@ -2080,6 +2166,8 @@ export function ensureExecutorSession(input: {
           refs,
           capabilities,
           settings,
+          lease_owner: executorLeaseOwner(),
+          lease_until: executorLeaseUntil(now),
           time_started: existing.time_started ?? input.started ?? now,
           time_updated: now,
         })
@@ -2113,6 +2201,8 @@ export function ensureExecutorSession(input: {
         refs,
         capabilities,
         settings,
+        lease_owner: executorLeaseOwner(),
+        lease_until: executorLeaseUntil(now),
         time_started: input.started ?? now,
         time_created: now,
         time_updated: now,
@@ -2145,6 +2235,8 @@ export function updateExecutorSessionStatus(runID: string, status: typeof Orches
       .update(OrchestratorExecutorSessionTable)
       .set({
         status,
+        lease_owner: null,
+        lease_until: 0,
         time_completed: Date.now(),
         time_updated: Date.now(),
       })
@@ -2171,6 +2263,8 @@ export function updateGoalRunExecutorSessionStatus(
       .update(OrchestratorExecutorSessionTable)
       .set({
         status,
+        lease_owner: null,
+        lease_until: 0,
         time_completed: Date.now(),
         time_updated: Date.now(),
       })
@@ -2226,6 +2320,32 @@ export function appendExecutorEvent(
         time_created: now,
         time_updated: now,
       })
+      .run(),
+  )
+  Database.use((db) =>
+    db
+      .update(OrchestratorExecutorSessionTable)
+      .set({
+        lease_owner: executorLeaseOwner(),
+        lease_until: executorLeaseUntil(now),
+        time_updated: now,
+      })
+      .where(eq(OrchestratorExecutorSessionTable.id, executorSessionID))
+      .run(),
+  )
+}
+
+export function renewExecutorSessionLease(input: { executorSessionID: string; now?: number }) {
+  const now = input.now ?? Date.now()
+  Database.use((db) =>
+    db
+      .update(OrchestratorExecutorSessionTable)
+      .set({
+        lease_owner: executorLeaseOwner(),
+        lease_until: executorLeaseUntil(now),
+        time_updated: now,
+      })
+      .where(eq(OrchestratorExecutorSessionTable.id, input.executorSessionID))
       .run(),
   )
 }
