@@ -616,6 +616,46 @@ describe("ProviderTransform.schema - gemini non-object properties removal", () =
 
     expect(result.properties.data.properties).toBeDefined()
   })
+
+  test("flattens top-level discriminated union tool schemas for strict function callers", () => {
+    const openaiModel = {
+      providerID: "openai",
+      api: {
+        id: "gpt-5.3-codex",
+      },
+    } as any
+
+    const schema = {
+      anyOf: [
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "list" },
+          },
+          required: ["action"],
+          additionalProperties: false,
+        },
+        {
+          type: "object",
+          properties: {
+            action: { type: "string", const: "write" },
+            value: { type: "string" },
+          },
+          required: ["action", "value"],
+          additionalProperties: false,
+        },
+      ],
+    } as any
+
+    const result = ProviderTransform.schema(openaiModel, schema) as any
+
+    expect(result.type).toBe("object")
+    expect(result.anyOf).toBeUndefined()
+    expect(result.oneOf).toBeUndefined()
+    expect(result.properties.action.enum).toEqual(["list", "write"])
+    expect(result.required).toEqual(["action"])
+    expect(result.properties.value.type).toBe("string")
+  })
 })
 
 describe("ProviderTransform.message - DeepSeek reasoning content", () => {

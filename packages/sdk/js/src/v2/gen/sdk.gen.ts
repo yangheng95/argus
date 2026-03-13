@@ -43,7 +43,6 @@ import type {
   ExperimentalScheduleDeleteResponses,
   ExperimentalScheduleListResponses,
   ExperimentalScratchpadGetResponses,
-  ExperimentalSessionListResponses,
   ExperimentalTaskplanListResponses,
   ExperimentalWorkspaceCreateErrors,
   ExperimentalWorkspaceCreateResponses,
@@ -103,6 +102,7 @@ import type {
   PanelKnowledgePreferenceUpdateResponses,
   PanelMessageResponses,
   PanelMessageStreamResponses,
+  PanelSessionSettingsUpdate,
   Part as Part2,
   PartDeleteErrors,
   PartDeleteResponses,
@@ -196,6 +196,10 @@ import type {
   SessionMessageResponses,
   SessionMessagesErrors,
   SessionMessagesResponses,
+  SessionPanelSettingsGetErrors,
+  SessionPanelSettingsGetResponses,
+  SessionPanelSettingsUpdateErrors,
+  SessionPanelSettingsUpdateResponses,
   SessionPromptAsyncErrors,
   SessionPromptAsyncResponses,
   SessionPromptAsyncStatusErrors,
@@ -1387,48 +1391,6 @@ export class Workspace extends HeyApiClient {
   }
 }
 
-export class Session extends HeyApiClient {
-  /**
-   * List sessions
-   *
-   * Get a list of all OpenCorvus sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      roots?: boolean
-      start?: number
-      cursor?: number
-      search?: string
-      limit?: number
-      archived?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "roots" },
-            { in: "query", key: "start" },
-            { in: "query", key: "cursor" },
-            { in: "query", key: "search" },
-            { in: "query", key: "limit" },
-            { in: "query", key: "archived" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<ExperimentalSessionListResponses, unknown, ThrowOnError>({
-      url: "/experimental/session",
-      ...options,
-      ...params,
-    })
-  }
-}
-
 export class Resource extends HeyApiClient {
   /**
    * Get MCP resources
@@ -1728,11 +1690,6 @@ export class Experimental extends HeyApiClient {
     return (this._workspace ??= new Workspace({ client: this.client }))
   }
 
-  private _session?: Session
-  get session(): Session {
-    return (this._session ??= new Session({ client: this.client }))
-  }
-
   private _resource?: Resource
   get resource(): Resource {
     return (this._resource ??= new Resource({ client: this.client }))
@@ -1759,7 +1716,84 @@ export class Experimental extends HeyApiClient {
   }
 }
 
-export class Session2 extends HeyApiClient {
+export class PanelSettings extends HeyApiClient {
+  /**
+   * Get session panel settings
+   *
+   * Read session-scoped overlay panel settings.
+   */
+  public get<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionPanelSettingsGetResponses,
+      SessionPanelSettingsGetErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/panel-settings",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Update session panel settings
+   *
+   * Update session-scoped overlay panel settings.
+   */
+  public update<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      panelSessionSettingsUpdate?: PanelSessionSettingsUpdate
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { key: "panelSessionSettingsUpdate", map: "body" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).patch<
+      SessionPanelSettingsUpdateResponses,
+      SessionPanelSettingsUpdateErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/panel-settings",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Session extends HeyApiClient {
   /**
    * List sessions
    *
@@ -2672,6 +2706,11 @@ export class Session2 extends HeyApiClient {
       ...options,
       ...params,
     })
+  }
+
+  private _panelSettings?: PanelSettings
+  get panelSettings(): PanelSettings {
+    return (this._panelSettings ??= new PanelSettings({ client: this.client }))
   }
 }
 
@@ -6386,9 +6425,9 @@ export class OpencodeClient extends HeyApiClient {
     return (this._experimental ??= new Experimental({ client: this.client }))
   }
 
-  private _session?: Session2
-  get session(): Session2 {
-    return (this._session ??= new Session2({ client: this.client }))
+  private _session?: Session
+  get session(): Session {
+    return (this._session ??= new Session({ client: this.client }))
   }
 
   private _part?: Part

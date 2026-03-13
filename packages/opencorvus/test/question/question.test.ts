@@ -3,6 +3,42 @@ import { Question } from "../../src/question"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
+test("ask - falls back to interaction timeout configured at runtime", async () => {
+  const previousQuestion = process.env.OPENCORVUS_QUESTION_TIMEOUT_MS
+  const previousInteraction = process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS
+  delete process.env.OPENCORVUS_QUESTION_TIMEOUT_MS
+  process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS = "0"
+
+  try {
+    await using tmp = await tmpdir({ git: true })
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        await expect(
+          Question.ask({
+            sessionID: "ses_test",
+            questions: [
+              {
+                question: "What would you like to do?",
+                header: "Action",
+                options: [
+                  { label: "Option 1", description: "First option" },
+                  { label: "Option 2", description: "Second option" },
+                ],
+              },
+            ],
+          }),
+        ).rejects.toBeInstanceOf(Question.RejectedError)
+      },
+    })
+  } finally {
+    if (previousQuestion === undefined) delete process.env.OPENCORVUS_QUESTION_TIMEOUT_MS
+    else process.env.OPENCORVUS_QUESTION_TIMEOUT_MS = previousQuestion
+    if (previousInteraction === undefined) delete process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS
+    else process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS = previousInteraction
+  }
+})
+
 test("ask - returns pending promise", async () => {
   await using tmp = await tmpdir({ git: true })
   await Instance.provide({

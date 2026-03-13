@@ -11,12 +11,9 @@ const opencorvus = path.resolve(repo, "packages/opencorvus")
 const tauri = path.resolve(dir, "src-tauri")
 const resources = path.join(tauri, "resources")
 const target = path.join(tauri, "target")
-const buildTarget = path.join(target, "bundle-build")
-const buildRelease = path.join(buildTarget, "release")
 const release = path.join(target, "release")
 
 const serverFile = process.platform === "win32" ? "opencorvus.exe" : "opencorvus"
-const overlayName = process.platform === "win32" ? "opencorvus-overlay.exe" : "opencorvus-overlay"
 
 const distName = [
   "opencorvus",
@@ -26,12 +23,7 @@ const distName = [
 
 const distServer = path.join(opencorvus, "dist", distName, "bin", serverFile)
 const stagedServer = path.join(resources, serverFile)
-const builtServer = path.join(buildRelease, serverFile)
-const builtOverlay = path.join(buildRelease, overlayName)
 const releaseServer = path.join(release, serverFile)
-const releaseOverlay = path.join(release, overlayName)
-const builtBundle = path.join(buildRelease, "bundle")
-const releaseBundle = path.join(release, "bundle")
 
 function text(error: unknown) {
   if (typeof error === "string") return error
@@ -62,14 +54,6 @@ async function copyFile(src: string, dest: string, options?: { required?: boolea
   }
 }
 
-async function copyTree(src: string, dest: string) {
-  if (!(await exists(src))) return false
-  await fs.rm(dest, { recursive: true, force: true }).catch(() => undefined)
-  await fs.mkdir(path.dirname(dest), { recursive: true })
-  await fs.cp(src, dest, { recursive: true, force: true })
-  return true
-}
-
 async function cargoPath() {
   if (process.platform !== "win32") return process.env.PATH
   const dir = process.env.USERPROFILE ? path.join(process.env.USERPROFILE, ".cargo", "bin") : ""
@@ -89,6 +73,24 @@ async function tauriArgs() {
   return ["--config", JSON.stringify({ version })]
 }
 
+async function cleanLegacyOutputs() {
+  await fs.rm(path.join(target, "bundle-build"), { recursive: true, force: true }).catch(() => undefined)
+  const files = await fs.readdir(release).catch(() => [])
+  await Promise.all(
+    files
+      .filter((file) => /^OpenCorvus_.*\.(?:msi|exe)$/i.test(file))
+      .map((file) => fs.rm(path.join(release, file), { force: true }).catch(() => undefined)),
+  )
+}
+
+async function cleanUnusedOutputs() {
+  await Promise.all([
+    fs.rm(path.join(target, "debug"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(release, "nsis"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(release, "wix"), { recursive: true, force: true }).catch(() => undefined),
+  ])
+}
+
 await $`bun run build`.cwd(opencorvus)
 
 if (!(await exists(distServer))) {
@@ -97,14 +99,12 @@ if (!(await exists(distServer))) {
 
 await fs.mkdir(resources, { recursive: true })
 await copyFile(distServer, stagedServer, { required: true })
-await fs.rm(buildTarget, { recursive: true, force: true }).catch(() => undefined)
+await cleanLegacyOutputs()
 
 await $`tauri build ${await tauriArgs()}`.cwd(dir).env({
-  CARGO_TARGET_DIR: buildTarget,
+  CARGO_TARGET_DIR: target,
   PATH: await cargoPath(),
 })
 
-await copyFile(distServer, builtServer)
-await copyFile(builtOverlay, releaseOverlay, { tolerateBusy: true })
 await copyFile(distServer, releaseServer, { tolerateBusy: true })
-await copyTree(builtBundle, releaseBundle)
+await cleanUnusedOutputs()

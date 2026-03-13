@@ -1,12 +1,17 @@
 import { describe, expect, test } from "bun:test"
 import {
+  CodexAuthPlugin,
   parseJwtClaims,
   extractAccountIdFromClaims,
   extractAccountId,
+  parseOAuthCallbackInput,
+  runOpenAIOAuthTlsPreflight,
+  formatOpenAIOAuthTlsPreflightFix,
   parseCodexSSE,
   prepareCodexBody,
   type IdTokenClaims,
 } from "../../src/plugin/codex"
+import { DEFAULT_OPENAI_CODEX_MODEL } from "../../src/provider/codex-live"
 
 function createTestJwt(payload: object): string {
   const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url")
@@ -123,6 +128,66 @@ describe("plugin.codex", () => {
     })
   })
 
+  describe("parseOAuthCallbackInput", () => {
+    test("accepts a full redirect url", () => {
+      expect(
+        parseOAuthCallbackInput(
+          "http://localhost:1455/auth/callback?code=auth-code&state=expected",
+          "expected",
+        ),
+      ).toBe("auth-code")
+    })
+
+    test("accepts raw authorization codes for manual fallback", () => {
+      expect(parseOAuthCallbackInput("auth-code", "expected")).toBe("auth-code")
+    })
+
+    test("rejects redirect urls with the wrong state", () => {
+      expect(() =>
+        parseOAuthCallbackInput(
+          "http://localhost:1455/auth/callback?code=auth-code&state=unexpected",
+          "expected",
+        ),
+      ).toThrow("Invalid state")
+    })
+  })
+
+  describe("runOpenAIOAuthTlsPreflight", () => {
+    test("classifies certificate chain failures", async () => {
+      const error = Object.assign(new Error("unable to get local issuer certificate"), {
+        cause: {
+          code: "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+          message: "unable to get local issuer certificate",
+        },
+      })
+
+      const result = await runOpenAIOAuthTlsPreflight({
+        fetchImpl: (() => Promise.reject(error)) as typeof fetch,
+      })
+
+      expect(result).toEqual({
+        ok: false,
+        kind: "tls-cert",
+        code: "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+        message: "unable to get local issuer certificate",
+      })
+      expect(formatOpenAIOAuthTlsPreflightFix(result)).toContain("cannot validate TLS certificates")
+    })
+
+    test("keeps non-certificate failures as network issues", async () => {
+      const result = await runOpenAIOAuthTlsPreflight({
+        fetchImpl: (() => Promise.reject(new Error("socket hang up"))) as typeof fetch,
+      })
+
+      expect(result).toEqual({
+        ok: false,
+        kind: "network",
+        code: undefined,
+        message: "socket hang up",
+      })
+    })
+  })
+
   describe("prepareCodexBody", () => {
     test("lifts system input into top-level instructions for responses payloads", () => {
       const body = prepareCodexBody({
@@ -171,6 +236,58 @@ describe("plugin.codex", () => {
         { type: "function_call", id: "fc_real", call_id: "call_1", name: "read_file", arguments: "{}" },
         { type: "function_call_output", call_id: "call_1", output: "ok" },
       ])
+    })
+  })
+
+  describe("oauth model filtering", () => {
+    test("uses the current ChatGPT codex default model", () => {
+      expect(DEFAULT_OPENAI_CODEX_MODEL).toBe("openai-codex/gpt-5.4")
+    })
+
+    test("keeps codex transport models visible and zeroes their costs", async () => {
+      type Hook = NonNullable<Awaited<ReturnType<typeof CodexAuthPlugin>>["auth"]>
+      type Loader = NonNullable<Hook["loader"]>
+      type LoaderAuth = Awaited<ReturnType<Parameters<Loader>[0]>>
+      type LoaderProvider = Parameters<Loader>[1]
+
+      const hooks = await CodexAuthPlugin({
+        client: {
+          auth: {
+            set: async () => {},
+          },
+        },
+      } as Parameters<typeof CodexAuthPlugin>[0])
+      const loader = hooks.auth?.loader
+      if (!loader) throw new Error("expected codex auth loader")
+
+      const provider = {
+        id: "openai-codex",
+        models: {
+          "gpt-5.4": {
+            cost: { input: 2.5, output: 15, cache: { read: 0.25, write: 0 } },
+          },
+          "gpt-5.3-codex": {
+            cost: { input: 1.75, output: 14, cache: { read: 0.175, write: 0 } },
+          },
+          "gpt-5.1-codex-mini": {
+            cost: { input: 0.25, output: 2, cache: { read: 0.025, write: 0 } },
+          },
+        },
+      } as LoaderProvider
+
+      await loader(async () => ({ type: "oauth" }) as LoaderAuth, provider)
+
+      expect(hooks.auth?.provider).toBe("openai-codex")
+      expect(Object.keys(provider.models).sort()).toEqual(["gpt-5.1-codex-mini", "gpt-5.3-codex", "gpt-5.4"])
+      expect(
+        Object.values(provider.models).every(
+          (model) =>
+            model.cost.input === 0 &&
+            model.cost.output === 0 &&
+            model.cost.cache.read === 0 &&
+            model.cost.cache.write === 0,
+        ),
+      ).toBe(true)
     })
   })
 

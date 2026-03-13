@@ -169,7 +169,7 @@
                 <span class="titlebar-menu-meta" data-i18n="titlebar.opacity_hint">Lower values make the whole overlay more transparent.</span>
               </span>
               <span class="titlebar-menu-range-control">
-                <input class="titlebar-menu-slider" id="opacityRange" type="range" min="30" max="100" step="5" value="50">
+                <input class="titlebar-menu-slider" id="opacityRange" type="range" min="50" max="100" step="5" value="50">
                 <span class="titlebar-menu-value" id="opacityValue">50%</span>
               </span>
             </label>
@@ -344,6 +344,7 @@
           </div>
           <div class="chat-compose-meta">
             <div class="chat-build">
+              <span class="chat-version" id="chatVersion"></span>
               <a class="chat-author" id="chatAuthor" href="https://github.com/yangheng95" target="_blank" rel="noreferrer noopener" data-i18n="version.author">Author: Yang, Heng @GitHub</a>
             </div>
             <div class="chat-compose-tip" data-i18n="chat.tip">Enter to send / Shift+Enter for newline</div>
@@ -354,6 +355,10 @@
 
       <!-- Collapsible Sections (right) -->
       <div class="sections" id="sections">
+        <header class="sections-header">
+          <span class="sections-title" data-i18n="sections.title">Inspector</span>
+        </header>
+        <div class="sections-stack">
 
         <!-- Spec -->
         <details class="section" id="specSection" data-phase-kind="spec">
@@ -799,9 +804,10 @@
               <div class="empty-hint" data-i18n="preference.none">No preferences</div>
             </div>
           </div>
-        </details>
+          </details>
+        </div>
+        </div>
       </div>
-    </div>
   </dialog>
 
   <!-- Memory Detail Dialog -->

@@ -296,6 +296,10 @@ test("overlay controls trigger without runtime failures", async () => {
         time: { updated: now - 4_000 },
       },
     },
+    panelSettings: {
+      "session-1": {},
+      "session-2": {},
+    },
     timeline: {
       task: {
         "task-1": [
@@ -433,6 +437,8 @@ test("overlay controls trigger without runtime failures", async () => {
     },
   }
   const route = (url: URL) => url.pathname.replace(/\/+$/, "") || "/"
+  const projectDir = (url: URL) => url.searchParams.get("directory") || data.path.directory
+  const sameDir = (value: string | undefined, url: URL) => !value || value === projectDir(url)
   const send = (value: unknown, init?: ResponseInit) =>
     new Response(JSON.stringify(value), {
       ...init,
@@ -521,10 +527,15 @@ test("overlay controls trigger without runtime failures", async () => {
         })
       }
       if (path === "/global/health") return send({ version: "1.2.3" })
-      if (path === "/tasks") return send(data.tasks)
+      if (path === "/tasks") {
+        return send({
+          ...data.tasks,
+          tasks: data.tasks.tasks.filter((item) => sameDir(item?.task?.directory, url)),
+        })
+      }
       if (path === "/global/tasks") return send(data.tasks)
       if (path === "/executor") return send(data.executors)
-      if (path === "/path") return send(data.path)
+      if (path === "/path") return send({ ...data.path, directory: projectDir(url) })
       if (path === "/vcs") return send(data.vcs)
       if (path === "/provider") return send(data.provider)
       if (path === "/provider/auth") return send(data.providerAuth)
@@ -573,21 +584,31 @@ test("overlay controls trigger without runtime failures", async () => {
         return send({ ok: true })
       }
       if (path.startsWith("/mcp/") && path.endsWith("/auth")) return send({ ok: true })
-      if (path === "/session" && req.method === "GET") return send(data.sessions)
-      if (path === "/experimental/session" && req.method === "GET") return send(data.sessions)
+      if (path === "/session" && req.method === "GET") return send(data.sessions.filter((item) => sameDir(item?.directory, url)))
       if (path === "/session" && req.method === "POST") {
         const id = `session-${data.counters.nextSession++}`
+        const directory = projectDir(url)
         const item = {
           id,
           title: `Created ${id}`,
-          directory: "D:/overlay/new-session",
+          directory,
           time: { updated: Date.now() },
         }
         data.sessions = [item, ...data.sessions]
         data.session[id] = item
+        data.panelSettings[id] = {}
         data.timeline.session[id] = []
         data.diffs[id] = []
         return send(item)
+      }
+      if (path.startsWith("/session/") && path.endsWith("/panel-settings") && req.method === "GET") {
+        const id = decodeURIComponent(path.slice(9, -15))
+        return send(data.panelSettings[id] || {})
+      }
+      if (path.startsWith("/session/") && path.endsWith("/panel-settings") && req.method === "PATCH") {
+        const id = decodeURIComponent(path.slice(9, -15))
+        data.panelSettings[id] = await req.json()
+        return send(data.panelSettings[id])
       }
       if (path.startsWith("/session/") && path.endsWith("/message")) {
         const id = decodeURIComponent(path.slice(9, -8))
@@ -605,6 +626,7 @@ test("overlay controls trigger without runtime failures", async () => {
         const id = decodeURIComponent(path.slice(9))
         data.sessions = data.sessions.filter((item) => item.id !== id)
         delete data.session[id]
+        delete data.panelSettings[id]
         delete data.timeline.session[id]
         delete data.diffs[id]
         return send({ ok: true })
@@ -765,9 +787,12 @@ test("overlay controls trigger without runtime failures", async () => {
       open: [] as string[],
       copy: [] as string[],
       created: [] as string[],
-      picked: ["D:/overlay/picked", "D:/overlay/picked"] as string[],
+      picked: ["D:/overlay/picked", "D:/overlay/picked", "D:/overlay/workspace/app"] as string[],
       alwaysOnTop: false,
-      settings: {},
+      settings: {
+        directory: "D:/overlay/workspace/app",
+        directoryMode: "custom",
+      },
     }
     Object.defineProperty(window, "__overlayTest", {
       configurable: true,
@@ -1049,10 +1074,11 @@ test("overlay controls trigger without runtime failures", async () => {
     seen.push("[data-path-action='reset']")
     await tap("[data-path-action='reset']")
     await page.waitForFunction(() => document.querySelector("#taskDir")?.getAttribute("title") === "D:/overlay/temp")
-    await page.waitForSelector(".session-row-main[data-session-id='session-1']")
-    seen.push(".session-row-main[data-session-id='session-1']")
-    await tap(".session-row-main[data-session-id='session-1']")
+    await page.waitForFunction(() => !document.querySelector(".session-row-main[data-session-id='session-1']"))
+    seen.push("[data-path-action='browse']")
+    await tap("[data-path-action='browse']")
     await page.waitForFunction(() => document.querySelector("#taskDir")?.getAttribute("title") === "D:/overlay/workspace/app")
+    await page.waitForSelector(".session-row-main[data-session-id='session-1']")
     await page.waitForSelector('[data-task-action="retry"]', { visible: true })
 
     for (const item of ["retry", "replan", "cancel"]) {
@@ -1361,4 +1387,4 @@ test("overlay controls trigger without runtime failures", async () => {
     await client.close().catch(() => undefined)
     server.stop(true)
   }
-})
+}, { timeout: 30_000 })

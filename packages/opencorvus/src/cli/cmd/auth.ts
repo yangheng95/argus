@@ -16,6 +16,9 @@ import { text } from "node:stream/consumers"
 import { entries } from "@/util/object"
 
 type PluginAuth = NonNullable<Hooks["auth"]>
+const BUILTIN_PROVIDER_NAMES: Record<string, string> = {
+  "openai-codex": "OpenAI Codex",
+}
 
 /**
  * Handle plugin-based authentication flow.
@@ -216,7 +219,7 @@ export const AuthListCommand = cmd({
     const database = await ModelsDev.get()
 
     for (const [providerID, result] of results) {
-      const name = database[providerID]?.name || providerID
+      const name = database[providerID]?.name || BUILTIN_PROVIDER_NAMES[providerID] || providerID
       prompts.log.info(`${name} ${UI.Style.TEXT_DIM}${result.type}`)
     }
 
@@ -322,12 +325,15 @@ export const AuthLoginCommand = cmd({
           existingProviders: providers,
           disabled,
           enabled,
-          providerNames: Object.fromEntries(
-            entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>).map(([id, provider]) => [
-              id,
-              provider.name,
-            ]),
-          ) as Record<string, string | undefined>,
+          providerNames: {
+            ...BUILTIN_PROVIDER_NAMES,
+            ...(Object.fromEntries(
+              entries((config.provider ?? {}) as NonNullable<Config.Info["provider"]>).map(([id, provider]) => [
+                id,
+                provider.name,
+              ]),
+            ) as Record<string, string | undefined>),
+          },
         })
         let provider = await prompts.autocomplete({
           message: "Select provider",
@@ -353,7 +359,7 @@ export const AuthLoginCommand = cmd({
             ...pluginProviders.map((x) => ({
               label: x.name,
               value: x.id,
-              hint: "plugin",
+              hint: x.id === "openai-codex" ? "ChatGPT Plus/Pro OAuth" : "plugin",
             })),
             {
               value: "other",

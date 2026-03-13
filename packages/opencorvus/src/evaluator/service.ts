@@ -66,7 +66,16 @@ export namespace EvaluatorService {
     const optional = await optionalChecks(config, task, delivery)
     const checks = [...core.checks, ...optional.flatMap((item) => Array.isArray(item.checks) ? item.checks : [])]
     const artifacts = [...core.artifacts, ...optional.flatMap((item) => Array.isArray(item.artifacts) ? item.artifacts : [])]
-    return publishResult(task, finalizeEvaluation(commands, checks, artifacts, optional, !!task.activeSpecVersionID))
+    return publishResult(
+      task,
+      finalizeEvaluation(
+        commands,
+        checks,
+        artifacts,
+        optional,
+        !!task.activeSpecVersionID && config.spec_check?.enabled !== false,
+      ),
+    )
   }
 
   export async function analyzeDelivery(input: {

@@ -16,8 +16,10 @@ import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
 import z from "zod"
 import { findRun, listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
+import { updateGoalRun } from "./transition"
 
 const log = Log.create({ service: "goal-runner" })
+export const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
 
 function dict(input: unknown) {
   return input && typeof input === "object" && !Array.isArray(input)
@@ -65,6 +67,33 @@ function retrySummary(prefix: string, files: string[]) {
     return `${prefix} No new file changes were detected in this retry; re-evaluating previously changed files: ${sample}.`
   }
   return `${prefix} No new file changes were detected in this retry; re-evaluating previously changed files: ${sample} and ${files.length - 3} more.`
+}
+
+export function goalRunLocalSessionID(goalRun: GoalRunRow) {
+  const id = dict(goalRun.metadata).local_session_id
+  return typeof id === "string" && id ? id : goalRun.session_id ?? undefined
+}
+
+export function goalRunExpired(goalRun: GoalRunRow, now = Date.now(), ttl = GOAL_RUN_RETENTION_MS) {
+  const time = goalRun.time_completed ?? goalRun.time_updated ?? goalRun.time_created ?? now
+  return now - time >= ttl
+}
+
+export async function removeGoalRunSession(goalRun: GoalRunRow) {
+  const id = goalRunLocalSessionID(goalRun)
+  if (id) {
+    await Session.remove(id).catch((err) => {
+      log.warn("failed to remove goal run session", { sessionID: id, error: String(err) })
+    })
+  }
+  if (!id && !goalRun.session_id) return
+  updateGoalRun(goalRun.id, {
+    session_id: null,
+    metadata: {
+      ...dict(goalRun.metadata),
+      local_session_id: null,
+    },
+  })
 }
 
 async function evaluationDelivery(task: TaskRow, delivery: { summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] }): Promise<EvaluationDelivery> {

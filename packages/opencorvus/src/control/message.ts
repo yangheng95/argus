@@ -23,6 +23,11 @@ type RunResult = {
   result: z.infer<typeof ControlMessageResult>
   timeline: boolean
 }
+type StreamState = {
+  assistant: Set<string>
+  raw: Map<string, string>
+  text: Map<string, string>
+}
 type SessionInfo = Awaited<ReturnType<typeof Session.create>>
 type ControlSession = {
   info: SessionInfo
@@ -86,13 +91,49 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     })
 
     if (onEvent) {
+      const stream: StreamState = {
+        assistant: new Set(),
+        raw: new Map(),
+        text: new Map(),
+      }
+      unsubs.push(
+        Bus.subscribe(MessageV2.Event.Updated, (event) => {
+          const info = event.properties.info
+          if (info.sessionID !== control?.info.id) return
+          if (info.role !== "assistant") return
+          stream.assistant.add(info.id)
+        }),
+      )
       unsubs.push(
         Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
-          const part = event.properties.part as Record<string, unknown>
+          const part = event.properties.part
           if (part.sessionID !== control?.info.id) return
-          if (part.type === "tool") {
-            onEvent({ type: "tool", tool: part.tool as string })
+          if (!stream.assistant.has(part.messageID)) return
+          if (part.type !== "tool") return
+          if (part.tool !== "StructuredOutput") {
+            onEvent({ type: "tool", tool: part.tool })
+            return
           }
+          const text = structuredMessageText(part.state.input)
+          if (!text) return
+          emitStreamText(stream, part.id, text, onEvent)
+        }),
+      )
+      unsubs.push(
+        Bus.subscribe(MessageV2.Event.PartDelta, (event) => {
+          const part = event.properties
+          if (part.sessionID !== control?.info.id) return
+          if (!stream.assistant.has(part.messageID)) return
+          if (part.field === "text") {
+            onEvent({ type: "message_delta", delta: part.delta })
+            return
+          }
+          if (part.field !== "raw") return
+          const raw = (stream.raw.get(part.partID) ?? "") + part.delta
+          stream.raw.set(part.partID, raw)
+          const text = structuredMessageText(raw)
+          if (!text) return
+          emitStreamText(stream, part.partID, text, onEvent)
         }),
       )
       onEvent({ type: "start" })
@@ -215,6 +256,94 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
       },
     ],
   })
+}
+
+function emitStreamText(state: StreamState, partID: string, text: string, onEvent: StreamCallback) {
+  const prev = state.text.get(partID) ?? ""
+  if (!text || text === prev) return
+  state.text.set(partID, text)
+  if (text.startsWith(prev)) {
+    onEvent({ type: "message_delta", delta: text.slice(prev.length) })
+    return
+  }
+  onEvent({ type: "message_replace", text })
+}
+
+function structuredMessageText(input: unknown) {
+  if (!input) return undefined
+  if (typeof input === "string") return structuredMessageFromRaw(input)
+  if (typeof input !== "object" || Array.isArray(input)) return undefined
+  return typeof input.message === "string" ? input.message : undefined
+}
+
+function structuredMessageFromRaw(raw: string) {
+  const parsed = (() => {
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return undefined
+    }
+  })()
+  if (parsed) return structuredMessageText(parsed)
+  const match = raw.match(/"message"\s*:\s*"/s)
+  if (!match) return undefined
+  return decodeJsonStringPrefix(raw.slice(match.index + match[0].length))
+}
+
+function decodeJsonStringPrefix(input: string) {
+  let result = ""
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i]
+    if (char === "\"") return result
+    if (char !== "\\") {
+      result += char
+      continue
+    }
+    i += 1
+    if (i >= input.length) return result
+    const escape = input[i]
+    if (escape === "u") {
+      const code = input.slice(i + 1, i + 5)
+      if (!/^[0-9a-fA-F]{4}$/.test(code)) return result
+      result += String.fromCharCode(Number.parseInt(code, 16))
+      i += 4
+      continue
+    }
+    if (escape === "\"") {
+      result += "\""
+      continue
+    }
+    if (escape === "\\") {
+      result += "\\"
+      continue
+    }
+    if (escape === "/") {
+      result += "/"
+      continue
+    }
+    if (escape === "b") {
+      result += "\b"
+      continue
+    }
+    if (escape === "f") {
+      result += "\f"
+      continue
+    }
+    if (escape === "n") {
+      result += "\n"
+      continue
+    }
+    if (escape === "r") {
+      result += "\r"
+      continue
+    }
+    if (escape === "t") {
+      result += "\t"
+      continue
+    }
+    return result
+  }
+  return result
 }
 
 async function resolveModel() {

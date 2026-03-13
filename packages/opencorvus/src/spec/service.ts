@@ -11,11 +11,12 @@
 import z from "zod"
 import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft } from "./agent"
 import { Log } from "@/util/log"
+import { Env } from "@/env"
 
 const log = Log.create({ service: "spec-service" })
 
 function specTimeoutMs() {
-  return Number(process.env.OPENCORVUS_SPEC_TIMEOUT_MS) || 300_000
+  return Number(Env.get("OPENCORVUS_SPEC_TIMEOUT_MS")) || 300_000
 }
 
 export class SpecFailureError extends Error {

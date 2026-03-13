@@ -171,7 +171,7 @@ test("copying chat and logs does not open the dialog", async () => {
       }
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") return send(data.tasks)
-      if (path === "/experimental/session") return send(data.sessions)
+      if (path === "/session") return send(data.sessions)
       if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
       if (path === "/control/timeline") {
         const taskID = url.searchParams.get("taskID")

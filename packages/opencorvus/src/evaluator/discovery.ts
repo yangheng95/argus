@@ -66,6 +66,13 @@ export function resolvedChecks(
 }
 
 function requiredSpecCheck(current: z.infer<typeof CheckConfig>["spec_check"]) {
+  if (current?.enabled === false) {
+    return {
+      ...current,
+      enabled: false,
+      mode: current.mode ?? ("strict" as const),
+    }
+  }
   return {
     ...(current ?? {}),
     enabled: true,

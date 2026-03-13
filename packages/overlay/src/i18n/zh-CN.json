@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "7ab3af4b9e06656d"
+    "panel_revision": "1629685e33917abb"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边定工作范围，中间推进会话，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -70,6 +70,7 @@
   "chat.role.user": "用户",
   "chat.send_label": "发送",
   "chat.send_title": "发送消息。Enter 发送，Shift+Enter 换行。",
+  "chat.thinking": "思考中",
   "chat.tip": "Enter 发送 · Shift+Enter 换行",
   "chat.title": "会话",
   "checks.artifact": "产物检查",
@@ -496,6 +497,7 @@
   "llm.auth_method": "认证方式",
   "llm.auth_type_api": "手动输入代码或 API 令牌",
   "llm.auth_type_oauth": "继续浏览器登录流程",
+  "sections.title": "检查面板",
   "titlebar.full_transcript": "显示完整转录",
   "titlebar.full_transcript_hint": "显示隐藏的控件文案、内部工具步骤和助手原始细节。"
 }

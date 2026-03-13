@@ -9,6 +9,7 @@ import { Instance } from "@/project/instance"
 import { ExecutorPlanner } from "./executor"
 import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agent"
 import { type ClarificationResult, type SpecDraft } from "@/spec/agent"
+import { Env } from "@/env"
 
 const log = Log.create({ service: "planner" })
 
@@ -16,7 +17,7 @@ const log = Log.create({ service: "planner" })
  *  Must be >= the agent's internal TIMEOUT_MS (300s) to avoid killing the agent
  *  mid-exploration. Override via OPENCORVUS_PLANNER_TIMEOUT_MS env var. */
 function plannerTimeoutMs() {
-  return Number(process.env.OPENCORVUS_PLANNER_TIMEOUT_MS) || 300_000
+  return Number(Env.get("OPENCORVUS_PLANNER_TIMEOUT_MS")) || 300_000
 }
 
 type StageInfo = {

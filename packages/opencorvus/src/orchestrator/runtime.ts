@@ -23,14 +23,19 @@ import {
   deliveryFromSnapshot,
   evaluateGoal,
   evaluateTask,
+  GOAL_RUN_RETENTION_MS,
   goalEvaluationOutcome,
+  goalRunExpired,
+  goalRunLocalSessionID,
+  removeGoalRunSession,
 } from "./goal-runner"
 import { nextGoalNode, pendingBlockingGoals } from "./goal-scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import { autoRejectInteraction } from "./interaction-actions"
-import { unattendedProject } from "./unattended"
+import { UNATTENDED_AUTO_REPLY, unattendedProject } from "./unattended"
 import {
+  OrchestratorGoalRunTable,
   OrchestratorInteractionRequestTable,
   OrchestratorRunTable,
   OrchestratorTaskTable,
@@ -100,13 +105,14 @@ const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 
 // Unattended-mode safeguards
-const INTERACTION_STALE_MS = safeParseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS, 30_000) // auto-reject stale interactions (30s default)
 const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
 // Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
 // Default is off so automated pipelines continue without interruption.
 const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
-const UNATTENDED_AUTO_REPLY =
-  "Use reasonable defaults consistent with the task request, keep scope minimal, continue execution, and do not ask again unless absolutely necessary."
+
+function interactionStaleMs() {
+  return safeParseInt(process.env.OPENCORVUS_INTERACTION_TIMEOUT_MS, 5 * 60 * 1000)
+}
 
 function goalsForRun(run: RunRow) {
   const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
@@ -516,13 +522,6 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
   }
 }
 
-async function removeGoalRunSession(goalRun: GoalRunRow) {
-  if (!goalRun.session_id) return
-  await Session.remove(goalRun.session_id).catch((err) => {
-    log.warn("failed to remove goal run session", { sessionID: goalRun.session_id, error: String(err) })
-  })
-}
-
 async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined, hooks: RuntimeHooks) {
   if (Instance.project.vcs !== "git") {
     await Project.initGit(Instance.directory)
@@ -572,6 +571,7 @@ export namespace OrchestratorRuntime {
       // Startup recovery: recover tasks stuck in transient states from a previous server instance
       // Tasks in "evaluating" or "delivering" with no active in-memory evaluation are stranded
       recoverStrandedTasks(hooks)
+      await pruneGoalRuns()
     } finally {
       current.syncing = false
     }
@@ -609,7 +609,8 @@ export namespace OrchestratorRuntime {
     const goalDelivery = latest ? findDeliveryByGoalRun(latest.id) : undefined
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
-      if (await unattendedProject()) {
+      const unattended = await unattendedProject()
+      if (unattended) {
         for (const interaction of pending) {
           const answered = await autoAnswerInteraction(interaction).catch((error) => {
             log.warn("failed to auto-answer unattended interaction", { id: interaction.id, error: String(error) })
@@ -619,49 +620,31 @@ export namespace OrchestratorRuntime {
         }
         run = requireRun(runID)
         task = requireTask(run.task_id)
-        const remaining = findPendingInteractions(run.id)
-        if (remaining.length === 0) {
-          // Fall through to continue sync after auto-answering defaults.
-        } else {
-          if (run.status !== "blocked") {
-            await hooks.updateRun(run, { status: "blocked", blocking_reason: remaining[0].request_type }, "Run blocked")
+        const now = Date.now()
+        const timeout = interactionStaleMs()
+        const stale = findPendingInteractions(run.id).filter((p) => (now - (p.time_created ?? 0)) > timeout)
+        if (stale.length > 0) {
+          for (const interaction of stale) {
+            log.info("auto-rejecting stale interaction", {
+              id: interaction.id,
+              type: interaction.request_type,
+              ageMs: now - (interaction.time_created ?? 0),
+              timeoutMs: timeout,
+            })
+            await autoRejectInteraction(interaction, "Timed out waiting for operator response")
           }
-          if (task.status !== "blocked") {
-            await hooks.updateTask(task, { status: "blocked", blocking_reason: remaining[0].request_type }, "Awaiting user input")
-          }
-          return
+          run = requireRun(runID)
+          task = requireTask(run.task_id)
         }
       }
 
-      // Auto-reject stale interactions for unattended operation
-      const now = Date.now()
-      const stale = findPendingInteractions(run.id).filter((p) => (now - (p.time_created ?? 0)) > INTERACTION_STALE_MS)
-      if (stale.length > 0) {
-        for (const interaction of stale) {
-          log.info("auto-rejecting stale interaction", { id: interaction.id, type: interaction.request_type, ageMs: now - (interaction.time_created ?? 0) })
-          await autoRejectInteraction(interaction, "Timed out waiting for operator response")
-        }
-        run = requireRun(runID)
-        task = requireTask(run.task_id)
-        // Re-check after auto-rejection
-        const stillPending = findPendingInteractions(run.id)
-        if (stillPending.length === 0) {
-          // Fall through to continue sync
-        } else {
-          if (run.status !== "blocked") {
-            await hooks.updateRun(run, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Run blocked")
-          }
-          if (task.status !== "blocked") {
-            await hooks.updateTask(task, { status: "blocked", blocking_reason: stillPending[0].request_type }, "Awaiting user input")
-          }
-          return
-        }
-      } else {
+      const remaining = findPendingInteractions(run.id)
+      if (remaining.length > 0) {
         if (run.status !== "blocked") {
-          await hooks.updateRun(run, { status: "blocked", blocking_reason: pending[0].request_type }, "Run blocked")
+          await hooks.updateRun(run, { status: "blocked", blocking_reason: remaining[0].request_type }, "Run blocked")
         }
         if (task.status !== "blocked") {
-          await hooks.updateTask(task, { status: "blocked", blocking_reason: pending[0].request_type }, "Awaiting user input")
+          await hooks.updateTask(task, { status: "blocked", blocking_reason: remaining[0].request_type }, "Awaiting user input")
         }
         return
       }
@@ -669,6 +652,12 @@ export namespace OrchestratorRuntime {
 
     if (!delivery && latest?.status === "completed" && goalDelivery) {
       await finalizeGoalRun(task, run, latest, hooks)
+      return
+    }
+
+    if (!delivery && latest?.status === "failed" && run.status !== "failed" && run.status !== "aborted") {
+      const evaluation = findEvaluationByGoalRun(latest.id)
+      await handleEvaluationFailure(task, run, evaluation?.summary ?? latest.error ?? "Goal run failed", hooks)
       return
     }
 
@@ -916,6 +905,35 @@ function recoverStrandedTasks(hooks: RuntimeHooks) {
     cleanupStaleGoalWorkspaces(task.id).catch((err) =>
       log.warn("failed to clean up stale goal workspaces", { taskID: task.id, error: String(err) }),
     )
+  }
+}
+
+async function pruneGoalRuns() {
+  const now = Date.now()
+  const rows = Database.use((db) =>
+    db
+      .select({ goalRun: OrchestratorGoalRunTable })
+      .from(OrchestratorGoalRunTable)
+      .innerJoin(OrchestratorTaskTable, eq(OrchestratorGoalRunTable.task_id, OrchestratorTaskTable.id))
+      .where(
+        and(
+          eq(OrchestratorTaskTable.project_id, Instance.project.id),
+          inArray(OrchestratorGoalRunTable.status, ["completed", "failed", "aborted", "superseded"]),
+        ),
+      )
+      .all(),
+  ).map((item) => item.goalRun)
+  for (const goalRun of rows) {
+    const id = goalRunLocalSessionID(goalRun)
+    if (id) {
+      OrchestratorRuntime.stopExecutorEventBridge(goalRun.session_id ?? id)
+      if (goalRun.session_id && goalRun.session_id !== id) {
+        OrchestratorRuntime.stopExecutorEventBridge(id)
+      }
+      await removeGoalRunSession(goalRun)
+    }
+    if (!goalRun.workspace_dir || !goalRunExpired(goalRun, now, GOAL_RUN_RETENTION_MS)) continue
+    await cleanupGoalWorkspace(goalRun.workspace_dir)
   }
 }
 

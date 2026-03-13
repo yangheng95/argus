@@ -2122,6 +2122,10 @@ export type Config = {
     reserved?: number
   }
   experimental?: {
+    /**
+     * Treat the project as unattended: prefer default assumptions over clarification blocking
+     */
+    unattended?: boolean
     disable_paste_summary?: boolean
     /**
      * Enable the batch tool
@@ -2332,51 +2336,44 @@ export type WorktreeResetInput = {
   directory: string
 }
 
-export type ProjectSummary = {
-  id: string
-  name?: string
-  worktree: string
-}
-
-export type GlobalSession = {
-  id: string
-  slug: string
-  projectID: string
-  directory: string
-  parentID?: string
-  summary?: {
-    additions: number
-    deletions: number
-    files: number
-    diffs?: Array<FileDiff>
-  }
-  share?: {
-    url: string
-  }
-  title: string
-  version: string
-  time: {
-    created: number
-    updated: number
-    compacting?: number
-    archived?: number
-  }
-  permission?: PermissionRuleset
-  revert?: {
-    messageID: string
-    partID?: string
-    snapshot?: string
-    diff?: string
-  }
-  project: ProjectSummary | null
-}
-
 export type McpResource = {
   name: string
   uri: string
   description?: string
   mimeType?: string
   client: string
+}
+
+export type PanelSessionSettings = {
+  executor?: string
+  alwaysOnTop?: boolean
+  unattended?: boolean
+  autoPermission?: boolean
+  autoQuestion?: boolean
+  sidebarCollapsed?: boolean
+  sidebarWidth?: number | null
+  sectionsWidth?: number | null
+  opacity?: number
+  zoom?: number
+  theme?: string
+  locale?: string
+  directory?: string
+}
+
+export type PanelSessionSettingsUpdate = {
+  executor?: string
+  alwaysOnTop?: boolean
+  unattended?: boolean
+  autoPermission?: boolean
+  autoQuestion?: boolean
+  sidebarCollapsed?: boolean
+  sidebarWidth?: number | null
+  sectionsWidth?: number | null
+  opacity?: number
+  zoom?: number
+  theme?: string
+  locale?: string
+  directory?: string
 }
 
 export type TextPartInput = {
@@ -3609,51 +3606,6 @@ export type WorktreeResetResponses = {
 
 export type WorktreeResetResponse = WorktreeResetResponses[keyof WorktreeResetResponses]
 
-export type ExperimentalSessionListData = {
-  body?: never
-  path?: never
-  query?: {
-    /**
-     * Filter sessions by project directory
-     */
-    directory?: string
-    /**
-     * Only return root sessions (no parentID)
-     */
-    roots?: boolean
-    /**
-     * Filter sessions updated on or after this timestamp (milliseconds since epoch)
-     */
-    start?: number
-    /**
-     * Return sessions updated before this timestamp (milliseconds since epoch)
-     */
-    cursor?: number
-    /**
-     * Filter sessions by title (case-insensitive)
-     */
-    search?: string
-    /**
-     * Maximum number of sessions to return
-     */
-    limit?: number
-    /**
-     * Include archived sessions (default false)
-     */
-    archived?: boolean
-  }
-  url: "/experimental/session"
-}
-
-export type ExperimentalSessionListResponses = {
-  /**
-   * List of sessions
-   */
-  200: Array<GlobalSession>
-}
-
-export type ExperimentalSessionListResponse = ExperimentalSessionListResponses[keyof ExperimentalSessionListResponses]
-
 export type ExperimentalResourceListData = {
   body?: never
   path?: never
@@ -4265,6 +4217,69 @@ export type SessionAbortResponses = {
 }
 
 export type SessionAbortResponse = SessionAbortResponses[keyof SessionAbortResponses]
+
+export type SessionPanelSettingsGetData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/panel-settings"
+}
+
+export type SessionPanelSettingsGetErrors = {
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionPanelSettingsGetError = SessionPanelSettingsGetErrors[keyof SessionPanelSettingsGetErrors]
+
+export type SessionPanelSettingsGetResponses = {
+  /**
+   * Session panel settings
+   */
+  200: PanelSessionSettings
+}
+
+export type SessionPanelSettingsGetResponse = SessionPanelSettingsGetResponses[keyof SessionPanelSettingsGetResponses]
+
+export type SessionPanelSettingsUpdateData = {
+  body?: PanelSessionSettingsUpdate
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/panel-settings"
+}
+
+export type SessionPanelSettingsUpdateErrors = {
+  /**
+   * Bad request
+   */
+  400: BadRequestError
+  /**
+   * Not found
+   */
+  404: NotFoundError
+}
+
+export type SessionPanelSettingsUpdateError = SessionPanelSettingsUpdateErrors[keyof SessionPanelSettingsUpdateErrors]
+
+export type SessionPanelSettingsUpdateResponses = {
+  /**
+   * Updated session panel settings
+   */
+  200: PanelSessionSettings
+}
+
+export type SessionPanelSettingsUpdateResponse =
+  SessionPanelSettingsUpdateResponses[keyof SessionPanelSettingsUpdateResponses]
 
 export type SessionDiffData = {
   body?: never

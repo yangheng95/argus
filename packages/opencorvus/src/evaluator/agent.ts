@@ -10,7 +10,7 @@
  * 4. Evaluates each goal independently against the delivery
  * 5. Produces targeted replan guidance when needed
  */
-import { generateText, stepCountIs } from "ai"
+import { generateText, stepCountIs, tool } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { verificationHints } from "@/check/policy"
@@ -20,6 +20,7 @@ import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { Env } from "@/env"
 
 const log = Log.create({ service: "evaluator-agent" })
 
@@ -89,22 +90,42 @@ export interface DeliveryInfo {
 // ---------------------------------------------------------------------------
 
 const MAX_STEPS = 25
-const TIMEOUT_MS = Number.isFinite(parseInt(process.env.OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS ?? "", 10))
-  ? parseInt(process.env.OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS!, 10)
-  : 480000
+
+function evaluatorTimeoutMs() {
+  const raw = Env.get("OPENCORVUS_EVALUATOR_AGENT_TIMEOUT_MS")
+  const parsed = Number.parseInt(raw ?? "", 10)
+  return Number.isFinite(parsed) ? parsed : 480_000
+}
+
+type AnalyzeInput = {
+  task: { title: string; request: string; sessionID?: string }
+  goals: GoalInfo[]
+  delivery: DeliveryInfo
+  checkResults: CheckResult[]
+}
 
 export namespace EvaluatorAgent {
-  export async function analyze(input: {
-    task: { title: string; request: string; sessionID?: string }
-    goals: GoalInfo[]
-    delivery: DeliveryInfo
-    checkResults: CheckResult[]
-  }): Promise<EvaluatorAnalysisType> {
+  export async function analyze(input: AnalyzeInput): Promise<EvaluatorAnalysisType> {
     const language = await agentLanguageModel()
     if (!language) throw new Error("Evaluator analysis model is unavailable")
+    const timeoutMs = evaluatorTimeoutMs()
 
     // Full evaluator tool set: codebase exploration + memory + preferences
-    const tools = createEvaluatorTools({ sessionID: input.task.sessionID })
+    const explorationTools = createEvaluatorTools({ sessionID: input.task.sessionID })
+    let submittedAnalysis: EvaluatorAnalysisType | undefined
+    const tools = {
+      ...explorationTools,
+      submit_analysis: tool({
+        description:
+          "Submit the final evaluation analysis after investigation. " +
+          "Call this tool ONCE when you have finished investigating and are ready to deliver the analysis.",
+        inputSchema: EvaluatorAnalysis,
+        execute: async (args) => {
+          submittedAnalysis = args as EvaluatorAnalysisType
+          return "Evaluation analysis submitted successfully."
+        },
+      }),
+    }
 
     // Pre-fetch context: historical failures + preferences (like planner's prefetchContext)
     const context = prefetchEvaluatorContext(input)
@@ -128,6 +149,7 @@ export namespace EvaluatorAgent {
       if (attempt > 0) {
         log.info("evaluator agent retrying", { attempt, reason: lastError?.message })
       }
+      submittedAnalysis = undefined
 
       let result: any
       try {
@@ -135,8 +157,9 @@ export namespace EvaluatorAgent {
           model: language,
           stopWhen: stepCountIs(MAX_STEPS),
           tools,
+          toolChoice: "required",
           maxOutputTokens: 16384,
-          abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+          abortSignal: AbortSignal.timeout(timeoutMs),
           system: EVALUATOR_SYSTEM,
           prompt: userPrompt,
         })
@@ -144,11 +167,6 @@ export namespace EvaluatorAgent {
         lastError = err instanceof Error ? err : new Error(String(err))
         log.warn("evaluator agent generateText failed", { attempt, error: lastError.message })
         continue
-      }
-
-      let allText = result.text?.trim() || ""
-      if (!allText || !allText.includes("{")) {
-        allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
       }
 
       toolCallCount = result.steps.reduce(
@@ -164,14 +182,39 @@ export namespace EvaluatorAgent {
         steps: result.steps.length,
         toolCalls: toolCallCount,
         finishReason: result.finishReason,
-        textLength: allText.length,
+        textLength: collectText(result).length,
       })
 
       try {
-        parsed = extractJSON(allText, input.goals.length)
+        if (submittedAnalysis) {
+          parsed = normalizeAnalysis(submittedAnalysis, input.goals.length)
+        } else {
+          let allText = collectText(result)
+          if (!allText.trim()) {
+            log.warn("evaluator: primary run produced no final text or submit_analysis call, forcing consolidation", {
+              attempt,
+              steps: result.steps.length,
+              finishReason: result.finishReason,
+            })
+            const forced = await finalizeAnalysis(language, input, result.steps, timeoutMs)
+            if (forced.submittedAnalysis) {
+              submittedAnalysis = forced.submittedAnalysis
+              parsed = normalizeAnalysis(submittedAnalysis, input.goals.length)
+            } else {
+              allText = collectText(forced.result)
+              parsed = extractJSON(allText, input.goals.length)
+            }
+          } else {
+            parsed = extractJSON(allText, input.goals.length)
+          }
+        }
       } catch (err) {
         lastError = new Error(`Evaluator analysis returned invalid JSON: ${err instanceof Error ? err.message : String(err)}`)
-        log.warn("evaluator: JSON extraction failed, will retry", { attempt, error: String(err), textLength: allText.length })
+        log.warn("evaluator: JSON extraction failed, will retry", {
+          attempt,
+          error: String(err),
+          textLength: collectText(result).length,
+        })
         continue
       }
 
@@ -202,6 +245,8 @@ export namespace EvaluatorAgent {
   }
 }
 
+export const parseEvaluatorAnalysis = extractJSON
+
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
@@ -209,13 +254,27 @@ export namespace EvaluatorAgent {
 function extractJSON(text: string, goalCount: number): EvaluatorAnalysisType {
   let raw = text.trim()
 
-  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fenced) raw = fenced[1].trim()
+  const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fencedComplete) {
+    raw = fencedComplete[1].trim()
+  } else {
+    const fencedOpen = raw.match(/```(?:json)?\s*([\s\S]*)/)
+    if (fencedOpen && fencedOpen[1].includes("{")) {
+      raw = fencedOpen[1].trim()
+    }
+  }
 
   if (!raw.startsWith("{")) {
     const match = raw.match(/(\{[\s\S]*\})/)
-    if (match) raw = match[1]
+    if (match) {
+      raw = match[1]
+    } else {
+      const idx = raw.indexOf("{")
+      if (idx >= 0) raw = raw.slice(idx)
+    }
   }
+
+  raw = sanitizeJSON(raw)
 
   // Handle truncated JSON — same repair logic as planner agent
   if (raw.startsWith("{") && !raw.endsWith("}")) {
@@ -247,26 +306,7 @@ function extractJSON(text: string, goalCount: number): EvaluatorAnalysisType {
     }
   }
 
-  // Normalize empty classification (LLM sometimes leaves it empty for accepted verdicts)
-  if (!obj.classification) obj.classification = "evaluation"
-  // Fill missing required fields for truncated output
-  if (!obj.verdict) obj.verdict = "rejected"
-  if (!obj.summary) obj.summary = "Evaluation analysis was truncated"
-  if (!Array.isArray(obj.goal_statuses)) obj.goal_statuses = []
-
-  // Fill missing goal statuses (LLM may have been truncated mid-array)
-  if (obj.goal_statuses.length < goalCount) {
-    for (let i = obj.goal_statuses.length; i < goalCount; i++) {
-      obj.goal_statuses.push({
-        goal_index: i,
-        status: "failed",
-        evidence: "Goal assessment was truncated in LLM output",
-        reasoning: "The evaluator did not provide a complete assessment for this goal.",
-      })
-    }
-  }
-
-  return EvaluatorAnalysis.parse(obj)
+  return normalizeAnalysis(obj, goalCount)
 }
 
 function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
@@ -370,6 +410,148 @@ function trimToLastComplete(raw: string): string {
  * 2. Load that exact model and language surface
  * 3. If that fails, surface the evaluator failure directly
  */
+function sanitizeJSON(raw: string) {
+  let out = ""
+  let inString = false
+  let i = 0
+  while (i < raw.length) {
+    const ch = raw[i]
+    if (!inString) {
+      if (ch === '"') inString = true
+      out += ch
+      i++
+      continue
+    }
+    if (ch === "\\") {
+      const next = raw[i + 1]
+      if (next && '"\\\/bfnrtu'.includes(next)) {
+        out += ch + next
+        i += 2
+        continue
+      }
+      out += "\\\\"
+      i++
+      continue
+    }
+    if (ch === '"') {
+      inString = false
+      out += ch
+      i++
+      continue
+    }
+    if (ch === "\n") {
+      out += "\\n"
+      i++
+      continue
+    }
+    if (ch === "\r") {
+      out += "\\r"
+      i++
+      continue
+    }
+    if (ch === "\t") {
+      out += "\\t"
+      i++
+      continue
+    }
+    out += ch
+    i++
+  }
+  return out
+}
+
+function normalizeAnalysis(input: unknown, goalCount: number): EvaluatorAnalysisType {
+  const obj = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
+
+  if (!obj.classification) obj.classification = "evaluation"
+  if (!obj.verdict) obj.verdict = "rejected"
+  if (!obj.summary) obj.summary = "Evaluation analysis was truncated"
+  if (!Array.isArray(obj.goal_statuses)) obj.goal_statuses = []
+  if (!("replan_guidance" in obj)) obj.replan_guidance = undefined
+
+  obj.goal_statuses = (obj.goal_statuses as unknown[]).flatMap((item, index) => {
+    if (!item || typeof item !== "object") return []
+    const row = { ...(item as Record<string, unknown>) }
+    if (typeof row.goal_index !== "number") row.goal_index = index
+    if (!row.status) row.status = "failed"
+    if (!row.evidence) row.evidence = "Goal assessment was truncated in LLM output"
+    if (!row.reasoning) row.reasoning = "The evaluator did not provide a complete assessment for this goal."
+    return [row]
+  })
+
+  if ((obj.goal_statuses as unknown[]).length < goalCount) {
+    for (let i = (obj.goal_statuses as unknown[]).length; i < goalCount; i++) {
+      ;(obj.goal_statuses as Record<string, unknown>[]).push({
+        goal_index: i,
+        status: "failed",
+        evidence: "Goal assessment was truncated in LLM output",
+        reasoning: "The evaluator did not provide a complete assessment for this goal.",
+      })
+    }
+  }
+
+  return EvaluatorAnalysis.parse(obj)
+}
+
+function collectText(result: { text?: string; steps: Array<{ text?: string }> }) {
+  const text = result.text?.trim() || ""
+  if (text && text.includes("{")) return text
+  return result.steps.map((step) => step.text).filter(Boolean).join("\n")
+}
+
+async function finalizeAnalysis(
+  language: LanguageModelV2,
+  input: AnalyzeInput,
+  steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
+  timeoutMs: number,
+) {
+  const transcript = steps
+    .flatMap((step, index) => {
+      const calls = Array.isArray(step.toolCalls)
+        ? step.toolCalls.map((item) => `Step ${index + 1} tool_call: ${JSON.stringify(item).slice(0, 1200)}`)
+        : []
+      const results = Array.isArray(step.toolResults)
+        ? step.toolResults.map((item) => `Step ${index + 1} tool_result: ${JSON.stringify(item).slice(0, 4000)}`)
+        : []
+      return [...calls, ...results]
+    })
+    .join("\n\n")
+
+  let submittedAnalysis: EvaluatorAnalysisType | undefined
+  const tools = {
+    submit_analysis: tool({
+      description:
+        "Submit the final evaluation analysis after investigation. " +
+        "Call this tool ONCE using the investigation transcript that was already gathered.",
+      inputSchema: EvaluatorAnalysis,
+      execute: async (args) => {
+        submittedAnalysis = args as EvaluatorAnalysisType
+        return "Evaluation analysis submitted successfully."
+      },
+    }),
+  }
+
+  const result = await generateText({
+    model: language,
+    stopWhen: stepCountIs(8),
+    tools,
+    toolChoice: "required",
+    maxOutputTokens: 16384,
+    abortSignal: AbortSignal.timeout(Math.min(timeoutMs, 120_000)),
+    system:
+      "You are finalizing an evaluation analysis after investigation is already complete. " +
+      "Do not investigate again. Use the transcript provided, then call submit_analysis exactly once.",
+    prompt: [
+      buildUserPrompt(input),
+      "# Investigation Transcript",
+      transcript || "(no transcript captured)",
+      "Now synthesize the final evaluation analysis and call submit_analysis exactly once.",
+    ].join("\n\n"),
+  })
+
+  return { result, submittedAnalysis }
+}
+
 async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
   try {
     const def = await Provider.defaultModel()

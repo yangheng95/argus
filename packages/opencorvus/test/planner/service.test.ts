@@ -1,7 +1,11 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { PlannerService } from "../../src/planner/service"
 import { PlannerAgent } from "../../src/planner/agent"
+
+beforeEach(() => {
+  process.env.OPENCORVUS_UNATTENDED = "0"
+})
 
 afterEach(() => {
   mock.restore()

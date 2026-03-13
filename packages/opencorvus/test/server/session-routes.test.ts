@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Config } from "../../src/config/config"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
 import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { SessionPrompt } from "../../src/session/prompt"
 import { SessionTable } from "../../src/session/session.sql"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
@@ -167,6 +168,28 @@ describe("session routes", () => {
         expect(body.tasks).toHaveLength(1)
         expect(body.tasks[0]?.task.id).toBe(taskID)
         expect(body.tasks[0]?.task.sessionID).toBeUndefined()
+      },
+    })
+  })
+
+  test("DELETE /session/:id aborts the session before removing it", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await Session.create({ title: "abort-on-delete" })
+        const spy = spyOn(SessionPrompt, "cancel").mockImplementation(() => undefined)
+        const removed = await app.request(`/session/${session.id}`, {
+          method: "DELETE",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(removed.status).toBe(200)
+        expect(spy).toHaveBeenCalledWith(session.id)
       },
     })
   })

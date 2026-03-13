@@ -256,6 +256,49 @@ describe("evaluator.service", () => {
     })
   })
 
+  test("respects an explicitly disabled spec_check even when a spec version exists", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const resolved = await EvaluatorService.resolveChecks({
+          checks: {
+            verify_cmd: [`"${BunProc.which()}" -e "process.exit(0)"`],
+            spec_check: {
+              enabled: false,
+              mode: "strict",
+            },
+          },
+        })
+        expect(resolved.spec_check).toEqual({
+          enabled: false,
+          mode: "strict",
+        })
+
+        const result = await EvaluatorService.evaluate(
+          {
+            activeSpecVersionID: Identifier.ascending("spec"),
+            metadata: {
+              checks: {
+                verify_cmd: [`"${BunProc.which()}" -e "process.exit(0)"`],
+                spec_check: {
+                  enabled: false,
+                  mode: "strict",
+                },
+              },
+            },
+          },
+          { summary: "delivery ready", changedFiles: ["src/types.ts"], diffs: [] },
+        )
+        expect(result.status).toBe("passed")
+        expect(result.verdict).toBe("accepted")
+        expect(result.checks.find((item) => item.name === "verify_cmd")?.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "spec_check")).toBeUndefined()
+      },
+    })
+  })
+
   test("artifact check in soft mode does not block the flow", async () => {
     await using tmp = await tmpdir({ git: true })
 
@@ -404,7 +447,7 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("fails spec check closed when changed files exceed the reliable review size", async () => {
+  test("does not fail spec check early for large diffs that exceed the old total review limit", async () => {
     await using tmp = await tmpdir({ git: true })
     const defaultModel = spyOn(Provider, "defaultModel").mockRejectedValue(new Error("no model"))
     const taskID = Identifier.ascending("task")
@@ -454,13 +497,21 @@ describe("evaluator.service", () => {
           },
           {
             summary: "delivery ready",
-            changedFiles: ["big.ts"],
+            changedFiles: ["big-a.ts", "big-b.ts"],
             diffs: [
               {
-                file: "big.ts",
+                file: "big-a.ts",
                 before: "",
-                after: "a".repeat(61_000),
-                additions: 61_000,
+                after: "a".repeat(50_000),
+                additions: 50_000,
+                deletions: 0,
+                status: "added",
+              },
+              {
+                file: "big-b.ts",
+                before: "",
+                after: "b".repeat(40_000),
+                additions: 40_000,
                 deletions: 0,
                 status: "added",
               },
@@ -472,8 +523,8 @@ describe("evaluator.service", () => {
         expect(result.checks.find((item) => item.name === "spec_check")).toMatchObject({
           status: "failed",
         })
-        expect(result.checks.find((item) => item.name === "spec_check")?.evidence).toContain("safe per-file review limit")
-        expect(defaultModel).not.toHaveBeenCalled()
+        expect(result.checks.find((item) => item.name === "spec_check")?.evidence).toContain("No evaluator model available")
+        expect(defaultModel).toHaveBeenCalledTimes(1)
       },
     })
   })

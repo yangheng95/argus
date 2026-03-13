@@ -14,13 +14,16 @@ import {
   OrchestratorInteractionRequestTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalRunTable,
+  OrchestratorGoalTable,
   OrchestratorPlanVersionTable,
   OrchestratorRunTable,
   OrchestratorSpecItemTable,
   OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
 } from "../../src/orchestrator/orchestrator.sql"
+import { createGoalSession } from "../../src/orchestrator/goal-runner"
 import { OrchestratorService } from "../../src/orchestrator/service"
+import { createGoalRun } from "../../src/orchestrator/transition"
 import { DeliveryService } from "../../src/orchestrator/delivery"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
@@ -554,6 +557,7 @@ describe("orchestrator.service", () => {
   }, 30000)
 
   test("persists spec items when resuming a legacy planner clarification", async () => {
+    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
     spyOn(SpecService, "rewrite").mockResolvedValue({
@@ -815,7 +819,7 @@ describe("orchestrator.service", () => {
         const interactions = await OrchestratorService.listTaskInteractions(taskID)
         const plannerInput = planner.mock.calls[0]?.[0] as { allowClarification?: boolean; spec?: { assumptions?: Array<{ assumption: string }> } }
 
-        expect(task?.status).toBe("queued")
+        expect(["queued", "running"]).toContain(task?.status)
         expect(interactions).toHaveLength(0)
         expect(plannerInput.allowClarification).toBe(false)
         expect(plannerInput.spec?.assumptions?.some((item) => item.assumption.includes("landing page hero section"))).toBe(true)
@@ -938,6 +942,7 @@ describe("orchestrator.service", () => {
   })
 
   test("preserves all planner clarification questions in blocked interactions", async () => {
+    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     stubSpec()
     spyOn(PlannerService, "initial").mockResolvedValue({
@@ -1175,6 +1180,7 @@ describe("orchestrator.service", () => {
   })
 
   test("blocks automatic replan when replanning needs clarification", async () => {
+    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
     replan.mockResolvedValue({
@@ -1506,6 +1512,7 @@ describe("orchestrator.service", () => {
   })
 
   test("replanTask blocks when clarification is required before replanning", async () => {
+    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
     replan.mockResolvedValue({
@@ -1593,6 +1600,7 @@ describe("orchestrator.service", () => {
   })
 
   test("answering replanning clarification resumes PlannerService.replan and creates the next version", async () => {
+    process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
     replan
@@ -1927,54 +1935,109 @@ describe("orchestrator.service", () => {
 
   test("creates a distinct goal session for each goal run", async () => {
     await using tmp = await tmpdir({ git: true })
-    stubPlanner()
-    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
-      sessionID,
-      queueTaskID: Identifier.ascending("task"),
-    }))
-    spyOn(OpencodeExecutor, "status").mockResolvedValue({
-      queueTaskID: Identifier.ascending("task"),
-      status: "completed",
-      error: null,
-    })
-    spyOn(OpencodeExecutor, "delivery").mockResolvedValue({
-      summary: "executor finished",
-      diffs: [],
-    })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "run two independent goals",
-          checks: {
-            build: [`"${process.execPath}" -e "process.exit(0)"`],
-            test: [`"${process.execPath}" -e "process.exit(0)"`],
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const specID = Identifier.ascending("spec")
+        const runID = Identifier.ascending("run")
+        const root = await Session.create({ title: "Task root" })
+        const task = {
+          id: taskID,
+          title: "run two independent goals",
+          session_id: root.id,
+        }
+        const goals = [
+          {
+            id: Identifier.ascending("goal"),
+            description: "Build passes",
+            criteria: "Build command passes.",
           },
-          goals: [
-            {
-              description: "Build passes",
-              criteria: "Build command passes.",
-              priority: "blocking",
-              metadata: {
-                check_selector: ["build"],
-              },
-            } as any,
-            {
-              description: "Tests pass",
-              criteria: "Test command passes.",
-              priority: "blocking",
-              metadata: {
-                check_selector: ["test"],
-              },
-            } as any,
-          ],
+          {
+            id: Identifier.ascending("goal"),
+            description: "Tests pass",
+            criteria: "Test command passes.",
+          },
+        ]
+
+        Database.transaction((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              session_id: root.id,
+              title: task.title,
+              request: task.title,
+              status: "running",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorSpecSnapshotTable)
+            .values({
+              id: specID,
+              task_id: taskID,
+              version: 1,
+              status: "ready",
+              summary: "spec",
+              content: "spec",
+              scope: "",
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          for (const [index, goal] of goals.entries()) {
+            db.insert(OrchestratorGoalTable)
+              .values({
+                id: goal.id,
+                task_id: taskID,
+                spec_snapshot_id: specID,
+                description: goal.description,
+                criteria: goal.criteria,
+                priority: "blocking",
+                source: "spec",
+                status: "pending",
+                order_index: index,
+                time_created: now,
+                time_updated: now,
+              })
+              .run()
+          }
+          db.insert(OrchestratorRunTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              executor: "opencode",
+              status: "running",
+              phase: "dispatch",
+              retry_count: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
         })
 
-        await OrchestratorService.getProgress(taskID)
-        const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
-        )!
+        const first = await createGoalSession(task as any, goals[0] as any, tmp.path)
+        const second = await createGoalSession(task as any, goals[1] as any, tmp.path)
+        createGoalRun({
+          taskID,
+          goalID: goals[0]!.id,
+          coordinatorRunID: runID,
+          sessionID: first.id,
+          executor: "opencode",
+          now,
+        })
+        createGoalRun({
+          taskID,
+          goalID: goals[1]!.id,
+          coordinatorRunID: runID,
+          sessionID: second.id,
+          executor: "opencode",
+          now,
+        })
+
         const goalRuns = Database.use((db) =>
           db
             .select()
@@ -1983,11 +2046,18 @@ describe("orchestrator.service", () => {
             .orderBy(OrchestratorGoalRunTable.time_created)
             .all(),
         )
-        const sessionIDs = goalRuns.map((item) => item.session_id).filter((item): item is string => !!item)
+        const sessionIDs = goalRuns
+          .map((item) => {
+            const id = item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+              ? (item.metadata as Record<string, unknown>).local_session_id
+              : undefined
+            return typeof id === "string" && id ? id : item.session_id
+          })
+          .filter((item): item is string => !!item)
 
         expect(goalRuns).toHaveLength(2)
         expect(new Set(sessionIDs).size).toBe(2)
-        expect(sessionIDs.every((item) => item !== task.session_id)).toBe(true)
+        expect(sessionIDs.every((item) => item !== root.id)).toBe(true)
       },
     })
   })

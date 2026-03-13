@@ -77,7 +77,8 @@ const MODEL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_MODEL_TIMEOUT_MS ??
 const SPEC_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_SPEC_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)
 const PLANNER_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_PLANNER_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)
 const EVALUATOR_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_EVALUATOR_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)
-const AUTO_REPLY = "Use reasonable defaults consistent with the task request, keep the scope minimal, continue execution, and do not ask again unless absolutely necessary."
+const AUTO_REPLY =
+  "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
 const STATUS_LOG_INTERVAL_MS = parseInt(process.env.OPENCORVUS_E2E_STATUS_LOG_INTERVAL_MS ?? "60000", 10)
 
 // ---------------------------------------------------------------------------
@@ -330,6 +331,9 @@ const PROJECT_CONFIG = JSON.stringify(
   {
     $schema: "https://opencorvus.ai/config.json",
     model: MODEL,
+    experimental: {
+      unattended: true,
+    },
     provider: {
       [MODEL_PROVIDER_ID]: {
         options: {

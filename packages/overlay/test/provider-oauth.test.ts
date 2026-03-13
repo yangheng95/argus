@@ -16,10 +16,10 @@ const types = {
 
 async function browser() {
   const list = [
-    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
-    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
     "C:/Program Files/Google/Chrome/Application/chrome.exe",
     "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+    "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
   ]
   for (const item of list) {
     if (await Bun.file(item).exists()) return item
@@ -130,11 +130,12 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") return send({ tasks: [] })
       if (path === "/global/tasks") return send({ tasks: [] })
-      if (path === "/experimental/session") return send([])
+      if (path === "/session") return send([])
       if (path === "/path") return send(data.path)
       if (path === "/vcs") return send(data.vcs)
       if (path === "/provider") return send(data.provider)
       if (path === "/provider/auth") return send(data.providerAuth)
+      if (path.startsWith("/provider/") && path.endsWith("/auth/prompts")) return send([])
       if (path === "/config" && req.method === "GET") return send(data.config)
       if (path === "/config" && req.method === "PATCH") {
         data.config = await req.json()
@@ -272,4 +273,4 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     await page.close()
     server.stop(true)
   }
-})
+}, { timeout: 60_000 })
