@@ -341,6 +341,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
   })
   let clarification = plannerClarification(planDraft)
   if (unattended && clarification) {
+    const planner = planDraft.metadata?.planner
     log.info(`${input.mode}: auto-suppressing planner clarification for unattended project`, {
       taskID: input.taskID,
       reason: clarification.reason,
@@ -351,12 +352,17 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
       metadata: {
         ...planDraft.metadata,
         clarification: undefined,
-        planner: {
-          ...(planDraft.metadata?.planner && typeof planDraft.metadata.planner === "object"
-            ? planDraft.metadata.planner as Record<string, unknown>
-            : {}),
-          clarification_source: "suppressed",
-        },
+        planner: planner
+          ? {
+              ...planner,
+              clarification_source: "suppressed" as const,
+            }
+          : {
+              role: "headless_compiler" as const,
+              quality: "compiled" as const,
+              source: "planner_agent" as const,
+              clarification_source: "suppressed" as const,
+            },
       },
     }
     clarification = undefined

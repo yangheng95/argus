@@ -11,6 +11,7 @@
  * 6. Rewrite — receives failure analysis and revises spec for replan
  */
 import { generateText, stepCountIs, tool } from "ai"
+import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
