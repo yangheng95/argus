@@ -191,6 +191,134 @@ test("overlay initializes cwd in a fresh temp directory when no custom cwd is sa
   }
 })
 
+test("overlay shows unattended mode enabled by default", async () => {
+  const exe = await browser()
+  const send = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+    })
+  const server = Bun.serve({
+    port: 0,
+    fetch(req) {
+      const url = new URL(req.url)
+      const path = url.pathname.replace(/\/+$/, "") || "/"
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/experimental/session") return send([])
+      if (path === "/path") {
+        const directory = url.searchParams.get("directory") || ""
+        return send({
+          home: "C:/Users/test",
+          state: "C:/Users/test/.opencorvus/state",
+          config: "C:/Users/test/.opencorvus/config",
+          worktree: directory,
+          directory,
+        })
+      }
+      if (path === "/vcs") {
+        return send({
+          branch: "",
+          clean: false,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/config") return send({})
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send(true)
+
+      const name = path === "/" ? "index.html" : path.slice(1)
+      const file = Bun.file(new URL(name, src))
+      const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
+      return file.exists().then((ok) => ok ? new Response(file, { headers: { "content-type": type } }) : new Response("not found", { status: 404 }))
+    },
+  })
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    const serverUrl = `http://127.0.0.1:${server.port}`
+    await tab.evaluateOnNewDocument((value) => {
+      const state = {
+        settings: {
+          serverUrl: value,
+          autoServer: false,
+        },
+      }
+      Object.defineProperty(window, "__overlayTest", {
+        configurable: true,
+        value: state,
+      })
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string, args: Record<string, unknown> = {}) => {
+            if (command === "overlay_settings_load") return state.settings
+            if (command === "overlay_settings_save") {
+              state.settings = { ...((args.settings as Record<string, unknown>) || {}) }
+              return true
+            }
+            if (command === "overlay_create_temp_dir") return "D:/overlay/default-unattended"
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              setAlwaysOnTop: async () => undefined,
+              isAlwaysOnTop: async () => false,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
+    }, serverUrl)
+
+    await tab.goto(serverUrl, { waitUntil: "load" })
+    await tab.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const saved = (window as typeof window & { __overlayTest: { settings: Record<string, unknown> } }).__overlayTest.settings
+      return {
+        unattended: state.unattended,
+        checked: document.querySelector("#chkUnattended") instanceof HTMLInputElement
+          ? (document.querySelector("#chkUnattended") as HTMLInputElement).checked
+          : false,
+        savedUnattended: saved.unattended,
+      }
+    })
+
+    expect(result.unattended).toBe(true)
+    expect(result.checked).toBe(true)
+    expect(result.savedUnattended).toBe(true)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+})
+
 test("cwd uses state.directory as the only active source and keeps actions on the right", async () => {
   const exe = await browser()
   const server = serve()
@@ -593,7 +721,7 @@ test("session message deltas refresh the transcript live", async () => {
 
       handleEventStreamEvent({
         type: "message.updated",
-        properties: {
+        payload: {
           info: {
             id: "msg-1",
             sessionID: "session-1",
@@ -604,7 +732,7 @@ test("session message deltas refresh the transcript live", async () => {
       })
       handleEventStreamEvent({
         type: "message.part.updated",
-        properties: {
+        payload: {
           part: {
             id: "part-1",
             sessionID: "session-1",
@@ -616,7 +744,7 @@ test("session message deltas refresh the transcript live", async () => {
       })
       handleEventStreamEvent({
         type: "message.part.delta",
-        properties: {
+        payload: {
           sessionID: "session-1",
           messageID: "msg-1",
           partID: "part-1",
@@ -635,6 +763,192 @@ test("session message deltas refresh the transcript live", async () => {
 
     expect(result.body).toContain("Hello")
     expect(result.count).not.toBe("")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task SSE payloads refresh the transcript live", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleEventStreamEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const renderSession = window.eval("renderSession")
+      const handleEventStreamEvent = window.eval("handleEventStreamEvent")
+
+      state.selectedTaskID = "task-1"
+      state.chatSessionID = ""
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+        },
+      }
+      state.session = []
+      state._renderedGroupKey = ""
+      renderSession()
+
+      handleEventStreamEvent({
+        type: "message.updated",
+        payload: {
+          info: {
+            id: "msg-task-1",
+            sessionID: "session-1",
+            role: "assistant",
+            time: { created: 10 },
+          },
+        },
+      })
+      handleEventStreamEvent({
+        type: "message.part.updated",
+        payload: {
+          part: {
+            id: "part-task-1",
+            sessionID: "session-1",
+            messageID: "msg-task-1",
+            type: "text",
+            text: "Publ",
+          },
+        },
+      })
+      handleEventStreamEvent({
+        type: "message.part.delta",
+        payload: {
+          sessionID: "session-1",
+          messageID: "msg-task-1",
+          partID: "part-task-1",
+          field: "text",
+          delta: "ishing",
+        },
+      })
+
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+
+      return {
+        body: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
+        count: document.querySelector("#chatCount")?.textContent || "",
+      }
+    })
+
+    expect(result.body).toContain("Publishing")
+    expect(result.count).not.toBe("")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task conversation merges control timeline with session messages", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadConversation") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const loadConversation = window.eval("loadConversation")
+      const root = window
+      const json = (value, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
+
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+
+        if (url.pathname === "/control/timeline" && method === "GET" && url.searchParams.get("taskID") === "task-1") {
+          return json([
+            {
+              info: {
+                id: "ctl-1",
+                role: "user",
+                taskID: "task-1",
+                time: { created: 1, updated: 1 },
+              },
+              parts: [{ type: "text", text: "Create a task." }],
+            },
+          ])
+        }
+        if (url.pathname === "/session/session-1/message" && method === "GET") {
+          return json([
+            {
+              info: {
+                id: "msg-1",
+                role: "assistant",
+                sessionID: "session-1",
+                time: { created: 2 },
+              },
+              parts: [{ type: "text", text: "Working on it." }],
+            },
+          ])
+        }
+        return new Response("not found", { status: 404 })
+      }
+
+      state.selectedTaskID = "task-1"
+      state.chatSessionID = ""
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+        },
+      }
+      state.session = []
+      state.sessionLoading = null
+      state.sessionQueued = false
+      state._renderedGroupKey = ""
+
+      await loadConversation()
+
+      return state.session.map((item) => ({
+        id: item.info?.id || "",
+        text: (item.parts || [])
+          .map((part) => part.text || "")
+          .join(""),
+      }))
+    })
+
+    expect(result).toEqual([
+      { id: "ctl-1", text: "Create a task." },
+      { id: "msg-1", text: "Working on it." },
+    ])
   } finally {
     await page.close()
     server.stop(true)
@@ -1106,7 +1420,7 @@ test("workspace mode follows unified selection helpers", async () => {
   }
 }, { timeout: 20_000 })
 
-test("workspace directory uses the visible control value as the single source of truth", async () => {
+test("workspace directory restores the baseline directory after task and session overrides", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -1139,6 +1453,8 @@ test("workspace directory uses the visible control value as the single source of
       const enterSessionWorkspace = window.eval("enterSessionWorkspace")
       const enterEmptyWorkspace = window.eval("enterEmptyWorkspace")
 
+      state.savedDirectory = "D:/overlay/manual"
+      state.tempDirectory = "D:/overlay/temp"
       state.directory = "D:/overlay/manual"
       restoreWorkspaceDirectory()
       const manual = activeDirectory()
@@ -1147,12 +1463,16 @@ test("workspace directory uses the visible control value as the single source of
       const task = {
         active: activeDirectory(),
         stored: state.directory,
+        saved: state.savedDirectory,
+        temp: state.tempDirectory,
       }
 
       enterSessionWorkspace("session-2", { directory: "D:/overlay/session" })
       const session = {
         active: activeDirectory(),
         stored: state.directory,
+        saved: state.savedDirectory,
+        temp: state.tempDirectory,
       }
 
       state.path = { directory: "D:/overlay/fallback" }
@@ -1169,10 +1489,14 @@ test("workspace directory uses the visible control value as the single source of
     expect(result.manual).toBe("D:/overlay/manual")
     expect(result.task.active).toBe("D:/overlay/task")
     expect(result.task.stored).toBe("D:/overlay/task")
+    expect(result.task.saved).toBe("D:/overlay/manual")
+    expect(result.task.temp).toBe("D:/overlay/temp")
     expect(result.session.active).toBe("D:/overlay/session")
     expect(result.session.stored).toBe("D:/overlay/session")
-    expect(result.restored).toBe("D:/overlay/session")
-    expect(result.stored).toBe("D:/overlay/session")
+    expect(result.session.saved).toBe("D:/overlay/manual")
+    expect(result.session.temp).toBe("D:/overlay/temp")
+    expect(result.restored).toBe("D:/overlay/manual")
+    expect(result.stored).toBe("D:/overlay/manual")
   } finally {
     await page.close()
     server.stop(true)

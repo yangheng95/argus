@@ -337,8 +337,8 @@ test("deleting an inactive session in the current directory updates locally with
     const base = { ...hits }
 
     await tab.click(".session-row-delete[data-session-delete='session-2']")
-    await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
-    await tab.click("#btnAppDialogOk")
+    await tab.waitForSelector(".session-row-delete[data-session-delete='session-2'][data-confirm='true']")
+    await tab.click(".session-row-delete[data-session-delete='session-2'][data-confirm='true']")
     await tab.waitForFunction(() => !document.querySelector(".session-row-main[data-session-id='session-2']"))
     await new Promise((resolve) => setTimeout(resolve, 250))
 

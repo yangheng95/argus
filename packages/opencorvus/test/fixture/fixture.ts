@@ -40,7 +40,13 @@ export async function tmpdir<T>(options?: TmpDirOptions<T>) {
   const result = {
     [Symbol.asyncDispose]: async () => {
       await options?.dispose?.(dirpath)
-      // await fs.rm(dirpath, { recursive: true, force: true })
+      if (process.env.OPENCORVUS_TEST_KEEP_TMPDIR === "1") return
+      await fs.rm(dirpath, {
+        recursive: true,
+        force: true,
+        maxRetries: 20,
+        retryDelay: 100,
+      }).catch(() => undefined)
     },
     path: realpath,
     extra: extra as T,

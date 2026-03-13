@@ -1336,8 +1336,9 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForSelector('[data-task-action="retry"]')
     seen.push(".session-row-delete[data-session-delete='session-3']")
     await tap(".session-row-delete[data-session-delete='session-3']")
-    await page.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
-    await confirm()
+    await page.waitForSelector(".session-row-delete[data-session-delete='session-3'][data-confirm='true']")
+    seen.push(".session-row-delete[data-session-delete='session-3'][data-confirm='true']")
+    await tap(".session-row-delete[data-session-delete='session-3'][data-confirm='true']")
 
     seen.push("#connBadge")
     await page.click("#connBadge", { clickCount: 2 })

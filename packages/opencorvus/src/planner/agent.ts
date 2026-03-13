@@ -19,6 +19,7 @@ import { createPlannerTools, prefetchContext } from "./tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { unattendedProject } from "@/orchestrator/unattended"
 import path from "path"
 
 const log = Log.create({ service: "planner-agent" })
@@ -93,7 +94,7 @@ export interface ReplanContext {
 // HeadlessPlannerAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 30
+const MAX_STEPS = 45
 const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.5
@@ -153,6 +154,7 @@ export namespace HeadlessPlannerAgent {
     if (input.signal?.aborted) throw new Error("planner aborted before context prefetch")
 
     const context = prefetchContext(input.title, input.request)
+    const unattended = await unattendedProject()
 
     // Quality-gated retry loop: if the first plan attempt scores below
     // QUALITY_RETRY_THRESHOLD, retry once with enhanced prompt that includes
@@ -166,7 +168,7 @@ export namespace HeadlessPlannerAgent {
       const retryContext = attempt > 0 && lastQuality
         ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
         : undefined
-      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext)
+      const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, unattended)
 
       log.info("planner agent starting", {
         title: input.title,
@@ -176,6 +178,7 @@ export namespace HeadlessPlannerAgent {
         fileRefsFound: fileRefs.length,
         taskWorkDir,
         toolCount: Object.keys(allTools).length,
+        unattended,
         attempt: attempt + 1,
         retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
@@ -229,15 +232,46 @@ export namespace HeadlessPlannerAgent {
           allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
         }
 
-        log.info("planner agent finished via text output (no submit_plan call)", {
-          steps: result.steps.length,
-          finishReason: result.finishReason,
-          textLength: allText.length,
-          textPreview: allText.slice(0, 200),
-          attempt: attempt + 1,
-        })
+        if (!allText.trim()) {
+          log.warn("planner: primary run produced no final text or submit_plan call, forcing consolidation", {
+            steps: result.steps.length,
+            finishReason: result.finishReason,
+            attempt: attempt + 1,
+          })
+          const forced = await finalizePlan(language, input, result.steps, input.signal)
+          if (forced.submittedPlan) {
+            submittedPlan = forced.submittedPlan
+          }
+          allText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
+        }
 
-        parsed = extractJSON(allText)
+        if (submittedPlan) {
+          const submitted = submittedPlan as PlannerOutputType
+          log.info("planner agent finished via forced submit_plan tool call", {
+            steps: result.steps.length,
+            subtasks: submitted.subtasks?.length ?? 0,
+            prdLength: submitted.prd?.length ?? 0,
+            attempt: attempt + 1,
+          })
+          parsed = {
+            ...submitted,
+            summary: submitted.summary ?? "",
+            prd: submitted.prd ?? "",
+            subtasks: Array.isArray(submitted.subtasks) ? submitted.subtasks : [],
+            risks: Array.isArray(submitted.risks) ? submitted.risks : [],
+            assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
+          }
+        } else {
+          log.info("planner agent finished via text output (no submit_plan call)", {
+            steps: result.steps.length,
+            finishReason: result.finishReason,
+            textLength: allText.length,
+            textPreview: allText.slice(0, 200),
+            attempt: attempt + 1,
+          })
+
+          parsed = extractJSON(allText)
+        }
       }
 
       // Ensure summary is meaningful (not garbage like "## heading" or empty)
@@ -293,6 +327,66 @@ export const parsePlannerOutput = extractJSON
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
+
+async function finalizePlan(
+  language: LanguageModelV2,
+  input: {
+    title: string
+    request: string
+    userGoals?: Array<{ description: string; criteria: string; priority?: string }>
+    spec?: { summary?: string; content: string }
+    replanContext?: ReplanContext
+    signal?: AbortSignal
+  },
+  steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
+  signal?: AbortSignal,
+) {
+  const transcript = steps
+    .flatMap((step, index) => {
+      const calls = Array.isArray(step.toolCalls)
+        ? step.toolCalls.map((item) => `Step ${index + 1} tool_call: ${JSON.stringify(item).slice(0, 1200)}`)
+        : []
+      const results = Array.isArray(step.toolResults)
+        ? step.toolResults.map((item) => `Step ${index + 1} tool_result: ${JSON.stringify(item).slice(0, 4000)}`)
+        : []
+      return [...calls, ...results]
+    })
+    .join("\n\n")
+
+  let submittedPlan: PlannerOutputType | undefined
+  const summaryTool = {
+    submit_plan: tool({
+      description:
+        "Submit the final plan after codebase exploration. " +
+        "Call this tool ONCE using the exploration transcript that was already gathered.",
+      inputSchema: PlannerOutput,
+      execute: async (args) => {
+        submittedPlan = args as PlannerOutputType
+        return "Plan submitted successfully."
+      },
+    }),
+  }
+
+  const result = await generateText({
+    model: language,
+    stopWhen: stepCountIs(8),
+    tools: summaryTool,
+    maxOutputTokens: 16384,
+    abortSignal: signal ?? AbortSignal.timeout(120_000),
+    system:
+      "You are finalizing a plan after exploration is already complete. " +
+      "Do not explore again. Use the transcript provided, then call submit_plan exactly once.",
+    prompt: [
+      `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
+      input.spec ? `# Spec Context\n\n${input.spec.content}` : "",
+      "# Exploration Transcript",
+      transcript || "(no transcript captured)",
+      "Now synthesize the final plan and call submit_plan exactly once.",
+    ].filter(Boolean).join("\n\n"),
+  })
+
+  return { result, submittedPlan }
+}
 
 /**
  * Ensure the plan summary is meaningful -- not garbage like "## heading",
@@ -768,8 +862,22 @@ function buildUserPrompt(
   fileRefs?: Array<{ ref: string; path: string; content: string }>,
   context?: string,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
+  unattended = false,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
+
+  if (unattended) {
+    sections.push(
+      [
+        "# Unattended Execution Policy",
+        "",
+        "This project is unattended.",
+        "When a reasonable default keeps the task moving, do not ask for clarification.",
+        "Document the choice in assumptions or risk notes and continue execution.",
+        "Only emit clarifications when the request is contradictory or impossible to execute safely without explicit human input.",
+      ].join("\n"),
+    )
+  }
 
   // If this is a quality retry, inject feedback from the previous attempt
   if (retryContext) {

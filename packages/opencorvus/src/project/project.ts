@@ -12,6 +12,7 @@ import { fn } from "@opencorvus-ai/util/fn"
 import { BusEvent } from "@/bus/bus-event"
 import { iife } from "@/util/iife"
 import { GlobalBus } from "@/bus/global"
+import { Global } from "@/global"
 import { existsSync } from "fs"
 import { git } from "../util/git"
 import { Glob } from "../util/glob"
@@ -36,6 +37,18 @@ export namespace Project {
 
   function generated(seed: string) {
     return createHash("sha1").update(Filesystem.windowsPath(seed)).digest("hex")
+  }
+
+  function internal(directory: string) {
+    return Filesystem.contains(path.join(Global.Path.data, "goal-workspace"), directory)
+  }
+
+  function visible(input: string[]) {
+    return [...new Set(input.filter((item) => item && !internal(item)))]
+  }
+
+  function same(a: string[], b: string[]) {
+    return a.length === b.length && a.every((item, index) => item === b[index])
   }
 
   async function text(args: string[], cwd: string) {
@@ -132,7 +145,7 @@ export namespace Project {
         updated: row.time_updated,
         initialized: row.time_initialized ?? undefined,
       },
-      sandboxes: row.sandboxes,
+      sandboxes: visible(row.sandboxes),
       commands: row.commands ?? undefined,
     }
   }
@@ -230,9 +243,9 @@ export namespace Project {
         updated: Date.now(),
       },
     }
-    if (data.sandbox !== result.worktree && !result.sandboxes.includes(data.sandbox))
+    if (data.sandbox !== result.worktree && !internal(data.sandbox) && !result.sandboxes.includes(data.sandbox))
       result.sandboxes.push(data.sandbox)
-    result.sandboxes = result.sandboxes.filter((x) => existsSync(x))
+    result.sandboxes = visible(result.sandboxes).filter((x) => existsSync(x))
     const insert = {
       id: result.id,
       worktree: result.worktree,
@@ -418,12 +431,13 @@ export namespace Project {
   export async function addSandbox(id: string, directory: string) {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) throw new Error(`Project not found: ${id}`)
-    const sandboxes = [...row.sandboxes]
-    if (!sandboxes.includes(directory)) sandboxes.push(directory)
+    const sandboxes = visible(row.sandboxes)
+    const next = internal(directory) || sandboxes.includes(directory) ? sandboxes : [...sandboxes, directory]
+    if (same(next, row.sandboxes)) return fromRow(row)
     const result = Database.use((db) =>
       db
         .update(ProjectTable)
-        .set({ sandboxes, time_updated: Date.now() })
+        .set({ sandboxes: next, time_updated: Date.now() })
         .where(eq(ProjectTable.id, id))
         .returning()
         .get(),
@@ -442,7 +456,8 @@ export namespace Project {
   export async function removeSandbox(id: string, directory: string) {
     const row = Database.use((db) => db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get())
     if (!row) throw new Error(`Project not found: ${id}`)
-    const sandboxes = row.sandboxes.filter((s) => s !== directory)
+    const sandboxes = visible(row.sandboxes).filter((s) => s !== directory)
+    if (same(sandboxes, row.sandboxes)) return fromRow(row)
     const result = Database.use((db) =>
       db
         .update(ProjectTable)

@@ -3,6 +3,7 @@ import fs from "fs"
 import path from "path"
 import { type ExecutorNameInfo } from "@/executor/compat"
 import { GoalInput, type EvaluationProvider, type PlanningProvider, type StageRouting } from "@/orchestrator/model"
+import { suppressClarifications, unattendedProject } from "@/orchestrator/unattended"
 import { Log } from "@/util/log"
 import { Instance } from "@/project/instance"
 import { ExecutorPlanner } from "./executor"
@@ -138,8 +139,9 @@ export namespace HeadlessPlannerService {
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
   }): Promise<PlanDraft> {
+    const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
-    const spec = input.spec
+    const spec = unattended && input.spec ? suppressClarifications(input.spec) : input.spec
     const goals = resolveGoals(input.request, spec, input.goals)
     const clarification = specClarification(spec)
     if (clarification) {
@@ -171,7 +173,7 @@ export namespace HeadlessPlannerService {
         "initial",
         undefined,
         undefined,
-        input.allowClarification !== false,
+        input.allowClarification !== false && !unattended,
         goals,
         {
           spec,
@@ -214,7 +216,7 @@ export namespace HeadlessPlannerService {
       "initial",
       undefined,
       undefined,
-      input.allowClarification !== false,
+      input.allowClarification !== false && !unattended,
       goals,
       {
         spec,
@@ -242,8 +244,9 @@ export namespace HeadlessPlannerService {
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
   }): Promise<PlanDraft> {
+    const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
-    const spec = input.spec
+    const spec = unattended && input.spec ? suppressClarifications(input.spec) : input.spec
     const goals = resolveGoals(input.request, spec, input.goals)
     const clarification = specClarification(spec)
     if (clarification) {
@@ -295,7 +298,7 @@ export namespace HeadlessPlannerService {
         "replan",
         input.previousPlanID,
         input.failureSummary,
-        input.allowClarification !== false,
+        input.allowClarification !== false && !unattended,
         goals,
         {
           spec,
@@ -320,7 +323,7 @@ export namespace HeadlessPlannerService {
       "replan",
       input.previousPlanID,
       input.failureSummary,
-      input.allowClarification !== false,
+      input.allowClarification !== false && !unattended,
       goals,
       {
         spec,

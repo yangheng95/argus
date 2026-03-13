@@ -170,4 +170,56 @@ describe("session routes", () => {
       },
     })
   })
+
+  test("GET/PATCH /session/:id/panel-settings persists session-scoped panel settings", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const session = await Session.create({ title: "panel-settings" })
+
+        const empty = await app.request(`/session/${session.id}/panel-settings`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(empty.status).toBe(200)
+        expect(await empty.json()).toEqual({})
+
+        const updated = await app.request(`/session/${session.id}/panel-settings`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            theme: "light",
+            zoom: 1.1,
+            directory: "D:/session/workspace",
+          }),
+        })
+
+        expect(updated.status).toBe(200)
+        expect(await updated.json()).toEqual({
+          theme: "light",
+          zoom: 1.1,
+          directory: "D:/session/workspace",
+        })
+
+        const fetched = await app.request(`/session/${session.id}/panel-settings`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(fetched.status).toBe(200)
+        expect(await fetched.json()).toEqual({
+          theme: "light",
+          zoom: 1.1,
+          directory: "D:/session/workspace",
+        })
+      },
+    })
+  })
 })

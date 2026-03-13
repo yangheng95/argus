@@ -6,6 +6,7 @@ import path from "path"
 import { tmpdir } from "../fixture/fixture"
 import { Filesystem } from "../../src/util/filesystem"
 import { GlobalBus } from "../../src/bus/global"
+import { Global } from "../../src/global"
 
 Log.init({ print: false })
 
@@ -265,6 +266,20 @@ describe("Project.discover", () => {
     const updated = Project.get(project.id)
     expect(updated).toBeDefined()
     expect(updated!.icon).toBeUndefined()
+  })
+})
+
+describe("Project.addSandbox", () => {
+  test("does not expose internal goal workspaces as sandboxes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const { project } = await Project.fromDirectory(tmp.path)
+    const directory = path.join(Global.Path.data, "goal-workspace", project.id, "task", "run")
+
+    await Filesystem.write(path.join(directory, "README.md"), "temp")
+    const updated = await Project.addSandbox(project.id, directory)
+
+    expect(updated.sandboxes).not.toContain(directory)
+    expect(Project.get(project.id)?.sandboxes).not.toContain(directory)
   })
 })
 

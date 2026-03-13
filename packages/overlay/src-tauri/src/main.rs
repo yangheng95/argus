@@ -8,7 +8,8 @@ use std::{
     path::PathBuf,
     process::{Child, Command, Stdio},
     sync::Mutex,
-    time::{SystemTime, UNIX_EPOCH},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 #[cfg(windows)]
@@ -18,13 +19,16 @@ use serde::{Deserialize, Serialize};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Manager, Runtime,
+    AppHandle, Manager, Runtime, UserAttentionType,
 };
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 const LOCAL_SERVER_HOST: &str = "127.0.0.1";
 const DEFAULT_SERVER_PORT: u16 = 7878;
+const TRAY_ID: &str = "main-tray";
+const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
+const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -35,6 +39,14 @@ struct ServerState {
 }
 
 struct Server(Mutex<ServerState>);
+
+#[derive(Default)]
+struct TrayAttentionState {
+    active: bool,
+    flashing: bool,
+}
+
+struct TrayAttention(Mutex<TrayAttentionState>);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +65,7 @@ struct OverlaySettings {
     executor: Option<String>,
     init_git: Option<bool>,
     always_on_top: Option<bool>,
+    unattended: Option<bool>,
     auto_permission: Option<bool>,
     auto_question: Option<bool>,
     sidebar_width: Option<u32>,
@@ -509,6 +522,74 @@ fn show_window<R: Runtime>(window: &tauri::WebviewWindow<R>) {
     let _ = window.set_focus();
 }
 
+fn request_attention<R: Runtime>(app: &AppHandle<R>, active: bool) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.request_user_attention(if active {
+            Some(UserAttentionType::Informational)
+        } else {
+            None
+        });
+    }
+}
+
+fn apply_tray_attention<R: Runtime>(app: &AppHandle<R>, active: bool) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let icon = if active {
+            create_attention_tray_icon()
+        } else {
+            create_tray_icon()
+        };
+        let _ = tray.set_icon(Some(icon));
+        let _ = tray.set_tooltip(Some(if active {
+            TRAY_TOOLTIP_ALERT
+        } else {
+            TRAY_TOOLTIP_DEFAULT
+        }));
+    }
+}
+
+fn clear_tray_attention<R: Runtime>(app: &AppHandle<R>) {
+    let state = app.state::<TrayAttention>();
+    let mut lock = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("overlay: tray attention mutex poisoned while clearing, recovering");
+            poisoned.into_inner()
+        }
+    };
+    lock.active = false;
+    lock.flashing = false;
+    drop(lock);
+    apply_tray_attention(app, false);
+    request_attention(app, false);
+}
+
+#[tauri::command]
+fn overlay_attention_set<R: Runtime>(app: AppHandle<R>, active: bool) -> Result<bool, String> {
+    let state = app.state::<TrayAttention>();
+    let mut lock = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            eprintln!("overlay: tray attention mutex poisoned while updating, recovering");
+            poisoned.into_inner()
+        }
+    };
+    lock.active = active;
+    if !active {
+        lock.flashing = false;
+    }
+    drop(lock);
+
+    if active {
+        request_attention(&app, true);
+        return Ok(true);
+    }
+
+    apply_tray_attention(&app, false);
+    request_attention(&app, false);
+    Ok(true)
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -522,10 +603,12 @@ fn main() {
             overlay_open_url,
             overlay_create_dir,
             overlay_create_temp_dir,
-            overlay_pick_dir
+            overlay_pick_dir,
+            overlay_attention_set
         ])
         .setup(|app| {
             app.manage(Server(Mutex::new(ServerState::default())));
+            app.manage(TrayAttention(Mutex::new(TrayAttentionState::default())));
             let handle = app.handle().clone();
             let _ = restart_server(&handle);
 
@@ -575,9 +658,9 @@ fn main() {
 
             let icon = create_tray_icon();
 
-            let _tray = TrayIconBuilder::new()
+            let _tray = TrayIconBuilder::with_id(TRAY_ID)
                 .icon(icon)
-                .tooltip("OpenCorvus")
+                .tooltip(TRAY_TOOLTIP_DEFAULT)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(move |app, event| {
@@ -585,6 +668,7 @@ fn main() {
                     match id {
                         "show" => {
                             if let Some(window) = app.get_webview_window("main") {
+                                clear_tray_attention(app);
                                 show_window(&window);
                             }
                         }
@@ -598,6 +682,7 @@ fn main() {
                             if let Some(window) = app.get_webview_window("main") {
                                 // Reload the frontend
                                 let _ = window.eval("location.reload()");
+                                clear_tray_attention(app);
                                 show_window(&window);
                             }
                         }
@@ -617,11 +702,43 @@ fn main() {
                     {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
+                            clear_tray_attention(&app);
                             show_window(&window);
                         }
                     }
                 })
                 .build(app)?;
+
+            {
+                let app = app.handle().clone();
+                thread::spawn(move || loop {
+                    thread::sleep(Duration::from_millis(700));
+                    let next = {
+                        let state = app.state::<TrayAttention>();
+                        let mut lock = match state.0.lock() {
+                            Ok(guard) => guard,
+                            Err(poisoned) => {
+                                eprintln!("overlay: tray attention mutex poisoned in flasher, recovering");
+                                poisoned.into_inner()
+                            }
+                        };
+                        if !lock.active {
+                            if !lock.flashing {
+                                None
+                            } else {
+                                lock.flashing = false;
+                                Some(false)
+                            }
+                        } else {
+                            lock.flashing = !lock.flashing;
+                            Some(lock.flashing)
+                        }
+                    };
+                    if let Some(active) = next {
+                        apply_tray_attention(&app, active);
+                    }
+                });
+            }
 
             Ok(())
         })
@@ -663,6 +780,39 @@ fn create_tray_icon() -> tauri::image::Image<'static> {
                 } else {
                     (edge * 255.0) as u8
                 };
+            }
+        }
+    }
+
+    tauri::image::Image::new_owned(rgba, size, size)
+}
+
+fn create_attention_tray_icon() -> tauri::image::Image<'static> {
+    let size: u32 = 32;
+    let mut rgba = create_tray_icon().rgba().to_vec();
+    let cx = 24.0;
+    let cy = 8.0;
+    let outer = 6.0;
+    let inner = 3.0;
+
+    for y in 0..size {
+        for x in 0..size {
+            let dx = x as f64 - cx;
+            let dy = y as f64 - cy;
+            let dist = (dx * dx + dy * dy).sqrt();
+            let idx = ((y * size + x) * 4) as usize;
+
+            if dist <= outer {
+                rgba[idx] = 0xf8;
+                rgba[idx + 1] = 0x71;
+                rgba[idx + 2] = 0x71;
+                rgba[idx + 3] = 255;
+            }
+            if dist <= inner {
+                rgba[idx] = 0xff;
+                rgba[idx + 1] = 0xff;
+                rgba[idx + 2] = 0xff;
+                rgba[idx + 3] = 255;
             }
         }
     }

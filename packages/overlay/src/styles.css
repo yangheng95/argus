@@ -5712,6 +5712,8 @@ body[data-resizing="true"] * {
   display: flex;
   align-items: stretch;
   gap: calc(4px * var(--ui-scale));
+  min-height: calc(68px * var(--ui-scale));
+  flex: 0 0 auto;
   padding: calc(6px * var(--ui-scale));
   border-color: var(--divider-soft);
   position: relative;
@@ -5725,9 +5727,11 @@ body[data-resizing="true"] * {
 .session-row-main {
   flex: 1;
   min-width: 0;
+  min-height: calc(54px * var(--ui-scale));
   text-align: left;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: calc(2px * var(--ui-scale));
   padding: calc(4px * var(--ui-scale)) calc(40px * var(--ui-scale)) calc(4px * var(--ui-scale)) calc(4px * var(--ui-scale));
   border: none;
@@ -5749,8 +5753,10 @@ body[data-resizing="true"] * {
 }
 
 .session-row-main strong {
+  display: block;
   font-size: calc(13px * var(--ui-scale));
   font-weight: 500;
+  line-height: 1.35;
   color: var(--text-strong);
   min-width: 0;
   flex: 1;
@@ -5761,7 +5767,9 @@ body[data-resizing="true"] * {
 
 .session-row-main span,
 .session-row-main small {
+  display: block;
   font-size: calc(11px * var(--ui-scale));
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5784,8 +5792,10 @@ body[data-resizing="true"] * {
   position: absolute;
   top: calc(5px * var(--ui-scale));
   right: calc(5px * var(--ui-scale));
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(5px * var(--ui-scale));
   padding: 0;
   border: none;
   border-radius: calc(var(--radius) - 2px);
@@ -5794,19 +5804,51 @@ body[data-resizing="true"] * {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: background 80ms, color 80ms, opacity 80ms;
+  transition: background 80ms, color 80ms, opacity 80ms, min-width 80ms, padding 80ms;
   box-shadow: none;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .session-row-mini:hover .session-row-delete,
-.session-row-mini:focus-within .session-row-delete {
+.session-row-mini:focus-within .session-row-delete,
+.session-row-delete[data-confirm="true"] {
   opacity: 1;
   pointer-events: auto;
+}
+
+.session-row-delete-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.session-row-delete-label {
+  display: none;
+  font-size: calc(10px * var(--ui-scale));
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .session-row-delete:hover {
   background: rgba(248, 113, 113, 0.16);
   color: var(--bad);
+}
+
+.session-row-delete[data-confirm="true"] {
+  min-width: calc(68px * var(--ui-scale));
+  padding: 0 calc(10px * var(--ui-scale));
+  background: rgba(248, 113, 113, 0.18);
+  color: var(--bad);
+}
+
+.session-row-delete[data-confirm="true"] .session-row-delete-icon {
+  display: none;
+}
+
+.session-row-delete[data-confirm="true"] .session-row-delete-label {
+  display: block;
 }
 
 .session-row-main:focus-visible,

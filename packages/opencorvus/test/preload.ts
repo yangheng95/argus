@@ -53,6 +53,17 @@ const cacheDir = path.join(dir, "cache", "opencorvus")
 await fs.mkdir(cacheDir, { recursive: true })
 await fs.writeFile(path.join(cacheDir, "version"), "14")
 
+const liveE2E = process.env.OPENCORVUS_RUN_LIVE_E2E === "1" || process.env.OPENCORVUS_RUN_LIVE_E2E === "true"
+
+if (liveE2E) {
+  const { Auth } = await import("../src/auth")
+  const fallback = await Auth.codexFallback()
+  const openai = fallback.openai
+  if (openai?.type === "oauth") {
+    await Auth.set("openai", openai)
+  }
+}
+
 // Clear provider env vars to ensure clean test state
 delete process.env["ANTHROPIC_API_KEY"]
 delete process.env["OPENAI_API_KEY"]

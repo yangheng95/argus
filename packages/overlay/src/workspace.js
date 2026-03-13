@@ -6,17 +6,28 @@
     function setWorkspaceDirectory(value, source = "manual") {
       const next = typeof value === "string" ? value.trim() : "";
       state.directory = next;
-      state.directoryMode = next ? "custom" : "temp";
+      if (source === "manual") {
+        state.savedDirectory = next;
+        if (next) state.tempDirectory = "";
+        state.directoryMode = next ? "custom" : "temp";
+      }
       state.workspaceDirectorySource = source;
-      if (typeof deps.onDirectoryChange === "function") deps.onDirectoryChange(next, source);
+      if (source === "manual" && typeof deps.onDirectoryChange === "function") deps.onDirectoryChange(next, source);
       return next;
     }
 
     function restoreWorkspaceDirectory() {
-      if (state.directory) return state.directory;
-      const next = typeof state.path?.directory === "string" ? state.path.directory.trim() : "";
+      const next =
+        typeof state.savedDirectory === "string" && state.savedDirectory.trim()
+          ? state.savedDirectory.trim()
+          : typeof state.tempDirectory === "string" && state.tempDirectory.trim()
+            ? state.tempDirectory.trim()
+            : "";
       if (!next) return state.directory;
-      return setWorkspaceDirectory(next, "auto");
+      state.directory = next;
+      state.workspaceDirectorySource = "auto";
+      state.directoryMode = state.savedDirectory ? "custom" : "temp";
+      return next;
     }
 
     function workspaceMode() {
@@ -59,7 +70,6 @@
     function clearProjectScopeData() {
       state.tasks = [];
       state.globalTasks = [];
-      state.sessions = [];
       state.path = null;
       state.vcs = null;
       state.memoryFiles = [];

@@ -12,7 +12,7 @@ describe("orchestrator.goal workspace cleanup", () => {
     await resetDatabase()
   })
 
-  test("removes the goal workspace directory and sandbox registration", async () => {
+  test("cleans goal workspace directories without exposing them as sandboxes", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -26,12 +26,13 @@ describe("orchestrator.goal workspace cleanup", () => {
         })
 
         expect(existsSync(directory)).toBe(true)
-        expect(Project.get(Instance.project.id)?.sandboxes.includes(directory)).toBe(true)
+        expect(Project.get(Instance.project.id)?.sandboxes ?? []).not.toContain(directory)
+        expect(await Project.sandboxes(Instance.project.id)).not.toContain(directory)
 
         await cleanupGoalWorkspace(directory)
 
         expect(existsSync(directory)).toBe(false)
-        expect(Project.get(Instance.project.id)?.sandboxes.includes(directory)).toBe(false)
+        expect(Project.get(Instance.project.id)?.sandboxes ?? []).not.toContain(directory)
       },
     })
   })

@@ -6,6 +6,7 @@ import { PlannerAgent } from "../../src/planner/agent"
 afterEach(() => {
   mock.restore()
   ExecutorRegistry.reset()
+  delete process.env.OPENCORVUS_UNATTENDED
 })
 
 const MOCK_PLAN = {
@@ -273,6 +274,31 @@ describe("planner.service", () => {
     })
 
     expect(plan.metadata.clarification).toBeUndefined()
+  })
+
+  test("suppresses spec clarification automatically in unattended mode", async () => {
+    process.env.OPENCORVUS_UNATTENDED = "1"
+    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+
+    const plan = await PlannerService.initial({
+      title: "无人值守任务",
+      request: "优化性能",
+      spec: {
+        ...MOCK_SPEC,
+        clarifications: [
+          {
+            header: "范围",
+            question: "优先优化哪个页面？",
+            context: "请求没有指定目标页面。",
+            default_assumption: "先优化默认首页。",
+          },
+        ],
+      } as any,
+    })
+
+    expect(plan.metadata.clarification).toBeUndefined()
+    expect(plan.metadata.planner?.clarification_source).toBe("suppressed")
+    expect(plan.prompt).toContain("先优化默认首页")
   })
 
   test("uses executor-native plan when configured with spec input", async () => {

@@ -1,6 +1,7 @@
 import z from "zod"
 import { CheckConfig, StageRouting } from "@/orchestrator/model"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
+import { PanelSettings } from "./settings"
 
 export const PanelSurface = SharedChannelSurface
 export const PanelCapabilityKind = z.enum(["query", "mutation"])
@@ -188,6 +189,44 @@ export const PanelCapabilityRegistry = list(
     surfaces: all,
     params: {
       match: z.string().optional(),
+    },
+  }),
+  item({
+    action: "view_panel_settings",
+    description: "Read session-scoped overlay panel settings.",
+    kind: "query",
+    surfaces: all,
+    params: {
+      sessionID: z.string(),
+    },
+  }),
+  item({
+    action: "update_panel_settings",
+    description: "Update session-scoped overlay panel settings.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      sessionID: z.string(),
+      settings: PanelSettings.Update,
+    },
+  }),
+  item({
+    action: "list_panel_api",
+    description: "List allowlisted raw panel API routes that LLMs may call directly.",
+    kind: "query",
+    surfaces: all,
+    params: {},
+  }),
+  item({
+    action: "call_panel_api",
+    description: "Call an allowlisted raw panel API route directly and return its JSON/text response.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      method: z.enum(["GET", "POST", "PATCH", "DELETE"]),
+      path: z.string(),
+      query: z.record(z.string(), z.string()).optional(),
+      body: z.record(z.string(), z.unknown()).optional(),
     },
   }),
   item({

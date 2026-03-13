@@ -29,6 +29,7 @@ import { nextGoalNode, pendingBlockingGoals } from "./goal-scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import { autoRejectInteraction } from "./interaction-actions"
+import { unattendedProject } from "./unattended"
 import {
   OrchestratorInteractionRequestTable,
   OrchestratorRunTable,
@@ -75,6 +76,7 @@ import {
   requireTask,
   type DeliveryRow,
   type GoalRunRow,
+  type InteractionRow,
   type PlanRow,
   type RunRow,
   type TaskRow,
@@ -103,6 +105,8 @@ const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS,
 // Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
 // Default is off so automated pipelines continue without interruption.
 const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
+const UNATTENDED_AUTO_REPLY =
+  "Use reasonable defaults consistent with the task request, keep scope minimal, continue execution, and do not ask again unless absolutely necessary."
 
 function goalsForRun(run: RunRow) {
   const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
@@ -141,6 +145,30 @@ function runExecutionTarget(run: RunRow, goalRun = activeGoalRun(run)) {
 async function provideWorkspace<R>(directory: string | undefined, fn: () => Promise<R>) {
   if (!directory || directory === Instance.directory) return fn()
   return Instance.provide({ directory, fn })
+}
+
+function interactionAnswers(payload: Record<string, unknown> | null | undefined) {
+  const questions = Array.isArray(payload?.questions) ? payload.questions : []
+  const items = questions.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const row = item as Record<string, unknown>
+    const assumed =
+      typeof row.default_assumption === "string" && row.default_assumption.trim()
+        ? row.default_assumption.trim()
+        : UNATTENDED_AUTO_REPLY
+    return [[assumed]]
+  })
+  return items.length > 0 ? items : [[UNATTENDED_AUTO_REPLY]]
+}
+
+async function autoAnswerInteraction(row: InteractionRow) {
+  if (row.request_type !== "question") return false
+  const { OrchestratorService } = await import("./service")
+  await OrchestratorService.replyInteraction(row.id, {
+    answers: interactionAnswers(row.payload as Record<string, unknown> | undefined),
+    message: "Auto-answered with default assumptions for unattended execution",
+  })
+  return true
 }
 
 async function taskDirectory(task: TaskRow) {
@@ -581,9 +609,33 @@ export namespace OrchestratorRuntime {
     const goalDelivery = latest ? findDeliveryByGoalRun(latest.id) : undefined
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
+      if (await unattendedProject()) {
+        for (const interaction of pending) {
+          const answered = await autoAnswerInteraction(interaction).catch((error) => {
+            log.warn("failed to auto-answer unattended interaction", { id: interaction.id, error: String(error) })
+            return false
+          })
+          if (!answered) continue
+        }
+        run = requireRun(runID)
+        task = requireTask(run.task_id)
+        const remaining = findPendingInteractions(run.id)
+        if (remaining.length === 0) {
+          // Fall through to continue sync after auto-answering defaults.
+        } else {
+          if (run.status !== "blocked") {
+            await hooks.updateRun(run, { status: "blocked", blocking_reason: remaining[0].request_type }, "Run blocked")
+          }
+          if (task.status !== "blocked") {
+            await hooks.updateTask(task, { status: "blocked", blocking_reason: remaining[0].request_type }, "Awaiting user input")
+          }
+          return
+        }
+      }
+
       // Auto-reject stale interactions for unattended operation
       const now = Date.now()
-      const stale = pending.filter((p) => (now - (p.time_created ?? 0)) > INTERACTION_STALE_MS)
+      const stale = findPendingInteractions(run.id).filter((p) => (now - (p.time_created ?? 0)) > INTERACTION_STALE_MS)
       if (stale.length > 0) {
         for (const interaction of stale) {
           log.info("auto-rejecting stale interaction", { id: interaction.id, type: interaction.request_type, ageMs: now - (interaction.time_created ?? 0) })

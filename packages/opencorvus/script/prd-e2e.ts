@@ -14,9 +14,9 @@ import path from "path"
 import * as fs from "fs/promises"
 import { generateText, stepCountIs } from "ai"
 import z from "zod"
-import { PlannerOutput, type PlannerOutputType } from "@/planner/agent"
 import { EvaluatorAnalysis, type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
+import { GoalInput } from "@/orchestrator/model"
 import {
   DEFAULT_OPENAI_CODEX_MODEL,
   getOpenAICodexLanguage,
@@ -24,6 +24,43 @@ import {
   normalizeOpenAICodexModel,
   openAICodexAuthHelp,
 } from "../src/provider/codex-live"
+
+const PlannerE2EOutput = z.object({
+  prd: z.string(),
+  summary: z.string(),
+  goals: z.array(
+    GoalInput.extend({
+      check_selector: z.array(z.string()).optional(),
+    }),
+  ).default([]),
+  milestones: z
+    .array(
+      z.object({
+        title: z.string(),
+        description: z.string().optional(),
+        goal_indices: z.array(z.number()),
+      }),
+    )
+    .optional(),
+  subtasks: z.array(
+    z.object({
+      title: z.string(),
+      description: z.string(),
+      order: z.number().optional(),
+    }),
+  ),
+  risks: z.array(z.string()).default([]),
+  assumptions: z
+    .array(
+      z.object({
+        question: z.string(),
+        assumption: z.string(),
+      }),
+    )
+    .optional(),
+})
+
+type PlannerE2EOutputType = z.infer<typeof PlannerE2EOutput>
 
 // ── CLI args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2)
@@ -176,7 +213,7 @@ console.log("━━━━━━━━━━━━━━━━━━━━━━�
 const planStart = Date.now()
 const planResult = await generateText({
   model,
-  stopWhen: stepCountIs(20),
+  stopWhen: stepCountIs(35),
   tools,
   maxOutputTokens: 16384,
   abortSignal: AbortSignal.timeout(300_000),
@@ -199,8 +236,43 @@ console.log(`总 tool calls: ${totalToolCalls}`)
 
 // ── 解析 Plan 输出 ──────────────────────────────────────────────────────────
 
+function collectText(result: { text: string; steps: Array<{ text?: string }> }) {
+  return result.text || result.steps.map((s) => s.text).filter(Boolean).join("\n")
+}
+
+async function finalizePlanText(
+  prompt: string,
+  result: { steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }> },
+) {
+  const transcript = result.steps
+    .flatMap((step, index) => {
+      const calls = Array.isArray(step.toolCalls)
+        ? step.toolCalls.map((item) => `Step ${index + 1} tool_call: ${JSON.stringify(item).slice(0, 1200)}`)
+        : []
+      const outputs = Array.isArray(step.toolResults)
+        ? step.toolResults.map((item) => `Step ${index + 1} tool_result: ${JSON.stringify(item).slice(0, 4000)}`)
+        : []
+      return [...calls, ...outputs]
+    })
+    .join("\n\n")
+  const forced = await generateText({
+    model,
+    stopWhen: stepCountIs(8),
+    maxOutputTokens: 16384,
+    abortSignal: AbortSignal.timeout(120_000),
+    system: `${PLANNER_SYSTEM}\n\nExploration is already complete. Do not explore again. Output only the final JSON object now.`,
+    prompt: [
+      prompt,
+      "# 已完成的探索记录",
+      transcript || "(无工具记录)",
+      "现在请基于以上探索结果，直接输出最终 JSON 对象，不要继续调用工具。",
+    ].join("\n\n"),
+  })
+  return collectText(forced)
+}
+
 function extractJSON<T>(result: { text: string; steps: Array<{ text: string }> }, schema: z.ZodType<T>): T {
-  const allText = result.text || result.steps.map((s) => s.text).filter(Boolean).join("\n")
+  const allText = collectText(result)
   let raw = allText.trim()
   const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
   if (fenced) raw = fenced[1].trim()
@@ -224,13 +296,17 @@ function extractJSON<T>(result: { text: string; steps: Array<{ text: string }> }
   return schema.parse(obj)
 }
 
-let plan: PlannerOutputType
+let plan: PlannerE2EOutputType
 try {
-  plan = extractJSON(planResult, PlannerOutput)
+  const primaryText = collectText(planResult)
+  const source = primaryText.trim()
+    ? { ...planResult, text: primaryText }
+    : { ...planResult, text: await finalizePlanText(REQUEST, planResult) }
+  plan = extractJSON(source, PlannerE2EOutput)
 } catch (err) {
   console.error("\nJSON 解析失败:")
   console.error(err)
-  const raw = planResult.text || planResult.steps.map((s) => s.text).filter(Boolean).join("\n")
+  const raw = collectText(planResult)
   console.error("原始输出 (前 2000 字):", raw.slice(0, 2000))
   process.exit(1)
 }
@@ -404,7 +480,7 @@ if (analysis.verdict === "rejected") {
   const replanStart = Date.now()
   const replanResult = await generateText({
     model,
-    stopWhen: stepCountIs(15),
+  stopWhen: stepCountIs(25),
     tools,
     maxOutputTokens: 16384,
     abortSignal: AbortSignal.timeout(300_000),
@@ -413,9 +489,13 @@ if (analysis.verdict === "rejected") {
   })
   const replanDuration = ((Date.now() - replanStart) / 1000).toFixed(1)
 
-  let replan: PlannerOutputType
+  let replan: PlannerE2EOutputType
   try {
-    replan = extractJSON(replanResult, PlannerOutput)
+    const replanText = collectText(replanResult)
+    const source = replanText.trim()
+      ? { ...replanResult, text: replanText }
+      : { ...replanResult, text: await finalizePlanText(replanPrompt, replanResult) }
+    replan = extractJSON(source, PlannerE2EOutput)
   } catch (err) {
     console.error("Replan JSON 解析失败:", err)
     process.exit(1)

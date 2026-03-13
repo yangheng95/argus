@@ -1,7 +1,7 @@
 import type { Hooks, PluginInput } from "@opencorvus-ai/plugin"
 import { Log } from "../util/log"
 import { Installation } from "../installation"
-import { OAUTH_DUMMY_KEY } from "../auth"
+import { Auth, OAUTH_DUMMY_KEY } from "../auth"
 import os from "os"
 import { ProviderTransform } from "@/provider/transform"
 
@@ -83,6 +83,193 @@ export function extractAccountId(tokens: TokenResponse): string | undefined {
     return claims ? extractAccountIdFromClaims(claims) : undefined
   }
   return undefined
+}
+
+function extractInstructions(items: unknown[] | undefined) {
+  if (!Array.isArray(items)) return
+  const system = items.filter((item) => {
+    if (!item || typeof item !== "object") return false
+    const role = (item as Record<string, unknown>).role
+    return role === "system" || role === "developer"
+  })
+  if (system.length === 0) return
+
+  const instructions = system
+    .map((item) => {
+      const content = (item as Record<string, unknown>).content
+      return typeof content === "string" ? content.trim() : ""
+    })
+    .filter(Boolean)
+    .join("\n\n")
+
+  if (!instructions) return
+  return {
+    instructions,
+    items: items.filter((item) => {
+      if (!item || typeof item !== "object") return true
+      const role = (item as Record<string, unknown>).role
+      return role !== "system" && role !== "developer"
+    }),
+  }
+}
+
+function followUpItems(items: unknown[] | undefined, calls?: Map<string, Record<string, unknown>>) {
+  if (!Array.isArray(items)) return items
+  const tail: unknown[] = []
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i]
+    if (!item || typeof item !== "object") break
+    const row = item as Record<string, unknown>
+    const role = row.role
+    if (role === "user") {
+      tail.unshift(item)
+      continue
+    }
+    const type = row.type
+    if (typeof type === "string" && type.endsWith("_output")) {
+      tail.unshift(item)
+      continue
+    }
+    break
+  }
+  if (tail.length === 0) return items
+
+  const callIds = tail.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const callID = (item as Record<string, unknown>).call_id
+    return typeof callID === "string" && callID ? [callID] : []
+  })
+  if (callIds.length === 0) return tail
+
+  const cached = callIds.flatMap((callID) => {
+    const item = calls?.get(callID)
+    return item ? [item] : []
+  })
+  if (cached.length > 0) return [...cached, ...tail]
+
+  const callSet = new Set(callIds)
+  const matched = items.filter((item) => {
+    if (!item || typeof item !== "object") return false
+    const row = item as Record<string, unknown>
+    const type = row.type
+    const callID = row.call_id
+    return typeof type === "string" && type.endsWith("_call") && typeof callID === "string" && callSet.has(callID)
+  })
+
+  return [...matched, ...tail]
+}
+
+function responseCalls(data: Record<string, unknown>) {
+  const output = Array.isArray(data.output) ? data.output : []
+  const entries = output.flatMap((item) => {
+    if (!item || typeof item !== "object") return []
+    const row = item as Record<string, unknown>
+    const type = row.type
+    const callID = row.call_id
+    if (typeof type !== "string" || !type.endsWith("_call")) return []
+    if (typeof callID !== "string" || !callID) return []
+    return [[callID, row] as const]
+  })
+  return entries.length > 0 ? new Map(entries) : undefined
+}
+
+export function prepareCodexBody(body: unknown, previousResponseId?: string, calls?: Map<string, Record<string, unknown>>) {
+  if (!body || typeof body !== "object") return body
+  const row = body as Record<string, unknown>
+  const { max_output_tokens: _, ...trimmed } = row
+  const existing = trimmed.instructions
+  const base = {
+    ...trimmed,
+    ...(previousResponseId && Array.isArray(trimmed.input) ? { input: followUpItems(trimmed.input, calls) } : {}),
+    ...(previousResponseId && Array.isArray(trimmed.messages) ? { messages: followUpItems(trimmed.messages, calls) } : {}),
+    store: false,
+    stream: true,
+  }
+  if (typeof existing === "string" && existing.trim()) return base
+
+  const fromInput = extractInstructions(Array.isArray(trimmed.input) ? trimmed.input : undefined)
+  if (fromInput) {
+    return {
+      ...base,
+      instructions: fromInput.instructions,
+      input: previousResponseId ? followUpItems(fromInput.items, calls) : fromInput.items,
+    }
+  }
+
+  const fromMessages = extractInstructions(Array.isArray(trimmed.messages) ? trimmed.messages : undefined)
+  if (!fromMessages) return base
+  return {
+    ...base,
+    instructions: fromMessages.instructions,
+    messages: previousResponseId ? followUpItems(fromMessages.items, calls) : fromMessages.items,
+  }
+}
+
+export function parseCodexSSE(text: string) {
+  const events = text
+    .split(/\r?\n\r?\n/)
+    .flatMap((chunk) => {
+      const data = chunk
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .filter(Boolean)
+        .join("\n")
+      if (!data || data === "[DONE]") return []
+      try {
+        return [JSON.parse(data) as Record<string, unknown>]
+      } catch {
+        return []
+      }
+    })
+
+  const done = events.findLast((event) => event.type === "response.completed")
+  if (done?.response && typeof done.response === "object") return done.response
+  const created = events.findLast((event) => event.type === "response.created")
+  if (created?.response && typeof created.response === "object") return created.response
+  return
+}
+
+async function codexResponse(response: Response, wantsStream: boolean) {
+  if (wantsStream) return response
+  const text = await response.text()
+  if (!text.trimStart().startsWith("event:")) {
+    return new Response(text, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    })
+  }
+
+  const parsed = parseCodexSSE(text)
+  if (!parsed) {
+    return new Response(text, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+    })
+  }
+
+  const headers = new Headers(response.headers)
+  headers.set("content-type", "application/json")
+  headers.delete("content-length")
+  return new Response(JSON.stringify(parsed), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
+async function responseState(response: Response) {
+  try {
+    const data = await response.clone().json() as Record<string, unknown>
+    return {
+      id: typeof data.id === "string" && data.id ? data.id : undefined,
+      calls: responseCalls(data),
+    }
+  } catch {
+    return
+  }
 }
 
 function buildAuthorizeUrl(redirectUri: string, pkce: PkceCodes, state: string): string {
@@ -349,6 +536,8 @@ function waitForOAuthCallback(pkce: PkceCodes, state: string): Promise<TokenResp
 }
 
 export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
+  const previousResponseIds = new Map<string, string>()
+  const previousCalls = new Map<string, Map<string, Record<string, unknown>>>()
   return {
     auth: {
       provider: "openai",
@@ -428,8 +617,10 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
               }
             }
 
-            const currentAuth = await getAuth()
-            if (currentAuth.type !== "oauth") return fetch(requestInput, init)
+            const currentAuth = await getAuth().catch(() => undefined) ?? await Auth.get("openai").catch(() => undefined)
+            if (!currentAuth || currentAuth.type !== "oauth") {
+              throw new Error("OpenAI OAuth credentials not available for Codex request")
+            }
 
             // Cast to include accountId field
             const authWithAccount = currentAuth as typeof currentAuth & { accountId?: string }
@@ -487,10 +678,37 @@ export async function CodexAuthPlugin(input: PluginInput): Promise<Hooks> {
                 ? new URL(CODEX_API_ENDPOINT)
                 : parsed
 
-            return fetch(url, {
+            let body = init?.body
+            let wantsStream = false
+            const sessionID = headers.get("session_id") ?? "global"
+            if (url.toString() === CODEX_API_ENDPOINT && typeof body === "string") {
+              try {
+                const parsedBody = JSON.parse(body) as Record<string, unknown>
+                const previous = previousResponseIds.get(sessionID)
+                wantsStream = parsedBody.stream === true
+                const adaptedBody = prepareCodexBody(parsedBody, previous, previousCalls.get(sessionID))
+                if (process.env.OPENCORVUS_DEBUG_CODEX === "1" && previous) {
+                  const items = Array.isArray((adaptedBody as Record<string, unknown>).input)
+                    ? (adaptedBody as Record<string, unknown>).input
+                    : []
+                  console.log("[codex] follow-up", JSON.stringify(items, null, 2))
+                }
+                body = JSON.stringify(adaptedBody)
+              } catch {
+                body = init?.body
+              }
+            }
+
+            const response = await fetch(url, {
               ...init,
+              body,
               headers,
             })
+            const adapted = await codexResponse(response, wantsStream)
+            const state = await responseState(adapted)
+            if (state?.id) previousResponseIds.set(sessionID, state.id)
+            if (state?.calls) previousCalls.set(sessionID, state.calls)
+            return adapted
           },
         }
       },
