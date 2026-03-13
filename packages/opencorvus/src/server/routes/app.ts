@@ -202,14 +202,19 @@ export function AppRoutes(root: Hono) {
           ...errors(400),
         },
       }),
-      validator(
-        "json",
-        z.object({
-          path: z.string().trim().min(1),
-        }),
-      ),
       async (c) => {
-        const target = c.req.valid("json").path
+        const parsed = z
+          .object({
+            path: z.string(),
+          })
+          .safeParse(await c.req.json().catch(() => ({})))
+        if (!parsed.success) {
+          throw new HTTPException(400, { message: "Path is required" })
+        }
+        const target = parsed.data.path.trim()
+        if (!target) {
+          throw new HTTPException(400, { message: "Path is required" })
+        }
         const result = await Process.run(openPathCommand(target), {
           nothrow: true,
           stdin: "ignore",

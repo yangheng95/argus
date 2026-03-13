@@ -1,5 +1,5 @@
 import z from "zod"
-import { generateObject } from "ai"
+import { generateObject } from "@/llm/api"
 import { Preference } from "@/preference"
 import { Provider } from "@/provider/provider"
 import { Database, eq } from "@/storage/db"
@@ -112,7 +112,7 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
       should_resume: false,
     }
   }
-  const resolved = interpreted.intent
+  const resolved = interpreted.intent as z.infer<typeof WorkbenchIntent>
 
   if (resolved.kind === "preference" && Array.isArray(resolved.preferences) && resolved.preferences.length > 0) {
     const scope = inferPreferenceScope(text)

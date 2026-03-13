@@ -10,7 +10,7 @@
  * 4. Evaluates each goal independently against the delivery
  * 5. Produces targeted replan guidance when needed
  */
-import { generateText, stepCountIs, tool } from "ai"
+import { stepCountIs, tool } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { verificationHints } from "@/check/policy"
@@ -21,6 +21,7 @@ import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
+import { generateText } from "@/llm/api"
 
 const log = Log.create({ service: "evaluator-agent" })
 
@@ -159,6 +160,7 @@ export namespace EvaluatorAgent {
           tools,
           toolChoice: "required",
           maxOutputTokens: 16384,
+          timeoutMs,
           abortSignal: AbortSignal.timeout(timeoutMs),
           system: EVALUATOR_SYSTEM,
           prompt: userPrompt,
@@ -537,6 +539,7 @@ async function finalizeAnalysis(
     tools,
     toolChoice: "required",
     maxOutputTokens: 16384,
+    timeoutMs: Math.min(timeoutMs, 120_000),
     abortSignal: AbortSignal.timeout(Math.min(timeoutMs, 120_000)),
     system:
       "You are finalizing an evaluation analysis after investigation is already complete. " +

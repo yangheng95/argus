@@ -1,0 +1,159 @@
+import { APICallError, generateObject as generateObjectBase, generateText as generateTextBase, streamObject as streamObjectBase, streamText as streamTextBase } from "ai"
+import { Env } from "@/env"
+
+const DEFAULT_TIMEOUT_MS = 5_000
+const DEFAULT_RETRIES = 2
+const DEFAULT_RETRY_DELAY_MS = 250
+
+function timeoutMs(value?: number | false) {
+  if (value === false) return undefined
+  if (typeof value === "number" && value > 0) return value
+  const env = Number.parseInt(Env.get("OPENCORVUS_LLM_TIMEOUT_MS") ?? "", 10)
+  return Number.isFinite(env) && env > 0 ? env : DEFAULT_TIMEOUT_MS
+}
+
+function retries(value?: number) {
+  if (typeof value === "number" && value >= 0) return value
+  const env = Number.parseInt(Env.get("OPENCORVUS_LLM_MAX_RETRIES") ?? "", 10)
+  return Number.isFinite(env) && env >= 0 ? env : DEFAULT_RETRIES
+}
+
+function retryDelayMs(value?: number) {
+  if (typeof value === "number" && value >= 0) return value
+  const env = Number.parseInt(Env.get("OPENCORVUS_LLM_RETRY_DELAY_MS") ?? "", 10)
+  return Number.isFinite(env) && env >= 0 ? env : DEFAULT_RETRY_DELAY_MS
+}
+
+function signal(signal?: AbortSignal, timeout?: number | false) {
+  const ms = timeoutMs(timeout)
+  if (!ms) return signal
+  const next = AbortSignal.timeout(ms)
+  if (!signal) return next
+  return AbortSignal.any([signal, next])
+}
+
+function retryable(error: unknown) {
+  if (error instanceof DOMException && error.name === "AbortError") return true
+  if (APICallError.isInstance(error)) return error.isRetryable
+  if (!(error instanceof Error)) return false
+  const message = error.message.toLowerCase()
+  return [
+    "timeout",
+    "timed out",
+    "connectionrefused",
+    "econnreset",
+    "fetch failed",
+    "overloaded",
+    "rate limit",
+    "too many requests",
+  ].some((part) => message.includes(part))
+}
+
+async function wait(ms: number, abort?: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const done = () => {
+      clearTimeout(timer)
+      abort?.removeEventListener("abort", stop)
+      resolve()
+    }
+    const stop = () => {
+      clearTimeout(timer)
+      abort?.removeEventListener("abort", stop)
+      reject(new DOMException("Aborted", "AbortError"))
+    }
+    const timer = setTimeout(done, ms)
+    abort?.addEventListener("abort", stop, { once: true })
+  })
+}
+
+async function call<T>(run: () => Promise<T>, input: {
+  retries?: number
+  retryDelayMs?: number
+  abortSignal?: AbortSignal
+}) {
+  const max = retries(input.retries)
+  const base = retryDelayMs(input.retryDelayMs)
+  for (let attempt = 0; attempt <= max; attempt++) {
+    try {
+      return await run()
+    } catch (error) {
+      if (attempt >= max || !retryable(error)) throw error
+      await wait(base * Math.pow(2, attempt), input.abortSignal)
+    }
+  }
+  throw new Error("unreachable")
+}
+
+export async function generateText(
+  input: Parameters<typeof generateTextBase>[0] & {
+    timeoutMs?: number | false
+    retries?: number
+    retryDelayMs?: number
+  },
+) {
+  const { timeoutMs: timeout, retries: count, retryDelayMs: delay, abortSignal, ...rest } = input
+  const next = signal(abortSignal, timeout)
+  return call(
+    () => generateTextBase({
+      ...(rest as Parameters<typeof generateTextBase>[0]),
+      abortSignal: next,
+      maxRetries: 0,
+    }),
+    {
+      retries: count,
+      retryDelayMs: delay,
+      abortSignal: next,
+    },
+  )
+}
+
+export async function generateObject(
+  input: Parameters<typeof generateObjectBase>[0] & {
+    timeoutMs?: number | false
+    retries?: number
+    retryDelayMs?: number
+  },
+) {
+  const { timeoutMs: timeout, retries: count, retryDelayMs: delay, abortSignal, ...rest } = input
+  const next = signal(abortSignal, timeout)
+  return call(
+    () => generateObjectBase({
+      ...(rest as Parameters<typeof generateObjectBase>[0]),
+      abortSignal: next,
+      maxRetries: 0,
+    }),
+    {
+      retries: count,
+      retryDelayMs: delay,
+      abortSignal: next,
+    },
+  )
+}
+
+export function streamText(
+  input: Parameters<typeof streamTextBase>[0] & {
+    timeoutMs?: number | false
+    retries?: number
+  },
+) {
+  const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
+  return streamTextBase({
+    ...(rest as Parameters<typeof streamTextBase>[0]),
+    abortSignal: signal(abortSignal, timeout),
+    maxRetries: retries(count),
+  })
+}
+
+export function streamObject(
+  input: Parameters<typeof streamObjectBase>[0] & {
+    timeoutMs?: number | false
+    retries?: number
+  },
+) {
+  const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
+  return streamObjectBase({
+    ...(rest as Parameters<typeof streamObjectBase>[0]),
+    abortSignal: signal(abortSignal, timeout),
+    maxRetries: retries(count),
+  })
+}

@@ -126,7 +126,7 @@ const AgentCreateCommand = cmd({
           spinner.stop(`LLM failed to generate agent: ${error.message}`, 1)
           if (isFullyNonInteractive) process.exit(1)
           throw new UI.CancelledError()
-        })
+        }) as { identifier: string; whenToUse: string; systemPrompt: string }
         spinner.stop(`Agent ${generated.identifier} generated`)
 
         // Select tools

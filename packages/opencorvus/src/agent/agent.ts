@@ -1,12 +1,13 @@
 import { Config } from "../config/config"
 import z from "zod"
 import { Provider } from "../provider/provider"
-import { generateObject, streamObject, type ModelMessage } from "ai"
+import { type ModelMessage } from "ai"
 import { SystemPrompt } from "../session/system"
 import { Instance } from "../project/instance"
 import { Truncate } from "../tool/truncation"
 import { Auth } from "../auth"
 import { ProviderTransform } from "../provider/transform"
+import { generateObject, streamObject } from "@/llm/api"
 
 import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
@@ -365,6 +366,7 @@ export namespace Agent {
     if (defaultModel.providerID === "openai" && (await Auth.get(defaultModel.providerID))?.type === "oauth") {
       const result = streamObject({
         ...params,
+        timeoutMs: 30_000,
         providerOptions: ProviderTransform.providerOptions(model, {
           instructions: SystemPrompt.instructions(),
           store: false,
@@ -377,7 +379,10 @@ export namespace Agent {
       return result.object
     }
 
-    const result = await generateObject(params)
+    const result = await generateObject({
+      ...params,
+      timeoutMs: 30_000,
+    })
     return result.object
   }
 }
