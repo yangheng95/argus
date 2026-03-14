@@ -9,7 +9,7 @@ import { ToolRegistry } from "@/tool/registry"
 import { Database, eq } from "@/storage/db"
 import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { panelCapabilityPrompt } from "@/panel/capability"
-import { ControlMessageInput, ControlMessageResult } from "./message-schema"
+import { ControlMessageInput, ControlMessageResult, PanelLocalAction } from "./message-schema"
 import { ControlTimeline } from "./timeline"
 import { Bus } from "@/bus"
 import { Log } from "@/util/log"
@@ -178,7 +178,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     })
 
     if (result.info.role === "assistant" && result.info.structured) {
-      const output = finalizeResult(ControlMessageResult.parse(result.info.structured), control)
+      const output = finalizeResult(ControlMessageResult.parse(result.info.structured), control, input)
       if (control?.keep) {
         await appendSummary(control.info.id, result, output.message)
       }
@@ -199,7 +199,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     const output = finalizeResult(ControlMessageResult.parse({
       kind: "panel_response",
       message: `Control message processing failed: ${error instanceof Error ? error.message : String(error)}`,
-    }), control)
+    }), control, input)
     log.error("panel request failed", {
       input: payload,
       panel_session_id: control?.info.id,
@@ -372,14 +372,14 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
     "Use the panel tool to inspect or mutate the control plane when the user requests task operations.",
     "Do not perform coding work directly.",
     "Respond only through the required structured output schema.",
-    "For greetings, general questions, or non-task messages, respond with kind=panel_response and a friendly, helpful message explaining what you can do (create tasks, check status, manage sessions, etc.).",
+    "For greetings, general questions, or non-task messages, respond with kind=panel_response and a friendly, helpful message explaining what you can do (create tasks, check status, update checks, and control task execution).",
     "Never bypass the panel tool or rely on local UI shortcuts.",
     "Treat metadata as explicit UI context. When metadata provides concrete IDs or target values, prefer those targets over guessing from the text.",
     "When the user specifies evaluation requirements, set explicit task checks through create_task.checks or update_checks instead of relying on planner goals alone.",
     "Only create a new task when allow_create is true and the user explicitly asked you to start or execute work.",
     "For create_task, always place the user's work request in create_task.request.",
     "For create_task.checks, build/test/lint/verify_cmd must be arrays of command strings or false; do not emit bare boolean true.",
-    "Only create, fork, or delete sessions when allow_session_mutation is true and the user explicitly asked to manage sessions.",
+    "Desktop panel is task-first. When the user asks to manage sessions on surface=panel, respond with kind=panel_response explaining that overlay only exposes tasks and session management is unavailable there.",
     "When a panel action returns file or image attachments, copy them into the structured result attachments field.",
     "",
     `Surface: ${input.surface}`,
@@ -455,7 +455,7 @@ function defaultSource(surface: z.infer<typeof ControlMessageInput>["surface"]) 
 }
 
 async function resolveSession(input: z.infer<typeof ControlMessageInput>) {
-  const persistent = input.surface === "panel" && !input.taskID
+  const persistent = input.surface !== "panel" && !!input.sessionID
   if (persistent && input.sessionID) {
     return {
       info: await Session.get(input.sessionID),
@@ -465,7 +465,7 @@ async function resolveSession(input: z.infer<typeof ControlMessageInput>) {
     } satisfies ControlSession
   }
   const info = await Session.create({
-    title: `Panel control (${input.surface})`,
+    title: `Control (${input.surface})`,
   })
   return {
     info,
@@ -475,14 +475,40 @@ async function resolveSession(input: z.infer<typeof ControlMessageInput>) {
   } satisfies ControlSession
 }
 
-function finalizeResult(result: z.infer<typeof ControlMessageResult>, control?: ControlSession) {
-  if (!control) return result
+function finalizeResult(
+  result: z.infer<typeof ControlMessageResult>,
+  control: ControlSession | undefined,
+  input: z.infer<typeof ControlMessageInput>,
+) {
+  if (!control) return normalizeResult(result, input)
   control.keep = shouldKeepSession(control, result)
-  if (!control.keep) return result
-  if (result.session_id) return result
+  const next = !control.keep
+    ? result
+    : result.session_id
+      ? result
+      : ControlMessageResult.parse({
+        ...result,
+        session_id: control.info.id,
+      })
+  return normalizeResult(next, input)
+}
+
+function normalizeResult(result: z.infer<typeof ControlMessageResult>, input: z.infer<typeof ControlMessageInput>) {
+  if (input.surface !== "panel") return result
+  const action = result.local_action
+  if (action && !PanelLocalAction.safeParse(action).success) {
+    log.warn("panel returned unsupported local action", {
+      input: loggedInput(input),
+      result: loggedResult(result),
+    })
+    return ControlMessageResult.parse({
+      kind: "panel_response",
+      message: "Desktop overlay only exposes tasks. Session management is unavailable there.",
+    })
+  }
   return ControlMessageResult.parse({
     ...result,
-    session_id: control.info.id,
+    session_id: undefined,
   })
 }
 

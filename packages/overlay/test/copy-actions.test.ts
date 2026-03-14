@@ -63,22 +63,6 @@ test("copying chat and logs does not open the dialog", async () => {
       delivery: null,
       interactions: [],
     },
-    sessions: [
-      {
-        id: "session-1",
-        title: "Overlay copy session",
-        directory: "D:/overlay/workspace/app",
-        time: { updated: now - 1_000 },
-      },
-    ],
-    session: {
-      "session-1": {
-        id: "session-1",
-        title: "Overlay copy session",
-        directory: "D:/overlay/workspace/app",
-        time: { updated: now - 1_000 },
-      },
-    },
     timeline: {
       task: {
         "task-1": [
@@ -171,16 +155,8 @@ test("copying chat and logs does not open the dialog", async () => {
       }
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks") return send(data.tasks)
-      if (path === "/session") return send(data.sessions)
       if (path.startsWith("/task/") && path.endsWith("/board")) return send(data.board)
-      if (path === "/control/timeline") {
-        const taskID = url.searchParams.get("taskID")
-        return send(taskID ? data.timeline.task[taskID] || [] : [])
-      }
-      if (path.startsWith("/session/") && req.method === "GET") {
-        const id = decodeURIComponent(path.slice(9))
-        return send(data.session[id] || null)
-      }
+      if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
       if (path === "/path") return send(data.path)
       if (path === "/vcs") return send(data.vcs)
       if (path === "/config") return send(data.config)

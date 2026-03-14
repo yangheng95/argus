@@ -458,8 +458,7 @@ test("overlay controls trigger without runtime failures", async () => {
   const append = async (body: Record<string, unknown>) => {
     const ts = Date.now()
     const msg = String(body.text || "").trim()
-    const taskID = body.taskID ? String(body.taskID) : body.sessionID === "session-1" ? "task-1" : ""
-    const sessionID = body.sessionID ? String(body.sessionID) : taskID === "task-1" ? "session-1" : ""
+    const taskID = body.taskID ? String(body.taskID) : ""
     const user = {
       parts: [{ type: "text", text: msg }],
       info: { role: "user", time: { created: ts } },
@@ -471,9 +470,6 @@ test("overlay controls trigger without runtime failures", async () => {
     if (taskID) {
       data.timeline.task[taskID] = [...(data.timeline.task[taskID] || []), user, assistant]
       data.counters.taskMessage += 1
-    }
-    if (sessionID) {
-      data.timeline.session[sessionID] = [...(data.timeline.session[sessionID] || []), user, assistant]
     }
     if (msg.startsWith("/goal ")) {
       const detail = msg.includes("\nCriteria:") ? msg.split("\nCriteria:")[1]?.trim() || "" : ""
@@ -677,6 +673,7 @@ test("overlay controls trigger without runtime failures", async () => {
           headers: { etag: `"board-${data.board.task.time.updated}"` },
         })
       }
+      if (path === "/task/task-1/transcript") return send(data.timeline.task["task-1"] || [])
       if (path === "/task/task-1/events") {
         const stream = new ReadableStream({
           start(controller) {
@@ -939,7 +936,7 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
     await page.waitForSelector('[data-task-action="retry"]')
     await page.waitForSelector(".change-row")
-    await page.waitForSelector(".session-row-main[data-session-id='session-1']")
+    await page.waitForSelector(".task-row-main[data-task-id='task-1']")
     await page.waitForSelector("#interaction-modal")
 
     expect(await page.$eval("#titlebarMenu", (node) => (node as HTMLElement).hidden)).toBe(true)
@@ -1074,11 +1071,11 @@ test("overlay controls trigger without runtime failures", async () => {
     seen.push("[data-path-action='reset']")
     await tap("[data-path-action='reset']")
     await page.waitForFunction(() => document.querySelector("#taskDir")?.getAttribute("title") === "D:/overlay/temp")
-    await page.waitForFunction(() => !document.querySelector(".session-row-main[data-session-id='session-1']"))
+    await page.waitForFunction(() => !document.querySelector(".task-row-main[data-task-id='task-1']"))
     seen.push("[data-path-action='browse']")
     await tap("[data-path-action='browse']")
     await page.waitForFunction(() => document.querySelector("#taskDir")?.getAttribute("title") === "D:/overlay/workspace/app")
-    await page.waitForSelector(".session-row-main[data-session-id='session-1']")
+    await page.waitForSelector(".task-row-main[data-task-id='task-1']")
     await page.waitForSelector('[data-task-action="retry"]', { visible: true })
 
     for (const item of ["retry", "replan", "cancel"]) {
@@ -1347,24 +1344,19 @@ test("overlay controls trigger without runtime failures", async () => {
 
     await close("#btnCloseConfigDialog", "#configDialog")
 
-    seen.push("#btnRefreshSessions")
-    await tap("#btnRefreshSessions")
+    seen.push("#btnRefreshTasks")
+    await tap("#btnRefreshTasks")
     await waitIdle()
-    seen.push("#btnCreateSession")
-    await tap("#btnCreateSession")
-    await page.waitForSelector(".session-row-main[data-session-id='session-3']")
-    seen.push(".session-row-main[data-session-id='session-1']")
-    await tap(".session-row-main[data-session-id='session-1']")
+    seen.push("#btnCreateTask")
+    await tap("#btnCreateTask")
+    await page.waitForFunction(() => document.body.dataset.workspace === "empty")
+    seen.push(".task-row-main[data-task-id='task-1']")
+    await tap(".task-row-main[data-task-id='task-1']")
     if (!(await page.$('[data-task-action="retry"]'))) {
-      seen.push(".session-row-main[data-session-id='session-1']")
-      await tap(".session-row-main[data-session-id='session-1']")
+      seen.push(".task-row-main[data-task-id='task-1']")
+      await tap(".task-row-main[data-task-id='task-1']")
     }
     await page.waitForSelector('[data-task-action="retry"]')
-    seen.push(".session-row-delete[data-session-delete='session-3']")
-    await tap(".session-row-delete[data-session-delete='session-3']")
-    await page.waitForSelector(".session-row-delete[data-session-delete='session-3'][data-confirm='true']")
-    seen.push(".session-row-delete[data-session-delete='session-3'][data-confirm='true']")
-    await tap(".session-row-delete[data-session-delete='session-3'][data-confirm='true']")
 
     seen.push("#connBadge")
     await page.click("#connBadge", { clickCount: 2 })

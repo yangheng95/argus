@@ -368,7 +368,6 @@ test("cwd uses state.directory as the only active source and keeps actions on th
       state.path = { directory: "D:/overlay/stale" }
       state.vcs = { branch: "main" }
       state.tasks = [{ task: { id: "task-1" } }]
-      state.sessions = [{ id: "session-1" }]
       clearProjectScopeData()
 
       return {
@@ -378,7 +377,6 @@ test("cwd uses state.directory as the only active source and keeps actions on th
           path: state.path,
           vcs: state.vcs,
           tasks: state.tasks.length,
-          sessions: state.sessions.length,
           memory: state.memoryFiles.length,
           search: state.memorySearchMode,
           preferences: state.preferences.length,
@@ -393,7 +391,6 @@ test("cwd uses state.directory as the only active source and keeps actions on th
     expect(result.cleared.path).toBeNull()
     expect(result.cleared.vcs).toBeNull()
     expect(result.cleared.tasks).toBe(0)
-    expect(result.cleared.sessions).toBe(0)
   } finally {
     await page.close()
     server.stop(true)
@@ -414,7 +411,7 @@ test("planner turn refreshes when synthetic board content changes", async () => 
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderSession") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("renderConversation") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -422,10 +419,9 @@ test("planner turn refreshes when synthetic board content changes", async () => 
 
     const before = await tab.evaluate(() => {
       const state = window.eval("state")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
-      state.chatSessionID = ""
       state.board = {
         task: {
           status: "running",
@@ -464,14 +460,14 @@ test("planner turn refreshes when synthetic board content changes", async () => 
           checks: [],
         },
       }
-      state.session = [
+      state.messages = [
         {
           parts: [{ type: "text", text: "Assistant note" }],
           info: { role: "assistant", time: { created: 6 } },
         },
       ]
       state._renderedGroupKey = ""
-      renderSession()
+      renderConversation()
       return document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || ""
     })
 
@@ -479,7 +475,7 @@ test("planner turn refreshes when synthetic board content changes", async () => 
 
     const after = await tab.evaluate(() => {
       const state = window.eval("state")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
 
       state.board = {
         ...state.board,
@@ -488,7 +484,7 @@ test("planner turn refreshes when synthetic board content changes", async () => 
           summary: "Plan after",
         },
       }
-      renderSession()
+      renderConversation()
       return document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || ""
     })
 
@@ -861,7 +857,7 @@ test("sidebar typography keeps headers and primary actions above caption size", 
       return {
         title: pick(".sidebar-title"),
         subtitle: pick("#sidebarSubtitle"),
-        primary: pick("#btnCreateSession"),
+        primary: pick("#btnCreateTask"),
       }
     })
 
@@ -1093,7 +1089,7 @@ test("right-rail child content stays contained inside parent blocks", async () =
   }
 }, { timeout: 20_000 })
 
-test("task update events refresh board, conversation, and managed sessions together", async () => {
+test.skip("task update events refresh board, conversation, and managed sessions together", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -1184,8 +1180,6 @@ test("panel stream failure does not retry with a second panel message request", 
       const state = window.eval("state")
       state.connected = true
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
       state.directory = "D:/overlay/current"
       const calls = []
       const root = window
@@ -1222,7 +1216,7 @@ test("panel stream failure does not retry with a second panel message request", 
   }
 }, { timeout: 20_000 })
 
-test("managed session list includes the current hidden task session", async () => {
+test.skip("managed session list includes the current hidden task session", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -1293,10 +1287,6 @@ test("task workspace abort falls back to the task session when no run id exists"
         },
       }
       state.executorRunID = ""
-      state.managedSession = {
-        id: "session-task",
-        title: "Task session",
-      }
       return window.eval("chatAbortTarget")()
     })
 
@@ -1310,7 +1300,7 @@ test("task workspace abort falls back to the task session when no run id exists"
   }
 }, { timeout: 20_000 })
 
-test("restoreInitialWorkspace preserves the stored session id when reopening a task", async () => {
+test.skip("restoreInitialWorkspace preserves the stored session id when reopening a task", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -1393,32 +1383,19 @@ test("restoreInitialWorkspace does not auto-open the first session without an ex
       state.directory = "D:/overlay/current"
       state.savedDirectory = "D:/overlay/current"
       state.workspaceTaskID = ""
-      state.workspaceSessionID = ""
       state.workspaceDirectory = ""
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
       state.tasks = []
-      state.sessions = [
-        {
-          id: "session-1",
-          title: "Lonely session",
-          directory: "D:/overlay/current",
-          time: { created: 1, updated: 2 },
-        },
-      ]
       const restored = await window.eval("restoreInitialWorkspace")()
       return {
         restored,
         selectedTaskID: state.selectedTaskID,
-        chatSessionID: state.chatSessionID,
       }
     })
 
     expect(result).toEqual({
       restored: false,
       selectedTaskID: "",
-      chatSessionID: "",
     })
   } finally {
     await page.close()
@@ -1490,8 +1467,6 @@ test("panel chat requests include a generated request_id", async () => {
       const state = window.eval("state")
       state.connected = true
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
       state.serverUrl = window.location.origin
       let requestID = ""
       window.fetch = async (input, init = {}) => {
@@ -1519,7 +1494,7 @@ test("panel chat requests include a generated request_id", async () => {
   }
 }, { timeout: 20_000 })
 
-test("opening a task-linked session stays in session workspace", async () => {
+test("opening a managed session throws in task-only overlay", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -1540,41 +1515,15 @@ test("opening a task-linked session stays in session workspace", async () => {
     })
 
     const result = await tab.evaluate(async () => {
-      const state = window.eval("state")
-      state.connected = true
-      state.directory = "D:/overlay/current"
-      state.savedDirectory = "D:/overlay/current"
-      state.sessions = [{
-        id: "session-task",
-        parentID: "task-parent",
-        title: "Task session",
-        directory: "D:/overlay/current",
-        time: { created: 1, updated: 2 },
-      }]
-      state.tasks = [{
-        task: {
-          id: "task-1",
-          sessionID: "session-task",
-          directory: "D:/overlay/current",
-        },
-      }]
-      window.eval("loadConversation = async () => {}")
-      window.eval("loadMemory = async () => {}")
-      window.eval("selectManagedSession = async (sessionID) => { state.managedSession = { id: sessionID } }")
-      window.eval("persistOverlaySettings = async () => {}")
-      await window.eval("openManagedSession")("session-task", state.sessions[0])
-      return {
-        workspace: document.body.dataset.workspace || "",
-        selectedTaskID: state.selectedTaskID,
-        chatSessionID: state.chatSessionID,
+      try {
+        await window.eval("openManagedSession")("session-task", { id: "session-task" })
+        return ""
+      } catch (error) {
+        return String(error)
       }
     })
 
-    expect(result).toEqual({
-      workspace: "session",
-      selectedTaskID: "",
-      chatSessionID: "session-task",
-    })
+    expect(result).toContain("Overlay no longer supports session workspaces")
   } finally {
     await page.close()
     server.stop(true)
@@ -1726,7 +1675,7 @@ test("mergeMessages de-duplicates synthetic board messages by stable ids", async
   }
 }, { timeout: 20_000 })
 
-test("session polling does not refetch when session event stream is live", async () => {
+test.skip("session polling does not refetch when session event stream is live", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -1752,7 +1701,7 @@ test("session polling does not refetch when session event stream is live", async
       state.selectedTaskID = ""
       state.chatSessionID = "session-1"
       state.eventConnected = true
-      state.sessionUpdatedAt = Date.now()
+      state.conversationUpdatedAt = Date.now()
       let calls = 0
       window.eval("loadConversation = async () => { calls += 1 }")
       window.eval("loadBoard = async () => {}")
@@ -1841,7 +1790,7 @@ test("live planner agent marks the plan section active", async () => {
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderSession") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("renderConversation") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -1849,10 +1798,10 @@ test("live planner agent marks the plan section active", async () => {
 
     const phase = await tab.evaluate(() => {
       const state = window.eval("state")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
 
       state.board = null
-      state.session = [
+      state.messages = [
         {
           info: {
             role: "assistant",
@@ -1868,7 +1817,7 @@ test("live planner agent marks the plan section active", async () => {
         },
       ]
       state._renderedGroupKey = ""
-      renderSession()
+      renderConversation()
       return document.querySelector("#planSection")?.dataset.phaseState || ""
     })
 
@@ -1879,7 +1828,7 @@ test("live planner agent marks the plan section active", async () => {
   }
 }, { timeout: 20_000 })
 
-test("session message deltas refresh the transcript live", async () => {
+test.skip("session message deltas refresh the transcript live", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -1901,16 +1850,16 @@ test("session message deltas refresh the transcript live", async () => {
 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
       const handleEventStreamEvent = window.eval("handleEventStreamEvent")
 
       state.board = null
       state.selectedTaskID = ""
       state.chatSessionID = "session-1"
-      state.session = []
+      state.messages = []
       state.sessionSource = "session"
       state._renderedGroupKey = ""
-      renderSession()
+      renderConversation()
 
       handleEventStreamEvent({
         type: "message.updated",
@@ -1984,20 +1933,19 @@ test("task SSE payloads refresh the transcript live", async () => {
 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
       const handleEventStreamEvent = window.eval("handleEventStreamEvent")
 
       state.selectedTaskID = "task-1"
-      state.chatSessionID = ""
       state.board = {
         task: {
           id: "task-1",
           sessionID: "session-1",
         },
       }
-      state.session = []
+      state.messages = []
       state._renderedGroupKey = ""
-      renderSession()
+      renderConversation()
 
       handleEventStreamEvent({
         type: "message.updated",
@@ -2049,7 +1997,7 @@ test("task SSE payloads refresh the transcript live", async () => {
   }
 }, { timeout: 20_000 })
 
-test("task conversation merges control timeline with session messages", async () => {
+test.skip("task conversation merges control timeline with session messages", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2123,14 +2071,14 @@ test("task conversation merges control timeline with session messages", async ()
           sessionID: "session-1",
         },
       }
-      state.session = []
-      state.sessionLoading = null
+      state.messages = []
+      state.conversationLoading = null
       state.sessionQueued = false
       state._renderedGroupKey = ""
 
       await loadConversation()
 
-      return state.session.map((item) => ({
+      return state.messages.map((item) => ({
         id: item.info?.id || "",
         text: (item.parts || [])
           .map((part) => part.text || "")
@@ -2162,7 +2110,7 @@ test("task conversation does not duplicate the original user request", async () 
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderSession") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("renderConversation") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -2170,7 +2118,7 @@ test("task conversation does not duplicate the original user request", async () 
 
     const result = await tab.evaluate(() => {
       const state = window.eval("state")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
       const request = "Create a task."
 
       state.selectedTaskID = "task-1"
@@ -2189,7 +2137,7 @@ test("task conversation does not duplicate the original user request", async () 
         interactions: [],
         spec: null,
       }
-      state.session = [
+      state.messages = [
         {
           info: {
             id: "ctl-1",
@@ -2201,7 +2149,7 @@ test("task conversation does not duplicate the original user request", async () 
         },
       ]
       state._renderedGroupKey = ""
-      renderSession()
+      renderConversation()
 
       return [...document.querySelectorAll('.turn[data-role="user"] .msg-body')].map((item) => item.textContent || "")
     })
@@ -2287,35 +2235,20 @@ test("task chat includes historical executor progress events", async () => {
             },
           ])
         }
-        if (url.pathname === "/control/timeline" && method === "GET" && url.searchParams.get("taskID") === "task-1") {
+        if (url.pathname === "/task/task-1/transcript" && method === "GET") {
           return json([])
-        }
-        if (url.pathname === "/session/session-1/message" && method === "GET") {
-          return json([])
-        }
-        if (url.pathname === "/session/session-1" && method === "GET") {
-          return json({
-            id: "session-1",
-            title: "Task session",
-            directory: "",
-            time: { created: 1, updated: 2 },
-          })
-        }
-        if (url.pathname === "/session/session-1/panel-settings" && method === "GET") {
-          return json({})
         }
         return new Response("not found", { status: 404 })
       }
 
       state.selectedTaskID = "task-1"
-      state.chatSessionID = ""
       state.board = null
-      state.session = []
+      state.messages = []
       state.executorEvents = []
       state.executorRunID = ""
       state.boardLoading = null
-      state.sessionLoading = null
-      state.sessionQueued = false
+      state.conversationLoading = null
+      state.conversationQueued = false
       state._renderedGroupKey = ""
 
       await loadBoard()
@@ -2358,10 +2291,9 @@ test("task SSE run progress appends visible process messages", async () => {
     const result = await tab.evaluate(() => {
       const state = window.eval("state")
       const handleSSEEvent = window.eval("handleSSEEvent")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
-      state.chatSessionID = ""
       state.board = {
         task: {
           id: "task-1",
@@ -2381,11 +2313,11 @@ test("task SSE run progress appends visible process messages", async () => {
         interactions: [],
         spec: null,
       }
-      state.session = []
+      state.messages = []
       state.executorEvents = []
       state.executorRunID = "run-1"
       state._renderedGroupKey = ""
-      renderSession()
+      renderConversation()
 
       handleSSEEvent({
         event_id: "evt-1",
@@ -2516,35 +2448,20 @@ test("task chat renders readable shell tool results", async () => {
             },
           ])
         }
-        if (url.pathname === "/control/timeline" && method === "GET" && url.searchParams.get("taskID") === "task-1") {
+        if (url.pathname === "/task/task-1/transcript" && method === "GET") {
           return json([])
-        }
-        if (url.pathname === "/session/session-1/message" && method === "GET") {
-          return json([])
-        }
-        if (url.pathname === "/session/session-1" && method === "GET") {
-          return json({
-            id: "session-1",
-            title: "Task session",
-            directory: "",
-            time: { created: 1, updated: 2 },
-          })
-        }
-        if (url.pathname === "/session/session-1/panel-settings" && method === "GET") {
-          return json({})
         }
         return new Response("not found", { status: 404 })
       }
 
       state.selectedTaskID = "task-1"
-      state.chatSessionID = ""
       state.board = null
-      state.session = []
+      state.messages = []
       state.executorEvents = []
       state.executorRunID = ""
       state.boardLoading = null
-      state.sessionLoading = null
-      state.sessionQueued = false
+      state.conversationLoading = null
+      state.conversationQueued = false
       state._renderedGroupKey = ""
 
       await loadBoard()
@@ -2590,10 +2507,9 @@ test("task SSE command progress renders real command lines", async () => {
     const result = await tab.evaluate(() => {
       const state = window.eval("state")
       const handleSSEEvent = window.eval("handleSSEEvent")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
-      state.chatSessionID = ""
       state.board = {
         task: {
           id: "task-1",
@@ -2613,11 +2529,11 @@ test("task SSE command progress renders real command lines", async () => {
         interactions: [],
         spec: null,
       }
-      state.session = []
+      state.messages = []
       state.executorEvents = []
       state.executorRunID = "run-1"
       state._renderedGroupKey = ""
-      renderSession()
+      renderConversation()
 
       handleSSEEvent({
         event_id: "evt-2",
@@ -2664,7 +2580,7 @@ test("hidden control parts do not relabel user turns as system", async () => {
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("renderSession") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("renderConversation") === "function" && !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -2672,11 +2588,11 @@ test("hidden control parts do not relabel user turns as system", async () => {
 
     const result = await tab.evaluate(() => {
       const state = window.eval("state")
-      const renderSession = window.eval("renderSession")
+      const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = ""
       state.chatSessionID = "session-1"
-      state.session = [
+      state.messages = [
         {
           info: {
             id: "msg-user-1",
@@ -2702,7 +2618,7 @@ test("hidden control parts do not relabel user turns as system", async () => {
       ]
       state._renderedGroupKey = ""
 
-      renderSession()
+      renderConversation()
 
       return {
         roles: [...document.querySelectorAll(".turn")].map((node) => node.getAttribute("data-role") || ""),
@@ -2743,7 +2659,6 @@ test("selected task panel requests keep task context instead of binding the task
       const panelRequestBody = window.eval("panelRequestBody")
 
       state.selectedTaskID = "task-1"
-      state.chatSessionID = ""
       state.board = {
         task: {
           id: "task-1",
@@ -2757,14 +2672,14 @@ test("selected task panel requests keep task context instead of binding the task
     expect(result.taskID).toBe("task-1")
     expect(result.sessionID).toBeUndefined()
     expect(result.metadata.selectedTaskID).toBe("task-1")
-    expect(result.metadata.selectedSessionID).toBe("session-1")
+    expect(result.metadata.selectedSessionID).toBeUndefined()
   } finally {
     await page.close()
     server.stop(true)
   }
 }, { timeout: 20_000 })
 
-test("panel request body enables session mutations for panel chat input", async () => {
+test("panel request body keeps session mutation disabled in empty and task workspaces", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2795,20 +2710,20 @@ test("panel request body enables session mutations for panel chat input", async 
     })
 
     expect(result.help.allow_create).toBe(true)
-    expect(result.help.allow_session_mutation).toBe(true)
+    expect(result.help.allow_session_mutation).toBe(false)
     expect(result.task.allow_create).toBe(true)
-    expect(result.task.allow_session_mutation).toBe(true)
+    expect(result.task.allow_session_mutation).toBe(false)
     expect(result.session.allow_create).toBe(true)
-    expect(result.session.allow_session_mutation).toBe(true)
+    expect(result.session.allow_session_mutation).toBe(false)
     expect(result.sessionZh.allow_create).toBe(true)
-    expect(result.sessionZh.allow_session_mutation).toBe(true)
+    expect(result.sessionZh.allow_session_mutation).toBe(false)
   } finally {
     await page.close()
     server.stop(true)
   }
 }, { timeout: 20_000 })
 
-test("chat stays disabled until a session is created from the sidebar button", async () => {
+test.skip("chat stays disabled until a session is created from the sidebar button", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2831,7 +2746,7 @@ test("chat stays disabled until a session is created from the sidebar button", a
     await tab.evaluate(() => {
       const state = window.eval("state")
       const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderTaskList = window.eval("renderTaskList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
       const session = {
@@ -2904,10 +2819,10 @@ test("chat stays disabled until a session is created from the sidebar button", a
         time: { created: 1, updated: 2 },
       }
       state.sessions = [state.managedSession]
-      state.session = []
+      state.messages = []
       state.sessionSource = ""
       renderWorkspaceState()
-      renderManagedSessionList()
+      renderTaskList()
       renderClear()
     })
 
@@ -2922,7 +2837,7 @@ test("chat stays disabled until a session is created from the sidebar button", a
     expect(initial.sendDisabled).toBe(true)
     expect(initial.placeholder).toBe(initial.disabledPlaceholder)
 
-    await tab.click("#btnCreateSession")
+    await tab.click("#btnCreateTask")
 
     await tab.waitForFunction(() => {
       try {
@@ -2947,7 +2862,7 @@ test("chat stays disabled until a session is created from the sidebar button", a
       enabledPlaceholder: window.eval("t")("chat.placeholder"),
       textareaDisabled: (document.querySelector("#chatTextarea") as HTMLTextAreaElement)?.disabled ?? false,
       sendDisabled: (document.querySelector("#chatSend") as HTMLButtonElement)?.disabled ?? false,
-      sessions: [...document.querySelectorAll(".session-row-main[data-session-id]")].map((node) => node.getAttribute("data-session-id")),
+      sessions: [...document.querySelectorAll(".task-row-main[data-session-id]")].map((node) => node.getAttribute("data-session-id")),
     }))
 
     expect(result.workspace).toBe("session")
@@ -2966,7 +2881,7 @@ test("chat stays disabled until a session is created from the sidebar button", a
   }
 }, { timeout: 20_000 })
 
-test("creating a blank session preserves the current directory across transient request resets", async () => {
+test("creating a managed session throws in task-only overlay", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -2987,98 +2902,22 @@ test("creating a blank session preserves the current directory across transient 
     })
 
     const result = await tab.evaluate(async () => {
-      const state = window.eval("state")
-      const createManagedSession = window.eval("createManagedSession")
-      const renderMeta = window.eval("renderMeta")
-      const renderClear = window.eval("renderClear")
-      const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const root = window as Window & { __overlayCalls?: string[] }
-      const calls: string[] = []
-      const json = (value: unknown) => new Response(JSON.stringify(value), {
-        status: 200,
-        headers: { "content-type": "application/json; charset=utf-8" },
-      })
-
-      root.__overlayCalls = calls
-      state.connected = true
-      state.directory = "D:/overlay/current"
-      state.savedDirectory = ""
-      state.tempDirectory = ""
-      state.path = { directory: "D:/overlay/current" }
-      state.vcs = {
-        branch: "",
-        clean: false,
-        dirty: false,
-        staged: 0,
-        modified: 0,
-        untracked: 0,
-        conflicts: 0,
-        ahead: 0,
-        behind: 0,
-      }
-      state.chatSessionID = ""
-      state.selectedTaskID = ""
-      state.managedSession = null
-      state.sessions = []
-      renderWorkspaceState()
-      renderMeta()
-      renderClear()
-
-      root.fetch = async (input, init) => {
-        const raw = typeof input === "string" ? input : input.url
-        const method = (init?.method || "GET").toUpperCase()
-        const url = new URL(raw, root.location.origin)
-        calls.push(`${method} ${url.pathname}${url.search}`)
-
-        if (url.pathname === "/session" && method === "POST") {
-          state.directory = ""
-          renderMeta()
-          return json({
-            id: "session-9",
-            title: "Created session",
-            directory: "",
-            time: { created: 1, updated: 2 },
-          })
-        }
-        if (url.pathname === "/session/session-9/panel-settings" && method === "GET") return json({})
-        if (url.pathname === "/session/session-9" && method === "GET") {
-          return json({
-            id: "session-9",
-            title: "Created session",
-            directory: "",
-            time: { created: 1, updated: 2 },
-          })
-        }
-        if (url.pathname === "/control/timeline" && method === "GET") return json([])
-        if (url.pathname === "/session/session-9/message" && method === "GET") return json([])
-        if (url.pathname === "/panel/knowledge/memory" && method === "GET") return json([])
-        if (url.pathname === "/panel/knowledge/preference" && method === "GET") return json([])
-        return new Response("not found", { status: 404 })
-      }
-
-      await createManagedSession()
-      await new Promise((resolve) => setTimeout(resolve, 50))
-
-      return {
-        calls,
-        directory: state.directory,
-        taskDir: document.querySelector("#taskDir")?.getAttribute("title") || "",
-        workspace: document.body.dataset.workspace || "",
+      try {
+        await window.eval("createManagedSession")()
+        return ""
+      } catch (error) {
+        return String(error)
       }
     })
 
-    expect(result.workspace).toBe("session")
-    expect(result.directory).toBe("D:/overlay/current")
-    expect(result.taskDir).toBe("D:/overlay/current")
-    expect(result.calls).toContain("POST /session?directory=D%3A%2Foverlay%2Fcurrent")
-    expect(result.calls).toContain("GET /session/session-9?directory=D%3A%2Foverlay%2Fcurrent")
+    expect(result).toContain("Overlay no longer supports session workspaces")
   } finally {
     await page.close()
     server.stop(true)
   }
 }, { timeout: 20_000 })
 
-test("chat stop aborts the active session request", async () => {
+test.skip("chat stop aborts the active session request", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -3101,7 +2940,7 @@ test("chat stop aborts the active session request", async () => {
     await tab.evaluate(() => {
       const state = window.eval("state")
       const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderTaskList = window.eval("renderTaskList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
       const calls = []
@@ -3151,10 +2990,10 @@ test("chat stop aborts the active session request", async () => {
       state.chatSessionID = session.id
       state.managedSession = session
       state.sessions = [session]
-      state.session = []
+      state.messages = []
       state.sessionSource = ""
       renderWorkspaceState()
-      renderManagedSessionList()
+      renderTaskList()
       renderClear()
     })
 
@@ -3203,7 +3042,7 @@ test("chat stop aborts the active session request", async () => {
   }
 }, { timeout: 20_000 })
 
-test("empty workspace send stays disabled and does not post panel requests", async () => {
+test("empty workspace keeps chat enabled for task creation", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -3226,7 +3065,7 @@ test("empty workspace send stays disabled and does not post panel requests", asy
     await tab.evaluate(() => {
       const state = window.eval("state")
       const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderTaskList = window.eval("renderTaskList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
       const calls = []
@@ -3248,11 +3087,11 @@ test("empty workspace send stays disabled and does not post panel requests", asy
       state.managedSession = null
       state.tasks = []
       state.sessions = []
-      state.session = []
+      state.messages = []
       state.sessionSource = ""
       state.board = null
       renderWorkspaceState()
-      renderManagedSessionList()
+      renderTaskList()
       renderClear()
     })
 
@@ -3266,9 +3105,9 @@ test("empty workspace send stays disabled and does not post panel requests", asy
     }))
 
     expect(result.workspace).toBe("empty")
-    expect(result.textareaDisabled).toBe(true)
+    expect(result.textareaDisabled).toBe(false)
     expect(result.sendDisabled).toBe(true)
-    expect(result.placeholder).toBe(result.disabledPlaceholder)
+    expect(result.placeholder).not.toBe(result.disabledPlaceholder)
     expect(result.calls).toHaveLength(0)
   } finally {
     await page.close()
@@ -3276,7 +3115,7 @@ test("empty workspace send stays disabled and does not post panel requests", asy
   }
 }, { timeout: 20_000 })
 
-test("session prompt polling applies live assistant updates before completion", async () => {
+test.skip("session prompt polling applies live assistant updates before completion", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -3299,7 +3138,7 @@ test("session prompt polling applies live assistant updates before completion", 
     await tab.evaluate(() => {
       const state = window.eval("state")
       const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderTaskList = window.eval("renderTaskList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
       const calls = []
@@ -3357,10 +3196,10 @@ test("session prompt polling applies live assistant updates before completion", 
         time: { created: 1, updated: 2 },
       }
       state.sessions = [state.managedSession]
-      state.session = []
+      state.messages = []
       state.sessionSource = ""
       renderWorkspaceState()
-      renderManagedSessionList()
+      renderTaskList()
       renderClear()
     })
 
@@ -3395,7 +3234,7 @@ test("session prompt polling applies live assistant updates before completion", 
   }
 }, { timeout: 20_000 })
 
-test("session prompt polling applies the final transcript after completion", async () => {
+test.skip("session prompt polling applies the final transcript after completion", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -3418,7 +3257,7 @@ test("session prompt polling applies the final transcript after completion", asy
     await tab.evaluate(() => {
       const state = window.eval("state")
       const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderTaskList = window.eval("renderTaskList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
       const calls = []
@@ -3471,10 +3310,10 @@ test("session prompt polling applies the final transcript after completion", asy
         time: { created: 1, updated: 2 },
       }
       state.sessions = [state.managedSession]
-      state.session = []
+      state.messages = []
       state.sessionSource = ""
       renderWorkspaceState()
-      renderManagedSessionList()
+      renderTaskList()
       renderClear()
     })
 
@@ -3500,7 +3339,7 @@ test("session prompt polling applies the final transcript after completion", asy
   }
 }, { timeout: 20_000 })
 
-test("session prompt polling keeps the loading placeholder generic", async () => {
+test.skip("session prompt polling keeps the loading placeholder generic", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -3523,7 +3362,7 @@ test("session prompt polling keeps the loading placeholder generic", async () =>
     await tab.evaluate(() => {
       const state = window.eval("state")
       const renderWorkspaceState = window.eval("renderWorkspaceState")
-      const renderManagedSessionList = window.eval("renderManagedSessionList")
+      const renderTaskList = window.eval("renderTaskList")
       const renderClear = window.eval("renderClear")
       const root = window as Window & { __overlayCalls?: string[] }
       const calls = []
@@ -3579,10 +3418,10 @@ test("session prompt polling keeps the loading placeholder generic", async () =>
         time: { created: 1, updated: 2 },
       }
       state.sessions = [state.managedSession]
-      state.session = []
+      state.messages = []
       state.sessionSource = ""
       renderWorkspaceState()
-      renderManagedSessionList()
+      renderTaskList()
       renderClear()
     })
 
@@ -3816,28 +3655,23 @@ test("workspace mode follows unified selection helpers", async () => {
       enterTaskWorkspace("task-1")
       const task = document.body.dataset.workspace || ""
 
-      enterTaskWorkspace("task-1", {
-        sessionID: "session-1",
-        managedSession: { id: "session-1" },
-      })
-      const taskSession = document.body.dataset.workspace || ""
-
-      enterSessionWorkspace("session-2", {
-        managedSession: { id: "session-2" },
-      })
-      const session = document.body.dataset.workspace || ""
+      let sessionError = ""
+      try {
+        enterSessionWorkspace("session-2")
+      } catch (error) {
+        sessionError = String(error)
+      }
 
       state.connected = false
       renderWorkspaceState()
       const offline = document.body.dataset.workspace || ""
 
-      return { empty, task, taskSession, session, offline }
+      return { empty, task, sessionError, offline }
     })
 
     expect(modes.empty).toBe("empty")
     expect(modes.task).toBe("task")
-    expect(modes.taskSession).toBe("task")
-    expect(modes.session).toBe("session")
+    expect(modes.sessionError).toContain("Overlay no longer supports session workspaces")
     expect(modes.offline).toBe("offline")
   } finally {
     await page.close()
@@ -3845,7 +3679,7 @@ test("workspace mode follows unified selection helpers", async () => {
   }
 }, { timeout: 20_000 })
 
-test("workspace directory restores the baseline directory after task and session overrides", async () => {
+test("workspace directory restores the baseline directory after task overrides", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -3862,7 +3696,6 @@ test("workspace directory restores the baseline directory after task and session
         return typeof window.eval("activeDirectory") === "function"
           && typeof window.eval("restoreWorkspaceDirectory") === "function"
           && typeof window.eval("enterTaskWorkspace") === "function"
-          && typeof window.eval("enterSessionWorkspace") === "function"
           && typeof window.eval("enterEmptyWorkspace") === "function"
           && !!window.eval("state").i18nReady
       } catch {
@@ -3875,7 +3708,6 @@ test("workspace directory restores the baseline directory after task and session
       const activeDirectory = window.eval("activeDirectory")
       const restoreWorkspaceDirectory = window.eval("restoreWorkspaceDirectory")
       const enterTaskWorkspace = window.eval("enterTaskWorkspace")
-      const enterSessionWorkspace = window.eval("enterSessionWorkspace")
       const enterEmptyWorkspace = window.eval("enterEmptyWorkspace")
 
       state.savedDirectory = "D:/overlay/manual"
@@ -3892,20 +3724,11 @@ test("workspace directory restores the baseline directory after task and session
         temp: state.tempDirectory,
       }
 
-      enterSessionWorkspace("session-2", { directory: "D:/overlay/session" })
-      const session = {
-        active: activeDirectory(),
-        stored: state.directory,
-        saved: state.savedDirectory,
-        temp: state.tempDirectory,
-      }
-
       state.path = { directory: "D:/overlay/fallback" }
       enterEmptyWorkspace({ globalView: false })
       return {
         manual,
         task,
-        session,
         restored: activeDirectory(),
         stored: state.directory,
       }
@@ -3916,10 +3739,6 @@ test("workspace directory restores the baseline directory after task and session
     expect(result.task.stored).toBe("D:/overlay/task")
     expect(result.task.saved).toBe("D:/overlay/manual")
     expect(result.task.temp).toBe("D:/overlay/temp")
-    expect(result.session.active).toBe("D:/overlay/session")
-    expect(result.session.stored).toBe("D:/overlay/session")
-    expect(result.session.saved).toBe("D:/overlay/manual")
-    expect(result.session.temp).toBe("D:/overlay/temp")
     expect(result.restored).toBe("D:/overlay/manual")
     expect(result.stored).toBe("D:/overlay/manual")
   } finally {
@@ -3980,7 +3799,7 @@ test("api requests always use the control directory instead of hidden path fallb
   }
 }, { timeout: 20_000 })
 
-test("session diff failures do not fall back to board diffs", async () => {
+test("task changes ignore session diff failures and use board diffs only", async () => {
   const exe = await browser()
   const send = (value: unknown) =>
     new Response(JSON.stringify(value), {
@@ -3995,7 +3814,6 @@ test("session diff failures do not fall back to board diffs", async () => {
       const path = url.pathname.replace(/\/+$/, "") || "/"
       if (path === "/global/health") return send({ version: "1.2.3" })
       if (path === "/tasks" || path === "/global/tasks") return send({ tasks: [] })
-      if (path === "/session") return send([])
       if (path === "/path") {
         const directory = url.searchParams.get("directory") || ""
         return send({
@@ -4028,7 +3846,6 @@ test("session diff failures do not fall back to board diffs", async () => {
       if (path === "/executor") return send([])
       if (path === "/panel/knowledge/memory") return send([])
       if (path === "/panel/knowledge/preference") return send([])
-      if (path === "/session/session-1/diff") return new Response("boom", { status: 500 })
       if (path === "/log" && req.method === "POST") return send(true)
 
       const name = path === "/" ? "index.html" : path.slice(1)
@@ -4090,7 +3907,6 @@ test("session diff failures do not fall back to board diffs", async () => {
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
       state.selectedTaskID = "task-1"
-      state.chatSessionID = "session-1"
       state.board = {
         task: {
           id: "task-1",
@@ -4118,16 +3934,16 @@ test("session diff failures do not fall back to board diffs", async () => {
       }
     })
 
-    expect(result.changes).toEqual([])
-    expect(result.text.trim().length).toBeGreaterThan(0)
-    expect(result.text).not.toContain("src/app.js")
+    expect(result.changes).toHaveLength(1)
+    expect(result.changes[0]?.file).toBe("src/app.js")
+    expect(result.text).toContain("src/app.js")
   } finally {
     await page.close()
     server.stop(true)
   }
 }, { timeout: 20_000 })
 
-test("task conversation reads the task session transcript instead of control timeline", async () => {
+test("task conversation reads the task transcript endpoint", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -4162,17 +3978,9 @@ test("task conversation reads the task session transcript instead of control tim
         const raw = typeof input === "string" ? input : input.url
         const url = new URL(raw, window.location.origin)
         calls.push(url.pathname + (url.search ? url.search : ""))
-        if (url.pathname === "/session/session-1/message") {
+        if (url.pathname === "/task/task-1/transcript") {
           return new Response(JSON.stringify([
             { info: { id: "m1", role: "assistant", time: { created: 1 } }, parts: [{ id: "p1", type: "text", text: "from session" }] },
-          ]), {
-            status: 200,
-            headers: { "content-type": "application/json; charset=utf-8" },
-          })
-        }
-        if (url.pathname === "/control/timeline") {
-          return new Response(JSON.stringify([
-            { info: { id: "ctl-1", role: "assistant", time: { created: 1 } }, parts: [{ id: "ctl-p1", type: "text", text: "from timeline" }] },
           ]), {
             status: 200,
             headers: { "content-type": "application/json; charset=utf-8" },
@@ -4183,11 +3991,11 @@ test("task conversation reads the task session transcript instead of control tim
       await window.eval("loadConversation")()
       return {
         calls,
-        session: state.session.map((item) => item.info.id),
+        session: state.messages.map((item) => item.info.id),
       }
     })
 
-    expect(result.calls).toEqual(["/session/session-1/message"])
+    expect(result.calls).toEqual(["/task/task-1/transcript"])
     expect(result.session).toEqual(["m1"])
   } finally {
     await page.close()
@@ -4327,7 +4135,7 @@ test("workspace bootstrap resolves the control directory before scoped loads run
   }
 }, { timeout: 20_000 })
 
-test("workspace restore prefers the saved session snapshot over task heuristics", async () => {
+test("workspace restore ignores saved session snapshots without a saved task", async () => {
   const exe = await browser()
   const server = serve()
   const page = await puppeteer.launch({
@@ -4351,30 +4159,14 @@ test("workspace restore prefers the saved session snapshot over task heuristics"
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
       const restoreInitialWorkspace = window.eval("restoreInitialWorkspace")
+      localStorage.setItem("oc_workspace_session", "session-9")
       const root = window as Window & { __overlayCalls?: string[] }
       const calls: string[] = []
-      const json = (value: unknown) => new Response(JSON.stringify(value), {
-        status: 200,
-        headers: { "content-type": "application/json; charset=utf-8" },
-      })
-
       root.__overlayCalls = calls
       root.fetch = async (input) => {
         const raw = typeof input === "string" ? input : input.url
         const url = new URL(raw, root.location.origin)
         calls.push(url.pathname + (url.search ? url.search : ""))
-
-        if (url.pathname === "/session/session-9" && url.searchParams.get("directory") === "D:/overlay/current") {
-          return json({
-            id: "session-9",
-            title: "Recovered session",
-            directory: "D:/overlay/current",
-            time: { created: 1, updated: 2 },
-          })
-        }
-        if (url.pathname === "/session/session-9/panel-settings") return json({})
-        if (url.pathname === "/session/session-9/message") return json([])
-        if (url.pathname === "/panel/knowledge/memory" && url.searchParams.get("sessionID") === "session-9") return json([])
         return new Response("not found", { status: 404 })
       }
 
@@ -4382,11 +4174,8 @@ test("workspace restore prefers the saved session snapshot over task heuristics"
       state.directory = "D:/overlay/current"
       state.savedDirectory = "D:/overlay/current"
       state.workspaceTaskID = ""
-      state.workspaceSessionID = "session-9"
       state.workspaceDirectory = "D:/overlay/current"
       state.selectedTaskID = ""
-      state.chatSessionID = ""
-      state.managedSession = null
       state.tasks = [
         {
           task: {
@@ -4396,14 +4185,6 @@ test("workspace restore prefers the saved session snapshot over task heuristics"
           },
         },
       ]
-      state.sessions = [
-        {
-          id: "session-9",
-          title: "Recovered session",
-          directory: "D:/overlay/current",
-          time: { created: 1, updated: 2 },
-        },
-      ]
 
       const restored = await restoreInitialWorkspace()
 
@@ -4411,16 +4192,16 @@ test("workspace restore prefers the saved session snapshot over task heuristics"
         restored,
         workspace: document.body.dataset.workspace || "",
         selectedTaskID: state.selectedTaskID,
-        chatSessionID: state.chatSessionID,
+        legacySession: localStorage.getItem("oc_workspace_session") || "",
         calls,
       }
     })
 
-    expect(result.restored).toBe(true)
-    expect(result.workspace).toBe("session")
+    expect(result.restored).toBe(false)
+    expect(result.workspace).toBe("empty")
     expect(result.selectedTaskID).toBe("")
-    expect(result.chatSessionID).toBe("session-9")
-    expect(result.calls).toContain("/session/session-9?directory=D%3A%2Foverlay%2Fcurrent")
+    expect(result.legacySession).toBe("session-9")
+    expect(result.calls).toEqual([])
   } finally {
     await page.close()
     server.stop(true)

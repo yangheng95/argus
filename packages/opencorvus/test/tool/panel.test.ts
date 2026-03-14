@@ -313,7 +313,7 @@ describe("panel tool", () => {
           },
         )
         const output = JSON.parse(result.output)
-        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Panel control ("))
+        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Control ("))
 
         expect(output.kind).toBe("panel_response")
         expect(output.message).toContain("explicit user request")
