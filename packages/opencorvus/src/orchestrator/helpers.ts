@@ -15,11 +15,19 @@ export const SAME_PLAN_RETRY_LIMIT = safeInt(process.env.OPENCORVUS_SAME_PLAN_RE
 export const DEFAULT_MAX_RUNS = safeInt(process.env.OPENCORVUS_MAX_RUNS, 10)
 export const DEFAULT_MAX_REPLANS = safeInt(process.env.OPENCORVUS_MAX_REPLANS, 3)
 
-export const orchestratorState = Instance.state(() => ({
-  booted: false,
-  syncing: false,
-  unsubscribe: undefined as (() => void) | undefined,
-}))
+export const orchestratorState = Instance.state(
+  () => ({
+    booted: false,
+    syncing: false,
+    unsubscribe: undefined as (() => void) | undefined,
+  }),
+  async (state) => {
+    state.unsubscribe?.()
+    state.booted = false
+    state.syncing = false
+    state.unsubscribe = undefined
+  },
+)
 
 export function deriveTitle(request: string) {
   const line = request

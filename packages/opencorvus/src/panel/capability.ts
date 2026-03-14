@@ -349,7 +349,12 @@ export function panelCapabilityPrompt(surface: Surface) {
       const action = item.local_action_types?.length
         ? ` Emits local actions: ${item.local_action_types.join(", ")} on ${item.local_action_surfaces?.join(", ")}.`
         : ""
-      return `- ${item.action}: ${item.description}${local}${action}`
+      const hint = item.action === "create_task"
+        ? " Required params: request:string. checks.build/test/lint/verify_cmd must be string arrays or false, never bare true."
+        : item.action === "update_checks"
+          ? " Use selection for simple toggles, or checks for the full evaluation config."
+          : ""
+      return `- ${item.action}: ${item.description}${local}${action}${hint}`
     })
     .join("\n")
 }

@@ -206,6 +206,7 @@ async function run(input: {
   if (!def) throw new Error("no LLM model available for spec agent")
   const model = await Provider.getModel(def.providerID, def.modelID)
   const language = await Provider.getLanguage(model)
+  const isReasoning = model.capabilities?.reasoning === true
 
   if (input.signal?.aborted) throw new Error("spec agent aborted after model resolution")
 
@@ -282,7 +283,7 @@ async function run(input: {
     let toolCallCount: number
 
     if (consolidationOnly) {
-      const forced = await finalizeSpec(language, input, lastSteps!, input.signal, retryContext)
+      const forced = await finalizeSpec(language, input, lastSteps!, input.signal, retryContext, isReasoning)
       if (forced.submittedSpec) submittedSpec = forced.submittedSpec
       result = forced.result
       toolCallCount = lastToolCallCount
@@ -352,7 +353,7 @@ async function run(input: {
           finishReason: result.finishReason,
           attempt: attempt + 1,
         })
-        const forced = await finalizeSpec(language, input, result.steps, input.signal)
+        const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning)
         if (forced.submittedSpec) {
           submittedSpec = forced.submittedSpec
         }
@@ -387,7 +388,7 @@ async function run(input: {
             textLength: allText.length,
             attempt: attempt + 1,
           })
-          const forced = await finalizeSpec(language, input, result.steps, input.signal)
+          const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning)
           if (forced.submittedSpec) {
             parsed = normalizeSpecOutput(forced.submittedSpec)
           } else {
@@ -585,6 +586,7 @@ async function finalizeSpec(
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   signal?: AbortSignal,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
+  isReasoning = false,
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -616,7 +618,7 @@ async function finalizeSpec(
     model: language,
     stopWhen: stepCountIs(8),
     tools: summaryTool,
-    toolChoice: "required",
+    toolChoice: isReasoning ? "auto" : "required",
     maxOutputTokens: 16384,
     timeoutMs: Math.min(120_000, TIMEOUT_MS),
     abortSignal: signal ?? AbortSignal.timeout(120_000),
@@ -1132,7 +1134,7 @@ The downstream PlannerAgent will take your spec and create implementation plans.
 ### Phase 0: RECALL (1-3 tool calls)
 
 1. **Search memory** (memory_search) with task keywords. If pre-fetched memory exists, only search for gaps.
-2. **List preferences** (preference_list) unless pre-fetched. Preferences are BINDING.
+2. **List preferences** (preference_list) unless pre-fetched. Preferences guide default conventions, but explicit task constraints and approved scope boundaries override them on conflict.
 
 ### Phase 1: EXPLORE (5-15 tool calls — MOST IMPORTANT phase)
 
@@ -1210,6 +1212,7 @@ The submit_spec tool accepts these fields:
 - spec_items must be verifiable — each should have clear success/failure criteria.
 - spec_items.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
 - Every blocking spec item MUST have at least one check_selector.
+- Explicit task constraints override preferences. Do not create spec items that require edits outside a user-declared file boundary.
 - Write in the same language as the request (Chinese request → Chinese spec).
 - If rewriting after failure: revise the spec to address the root cause.
 - After finishing exploration, call submit_spec with your specification. Do NOT output raw JSON text.

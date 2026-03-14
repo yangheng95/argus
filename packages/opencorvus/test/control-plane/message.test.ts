@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { ControlMessage } from "../../src/control"
 import { Instance } from "../../src/project/instance"
+import { SessionPrompt } from "../../src/session/prompt"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
 import { installControlModel } from "./mock-control-model"
@@ -80,6 +81,40 @@ describe("control.message", () => {
         expect(result.kind).toBe("panel_response")
         expect(result.message).toContain("Session created:")
         expect(result.session_id).toBeDefined()
+      },
+    })
+  })
+
+  test("fails explicitly when the control model does not return structured output", async () => {
+    await using tmp = await tmpdir({ git: true })
+    installControlModel()
+    spyOn(SessionPrompt, "prompt").mockResolvedValue({
+      info: {
+        role: "assistant",
+        error: {
+          message: "invalid create_task args: missing request; checks.build must be string[] or false",
+        },
+      },
+      parts: [
+        {
+          type: "text",
+          text: "Let me correct the parameters and try again.",
+        },
+      ],
+    } as any)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await ControlMessage.handle({
+          surface: "panel",
+          text: "Create a task for this PRD.",
+        })
+
+        expect(result.kind).toBe("panel_response")
+        expect(result.message).toContain("Control message processing failed")
+        expect(result.message).toContain("missing request")
+        expect(result.message).not.toContain("Let me correct the parameters")
       },
     })
   })

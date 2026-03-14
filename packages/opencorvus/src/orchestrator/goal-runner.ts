@@ -410,8 +410,13 @@ export async function applyGoalDelivery(input: {
     diffs: z.infer<typeof Snapshot.FileDiff>[]
   }
 }) {
+  const baseDir = path.resolve(input.directory)
   for (const diff of input.delivery.diffs) {
-    const file = path.join(input.directory, diff.file)
+    const file = path.resolve(path.join(input.directory, diff.file))
+    if (!file.startsWith(baseDir + path.sep) && file !== baseDir) {
+      log.warn("goal delivery: skipping path traversal attempt", { file, baseDir })
+      continue
+    }
     if (diff.status === "deleted") {
       await fs.rm(file, { force: true }).catch((err) => {
         log.warn("failed to delete file during goal delivery apply", { file, error: String(err) })
@@ -559,11 +564,37 @@ export async function evaluateTask(input: {
   return { result, ...analyzed }
 }
 
+const REVIEW_CHECKS = new Set(["ui_review", "code_quality", "code_review", "dead_code_review"])
+
+function checkBase(name: string) {
+  return name.replace(/#\d+$/, "")
+}
+
+function reviewInfraFailure(check: { name: string; status: string; evidence?: string }) {
+  if (check.status !== "failed") return false
+  if (!REVIEW_CHECKS.has(checkBase(check.name))) return false
+  const text = (check.evidence ?? "").toLowerCase()
+  return (
+    text.includes("review model call failed after retries") ||
+    text.includes("review model could not be loaded") ||
+    text.includes("no review model available") ||
+    text.includes("no review model is configured") ||
+    text.includes("failed to execute after retries")
+  )
+}
+
+export function blockingEvaluationFailure(result: EvaluationOutput) {
+  if (result.status !== "failed") return false
+  const failed = result.checks.filter((check) => check.status === "failed")
+  if (failed.length === 0) return true
+  return failed.some((check) => !reviewInfraFailure(check))
+}
+
 export function goalEvaluationOutcome(
   result: EvaluationOutput,
   analysis: EvaluatorAnalysisType,
 ) {
-  const phase1Failed = result.status === "failed"
+  const phase1Failed = blockingEvaluationFailure(result)
   const verdict = phase1Failed ? "rejected" : analysis.verdict
   const status = verdict === "accepted" ? "passed" : "failed"
   const summary = phase1Failed && analysis.verdict === "accepted"
