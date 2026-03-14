@@ -130,6 +130,7 @@ export function progressStatus(status: OrchestratorTaskStatus) {
 
 export function budgetRow(input?: z.infer<typeof Budget>): OrchestratorBudget | undefined {
   if (!input) return undefined
+  if (Object.values(input).every((value) => value === undefined)) return undefined
   return {
     max_runs: input.maxRuns,
     max_replans: input.maxReplans,

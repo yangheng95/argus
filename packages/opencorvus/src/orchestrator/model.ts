@@ -537,6 +537,10 @@ export const UpdateTaskChecksInput = z.object({
   checks: CheckConfig.optional(),
 })
 
+export const UpdateTaskBudgetInput = z.object({
+  budget: Budget.nullish(),
+})
+
 export const TaskAccepted = z.object({
   task_id: Identifier.schema("task"),
 })
@@ -552,7 +556,7 @@ export const InjectMessageInput = z.object({
 })
 
 export const TaskMessageResult = z.object({
-  kind: z.enum(["preference", "goal", "plan", "note"]),
+  kind: z.enum(["preference", "goal", "plan", "spec", "note"]),
   message: z.string(),
   should_resume: z.boolean(),
 })

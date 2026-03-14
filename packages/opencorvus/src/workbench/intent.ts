@@ -14,7 +14,7 @@ const MessageInput = z.object({
 })
 
 const WorkbenchIntent = z.object({
-  kind: z.enum(["preference", "goal", "plan", "note"]),
+  kind: z.enum(["preference", "goal", "plan", "spec", "note"]),
   preferences: z
     .array(
       z.object({
@@ -25,6 +25,7 @@ const WorkbenchIntent = z.object({
     .default([]),
   goals: z.array(z.string()).default([]),
   plan_hints: z.array(z.string()).default([]),
+  spec_updates: z.array(z.string()).default([]),
   note: z.string().nullable().default(null),
   should_resume: z.boolean().default(false),
   confidence: z.number().min(0).max(1).default(0.5),
@@ -61,7 +62,7 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     }
   }
 
-  const goal = parseCommand(text, "/goal")
+  const goal = parseGoalUpdate(text)
   if (goal) {
     recordNote({
       taskID: input.taskID,
@@ -77,7 +78,7 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     }
   }
 
-  const plan = parseCommand(text, "/plan")
+  const plan = parsePlanHint(text)
   if (plan) {
     appendPlanHint({
       taskID: input.taskID,
@@ -93,6 +94,22 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     return {
       kind: "plan" as const,
       message: "Plan hint recorded.",
+      should_resume: true,
+    }
+  }
+
+  const spec = parseSpecUpdate(text)
+  if (spec) {
+    recordNote({
+      taskID: input.taskID,
+      kind: "constraint",
+      content: spec,
+      source: input.source,
+      userID: input.userID,
+    })
+    return {
+      kind: "spec" as const,
+      message: `Recorded spec update for next rewrite: ${spec}`,
       should_resume: true,
     }
   }
@@ -170,6 +187,23 @@ export async function ingestTaskMessage(raw: z.input<typeof MessageInput>) {
     }
   }
 
+  if (resolved.kind === "spec" && Array.isArray(resolved.spec_updates) && resolved.spec_updates.length > 0) {
+    for (const item of resolved.spec_updates) {
+      recordNote({
+        taskID: input.taskID,
+        kind: "constraint",
+        content: item,
+        source: input.source,
+        userID: input.userID,
+      })
+    }
+    return {
+      kind: "spec" as const,
+      message: `Recorded spec update${resolved.spec_updates.length > 1 ? "s" : ""} for next rewrite: ${resolved.spec_updates.join("; ")}`,
+      should_resume: true,
+    }
+  }
+
   const note = resolved.note?.trim() || text
   recordNote({
     taskID: input.taskID,
@@ -206,8 +240,9 @@ Rules:
 - Default preferences to global unless the user clearly says they only apply to this session.
 - Use "goal" when the user adds or changes acceptance goals.
 - Use "plan" when the user suggests how the task should be executed.
+- Use "spec" when the user changes requirements, scope, acceptance contract, or provides a revised spec.
 - Use "note" for everything else.
-- Do not invent preferences, goals, or plan hints that are not supported by the text.
+- Do not invent preferences, goals, spec updates, or plan hints that are not supported by the text.
 - Keep extracted strings concise and directly usable.`,
         },
         {
@@ -302,6 +337,31 @@ function parseCommand(text: string, prefix: string) {
   const value = text.slice(prefix.length).trim()
   if (!value) return undefined
   return value
+}
+
+function parseGoalUpdate(text: string) {
+  const direct = parseCommand(text, "/goal")
+  if (direct) return direct
+  const match = text.match(/^(?:new\s+goal|goal|goals|目标|新目标)\s*[:：-]\s*(.+)$/i)
+  return match?.[1]?.trim() || undefined
+}
+
+function parsePlanHint(text: string) {
+  const direct = parseCommand(text, "/plan")
+  if (direct) return direct
+  const match = text.match(/^(?:plan|planning\s+hint|execution\s+plan|执行计划|计划建议|方案建议)\s*[:：-]\s*(.+)$/i)
+  return match?.[1]?.trim() || undefined
+}
+
+function parseSpecUpdate(text: string) {
+  const direct = [
+    parseCommand(text, "/spec"),
+    parseCommand(text, "/req"),
+    parseCommand(text, "/requirement"),
+  ].find(Boolean)
+  if (direct) return direct
+  const match = text.match(/^(?:new\s+spec|updated\s+spec|spec(?:ification)?\s+update|spec|new\s+requirement|requirement|requirements|scope\s+change|需求变更|新需求|新spec|规格变更|spec变更)\s*[:：-]\s*(.+)$/i)
+  return match?.[1]?.trim() || undefined
 }
 
 function parsePreference(text: string) {

@@ -3,12 +3,22 @@ import fs from "fs/promises"
 import os from "os"
 import path from "path"
 import { Bus } from "../../src/bus"
+import { parseSSE } from "../../src/control-plane/sse"
 import { Config } from "../../src/config/config"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
+import { type ExecutorAdapter } from "../../src/executor/compat"
+import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
+import * as GuiScreenshot from "../../src/gui/screenshot"
 import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
-import { OrchestratorChannelBindingTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import {
+  OrchestratorChannelBindingTable,
+  OrchestratorInteractionRequestTable,
+  OrchestratorTaskTable,
+} from "../../src/orchestrator/orchestrator.sql"
+import { OrchestratorService } from "../../src/orchestrator/service"
+import { ControlMessage } from "../../src/control"
 import { PlannerService } from "../../src/planner/service"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
@@ -68,6 +78,7 @@ describe("channel routes", () => {
   beforeEach(async () => {
     await Instance.disposeAll()
     await resetDatabase()
+    ExecutorRegistry.reset()
     Config.global.reset()
     originalConfigDir = process.env.OPENCORVUS_CONFIG_DIR
     configDir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-channel-config-"))
@@ -89,7 +100,7 @@ describe("channel routes", () => {
     await resetDatabase()
   })
 
-  test("POST /channel/message creates a bound task from a channel thread", async () => {
+  test("POST /channel/v1/ingress creates a bound task from a channel thread", async () => {
     await using tmp = await tmpdir({ git: true })
     stub()
     installControlModel()
@@ -102,39 +113,47 @@ describe("channel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const response = await app.request("/channel/message", {
+        const response = await app.request("/channel/v1/ingress", {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-channel-1",
             platform: "discord",
             channel: "room-1",
             thread: "thread-1",
-            text: "Create a task to ship the settings panel improvements.",
-            request_id: "req-channel-1",
-            user_id: "user-1",
+            user: {
+              id: "user-1",
+            },
+            message: {
+              text: "Create a task to ship the settings panel improvements.",
+            },
           }),
         })
 
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; task_id: string; message: string }
-        expect(body.kind).toBe("created")
-        expect(body.message).toContain("Task accepted:")
+        const body = (await response.json()) as {
+          result: { kind: string; task_id: string; message: string }
+        }
+        expect(body.result.kind).toBe("created")
+        expect(body.result.message).toContain("Task accepted:")
 
         const task = Database.use((db) =>
           db
             .select()
             .from(OrchestratorTaskTable)
-            .where(eq(OrchestratorTaskTable.id, body.task_id))
+            .where(eq(OrchestratorTaskTable.id, body.result.task_id))
             .get(),
         )
         const binding = Database.use((db) =>
           db
             .select()
             .from(OrchestratorChannelBindingTable)
-            .where(eq(OrchestratorChannelBindingTable.task_id, body.task_id))
+            .where(eq(OrchestratorChannelBindingTable.task_id, body.result.task_id))
             .get(),
         )
         expect(task?.source).toBe("channel:discord")
@@ -148,7 +167,7 @@ describe("channel routes", () => {
     })
   })
 
-  test("POST /channel/message routes free-form follow-up text into board controls", async () => {
+  test("POST /channel/v1/ingress routes free-form follow-up text into board controls", async () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_WORKBENCH_LLM = "0"
     stub()
@@ -162,41 +181,56 @@ describe("channel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const created = await app.request("/channel/message", {
+        const created = await app.request("/channel/v1/ingress", {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-room-2-create",
             platform: "discord",
             channel: "room-2",
             thread: "thread-2",
-            text: "Create a task to implement feature x.",
-            user_id: "user-2",
+            user: {
+              id: "user-2",
+            },
+            message: {
+              text: "Create a task to implement feature x.",
+            },
           }),
         })
-        const { task_id } = (await created.json()) as { task_id: string }
+        const { result } = (await created.json()) as { result: { task_id: string } }
+        const task_id = result.task_id
 
-        const response = await app.request("/channel/message", {
+        const response = await app.request("/channel/v1/ingress", {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-room-2-followup",
             platform: "discord",
             channel: "room-2",
             thread: "thread-2",
-            text: "Please keep updates concise and avoid changing lockfiles unless absolutely necessary.",
-            user_id: "user-2",
+            user: {
+              id: "user-2",
+            },
+            message: {
+              text: "Please keep updates concise and avoid changing lockfiles unless absolutely necessary.",
+            },
           }),
         })
 
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; message: string }
-        expect(body.kind).toBe("message")
-        expect(body.message).toContain("Intent analysis failed")
+        const body = (await response.json()) as { result: { kind: string; message: string } }
+        expect(body.result.kind).toBe("message")
+        expect(body.result.message).toContain("Intent analysis failed")
 
         const brief = await app.request(`/task/${task_id}/brief`, {
           headers: {
@@ -212,7 +246,7 @@ describe("channel routes", () => {
     })
   })
 
-  test("POST /channel/message can refuse implicit task creation", async () => {
+  test("POST /channel/v1/ingress can refuse implicit task creation", async () => {
     await using tmp = await tmpdir({ git: true })
     stub()
     installControlModel()
@@ -225,25 +259,32 @@ describe("channel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const response = await app.request("/channel/message", {
+        const response = await app.request("/channel/v1/ingress", {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-room-3",
             platform: "discord",
             channel: "room-3",
             thread: "thread-3",
-            text: "follow up without a bound task",
-            allow_create: false,
+            message: {
+              text: "follow up without a bound task",
+            },
+            context: {
+              allow_create: false,
+            },
           }),
         })
 
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; message: string }
-        expect(body.kind).toBe("panel_response")
-        expect(body.message).toContain("No task is bound")
+        const body = (await response.json()) as { result: { kind: string; message: string } }
+        expect(body.result.kind).toBe("panel_response")
+        expect(body.result.message).toContain("No task is bound")
 
         const tasks = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.project_id, Instance.project.id)).all(),
@@ -253,7 +294,7 @@ describe("channel routes", () => {
     })
   })
 
-  test("POST /channel/message preserves source for follow-up task messages", async () => {
+  test("POST /channel/v1/ingress preserves source for follow-up task messages", async () => {
     await using tmp = await tmpdir({ git: true })
     process.env.OPENCORVUS_WORKBENCH_LLM = "0"
     stub()
@@ -273,37 +314,49 @@ describe("channel routes", () => {
         })
 
         try {
-          await app.request("/channel/message", {
+          await app.request("/channel/v1/ingress", {
             method: "POST",
             headers: {
               "content-type": "application/json",
               "x-opencorvus-directory": tmp.path,
             },
             body: JSON.stringify({
+              type: "channel_ingress",
+              version: "channel.v1",
+              request_id: "req-slack-1",
               platform: "slack",
               channel: "room-4",
               thread: "thread-4",
-              text: "Create a task to implement feature y.",
-              request_id: "req-slack-1",
+              message: {
+                text: "Create a task to implement feature y.",
+              },
               source: "slack",
-              user_id: "user-4",
+              user: {
+                id: "user-4",
+              },
             }),
           })
 
-          const response = await app.request("/channel/message", {
+          const response = await app.request("/channel/v1/ingress", {
             method: "POST",
             headers: {
               "content-type": "application/json",
               "x-opencorvus-directory": tmp.path,
             },
             body: JSON.stringify({
+              type: "channel_ingress",
+              version: "channel.v1",
+              request_id: "req-slack-2",
               platform: "slack",
               channel: "room-4",
               thread: "thread-4",
-              text: "keep updates concise",
-              request_id: "req-slack-2",
+              message: {
+                text: "keep updates concise",
+              },
               source: "slack",
-              user_id: "user-4",
+              user: {
+                id: "user-4",
+              },
             }),
           })
 
@@ -316,7 +369,7 @@ describe("channel routes", () => {
     })
   })
 
-  test("POST /channel/message accepts mainstream non-legacy channel platforms", async () => {
+  test("POST /channel/v1/ingress accepts mainstream non-legacy channel platforms", async () => {
     await using tmp = await tmpdir({ git: true })
     stub()
     installControlModel()
@@ -329,35 +382,554 @@ describe("channel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const response = await app.request("/channel/message", {
+        const response = await app.request("/channel/v1/ingress", {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
           },
           body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-feishu-1",
             platform: "feishu",
             channel: "chat-9",
             thread: "root-9",
-            text: "Create a task to wire channel screenshots into the control plane.",
-            user_id: "ou_xxx",
+            user: {
+              id: "ou_xxx",
+            },
+            message: {
+              text: "Create a task to wire channel screenshots into the control plane.",
+            },
           }),
         })
 
         expect(response.status).toBe(200)
-        const body = (await response.json()) as { kind: string; task_id: string }
-        expect(body.kind).toBe("created")
+        const body = (await response.json()) as { result: { kind: string; task_id: string } }
+        expect(body.result.kind).toBe("created")
 
         const binding = Database.use((db) =>
           db
             .select()
             .from(OrchestratorChannelBindingTable)
-            .where(eq(OrchestratorChannelBindingTable.task_id, body.task_id))
+            .where(eq(OrchestratorChannelBindingTable.task_id, body.result.task_id))
             .get(),
         )
         expect(binding?.platform).toBe("feishu")
         expect(binding?.channel).toBe("chat-9")
         expect(binding?.thread).toBe("root-9")
+      },
+    })
+  })
+
+  test("POST /channel/v1/ingress routes text to an explicit task context and binds the thread", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_WORKBENCH_LLM = "0"
+    stub()
+    installControlModel()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "implement the channel protocol task flow",
+          source: "api",
+        })
+        const app = Server.App()
+        const response = await app.request("/channel/v1/ingress", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-v1-1",
+            platform: "discord",
+            channel: "room-v1",
+            thread: "thread-v1",
+            user: {
+              id: "user-v1",
+              name: "Alice",
+            },
+            message: {
+              text: "/plan 先补 SSE 回归",
+            },
+            context: {
+              task_id: taskID,
+              allow_create: false,
+            },
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as {
+          type: string
+          result: { kind: string }
+          context: { task_id?: string; bound: boolean }
+        }
+        expect(body.type).toBe("channel_egress")
+        expect(body.result.kind).toBe("message")
+        expect(body.context.task_id).toBe(taskID)
+        expect(body.context.bound).toBe(true)
+
+        const binding = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorChannelBindingTable)
+            .where(eq(OrchestratorChannelBindingTable.task_id, taskID))
+            .get(),
+        )
+        expect(binding?.platform).toBe("discord")
+        expect(binding?.channel).toBe("room-v1")
+        expect(binding?.thread).toBe("thread-v1")
+
+        const state = await app.request("/channel/v1/thread?platform=discord&channel=room-v1&thread=thread-v1", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(state.status).toBe(200)
+        const stateBody = await state.json() as {
+          binding: { task_id: string } | null
+          board: { task: { id: string } } | null
+        }
+        expect(stateBody.binding?.task_id).toBe(taskID)
+        expect(stateBody.board?.task.id).toBe(taskID)
+      },
+    })
+  })
+
+  test("POST /channel/v1/ingress forwards attachments into control message input", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const handle = spyOn(ControlMessage, "handle").mockResolvedValue({
+      kind: "panel_response",
+      message: "Attachment noted.",
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/channel/v1/ingress", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-v1-attachment",
+            platform: "discord",
+            channel: "room-attachment",
+            thread: "thread-attachment",
+            message: {
+              id: "msg-v1",
+              text: "请看这个截图然后告诉我下一步",
+              attachments: [
+                {
+                  mime: "image/png",
+                  filename: "shot.png",
+                  data: Buffer.from("hello").toString("base64"),
+                },
+              ],
+            },
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = await response.json() as { result: { message: string } }
+        expect(body.result.message).toBe("Attachment noted.")
+
+        const input = handle.mock.calls[0]?.[0] as {
+          attachments?: Array<{ mime: string; url: string; filename?: string }>
+          metadata?: { channel?: { protocol?: { message_id?: string } } }
+        }
+        expect(input.attachments?.[0]?.mime).toBe("image/png")
+        expect(input.attachments?.[0]?.filename).toBe("shot.png")
+        expect(input.attachments?.[0]?.url).toBe(`data:image/png;base64,${Buffer.from("hello").toString("base64")}`)
+        expect(input.metadata?.channel?.protocol?.message_id).toBe("msg-v1")
+      },
+    })
+  })
+
+  test("channel.v1 thread selection and task listing expose the current binding", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stub()
+    installControlModel()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const first = await OrchestratorService.createTask({
+          request: "first channel task",
+          source: "api",
+        })
+        const second = await OrchestratorService.createTask({
+          request: "second channel task",
+          source: "api",
+        })
+        const app = Server.App()
+        const selected = await app.request("/channel/v1/thread/select", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            platform: "discord",
+            channel: "room-select",
+            thread: "thread-select",
+            task_id: second,
+          }),
+        })
+
+        expect(selected.status).toBe(200)
+        const selectedBody = await selected.json() as {
+          binding: { task_id: string } | null
+          board: { task: { id: string } } | null
+        }
+        expect(selectedBody.binding?.task_id).toBe(second)
+        expect(selectedBody.board?.task.id).toBe(second)
+
+        const listed = await app.request("/channel/v1/tasks?platform=discord&channel=room-select&thread=thread-select&limit=10", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(listed.status).toBe(200)
+        const listedBody = await listed.json() as {
+          binding?: { task_id: string } | null
+          board: { tasks: Array<{ task: { id: string } }> }
+        }
+        expect(listedBody.binding?.task_id).toBe(second)
+        expect(listedBody.board.tasks.map((item) => item.task.id)).toContain(first)
+        expect(listedBody.board.tasks.map((item) => item.task.id)).toContain(second)
+      },
+    })
+  })
+
+  test("POST /channel/v1/ingress supports plan queries and screenshot attachments", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stub()
+    installControlModel()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    spyOn(GuiScreenshot, "captureWindowScreenshot").mockResolvedValue({
+      mime: "image/png",
+      filename: "opencorvus-gui.png",
+      url: `data:image/png;base64,${Buffer.from("hello").toString("base64")}`,
+      title: "OpenCorvus",
+      app: "OpenCorvus",
+      width: 1280,
+      height: 720,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/channel/v1/ingress", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-plan-create",
+            platform: "discord",
+            channel: "room-plan",
+            thread: "thread-plan",
+            user: {
+              id: "user-plan",
+            },
+            message: {
+              text: "Create a task to validate the channel plan flow.",
+            },
+          }),
+        })
+        expect(created.status).toBe(200)
+
+        const planned = await app.request("/channel/v1/ingress", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-plan-view",
+            platform: "discord",
+            channel: "room-plan",
+            thread: "thread-plan",
+            message: {
+              text: "view plan",
+            },
+          }),
+        })
+        expect(planned.status).toBe(200)
+        const plannedBody = await planned.json() as { result: { kind: string; message: string } }
+        expect(plannedBody.result.kind).toBe("panel_response")
+        expect(plannedBody.result.message).toContain("Plan")
+
+        const screenshot = await app.request("/channel/v1/ingress", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-plan-shot",
+            platform: "discord",
+            channel: "room-plan",
+            thread: "thread-plan",
+            message: {
+              text: "send me an OpenCorvus screenshot",
+            },
+          }),
+        })
+        expect(screenshot.status).toBe(200)
+        const screenshotBody = await screenshot.json() as {
+          result: { message: string; attachments?: Array<{ filename?: string; mime: string }> }
+        }
+        expect(screenshotBody.result.message).toContain("Captured OpenCorvus GUI")
+        expect(screenshotBody.result.attachments?.[0]?.filename).toBe("opencorvus-gui.png")
+        expect(screenshotBody.result.attachments?.[0]?.mime).toBe("image/png")
+      },
+    })
+  })
+
+  test("POST /channel/v1/ingress answers pending permission interactions deterministically", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stub()
+    installControlModel()
+    const resolved: Array<{ kind: string; requestID: string }> = []
+    const codex: ExecutorAdapter = {
+      capabilities() {
+        return {
+          submit: true,
+          status: true,
+          abort: true,
+          delivery: true,
+          resume: true,
+          events: true,
+        }
+      },
+      async submit(input) {
+        return {
+          sessionID: input.sessionID,
+          queueTaskID: Identifier.ascending("task"),
+        }
+      },
+      async status(queueTaskID) {
+        return {
+          queueTaskID,
+          status: "queued",
+          error: null,
+        }
+      },
+      async abort() {
+        return true
+      },
+      async delivery() {
+        return {
+          summary: "done",
+          diffs: [],
+        }
+      },
+      async resume(input) {
+        return this.submit({
+          sessionID: input.sessionID,
+          prompt: input.message,
+          priority: input.priority,
+        })
+      },
+      async *events() {},
+      async resolve(input) {
+        resolved.push({
+          kind: input.kind,
+          requestID: input.requestID,
+        })
+        return true
+      },
+    }
+    ExecutorRegistry.register("codex", codex)
+
+    let interactionID = ""
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "need protocol interaction over channel",
+          executor: "codex",
+          source: "channel:discord",
+          channelBinding: {
+            platform: "discord",
+            channel: "room-interaction",
+            thread: "thread-interaction",
+          },
+        })
+        const task = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorTaskTable)
+            .where(eq(OrchestratorTaskTable.id, taskID))
+            .get(),
+        )
+        const now = Date.now()
+        interactionID = Identifier.ascending("interaction")
+        Database.use((db) =>
+          db.insert(OrchestratorInteractionRequestTable).values({
+            id: interactionID,
+            task_id: taskID,
+            run_id: task!.active_run_id!,
+            session_id: task!.session_id!,
+            external_id: "protocol-request-1",
+            request_type: "permission",
+            status: "pending",
+            title: "Permission: bash",
+            body: "echo *",
+            payload: {
+              protocol_request: true,
+              request_id: "protocol-request-1",
+            },
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
+      },
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/channel/v1/ingress", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            type: "channel_ingress",
+            version: "channel.v1",
+            request_id: "req-interaction-allow",
+            platform: "discord",
+            channel: "room-interaction",
+            thread: "thread-interaction",
+            metadata: {
+              interactionID,
+              reply: "once",
+            },
+            message: {
+              text: "allow",
+            },
+          }),
+        })
+        expect(response.status).toBe(200)
+        const body = await response.json() as { result: { kind: string; message: string } }
+        expect(body.result.kind).toBe("interaction")
+        expect(body.result.message).toContain("Permission granted")
+        expect(resolved).toContainEqual({
+          kind: "approval",
+          requestID: "protocol-request-1",
+        })
+      },
+    })
+  })
+
+  test("GET /channel/v1/thread/events wraps bound task events in channel envelopes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stub()
+    installControlModel()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "stream channel thread events",
+          source: "channel:discord",
+          channelBinding: {
+            platform: "discord",
+            channel: "room-events",
+            thread: "thread-events",
+          },
+        })
+        const app = Server.App()
+        const stop = new AbortController()
+        const response = await app.request("/channel/v1/thread/events?platform=discord&channel=room-events&thread=thread-events", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+          signal: stop.signal,
+        })
+
+        expect(response.status).toBe(200)
+        expect(response.body).toBeDefined()
+
+        const seen: unknown[] = []
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error("timed out waiting for channel event"))
+            }, 3000)
+
+            void parseSSE(response.body!, stop.signal, (item) => {
+              seen.push(item)
+              const next = item as { type?: string; event?: { type?: string } }
+              if (next.type === "channel_event" && next.event?.type === "channel.connected") {
+                void Bus.publish(OrchestratorEvent.TaskUpdated, {
+                  taskID,
+                  status: "running",
+                  summary: "Task event mirrored to channel",
+                }).catch((error) => {
+                  clearTimeout(timeout)
+                  reject(error)
+                })
+                return
+              }
+              if (next.type !== "channel_event") return
+              if (next.event?.type !== "task.updated") return
+              clearTimeout(timeout)
+              resolve()
+            }).catch((error) => {
+              clearTimeout(timeout)
+              reject(error)
+            })
+          })
+        } finally {
+          stop.abort()
+        }
+
+        expect(seen).toContainEqual(expect.objectContaining({
+          type: "channel_event",
+          event: expect.objectContaining({
+            task_id: taskID,
+            type: "task.updated",
+            summary: "Task event mirrored to channel",
+          }),
+        }))
       },
     })
   })

@@ -5,8 +5,7 @@
  *   createTask → plan (real LLM) → execute (real opencorvus session) → verify (bun test) → evaluate (real LLM)
  *   → retry/replan (small budget) → assert final state
  *
- * 任务: 实现一个最小可用的 NoteStore 闭环：
- *   1 个源文件 + 1 个测试文件。
+ * 任务: 实现一个最小可用的 NoteStore 闭环。
  * Slack: 任务状态变更通知到 #argus-opencode 频道（Bus.subscribe + chat.postMessage）。
  *
  * 运行: bun test test/e2e/full-pipeline.test.ts
@@ -20,22 +19,15 @@ import { OrchestratorService } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
 import { Provider } from "../../src/provider/provider"
 import { Log } from "../../src/util/log"
+import { dashscopeCodingKey, env, loadBenchmarkEnv, prepareDashscopeEnv } from "../../script/benchmark/env"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: true })
 
-function env(...keys: string[]) {
-  for (const key of keys) {
-    const value = process.env[key]?.trim()
-    if (value) return value
-  }
-}
+await loadBenchmarkEnv(import.meta.dir)
 
-function dashscopeCodingKey() {
-  const key = env("DASHSCOPE_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
-  return key?.startsWith("sk-sp-") ? key : undefined
-}
+prepareDashscopeEnv()
 
 // ---------------------------------------------------------------------------
 // 凭证 & 配置（硬编码）
@@ -45,11 +37,11 @@ async function resolveModel() {
   return Instance.provide({
     directory: path.resolve(import.meta.dir, "../.."),
     fn: async () => {
+      const providers = await Provider.list()
       const explicit = env("OPENCORVUS_E2E_MODEL")
       if (explicit) {
         if (explicit.includes("/")) return explicit
-        const providers = await Provider.list()
-        const preferred = ["github-copilot", "google", "deepseek", "gitlab", "alibaba-cn"]
+        const preferred = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface", "github-copilot"]
         for (const providerID of preferred) {
           const provider = providers[providerID]
           if (provider?.models[explicit]) return `${providerID}/${explicit}`
@@ -61,14 +53,10 @@ async function resolveModel() {
         throw new Error(`OPENCORVUS_E2E_MODEL not found outside openai-codex: ${explicit}`)
       }
 
-      const providers = await Provider.list()
-      if (dashscopeCodingKey() && providers["alibaba-cn"]?.models["qwen3-coder-plus"]) {
-        return "alibaba-cn/qwen3-coder-plus"
+      if (dashscopeCodingKey() && providers["alibaba-cn"]?.models["qwen3.5-plus"]) {
+        return "alibaba-cn/qwen3.5-plus"
       }
-      if (providers["github-copilot"]?.models["gpt-5.4"]) {
-        return "github-copilot/gpt-5.4"
-      }
-      const preferred = ["github-copilot", "google", "deepseek", "gitlab", "alibaba-cn"]
+      const preferred = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface"]
       for (const providerID of preferred) {
         const provider = providers[providerID]
         if (!provider) continue
@@ -77,10 +65,10 @@ async function resolveModel() {
       }
 
       const def = await Provider.defaultModel()
-      if (def.providerID !== "openai-codex") return `${def.providerID}/${def.modelID}`
+      if (!["openai-codex", "github-copilot"].includes(def.providerID)) return `${def.providerID}/${def.modelID}`
 
       for (const provider of Object.values(providers)) {
-        if (provider.id === "openai-codex") continue
+        if (provider.id === "openai-codex" || provider.id === "github-copilot") continue
         const [model] = Provider.sort(Object.values(provider.models))
         if (model) return `${provider.id}/${model.id}`
       }
@@ -142,7 +130,7 @@ const TASK_TITLE = "实现 NoteStore 最小闭环"
 const TASK_REQUEST = `
 # 任务
 
-在 src/ 下实现一个最小可用的 NoteStore，并补充测试。
+实现一个最小可用的 NoteStore，并补充测试。
 
 ## 1. 创建 src/note-store.ts
 
@@ -166,8 +154,7 @@ const TASK_REQUEST = `
 
 ## 3. 约束
 
-- 只修改 src/ 下文件
-- 不引入第三方依赖
+- 可以自由组织项目并新增必要文件，只要最终交付合理、可运行、易于理解
 - 运行 \`bun test src/note-store.test.ts\` 必须通过
 `.trim()
 
@@ -221,28 +208,6 @@ const PROJECT_CONFIG = JSON.stringify(
 async function scaffoldProject(dir: string) {
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
-
-  await Bun.write(
-    path.join(dir, "package.json"),
-        JSON.stringify({ name: "note-store-e2e", scripts: { test: "bun test" } }, null, 2),
-  )
-  await Bun.write(
-    path.join(dir, "tsconfig.json"),
-    JSON.stringify(
-      {
-        compilerOptions: {
-          strict: true,
-          target: "ES2022",
-          module: "ESNext",
-          moduleResolution: "bundler",
-          lib: ["ES2022"],
-        },
-        include: ["src/**/*.ts"],
-      },
-      null,
-      2,
-    ),
-  )
 
   // Config.get() 会从项目根或 .opencorvus/ 读取，两处都写
   await Bun.write(path.join(dir, "opencorvus.json"), PROJECT_CONFIG)

@@ -14,8 +14,9 @@ import { Snapshot } from "@/snapshot"
 import { type EvaluationDelivery, type EvaluationOutput } from "@/evaluator/shared"
 import { type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
+import { Identifier } from "@/id/id"
 import z from "zod"
-import { findRun, listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
+import { findRun, findTask, listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
 import { updateGoalRun } from "./transition"
 
 const log = Log.create({ service: "goal-runner" })
@@ -87,9 +88,53 @@ export function goalRunExpired(goalRun: GoalRunRow, now = Date.now(), ttl = GOAL
   return now - time >= ttl
 }
 
+async function archiveGoalRunTranscript(goalRun: GoalRunRow) {
+  const sourceSessionID = goalRunLocalSessionID(goalRun)
+  if (!sourceSessionID) return
+  const task = findTask(goalRun.task_id)
+  const targetSessionID = task?.session_id ?? undefined
+  if (!targetSessionID || targetSessionID === sourceSessionID) return
+
+  const messages = await Session.messages({ sessionID: sourceSessionID }).catch(() => [])
+  if (messages.length === 0) return
+
+  const ids = new Map<string, string>()
+  for (const item of messages) {
+    const messageID = Identifier.ascending("message")
+    ids.set(item.info.id, messageID)
+    const info =
+      item.info.role === "assistant"
+        ? {
+            ...item.info,
+            id: messageID,
+            sessionID: targetSessionID,
+            parentID: ids.get(item.info.parentID) ?? item.info.parentID,
+          }
+        : {
+            ...item.info,
+            id: messageID,
+            sessionID: targetSessionID,
+          }
+    await Session.saveMessage(info)
+    for (const part of item.parts) {
+      await Session.updatePart({
+        ...part,
+        id: Identifier.ascending("part"),
+        messageID,
+        sessionID: targetSessionID,
+      })
+    }
+    await Session.updateMessage(info)
+  }
+  await Session.touch(targetSessionID)
+}
+
 export async function removeGoalRunSession(goalRun: GoalRunRow) {
   const id = goalRunLocalSessionID(goalRun)
   if (id) {
+    await archiveGoalRunTranscript(goalRun).catch((err) => {
+      log.warn("failed to archive goal run transcript", { goalRunID: goalRun.id, sessionID: id, error: String(err) })
+    })
     await Session.remove(id).catch((err) => {
       log.warn("failed to remove goal run session", { sessionID: id, error: String(err) })
     })

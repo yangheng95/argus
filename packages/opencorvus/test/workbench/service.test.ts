@@ -260,6 +260,43 @@ describe("workbench.service", () => {
     })
   })
 
+  test("records spec updates from task messages and queues a spec rewrite", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
+      sessionID: input.sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    spyOn(OpencodeExecutor, "abort").mockResolvedValue(true)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "implement feature",
+        })
+        const result = await OrchestratorService.handleTaskMessage(taskID, {
+          text: "/spec replace the email flow with a magic-link login requirement",
+          source: "api",
+        })
+        const plans = Database.use((db) =>
+          db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.task_id, taskID)).all(),
+        )
+        const specs = Database.use((db) =>
+          db.select().from(OrchestratorSpecSnapshotTable).where(eq(OrchestratorSpecSnapshotTable.task_id, taskID)).all(),
+        )
+        const notes = Database.use((db) =>
+          db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all(),
+        )
+
+        expect(result.kind).toBe("spec")
+        expect(result.message).toContain("Queued a spec rewrite and replan")
+        expect(plans).toHaveLength(2)
+        expect(specs).toHaveLength(2)
+        expect(notes.some((item) => item.kind === "constraint" && item.content.includes("magic-link login"))).toBe(true)
+      },
+    })
+  })
+
   test("records free-form plan text as an operator note when intent analysis is unavailable", async () => {
     await using tmp = await tmpdir({ git: true })
     spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
@@ -339,6 +376,42 @@ describe("workbench.service", () => {
         expect(result.should_resume).toBe(true)
         expect(last?.parts.some((part) => part.type === "text" && part.text === "/plan also update the copy")).toBe(true)
         expect(runs.length).toBeGreaterThan(1)
+      },
+    })
+  })
+
+  test("forwards plan hints into the active executor session when resume is available", async () => {
+    await using tmp = await tmpdir({ git: true })
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async (input: { sessionID: string }) => ({
+      sessionID: input.sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    const resume = spyOn(OpencodeExecutor, "resume").mockImplementation(async (input: { sessionID: string; message: string }) => ({
+      sessionID: input.sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "implement feature",
+        })
+        const result = await OrchestratorService.handleTaskMessage(taskID, {
+          text: "/plan keep the diff small and land tests first",
+          source: "api",
+        })
+        const notes = Database.use((db) =>
+          db.select().from(WorkbenchTaskNoteTable).where(eq(WorkbenchTaskNoteTable.task_id, taskID)).all(),
+        )
+
+        expect(result.kind).toBe("plan")
+        expect(result.message).toContain("forwarded to the active run")
+        expect(resume).toHaveBeenCalledTimes(1)
+        expect(resume.mock.calls[0]?.[0]).toMatchObject({
+          message: "/plan keep the diff small and land tests first",
+        })
+        expect(notes.some((item) => item.kind === "plan_hint")).toBe(true)
       },
     })
   })

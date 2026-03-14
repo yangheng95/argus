@@ -40,10 +40,13 @@ import {
   hasOpenAICodexAuth,
   normalizeOpenAICodexModel,
 } from "@/provider/codex-live"
+import { loadBenchmarkEnv } from "../../script/benchmark/env"
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
+
+await loadBenchmarkEnv(import.meta.dir)
 
 const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_BENCHMARK_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
 const HAS_LLM = await hasOpenAICodexAuth()

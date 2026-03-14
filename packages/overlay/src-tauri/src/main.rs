@@ -251,10 +251,6 @@ fn server_info(port: u16) -> OverlayServerInfo {
     }
 }
 
-fn webui_url(info: &OverlayServerInfo) -> String {
-    format!("{}/ui/", info.url.trim_end_matches('/'))
-}
-
 fn next_server_port() -> Result<u16, String> {
     if let Ok(listener) = TcpListener::bind((LOCAL_SERVER_HOST, DEFAULT_SERVER_PORT)) {
         return listener
@@ -367,17 +363,6 @@ fn ensure_server<R: Runtime>(app: &AppHandle<R>) -> Result<OverlayServerInfo, St
     }
 
     start_server(app)
-}
-
-fn open_webui<R: Runtime>(app: &AppHandle<R>, info: &OverlayServerInfo) {
-    let url = webui_url(info);
-    let app = app.clone();
-    thread::spawn(move || {
-        thread::sleep(Duration::from_millis(1200));
-        if let Err(err) = app.opener().open_url(url, None::<&str>) {
-            eprintln!("overlay: failed to open webui: {err}");
-        }
-    });
 }
 
 #[tauri::command]
@@ -628,8 +613,7 @@ fn main() {
             app.manage(Server(Mutex::new(ServerState::default())));
             app.manage(TrayAttention(Mutex::new(TrayAttentionState::default())));
             let handle = app.handle().clone();
-            let info = restart_server(&handle)?;
-            open_webui(&handle, &info);
+            restart_server(&handle)?;
 
             // Set window icon (needed for taskbar/alt-tab when decorations=false).
             // bundle.icon only applies to the packaged exe, not cargo run dev builds.

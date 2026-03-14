@@ -12,6 +12,7 @@ const tauri = path.resolve(dir, "src-tauri")
 const resources = path.join(tauri, "resources")
 const target = path.join(tauri, "target")
 const release = path.join(target, "release")
+const overlayUi = path.join(dir, "src")
 
 const serverFile = process.platform === "win32" ? "opencorvus.exe" : "opencorvus"
 
@@ -23,7 +24,9 @@ const distName = [
 
 const distServer = path.join(opencorvus, "dist", distName, "bin", serverFile)
 const stagedServer = path.join(resources, serverFile)
+const stagedUi = path.join(resources, "ui")
 const releaseServer = path.join(release, serverFile)
+const releaseUi = path.join(release, "ui")
 
 function text(error: unknown) {
   if (typeof error === "string") return error
@@ -33,7 +36,10 @@ function text(error: unknown) {
 }
 
 async function exists(file: string) {
-  return Bun.file(file).exists()
+  return fs
+    .access(file)
+    .then(() => true)
+    .catch(() => false)
 }
 
 async function copyFile(src: string, dest: string, options?: { required?: boolean; tolerateBusy?: boolean }) {
@@ -52,6 +58,17 @@ async function copyFile(src: string, dest: string, options?: { required?: boolea
     }
     throw error
   }
+}
+
+async function copyDir(src: string, dest: string, options?: { required?: boolean }) {
+  if (!(await exists(src))) {
+    if (options?.required) throw new Error(`Missing required directory: ${src}`)
+    return false
+  }
+  await fs.rm(dest, { recursive: true, force: true }).catch(() => undefined)
+  await fs.mkdir(path.dirname(dest), { recursive: true })
+  await fs.cp(src, dest, { recursive: true })
+  return true
 }
 
 async function cargoPath() {
@@ -99,6 +116,7 @@ if (!(await exists(distServer))) {
 
 await fs.mkdir(resources, { recursive: true })
 await copyFile(distServer, stagedServer, { required: true })
+await copyDir(overlayUi, stagedUi, { required: true })
 await cleanLegacyOutputs()
 
 await $`tauri build ${await tauriArgs()}`.cwd(dir).env({
@@ -107,4 +125,5 @@ await $`tauri build ${await tauriArgs()}`.cwd(dir).env({
 })
 
 await copyFile(distServer, releaseServer, { tolerateBusy: true })
+await copyDir(overlayUi, releaseUi, { required: true })
 await cleanUnusedOutputs()

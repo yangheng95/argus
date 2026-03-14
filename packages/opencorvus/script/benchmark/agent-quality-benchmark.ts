@@ -7,7 +7,7 @@
  *   - Goal evaluation: Two-layer — (1) automated checks (exit codes), (2) LLM assessment
  *
  * Run once: bun run packages/opencorvus/src/index.ts auth login
- * Run: bun run script/benchmark-agents.ts
+ * Run: bun run script/benchmark/agent-quality-benchmark.ts
  */
 import { generateText, stepCountIs } from "ai"
 import z from "zod"
@@ -19,7 +19,8 @@ import {
   hasOpenAICodexAuth,
   normalizeOpenAICodexModel,
   openAICodexAuthHelp,
-} from "../src/provider/codex-live"
+} from "../../src/provider/codex-live"
+import { loadBenchmarkEnv } from "./env"
 
 // ---------------------------------------------------------------------------
 // Schema (inline to avoid import issues with @/ aliases)
@@ -82,6 +83,8 @@ type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
 // Setup
 // ---------------------------------------------------------------------------
 
+await loadBenchmarkEnv(import.meta.dir)
+
 const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_BENCHMARK_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
 if (!(await hasOpenAICodexAuth())) {
   console.error(`OpenAI OAuth credentials are required. ${openAICodexAuthHelp()}`)
@@ -89,7 +92,7 @@ if (!(await hasOpenAICodexAuth())) {
 }
 
 const TIMEOUT = 300_000
-const PROJECT_ROOT = path.resolve(import.meta.dir, "..")
+const PROJECT_ROOT = path.resolve(import.meta.dir, "../..")
 let lang: ReturnType<typeof getOpenAICodexLanguage> | undefined
 
 function createModel() {

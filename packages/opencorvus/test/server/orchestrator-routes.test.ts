@@ -519,6 +519,59 @@ describe("orchestrator routes", () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
+  test("PATCH /task/:id/budget updates the task run budget", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "implement feature x",
+          }),
+        })
+        const { task_id } = (await created.json()) as { task_id: string }
+        const response = await app.request(`/task/${task_id}/budget`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            budget: {
+              maxRuns: 2,
+              maxReplans: 0,
+              maxEvaluations: 3,
+              maxWallTimeMs: 180000,
+            },
+          }),
+        })
+
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as { budget?: { maxRuns?: number; maxReplans?: number; maxEvaluations?: number; maxWallTimeMs?: number } }
+        expect(body.budget).toEqual({
+          maxRuns: 2,
+          maxReplans: 0,
+          maxEvaluations: 3,
+          maxWallTimeMs: 180000,
+        })
+      },
+    })
+
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
   test("GET /task/:id/board returns 304 when the board tag is unchanged", async () => {
     await using tmp = await tmpdir({ git: true })
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { launchBrowser } from "./launch"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
@@ -179,11 +180,7 @@ test("selecting an oauth-capable provider starts oauth before provider test", as
     },
   })
 
-  const page = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox"],
-  })
+  const page = await launchBrowser()
 
   try {
     const tab = await page.newPage()

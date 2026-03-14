@@ -11,6 +11,12 @@ function goalCriteria(description: string) {
 
 export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string) {
   const notes = taskNotes(task.id, 24)
+  const constraints = [...new Set(
+    notes
+      .filter((note) => note.kind === "constraint")
+      .map((note) => noteText(note.content))
+      .filter(Boolean),
+  )]
   const goalUpdates = [...new Set(
     notes
       .filter((note) => note.kind === "goal_update")
@@ -45,10 +51,16 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string) {
           }],
     ),
   ]
-  const request = goalUpdates.length === 0 && planHints.length === 0
+  const request = goalUpdates.length === 0 && planHints.length === 0 && constraints.length === 0
     ? task.request
     : [
         task.request,
+        constraints.length > 0
+          ? [
+              "Operator requirement and spec updates for the next spec rewrite:",
+              ...constraints.map((item) => `- ${item}`),
+            ].join("\n")
+          : "",
         goalUpdates.length > 0
           ? [
               "Operator goal updates for the next spec rewrite:",
@@ -64,6 +76,7 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string) {
       ].filter(Boolean).join("\n\n")
   return {
     request,
+    constraints,
     goals,
     goalUpdates,
     planHints,

@@ -30,6 +30,7 @@ import {
   TaskEvent,
   Task,
   UpdateTaskChecksInput,
+  UpdateTaskBudgetInput,
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
 import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
@@ -410,6 +411,29 @@ export const OrchestratorRoutes = lazy(() =>
       validator("json", InjectMessageInput),
       async (c) => {
         return c.json(await OrchestratorService.injectMessage(c.req.valid("param").taskID, c.req.valid("json").message))
+      },
+    )
+    .patch(
+      "/task/:taskID/budget",
+      describeRoute({
+        summary: "Update task budget",
+        operationId: "task.budget.update",
+        responses: {
+          200: {
+            description: "Task budget updated",
+            content: {
+              "application/json": {
+                schema: resolver(Task),
+              },
+            },
+          },
+          ...errors(400, 404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      validator("json", UpdateTaskBudgetInput),
+      async (c) => {
+        return c.json(await OrchestratorService.updateTaskBudget(c.req.valid("param").taskID, c.req.valid("json")))
       },
     )
     .patch(

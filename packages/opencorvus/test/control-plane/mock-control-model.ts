@@ -162,16 +162,17 @@ function streamCall(toolName: string, value: Record<string, unknown>) {
 function action(prompt: LanguageModelV2Prompt) {
   const input = userInput(prompt)
   const meta = object(input.metadata) ?? {}
-  const sessionID = text(meta.sessionID, input.sessionID)
-  const taskID = text(meta.taskID, input.taskID)
-  const interactionID = text(meta.interactionID)
+  const scoped = object(meta.channel) ?? object(text(input.surface) ? meta[text(input.surface)!] : undefined) ?? {}
+  const sessionID = text(meta.sessionID, scoped.sessionID, input.sessionID)
+  const taskID = text(meta.taskID, scoped.taskID, input.taskID)
+  const interactionID = text(meta.interactionID, scoped.interactionID)
   const goalID = text(meta.goalID)
-  const executor = text(meta.executor, input.executor)
-  const reply = text(meta.reply)
-  const answer = text(meta.answer)
-  const criteria = text(meta.criteria)
-  const description = text(meta.description)
-  const ui = text(meta.ui_context)
+  const executor = text(meta.executor, scoped.executor, input.executor)
+  const reply = text(meta.reply, scoped.reply)
+  const answer = text(meta.answer, scoped.answer)
+  const criteria = text(meta.criteria, scoped.criteria)
+  const description = text(meta.description, scoped.description)
+  const ui = text(meta.ui_context, scoped.ui_context)
   const sessionIntent = /create .*session|new blank session|new session|fork session|fork |export session|export .*html|delete session|delete task session/i
   if (input.surface === "panel" && sessionIntent.test(input.text)) {
     return {
@@ -204,6 +205,11 @@ function action(prompt: LanguageModelV2Prompt) {
     return {
       action: "view_plan",
       taskID,
+    }
+  }
+  if (/(send me .*screenshot|capture .*screenshot|capture .*overlay|capture .*gui|show .*screenshot|截图|^screenshot$|open\s*corvus .*image)/i.test(input.text)) {
+    return {
+      action: "capture_overlay_screenshot",
     }
   }
   if (/switch executor|切换.*executor|use executor|executor/i.test(input.text) && executor) {

@@ -14,6 +14,7 @@ import { Project } from "@/project/project"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
+import { MessageV2 } from "@/session/message"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { WorkbenchService } from "@/workbench/service"
@@ -40,6 +41,7 @@ import {
   ReplyInteractionInput,
   TaskMessageInput,
   UpdateTaskChecksInput,
+  UpdateTaskBudgetInput,
   UpdatePreferenceInput,
 } from "./model"
 import {
@@ -291,7 +293,7 @@ async function supersedeRunForSpecRewrite(task: TaskRow, run: RunRow, summary: s
   }
 }
 
-async function replanForGoalUpdate(taskID: string, note: string) {
+async function replanForSpecUpdate(taskID: string, note: string, reason: string) {
   const task = requireTask(taskID)
   if (task.status === "cancelled") {
     return { resumed: false, status: task.status }
@@ -300,7 +302,7 @@ async function replanForGoalUpdate(taskID: string, note: string) {
   if (!run) {
     return { resumed: false, status: task.status }
   }
-  const summary = `Spec rewrite requested after goal update: ${note.trim() || "operator goal change"}`
+  const summary = `Spec rewrite requested after ${reason}: ${note.trim() || reason}`
   if (
     ["queued", "running", "blocked", "evaluating", "delivering"].includes(task.status) &&
     !["failed", "aborted"].includes(run.status)
@@ -311,6 +313,61 @@ async function replanForGoalUpdate(taskID: string, note: string) {
   return {
     resumed: true,
     status: requireRun(nextRunID).status,
+  }
+}
+
+async function appendTaskMessageTranscript(taskID: string, text: string) {
+  const task = requireTask(taskID)
+  if (!task.session_id) return
+  const now = Date.now()
+  const userMsg: MessageV2.User = {
+    id: Identifier.ascending("message"),
+    sessionID: task.session_id,
+    role: "user",
+    time: { created: now },
+    agent: "task_message",
+    model: {
+      providerID: "opencorvus",
+      modelID: "task-message",
+    },
+    extra: {
+      taskID,
+    },
+  }
+  await Session.updateMessage(userMsg)
+  await Session.updatePart({
+    id: Identifier.ascending("part"),
+    messageID: userMsg.id,
+    sessionID: task.session_id,
+    type: "text",
+    text,
+    kind: "user_content",
+    source: "user",
+    audience: {
+      model: false,
+      ui: true,
+      acp: false,
+    },
+  } satisfies MessageV2.TextPart)
+}
+
+function liveTaskMessage(taskID: string) {
+  const task = requireTask(taskID)
+  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+  if (!run) return false
+  return ["accepted", "running"].includes(run.status)
+}
+
+async function continueTaskMessage(taskID: string, message: string) {
+  if (liveTaskMessage(taskID)) {
+    return {
+      ...(await OrchestratorService.injectMessage(taskID, message)),
+      live: true,
+    }
+  }
+  return {
+    ...(await OrchestratorService.recordOperatorNote(taskID, message)),
+    live: false,
   }
 }
 
@@ -667,6 +724,44 @@ export namespace OrchestratorService {
     return writeTaskChecks(requireTask(taskID), checks)
   }
 
+  export async function updateTaskBudget(taskID: string, raw: z.input<typeof UpdateTaskBudgetInput>) {
+    const task = requireTask(taskID)
+    const input = UpdateTaskBudgetInput.parse(raw)
+    const budget = budgetRow(input.budget ?? undefined)
+    if (JSON.stringify(task.budget ?? null) === JSON.stringify(budget ?? null)) {
+      return viewTask(task)
+    }
+    const now = Date.now()
+    Database.transaction((db) => {
+      db.update(OrchestratorTaskTable)
+        .set({
+          budget,
+          time_updated: now,
+        })
+        .where(eq(OrchestratorTaskTable.id, task.id))
+        .run()
+      db.insert(OrchestratorProgressSnapshotTable)
+        .values({
+          id: Identifier.ascending("progress"),
+          task_id: task.id,
+          status: progressStatus(task.status),
+          summary: "Task budget updated",
+          payload: {
+            budget: input.budget ?? null,
+          },
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+      Database.effect(() => Bus.publish(Event.TaskUpdated, {
+        taskID: task.id,
+        status: task.status,
+        summary: "Task budget updated",
+      }))
+    })
+    return viewTask(requireTask(task.id))
+  }
+
   export async function updatePreference(preferenceID: string, input: z.input<typeof UpdatePreferenceInput>) {
     const body = UpdatePreferenceInput.parse(input)
     WorkbenchService.updatePreference({
@@ -970,6 +1065,7 @@ export namespace OrchestratorService {
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
     const input = TaskMessageInput.parse(raw)
+    await appendTaskMessageTranscript(taskID, input.text)
     const result = await WorkbenchService.ingestTaskMessage({
       taskID,
       text: input.text,
@@ -986,21 +1082,38 @@ export namespace OrchestratorService {
     if (!result.should_resume) {
       return result
     }
-    if (result.kind === "goal") {
-      const replan = await replanForGoalUpdate(taskID, input.text)
+    if (result.kind === "goal" || result.kind === "spec") {
+      const replan = await replanForSpecUpdate(
+        taskID,
+        input.text,
+        result.kind === "goal" ? "goal update" : "spec update",
+      )
       return {
         ...result,
         message: replan.resumed
-          ? "Recorded goal update. Queued a spec rewrite and replan."
+          ? result.kind === "goal"
+            ? "Recorded goal update. Queued a spec rewrite and replan."
+            : "Recorded spec update. Queued a spec rewrite and replan."
           : result.message,
       }
     }
-    const note = await OrchestratorService.recordOperatorNote(taskID, input.text)
+    const note = await continueTaskMessage(taskID, input.text)
     return {
       ...result,
-      message: result.kind === "note" && note.resumed
-        ? "Operator note recorded. Queued a follow-up run."
-        : result.message,
+      message:
+        result.kind === "plan" && note.live && note.resumed
+          ? "Plan hint recorded and forwarded to the active run."
+          : result.kind === "plan" && note.live && !note.resumed
+            ? "Plan hint recorded. Active run cannot absorb it directly; it will apply on the next run."
+            : result.kind === "plan" && note.resumed
+              ? "Plan hint recorded. Queued a follow-up run."
+              : result.kind === "note" && note.live && note.resumed
+                ? "Operator note recorded and forwarded to the active run."
+                : result.kind === "note" && note.live && !note.resumed
+                  ? "Operator note recorded. Active run cannot absorb it directly; it will apply on the next run."
+                  : result.kind === "note" && note.resumed
+                    ? "Operator note recorded. Queued a follow-up run."
+                    : result.message,
     }
   }
 
