@@ -98,42 +98,54 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       }
       unsubs.push(
         Bus.subscribe(MessageV2.Event.Updated, (event) => {
-          const info = event.properties.info
-          if (info.sessionID !== control?.info.id) return
-          if (info.role !== "assistant") return
-          stream.assistant.add(info.id)
+          try {
+            const info = event.properties.info
+            if (info.sessionID !== control?.info.id) return
+            if (info.role !== "assistant") return
+            stream.assistant.add(info.id)
+          } catch (err) {
+            log.warn("control stream: MessageV2.Event.Updated handler error", { error: String(err) })
+          }
         }),
       )
       unsubs.push(
         Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
-          const part = event.properties.part
-          if (part.sessionID !== control?.info.id) return
-          if (!stream.assistant.has(part.messageID)) return
-          if (part.type !== "tool") return
-          if (part.tool !== "StructuredOutput") {
-            onEvent({ type: "tool", tool: part.tool })
-            return
+          try {
+            const part = event.properties.part
+            if (part.sessionID !== control?.info.id) return
+            if (!stream.assistant.has(part.messageID)) return
+            if (part.type !== "tool") return
+            if (part.tool !== "StructuredOutput") {
+              onEvent({ type: "tool", tool: part.tool })
+              return
+            }
+            const text = structuredMessageText(part.state?.input)
+            if (!text) return
+            emitStreamText(stream, part.id, text, onEvent)
+          } catch (err) {
+            log.warn("control stream: MessageV2.Event.PartUpdated handler error", { error: String(err) })
           }
-          const text = structuredMessageText(part.state.input)
-          if (!text) return
-          emitStreamText(stream, part.id, text, onEvent)
         }),
       )
       unsubs.push(
         Bus.subscribe(MessageV2.Event.PartDelta, (event) => {
-          const part = event.properties
-          if (part.sessionID !== control?.info.id) return
-          if (!stream.assistant.has(part.messageID)) return
-          if (part.field === "text") {
-            onEvent({ type: "message_delta", delta: part.delta })
-            return
+          try {
+            const part = event.properties
+            if (part.sessionID !== control?.info.id) return
+            if (!stream.assistant.has(part.messageID)) return
+            if (part.field === "text") {
+              onEvent({ type: "message_delta", delta: part.delta })
+              return
+            }
+            if (part.field !== "raw") return
+            const raw = (stream.raw.get(part.partID) ?? "") + part.delta
+            stream.raw.set(part.partID, raw)
+            const text = structuredMessageText(raw)
+            if (!text) return
+            emitStreamText(stream, part.partID, text, onEvent)
+          } catch (err) {
+            log.warn("control stream: MessageV2.Event.PartDelta handler error", { error: String(err) })
           }
-          if (part.field !== "raw") return
-          const raw = (stream.raw.get(part.partID) ?? "") + part.delta
-          stream.raw.set(part.partID, raw)
-          const text = structuredMessageText(raw)
-          if (!text) return
-          emitStreamText(stream, part.partID, text, onEvent)
         }),
       )
       onEvent({ type: "start" })
@@ -181,21 +193,8 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       } satisfies RunResult
     }
 
-    const text = textFromMessage(result)
-    const output = finalizeResult(parseTextAsResult(text), control)
-    if (control?.keep) {
-      await appendSummary(control.info.id, result, output.message)
-    }
-    log.info("panel request completed", {
-      input: payload,
-      panel_session_id: control.info.id,
-      result: loggedResult(output),
-      fallback_text: text,
-    })
-    return {
-      result: output,
-      timeline: shouldAppendTimeline(input, output, control),
-    } satisfies RunResult
+    const detail = messageError(result)
+    throw new Error(detail || "Control model did not return structured output")
   } catch (error) {
     const output = finalizeResult(ControlMessageResult.parse({
       kind: "panel_response",
@@ -378,6 +377,8 @@ async function systemPrompt(input: z.infer<typeof ControlMessageInput>) {
     "Treat metadata as explicit UI context. When metadata provides concrete IDs or target values, prefer those targets over guessing from the text.",
     "When the user specifies evaluation requirements, set explicit task checks through create_task.checks or update_checks instead of relying on planner goals alone.",
     "Only create a new task when allow_create is true and the user explicitly asked you to start or execute work.",
+    "For create_task, always place the user's work request in create_task.request.",
+    "For create_task.checks, build/test/lint/verify_cmd must be arrays of command strings or false; do not emit bare boolean true.",
     "Only create, fork, or delete sessions when allow_session_mutation is true and the user explicitly asked to manage sessions.",
     "When a panel action returns file or image attachments, copy them into the structured result attachments field.",
     "",
@@ -439,38 +440,13 @@ async function panelTools() {
   return Object.fromEntries(ids.map((id) => [id, id === "panel"]))
 }
 
-function textFromMessage(message: MessageV2.WithParts) {
-  return message.parts
-    .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
-    .map((part) => part.text)
-    .join("\n")
-}
-
-function parseTextAsResult(text: string): z.infer<typeof ControlMessageResult> {
-  // Cascading parse strategy: try progressively looser formats before falling
-  // back to wrapping the raw text as a plain panel_response.  Each catch block
-  // is intentionally empty so the next strategy is attempted silently.
-
-  // Strategy 1 - the model returned well-formed JSON matching the schema.
-  try {
-    return ControlMessageResult.parse(JSON.parse(text))
-  } catch {
-    // JSON parse or schema validation failed; fall through to next strategy.
-  }
-  // Strategy 2 - the model wrapped its JSON inside a markdown code fence.
-  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (jsonMatch) {
-    try {
-      return ControlMessageResult.parse(JSON.parse(jsonMatch[1].trim()))
-    } catch {
-      // Fenced content was not valid JSON or did not match schema; fall through.
-    }
-  }
-  // Strategy 3 (fallback) - treat the entire text as a plain message.
-  return ControlMessageResult.parse({
-    kind: "panel_response",
-    message: text || "（模型未返回有效响应）",
-  })
+function messageError(message: MessageV2.WithParts) {
+  if (message.info.role !== "assistant" || !message.info.error) return ""
+  const text = Reflect.get(message.info.error, "message")
+  if (typeof text === "string" && text.trim()) return text.trim()
+  const data = Reflect.get(message.info.error, "data")
+  const nested = data && typeof data === "object" ? Reflect.get(data, "message") : undefined
+  return typeof nested === "string" ? nested.trim() : ""
 }
 
 function defaultSource(surface: z.infer<typeof ControlMessageInput>["surface"]) {
@@ -522,9 +498,7 @@ function shouldAppendTimeline(
   result: z.infer<typeof ControlMessageResult>,
   control?: ControlSession,
 ) {
-  if (!control) return true
-  if (control.keep) return true
-  return !(input.surface === "panel" && !input.taskID && !result.task_id)
+  return true
 }
 
 function shouldRemoveSession(control?: ControlSession) {

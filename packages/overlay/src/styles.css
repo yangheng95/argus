@@ -6718,6 +6718,19 @@ body[data-theme="light"] {
   overscroll-behavior: contain;
 }
 
+.msg-tool-output {
+  max-height: none;
+  overflow-y: visible;
+  overscroll-behavior: auto;
+}
+
+.msg-reasoning,
+.msg-patch {
+  max-height: none;
+  overflow: visible;
+  overscroll-behavior: auto;
+}
+
 .md-content img,
 .md-content svg,
 .md-content canvas,

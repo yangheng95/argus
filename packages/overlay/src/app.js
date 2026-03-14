@@ -12,6 +12,7 @@ const SESSION_POLL = 6000;
 const SSE_BACKSTOP = 15000;
 const BOARD_EVENT_DEBOUNCE = 150;
 const SESSION_EVENT_DEBOUNCE = 150;
+const SESSION_LIST_EVENT_DEBOUNCE = 250;
 const ZOOM_STEP = 0.1;
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
@@ -102,6 +103,7 @@ const state = {
   workspaceTaskID: DEFAULT_OVERLAY_SETTINGS.workspaceTaskID,
   workspaceSessionID: DEFAULT_OVERLAY_SETTINGS.workspaceSessionID,
   workspaceDirectory: DEFAULT_OVERLAY_SETTINGS.workspaceDirectory,
+  workspaceEpoch: 0,
   directoryEpoch: 0,
   localeSeq: 0,
   i18n: {},
@@ -128,12 +130,18 @@ const state = {
   boardQueued: false,
   boardKick: null,
   boardUpdatedAt: 0,
+  sessionsKick: null,
+  reconnectTimer: null,
   chatSessionID: "",
   sessions: [],
+  tasksSeq: 0,
+  sessionsSeq: 0,
   managedSession: null,
   session: [],
+  pendingTaskMessages: null,
   executorEvents: [],
   executorRunID: "",
+  executorEventsFetchedAt: 0,
   sessionLoading: null,
   sessionQueued: false,
   sessionKick: null,
@@ -141,8 +149,10 @@ const state = {
   changes: [],
   chatRequest: null,
   sse: null,
+  sseRetryTimer: null,
   sseConnected: false,
   eventStream: null,
+  eventRetryTimer: null,
   eventConnected: false,
   pollTimer: null,
   sessionTimer: null,
@@ -1687,7 +1697,10 @@ async function deleteSessionApi(sessionID, opts = {}, input) {
 function canComposeChat() {
   if (!state.connected) return false;
   const mode = workspaceMode();
-  return mode === "session" || mode === "task" || mode === "task-session";
+  if (mode === "empty") return true;
+  if (mode === "session") return !!currentSessionID();
+  if (mode === "task" || mode === "task-session") return !!currentTaskSessionID();
+  return false;
 }
 
 function chatInputText() {
@@ -1705,6 +1718,13 @@ function chatAbortTarget() {
       return {
         kind: "run",
         runID,
+      };
+    }
+    const sessionID = currentTaskSessionID() || state.managedSession?.id || "";
+    if (sessionID) {
+      return {
+        kind: "session",
+        sessionID,
       };
     }
     return null;
@@ -1781,7 +1801,13 @@ async function stopChatRequest(options = {}) {
 }
 
 function chatPlaceholder() {
-  return state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……")
+  return state.session.find((item) =>
+    item.info?.role === "assistant" &&
+    !item.info?.id &&
+    Array.isArray(item.parts) &&
+    item.parts.length === 1 &&
+    item.parts[0]?.type === "text",
+  ) || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……")
     || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "...")
     || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === t("chat.thinking"));
 }
@@ -1816,7 +1842,6 @@ async function abortableDelay(ms, signal) {
 async function sessionMessage(text, signal) {
   const sessionID = currentSessionID();
   if (!sessionID) throw new Error("No active session");
-  startEventStream();
   const queued = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1836,7 +1861,6 @@ async function sessionMessage(text, signal) {
   });
   const taskID = typeof queued?.taskID === "string" ? queued.taskID : "";
   if (!taskID) throw new Error("Missing session prompt task ID");
-  let refreshed = 0;
   while (true) {
     const status = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async/${encodeURIComponent(taskID)}`, {
       signal,
@@ -1846,20 +1870,19 @@ async function sessionMessage(text, signal) {
     }
     if (status?.status === "running" || status?.status === "retrying") {
       setChatPlaceholderText(t("chat.thinking"));
-      if (!state.eventConnected && currentSessionID() === sessionID && Date.now() - refreshed >= 600) {
-        refreshed = Date.now();
-        await loadConversation();
+      if (!state.eventConnected && currentSessionID() === sessionID) {
+        await refreshSessionMessages(sessionID, { streaming: true });
       }
     }
     if (status?.status === "completed") {
       if (currentSessionID() === sessionID) {
-        await loadConversation();
+        await refreshSessionMessages(sessionID);
       }
       return status;
     }
     if (status?.status === "failed") {
       if (currentSessionID() === sessionID) {
-        await loadConversation().catch(() => undefined);
+        await refreshSessionMessages(sessionID).catch(() => undefined);
       }
       throw new Error(status?.error || "Session prompt failed");
     }
@@ -1867,18 +1890,44 @@ async function sessionMessage(text, signal) {
   }
 }
 
-function panelRequestBody(text, metadata = {}) {
+async function refreshSessionMessages(sessionID, options = {}) {
+  if (!sessionID || currentSessionID() !== sessionID) return false;
+  const sessionMsgs = await apiJson(`session/${sessionID}/message`);
+  if (currentSessionID() !== sessionID) return false;
+  const next = Array.isArray(sessionMsgs) ? sessionMsgs : [];
+  if (options.streaming) {
+    const assistant = next
+      .filter((item) => item?.info?.role === "assistant")
+      .flatMap((item) => Array.isArray(item?.parts) ? item.parts : [])
+      .filter((part) => part?.type === "text" && typeof part.text === "string")
+      .map((part) => part.text.trim())
+      .find(Boolean)
+    if (assistant) {
+      setChatPlaceholderText(assistant)
+      return true;
+    }
+  }
+  state.session = next;
+  state.sessionUpdatedAt = Date.now();
+  renderSession();
+  await loadChanges();
+  return true;
+}
+
+function panelRequestBody(text, metadata = {}, requestID) {
   const taskID = state.selectedTaskID || undefined;
   const selectedSessionID = currentSessionID() || undefined;
-  const sessionID = taskID ? undefined : selectedSessionID;
+  const session = selectedSessionID ? sessionItem(selectedSessionID) : null;
+  const sessionID = !taskID && isPanelControlSession(session) ? selectedSessionID : undefined;
   return {
     surface: "panel",
     text,
     taskID,
     sessionID,
     executor: state.executor,
-    allow_create: false,
-    allow_session_mutation: true,
+    request_id: requestID || undefined,
+    allow_create: true,
+    allow_session_mutation: !taskID,
     metadata: {
       selectedTaskID: taskID,
       selectedSessionID,
@@ -1904,6 +1953,7 @@ async function applyPanelResult(result) {
   }
   if (result?.local_action?.type === "select_task" && result.local_action.taskID) {
     await loadTasks();
+    await loadManagedSessions();
     await selectTask(result.local_action.taskID);
     return;
   }
@@ -1916,7 +1966,9 @@ async function applyPanelResult(result) {
     renderWorkspaceState();
   }
   if (result?.task_id && state.selectedTaskID !== result.task_id) {
+    state.pendingTaskMessages = null;
     await loadTasks();
+    await loadManagedSessions();
     await selectTask(result.task_id);
     return;
   }
@@ -1942,49 +1994,28 @@ async function applyPanelResult(result) {
 async function panelMessage(text, metadata, signal) {
   AppLog.debug("panel", "message: " + text.slice(0, 80));
   const requestSignal = signal ?? AbortSignal.timeout(120000);
-  if (!state.selectedTaskID) {
-    return panelMessageStream(text, metadata, requestSignal);
-  }
-  const result = await apiJson("panel/message", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(panelRequestBody(text, metadata)),
-    signal: requestSignal,
-  });
-  await applyPanelResult(result);
-  return result;
+  return panelMessageStream(text, metadata, requestSignal, state.workspaceEpoch, crypto.randomUUID());
 }
 
-async function panelMessageStream(text, metadata, signal) {
-  const body = JSON.stringify(panelRequestBody(text, metadata));
+async function panelMessageStream(text, metadata, signal, workspaceEpoch = state.workspaceEpoch, requestID = crypto.randomUUID()) {
+  const body = JSON.stringify(panelRequestBody(text, metadata, requestID));
   const requestSignal = signal ?? AbortSignal.timeout(120000);
-  let res;
-  try {
-    res = await fetch(apiUrl("panel/message/stream"), {
-      method: "POST",
-      headers: { ...apiHeaders(), "Content-Type": "application/json" },
-      body,
-      signal: requestSignal,
-    });
-  } catch (streamErr) {
-    if (isAbortError(streamErr)) throw streamErr;
-    AppLog.debug("panel", "stream endpoint unavailable, falling back to POST", { error: String(streamErr) });
-  }
-  if (!res?.ok || !res.body) {
-    const result = await apiJson("panel/message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      signal: requestSignal,
-    });
-    await applyPanelResult(result);
-    return result;
+  const res = await fetch(apiUrl("panel/message/stream"), {
+    method: "POST",
+    headers: { ...apiHeaders(), "Content-Type": "application/json" },
+    body,
+    signal: requestSignal,
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`Panel stream failed: ${res.status} ${res.statusText}`);
   }
 
   // Replace "……" thinking placeholder with a live indicator
   const placeholder = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
-  if (placeholder) placeholder.parts[0].text = "...";
-  renderSession();
+  if (state.workspaceEpoch === workspaceEpoch) {
+    if (placeholder) placeholder.parts[0].text = "...";
+    renderSession();
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -2009,6 +2040,7 @@ async function panelMessageStream(text, metadata, signal) {
       if (!data) continue;
       try {
         const ev = JSON.parse(data);
+        if (state.workspaceEpoch !== workspaceEpoch) continue;
         if (ev.type === "tool" && placeholder && !streamed) {
           placeholder.parts[0].text = t("chat.thinking");
           renderSession();
@@ -2038,9 +2070,16 @@ async function panelMessageStream(text, metadata, signal) {
     consume(decoder.decode(value, { stream: true }));
   }
 
-  if (!result) return null;
+  if (!result) {
+    throw new Error("Panel stream ended without a final result");
+  }
+
+  if (state.workspaceEpoch !== workspaceEpoch) {
+    return result;
+  }
 
   if (panelResultNavigates(result)) {
+    if (result && typeof result === "object") result._request = text;
     await applyPanelResult(result);
     return result;
   }
@@ -3214,7 +3253,7 @@ async function checkConnection() {
 
   for (let i = 0; i < attempts; i++) {
     try {
-      const [health] = await Promise.all([apiJson("global/health"), apiJson("tasks")]);
+      const health = await apiJson("global/health", undefined, { directory: false });
       setConnStatus("online");
       state.connected = true;
       renderWorkspaceState();
@@ -3405,7 +3444,7 @@ function syncExecutorWidth() {
 }
 
 function currentTaskSessionID() {
-  return state.board?.task?.sessionID || "";
+  return state.board?.task?.sessionID || taskItem(state.selectedTaskID)?.task?.sessionID || "";
 }
 
 async function loadMeta() {
@@ -3831,7 +3870,6 @@ function isUnusedSession(session) {
 
 function visibleSession(session) {
   if (!session || typeof session !== "object") return false;
-  if (session.parentID) return false;
   if (isPanelControlSession(session)) return false;
   if (isDefaultSessionTitle(session.title) && isUnusedSession(session)) return false;
   if (isDeletingManagedSession(session.id)) return false;
@@ -3841,7 +3879,7 @@ function visibleSession(session) {
 function displaySessions() {
   const list = state.sessions.filter(visibleSession);
   const current = state.managedSession;
-  if (!current?.id || !visibleSession(current) || list.some((item) => item?.id === current.id)) return list;
+  if (!current?.id || list.some((item) => item?.id === current.id)) return list;
   return [current, ...list];
 }
 
@@ -4035,18 +4073,15 @@ async function syncManagedSession(sessionID = currentSessionID()) {
     renderManagedSessionList();
     return;
   }
-  if (state.managedSession?.id === sessionID) {
-    renderManagedSessionList();
-    return;
-  }
   await selectManagedSession(sessionID);
 }
 
 async function loadTasks() {
   const epoch = state.directoryEpoch;
+  const seq = ++state.tasksSeq;
   try {
     const data = await apiJson("tasks");
-    if (epoch !== state.directoryEpoch) return;
+    if (epoch !== state.directoryEpoch || seq !== state.tasksSeq) return;
     state.tasks = sortedTasks(data).filter((item) => !isDeletingManagedSession(item?.task?.sessionID));
     if (state.selectedTaskID && !state.tasks.some((item) => item.task.id === state.selectedTaskID)) {
       enterEmptyWorkspace();
@@ -4054,7 +4089,7 @@ async function loadTasks() {
     }
   } catch (e) {
     AppLog.debug("tasks", "loadTasks failed, keeping current state", { error: String(e) });
-    if (epoch !== state.directoryEpoch) return;
+    if (epoch !== state.directoryEpoch || seq !== state.tasksSeq) return;
   }
 }
 
@@ -4062,7 +4097,7 @@ async function loadTasks() {
 
 async function selectTask(taskID, options = {}) {
   const nextTaskID = taskID || "";
-  const nextSessionID = options.sessionID || "";
+  const nextSessionID = options.sessionID || taskItem(nextTaskID)?.task?.sessionID || "";
   if (nextTaskID === state.selectedTaskID && nextSessionID === state.chatSessionID && state.board) return;
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
@@ -4074,12 +4109,19 @@ async function selectTask(taskID, options = {}) {
   if (!nextTaskID) {
     setTaskStatus("idle", { visible: false });
     state.session = [];
+    state.pendingTaskMessages = null;
     renderSession();
     await syncManagedSession("");
     await syncSessionOverlaySettings("");
     clearWorkspaceMemory();
     await persistOverlaySettings({ includeSession: false });
     return;
+  }
+
+  if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
+    state.session = state.pendingTaskMessages;
+    state.pendingTaskMessages = null;
+    renderSession();
   }
 
   await loadBoard();
@@ -4165,6 +4207,14 @@ function scheduleConversation(delay = 0) {
   }, delay);
 }
 
+function scheduleManagedSessions(delay = 0) {
+  if (state.sessionsKick) clearTimeout(state.sessionsKick);
+  state.sessionsKick = setTimeout(() => {
+    state.sessionsKick = null;
+    loadManagedSessions();
+  }, delay);
+}
+
 async function loadConversation() {
   const target = conversationTarget();
   const targetKey = conversationTargetKey(target);
@@ -4183,25 +4233,30 @@ async function loadConversation() {
         await loadChanges();
         return;
       }
+      if (target.taskID) {
+        const sessionID = currentSessionID();
+        let result = [];
+        if (sessionID) {
+          try {
+            const sessionMsgs = await apiJson(`session/${sessionID}/message`);
+            result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
+          } catch (sessionErr) {
+            AppLog.debug("ui", "task session load failed", { sessionID, error: String(sessionErr) });
+          }
+        }
+        if (targetKey !== conversationTargetKey(conversationTarget())) return;
+        state.session = result;
+        state.sessionUpdatedAt = Date.now();
+        renderSession();
+        return;
+      }
       const params = new URLSearchParams();
-      if (target.taskID) params.set("taskID", target.taskID);
-      else if (target.sessionID) params.set("sessionID", target.sessionID);
+      if (target.sessionID) params.set("sessionID", target.sessionID);
       else params.set("surface", "panel");
       const messages = await apiJson(`control/timeline?${params.toString()}`);
       let result = Array.isArray(messages) ? messages : [];
       const sessionID = currentSessionID();
-
-      // Task chats need both control-plane timeline entries and the underlying
-      // task session transcript; otherwise early assistant turns can be missed
-      // before the task SSE stream is connected.
-      if (target.taskID && sessionID) {
-        try {
-          const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-          result = mergeMessages(result, Array.isArray(sessionMsgs) ? sessionMsgs : []);
-        } catch (mergeErr) {
-          AppLog.debug("ui", "task session merge failed", { sessionID, error: String(mergeErr) });
-        }
-      } else if (result.length === 0 && sessionID) {
+      if (result.length === 0 && sessionID) {
         // Fallback: if control timeline is empty, load the underlying session messages
         // (headless API tasks don't write to the control timeline)
         try {
@@ -4237,12 +4292,7 @@ async function loadConversation() {
           AppLog.debug("ui", "session message final fallback failed", { sessionID, error: String(fallbackErr2) });
         }
       }
-      state.session = [];
-      state.sessionUpdatedAt = Date.now();
-      renderSession();
-      if (!state.selectedTaskID || state.chatSessionID) {
-        await loadChanges();
-      }
+      return;
     } finally {
       state.sessionLoading = null;
       if (state.sessionQueued) {
@@ -4256,7 +4306,8 @@ async function loadConversation() {
 
 function currentSessionID() {
   if (state.chatSessionID) return state.chatSessionID;
-  return state.board?.task?.sessionID || "";
+  if (state.selectedTaskID) return currentTaskSessionID();
+  return state.managedSession?.id || "";
 }
 
 function conversationTarget() {
@@ -4284,6 +4335,19 @@ function conversationTargetKey(target = conversationTarget()) {
 }
 
 async function loadChanges() {
+  if (state.selectedTaskID) {
+    const requestKey = `task:${state.selectedTaskID}`
+    state.changeKey = requestKey
+    const delivery =
+      state.board?.acceptedDelivery?.result?.diffs ||
+      state.board?.delivery?.result?.diffs ||
+      state.board?.candidateDelivery?.result?.diffs ||
+      []
+    state.changes = normalizeDiffs(delivery)
+    renderChanges()
+    return
+  }
+
   const sessionID = currentSessionID();
   const requestKey = sessionID || `changes:${state.selectedTaskID || state.chatSessionID || "none"}`;
   state.changeKey = requestKey;
@@ -4371,7 +4435,9 @@ function startSSE(taskID, retryCount = 0) {
       state.sseConnected = false;
       const delay = 3000;
       AppLog.info("sse", `stream ended, reconnecting in ${delay}ms`, { taskID });
-      setTimeout(() => {
+      if (state.sseRetryTimer) clearTimeout(state.sseRetryTimer);
+      state.sseRetryTimer = setTimeout(() => {
+        state.sseRetryTimer = null;
         if (state.selectedTaskID === taskID) startSSE(taskID, 0);
       }, delay);
     } catch (e) {
@@ -4383,7 +4449,9 @@ function startSSE(taskID, retryCount = 0) {
       }
       const delay = Math.min(5000 * Math.pow(1.5, retryCount), 60000);
       AppLog.warn("sse", `disconnected, retrying in ${Math.round(delay)}ms (attempt ${retryCount + 1})`, { taskID, error: String(e) });
-      setTimeout(() => {
+      if (state.sseRetryTimer) clearTimeout(state.sseRetryTimer);
+      state.sseRetryTimer = setTimeout(() => {
+        state.sseRetryTimer = null;
         if (state.selectedTaskID === taskID) startSSE(taskID, retryCount + 1);
       }, delay);
     }
@@ -4391,6 +4459,10 @@ function startSSE(taskID, retryCount = 0) {
 }
 
 function stopSSE() {
+  if (state.sseRetryTimer) {
+    clearTimeout(state.sseRetryTimer);
+    state.sseRetryTimer = null;
+  }
   if (state.sse) {
     state.sse.abort();
     state.sse = null;
@@ -4442,7 +4514,9 @@ function startEventStream(retryCount = 0) {
       if (!state.selectedTaskID && currentSessionID()) {
         const delay = 3000;
         AppLog.info("event", `stream ended, reconnecting in ${delay}ms`);
-        setTimeout(() => {
+        if (state.eventRetryTimer) clearTimeout(state.eventRetryTimer);
+        state.eventRetryTimer = setTimeout(() => {
+          state.eventRetryTimer = null;
           if (!state.selectedTaskID && currentSessionID()) startEventStream(0);
         }, delay);
       }
@@ -4456,7 +4530,9 @@ function startEventStream(retryCount = 0) {
       }
       const delay = Math.min(5000 * Math.pow(1.5, retryCount), 60000);
       AppLog.warn("event", `disconnected, retrying in ${Math.round(delay)}ms (attempt ${retryCount + 1})`, { error: String(e) });
-      setTimeout(() => {
+      if (state.eventRetryTimer) clearTimeout(state.eventRetryTimer);
+      state.eventRetryTimer = setTimeout(() => {
+        state.eventRetryTimer = null;
         if (!state.selectedTaskID && currentSessionID()) startEventStream(retryCount + 1);
       }, delay);
     }
@@ -4464,6 +4540,10 @@ function startEventStream(retryCount = 0) {
 }
 
 function stopEventStream() {
+  if (state.eventRetryTimer) {
+    clearTimeout(state.eventRetryTimer);
+    state.eventRetryTimer = null;
+  }
   if (state.eventStream) {
     state.eventStream.abort();
     state.eventStream = null;
@@ -4478,13 +4558,13 @@ function eventData(event) {
 }
 
 function mergeMessages(...lists) {
-  const seen = new Set();
+  const ids = new Set();
   return lists.flatMap((list) =>
     (Array.isArray(list) ? list : []).filter((item) => {
       const id = item?.info?.id;
       if (!id) return true;
-      if (seen.has(id)) return false;
-      seen.add(id);
+      if (ids.has(id)) return false;
+      ids.add(id);
       return true;
     }),
   );
@@ -4581,9 +4661,8 @@ function handleEventStreamEvent(event) {
     type.includes("interaction.")
   ) {
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    if (type.includes("interaction.")) {
-      scheduleConversation(SESSION_EVENT_DEBOUNCE);
-    }
+    scheduleConversation(SESSION_EVENT_DEBOUNCE);
+    scheduleManagedSessions(SESSION_LIST_EVENT_DEBOUNCE);
   }
 }
 
@@ -4595,7 +4674,7 @@ function handleSSEEvent(event) {
 
 function startPolling() {
   stopPolling();
-  if (!state.selectedTaskID && currentSessionID()) {
+  if (currentSessionID()) {
     startEventStream();
   }
   state.pollTimer = setInterval(() => {
@@ -4605,7 +4684,8 @@ function startPolling() {
     loadMeta();
   }, POLL_INTERVAL);
   state.sessionTimer = setInterval(() => {
-    if (!state.sseConnected || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP) {
+    const live = state.selectedTaskID ? state.sseConnected : state.eventConnected;
+    if (!live || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP) {
       loadConversation();
     }
   }, SESSION_POLL);
@@ -4617,6 +4697,7 @@ function stopPolling() {
   if (state.elapsedTimer) { clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
   if (state.boardKick) { clearTimeout(state.boardKick); state.boardKick = null; }
   if (state.sessionKick) { clearTimeout(state.sessionKick); state.sessionKick = null; }
+  if (state.sessionsKick) { clearTimeout(state.sessionsKick); state.sessionsKick = null; }
   stopEventStream();
 }
 
@@ -5784,15 +5865,16 @@ function isCriteriaEnabled(item) {
 
 async function listManagedSessions(limit = 200) {
   const params = new URLSearchParams();
-  params.set("roots", "true");
   params.set("limit", String(limit));
   const data = await apiJson(`session?${params.toString()}`);
   return Array.isArray(data) ? data.filter((item) => !item?.time?.archived) : [];
 }
 
 async function loadManagedSessions() {
+  const seq = ++state.sessionsSeq;
   try {
     const data = await listManagedSessions();
+    if (seq !== state.sessionsSeq) return;
     state.sessions = [...data]
       .filter((item) => !isDeletingManagedSession(item?.id))
       .sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
@@ -5802,6 +5884,7 @@ async function loadManagedSessions() {
     }
     renderManagedSessionList();
   } catch (e) {
+    if (seq !== state.sessionsSeq) return;
     AppLog.error("ui", "Failed to load sessions", { error: String(e) });
   }
 }
@@ -6051,22 +6134,13 @@ function formatSessionTranscript(messages) {
 async function openManagedSession(sessionID, input) {
   if (!sessionID) return;
   const session = input || sessionItem(sessionID);
-  let task = await resolveTaskForSession(sessionID);
-  let dir = task?.task?.directory || session?.directory || "";
+  let dir = session?.directory || "";
   if (dir && dir !== activeDirectory()) {
     await setActiveDirectory(dir, {
       restoreWorkspace: false,
       includeSessions: false,
     });
-    task = await resolveTaskForSession(sessionID);
-    dir = task?.task?.directory || session?.directory || dir;
-  }
-  if (task?.task?.id) {
-    await selectTask(task.task.id, { sessionID, managedSession: session });
-    await Promise.all([selectManagedSession(sessionID, { session, directory: dir }), loadMemory()]);
-    rememberWorkspace({ taskID: task.task.id, sessionID, directory: activeDirectory() || dir });
-    await persistOverlaySettings({ includeSession: false });
-    return;
+    dir = session?.directory || dir;
   }
   enterSessionWorkspace(sessionID, { managedSession: session });
   renderClear();
@@ -6226,11 +6300,25 @@ function boardArtifact(board, label) {
   return list.find((item) => item.label === label);
 }
 
+function hashText(value) {
+  let hash = 2166136261;
+  const text = String(value || "");
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 function syntheticTextMessage(role, time, text) {
   if (typeof text !== "string" || !text.trim()) return null;
   return {
     _synthetic: true,
-    info: { role, time: { created: Number.isFinite(time) ? time : Date.now() } },
+    info: {
+      id: `synthetic:${role}:${Number.isFinite(time) ? time : Date.now()}:${hashText(text)}`,
+      role,
+      time: { created: Number.isFinite(time) ? time : Date.now() },
+    },
     parts: [{ type: "text", text }],
   };
 }
@@ -6441,18 +6529,25 @@ function buildExecutorMessages() {
 
 async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") {
   const next = typeof runID === "string" ? runID : "";
+  const activeTask = state.board?.task?.status;
+  const activeRun = ["queued", "planning", "running", "blocked", "evaluating"].includes(String(activeTask || ""));
   if (!state.selectedTaskID) {
     state.executorEvents = [];
     state.executorRunID = "";
+    state.executorEventsFetchedAt = 0;
     return [];
   }
   if (!next) {
     state.executorEvents = [];
     state.executorRunID = "";
+    state.executorEventsFetchedAt = 0;
     renderSession();
     return [];
   }
-  if (state.executorRunID === next) return state.executorEvents;
+  if (
+    state.executorRunID === next &&
+    (!activeRun || Date.now() - state.executorEventsFetchedAt < 3000)
+  ) return state.executorEvents;
   try {
     const events = await apiJson(`run/${encodeURIComponent(next)}/executor-events`);
     if (state.selectedTaskID !== state.board?.task?.id) return state.executorEvents;
@@ -6461,6 +6556,7 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
       .map(executorEventEntry)
       .filter((item) => !!item);
     state.executorRunID = next;
+    state.executorEventsFetchedAt = Date.now();
     renderSession();
     return state.executorEvents;
   } catch (e) {
@@ -6468,6 +6564,7 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
     if ((state.board?.task?.activeRunID || "") !== next) return state.executorEvents;
     state.executorEvents = [];
     state.executorRunID = next;
+    state.executorEventsFetchedAt = Date.now();
     renderSession();
     return [];
   }
@@ -6475,11 +6572,16 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
 
 function appendExecutorEvent(raw) {
   const event = executorEventEntry(raw);
-  if (!event || !visibleExecutorEvent(event)) return;
+  if (!event) return;
   if (state.executorEvents.some((item) => item.id === event.id)) return;
-  if (event.runID && state.executorRunID && state.executorRunID !== event.runID) return;
+  if (event.runID && state.executorRunID && state.executorRunID !== event.runID) {
+    // New run started — discard stale events from the previous run and adopt the new runID.
+    state.executorEvents = [];
+    state.executorRunID = event.runID;
+  }
   if (event.runID && !state.executorRunID) state.executorRunID = event.runID;
   state.executorEvents = [...state.executorEvents, event].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  state.executorEventsFetchedAt = Date.now();
   state.sessionUpdatedAt = Date.now();
   renderSession();
 }
@@ -6745,6 +6847,18 @@ function conversationMessages() {
   const boardMsgs = buildBoardContextMessages();
   const executorMsgs = buildExecutorMessages();
   let realMessages = state.session || [];
+  if (!state.selectedTaskID && isPanelControlSession(state.managedSession || sessionItem(currentSessionID()))) {
+    realMessages = realMessages.filter((message) => {
+      if (message?.info?.role !== "assistant") return true;
+      if (message.info?.summary === true) return true;
+      return (message.parts || []).some((part) => {
+        if (part?.type !== "text") return false;
+        if (part.audience && part.audience.ui === false) return false;
+        if (part.kind === "trace" && !part.audience?.ui) return false;
+        return !!String(part.text || "").trim();
+      });
+    });
+  }
   if (boardMsgs.length > 0 && realMessages.length > 0) {
     realMessages = realMessages.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
@@ -7214,7 +7328,7 @@ function renderToolPart(part) {
   const st = part.state || {};
   const status = st.status || "pending";
   const input = st.input || {};
-  const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
+  const hiddenTools = ["planner", "structuredoutput", "todowrite", "todoupdate", "task_report"];
   if (hiddenTools.includes(toolName.toLowerCase())) return "";
 
   const detail = toolDetail(toolName, input, st);
@@ -7300,6 +7414,7 @@ dom.chatForm.addEventListener("submit", async (e) => {
     target: chatAbortTarget(),
     aborted: false,
     stopping: false,
+    workspaceEpoch: state.workspaceEpoch,
   };
   const timeout = setTimeout(() => {
     request.controller.abort(new DOMException("Timed out", "AbortError"));
@@ -7308,10 +7423,6 @@ dom.chatForm.addEventListener("submit", async (e) => {
   dom.chatTextarea.value = "";
   sizeChat();
   renderChatComposer();
-
-  if (!state.selectedTaskID) {
-    state.session = [];
-  }
 
   const now = Date.now();
   state.session = [
@@ -7322,12 +7433,16 @@ dom.chatForm.addEventListener("submit", async (e) => {
   renderSession();
 
   try {
-    if (state.selectedTaskID) {
-      await panelMessage(text, undefined, request.controller.signal);
-    } else {
+    const mode = workspaceMode();
+    if (mode === "session") {
       await sessionMessage(text, request.controller.signal);
+    } else {
+      await panelMessage(text, undefined, request.controller.signal);
     }
   } catch (err) {
+    if (request.workspaceEpoch !== state.workspaceEpoch) {
+      return;
+    }
     if (request.aborted || isAbortError(err)) {
       const ph = chatPlaceholder();
       if (ph) ph.parts[0].text = t("chat.interrupted_notice");
@@ -8864,6 +8979,10 @@ async function restoreInitialWorkspace() {
       restoreWorkspace: false,
     });
   }
+  if (taskID && state.tasks.some((item) => item?.task?.id === taskID)) {
+    await selectTask(taskID, { sessionID });
+    return true;
+  }
   if (sessionID) {
     const session = displaySessions().find((item) => item?.id === sessionID) || sessionItem(sessionID);
     if (session?.id) {
@@ -8871,25 +8990,11 @@ async function restoreInitialWorkspace() {
       return true;
     }
   }
-  if (taskID && state.tasks.some((item) => item?.task?.id === taskID)) {
-    await selectTask(taskID);
-    return true;
-  }
   if (moved && activeDirectory() !== base) {
     await setActiveDirectory(base, {
       persist: false,
       restoreWorkspace: false,
     });
-  }
-  if (await ensureTaskSelection()) return true;
-  const dir = activeDirectory();
-  const sessions = displaySessions();
-  const session = dir
-    ? sessions.find((item) => item.directory === dir)
-    : sessions[0];
-  if (session?.id) {
-    await openManagedSession(session.id, session);
-    return true;
   }
   return false;
 }
@@ -8924,7 +9029,8 @@ async function init() {
     renderExtensions();
   }
   // Retry connection periodically
-  setInterval(async () => {
+  if (state.reconnectTimer) clearInterval(state.reconnectTimer);
+  state.reconnectTimer = setInterval(async () => {
     try {
       if (!state.connected) {
         const ok = await checkConnection();
@@ -8932,7 +9038,6 @@ async function init() {
           await ensureWorkspaceDirectory();
           await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
           await restoreInitialWorkspace();
-          if (state.selectedTaskID) await selectTask(state.selectedTaskID);
         }
       }
     } catch (retryErr) {
@@ -8957,6 +9062,21 @@ window.addEventListener("blur", () => {
   stopPaneResize();
   clearPendingSessionDelete();
   void refreshInteractionAttention?.();
+});
+window.addEventListener("beforeunload", () => {
+  if (state.reconnectTimer) {
+    clearInterval(state.reconnectTimer);
+    state.reconnectTimer = null;
+  }
+  if (state.sseRetryTimer) {
+    clearTimeout(state.sseRetryTimer);
+    state.sseRetryTimer = null;
+  }
+  if (state.eventRetryTimer) {
+    clearTimeout(state.eventRetryTimer);
+    state.eventRetryTimer = null;
+  }
+  stopPolling();
 });
 document.addEventListener("visibilitychange", () => {
   syncTechFx();
