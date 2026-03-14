@@ -13,6 +13,10 @@ type Notify = {
   payload?: Record<string, unknown>
 }
 
+type Cursor = {
+  index: number
+}
+
 type State = {
   id: string
   sessionID: string
@@ -21,9 +25,12 @@ type State = {
   error: string | null
   output: string
   events: Notify[]
+  base: number
+  readers: Set<Cursor>
   wake?: () => void
   abort: AbortController
   startHash?: string
+  cleanup?: ReturnType<typeof setTimeout>
 }
 
 export const ManagedCodingExecutor = {
@@ -73,11 +80,12 @@ export const ManagedCodingExecutor = {
         },
       })
 
-      void consume(stream, state, latest).catch((err) => {
+      void consume(stream, state, tasks, latest).catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
         if (state.status === "running" || state.status === "retrying") {
           state.status = "failed"
           state.error = message
+          finalize(tasks, latest, state)
         } else {
           log.warn("executor stream error after terminal state", { status: state.status, error: message })
         }
@@ -110,6 +118,8 @@ export const ManagedCodingExecutor = {
           error: null,
           output: "",
           events: [],
+          base: 0,
+          readers: new Set(),
           abort: new AbortController(),
           startHash,
         }
@@ -155,6 +165,7 @@ export const ManagedCodingExecutor = {
             error: "task cancelled",
           },
         })
+        finalize(tasks, latest, state)
         return true
       },
       async delivery(input) {
@@ -175,6 +186,9 @@ export const ManagedCodingExecutor = {
       async resume(input) {
         const id = Identifier.ascending("task")
         const prev = pick(tasks, latest, { sessionID: input.sessionID })
+        // Capture a fresh startHash so delivery() can diff from this point.
+        // Same pattern as submit() — failures are safe to ignore.
+        const startHash = await Snapshot.track().catch(() => undefined)
         const state: State = {
           id,
           sessionID: input.sessionID,
@@ -183,7 +197,10 @@ export const ManagedCodingExecutor = {
           error: null,
           output: "",
           events: [],
+          base: 0,
+          readers: new Set(),
           abort: new AbortController(),
+          startHash,
         }
         tasks.set(id, state)
         latest.set(input.sessionID, id)
@@ -218,16 +235,22 @@ export const ManagedCodingExecutor = {
         const MAX_IDLE_MS = 30 * 60 * 1000 // 30 minutes max idle before giving up
         const state = pick(tasks, latest, input)
         if (!state) return
-        let index = 0
+        const cursor: Cursor = {
+          index: state.base,
+        }
+        state.readers.add(cursor)
         const abort = () => {
           state.wake?.()
         }
         input.signal?.addEventListener("abort", abort)
         try {
           while (true) {
-            while (index < state.events.length) {
-              yield state.events[index]!
-              index += 1
+            while (cursor.index < state.base + state.events.length) {
+              const item = state.events[cursor.index - state.base]
+              if (!item) break
+              yield item
+              cursor.index += 1
+              compact(state)
             }
             if (input.signal?.aborted) return
             if (state.status === "completed" || state.status === "failed") return
@@ -245,6 +268,8 @@ export const ManagedCodingExecutor = {
           }
         } finally {
           input.signal?.removeEventListener("abort", abort)
+          state.readers.delete(cursor)
+          compact(state)
         }
       },
       planningCapabilities() {
@@ -294,7 +319,12 @@ function value<T>(input: T | (() => T)) {
   return input
 }
 
-async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, latest: Map<string, string>) {
+async function consume(
+  stream: AsyncIterable<CodingEventInfo>,
+  state: State,
+  tasks: Map<string, State>,
+  latest: Map<string, string>,
+) {
   for await (const event of stream) {
     if (state.abort.signal.aborted || state.status === "failed") return
     sync(state, event)
@@ -307,6 +337,7 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
     if (event.type === "error") {
       state.status = "failed"
       state.error = event.message
+      finalize(tasks, latest, state)
       return
     }
     if (event.type === "done") {
@@ -314,6 +345,7 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
       state.error = null
       if (event.output) state.output = event.output
       latest.set(state.sessionID, state.id)
+      finalize(tasks, latest, state)
       return
     }
   }
@@ -330,11 +362,8 @@ async function consume(stream: AsyncIterable<CodingEventInfo>, state: State, lat
         error: "executor stream ended unexpectedly",
       },
     })
+    finalize(tasks, latest, state)
   }
-
-  // Free event buffers after stream finishes to prevent unbounded memory growth.
-  // Status/delivery queries still work since they read state.output/state.status, not events.
-  state.events.length = 0
 }
 
 function pick(tasks: Map<string, State>, latest: Map<string, string>, input: { sessionID?: string; queueTaskID?: string }) {
@@ -363,7 +392,49 @@ function sync(state: State, event: CodingEventInfo) {
 
 function push(state: State, event: Notify) {
   state.events.push(event)
+  compact(state)
   state.wake?.()
+}
+
+const MAX_BUFFERED_EVENTS = 256
+
+function retentionMs() {
+  const raw = Number(process.env.OPENCORVUS_EXECUTOR_TASK_RETENTION_MS)
+  if (!Number.isFinite(raw) || raw <= 0) return 60_000
+  return Math.max(1_000, Math.floor(raw))
+}
+
+function finalize(tasks: Map<string, State>, latest: Map<string, string>, state: State) {
+  compact(state)
+  if (state.cleanup) clearTimeout(state.cleanup)
+  const timer = setTimeout(() => {
+    tasks.delete(state.id)
+    if (latest.get(state.sessionID) === state.id) latest.delete(state.sessionID)
+  }, retentionMs())
+  timer.unref()
+  state.cleanup = timer
+}
+
+function compact(state: State) {
+  if (state.readers.size === 0) {
+    if (state.status === "completed" || state.status === "failed") {
+      state.events.length = 0
+      state.base = 0
+      return
+    }
+    if (state.events.length > MAX_BUFFERED_EVENTS) {
+      const trim = state.events.length - MAX_BUFFERED_EVENTS
+      state.events.splice(0, trim)
+      state.base += trim
+    }
+    return
+  }
+
+  const min = Math.min(...[...state.readers].map((reader) => reader.index))
+  const trim = min - state.base
+  if (trim <= 0) return
+  state.events.splice(0, trim)
+  state.base = min
 }
 
 function map(state: State, event: CodingEventInfo): Notify {

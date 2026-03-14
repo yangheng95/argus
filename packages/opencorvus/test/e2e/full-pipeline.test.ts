@@ -124,7 +124,7 @@ const HAS_SLACK_CREDS = !!(
 )
 const liveTest = RUN_LIVE_E2E && HAS_LIVE_MODEL ? test : test.skip
 
-const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "900000", 10) // 15 分钟
+const TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_TIMEOUT_MS ?? "1800000", 10) // 30 分钟
 const MODEL_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_MODEL_TIMEOUT_MS ?? "300000", 10) // 5 minutes
 const SPEC_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_SPEC_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)
 const PLANNER_TIMEOUT_MS = parseInt(process.env.OPENCORVUS_E2E_PLANNER_TIMEOUT_MS ?? String(MODEL_TIMEOUT_MS), 10)

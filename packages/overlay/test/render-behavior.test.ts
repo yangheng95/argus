@@ -1093,6 +1093,740 @@ test("right-rail child content stays contained inside parent blocks", async () =
   }
 }, { timeout: 20_000 })
 
+test("task update events refresh board, conversation, and managed sessions together", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleEventStreamEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+        },
+      }
+
+      window.__overlayTest = {
+        board: 0,
+        conversation: 0,
+        sessions: 0,
+      }
+      window.eval("loadBoard = async () => { window.__overlayTest.board += 1 }")
+      window.eval("loadConversation = async () => { window.__overlayTest.conversation += 1 }")
+      window.eval("loadManagedSessions = async () => { window.__overlayTest.sessions += 1 }")
+      window.eval("handleEventStreamEvent")({
+        type: "orchestrator.task.updated",
+        properties: {
+          taskID: "task-1",
+        },
+      })
+    })
+
+    await tab.waitForFunction(() => {
+      try {
+        const value = window.__overlayTest
+        return value.board === 1 && value.conversation === 1 && value.sessions === 1
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => window.__overlayTest)
+    expect(result).toEqual({
+      board: 1,
+      conversation: 1,
+      sessions: 1,
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("panel stream failure does not retry with a second panel message request", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("panelMessage") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.connected = true
+      state.selectedTaskID = ""
+      state.chatSessionID = ""
+      state.managedSession = null
+      state.directory = "D:/overlay/current"
+      const calls = []
+      const root = window
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
+        if (url.pathname === "/panel/message/stream") {
+          return new Response("boom", { status: 500, statusText: "Internal Server Error" })
+        }
+        if (url.pathname === "/panel/message") {
+          return new Response(JSON.stringify({ kind: "created", task_id: "task-dup", message: "dup" }), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+
+      try {
+        await window.eval("panelMessage")("Create a new task")
+        return { calls, error: "" }
+      } catch (error) {
+        return { calls, error: String(error) }
+      }
+    })
+
+    expect(result.calls).toEqual(["POST /panel/message/stream"])
+    expect(result.error).toContain("Panel stream failed")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("managed session list includes the current hidden task session", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("displaySessions") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.sessions = []
+      state.managedSession = {
+        id: "session-task",
+        parentID: "task-parent",
+        title: "Task session",
+        directory: "D:/overlay/current",
+        time: { created: 1, updated: 2 },
+      }
+      return window.eval("displaySessions")().map((item) => item.id)
+    })
+
+    expect(result).toEqual(["session-task"])
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task workspace abort falls back to the task session when no run id exists", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("chatAbortTarget") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-task",
+          activeRunID: "",
+        },
+      }
+      state.executorRunID = ""
+      state.managedSession = {
+        id: "session-task",
+        title: "Task session",
+      }
+      return window.eval("chatAbortTarget")()
+    })
+
+    expect(result).toEqual({
+      kind: "session",
+      sessionID: "session-task",
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("restoreInitialWorkspace preserves the stored session id when reopening a task", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("restoreInitialWorkspace") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.connected = true
+      state.directory = "D:/overlay/current"
+      state.savedDirectory = "D:/overlay/current"
+      state.workspaceTaskID = "task-1"
+      state.workspaceSessionID = "session-9"
+      state.workspaceDirectory = "D:/overlay/current"
+      state.tasks = [{
+        task: {
+          id: "task-1",
+          sessionID: "session-9",
+          directory: "D:/overlay/current",
+        },
+      }]
+      window.eval("loadBoard = async () => { state.board = { task: { id: 'task-1', sessionID: 'session-9', status: 'running', time: {} }, lanes: [], interactions: [] } }")
+      window.eval("loadConversation = async () => {}")
+      window.eval("loadMeta = async () => {}")
+      window.eval("syncSessionOverlaySettings = async () => {}")
+      window.eval("persistOverlaySettings = async () => {}")
+      await window.eval("restoreInitialWorkspace")()
+      return {
+        selectedTaskID: state.selectedTaskID,
+        chatSessionID: state.chatSessionID,
+      }
+    })
+
+    expect(result).toEqual({
+      selectedTaskID: "task-1",
+      chatSessionID: "",
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("restoreInitialWorkspace does not auto-open the first session without an explicit saved target", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("restoreInitialWorkspace") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.connected = true
+      state.directory = "D:/overlay/current"
+      state.savedDirectory = "D:/overlay/current"
+      state.workspaceTaskID = ""
+      state.workspaceSessionID = ""
+      state.workspaceDirectory = ""
+      state.selectedTaskID = ""
+      state.chatSessionID = ""
+      state.managedSession = null
+      state.tasks = []
+      state.sessions = [
+        {
+          id: "session-1",
+          title: "Lonely session",
+          directory: "D:/overlay/current",
+          time: { created: 1, updated: 2 },
+        },
+      ]
+      const restored = await window.eval("restoreInitialWorkspace")()
+      return {
+        restored,
+        selectedTaskID: state.selectedTaskID,
+        chatSessionID: state.chatSessionID,
+      }
+    })
+
+    expect(result).toEqual({
+      restored: false,
+      selectedTaskID: "",
+      chatSessionID: "",
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task-scoped panel requests do not grant session mutation by default", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("panelRequestBody") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+        },
+      }
+      return window.eval("panelRequestBody")("Create a new session")
+    })
+
+    expect(result.allow_create).toBe(true)
+    expect(result.allow_session_mutation).toBe(false)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("panel chat requests include a generated request_id", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("panelMessage") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.connected = true
+      state.selectedTaskID = ""
+      state.chatSessionID = ""
+      state.managedSession = null
+      state.serverUrl = window.location.origin
+      let requestID = ""
+      window.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        if (url.pathname === "/panel/message/stream") {
+          const body = JSON.parse(String(init.body || "{}"))
+          requestID = body.request_id || ""
+          return new Response(`data: ${JSON.stringify({ type: "done", result: { kind: "panel_response", message: "ok" } })}\n\n`, {
+            status: 200,
+            headers: { "content-type": "text/event-stream; charset=utf-8" },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+      await window.eval("panelMessage")("Create a task")
+      return requestID
+    })
+
+    expect(typeof result).toBe("string")
+    expect(result.length).toBeGreaterThan(10)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("opening a task-linked session stays in session workspace", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("openManagedSession") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.connected = true
+      state.directory = "D:/overlay/current"
+      state.savedDirectory = "D:/overlay/current"
+      state.sessions = [{
+        id: "session-task",
+        parentID: "task-parent",
+        title: "Task session",
+        directory: "D:/overlay/current",
+        time: { created: 1, updated: 2 },
+      }]
+      state.tasks = [{
+        task: {
+          id: "task-1",
+          sessionID: "session-task",
+          directory: "D:/overlay/current",
+        },
+      }]
+      window.eval("loadConversation = async () => {}")
+      window.eval("loadMemory = async () => {}")
+      window.eval("selectManagedSession = async (sessionID) => { state.managedSession = { id: sessionID } }")
+      window.eval("persistOverlaySettings = async () => {}")
+      await window.eval("openManagedSession")("session-task", state.sessions[0])
+      return {
+        workspace: document.body.dataset.workspace || "",
+        selectedTaskID: state.selectedTaskID,
+        chatSessionID: state.chatSessionID,
+      }
+    })
+
+    expect(result).toEqual({
+      workspace: "session",
+      selectedTaskID: "",
+      chatSessionID: "session-task",
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("active runs re-fetch executor events after the refresh window", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadExecutorEvents") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.serverUrl = window.location.origin
+      state.board = {
+        task: {
+          id: "task-1",
+          activeRunID: "run-1",
+          status: "running",
+        },
+      }
+      let calls = 0
+      window.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        if (url.pathname === "/run/run-1/executor-events") {
+          calls += 1
+          return new Response("[]", {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+      await window.eval("loadExecutorEvents")("run-1")
+      await window.eval("loadExecutorEvents")("run-1")
+      state.executorEventsFetchedAt = Date.now() - 4000
+      await window.eval("loadExecutorEvents")("run-1")
+      return calls
+    })
+
+    expect(result).toBe(2)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("executor store keeps hidden events even when they are not rendered", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("appendExecutorEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      window.eval("appendExecutorEvent")({
+        id: "evt-hidden",
+        runID: "run-1",
+        kind: "status",
+        summary: "running",
+        time: { created: 1 },
+      })
+      window.eval("appendExecutorEvent")({
+        id: "evt-visible",
+        runID: "run-1",
+        kind: "tool_call",
+        summary: "Tool call: read_file",
+        payload: { name: "read_file" },
+        time: { created: 2 },
+      })
+      return {
+        stored: state.executorEvents.map((item) => item.id),
+        visible: window.eval("buildExecutorMessages")().map((item) => item.info.id),
+      }
+    })
+
+    expect(result.stored).toEqual(["evt-hidden", "evt-visible"])
+    expect(result.visible).toEqual(["evt-visible"])
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("mergeMessages de-duplicates synthetic board messages by stable ids", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("syntheticTextMessage") === "function" && typeof window.eval("mergeMessages") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const left = window.eval("syntheticTextMessage")("system", 10, "same")
+      const right = window.eval("syntheticTextMessage")("system", 10, "same")
+      return window.eval("mergeMessages")([left], [right]).length
+    })
+
+    expect(result).toBe(1)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("session polling does not refetch when session event stream is live", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("startPolling") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.connected = true
+      state.selectedTaskID = ""
+      state.chatSessionID = "session-1"
+      state.eventConnected = true
+      state.sessionUpdatedAt = Date.now()
+      let calls = 0
+      window.eval("loadConversation = async () => { calls += 1 }")
+      window.eval("loadBoard = async () => {}")
+      window.eval("loadMeta = async () => {}")
+      window.eval("startPolling")()
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      window.eval("stopPolling")()
+      return calls
+    })
+
+    expect(result).toBe(0)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("health check stays online when tasks endpoint fails", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("checkConnection") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const root = window
+      const calls = []
+      root.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        calls.push(url.pathname)
+        if (url.pathname === "/global/health") {
+          return new Response(JSON.stringify({ version: "1.2.3" }), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        if (url.pathname === "/tasks" || url.pathname === "/global/tasks") {
+          return new Response("boom", { status: 500 })
+        }
+        return new Response("not found", { status: 404 })
+      }
+      state.connected = false
+      const ok = await window.eval("checkConnection")()
+      return {
+        ok,
+        connected: state.connected,
+        calls,
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.connected).toBe(true)
+    expect(result.calls).toEqual(["/global/health"])
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
 test("live planner agent marks the plan section active", async () => {
   const exe = await browser()
   const server = serve()
@@ -2060,13 +2794,13 @@ test("panel request body enables session mutations for panel chat input", async 
       }
     })
 
-    expect(result.help.allow_create).toBe(false)
+    expect(result.help.allow_create).toBe(true)
     expect(result.help.allow_session_mutation).toBe(true)
-    expect(result.task.allow_create).toBe(false)
+    expect(result.task.allow_create).toBe(true)
     expect(result.task.allow_session_mutation).toBe(true)
-    expect(result.session.allow_create).toBe(false)
+    expect(result.session.allow_create).toBe(true)
     expect(result.session.allow_session_mutation).toBe(true)
-    expect(result.sessionZh.allow_create).toBe(false)
+    expect(result.sessionZh.allow_create).toBe(true)
     expect(result.sessionZh.allow_session_mutation).toBe(true)
   } finally {
     await page.close()
@@ -3102,7 +3836,7 @@ test("workspace mode follows unified selection helpers", async () => {
 
     expect(modes.empty).toBe("empty")
     expect(modes.task).toBe("task")
-    expect(modes.taskSession).toBe("task-session")
+    expect(modes.taskSession).toBe("task")
     expect(modes.session).toBe("session")
     expect(modes.offline).toBe("offline")
   } finally {
@@ -3387,6 +4121,140 @@ test("session diff failures do not fall back to board diffs", async () => {
     expect(result.changes).toEqual([])
     expect(result.text.trim().length).toBeGreaterThan(0)
     expect(result.text).not.toContain("src/app.js")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task conversation reads the task session transcript instead of control timeline", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadConversation") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+        },
+      }
+      state.serverUrl = window.location.origin
+      const calls = []
+      window.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        calls.push(url.pathname + (url.search ? url.search : ""))
+        if (url.pathname === "/session/session-1/message") {
+          return new Response(JSON.stringify([
+            { info: { id: "m1", role: "assistant", time: { created: 1 } }, parts: [{ id: "p1", type: "text", text: "from session" }] },
+          ]), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        if (url.pathname === "/control/timeline") {
+          return new Response(JSON.stringify([
+            { info: { id: "ctl-1", role: "assistant", time: { created: 1 } }, parts: [{ id: "ctl-p1", type: "text", text: "from timeline" }] },
+          ]), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+      await window.eval("loadConversation")()
+      return {
+        calls,
+        session: state.session.map((item) => item.info.id),
+      }
+    })
+
+    expect(result.calls).toEqual(["/session/session-1/message"])
+    expect(result.session).toEqual(["m1"])
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task changes prefer board delivery diffs over session diff fetches", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await puppeteer.launch({
+    executablePath: exe,
+    headless: "new",
+    args: ["--no-sandbox"],
+  })
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadChanges") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+        },
+        delivery: {
+          result: {
+            diffs: [
+              {
+                file: "src/app.js",
+                before: "a",
+                after: "b",
+                additions: 1,
+                deletions: 1,
+                status: "modified",
+              },
+            ],
+          },
+        },
+      }
+      state.serverUrl = window.location.origin
+      const calls = []
+      window.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        calls.push(url.pathname)
+        return new Response("not found", { status: 404 })
+      }
+      await window.eval("loadChanges")()
+      return {
+        calls,
+        files: state.changes.map((item) => item.file),
+      }
+    })
+
+    expect(result.calls).toEqual([])
+    expect(result.files).toEqual(["src/app.js"])
   } finally {
     await page.close()
     server.stop(true)

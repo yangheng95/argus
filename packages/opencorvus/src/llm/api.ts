@@ -66,18 +66,22 @@ async function wait(ms: number, abort?: AbortSignal) {
   })
 }
 
-async function call<T>(run: () => Promise<T>, input: {
+async function call<T>(run: (attemptSignal: AbortSignal | undefined) => Promise<T>, input: {
   retries?: number
   retryDelayMs?: number
   abortSignal?: AbortSignal
+  timeoutMs?: number | false
 }) {
   const max = retries(input.retries)
   const base = retryDelayMs(input.retryDelayMs)
   for (let attempt = 0; attempt <= max; attempt++) {
+    // Create a fresh per-attempt timeout signal so earlier timeouts don't poison retries.
+    const attemptSignal = signal(input.abortSignal, input.timeoutMs)
     try {
-      return await run()
+      return await run(attemptSignal)
     } catch (error) {
       if (attempt >= max || !retryable(error)) throw error
+      // Use only the caller's abort signal for the delay (not the already-expired per-attempt signal).
       await wait(base * Math.pow(2, attempt), input.abortSignal)
     }
   }
@@ -92,17 +96,17 @@ export async function generateText(
   },
 ) {
   const { timeoutMs: timeout, retries: count, retryDelayMs: delay, abortSignal, ...rest } = input
-  const next = signal(abortSignal, timeout)
   return call(
-    () => generateTextBase({
+    (attemptSignal) => generateTextBase({
       ...(rest as Parameters<typeof generateTextBase>[0]),
-      abortSignal: next,
+      abortSignal: attemptSignal,
       maxRetries: 0,
     }),
     {
       retries: count,
       retryDelayMs: delay,
-      abortSignal: next,
+      abortSignal,
+      timeoutMs: timeout,
     },
   )
 }
@@ -115,17 +119,17 @@ export async function generateObject(
   },
 ) {
   const { timeoutMs: timeout, retries: count, retryDelayMs: delay, abortSignal, ...rest } = input
-  const next = signal(abortSignal, timeout)
   return call(
-    () => generateObjectBase({
+    (attemptSignal) => generateObjectBase({
       ...(rest as Parameters<typeof generateObjectBase>[0]),
-      abortSignal: next,
+      abortSignal: attemptSignal,
       maxRetries: 0,
     }),
     {
       retries: count,
       retryDelayMs: delay,
-      abortSignal: next,
+      abortSignal,
+      timeoutMs: timeout,
     },
   )
 }

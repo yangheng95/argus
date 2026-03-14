@@ -107,8 +107,9 @@ type AnalyzeInput = {
 
 export namespace EvaluatorAgent {
   export async function analyze(input: AnalyzeInput): Promise<EvaluatorAnalysisType> {
-    const language = await agentLanguageModel()
-    if (!language) throw new Error("Evaluator analysis model is unavailable")
+    const resolved = await agentLanguageModel()
+    if (!resolved) throw new Error("Evaluator analysis model is unavailable")
+    const { language, isReasoning } = resolved
     const timeoutMs = evaluatorTimeoutMs()
 
     // Full evaluator tool set: codebase exploration + memory + preferences
@@ -158,7 +159,8 @@ export namespace EvaluatorAgent {
           model: language,
           stopWhen: stepCountIs(MAX_STEPS),
           tools,
-          toolChoice: "required",
+          // reasoning models (e.g. qwen3.5-plus) reject toolChoice="required" — use "auto" instead
+          toolChoice: isReasoning ? "auto" : "required",
           maxOutputTokens: 16384,
           timeoutMs,
           abortSignal: AbortSignal.timeout(timeoutMs),
@@ -198,7 +200,7 @@ export namespace EvaluatorAgent {
               steps: result.steps.length,
               finishReason: result.finishReason,
             })
-            const forced = await finalizeAnalysis(language, input, result.steps, timeoutMs)
+            const forced = await finalizeAnalysis(language, input, result.steps, timeoutMs, isReasoning)
             if (forced.submittedAnalysis) {
               submittedAnalysis = forced.submittedAnalysis
               parsed = normalizeAnalysis(submittedAnalysis, input.goals.length)
@@ -506,6 +508,7 @@ async function finalizeAnalysis(
   input: AnalyzeInput,
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   timeoutMs: number,
+  isReasoning = false,
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -537,7 +540,7 @@ async function finalizeAnalysis(
     model: language,
     stopWhen: stepCountIs(8),
     tools,
-    toolChoice: "required",
+    toolChoice: isReasoning ? "auto" : "required",
     maxOutputTokens: 16384,
     timeoutMs: Math.min(timeoutMs, 120_000),
     abortSignal: AbortSignal.timeout(Math.min(timeoutMs, 120_000)),
@@ -555,20 +558,20 @@ async function finalizeAnalysis(
   return { result, submittedAnalysis }
 }
 
-async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
+async function agentLanguageModel(): Promise<{ language: LanguageModelV2; isReasoning: boolean } | undefined> {
   try {
     const def = await Provider.defaultModel()
     if (!def) return undefined
     log.info("evaluator: default model resolved", { providerID: def.providerID, modelID: def.modelID })
     const model = await Provider.getModel(def.providerID, def.modelID)
     const language = await Provider.getLanguage(model)
-    log.info("evaluator: model ready via Provider", { modelId: language.modelId })
-    return language
+    const isReasoning = model.capabilities?.reasoning === true
+    log.info("evaluator: model ready via Provider", { modelId: language.modelId, isReasoning })
+    return { language, isReasoning }
   } catch (err) {
     log.error("evaluator: model resolution failed — evaluator will be unavailable", { error: String(err) })
     return undefined
   }
-
 }
 
 // ---------------------------------------------------------------------------
@@ -610,7 +613,11 @@ function prefetchEvaluatorContext(input: {
     const prefs = Preference.merged({ projectID: projectId })
     if (prefs.length > 0) {
       const items = prefs.map((p) => `- **${p.key}**: ${p.value}`).join("\n")
-      sections.push(`## Active Preferences (BINDING — check compliance)\n\n${items}`)
+      sections.push(
+        "## Active Preferences (default conventions — explicit task constraints win on conflict)\n\n" +
+          "Treat these as binding only when they do not conflict with the user request, approved spec, or explicit task boundaries.\n\n" +
+          items,
+      )
     }
   } catch (err) {
     log.warn("evaluator: preferences prefetch failed", { error: err instanceof Error ? err.message : String(err) })
@@ -750,7 +757,7 @@ A shallow evaluation is WORSE than no evaluation — it causes the orchestrator 
 ### Phase 0: RECALL (1-2 tool calls)
 
 1. **Search memory** (memory_search) with failure-related keywords from the check results. If pre-fetched memory exists in the prompt, only search for additional gaps.
-2. **List preferences** (preference_list) unless already pre-fetched. Preferences are BINDING — convention violations are real failures.
+2. **List preferences** (preference_list) unless already pre-fetched. Preferences are default conventions, but explicit task constraints and approved spec boundaries override them on conflict.
 
 ### Phase 1: REVIEW automated check results (no tool calls needed)
 
@@ -787,7 +794,8 @@ After investigation, you should know:
 If preferences were loaded (from pre-fetch or Phase 0):
 - Verify changed code follows naming conventions, file structure patterns, code style rules
 - Check for anti-patterns explicitly called out in preferences
-- Convention violations ARE failures — they produce "evaluation" classification
+- If a preference conflicts with an explicit user request or approved task boundary, follow the task boundary and note the preference conflict without failing the delivery for that reason alone
+- Convention violations ARE failures only when they do not conflict with explicit task constraints
 
 ### Phase 3: ASSESS each goal (no tool calls — synthesize from investigation)
 
@@ -870,6 +878,7 @@ Respond with ONLY a JSON object. **CRITICAL**: Output fields in EXACTLY this ord
 - classification "transient" should be very rare (< 10% of failures). Most failures are "evaluation" (partial implementation) or "strategy" (wrong approach).
 - If verdict is "accepted", still provide detailed evidence for each goal. An accepted verdict with weak evidence is useless for learning.
 - Write in the same language as the task request (Chinese request → Chinese output).
+- Explicit task constraints override preferences. Example: if the task says "only modify src/", do not reject solely because a preference suggests updating README outside src/.
 - Do NOT fabricate evidence. If investigation cannot verify a required goal, reject the delivery and explain the missing evidence.
 - After finishing tool calls, output JSON immediately. Do not add commentary before or after the JSON.
 

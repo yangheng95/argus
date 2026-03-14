@@ -15,6 +15,7 @@ import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
 import {
   applyGoalDelivery,
+  blockingEvaluationFailure,
   buildGoalPrompt,
   cleanupGoalWorkspace,
   cleanupStaleGoalWorkspaces,
@@ -111,6 +112,8 @@ const finalizingGoalRuns = new Set<string>() // guards against concurrent finali
 const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 const FOLLOWUP_RUN_SYNC_GRACE_MS = 250
+const EXECUTOR_OUTPUT_FLUSH_MS = 100
+const EXECUTOR_OUTPUT_FLUSH_CHARS = 1024
 
 // Unattended-mode safeguards
 const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
@@ -237,13 +240,19 @@ async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks
     sessionID: task.session_id ?? undefined,
   })
   const startRef = taskBaselineRef(task)
-  const baseRef = await Snapshot.track()
+  const baseRef = await Snapshot.track().catch(() => undefined)
   const workspaceDir = await createGoalWorkspace({
     task,
     goal: next.goal,
     snapshot: baseRef,
   })
-  const session = await createGoalSession(task, next.goal, workspaceDir)
+  let session: Awaited<ReturnType<typeof createGoalSession>>
+  try {
+    session = await createGoalSession(task, next.goal, workspaceDir)
+  } catch (err) {
+    await cleanupGoalWorkspace(workspaceDir).catch((e) => log.warn("cleanup after session create failure", { error: String(e) }))
+    throw err
+  }
   const goalRun = createGoalRun({
     taskID: task.id,
     goalID: next.goal.id,
@@ -268,14 +277,22 @@ async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks
   })
   const source: "planner" | "scheduler" | "system" = run.metadata?.strategy === "operator_note" ? "system" : "scheduler"
   const executor = ExecutorRegistry.require(run.executor)
-  const submission = await provideWorkspace(workspaceDir, () =>
-    executor.submit({
-      sessionID: session.id,
-      prompt,
-      priority: task.priority,
-      source,
-    })
-  )
+  let submission: Awaited<ReturnType<typeof executor.submit>>
+  try {
+    submission = await provideWorkspace(workspaceDir, () =>
+      executor.submit({
+        sessionID: session.id,
+        prompt,
+        priority: task.priority,
+        source,
+      })
+    )
+  } catch (err) {
+    updateGoalRun(goalRun.id, { status: "failed", error: String(err), time_completed: Date.now() })
+    await removeGoalRunSession(goalRun).catch((e) => log.warn("cleanup session after submit failure", { error: String(e) }))
+    await cleanupGoalWorkspace(workspaceDir).catch((e) => log.warn("cleanup workspace after submit failure", { error: String(e) }))
+    throw err
+  }
   const now = Date.now()
   updateGoalRun(goalRun.id, {
     session_id: submission.sessionID,
@@ -441,7 +458,7 @@ async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: Runtim
   })
   const goals = goalsForRun(run)
   const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
-  const phase1Failed = result.status === "failed"
+  const phase1Failed = blockingEvaluationFailure(result)
   const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
   const finalStatus = (finalVerdict === "accepted" ? "passed" : "failed") as typeof result.status
   const finalSummary = phase1Failed && analysis.verdict === "accepted"
@@ -528,20 +545,20 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       )
       updateGoalRun(goalRun.id, { status: "failed", error: summary, blocking_reason: null, time_completed: now })
       if (goal.priority === "advisory") {
-        await dispose()
+        await dispose().catch((err) => log.warn("dispose failed after advisory timeout", { error: String(err) }))
         await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
         return
       }
-      await dispose()
+      await dispose().catch((err) => log.warn("dispose failed after evaluation timeout", { error: String(err) }))
       await handleEvaluationFailure(requireTask(task.id), run, summary, hooks)
       return
     }
     if (existingEvaluation.status === "passed" || goal.priority === "advisory") {
-      await dispose()
+      await dispose().catch((err) => log.warn("dispose failed after passed evaluation", { error: String(err) }))
       await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
       return
     }
-    await dispose()
+    await dispose().catch((err) => log.warn("dispose failed after failed evaluation", { error: String(err) }))
     await handleEvaluationFailure(requireTask(task.id), run, existingEvaluation.summary, hooks)
     return
   }
@@ -615,7 +632,7 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
     }
     await handleEvaluationFailure(requireTask(task.id), run, outcome.summary, hooks, analysis)
   } finally {
-    await dispose()
+    await dispose().catch((err) => log.warn("dispose failed after goal run finalization", { error: String(err) }))
   }
 }
 
@@ -980,7 +997,7 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   })
   const goals = goalsForRun(run)
   const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
-  const phase1Failed = result.status === "failed"
+  const phase1Failed = blockingEvaluationFailure(result)
   const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
   const finalStatus = (finalVerdict === "accepted" ? "passed" : "failed") as typeof result.status
   const finalSummary = phase1Failed && analysis.verdict === "accepted"
@@ -1365,31 +1382,52 @@ function consumeExecutorEvents(
   OrchestratorRuntime.stopExecutorEventBridge(sessionID)
   const controller = new AbortController()
   executorEventBridges.set(sessionID, controller)
+  let output = ""
+  let outputAt = Date.now()
+  const flushOutput = () => {
+    if (!output) return
+    Bus.publish(Event.RunOutput, {
+      taskID,
+      runID,
+      type: "text_delta",
+      text: output,
+    })
+    output = ""
+    outputAt = Date.now()
+  }
   // 异步消费 — 不阻塞 dispatch 返回
   ;(async () => {
     try {
       for await (const event of executor.events({ sessionID, signal: controller.signal })) {
         try {
+          if (event.type === "message.part.delta") {
+            const delta = typeof event.payload?.delta === "string" ? event.payload.delta : event.summary ?? ""
+            if (delta) {
+              output += delta
+              const now = Date.now()
+              if (output.length >= EXECUTOR_OUTPUT_FLUSH_CHARS || now - outputAt >= EXECUTOR_OUTPUT_FLUSH_MS) {
+                flushOutput()
+              }
+            }
+            continue
+          }
+
+          flushOutput()
           upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
-          appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
-            provider: executorName,
-            kind: protocolEventKind(event.type),
-            summary: event.summary ?? event.type,
-            payload: event.payload,
-            raw: {
-              type: event.type,
-              summary: event.summary,
+          if (shouldPersistExecutorEvent(event.type)) {
+            appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
+              provider: executorName,
+              kind: protocolEventKind(event.type),
+              summary: event.summary ?? event.type,
               payload: event.payload,
-            },
-          })
-          if (event.type === "text_delta") {
-            Bus.publish(Event.RunOutput, {
-              taskID,
-              runID,
-              type: "text_delta",
-              text: event.summary ?? "",
+              raw: {
+                type: event.type,
+                summary: event.summary,
+                payload: event.payload,
+              },
             })
-          } else {
+          }
+          if (shouldPublishExecutorProgress(event.type)) {
             Bus.publish(Event.RunProgress, {
               taskID,
               runID,
@@ -1405,6 +1443,7 @@ function consumeExecutorEvents(
     } catch (err) {
       log.warn("executor event bridge ended", { taskID, runID, error: String(err) })
     } finally {
+      flushOutput()
       if (executorEventBridges.get(sessionID) === controller) {
         executorEventBridges.delete(sessionID)
       }
@@ -1438,6 +1477,19 @@ function protocolEventKind(type: string) {
   if (type.includes("done") || type.includes("completed")) return "done"
   if (type.includes("delta") || type.includes("message")) return "message_delta"
   return "status"
+}
+
+export function shouldPersistExecutorEvent(type: string) {
+  return type !== "message.part.delta" &&
+    type !== "protocol.raw" &&
+    type !== "usage.updated" &&
+    type !== "executor.status"
+}
+
+export function shouldPublishExecutorProgress(type: string) {
+  return type !== "protocol.raw" &&
+    type !== "usage.updated" &&
+    type !== "executor.status"
 }
 
 function upsertExecutorInteraction(

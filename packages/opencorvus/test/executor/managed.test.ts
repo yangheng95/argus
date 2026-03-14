@@ -4,6 +4,7 @@ import { ExecutorRegistry } from "../../src/executor/registry"
 
 describe("managed coding executor", () => {
   afterEach(() => {
+    delete process.env.OPENCORVUS_EXECUTOR_TASK_RETENTION_MS
     ExecutorRegistry.reset()
   })
 
@@ -357,5 +358,99 @@ describe("managed coding executor", () => {
     })
     expect(seen[0]?.["toolMode"]).toBeUndefined()
     expect(seen[0]?.["tools"]).toBeUndefined()
+  })
+
+  test("terminal tasks are cleaned up after the retention window", async () => {
+    process.env.OPENCORVUS_EXECUTOR_TASK_RETENTION_MS = "1000"
+    const provider: CodingProvider = {
+      name: "codex",
+      capabilities() {
+        return {
+          builtinTools: true,
+          customTools: true,
+          stream: true,
+          resume: true,
+          interrupt: true,
+          cwd: true,
+          system: true,
+        }
+      },
+      async *run() {
+        yield { type: "done", sessionID: "resp_cleanup", output: "ok" }
+      },
+      async *resume() {},
+      async interrupt() {
+        return true
+      },
+    }
+
+    const executor = ExecutorRegistry.registerCoding("codex", provider, {})
+    const submitted = await executor.submit({
+      sessionID: "session_cleanup",
+      prompt: "cleanup",
+    })
+
+    let status = await executor.status(submitted.queueTaskID)
+    for (let index = 0; index < 10 && status.status !== "completed"; index++) {
+      await Bun.sleep(10)
+      status = await executor.status(submitted.queueTaskID)
+    }
+
+    expect(status.status).toBe("completed")
+    await Bun.sleep(1200)
+    await expect(executor.status(submitted.queueTaskID)).rejects.toThrow("executor task not found")
+    expect(await executor.delivery({ sessionID: "session_cleanup" })).toEqual({ summary: "", diffs: [] })
+  })
+
+  test("streams many deltas without losing output under backpressure", async () => {
+    const total = 1500
+    const chunks = Array.from({ length: total }, (_, index) => `${index},`)
+    const provider: CodingProvider = {
+      name: "claude-code",
+      capabilities() {
+        return {
+          builtinTools: true,
+          customTools: false,
+          stream: true,
+          resume: true,
+          interrupt: true,
+          cwd: true,
+          system: true,
+        }
+      },
+      async *run() {
+        for (const chunk of chunks) {
+          yield { type: "text_delta", text: chunk }
+        }
+        yield { type: "done", sessionID: "resp_pressure", output: chunks.join("") }
+      },
+      async *resume() {},
+      async interrupt() {
+        return true
+      },
+    }
+
+    const executor = ExecutorRegistry.registerCoding("claude-code", provider, {})
+    const submitted = await executor.submit({
+      sessionID: "session_pressure",
+      prompt: "pressure",
+    })
+
+    const seen: string[] = []
+    for await (const event of executor.events({ sessionID: "session_pressure" })) {
+      if (event.type === "message.part.delta" && event.payload?.delta) {
+        seen.push(String(event.payload.delta))
+        if (seen.length % 100 === 0) {
+          await Bun.sleep(1)
+        }
+      }
+    }
+
+    const status = await executor.status(submitted.queueTaskID)
+    const delivery = await executor.delivery({ sessionID: "session_pressure" })
+
+    expect(status.status).toBe("completed")
+    expect(seen).toEqual(chunks)
+    expect(delivery.summary).toBe(chunks.join(""))
   })
 })

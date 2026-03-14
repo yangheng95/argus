@@ -120,8 +120,9 @@ export namespace HeadlessPlannerAgent {
     // Check abort signal early -- setup calls (model resolution, memory search) can be slow
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
 
-    const language = await agentLanguageModel()
-    if (!language) throw new Error("no LLM model available for planner agent")
+    const resolved = await agentLanguageModel()
+    if (!resolved) throw new Error("no LLM model available for planner agent")
+    const { language, isReasoning } = resolved
     if (input.signal?.aborted) throw new Error("planner aborted after model resolution")
 
     // Extract working directory from request (eval tasks specify it explicitly)
@@ -203,7 +204,7 @@ export namespace HeadlessPlannerAgent {
       let toolCallCount: number
 
       if (consolidationOnly) {
-        const forced = await finalizePlan(language, input, lastSteps!, input.signal, retryContext)
+        const forced = await finalizePlan(language, input, lastSteps!, input.signal, retryContext, isReasoning)
         if (forced.submittedPlan) submittedPlan = forced.submittedPlan
         result = forced.result
         toolCallCount = lastToolCallCount
@@ -281,7 +282,7 @@ export namespace HeadlessPlannerAgent {
             finishReason: result.finishReason,
             attempt: attempt + 1,
           })
-          const forced = await finalizePlan(language, input, result.steps, input.signal)
+          const forced = await finalizePlan(language, input, result.steps, input.signal, undefined, isReasoning)
           if (forced.submittedPlan) {
             submittedPlan = forced.submittedPlan
           }
@@ -324,7 +325,7 @@ export namespace HeadlessPlannerAgent {
               textLength: allText.length,
               attempt: attempt + 1,
             })
-            const forced = await finalizePlan(language, input, result.steps, input.signal, retryContext)
+            const forced = await finalizePlan(language, input, result.steps, input.signal, retryContext, isReasoning)
             if (forced.submittedPlan) {
               parsed = normalizePlanOutput(forced.submittedPlan)
             } else {
@@ -404,6 +405,7 @@ async function finalizePlan(
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   signal?: AbortSignal,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
+  isReasoning = false,
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -435,7 +437,7 @@ async function finalizePlan(
     model: language,
     stopWhen: stepCountIs(8),
     tools: summaryTool,
-    toolChoice: "required",
+    toolChoice: isReasoning ? "auto" : "required",
     maxOutputTokens: 16384,
     timeoutMs: 120_000,
     abortSignal: signal ?? AbortSignal.timeout(120_000),
@@ -877,7 +879,7 @@ function validatePlanQuality(
  * 2. Load that exact model and language surface
  * 3. If that fails, surface the planner failure directly
  */
-async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
+async function agentLanguageModel(): Promise<{ language: LanguageModelV2; isReasoning: boolean } | undefined> {
   const def = await Provider.defaultModel().catch((err) => {
     log.error("planner: Provider.defaultModel() failed", { error: String(err) })
     return undefined
@@ -886,8 +888,9 @@ async function agentLanguageModel(): Promise<LanguageModelV2 | undefined> {
   log.info("planner: default model resolved", { providerID: def.providerID, modelID: def.modelID })
   const model = await Provider.getModel(def.providerID, def.modelID)
   const language = await Provider.getLanguage(model)
-  log.info("planner: model ready via Provider", { modelId: language.modelId })
-  return language
+  const isReasoning = model.capabilities?.reasoning === true
+  log.info("planner: model ready via Provider", { modelId: language.modelId, isReasoning })
+  return { language, isReasoning }
 }
 
 /**
@@ -1134,7 +1137,7 @@ Think of yourself as a tech lead doing code review BEFORE implementation starts.
 ### Phase 0: RECALL (1-3 tool calls)
 
 1. **Search memory** (memory_search) with task keywords. If pre-fetched memory exists, only search for gaps.
-2. **List preferences** (preference_list) unless pre-fetched. Preferences are BINDING.
+2. **List preferences** (preference_list) unless pre-fetched. Preferences guide default conventions, but explicit task constraints and approved spec boundaries override them on conflict.
 
 ### Phase 1: EXPLORE (5-15 tool calls -- this is the MOST IMPORTANT phase)
 
@@ -1206,6 +1209,7 @@ The submit_plan tool accepts these fields:
 - Every file path in your plan MUST come from actual tool results or pre-read files -- never guess paths.
 - Goals are authoritative input from the specification. The planner must not redefine or mutate them.
 - Clarifications are only for execution-strategy blockers. Do NOT ask for missing scope, requirements, or acceptance criteria; that belongs to the spec stage.
+- Explicit task constraints override preferences. Do not plan edits outside a user-declared file boundary just to satisfy a preference.
 - subtask descriptions must reference specific files, functions, and patterns discovered during exploration.
 - Write in the same language as the request (Chinese request -> Chinese plan).
 - If replanning: your new plan MUST differ from the previous failed approach.

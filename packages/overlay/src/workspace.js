@@ -34,7 +34,6 @@
 
     function workspaceMode() {
       if (!state.connected) return "offline";
-      if (state.selectedTaskID && state.chatSessionID) return "task-session";
       if (state.selectedTaskID) return "task";
       if (state.chatSessionID) return "session";
       return "empty";
@@ -52,6 +51,7 @@
     }
 
     function clearWorkspaceRuntime() {
+      state.workspaceEpoch = (state.workspaceEpoch || 0) + 1;
       deps.stopPolling();
       deps.stopSSE();
       if (typeof deps.stopEventStream === "function") deps.stopEventStream();
@@ -64,13 +64,17 @@
       state.boardQueued = false;
       state.sessionLoading = null;
       state.sessionQueued = false;
+      state.tasksSeq = (state.tasksSeq || 0) + 1;
+      state.sessionsSeq = (state.sessionsSeq || 0) + 1;
       state.board = null;
       state.boardEtag = "";
       state.boardUpdatedAt = 0;
       state.executorEvents = [];
       state.executorRunID = "";
+      state.executorEventsFetchedAt = 0;
       state.sessionUpdatedAt = 0;
       state.session = [];
+      state.pendingTaskMessages = null;
       renderWorkspaceState();
     }
 
@@ -101,8 +105,8 @@
         setWorkspaceDirectory(options.directory, "task");
       }
       state.selectedTaskID = taskID || "";
-      state.chatSessionID = options.sessionID || "";
-      state.managedSession = options.managedSession || null;
+      state.chatSessionID = "";
+      state.managedSession = null;
       clearWorkspaceRuntime();
       if (typeof deps.renderMeta === "function") deps.renderMeta();
       deps.renderManagedSessionList();

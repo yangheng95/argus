@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EvaluatorService } from "../../src/evaluator/service"
 import { CheckConfig } from "../../src/orchestrator/model"
-import { evaluateGoal } from "../../src/orchestrator/goal-runner"
+import { blockingEvaluationFailure, evaluateGoal, goalEvaluationOutcome } from "../../src/orchestrator/goal-runner"
 import { resetDatabase } from "../fixture/db"
 
 const analysis = {
@@ -184,6 +184,26 @@ describe("orchestrator.goal checks", () => {
         enabled: false,
         mode: "strict",
       },
+    })
+  })
+
+  test("allows accepted analysis to override review infrastructure failures", () => {
+    const result = {
+      status: "failed",
+      verdict: "rejected",
+      summary: "Failed: code_review (failed). Passed: test.",
+      checks: [
+        { name: "test", status: "passed", evidence: "5 pass" },
+        { name: "code_review", status: "failed", evidence: "Review model call failed after retries." },
+      ],
+      artifacts: [],
+    } as const
+
+    expect(blockingEvaluationFailure(result as any)).toBe(false)
+    expect(goalEvaluationOutcome(result as any, analysis)).toEqual({
+      verdict: "accepted",
+      status: "passed",
+      summary: "Goal accepted.",
     })
   })
 })
