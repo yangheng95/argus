@@ -12,11 +12,18 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
 }
 
+let _overlayDirCache: string | null | undefined = undefined
+
 function resolveOverlayDir(): string | undefined {
+  if (_overlayDirCache !== undefined) return _overlayDirCache ?? undefined
   const binDir = path.dirname(process.execPath)
   const distUi = path.join(binDir, "ui")
-  if (fs.existsSync(path.join(distUi, "index.html"))) return distUi
-
+  if (fs.existsSync(path.join(distUi, "index.html"))) return (_overlayDirCache = distUi)
+  const devUi = path.resolve(process.cwd(), "../overlay/src")
+  if (fs.existsSync(path.join(devUi, "index.html"))) return (_overlayDirCache = devUi)
+  const repoUi = path.resolve(import.meta.dir, "../../../overlay/src")
+  if (fs.existsSync(path.join(repoUi, "index.html"))) return (_overlayDirCache = repoUi)
+  _overlayDirCache = null
   return undefined
 }
 

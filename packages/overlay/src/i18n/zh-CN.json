@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "08218a4eac610091"
+    "panel_revision": "ad3bc8c813012fb2"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边定工作范围，中间推进会话，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
