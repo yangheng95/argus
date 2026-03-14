@@ -82,6 +82,9 @@ export const PanelTool = Tool.define("panel", {
             board.overview?.summary,
             board.spec ? `Spec: ${board.spec.summary}` : undefined,
             board.plan ? `Plan: ${board.plan.summary}` : undefined,
+            board.task.budget
+              ? `Budget: runs=${board.task.budget.maxRuns ?? "default"}, replans=${board.task.budget.maxReplans ?? "default"}, evaluations=${board.task.budget.maxEvaluations ?? "default"}, wall=${board.task.budget.maxWallTimeMs === undefined ? "default" : `${board.task.budget.maxWallTimeMs}ms`}`
+              : "Budget: defaults",
             `Goals: ${board.goals.length}, acceptance items: ${board.specItems.length}`,
             pendingCount(board) > 0 ? `Pending blockers: ${pendingCount(board)}` : undefined,
             board.evaluation ? `Evaluation: ${board.evaluation.verdict} - ${board.evaluation.summary}` : undefined,
@@ -108,6 +111,7 @@ export const PanelTool = Tool.define("panel", {
           requestID: params.request_id ?? ctx.extra?.requestID,
           request: params.request,
           executor: params.executor,
+          budget: params.budget,
           checks: params.checks,
           routing: params.routing,
           source: params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"),
@@ -177,6 +181,9 @@ export const PanelTool = Tool.define("panel", {
       case "cancel_task":
         await OrchestratorService.cancelTask(params.taskID)
         return { title: "Task cancelled", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task cancelled." }), metadata: {} }
+      case "update_budget":
+        await OrchestratorService.updateTaskBudget(params.taskID, { budget: params.budget })
+        return { title: "Budget updated", output: JSON.stringify({ kind: "message", task_id: params.taskID, message: "Task budget updated." }), metadata: {} }
       case "update_checks":
         if (params.checks) {
           await OrchestratorService.updateTaskChecks(params.taskID, { checks: params.checks })

@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { launchBrowser } from "./launch"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
@@ -40,11 +41,7 @@ test("hidden titlebar menu does not block section collapse", async () => {
     },
   })
   const app = `http://127.0.0.1:${server.port}`
-  const page = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox"],
-  })
+  const page = await launchBrowser()
 
   try {
     const tab = await page.newPage()

@@ -1,3 +1,5 @@
+import { launchBrowser } from "./launch"
+
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
 )
@@ -41,11 +43,7 @@ function serve() {
 test("resolving one interaction only disables its own buttons", async () => {
   const exe = await browser()
   const server = serve()
-  const page = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox"],
-  })
+  const page = await launchBrowser()
 
   try {
     const tab = await page.newPage()
@@ -122,11 +120,7 @@ test("resolving one interaction only disables its own buttons", async () => {
 test("renderMarkdown drops unsafe markdown URLs", async () => {
   const exe = await browser()
   const server = serve()
-  const page = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox"],
-  })
+  const page = await launchBrowser()
 
   try {
     const tab = await page.newPage()
@@ -165,11 +159,7 @@ test("renderMarkdown drops unsafe markdown URLs", async () => {
 test("automatic permission replies default to once and honor always", async () => {
   const exe = await browser()
   const server = serve()
-  const page = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox"],
-  })
+  const page = await launchBrowser()
 
   try {
     const tab = await page.newPage()
@@ -241,11 +231,7 @@ test("automatic permission replies default to once and honor always", async () =
 test("interaction errors release busy before board reload settles", async () => {
   const exe = await browser()
   const server = serve()
-  const page = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox"],
-  })
+  const page = await launchBrowser()
 
   try {
     const tab = await page.newPage()

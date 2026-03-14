@@ -1,6 +1,6 @@
 import { App } from "@slack/bolt"
 import { Bus } from "@/bus"
-import { ChannelIngress } from "@/channel/ingress"
+import { ChannelProtocol } from "@/channel/protocol"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
 import { OrchestratorChannelBindingTable } from "@/orchestrator/orchestrator.sql"
 import { Instance } from "@/project/instance"
@@ -143,17 +143,29 @@ export class SlackGateway {
     const thread = message.thread_ts ?? message.ts
 
     await this.withInstance(async () => {
-      const result = await ChannelIngress.message({
+      const result = await ChannelProtocol.ingress({
+        type: "channel_ingress",
+        version: "channel.v1",
+        request_id: message.ts,
         platform: "slack",
         channel,
         thread,
-        text,
-        user_id: message.user,
-        request_id: message.ts,
+        ...(message.user
+          ? {
+              user: {
+                id: message.user,
+              },
+            }
+          : {}),
+        message: {
+          text,
+        },
+        context: {
+          allow_create: thread === message.ts,
+        },
         source: "slack",
-        allow_create: thread === message.ts,
       })
-      await this.sendThread(channel, thread, result.message, result.attachments)
+      await this.sendThread(channel, thread, result.result.message, result.result.attachments)
     })
   }
 

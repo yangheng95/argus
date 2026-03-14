@@ -1,5 +1,5 @@
 import z from "zod"
-import { CheckConfig, StageRouting } from "@/orchestrator/model"
+import { Budget, CheckConfig, StageRouting } from "@/orchestrator/model"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
 
 export const PanelSurface = SharedChannelSurface
@@ -100,6 +100,7 @@ export const PanelCapabilityRegistry = list(
       request: z.string(),
       request_id: z.string().optional(),
       executor: z.enum(["opencode", "codex", "claude-code"]).optional(),
+      budget: Budget.optional(),
       checks: CheckConfig.optional(),
       routing: StageRouting.optional(),
       channel: z.string().optional(),
@@ -168,6 +169,16 @@ export const PanelCapabilityRegistry = list(
     surfaces: all,
     params: {
       taskID: z.string(),
+    },
+  }),
+  item({
+    action: "update_budget",
+    description: "Update the run budget for a task.",
+    kind: "mutation",
+    surfaces: all,
+    params: {
+      taskID: z.string(),
+      budget: Budget.nullish(),
     },
   }),
   item({

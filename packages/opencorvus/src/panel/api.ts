@@ -6,6 +6,7 @@ const routes = [
   { method: "GET", path: "task/:taskID/board", description: "Read the full task board for a task." },
   { method: "GET", path: "task/:taskID/transcript", description: "Read the task transcript." },
   { method: "GET", path: "task/:taskID/interactions", description: "List pending and resolved task interactions." },
+  { method: "PATCH", path: "task/:taskID/budget", description: "Update task run budget." },
   { method: "POST", path: "task/:taskID/retry", description: "Queue a retry for a task." },
   { method: "POST", path: "task/:taskID/replan", description: "Queue a replan for a task." },
   { method: "POST", path: "task/:taskID/cancel", description: "Cancel a task." },

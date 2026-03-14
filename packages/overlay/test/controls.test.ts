@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test"
+import { launchBrowser } from "./launch"
 
 const { default: puppeteer } = await import(
   new URL("../../opencorvus/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js", import.meta.url).href,
@@ -35,6 +36,12 @@ test("overlay controls trigger without runtime failures", async () => {
     directory: "D:/overlay/workspace/app",
     status: "running",
     sessionID: "session-1",
+    budget: {
+      maxRuns: 2,
+      maxReplans: 1,
+      maxEvaluations: 3,
+      maxWallTimeMs: 120000,
+    },
     time: {
       created: now - 90_000,
       started: now - 80_000,
@@ -691,6 +698,12 @@ test("overlay controls trigger without runtime failures", async () => {
         data.board.task.metadata.checks = body.checks
         return send({ ok: true })
       }
+      if (path === "/task/task-1/budget" && req.method === "PATCH") {
+        const body = await req.json()
+        data.board.task.budget = body.budget
+        data.tasks.tasks[0].task.budget = body.budget
+        return send(data.board.task)
+      }
       if (path.startsWith("/interaction/") && path.endsWith("/reply")) {
         const id = decodeURIComponent(path.slice(13, -6))
         const item = data.board.interactions.find((entry) => entry.id === id)
@@ -757,11 +770,7 @@ test("overlay controls trigger without runtime failures", async () => {
   const seen: string[] = []
   const errors: string[] = []
   const app = `http://127.0.0.1:${server.port}`
-  const client = await puppeteer.launch({
-    executablePath: exe,
-    headless: "new",
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  })
+  const client = await launchBrowser(["--disable-dev-shm-usage"])
   const page = await client.newPage()
   await page.setViewport({ width: 1600, height: 1200 })
   page.on("pageerror", (error) => {
@@ -789,6 +798,8 @@ test("overlay controls trigger without runtime failures", async () => {
       settings: {
         directory: "D:/overlay/workspace/app",
         directoryMode: "custom",
+        workspaceTaskID: "task-1",
+        workspaceDirectory: "D:/overlay/workspace/app",
       },
     }
     Object.defineProperty(window, "__overlayTest", {
@@ -934,9 +945,11 @@ test("overlay controls trigger without runtime failures", async () => {
 
     await page.goto(`${app}/ui/index.html`, { waitUntil: "load" })
     await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
+    await page.waitForSelector(".task-row-main[data-task-id='task-1']")
+    await page.click(".task-row-main[data-task-id='task-1']")
+    await page.waitForFunction(() => document.body.dataset.workspace === "task")
     await page.waitForSelector('[data-task-action="retry"]')
     await page.waitForSelector(".change-row")
-    await page.waitForSelector(".task-row-main[data-task-id='task-1']")
     await page.waitForSelector("#interaction-modal")
 
     expect(await page.$eval("#titlebarMenu", (node) => (node as HTMLElement).hidden)).toBe(true)
@@ -1021,7 +1034,7 @@ test("overlay controls trigger without runtime failures", async () => {
     })
     await page.waitForFunction(() => ((window as typeof window & { __overlayTest: { drag: number } }).__overlayTest.drag || 0) === 1)
 
-    for (const item of ["#specSection", "#planSection", "#goalsSection", "#criteriaSection", "#changesSection", "#overviewSection", "#llmSection"]) {
+    for (const item of ["#specSection", "#planSection", "#goalsSection", "#criteriaSection", "#budgetSection", "#changesSection", "#overviewSection", "#llmSection"]) {
       seen.push(`${item} > summary`)
       await tap(`${item} > summary`)
       await page.waitForFunction((id) => (document.querySelector(id) as HTMLDetailsElement | null)?.open === true, {}, item)
@@ -1093,6 +1106,31 @@ test("overlay controls trigger without runtime failures", async () => {
     await expand("#criteriaSection")
     seen.push('label.criteria-item:has(input[data-check="ui_review"])')
     await tap('label.criteria-item:has(input[data-check="ui_review"])')
+    await waitIdle()
+
+    await expand("#budgetSection")
+    await page.$eval("#budgetMaxRuns", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "4"
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await page.$eval("#budgetMaxReplans", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "0"
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await page.$eval("#budgetMaxEvaluations", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "5"
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await page.$eval("#budgetMaxWallTime", (node) => {
+      const input = node as HTMLInputElement
+      input.value = "3"
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    seen.push("#btnBudgetSave")
+    await tap("#btnBudgetSave")
     await waitIdle()
 
     await expand("#goalsSection")
@@ -1379,4 +1417,4 @@ test("overlay controls trigger without runtime failures", async () => {
     await client.close().catch(() => undefined)
     server.stop(true)
   }
-}, { timeout: 30_000 })
+}, { timeout: 60_000 })

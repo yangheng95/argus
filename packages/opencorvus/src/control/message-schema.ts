@@ -1,6 +1,12 @@
 import z from "zod"
 import { ChannelSurface } from "@/channel/catalog"
 
+export const ControlMessageAttachment = z.object({
+  mime: z.string(),
+  url: z.string(),
+  filename: z.string().optional(),
+})
+
 const SetExecutorAction = z.object({
   type: z.literal("set_executor"),
   executor: z.enum(["opencode", "codex", "claude-code"]),
@@ -62,7 +68,8 @@ export const ControlMessageInput = z.object({
   source: z.string().optional(),
   allow_create: z.boolean().default(true),
   allow_session_mutation: z.boolean().default(false),
-  metadata: z.record(z.string(), z.any()).optional(),
+  attachments: ControlMessageAttachment.array().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 })
 
 export const PanelMessageInput = ControlMessageInput.extend({

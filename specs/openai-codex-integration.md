@@ -101,7 +101,7 @@ bun test test/benchmark/agent-quality.test.ts --timeout 300000
 
 ```bash
 cd packages/opencorvus
-bun run script/benchmark-agents.ts
+bun run script/benchmark/agent-quality-benchmark.ts
 ```
 
 ### PRD 全链路 E2E

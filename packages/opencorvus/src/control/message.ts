@@ -239,8 +239,9 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
         role: "user",
         text: input.text,
         metadata: {
-          allow_create: input.allow_create,
           ...(input.metadata ?? {}),
+          allow_create: input.allow_create,
+          ...(input.attachments?.length ? { attachments: input.attachments } : {}),
         },
       },
       {
@@ -408,6 +409,12 @@ function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
       type: "text" as const,
       text: input.text,
     },
+    ...(input.attachments ?? []).map((item) => ({
+      type: "file" as const,
+      url: item.url,
+      mime: item.mime,
+      ...(item.filename ? { filename: item.filename } : {}),
+    })),
     {
       type: "text" as const,
       text: JSON.stringify({
@@ -421,6 +428,10 @@ function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
         source: input.source,
         allow_create: input.allow_create,
         allow_session_mutation: input.allow_session_mutation,
+        attachments: (input.attachments ?? []).map((item) => ({
+          mime: item.mime,
+          filename: item.filename,
+        })),
         metadata: input.metadata,
         request_id: input.request_id,
       }),
@@ -606,6 +617,14 @@ function loggedInput(input: z.infer<typeof ControlMessageInput>) {
     ...(input.request_id ? { request_id: input.request_id } : {}),
     ...(input.source ? { source: input.source } : {}),
     allow_create: input.allow_create,
+    ...(input.attachments?.length
+      ? {
+          attachments: input.attachments.map((item) => ({
+            mime: item.mime,
+            ...(item.filename ? { filename: item.filename } : {}),
+          })),
+        }
+      : {}),
     ...(input.metadata ? { metadata: input.metadata } : {}),
   }
 }

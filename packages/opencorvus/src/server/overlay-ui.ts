@@ -12,19 +12,32 @@ const MIME: Record<string, string> = {
   ".json": "application/json",
 }
 
-let _overlayDirCache: string | null | undefined = undefined
+let _overlayDirCache: string | undefined
+
+function isOverlayDir(dir: string) {
+  return fs.existsSync(path.join(dir, "index.html"))
+}
+
+function overlayDirCandidates() {
+  const binDir = path.dirname(process.execPath)
+  return [
+    process.env.OPENCORVUS_OVERLAY_UI_DIR?.trim(),
+    path.join(binDir, "ui"),
+    path.resolve(binDir, "../Resources/ui"),
+    path.resolve(binDir, "../../Resources/ui"),
+    path.resolve(process.cwd(), "packages/overlay/src"),
+    path.resolve(process.cwd(), "../overlay/src"),
+    path.resolve(process.cwd(), "overlay/src"),
+    path.resolve(import.meta.dir, "../../../overlay/src"),
+    path.resolve(import.meta.dir, "../../../../overlay/src"),
+  ].filter((dir, index, list): dir is string => !!dir && list.indexOf(dir) === index)
+}
 
 function resolveOverlayDir(): string | undefined {
-  if (_overlayDirCache !== undefined) return _overlayDirCache ?? undefined
-  const binDir = path.dirname(process.execPath)
-  const distUi = path.join(binDir, "ui")
-  if (fs.existsSync(path.join(distUi, "index.html"))) return (_overlayDirCache = distUi)
-  const devUi = path.resolve(process.cwd(), "../overlay/src")
-  if (fs.existsSync(path.join(devUi, "index.html"))) return (_overlayDirCache = devUi)
-  const repoUi = path.resolve(import.meta.dir, "../../../overlay/src")
-  if (fs.existsSync(path.join(repoUi, "index.html"))) return (_overlayDirCache = repoUi)
-  _overlayDirCache = null
-  return undefined
+  if (_overlayDirCache && isOverlayDir(_overlayDirCache)) return _overlayDirCache
+  const dir = overlayDirCandidates().find(isOverlayDir)
+  _overlayDirCache = dir
+  return dir
 }
 
 export namespace OverlayUI {
