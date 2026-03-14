@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Instance } from "../../src/project/instance"
+import { OrchestratorService } from "../../src/orchestrator/service"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
@@ -43,7 +44,8 @@ describe("panel routes", () => {
         expect(body.surface).toBe("slack")
         expect(names).toContain("view_board")
         expect(names).not.toContain("set_executor")
-        expect(body.actions.find((item) => item.action === "create_session")?.local_action_types).toEqual(["select_session"])
+        expect(names).not.toContain("create_session")
+        expect(names).not.toContain("delete_session")
       },
     })
   })
@@ -56,7 +58,6 @@ describe("panel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const session = await Session.create({ title: "selected-panel-session" })
         const response = await app.request("/panel/message", {
           method: "POST",
           headers: {
@@ -82,7 +83,7 @@ describe("panel routes", () => {
           local_action?: { type: string; executor?: string }
         }
         expect(body.kind).toBe("panel_response")
-        expect(typeof body.session_id).toBe("string")
+        expect(body.session_id).toBeUndefined()
         expect(body.local_action?.type).toBe("set_executor")
         expect(body.local_action?.executor).toBe("codex")
       },
@@ -98,7 +99,6 @@ describe("panel routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
-        const session = await Session.create({ title: "selected-panel-session" })
         const response = await app.request("/panel/message", {
           method: "POST",
           headers: {
@@ -108,7 +108,6 @@ describe("panel routes", () => {
           body: JSON.stringify({
             surface: "panel",
             text: "Use executor codex for desktop panel actions and new tasks.",
-            sessionID: session.id,
             request_id: requestID,
             metadata: {
               executor: "codex",
@@ -140,16 +139,16 @@ describe("panel routes", () => {
 
         expect(requestLine).toBeDefined()
         expect(requestLine).toContain(`"request_id":"${requestID}"`)
-        expect(requestLine).toContain(`"sessionID":"${session.id}"`)
         expect(requestLine).toContain(`"ui_context":"engine_bar"`)
         expect(resultLine).toBeDefined()
         expect(resultLine).toContain(`"kind":"panel_response"`)
         expect(resultLine).toContain(`"local_action":{"type":"set_executor","executor":"codex"}`)
+        expect(resultLine).not.toContain(`"session_id":`)
       },
     })
   })
 
-  test("POST /panel/message/stream emits live message deltas from structured output", async () => {
+  test("POST /panel/message/stream returns a task-first response for session-management requests", async () => {
     await using tmp = await tmpdir({ git: true })
     installControlModel()
 
@@ -166,7 +165,6 @@ describe("panel routes", () => {
           body: JSON.stringify({
             surface: "panel",
             text: "Create new session",
-            allow_session_mutation: true,
           }),
         })
 
@@ -184,14 +182,14 @@ describe("panel routes", () => {
             return [JSON.parse(data) as { type: string; delta?: string; result?: { message?: string } }]
           })
 
-        expect(events.some((item) => item.type === "message_delta" && item.delta?.includes("Session created:"))).toBe(true)
+        expect(events.some((item) => item.type === "message_delta" && item.delta?.includes("only exposes tasks"))).toBe(true)
         expect(events.at(-1)?.type).toBe("done")
-        expect(events.at(-1)?.result?.message).toContain("Session created:")
+        expect(events.at(-1)?.result?.message).toContain("only exposes tasks")
       },
     })
   })
 
-  test("POST /panel/message does not create a blank session without explicit permission", async () => {
+  test("POST /panel/message rejects panel session management requests", async () => {
     await using tmp = await tmpdir({ git: true })
     installControlModel()
 
@@ -208,7 +206,6 @@ describe("panel routes", () => {
           body: JSON.stringify({
             surface: "panel",
             text: "Create new session",
-            allow_session_mutation: false,
           }),
         })
 
@@ -217,11 +214,36 @@ describe("panel routes", () => {
           kind: string
           message: string
         }
-        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Panel control ("))
+        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Control ("))
 
         expect(body.kind).toBe("panel_response")
-        expect(body.message).not.toContain("Task accepted:")
+        expect(body.message).toContain("only exposes tasks")
         expect(sessions).toHaveLength(0)
+      },
+    })
+  })
+
+  test("POST /panel/message rejects sessionID in desktop panel requests", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const response = await app.request("/panel/message", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            surface: "panel",
+            text: "hello",
+            sessionID: "session_forbidden",
+          }),
+        })
+
+        expect(response.status).toBe(400)
       },
     })
   })
@@ -252,7 +274,7 @@ describe("panel routes", () => {
           kind: string
           message: string
         }
-        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Panel control ("))
+        const sessions = [...Session.list({ roots: true })].filter((item) => !item.title.startsWith("Control ("))
 
         expect(body.kind).toBe("panel_response")
         expect(body.message).not.toContain("Task accepted:")
@@ -261,12 +283,18 @@ describe("panel routes", () => {
     })
   })
 
-  test("panel knowledge memory respects session-aware recall", async () => {
+  test("panel knowledge memory resolves taskID through the linked task session", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "Remember panel task context",
+          source: "panel",
+        })
+        const task = await OrchestratorService.getTask(taskID)
+        if (!task.sessionID) throw new Error("task missing linked session")
         Memory.writeFile({
           title: "Global lesson",
           content: "## Lesson\nSocket Mode must be enabled before the bot will receive events.",
@@ -281,7 +309,7 @@ describe("panel routes", () => {
           projectId: Instance.project.id,
           kind: "episode",
           scope: "session",
-          sessionID: "ses_panel_memory",
+          sessionID: task.sessionID,
         })
 
         const app = Server.App()
@@ -297,12 +325,12 @@ describe("panel routes", () => {
         expect(globalBody.some((item) => item.title === "Global lesson")).toBe(true)
         expect(globalBody.some((item) => item.title === "Session episode")).toBe(false)
 
-        const sessionList = await app.request("/panel/knowledge/memory?sessionID=ses_panel_memory", {
+        const taskList = await app.request(`/panel/knowledge/memory?taskID=${taskID}`, {
           headers: baseHeaders,
         })
-        expect(sessionList.status).toBe(200)
-        const sessionBody = await sessionList.json() as Array<{ title: string; kind: string }>
-        expect(sessionBody.some((item) => item.title === "Session episode" && item.kind === "episode")).toBe(true)
+        expect(taskList.status).toBe(200)
+        const taskBody = await taskList.json() as Array<{ title: string; kind: string }>
+        expect(taskBody.some((item) => item.title === "Session episode" && item.kind === "episode")).toBe(true)
 
         const search = await app.request("/panel/knowledge/memory/search", {
           method: "POST",
@@ -312,7 +340,7 @@ describe("panel routes", () => {
           },
           body: JSON.stringify({
             query: "feature panel-session-memory validating session",
-            sessionID: "ses_panel_memory",
+            taskID,
             limit: 10,
           }),
         })

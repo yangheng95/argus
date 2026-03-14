@@ -8,11 +8,10 @@ const DEFAULT_SERVER = (() => {
   return "http://127.0.0.1:7878";
 })();
 const POLL_INTERVAL = 4000;
-const SESSION_POLL = 6000;
+const CONVERSATION_POLL = 6000;
 const SSE_BACKSTOP = 15000;
 const BOARD_EVENT_DEBOUNCE = 150;
-const SESSION_EVENT_DEBOUNCE = 150;
-const SESSION_LIST_EVENT_DEBOUNCE = 250;
+const CONVERSATION_EVENT_DEBOUNCE = 150;
 const ZOOM_STEP = 0.1;
 const MIN_UI_ZOOM = 0.8;
 const MAX_UI_ZOOM = 1.6;
@@ -53,7 +52,6 @@ const DEFAULT_OVERLAY_SETTINGS = {
   directoryMode: "temp",
   directory: "",
   workspaceTaskID: "",
-  workspaceSessionID: "",
   workspaceDirectory: "",
 };
 const OVERLAY_VERSION = "0.0.1-alpha";
@@ -101,7 +99,6 @@ const state = {
   savedDirectory: DEFAULT_OVERLAY_SETTINGS.directory,
   tempDirectory: "",
   workspaceTaskID: DEFAULT_OVERLAY_SETTINGS.workspaceTaskID,
-  workspaceSessionID: DEFAULT_OVERLAY_SETTINGS.workspaceSessionID,
   workspaceDirectory: DEFAULT_OVERLAY_SETTINGS.workspaceDirectory,
   workspaceEpoch: 0,
   directoryEpoch: 0,
@@ -130,22 +127,17 @@ const state = {
   boardQueued: false,
   boardKick: null,
   boardUpdatedAt: 0,
-  sessionsKick: null,
   reconnectTimer: null,
-  chatSessionID: "",
-  sessions: [],
   tasksSeq: 0,
-  sessionsSeq: 0,
-  managedSession: null,
-  session: [],
+  messages: [],
   pendingTaskMessages: null,
   executorEvents: [],
   executorRunID: "",
   executorEventsFetchedAt: 0,
-  sessionLoading: null,
-  sessionQueued: false,
-  sessionKick: null,
-  sessionUpdatedAt: 0,
+  conversationLoading: null,
+  conversationQueued: false,
+  conversationKick: null,
+  conversationUpdatedAt: 0,
   changes: [],
   chatRequest: null,
   sse: null,
@@ -155,7 +147,7 @@ const state = {
   eventRetryTimer: null,
   eventConnected: false,
   pollTimer: null,
-  sessionTimer: null,
+  conversationTimer: null,
   elapsedTimer: null,
   changeKey: "",
   _renderedGroupKey: "",
@@ -264,9 +256,9 @@ const dom = {
   chatTextarea: $("#chatTextarea"),
   btnTaskInterrupt: $("#btnTaskInterrupt"),
   chatSend: $("#chatSend"),
-  sessionListPanel: $("#sessionListPanel"),
-  btnRefreshSessions: $("#btnRefreshSessions"),
-  btnCreateSession: $("#btnCreateSession"),
+  taskListPanel: $("#taskListPanel"),
+  btnRefreshTasks: $("#btnRefreshTasks"),
+  btnCreateTask: $("#btnCreateTask"),
   skillDialog: $("#skillDialog"),
   skillForm: $("#skillForm"),
   skillType: $("#skillType"),
@@ -380,7 +372,7 @@ const workspace = window.createOverlayWorkspace?.({
   stopChatRequest,
   renderChatComposer,
   renderMeta,
-  renderManagedSessionList,
+  renderTaskList,
   onDirectoryChange() {
     void persistOverlaySettings();
   },
@@ -421,7 +413,6 @@ let llmNoticeTimer;
 let llmSyncSerial = 0;
 let llmSavedValue = "";
 let bootstrapSettings = { ...DEFAULT_OVERLAY_SETTINGS };
-let settingsSessionID = "";
 let settingsSeq = 0;
 
 // ── AppLog ──
@@ -757,7 +748,7 @@ function refreshLocalizedState() {
   renderMeta();
   renderExtensions();
   renderChannels();
-  renderManagedSessionList();
+  renderTaskList();
   renderMemory();
   renderPreferences();
   renderLlmSummary();
@@ -772,7 +763,7 @@ function refreshLocalizedState() {
     renderPlan(null);
     renderChanges();
   }
-  renderSession();
+  renderConversation();
   renderChatComposer();
   if (dom.skillMarketDialog?.open) renderSkillMarket();
 }
@@ -1267,7 +1258,6 @@ function browserOverlaySettings() {
     locale: sanitizeLocale(localStorage.getItem("oc_locale") || DEFAULT_OVERLAY_SETTINGS.locale),
     directory,
     workspaceTaskID: localStorage.getItem("oc_workspace_task") || DEFAULT_OVERLAY_SETTINGS.workspaceTaskID,
-    workspaceSessionID: localStorage.getItem("oc_workspace_session") || DEFAULT_OVERLAY_SETTINGS.workspaceSessionID,
     workspaceDirectory: localStorage.getItem("oc_workspace_directory") || DEFAULT_OVERLAY_SETTINGS.workspaceDirectory,
   };
 }
@@ -1302,10 +1292,6 @@ function applyOverlaySettings(settings, options = {}) {
   state.locale = sanitizeLocale(settings?.locale || DEFAULT_OVERLAY_SETTINGS.locale);
   state.workspaceTaskID =
     typeof settings?.workspaceTaskID === "string" ? settings.workspaceTaskID.trim() : DEFAULT_OVERLAY_SETTINGS.workspaceTaskID;
-  state.workspaceSessionID =
-    typeof settings?.workspaceSessionID === "string"
-      ? settings.workspaceSessionID.trim()
-      : DEFAULT_OVERLAY_SETTINGS.workspaceSessionID;
   state.workspaceDirectory =
     typeof settings?.workspaceDirectory === "string"
       ? settings.workspaceDirectory.trim()
@@ -1338,60 +1324,22 @@ function bootstrapOverlaySettings(input = state) {
     directoryMode: input.savedDirectory ? "custom" : "temp",
     directory: input.savedDirectory || undefined,
     workspaceTaskID: input.workspaceTaskID || undefined,
-    workspaceSessionID: input.workspaceSessionID || undefined,
     workspaceDirectory: input.workspaceDirectory || undefined,
   };
 }
 
 function rememberWorkspace(input = {}) {
   const taskID = typeof input.taskID === "string" ? input.taskID.trim() : state.selectedTaskID || "";
-  const sessionID = typeof input.sessionID === "string" ? input.sessionID.trim() : currentSessionID() || "";
   const directory = typeof input.directory === "string"
     ? input.directory.trim()
     : activeDirectory() || state.directory || "";
   state.workspaceTaskID = taskID;
-  state.workspaceSessionID = sessionID;
-  state.workspaceDirectory = taskID || sessionID ? directory : "";
+  state.workspaceDirectory = taskID ? directory : "";
 }
 
 function clearWorkspaceMemory() {
   state.workspaceTaskID = "";
-  state.workspaceSessionID = "";
   state.workspaceDirectory = "";
-}
-
-function sessionOverlaySettings(input = state) {
-  return {
-    executor: input.executor,
-    alwaysOnTop: input.alwaysOnTop,
-    unattended: input.unattended,
-    autoPermission: input.autoPermission,
-    autoQuestion: input.autoQuestion,
-    sidebarCollapsed: input.sidebarCollapsed,
-    sidebarWidth: input.sidebarWidth ?? null,
-    sectionsWidth: input.sectionsWidth ?? null,
-    opacity: input.opacity,
-    zoom: input.zoom,
-    theme: input.theme,
-    locale: input.locale,
-    directory: input.savedDirectory || "",
-  };
-}
-
-async function loadSessionOverlaySettings(sessionID) {
-  if (!sessionID || !state.connected) return {};
-  return apiJson(`session/${encodeURIComponent(sessionID)}/panel-settings`, undefined, { directory: false })
-    .catch(() => ({}));
-}
-
-async function saveSessionOverlaySettings(sessionID, settings) {
-  if (!sessionID || !state.connected) return false;
-  await apiJson(`session/${encodeURIComponent(sessionID)}/panel-settings`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(settings),
-  }, { directory: false });
-  return true;
 }
 
 async function loadOverlaySettings() {
@@ -1413,9 +1361,8 @@ async function loadOverlaySettings() {
   applyOverlaySettings(bootstrapSettings, { resetTemp: true });
 }
 
-async function persistOverlaySettings(options = {}) {
+async function persistOverlaySettings() {
   rememberWorkspace();
-  const sessionID = currentSessionID() || "";
   const settings = bootstrapOverlaySettings();
   bootstrapSettings = {
     ...bootstrapSettings,
@@ -1442,8 +1389,7 @@ async function persistOverlaySettings(options = {}) {
   localStorage.setItem("oc_locale", settings.locale || DEFAULT_OVERLAY_SETTINGS.locale);
   if (settings.workspaceTaskID) localStorage.setItem("oc_workspace_task", settings.workspaceTaskID);
   else localStorage.removeItem("oc_workspace_task");
-  if (settings.workspaceSessionID) localStorage.setItem("oc_workspace_session", settings.workspaceSessionID);
-  else localStorage.removeItem("oc_workspace_session");
+  localStorage.removeItem("oc_workspace_session");
   if (settings.workspaceDirectory) localStorage.setItem("oc_workspace_directory", settings.workspaceDirectory);
   else localStorage.removeItem("oc_workspace_directory");
   if (settings.directory) localStorage.setItem("oc_directory", settings.directory);
@@ -1453,9 +1399,6 @@ async function persistOverlaySettings(options = {}) {
     settings,
     directory: settingsDirectory(settings) || undefined,
   }).catch(() => undefined);
-  if (sessionID && options.includeSession !== false) {
-    await saveSessionOverlaySettings(sessionID, sessionOverlaySettings()).catch(() => undefined);
-  }
   if (saved) return;
 }
 
@@ -1468,25 +1411,6 @@ async function applyWindowPin() {
   await win.setAlwaysOnTop(state.alwaysOnTop).catch(() => undefined);
   if (dom.btnPin) dom.btnPin.dataset.pinned = String(state.alwaysOnTop);
   renderTitlebarMenu();
-}
-
-async function syncSessionOverlaySettings(sessionID = currentSessionID(), options = {}) {
-  const next = sessionID || "";
-  if (!options.force && settingsSessionID === next) return false;
-  settingsSessionID = next;
-  const seq = ++settingsSeq;
-  const session = next ? await loadSessionOverlaySettings(next) : {};
-  if (seq !== settingsSeq || settingsSessionID !== next) return false;
-  applyOverlaySettings({ ...bootstrapSettings, ...(session && typeof session === "object" ? session : {}) }, {
-    preserveDirectory: !!next,
-  });
-  refreshLocalizedState();
-  renderWorkspaceState();
-  renderScale();
-  await applyWindowPin();
-  await applyWindowOpacity();
-  await syncUnattendedConfig(true);
-  return true;
 }
 
 async function createTempDirectory() {
@@ -1685,21 +1609,11 @@ async function apiJson(path, opts, input) {
   return res.json();
 }
 
-async function deleteSessionApi(sessionID, opts = {}, input) {
-  const params = new URLSearchParams();
-  if (opts.deleteTasks) params.set("deleteTasks", "true");
-  const query = params.toString();
-  return apiJson(`session/${encodeURIComponent(sessionID)}${query ? `?${query}` : ""}`, {
-    method: "DELETE",
-  }, input);
-}
-
 function canComposeChat() {
   if (!state.connected) return false;
   const mode = workspaceMode();
   if (mode === "empty") return true;
-  if (mode === "session") return !!currentSessionID();
-  if (mode === "task" || mode === "task-session") return !!currentTaskSessionID();
+  if (mode === "task") return true;
   return false;
 }
 
@@ -1720,7 +1634,7 @@ function chatAbortTarget() {
         runID,
       };
     }
-    const sessionID = currentTaskSessionID() || state.managedSession?.id || "";
+    const sessionID = currentTaskSessionID();
     if (sessionID) {
       return {
         kind: "session",
@@ -1729,12 +1643,7 @@ function chatAbortTarget() {
     }
     return null;
   }
-  const sessionID = currentSessionID();
-  if (!sessionID) return null;
-  return {
-    kind: "session",
-    sessionID,
-  };
+  return null;
 }
 
 async function abortChatTarget(target) {
@@ -1801,136 +1710,33 @@ async function stopChatRequest(options = {}) {
 }
 
 function chatPlaceholder() {
-  return state.session.find((item) =>
+  return state.messages.find((item) =>
     item.info?.role === "assistant" &&
     !item.info?.id &&
     Array.isArray(item.parts) &&
     item.parts.length === 1 &&
     item.parts[0]?.type === "text",
-  ) || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……")
-    || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "...")
-    || state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === t("chat.thinking"));
-}
-
-function setChatPlaceholderText(text) {
-  const part = chatPlaceholder()?.parts?.[0];
-  if (!part || part.type !== "text") return false;
-  part.text = text;
-  renderSession();
-  return true;
+  ) || state.messages.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……")
+    || state.messages.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "...")
+    || state.messages.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === t("chat.thinking"));
 }
 
 function isPendingPlaceholderPart(part) {
   return part?.type === "text" && !part.id && ["……", "...", t("chat.thinking")].includes(part.text);
 }
 
-async function abortableDelay(ms, signal) {
-  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(new DOMException("Aborted", "AbortError"));
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-async function sessionMessage(text, signal) {
-  const sessionID = currentSessionID();
-  if (!sessionID) throw new Error("No active session");
-  const queued = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      parts: [
-        {
-          type: "text",
-          text,
-        },
-      ],
-      extra: {
-        surface: "panel",
-        source: "panel",
-      },
-    }),
-    signal,
-  });
-  const taskID = typeof queued?.taskID === "string" ? queued.taskID : "";
-  if (!taskID) throw new Error("Missing session prompt task ID");
-  while (true) {
-    const status = await apiJson(`session/${encodeURIComponent(sessionID)}/prompt_async/${encodeURIComponent(taskID)}`, {
-      signal,
-    });
-    if (status?.status === "queued") {
-      setChatPlaceholderText("...");
-    }
-    if (status?.status === "running" || status?.status === "retrying") {
-      setChatPlaceholderText(t("chat.thinking"));
-      if (!state.eventConnected && currentSessionID() === sessionID) {
-        await refreshSessionMessages(sessionID, { streaming: true });
-      }
-    }
-    if (status?.status === "completed") {
-      if (currentSessionID() === sessionID) {
-        await refreshSessionMessages(sessionID);
-      }
-      return status;
-    }
-    if (status?.status === "failed") {
-      if (currentSessionID() === sessionID) {
-        await refreshSessionMessages(sessionID).catch(() => undefined);
-      }
-      throw new Error(status?.error || "Session prompt failed");
-    }
-    await abortableDelay(500, signal);
-  }
-}
-
-async function refreshSessionMessages(sessionID, options = {}) {
-  if (!sessionID || currentSessionID() !== sessionID) return false;
-  const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-  if (currentSessionID() !== sessionID) return false;
-  const next = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-  if (options.streaming) {
-    const assistant = next
-      .filter((item) => item?.info?.role === "assistant")
-      .flatMap((item) => Array.isArray(item?.parts) ? item.parts : [])
-      .filter((part) => part?.type === "text" && typeof part.text === "string")
-      .map((part) => part.text.trim())
-      .find(Boolean)
-    if (assistant) {
-      setChatPlaceholderText(assistant)
-      return true;
-    }
-  }
-  state.session = next;
-  state.sessionUpdatedAt = Date.now();
-  renderSession();
-  await loadChanges();
-  return true;
-}
-
 function panelRequestBody(text, metadata = {}, requestID) {
   const taskID = state.selectedTaskID || undefined;
-  const selectedSessionID = currentSessionID() || undefined;
-  const session = selectedSessionID ? sessionItem(selectedSessionID) : null;
-  const sessionID = !taskID && isPanelControlSession(session) ? selectedSessionID : undefined;
   return {
     surface: "panel",
     text,
     taskID,
-    sessionID,
     executor: state.executor,
     request_id: requestID || undefined,
     allow_create: true,
-    allow_session_mutation: !taskID,
+    allow_session_mutation: false,
     metadata: {
       selectedTaskID: taskID,
-      selectedSessionID,
       ...metadata,
     },
   };
@@ -1939,9 +1745,8 @@ function panelRequestBody(text, metadata = {}, requestID) {
 function panelResultNavigates(result) {
   if (!result || typeof result !== "object") return false;
   const action = result.local_action?.type;
-  if (action === "select_task" || action === "select_session") return true;
+  if (action === "select_task") return true;
   if (result.task_id) return true;
-  if (result.session_id && !state.selectedTaskID) return true;
   return false;
 }
 
@@ -1953,39 +1758,19 @@ async function applyPanelResult(result) {
   }
   if (result?.local_action?.type === "select_task" && result.local_action.taskID) {
     await loadTasks();
-    await loadManagedSessions();
     await selectTask(result.local_action.taskID);
     return;
-  }
-  if (result?.local_action?.type === "select_session" && result.local_action.sessionID) {
-    await openManagedSession(result.local_action.sessionID);
-    return;
-  }
-  if (result?.local_action?.type === "invalidate_session" && result.local_action.sessionID) {
-    state.chatSessionID = state.chatSessionID === result.local_action.sessionID ? "" : state.chatSessionID;
-    renderWorkspaceState();
   }
   if (result?.task_id && state.selectedTaskID !== result.task_id) {
     state.pendingTaskMessages = null;
     await loadTasks();
-    await loadManagedSessions();
     await selectTask(result.task_id);
-    return;
-  }
-  if (result?.session_id && !state.selectedTaskID) {
-    if (currentSessionID() === result.session_id) {
-      await loadConversation();
-      void loadManagedSessions();
-      void loadMemory();
-      return;
-    }
-    await openManagedSession(result.session_id);
-    await loadManagedSessions();
     return;
   }
   if (state.selectedTaskID) {
     await loadBoard();
     await loadConversation();
+    void loadMemory();
   } else {
     await loadTasks();
   }
@@ -2011,10 +1796,10 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   }
 
   // Replace "……" thinking placeholder with a live indicator
-  const placeholder = state.session.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
+  const placeholder = state.messages.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
   if (state.workspaceEpoch === workspaceEpoch) {
     if (placeholder) placeholder.parts[0].text = "...";
-    renderSession();
+    renderConversation();
   }
 
   const reader = res.body.getReader();
@@ -2043,17 +1828,17 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
         if (state.workspaceEpoch !== workspaceEpoch) continue;
         if (ev.type === "tool" && placeholder && !streamed) {
           placeholder.parts[0].text = t("chat.thinking");
-          renderSession();
+          renderConversation();
         } else if (ev.type === "message_delta" && placeholder && typeof ev.delta === "string") {
           streamed = true;
           live += ev.delta;
           placeholder.parts[0].text = live;
-          renderSession();
+          renderConversation();
         } else if (ev.type === "message_replace" && placeholder && typeof ev.text === "string") {
           streamed = true;
           live = ev.text;
           placeholder.parts[0].text = live;
-          renderSession();
+          renderConversation();
         } else if (ev.type === "done") {
           result = ev.result;
         }
@@ -2088,7 +1873,7 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   if (placeholder && result.message) {
     if (streamed) {
       placeholder.parts[0].text = result.message;
-      renderSession();
+      renderConversation();
     } else {
       const msg = result.message;
       let i = 0;
@@ -2096,7 +1881,7 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
         const step = () => {
           i = Math.min(i + 2 + Math.floor(Math.random() * 2), msg.length);
           placeholder.parts[0].text = msg.slice(0, i);
-          renderSession();
+          renderConversation();
           if (i >= msg.length) { resolve(); return; }
           requestAnimationFrame(step);
         };
@@ -3586,17 +3371,22 @@ function resetProjectScope() {
   renderMeta();
   renderMemory();
   renderPreferences();
-  renderManagedSessionList();
+  renderTaskList();
 }
 
 async function reloadProjectScope(options = {}) {
-  const includeSessions = options.includeSessions !== false;
   const restoreWorkspace = options.restoreWorkspace !== false;
   await ensureWorkspaceDirectory();
-  const jobs = [loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()];
-  if (includeSessions) jobs.push(loadManagedSessions());
+  const jobs = [loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadPreferences()];
   await Promise.all(jobs);
   if (restoreWorkspace) await restoreInitialWorkspace();
+  if (!state.selectedTaskID) {
+    state.memoryFiles = [];
+    state.memorySearchMode = false;
+    renderMemory();
+    return;
+  }
+  await loadMemory();
 }
 
 async function ensureWorkspaceDirectory() {
@@ -3815,7 +3605,7 @@ function gitTitle(vcs, dir) {
   ].join("\n");
 }
 
-// ── Task and Session Helpers ──
+// ── Task Helpers ──
 
 function clipText(value, limit = 80) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -3849,120 +3639,6 @@ function sortedTasks(data) {
     .sort((a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0));
 }
 
-function sessionTitle(session) {
-  return clipText(session?.title || session?.id || "", 72);
-}
-
-function isDefaultSessionTitle(title) {
-  return /^((New session - )|(Child session - ))\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(String(title || ""));
-}
-
-function isPanelControlSession(session) {
-  return typeof session?.title === "string" && session.title.startsWith("Panel control (");
-}
-
-function isUnusedSession(session) {
-  const created = Number(session?.time?.created || 0);
-  const updated = Number(session?.time?.updated || 0);
-  if (!created || !updated) return false;
-  return Math.abs(updated - created) < 1000;
-}
-
-function visibleSession(session) {
-  if (!session || typeof session !== "object") return false;
-  if (isPanelControlSession(session)) return false;
-  if (isDefaultSessionTitle(session.title) && isUnusedSession(session)) return false;
-  if (isDeletingManagedSession(session.id)) return false;
-  return true;
-}
-
-function displaySessions() {
-  const list = state.sessions.filter(visibleSession);
-  const current = state.managedSession;
-  if (!current?.id || list.some((item) => item?.id === current.id)) return list;
-  return [current, ...list];
-}
-
-const SESSION_DELETE_CONFIRM_MS = 2500;
-let pendingSessionDeleteID = "";
-let pendingSessionDeleteTimer = null;
-const deletingSessionIDs = new Set();
-
-function isPendingSessionDelete(sessionID) {
-  return !!sessionID && pendingSessionDeleteID === sessionID;
-}
-
-function isDeletingManagedSession(sessionID) {
-  return !!sessionID && deletingSessionIDs.has(sessionID);
-}
-
-function clearPendingSessionDelete(sessionID) {
-  if (sessionID && pendingSessionDeleteID !== sessionID) return;
-  pendingSessionDeleteID = "";
-  if (pendingSessionDeleteTimer) {
-    clearTimeout(pendingSessionDeleteTimer);
-    pendingSessionDeleteTimer = null;
-  }
-  renderManagedSessionList();
-}
-
-function armPendingSessionDelete(sessionID) {
-  if (!sessionID) return;
-  pendingSessionDeleteID = sessionID;
-  if (pendingSessionDeleteTimer) clearTimeout(pendingSessionDeleteTimer);
-  pendingSessionDeleteTimer = setTimeout(() => {
-    pendingSessionDeleteID = "";
-    pendingSessionDeleteTimer = null;
-    renderManagedSessionList();
-  }, SESSION_DELETE_CONFIRM_MS);
-  renderManagedSessionList();
-}
-
-function sessionItem(sessionID) {
-  if (!sessionID) return null;
-  return [state.managedSession, ...state.sessions]
-    .find((item) => item?.id === sessionID) || null;
-}
-
-function sessionRow(item, meta = "") {
-  const active = currentSessionID() === item.id ? ' data-active="true"' : "";
-  const badge = "";
-  const title = escapeHtml(item.title || item.id);
-  const confirmDelete = isPendingSessionDelete(item.id);
-  const deleteLabel = confirmDelete ? t("dialog.confirm") : t("common.delete");
-  return `<div class="session-row-mini"${active} title="${title}">
-    <button type="button" class="session-row-main" data-session-id="${escapeHtml(item.id)}" title="${title}">
-      <div class="session-row-head">
-        <strong>${escapeHtml(sessionTitle(item) || item.id)}</strong>
-        ${badge}
-      </div>
-      <span>${escapeHtml(clipText(item.id, 24))}</span>
-      <small>${escapeHtml(meta)}</small>
-    </button>
-    <button
-      type="button"
-      class="session-row-delete"
-      data-session-delete="${escapeHtml(item.id)}"
-      data-confirm="${confirmDelete ? "true" : "false"}"
-      title="${escapeHtml(deleteLabel)}"
-      aria-label="${escapeHtml(deleteLabel)}"
-    >
-      <span class="session-row-delete-icon" data-icon="delete" aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M3.5 4.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-          <path d="M6.5 2.75h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-          <path d="M5.25 4.5v7.25a1 1 0 001 1h3.5a1 1 0 001-1V4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-      <span class="session-row-delete-icon" data-icon="confirm" aria-hidden="true">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <path d="M4 8.25l2.5 2.5L12 5.25" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </span>
-    </button>
-  </div>`;
-}
-
 function taskItem(taskID, items = state.tasks) {
   if (!taskID) return null;
   return items.find((item) => item?.task?.id === taskID) || null;
@@ -3972,31 +3648,49 @@ function taskByID(taskID) {
   return taskItem(taskID, state.tasks);
 }
 
-function taskItemForSession(sessionID, items = state.tasks) {
-  if (!sessionID) return null;
-  return items.find((item) => item?.task?.sessionID === sessionID) || null;
+function taskUpdated(item) {
+  return item?.updated_at || item?.task?.time?.updated || item?.task?.time?.created || 0;
 }
 
-async function resolveTaskForSession(sessionID) {
-  const item = taskItemForSession(sessionID);
-  if (item) return item;
-  await loadTasks();
-  return taskItemForSession(sessionID);
+function taskListTitle(item) {
+  return clipText(item?.task?.title || item?.overview?.headline || item?.task?.id || "", 72);
 }
 
-function removeManagedSession(sessionID) {
-  const task = taskByID(state.selectedTaskID);
-  const dropTask =
-    !!state.selectedTaskID && (task?.task?.sessionID === sessionID || state.board?.task?.sessionID === sessionID);
-  const active = state.chatSessionID === sessionID || dropTask || state.managedSession?.id === sessionID;
-  state.sessions = state.sessions.filter((item) => item?.id !== sessionID);
-  state.tasks = state.tasks.filter((item) => item?.task?.sessionID !== sessionID);
-  if (state.chatSessionID === sessionID) state.chatSessionID = "";
-  if (dropTask) state.selectedTaskID = "";
-  if (state.managedSession?.id === sessionID) state.managedSession = null;
-  renderWorkspaceState();
-  renderManagedSessionList();
-  return active;
+function taskListBadge(item) {
+  const pending = Number(item?.pending_interactions || 0) > 0;
+  return pending ? t("detail.pending_interactions") : statusLabel(item?.task?.status || "idle");
+}
+
+function taskListMeta(item) {
+  return joinBullet([
+    stamp(taskUpdated(item)),
+    shortPath(item?.task?.directory || ""),
+  ]);
+}
+
+function taskRow(item) {
+  const id = item?.task?.id || "";
+  const status = item?.task?.status || "idle";
+  const active = state.selectedTaskID === id ? ' data-active="true"' : "";
+  const title = escapeHtml(taskListTitle(item) || id);
+  return `<div class="task-row-mini global-task-row"${active} title="${title}">
+    <button type="button" class="task-row-main" data-task-id="${escapeHtml(id)}" title="${title}">
+      <div class="task-row-head">
+        <span class="status-dot" data-status="${escapeHtml(status)}" aria-hidden="true"></span>
+        <strong>${title}</strong>
+      </div>
+      <span>${escapeHtml(taskListBadge(item))}</span>
+      <small>${escapeHtml(taskListMeta(item))}</small>
+    </button>
+  </div>`;
+}
+
+function taskSection(label, items) {
+  if (!items.length) return "";
+  return `<section class="sidebar-list-group">
+    <div class="sidebar-list-heading">${escapeHtml(label)}</div>
+    <div class="sidebar-list-cluster">${items.map((item) => taskRow(item)).join("")}</div>
+  </section>`;
 }
 
 function renderSidebar() {
@@ -4066,39 +3760,32 @@ function startPaneResize(side, event) {
   event.preventDefault();
 }
 
-async function syncManagedSession(sessionID = currentSessionID()) {
-  if (!sessionID) {
-    state.managedSession = null;
-    renderWorkspaceState();
-    renderManagedSessionList();
-    return;
-  }
-  await selectManagedSession(sessionID);
-}
-
 async function loadTasks() {
   const epoch = state.directoryEpoch;
   const seq = ++state.tasksSeq;
   try {
     const data = await apiJson("tasks");
     if (epoch !== state.directoryEpoch || seq !== state.tasksSeq) return;
-    state.tasks = sortedTasks(data).filter((item) => !isDeletingManagedSession(item?.task?.sessionID));
+    state.tasks = sortedTasks(data);
     if (state.selectedTaskID && !state.tasks.some((item) => item.task.id === state.selectedTaskID)) {
       enterEmptyWorkspace();
       renderClear();
+      clearWorkspaceMemory();
+      renderMemory();
+      void persistOverlaySettings();
     }
   } catch (e) {
     AppLog.debug("tasks", "loadTasks failed, keeping current state", { error: String(e) });
     if (epoch !== state.directoryEpoch || seq !== state.tasksSeq) return;
   }
+  renderTaskList();
 }
 
 // ── Task Selection ──
 
 async function selectTask(taskID, options = {}) {
   const nextTaskID = taskID || "";
-  const nextSessionID = options.sessionID || taskItem(nextTaskID)?.task?.sessionID || "";
-  if (nextTaskID === state.selectedTaskID && nextSessionID === state.chatSessionID && state.board) return;
+  if (nextTaskID === state.selectedTaskID && state.board) return;
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
   } else {
@@ -4108,31 +3795,29 @@ async function selectTask(taskID, options = {}) {
 
   if (!nextTaskID) {
     setTaskStatus("idle", { visible: false });
-    state.session = [];
+    state.messages = [];
     state.pendingTaskMessages = null;
-    renderSession();
-    await syncManagedSession("");
-    await syncSessionOverlaySettings("");
+    renderConversation();
+    renderTaskList();
     clearWorkspaceMemory();
-    await persistOverlaySettings({ includeSession: false });
+    state.memoryFiles = [];
+    state.memorySearchMode = false;
+    renderMemory();
+    await persistOverlaySettings();
     return;
   }
 
   if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
-    state.session = state.pendingTaskMessages;
+    state.messages = state.pendingTaskMessages;
     state.pendingTaskMessages = null;
-    renderSession();
+    renderConversation();
   }
 
-  await loadBoard();
-  await loadConversation();
-  await loadMeta();
-  await syncSessionOverlaySettings(currentSessionID());
+  await Promise.all([loadBoard(), loadConversation(), loadMeta(), loadMemory()]);
   rememberWorkspace({
     taskID: nextTaskID,
-    sessionID: nextSessionID || currentSessionID(),
   });
-  await persistOverlaySettings({ includeSession: false });
+  await persistOverlaySettings();
   startPolling();
 
   // Start SSE for running tasks
@@ -4182,7 +3867,6 @@ async function loadBoard() {
       await Promise.all([
         loadChanges(),
         loadExecutorEvents(state.board?.task?.activeRunID || ""),
-        !state.chatSessionID ? syncManagedSession(currentTaskSessionID()) : Promise.resolve(),
       ]);
     } catch (e) {
       AppLog.warn("board", "loadBoard failed", { error: String(e) });
@@ -4200,123 +3884,57 @@ async function loadBoard() {
 // ── Control Conversation ──
 
 function scheduleConversation(delay = 0) {
-  if (state.sessionKick) clearTimeout(state.sessionKick);
-  state.sessionKick = setTimeout(() => {
-    state.sessionKick = null;
+  if (state.conversationKick) clearTimeout(state.conversationKick);
+  state.conversationKick = setTimeout(() => {
+    state.conversationKick = null;
     loadConversation();
-  }, delay);
-}
-
-function scheduleManagedSessions(delay = 0) {
-  if (state.sessionsKick) clearTimeout(state.sessionsKick);
-  state.sessionsKick = setTimeout(() => {
-    state.sessionsKick = null;
-    loadManagedSessions();
   }, delay);
 }
 
 async function loadConversation() {
   const target = conversationTarget();
   const targetKey = conversationTargetKey(target);
-  if (state.sessionLoading) {
-    state.sessionQueued = true;
-    return state.sessionLoading;
+  if (state.conversationLoading) {
+    state.conversationQueued = true;
+    return state.conversationLoading;
   }
-  state.sessionLoading = (async () => {
+  state.conversationLoading = (async () => {
     try {
-      if (target.sessionID && !target.taskID) {
-        const sessionMsgs = await apiJson(`session/${target.sessionID}/message`);
-        if (targetKey !== conversationTargetKey(conversationTarget())) return;
-        state.session = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-        state.sessionUpdatedAt = Date.now();
-        renderSession();
-        await loadChanges();
-        return;
-      }
       if (target.taskID) {
-        const sessionID = currentSessionID();
-        let result = [];
-        if (sessionID) {
-          try {
-            const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-            result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-          } catch (sessionErr) {
-            AppLog.debug("ui", "task session load failed", { sessionID, error: String(sessionErr) });
-          }
-        }
+        const messages = await apiJson(`task/${encodeURIComponent(target.taskID)}/transcript`);
         if (targetKey !== conversationTargetKey(conversationTarget())) return;
-        state.session = result;
-        state.sessionUpdatedAt = Date.now();
-        renderSession();
+        state.messages = Array.isArray(messages) ? messages : [];
+        state.conversationUpdatedAt = Date.now();
+        renderConversation();
         return;
       }
-      const params = new URLSearchParams();
-      if (target.sessionID) params.set("sessionID", target.sessionID);
-      else params.set("surface", "panel");
-      const messages = await apiJson(`control/timeline?${params.toString()}`);
-      let result = Array.isArray(messages) ? messages : [];
-      const sessionID = currentSessionID();
-      if (result.length === 0 && sessionID) {
-        // Fallback: if control timeline is empty, load the underlying session messages
-        // (headless API tasks don't write to the control timeline)
-        try {
-          const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-          result = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-        } catch (fallbackErr) {
-          AppLog.debug("ui", "session message fallback failed", { sessionID, error: String(fallbackErr) });
-        }
-      }
-
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      state.session = result;
-      state.sessionUpdatedAt = Date.now();
-      renderSession();
-      if (!state.selectedTaskID || state.chatSessionID) {
-        await loadChanges();
-      }
+      state.messages = [];
+      state.conversationUpdatedAt = Date.now();
+      renderConversation();
     } catch (e) {
       AppLog.error("ui", "Failed to load conversation", { error: String(e) });
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
-      const sessionID = currentSessionID();
-      if (sessionID) {
-        try {
-          const sessionMsgs = await apiJson(`session/${sessionID}/message`);
-          state.session = Array.isArray(sessionMsgs) ? sessionMsgs : [];
-          state.sessionUpdatedAt = Date.now();
-          renderSession();
-          if (!state.selectedTaskID || state.chatSessionID) {
-            await loadChanges();
-          }
-          return;
-        } catch (fallbackErr2) {
-          AppLog.debug("ui", "session message final fallback failed", { sessionID, error: String(fallbackErr2) });
-        }
-      }
+      state.messages = [];
+      state.conversationUpdatedAt = Date.now();
+      renderConversation();
       return;
     } finally {
-      state.sessionLoading = null;
-      if (state.sessionQueued) {
-        state.sessionQueued = false;
+      state.conversationLoading = null;
+      if (state.conversationQueued) {
+        state.conversationQueued = false;
         queueMicrotask(() => loadConversation());
       }
     }
   })();
-  return state.sessionLoading;
+  return state.conversationLoading;
 }
 
 function currentSessionID() {
-  if (state.chatSessionID) return state.chatSessionID;
-  if (state.selectedTaskID) return currentTaskSessionID();
-  return state.managedSession?.id || "";
+  return currentTaskSessionID();
 }
 
 function conversationTarget() {
-  if (state.chatSessionID) {
-    return {
-      kind: "session",
-      sessionID: state.chatSessionID,
-    };
-  }
   if (state.selectedTaskID) {
     return {
       kind: "task",
@@ -4324,14 +3942,13 @@ function conversationTarget() {
     };
   }
   return {
-    kind: "fallback",
+    kind: "empty",
   };
 }
 
 function conversationTargetKey(target = conversationTarget()) {
-  if (target.sessionID) return `session:${target.sessionID}`;
   if (target.taskID) return `task:${target.taskID}`;
-  return "";
+  return "empty";
 }
 
 async function loadChanges() {
@@ -4347,28 +3964,9 @@ async function loadChanges() {
     renderChanges()
     return
   }
-
-  const sessionID = currentSessionID();
-  const requestKey = sessionID || `changes:${state.selectedTaskID || state.chatSessionID || "none"}`;
-  state.changeKey = requestKey;
-
-  if (!sessionID) {
-    state.changes = [];
-    renderChanges();
-    return;
-  }
-
-  try {
-    const diff = await apiJson(`session/${sessionID}/diff`);
-    if (state.changeKey !== requestKey) return;
-    state.changes = normalizeDiffs(diff);
-    renderChanges();
-  } catch (e) {
-    AppLog.error("ui", "Failed to load session diff", { error: String(e) });
-    if (state.changeKey !== requestKey) return;
-    state.changes = [];
-    renderChanges();
-  }
+  state.changeKey = "changes:none";
+  state.changes = [];
+  renderChanges();
 }
 
 function normalizeDiffs(list) {
@@ -4471,72 +4069,7 @@ function stopSSE() {
 }
 
 function startEventStream(retryCount = 0) {
-  if (!state.connected) return;
-  if (state.selectedTaskID) return;
-  if (!currentSessionID()) return;
-  if (state.eventStream) return;
-  const controller = new AbortController();
-  state.eventStream = controller;
-  state.eventConnected = false;
-  const MAX_RETRIES = 60;
-
-  (async () => {
-    try {
-      const res = await fetch(apiUrl("event"), {
-        headers: apiHeaders(),
-        signal: controller.signal,
-      });
-      if (!res.ok || !res.body) throw new Error(`API ${res.status}: ${res.statusText}`);
-      state.eventConnected = true;
-      AppLog.info("event", "connected");
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data:")) continue;
-          try {
-            const event = JSON.parse(line.slice(5).trim());
-            handleEventStreamEvent(event);
-          } catch (e) {
-            AppLog.debug("event", "malformed event: " + line, { error: String(e) });
-          }
-        }
-      }
-      state.eventConnected = false;
-      state.eventStream = null;
-      if (!state.selectedTaskID && currentSessionID()) {
-        const delay = 3000;
-        AppLog.info("event", `stream ended, reconnecting in ${delay}ms`);
-        if (state.eventRetryTimer) clearTimeout(state.eventRetryTimer);
-        state.eventRetryTimer = setTimeout(() => {
-          state.eventRetryTimer = null;
-          if (!state.selectedTaskID && currentSessionID()) startEventStream(0);
-        }, delay);
-      }
-    } catch (e) {
-      state.eventConnected = false;
-      state.eventStream = null;
-      if (e.name === "AbortError") return;
-      if (retryCount >= MAX_RETRIES) {
-        AppLog.error("event", "max retries reached, giving up", { retryCount });
-        return;
-      }
-      const delay = Math.min(5000 * Math.pow(1.5, retryCount), 60000);
-      AppLog.warn("event", `disconnected, retrying in ${Math.round(delay)}ms (attempt ${retryCount + 1})`, { error: String(e) });
-      if (state.eventRetryTimer) clearTimeout(state.eventRetryTimer);
-      state.eventRetryTimer = setTimeout(() => {
-        state.eventRetryTimer = null;
-        if (!state.selectedTaskID && currentSessionID()) startEventStream(retryCount + 1);
-      }, delay);
-    }
-  })();
+  return;
 }
 
 function stopEventStream() {
@@ -4576,7 +4109,7 @@ function handleEventStreamEvent(event) {
   if (type === "message.updated") {
     const info = record(properties.info) ? properties.info : null;
     if (info?.sessionID !== currentSessionID()) return;
-    const existing = state.session.find((item) => item.info?.id === info.id);
+    const existing = state.messages.find((item) => item.info?.id === info.id);
     if (existing) {
       existing.info = info;
     } else if (state.chatRequest && !state.selectedTaskID) {
@@ -4584,25 +4117,25 @@ function handleEventStreamEvent(event) {
       if (placeholder) {
         placeholder.info = { ...placeholder.info, ...info };
       } else {
-        state.session.push({
+        state.messages.push({
           info,
           parts: [],
         });
       }
     } else {
-      state.session.push({
+      state.messages.push({
         info,
         parts: [],
       });
     }
-    state.sessionUpdatedAt = Date.now();
-    renderSession();
+    state.conversationUpdatedAt = Date.now();
+    renderConversation();
     return;
   }
   if (type === "message.part.updated") {
     const part = record(properties.part) ? properties.part : null;
     if (part?.sessionID !== currentSessionID()) return;
-    const message = state.session.find((item) => item.info?.id === part.messageID);
+    const message = state.messages.find((item) => item.info?.id === part.messageID);
     if (!message) return;
     const index = message.parts.findIndex((item) => item.id === part.id);
     if (index >= 0) {
@@ -4612,19 +4145,19 @@ function handleEventStreamEvent(event) {
     } else {
       message.parts.push(part);
     }
-    state.sessionUpdatedAt = Date.now();
-    renderSession();
+    state.conversationUpdatedAt = Date.now();
+    renderConversation();
     return;
   }
   if (type === "message.part.delta") {
     if (properties.sessionID !== currentSessionID() || properties.field !== "text" || typeof properties.delta !== "string") return;
-    const message = state.session.find((item) => item.info?.id === properties.messageID);
+    const message = state.messages.find((item) => item.info?.id === properties.messageID);
     if (!message) return;
     const part = message.parts.find((item) => item.id === properties.partID && item.type === "text");
     if (!part) return;
     part.text += properties.delta;
-    state.sessionUpdatedAt = Date.now();
-    renderSession();
+    state.conversationUpdatedAt = Date.now();
+    renderConversation();
     return;
   }
   if (type === "run.progress") {
@@ -4661,8 +4194,7 @@ function handleEventStreamEvent(event) {
     type.includes("interaction.")
   ) {
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
-    scheduleConversation(SESSION_EVENT_DEBOUNCE);
-    scheduleManagedSessions(SESSION_LIST_EVENT_DEBOUNCE);
+    scheduleConversation(CONVERSATION_EVENT_DEBOUNCE);
   }
 }
 
@@ -4674,30 +4206,26 @@ function handleSSEEvent(event) {
 
 function startPolling() {
   stopPolling();
-  if (currentSessionID()) {
-    startEventStream();
-  }
   state.pollTimer = setInterval(() => {
     if (!state.sseConnected || Date.now() - state.boardUpdatedAt > SSE_BACKSTOP) {
       loadBoard();
     }
     loadMeta();
   }, POLL_INTERVAL);
-  state.sessionTimer = setInterval(() => {
-    const live = state.selectedTaskID ? state.sseConnected : state.eventConnected;
-    if (!live || Date.now() - state.sessionUpdatedAt > SSE_BACKSTOP) {
+  state.conversationTimer = setInterval(() => {
+    const live = state.sseConnected;
+    if (!live || Date.now() - state.conversationUpdatedAt > SSE_BACKSTOP) {
       loadConversation();
     }
-  }, SESSION_POLL);
+  }, CONVERSATION_POLL);
 }
 
 function stopPolling() {
   if (state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
-  if (state.sessionTimer) { clearInterval(state.sessionTimer); state.sessionTimer = null; }
+  if (state.conversationTimer) { clearInterval(state.conversationTimer); state.conversationTimer = null; }
   if (state.elapsedTimer) { clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
   if (state.boardKick) { clearTimeout(state.boardKick); state.boardKick = null; }
-  if (state.sessionKick) { clearTimeout(state.sessionKick); state.sessionKick = null; }
-  if (state.sessionsKick) { clearTimeout(state.sessionsKick); state.sessionsKick = null; }
+  if (state.conversationKick) { clearTimeout(state.conversationKick); state.conversationKick = null; }
   stopEventStream();
 }
 
@@ -4738,8 +4266,8 @@ function renderBoard() {
   renderInteractions(interactions || []);
   renderExecutor();
 
-  // Re-render session to include updated board context (goals, evaluation)
-  renderSession();
+  // Re-render the task conversation to include updated board context.
+  renderConversation();
 }
 
 function setTaskStatus(status, options = {}) {
@@ -4906,7 +4434,7 @@ function phaseFromMessage(message) {
   return "";
 }
 
-function liveSessionPhase(messages = state.session) {
+function liveConversationPhase(messages = state.messages) {
   const list = Array.isArray(messages) ? messages : [];
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const message = list[index];
@@ -4948,7 +4476,7 @@ function relatePhase(kind, related, board, goals) {
 
 function syncSectionPhases(board = state.board) {
   clearSectionPhases();
-  const live = liveSessionPhase();
+  const live = liveConversationPhase();
   if (!board?.task && !live) return;
 
   const goals = (board?.lanes || []).find((lane) => lane.id === "goals")?.cards || [];
@@ -5121,11 +4649,7 @@ function renderChanges() {
   if (!files.length) {
     dom.changesBadge.textContent = "";
     delete dom.changesBadge.dataset.tone;
-    const hint = currentSessionID()
-      ? t("empty.files")
-      : state.selectedTaskID || state.chatSessionID
-        ? t("files.unavailable")
-        : t("files.select_target");
+    const hint = state.selectedTaskID ? t("files.unavailable") : t("files.select_target");
     dom.changesBody.innerHTML = `<p class="empty-hint">${escapeHtml(hint)}</p>`;
     syncSectionPhases();
     return;
@@ -5861,200 +5385,24 @@ function isCriteriaEnabled(item) {
   return !!input?.checked;
 }
 
-// ── Session Manager ──
-
-async function listManagedSessions(limit = 200) {
-  const params = new URLSearchParams();
-  params.set("limit", String(limit));
-  const data = await apiJson(`session?${params.toString()}`);
-  return Array.isArray(data) ? data.filter((item) => !item?.time?.archived) : [];
+function renderTaskList() {
+  if (!dom.taskListPanel) return;
+  const active = state.tasks.filter((item) => !["completed", "failed", "cancelled"].includes(item?.task?.status || ""));
+  const recent = state.tasks.filter((item) => ["completed", "failed", "cancelled"].includes(item?.task?.status || ""));
+  const html = state.tasks.length === 0
+    ? `<div class="empty-hint">${escapeHtml(t("task.none"))}</div>`
+    : [
+      taskSection(t("task.group.active"), active),
+      taskSection(t("task.group.recent"), recent),
+    ].filter(Boolean).join("");
+  if (dom.taskListPanel.innerHTML === html) return;
+  const top = dom.taskListPanel.scrollTop;
+  dom.taskListPanel.innerHTML = html;
+  dom.taskListPanel.scrollTop = top;
 }
 
-async function loadManagedSessions() {
-  const seq = ++state.sessionsSeq;
-  try {
-    const data = await listManagedSessions();
-    if (seq !== state.sessionsSeq) return;
-    state.sessions = [...data]
-      .filter((item) => !isDeletingManagedSession(item?.id))
-      .sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
-    if (pendingSessionDeleteID && !displaySessions().some((item) => item?.id === pendingSessionDeleteID)) {
-      clearPendingSessionDelete();
-      return;
-    }
-    renderManagedSessionList();
-  } catch (e) {
-    if (seq !== state.sessionsSeq) return;
-    AppLog.error("ui", "Failed to load sessions", { error: String(e) });
-  }
-}
-
-function storeManagedSession(session, options = {}) {
-  if (!session?.id) return;
-  state.sessions = [session, ...state.sessions.filter((item) => item?.id !== session.id)]
-    .filter((item) => !isDeletingManagedSession(item?.id))
-    .sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
-  if (options.select === false) {
-    renderManagedSessionList();
-    return;
-  }
-  state.managedSession = session;
-  renderWorkspaceState();
-  renderManagedSessionList();
-}
-
-async function selectManagedSession(sessionID, input = {}) {
-  if (!sessionID) {
-    state.managedSession = null;
-    renderWorkspaceState();
-    renderManagedSessionList();
-    await syncSessionOverlaySettings("");
-    clearWorkspaceMemory();
-    await persistOverlaySettings({ includeSession: false });
-    return;
-  }
-  const session = input.session || sessionItem(sessionID);
-  const dir =
-    typeof input.directory === "string" && input.directory
-      ? input.directory
-      : session?.directory || activeDirectory() || state.savedDirectory || state.tempDirectory || state.path?.directory || "";
-  const settings = syncSessionOverlaySettings(sessionID);
-  if (session?.id) storeManagedSession(session);
-  try {
-    const next = await apiJson(`session/${sessionID}`, undefined, { directory: dir });
-    storeManagedSession(next);
-    AppLog.info("session", "Loaded managed session", {
-      sessionID,
-      session: next,
-    });
-    await settings;
-  } catch (e) {
-    if (session) {
-      await settings;
-      return;
-    }
-    AppLog.error("ui", "Failed to load managed session", { error: String(e) });
-  }
-}
-
-function renderManagedSessionList() {
-  if (!dom.sessionListPanel) return;
-  const items = displaySessions();
-  const html = !items.length
-    ? `<div class="empty-hint">${escapeHtml(t("session.none_loaded"))}</div>`
-    : items
-      .map((item) => sessionRow(item, joinBullet([stamp(item.time?.updated), shortPath(item.directory || "")])))
-      .join("");
-  if (dom.sessionListPanel.innerHTML === html) return;
-  const top = dom.sessionListPanel.scrollTop;
-  dom.sessionListPanel.innerHTML = html;
-  dom.sessionListPanel.scrollTop = top;
-}
-
-async function createManagedSession() {
-  try {
-    const current = activeDirectory() || state.savedDirectory || state.tempDirectory || state.path?.directory || "";
-    const session = await apiJson("session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
-    const dir = session?.directory || current;
-    storeManagedSession(session);
-    enterSessionWorkspace(session?.id || "", { directory: dir, managedSession: session || null });
-    renderClear();
-    startEventStream();
-    await Promise.all([
-      selectManagedSession(session?.id || "", { session, directory: dir }),
-      loadConversation(),
-      loadMemory(),
-    ]);
-    rememberWorkspace({ sessionID: session?.id || "", directory: dir });
-    await persistOverlaySettings({ includeSession: false });
-  } catch (e) {
-    AppLog.error("ui", "Failed to create session", { error: String(e) });
-    await nativeMessage(errorText("session.create_failed", e), {
-      title: t("chat.title"),
-      kind: "error",
-    });
-  }
-}
-
-function managedSessionDeleteSnapshot(sessionID, session) {
-  return {
-    active: false,
-    sessionID,
-    session: session || null,
-    selectedTaskID: state.selectedTaskID || "",
-    selectedSessionID: currentSessionID(),
-  };
-}
-
-async function settleManagedSessionDelete() {
-  if (state.sessions[0]?.id) {
-    await openManagedSession(state.sessions[0].id);
-    return;
-  }
-  await selectTask("");
-}
-
-async function restoreManagedSessionDelete(snapshot) {
-  deletingSessionIDs.delete(snapshot.sessionID);
-  await Promise.all([loadTasks(), loadManagedSessions()]);
-  if (!snapshot.active) return;
-  if (snapshot.selectedTaskID && state.tasks.some((item) => item?.task?.id === snapshot.selectedTaskID)) {
-    await selectTask(snapshot.selectedTaskID, {
-      sessionID: snapshot.selectedSessionID,
-      managedSession: snapshot.session,
-    });
-    return;
-  }
-  if (snapshot.selectedSessionID && displaySessions().some((item) => item?.id === snapshot.selectedSessionID)) {
-    await openManagedSession(snapshot.selectedSessionID, snapshot.session);
-    return;
-  }
-  if (state.sessions[0]?.id) {
-    await openManagedSession(state.sessions[0].id);
-    return;
-  }
-  await selectTask("");
-}
-
-async function deleteManagedSession(sessionID = state.managedSession?.id) {
-  if (!sessionID || isDeletingManagedSession(sessionID)) return;
-  const session = sessionItem(sessionID);
-  const snapshot = managedSessionDeleteSnapshot(sessionID, session);
-  const dir = session?.directory || state.directory;
-  clearPendingSessionDelete(sessionID);
-  deletingSessionIDs.add(sessionID);
-  const active = removeManagedSession(sessionID);
-  snapshot.active = active;
-  try {
-    const request = deleteSessionApi(sessionID, { deleteTasks: true }, { directory: dir }).then(
-      () => null,
-      (error) => error,
-    );
-    if (active) await settleManagedSessionDelete();
-    const error = await request;
-    deletingSessionIDs.delete(sessionID);
-    if (error) throw error;
-  } catch (e) {
-    AppLog.error("ui", "Failed to delete session", { error: String(e) });
-    await restoreManagedSessionDelete(snapshot);
-    await nativeMessage(errorText("session.delete_failed", e), {
-      title: t("session.delete_title"),
-      kind: "error",
-    });
-  }
-}
-
-async function requestManagedSessionDelete(sessionID) {
-  if (!sessionID || isDeletingManagedSession(sessionID)) return;
-  if (!isPendingSessionDelete(sessionID)) {
-    armPendingSessionDelete(sessionID);
-    return;
-  }
-  await deleteManagedSession(sessionID);
+function unsupportedSessionWorkspace() {
+  throw new Error("Overlay no longer supports session workspaces; use tasks instead.");
 }
 
 function transcriptRole(role) {
@@ -6114,7 +5462,7 @@ function formatTranscriptPart(part, role) {
   return "";
 }
 
-function formatSessionTranscript(messages) {
+function formatConversationTranscript(messages) {
   return (Array.isArray(messages) ? messages : [])
     .map((item) => {
       const role = item?.info?.role || "assistant";
@@ -6131,27 +5479,16 @@ function formatSessionTranscript(messages) {
     .join("\n\n---\n\n");
 }
 
+async function createManagedSession() {
+  unsupportedSessionWorkspace();
+}
+
 async function openManagedSession(sessionID, input) {
-  if (!sessionID) return;
-  const session = input || sessionItem(sessionID);
-  let dir = session?.directory || "";
-  if (dir && dir !== activeDirectory()) {
-    await setActiveDirectory(dir, {
-      restoreWorkspace: false,
-      includeSessions: false,
-    });
-    dir = session?.directory || dir;
-  }
-  enterSessionWorkspace(sessionID, { managedSession: session });
-  renderClear();
-  startEventStream();
-  await Promise.all([
-    selectManagedSession(sessionID, { session, directory: dir }),
-    loadConversation(),
-    loadMemory(),
-  ]);
-  rememberWorkspace({ sessionID, directory: activeDirectory() || dir });
-  await persistOverlaySettings({ includeSession: false });
+  unsupportedSessionWorkspace();
+}
+
+async function selectManagedSession(sessionID, input = {}) {
+  unsupportedSessionWorkspace();
 }
 
 // ── Interactions ──
@@ -6179,7 +5516,7 @@ function showInteractionError(id, msg) {
   }
 }
 
-// ── Session Rendering ──
+// ── Conversation Rendering ──
 //
 // The API returns one message per tool-call step, so a single user request
 // may produce 30+ consecutive "assistant" messages.  We group consecutive
@@ -6541,7 +5878,7 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
     state.executorEvents = [];
     state.executorRunID = "";
     state.executorEventsFetchedAt = 0;
-    renderSession();
+    renderConversation();
     return [];
   }
   if (
@@ -6557,7 +5894,7 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
       .filter((item) => !!item);
     state.executorRunID = next;
     state.executorEventsFetchedAt = Date.now();
-    renderSession();
+    renderConversation();
     return state.executorEvents;
   } catch (e) {
     AppLog.debug("executor", "loadExecutorEvents failed", { runID: next, error: String(e) });
@@ -6565,7 +5902,7 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
     state.executorEvents = [];
     state.executorRunID = next;
     state.executorEventsFetchedAt = Date.now();
-    renderSession();
+    renderConversation();
     return [];
   }
 }
@@ -6582,8 +5919,8 @@ function appendExecutorEvent(raw) {
   if (event.runID && !state.executorRunID) state.executorRunID = event.runID;
   state.executorEvents = [...state.executorEvents, event].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
   state.executorEventsFetchedAt = Date.now();
-  state.sessionUpdatedAt = Date.now();
-  renderSession();
+  state.conversationUpdatedAt = Date.now();
+  renderConversation();
 }
 
 function gitCheckpointTitle(stage, mode) {
@@ -6739,7 +6076,7 @@ function buildBoardContextMessages() {
   const { task, plan, evaluation, delivery, lanes } = board;
 
   // 1. User request — show the original task request as a "user" turn
-  if (task?.request && !hasConversationRequest(state.session || [], task.request)) {
+  if (task?.request && !hasConversationRequest(state.messages || [], task.request)) {
     messages.push({
       _synthetic: true,
       info: { role: "user", time: { created: (task.time?.created || 0) - 2 } },
@@ -6846,19 +6183,7 @@ function hasConversationRequest(messages, request) {
 function conversationMessages() {
   const boardMsgs = buildBoardContextMessages();
   const executorMsgs = buildExecutorMessages();
-  let realMessages = state.session || [];
-  if (!state.selectedTaskID && isPanelControlSession(state.managedSession || sessionItem(currentSessionID()))) {
-    realMessages = realMessages.filter((message) => {
-      if (message?.info?.role !== "assistant") return true;
-      if (message.info?.summary === true) return true;
-      return (message.parts || []).some((part) => {
-        if (part?.type !== "text") return false;
-        if (part.audience && part.audience.ui === false) return false;
-        if (part.kind === "trace" && !part.audience?.ui) return false;
-        return !!String(part.text || "").trim();
-      });
-    });
-  }
+  let realMessages = state.messages || [];
   if (boardMsgs.length > 0 && realMessages.length > 0) {
     realMessages = realMessages.filter((message) => {
       const text = (message.parts || []).map((part) => part.text || "").join("");
@@ -7201,7 +6526,7 @@ function evaluationContextText(board, goals) {
   return lines.join("\n");
 }
 
-function renderSession() {
+function renderConversation() {
   const sorted = conversationMessages();
   if (sorted.length === 0) {
     dom.chatScroll.innerHTML = `<div class="chat-empty">${escapeHtml(t("chat.empty"))}</div>`;
@@ -7257,7 +6582,7 @@ function renderSession() {
 
 async function copyChatConversation() {
   try {
-    const transcript = formatSessionTranscript(conversationMessages());
+    const transcript = formatConversationTranscript(conversationMessages());
     if (!transcript) return;
     const ok = await copyText(transcript);
     if (!ok) throw new Error(t("chat.copy_failed"));
@@ -7356,8 +6681,8 @@ function renderClear() {
   renderMeta();
   setTaskStatus("idle", { visible: false });
   clearSectionPhases();
-  state.session = [];
-  state.sessionUpdatedAt = 0;
+  state.messages = [];
+  state.conversationUpdatedAt = 0;
   dom.overviewBadge.textContent = "";
   dom.overviewBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("empty.overview"))}</p>`;
   state.changes = [];
@@ -7425,20 +6750,15 @@ dom.chatForm.addEventListener("submit", async (e) => {
   renderChatComposer();
 
   const now = Date.now();
-  state.session = [
-    ...state.session,
+  state.messages = [
+    ...state.messages,
     { parts: [{ type: "text", text }], info: { role: "user", time: { created: now } } },
     { parts: [{ type: "text", text: "……" }], info: { role: "assistant", time: { created: now + 1 } } },
   ];
-  renderSession();
+  renderConversation();
 
   try {
-    const mode = workspaceMode();
-    if (mode === "session") {
-      await sessionMessage(text, request.controller.signal);
-    } else {
-      await panelMessage(text, undefined, request.controller.signal);
-    }
+    await panelMessage(text, undefined, request.controller.signal);
   } catch (err) {
     if (request.workspaceEpoch !== state.workspaceEpoch) {
       return;
@@ -7446,7 +6766,7 @@ dom.chatForm.addEventListener("submit", async (e) => {
     if (request.aborted || isAbortError(err)) {
       const ph = chatPlaceholder();
       if (ph) ph.parts[0].text = t("chat.interrupted_notice");
-      renderSession();
+      renderConversation();
       return;
     }
     if (emptyStart && workspaceMode() === "empty") {
@@ -7454,11 +6774,11 @@ dom.chatForm.addEventListener("submit", async (e) => {
       renderClear();
       return;
     }
-    const ph = state.session.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……");
+    const ph = state.messages.find((item) => item.info?.role === "assistant" && item.parts?.[0]?.text === "……");
     const msg = t("interaction.error", { message: err?.message || err });
     if (ph) ph.parts[0].text = msg;
-    else state.session.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
-    renderSession();
+    else state.messages.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
+    renderConversation();
   } finally {
     clearTimeout(timeout);
     if (state.chatRequest === request) {
@@ -7524,16 +6844,10 @@ dom.rightPaneResizer?.addEventListener("pointerdown", (event) => {
   startPaneResize("right", event);
 });
 
-dom.sessionListPanel?.addEventListener("click", async (event) => {
-  const remove = eventClosest(event, "[data-session-delete]");
-  if (remove) {
-    await requestManagedSessionDelete(remove.dataset.sessionDelete || "");
-    return;
-  }
-  clearPendingSessionDelete();
-  const button = eventClosest(event, "[data-session-id]");
+dom.taskListPanel?.addEventListener("click", async (event) => {
+  const button = eventClosest(event, "[data-task-id]");
   if (!button) return;
-  await openManagedSession(button.dataset.sessionId || "");
+  await selectTask(button.dataset.taskId || "");
 });
 
 dom.taskDir?.addEventListener("click", async (event) => {
@@ -7606,11 +6920,25 @@ dom.engineBar.addEventListener("click", async (event) => {
   await persistOverlaySettings();
 });
 
-dom.btnRefreshSessions.addEventListener("click", async () => {
-  await Promise.all([loadTasks(), loadManagedSessions()]);
-  await syncManagedSession(currentSessionID());
+dom.btnRefreshTasks.addEventListener("click", async () => {
+  await Promise.all([
+    loadTasks(),
+    loadMeta(),
+    loadPreferences(),
+    state.selectedTaskID ? loadBoard() : Promise.resolve(),
+    state.selectedTaskID ? loadConversation() : Promise.resolve(),
+    state.selectedTaskID ? loadMemory() : Promise.resolve(),
+  ]);
+  if (!state.selectedTaskID) {
+    state.memoryFiles = [];
+    state.memorySearchMode = false;
+    renderMemory();
+  }
 });
-dom.btnCreateSession.addEventListener("click", () => createManagedSession());
+dom.btnCreateTask.addEventListener("click", async () => {
+  await selectTask("");
+  dom.chatTextarea?.focus();
+});
 
 dom.btnAddSkill.addEventListener("click", () => {
   dom.skillForm.reset();
@@ -8130,7 +7458,7 @@ dom.channelForm.addEventListener("submit", async (e) => {
     dom.channelDialog.close();
     const ok = await checkConnection();
     if (ok) {
-      await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
+      await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
     }
   } catch (e) {
     AppLog.error("ui", "Failed to save channel settings", { error: String(e) });
@@ -8156,7 +7484,7 @@ dom.settingsForm.addEventListener("submit", async (e) => {
   dom.settingsDialog.close();
   const ok = await checkConnection();
   if (ok) {
-    await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
+    await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors()]);
   }
 });
 
@@ -8318,9 +7646,14 @@ function setupDialogBackdropClose() {
 
 async function loadMemory() {
   const epoch = state.directoryEpoch;
+  if (!state.selectedTaskID) {
+    state.memoryFiles = [];
+    state.memorySearchMode = false;
+    renderMemory();
+    return;
+  }
   try {
-    const sessionID = currentSessionID();
-    const query = sessionID ? `?sessionID=${encodeURIComponent(sessionID)}` : "";
+    const query = `?taskID=${encodeURIComponent(state.selectedTaskID)}`;
     const files = await apiJson(`panel/knowledge/memory${query}`);
     if (epoch !== state.directoryEpoch) return;
     state.memoryFiles = Array.isArray(files) ? files : [];
@@ -8341,11 +7674,11 @@ async function searchMemory(query) {
   }
   const epoch = state.directoryEpoch;
   try {
-    const sessionID = currentSessionID() || undefined;
+    const taskID = state.selectedTaskID || undefined;
     const results = await apiJson("panel/knowledge/memory/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: query.trim(), sessionID, limit: 20 }),
+      body: JSON.stringify({ query: query.trim(), taskID, limit: 20 }),
     });
     if (epoch !== state.directoryEpoch) return;
     // Convert search results to a display-friendly format
@@ -8366,6 +7699,13 @@ async function searchMemory(query) {
   }
 }
 
+function knowledgeScopeLabel(scope) {
+  if (scope === "session") return t("preference.scope.session");
+  if (scope === "cwd") return t("preference.scope.cwd");
+  if (scope === "global") return t("preference.scope.global");
+  return scope || "";
+}
+
 function renderMemory() {
   const files = state.memoryFiles;
   if (dom.memoryBadge) {
@@ -8376,7 +7716,7 @@ function renderMemory() {
 
   if (!files.length) {
     dom.memoryList.innerHTML = `<div class="empty-hint">${escapeHtml(
-      state.memorySearchMode ? t("memory.no_results") : t("memory.none"),
+      state.memorySearchMode ? t("memory.no_results") : state.selectedTaskID ? t("memory.none") : t("memory.none_unselected"),
     )}</div>`;
     return;
   }
@@ -8393,7 +7733,7 @@ function renderMemory() {
           ${f.snippet ? `<div class="knowledge-item-meta">${escapeHtml(f.snippet)}</div>` : ""}
         </div>
         <div class="knowledge-item-actions">
-          <span class="knowledge-scope" data-scope="${escapeHtml(f.scope)}">${escapeHtml(f.scope)}</span>
+          <span class="knowledge-scope" data-scope="${escapeHtml(f.scope)}">${escapeHtml(knowledgeScopeLabel(f.scope))}</span>
           <button type="button" class="btn btn-ghost mini danger knowledge-delete" data-action="delete-memory" data-id="${escapeHtml(f.id)}" title="${escapeHtml(t("memory.delete_button_title"))}" aria-label="${escapeHtml(t("memory.delete_button_title"))}">${escapeHtml(t("common.delete"))}</button>
         </div>
       </div>`;
@@ -8417,7 +7757,7 @@ async function openMemoryDetail(fileId) {
     const f = data.file;
     dom.memoryDialogTitle.textContent = f.title;
     dom.memoryDialogMeta.innerHTML = [
-      `<span class="knowledge-scope" data-scope="${escapeHtml(f.scope)}">${escapeHtml(f.scope)}</span>`,
+      `<span class="knowledge-scope" data-scope="${escapeHtml(f.scope)}">${escapeHtml(knowledgeScopeLabel(f.scope))}</span>`,
       `<span>${escapeHtml(t("memory.source", { value: f.source }))}</span>`,
       `<span>${escapeHtml(t("memory.created", { value: formatDateTime(f.timeCreated) }))}</span>`,
       `<span>${escapeHtml(t("memory.updated", { value: formatDateTime(f.timeUpdated) }))}</span>`,
@@ -8536,10 +7876,6 @@ async function deletePreference(prefId) {
   } catch (e) {
     AppLog.error("ui", "Failed to delete preference", { error: String(e) });
   }
-}
-
-async function loadKnowledge() {
-  await Promise.all([loadMemory(), loadPreferences()]);
 }
 
 // Knowledge event listeners
@@ -8970,7 +8306,6 @@ async function restoreInitialWorkspace() {
   if (hasWorkspaceSelection()) return false;
   const base = activeDirectory() || "";
   const taskID = state.workspaceTaskID || "";
-  const sessionID = state.workspaceSessionID || "";
   const directory = state.workspaceDirectory || "";
   const moved = !!directory && !!base && directory !== base;
   if (moved) {
@@ -8980,15 +8315,8 @@ async function restoreInitialWorkspace() {
     });
   }
   if (taskID && state.tasks.some((item) => item?.task?.id === taskID)) {
-    await selectTask(taskID, { sessionID });
+    await selectTask(taskID);
     return true;
-  }
-  if (sessionID) {
-    const session = displaySessions().find((item) => item?.id === sessionID) || sessionItem(sessionID);
-    if (session?.id) {
-      await openManagedSession(sessionID, session);
-      return true;
-    }
   }
   if (moved && activeDirectory() !== base) {
     await setActiveDirectory(base, {
@@ -9020,8 +8348,9 @@ async function init() {
   if (ok) {
     AppLog.info("init", "loading initial data");
     await ensureWorkspaceDirectory();
-    await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+    await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadPreferences()]);
     await restoreInitialWorkspace();
+    if (!state.selectedTaskID) renderMemory();
     AppLog.info("init", "ready");
   } else {
     AppLog.warn("init", "starting offline");
@@ -9036,8 +8365,9 @@ async function init() {
         const ok = await checkConnection();
         if (ok) {
           await ensureWorkspaceDirectory();
-          await Promise.all([loadTasks(), loadManagedSessions(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadKnowledge()]);
+          await Promise.all([loadTasks(), loadMeta(), loadExtensions(), loadConfigInfo(), loadExecutors(), loadPreferences()]);
           await restoreInitialWorkspace();
+          if (!state.selectedTaskID) renderMemory();
         }
       }
     } catch (retryErr) {
@@ -9060,7 +8390,6 @@ window.addEventListener("focus", () => {
 });
 window.addEventListener("blur", () => {
   stopPaneResize();
-  clearPendingSessionDelete();
   void refreshInteractionAttention?.();
 });
 window.addEventListener("beforeunload", () => {

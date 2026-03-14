@@ -1,23 +1,36 @@
 import z from "zod"
 import { ChannelSurface } from "@/channel/catalog"
 
+const SetExecutorAction = z.object({
+  type: z.literal("set_executor"),
+  executor: z.enum(["opencode", "codex", "claude-code"]),
+})
+
+const SelectTaskAction = z.object({
+  type: z.literal("select_task"),
+  taskID: z.string(),
+})
+
+const SelectSessionAction = z.object({
+  type: z.literal("select_session"),
+  sessionID: z.string(),
+})
+
+const InvalidateSessionAction = z.object({
+  type: z.literal("invalidate_session"),
+  sessionID: z.string(),
+})
+
 export const ControlLocalAction = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("set_executor"),
-    executor: z.enum(["opencode", "codex", "claude-code"]),
-  }),
-  z.object({
-    type: z.literal("select_task"),
-    taskID: z.string(),
-  }),
-  z.object({
-    type: z.literal("select_session"),
-    sessionID: z.string(),
-  }),
-  z.object({
-    type: z.literal("invalidate_session"),
-    sessionID: z.string(),
-  }),
+  SetExecutorAction,
+  SelectTaskAction,
+  SelectSessionAction,
+  InvalidateSessionAction,
+])
+
+export const PanelLocalAction = z.discriminatedUnion("type", [
+  SetExecutorAction,
+  SelectTaskAction,
 ])
 
 export const ControlAttachment = z.object({
@@ -50,4 +63,17 @@ export const ControlMessageInput = z.object({
   allow_create: z.boolean().default(true),
   allow_session_mutation: z.boolean().default(false),
   metadata: z.record(z.string(), z.any()).optional(),
+})
+
+export const PanelMessageInput = ControlMessageInput.extend({
+  surface: z.literal("panel"),
+  sessionID: z.undefined().optional(),
+  allow_session_mutation: z.literal(false).default(false),
+})
+
+export const PanelMessageResult = ControlMessageResult.omit({
+  session_id: true,
+  local_action: true,
+}).extend({
+  local_action: PanelLocalAction.optional(),
 })

@@ -107,7 +107,11 @@ function stream(input: LanguageModelV2CallOptions) {
   if (tool) {
     return streamCall("StructuredOutput", structured(tool))
   }
-  return streamCall("panel", action(input.prompt))
+  const next = action(input.prompt)
+  if ("kind" in next) {
+    return streamCall("StructuredOutput", next)
+  }
+  return streamCall("panel", next)
 }
 
 function streamCall(toolName: string, value: Record<string, unknown>) {
@@ -168,6 +172,13 @@ function action(prompt: LanguageModelV2Prompt) {
   const criteria = text(meta.criteria)
   const description = text(meta.description)
   const ui = text(meta.ui_context)
+  const sessionIntent = /create .*session|new blank session|new session|fork session|fork |export session|export .*html|delete session|delete task session/i
+  if (input.surface === "panel" && sessionIntent.test(input.text)) {
+    return {
+      kind: "panel_response",
+      message: "Desktop overlay only exposes tasks. Session management is unavailable there.",
+    }
+  }
   if (interactionID && /reject/i.test(input.text)) {
     return {
       action: "reject_interaction",

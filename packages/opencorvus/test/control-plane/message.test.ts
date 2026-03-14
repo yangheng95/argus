@@ -62,7 +62,7 @@ describe("control.message", () => {
     })
   })
 
-  test("creates a session through the real control pipeline", async () => {
+  test("returns a task-first response when panel users ask for session management", async () => {
     await using tmp = await tmpdir({ git: true })
     installControlModel()
 
@@ -72,15 +72,14 @@ describe("control.message", () => {
         const result = await ControlMessage.handle({
           surface: "panel",
           text: "Create a new session.",
-          allow_session_mutation: true,
           metadata: {
-            ui_context: "session_manager",
+            ui_context: "task_list",
           },
         })
 
         expect(result.kind).toBe("panel_response")
-        expect(result.message).toContain("Session created:")
-        expect(result.session_id).toBeDefined()
+        expect(result.message).toContain("only exposes tasks")
+        expect(result.session_id).toBeUndefined()
       },
     })
   })

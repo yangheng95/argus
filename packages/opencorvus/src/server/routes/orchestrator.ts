@@ -5,6 +5,8 @@ import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { Bus } from "@/bus"
 import { Database, eq } from "@/storage/db"
+import { Session } from "@/session"
+import { MessageV2 } from "@/session/message"
 import {
   Artifact,
   CreateTaskInput,
@@ -32,6 +34,7 @@ import {
 } from "@/orchestrator/model"
 import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
+import { requireTask } from "@/orchestrator/store"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -293,6 +296,30 @@ export const OrchestratorRoutes = lazy(() =>
         }
         c.header("ETag", etag)
         return c.json(await OrchestratorService.getBoard(taskID, { sync: false }))
+      },
+    )
+    .get(
+      "/task/:taskID/transcript",
+      describeRoute({
+        summary: "Get task transcript",
+        operationId: "task.transcript",
+        responses: {
+          200: {
+            description: "Task transcript",
+            content: {
+              "application/json": {
+                schema: resolver(MessageV2.WithParts.array()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        const task = requireTask(c.req.valid("param").taskID)
+        if (!task.session_id) return c.json([])
+        return c.json(await Session.messages({ sessionID: task.session_id }))
       },
     )
     .get(

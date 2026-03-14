@@ -1,20 +1,13 @@
 import { Tool } from "./tool"
 import { OrchestratorService } from "@/orchestrator/service"
-import { Session } from "@/session"
-import { Filesystem } from "@/util/filesystem"
-import { Global } from "@/global"
-import { LLMTrace } from "@/session/llm-trace"
-import { buildSessionTraceHtml } from "@/cli/cmd/export-html"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
-import { PanelSettings } from "@/panel/settings"
 import { PanelApi } from "@/panel/api"
 import { Server } from "@/server/server"
 import { Instance } from "@/project/instance"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
 const allowTaskCreate = (ctx: Tool.Context) => ctx.extra?.allowCreate !== false
-const allowSessionMutation = (ctx: Tool.Context) => ctx.extra?.allowSessionMutation !== false
 
 function ignored(message: string) {
   return {
@@ -27,16 +20,8 @@ function ignored(message: string) {
   }
 }
 
-function sessionMutationRoute(method: string, path: string) {
-  const nextMethod = method.trim().toUpperCase()
-  const nextPath = path.replace(/^\/+/, "").replace(/\?.*$/, "")
-  if (nextMethod === "POST" && nextPath === "session") return true
-  if ((nextMethod === "PATCH" || nextMethod === "DELETE") && /^session\/[^/]+$/.test(nextPath)) return true
-  return false
-}
-
 export const PanelTool = Tool.define("panel", {
-  description: "Operate the OpenCorvus control plane: inspect specs, plans, and task boards, manage task state, reply to interactions, and manage sessions.",
+  description: "Operate the OpenCorvus control plane: inspect specs, plans, and task boards, manage task state, and reply to interactions.",
   parameters: PanelActionSchema,
   async execute(params, ctx) {
     switch (params.action) {
@@ -225,32 +210,6 @@ export const PanelTool = Tool.define("panel", {
             metadata: {},
           }
         }
-      case "view_panel_settings": {
-        const settings = await PanelSettings.get(params.sessionID)
-        return {
-          title: "Panel settings",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: params.sessionID,
-            message: "Loaded panel settings.",
-            settings,
-          }),
-          metadata: {},
-        }
-      }
-      case "update_panel_settings": {
-        const settings = await PanelSettings.set(params.sessionID, params.settings)
-        return {
-          title: "Panel settings updated",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: params.sessionID,
-            message: "Panel settings updated.",
-            settings,
-          }),
-          metadata: {},
-        }
-      }
       case "list_panel_api":
         return {
           title: "Panel API catalog",
@@ -264,9 +223,6 @@ export const PanelTool = Tool.define("panel", {
       case "call_panel_api": {
         const query = new URLSearchParams(params.query ?? {}).toString()
         const target = params.path.replace(/^\/+/, "")
-        if (sessionMutationRoute(params.method, target) && !allowSessionMutation(ctx)) {
-          return ignored("Session changes require an explicit user request.")
-        }
         if (!PanelApi.allow(params.method, target)) {
           return {
             title: "Panel API blocked",
@@ -326,122 +282,11 @@ export const PanelTool = Tool.define("panel", {
           }),
           metadata: {},
         }
-      case "select_session":
-        if (!localOnly(ctx)) throw new Error("Session selection is only available in the desktop panel.")
-        return {
-          title: "Session selected",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: params.sessionID,
-            message: `Selected session ${params.sessionID}.`,
-            local_action: { type: "select_session", sessionID: params.sessionID },
-          }),
-          metadata: {},
-        }
-      case "create_session": {
-        if (!allowSessionMutation(ctx)) {
-          return ignored("Session creation requires an explicit user request.")
-        }
-        const session = await Session.create({})
-        return {
-          title: "Session created",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: session.id,
-            message: `Session created: ${session.id}`,
-            ...(localOnly(ctx)
-              ? {
-                  local_action: {
-                    type: "select_session",
-                    sessionID: session.id,
-                  },
-                }
-              : {}),
-          }),
-          metadata: {},
-        }
-      }
-      case "fork_session": {
-        if (!allowSessionMutation(ctx)) {
-          return ignored("Session changes require an explicit user request.")
-        }
-        const session = await Session.fork({ sessionID: params.sessionID })
-        return {
-          title: "Session forked",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: session.id,
-            message: `Session forked: ${session.id}`,
-            ...(localOnly(ctx)
-              ? {
-                  local_action: {
-                    type: "select_session",
-                    sessionID: session.id,
-                  },
-                }
-              : {}),
-          }),
-          metadata: {},
-        }
-      }
-      case "delete_session": {
-        if (!allowSessionMutation(ctx)) {
-          return ignored("Session changes require an explicit user request.")
-        }
-        await OrchestratorService.deleteSession(params.sessionID, { deleteTasks: true })
-        return {
-          title: "Session deleted",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: params.sessionID,
-            message: `Session deleted: ${params.sessionID}`,
-            ...(localOnly(ctx)
-              ? {
-                  local_action: {
-                    type: "invalidate_session",
-                    sessionID: params.sessionID,
-                  },
-                }
-              : {}),
-          }),
-          metadata: {},
-        }
-      }
-      case "export_session_html": {
-        const file = await exportSessionHtml(params.sessionID)
-        return {
-          title: "Session exported",
-          output: JSON.stringify({
-            kind: "panel_response",
-            session_id: params.sessionID,
-            message: `Session HTML exported to ${file}`,
-          }),
-          metadata: {},
-        }
-      }
       default:
         throw new Error(`Unknown panel action: ${String((params as { action: string }).action)}`)
     }
   },
 })
-
-async function exportSessionHtml(sessionID: string) {
-  const session = await Session.get(sessionID)
-  const messages = await Session.messages({ sessionID })
-  const calls = await LLMTrace.read(sessionID)
-  const report = await buildSessionTraceHtml({
-    session: {
-      id: session.id,
-      title: session.title,
-      time: session.time,
-    },
-    messages,
-    calls,
-  })
-  const out = `${Global.Path.data}/panel-${sessionID}.html`
-  await Filesystem.write(out, report)
-  return out
-}
 
 function pendingCount(board: Awaited<ReturnType<typeof OrchestratorService.getBoard>>) {
   return board.interactions.filter((item) => item.status === "pending").length

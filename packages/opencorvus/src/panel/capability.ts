@@ -1,11 +1,10 @@
 import z from "zod"
 import { CheckConfig, StageRouting } from "@/orchestrator/model"
 import { ChannelId, ChannelSurface as SharedChannelSurface } from "@/channel/catalog"
-import { PanelSettings } from "./settings"
 
 export const PanelSurface = SharedChannelSurface
 export const PanelCapabilityKind = z.enum(["query", "mutation"])
-export const PanelLocalActionType = z.enum(["set_executor", "select_task", "select_session", "invalidate_session"])
+export const PanelLocalActionType = z.enum(["set_executor", "select_task"])
 export const PanelCapabilityQuery = z.object({
   surface: PanelSurface.default("panel"),
 })
@@ -192,25 +191,6 @@ export const PanelCapabilityRegistry = list(
     },
   }),
   item({
-    action: "view_panel_settings",
-    description: "Read session-scoped overlay panel settings.",
-    kind: "query",
-    surfaces: all,
-    params: {
-      sessionID: z.string(),
-    },
-  }),
-  item({
-    action: "update_panel_settings",
-    description: "Update session-scoped overlay panel settings.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      sessionID: z.string(),
-      settings: PanelSettings.Update,
-    },
-  }),
-  item({
     action: "list_panel_api",
     description: "List allowlisted raw panel API routes that LLMs may call directly.",
     kind: "query",
@@ -250,57 +230,6 @@ export const PanelCapabilityRegistry = list(
     },
     local_action_types: ["select_task"],
     local_action_surfaces: panel,
-  }),
-  item({
-    action: "select_session",
-    description: "Focus a session in the desktop panel chat.",
-    kind: "mutation",
-    surfaces: panel,
-    params: {
-      sessionID: z.string(),
-    },
-    local_action_types: ["select_session"],
-    local_action_surfaces: panel,
-  }),
-  item({
-    action: "create_session",
-    description: "Create a blank session.",
-    kind: "mutation",
-    surfaces: all,
-    params: {},
-    local_action_types: ["select_session"],
-    local_action_surfaces: panel,
-  }),
-  item({
-    action: "fork_session",
-    description: "Fork an existing session.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      sessionID: z.string(),
-    },
-    local_action_types: ["select_session"],
-    local_action_surfaces: panel,
-  }),
-  item({
-    action: "delete_session",
-    description: "Delete a session and its linked tasks.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      sessionID: z.string(),
-    },
-    local_action_types: ["invalidate_session"],
-    local_action_surfaces: panel,
-  }),
-  item({
-    action: "export_session_html",
-    description: "Export a session transcript as HTML.",
-    kind: "mutation",
-    surfaces: all,
-    params: {
-      sessionID: z.string(),
-    },
   }),
 )
 

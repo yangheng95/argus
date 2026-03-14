@@ -35,7 +35,6 @@
     function workspaceMode() {
       if (!state.connected) return "offline";
       if (state.selectedTaskID) return "task";
-      if (state.chatSessionID) return "session";
       return "empty";
     }
 
@@ -47,7 +46,7 @@
     }
 
     function hasWorkspaceSelection() {
-      return !!(state.selectedTaskID || state.chatSessionID || state.managedSession?.id);
+      return !!state.selectedTaskID;
     }
 
     function clearWorkspaceRuntime() {
@@ -57,23 +56,22 @@
       if (typeof deps.stopEventStream === "function") deps.stopEventStream();
       if (typeof deps.stopChatRequest === "function") void deps.stopChatRequest();
       if (state.boardKick) clearTimeout(state.boardKick);
-      if (state.sessionKick) clearTimeout(state.sessionKick);
+      if (state.conversationKick) clearTimeout(state.conversationKick);
       state.boardKick = null;
-      state.sessionKick = null;
+      state.conversationKick = null;
       state.boardLoading = null;
       state.boardQueued = false;
-      state.sessionLoading = null;
-      state.sessionQueued = false;
+      state.conversationLoading = null;
+      state.conversationQueued = false;
       state.tasksSeq = (state.tasksSeq || 0) + 1;
-      state.sessionsSeq = (state.sessionsSeq || 0) + 1;
       state.board = null;
       state.boardEtag = "";
       state.boardUpdatedAt = 0;
       state.executorEvents = [];
       state.executorRunID = "";
       state.executorEventsFetchedAt = 0;
-      state.sessionUpdatedAt = 0;
-      state.session = [];
+      state.conversationUpdatedAt = 0;
+      state.messages = [];
       state.pendingTaskMessages = null;
       renderWorkspaceState();
     }
@@ -81,7 +79,6 @@
     function clearProjectScopeData() {
       state.tasks = [];
       state.globalTasks = [];
-      state.sessions = [];
       state.path = null;
       state.vcs = null;
       state.memoryFiles = [];
@@ -92,12 +89,10 @@
     function enterEmptyWorkspace(options = {}) {
       if (options.globalView !== undefined) state.globalView = !!options.globalView;
       state.selectedTaskID = "";
-      state.chatSessionID = "";
-      state.managedSession = null;
       if (options.restoreDirectory !== false) restoreWorkspaceDirectory();
       clearWorkspaceRuntime();
       if (typeof deps.renderMeta === "function") deps.renderMeta();
-      deps.renderManagedSessionList();
+      deps.renderTaskList();
     }
 
     function enterTaskWorkspace(taskID, options = {}) {
@@ -105,23 +100,13 @@
         setWorkspaceDirectory(options.directory, "task");
       }
       state.selectedTaskID = taskID || "";
-      state.chatSessionID = "";
-      state.managedSession = null;
       clearWorkspaceRuntime();
       if (typeof deps.renderMeta === "function") deps.renderMeta();
-      deps.renderManagedSessionList();
+      deps.renderTaskList();
     }
 
     function enterSessionWorkspace(sessionID, options = {}) {
-      if (typeof options.directory === "string" && options.directory.trim()) {
-        setWorkspaceDirectory(options.directory, "session");
-      }
-      state.selectedTaskID = "";
-      state.chatSessionID = sessionID || "";
-      state.managedSession = options.managedSession || null;
-      clearWorkspaceRuntime();
-      if (typeof deps.renderMeta === "function") deps.renderMeta();
-      deps.renderManagedSessionList();
+      throw new Error("Overlay no longer supports session workspaces; use tasks instead.");
     }
 
     return {
