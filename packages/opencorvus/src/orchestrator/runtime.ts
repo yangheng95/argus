@@ -112,6 +112,7 @@ const evaluatingRuns = new Map<string, number>() // runID → start timestamp, g
 const finalizingRuns = new Set<string>() // guards against concurrent finalizeCoordinatorRun for the same run
 const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
 const finalizingGoalRuns = new Set<string>() // guards against concurrent finalizeGoalRun for the same goal run
+const runAppliedFiles = new Map<string, Set<string>>() // runID → files applied by goal deliveries, for conflict detection
 const goalRunFinalizeLocks = new Map<string, Promise<void>>()
 const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
@@ -121,6 +122,9 @@ const EXECUTOR_OUTPUT_FLUSH_CHARS = 1024
 
 // Unattended-mode safeguards
 const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
+function goalRunTimeoutMs() {
+  return safeParseInt(process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS, 60_000)
+}
 const EXECUTOR_STATUS_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EXECUTOR_STATUS_TIMEOUT_MS, 15_000)
 const GOAL_RUN_PARALLELISM = Math.max(1, safeParseInt(process.env.OPENCORVUS_GOAL_PARALLELISM, 4))
 // Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
@@ -430,6 +434,7 @@ async function finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: Runtime
   } finally {
     finalizingRuns.delete(run.id)
     evaluatingRuns.delete(run.id)
+    runAppliedFiles.delete(run.id)
   }
 }
 
@@ -665,6 +670,18 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       time_completed: Date.now(),
     })
     if (outcome.status === "passed" || (goal.priority === "advisory" && delivered.diffs.length > 0)) {
+      const appliedByRun = runAppliedFiles.get(run.id) ?? new Set<string>()
+      const conflicts = delivered.diffs.filter((d) => d.status !== "deleted" && appliedByRun.has(d.file))
+      if (conflicts.length > 0) {
+        log.warn("goal delivery: overwriting files already modified by a sibling goal — use milestone ordering to serialize these goals", {
+          goal: goal.description,
+          conflicts: conflicts.map((d) => d.file),
+        })
+      }
+      for (const diff of delivered.diffs) {
+        if (diff.status !== "deleted") appliedByRun.add(diff.file)
+      }
+      runAppliedFiles.set(run.id, appliedByRun)
       await provideWorkspace(await taskDirectory(task), () =>
         applyGoalDelivery({
           directory: Instance.directory,
@@ -778,11 +795,12 @@ async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow
 
   if (queue.status === "running") {
     const started = goalRun.time_started ?? run.time_started ?? run.time_created
-    if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
+    const maxMs = goalRunTimeoutMs()
+    if (started && (Date.now() - started) > maxMs) {
       log.warn("goal run exceeded max execution time", {
         runID: run.id,
         goalRunID: goalRun.id,
-        maxMs: RUN_MAX_EXECUTION_MS,
+        maxMs,
         elapsedMs: Date.now() - started,
       })
       try {
@@ -799,7 +817,7 @@ async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow
       }
       await handleExecutionFailure(
         run,
-        `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`,
+        `Goal run exceeded maximum execution time (${Math.round(maxMs / 60000)}min)`,
         hooks,
         goalRun,
       )

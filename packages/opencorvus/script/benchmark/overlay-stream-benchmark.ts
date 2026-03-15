@@ -19,7 +19,9 @@ Log.init({ print: true })
 const report = process.argv.find((item) => item.startsWith("--report="))?.slice("--report=".length)
 const keep = process.argv.includes("--keep")
 const headless = !process.argv.includes("--headed")
-const timeoutMs = Number(process.argv.find((item) => item.startsWith("--timeout-ms="))?.split("=")[1]) || 300_000
+const timeoutMs = Number(process.argv.find((item) => item.startsWith("--timeout-ms="))?.split("=")[1]) || 480_000
+const specTimeoutMs = Number(process.argv.find((item) => item.startsWith("--spec-timeout-ms="))?.split("=")[1]) || Math.max(60_000, Math.min(180_000, Math.floor(timeoutMs * 0.2)))
+const plannerTimeoutMs = Number(process.argv.find((item) => item.startsWith("--planner-timeout-ms="))?.split("=")[1]) || Math.max(60_000, Math.min(180_000, Math.floor(timeoutMs * 0.25)))
 const BENCHMARK_EXECUTOR = "codex"
 const FINAL = new Set(["completed", "failed", "cancelled"])
 const TASK_TITLE = "Overlay Parallel Benchmark"
@@ -59,6 +61,10 @@ temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-stream-h
 temp.dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-stream-project-"))
 process.env.OPENCORVUS_HOME = temp.home
 process.env.OPENCORVUS_GOAL_PARALLELISM = "2"
+process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
+process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
+process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
+process.env.OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS = String(plannerTimeoutMs)
 
 await resetDatabase()
 await scaffoldProject(temp.dir)

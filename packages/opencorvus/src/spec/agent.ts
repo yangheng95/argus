@@ -147,10 +147,14 @@ export interface SpecRewriteContext {
 // HeadlessSpecAgent
 // ---------------------------------------------------------------------------
 
-const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.4
 const MAX_SPEC_ATTEMPTS = 2
+
+function timeoutMs(input?: number) {
+  if (input && input > 0) return input
+  return Number.parseInt(Env.get("OPENCORVUS_SPEC_AGENT_TIMEOUT_MS") ?? Env.get("OPENCORVUS_SPEC_TIMEOUT_MS") ?? "", 10) || 120_000
+}
 
 function maxSteps() {
   const value = Number.parseInt(Env.get("OPENCORVUS_SPEC_AGENT_MAX_STEPS") ?? "", 10)
@@ -166,6 +170,7 @@ export namespace HeadlessSpecAgent {
     title: string
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
+    timeoutMs?: number
     signal?: AbortSignal
     stream?: TextHooks
   }): Promise<SpecOutputType> {
@@ -180,6 +185,7 @@ export namespace HeadlessSpecAgent {
     request: string
     rewriteContext: SpecRewriteContext
     goals?: Array<{ description: string; criteria: string; priority?: string }>
+    timeoutMs?: number
     signal?: AbortSignal
     stream?: TextHooks
   }): Promise<SpecOutputType> {
@@ -200,10 +206,12 @@ async function run(input: {
   mode: "initial" | "rewrite"
   goals?: Array<{ description: string; criteria: string; priority?: string }>
   rewriteContext?: SpecRewriteContext
+  timeoutMs?: number
   signal?: AbortSignal
   stream?: TextHooks
 }): Promise<SpecOutputType> {
   if (input.signal?.aborted) throw new Error("spec agent aborted before model resolution")
+  const limit = timeoutMs(input.timeoutMs)
 
   // No model configured → throw below with clear error
   const def = await Provider.defaultModel().catch(() => undefined)
@@ -297,14 +305,14 @@ async function run(input: {
         reusedToolCalls: toolCallCount,
       })
     } else {
-      result = await completeText({
-        model: language,
+        result = await completeText({
+          model: language,
         stopWhen: stepCountIs(stepLimit),
         tools: allTools,
         toolChoice: "auto",
         maxOutputTokens: 32768,
-        timeoutMs: TIMEOUT_MS,
-        abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+        timeoutMs: limit,
+        abortSignal: input.signal ?? AbortSignal.timeout(limit),
         system: await specSystem(),
         prompt: userPrompt,
         ...(input.stream ?? {}),
@@ -586,6 +594,7 @@ async function finalizeSpec(
     mode: "initial" | "rewrite"
     goals?: Array<{ description: string; criteria: string; priority?: string }>
     rewriteContext?: SpecRewriteContext
+    timeoutMs?: number
     signal?: AbortSignal
     stream?: TextHooks
   },
@@ -627,8 +636,8 @@ async function finalizeSpec(
     tools: summaryTool,
     toolChoice: isReasoning ? "auto" : "required",
     maxOutputTokens: 16384,
-    timeoutMs: Math.min(120_000, TIMEOUT_MS),
-    abortSignal: signal ?? AbortSignal.timeout(120_000),
+    timeoutMs: timeoutMs(input.timeoutMs),
+    abortSignal: signal ?? AbortSignal.timeout(timeoutMs(input.timeoutMs)),
     system:
       "You are finalizing a specification after an exploration attempt. " +
       "Do not explore again. Use the transcript if it is helpful, but do not claim that a missing or weak transcript blocks you. " +

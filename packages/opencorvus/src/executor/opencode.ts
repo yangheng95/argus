@@ -2,7 +2,7 @@ import z from "zod"
 import { Identifier } from "@/id/id"
 import { TaskQueueService } from "@/scheduler/task-queue-service"
 import { TaskQueueTable } from "@/scheduler/task-queue.sql"
-import { Bus } from "@/bus"
+import { GlobalBus } from "@/bus/global"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message"
 import { SessionSummary } from "@/session/summary"
@@ -144,14 +144,15 @@ export namespace OpencodeExecutor {
       queue.push(event)
       wake?.()
     }
-    const unsub = Bus.subscribeAll((event) => {
-      const next = mapEvent(event, sessionID)
+    const handler = (event: { payload: { type: string; properties: Record<string, unknown> } }) => {
+      const next = mapEvent(event.payload, sessionID)
       if (!next) return
       push(next)
-    })
+    }
+    GlobalBus.on("event", handler)
     const abort = () => {
       done = true
-      unsub()
+      GlobalBus.off("event", handler)
       wake?.()
     }
     input.signal?.addEventListener("abort", abort)
@@ -169,7 +170,7 @@ export namespace OpencodeExecutor {
       }
     } finally {
       input.signal?.removeEventListener("abort", abort)
-      unsub()
+      GlobalBus.off("event", handler)
     }
   }
 }

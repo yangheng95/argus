@@ -1,0 +1,122 @@
+{
+  "generated_at": "2026-03-15T11:39:42.987Z",
+  "mode": "full",
+  "title": "prd",
+  "request_file": "D:\\myhexin-local\\argus-opencode\\specs\\prd.txt",
+  "executor": "opencode",
+  "model": "alibaba-coding-plan-cn/kimi-k2.5",
+  "stage_timeout_ms": {
+    "spec": 96000,
+    "planner": 120000
+  },
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+  "server": "http://127.0.0.1:7878/",
+  "taskID": "tsk_cf148bb63001FCOiOe364tb5o2",
+  "taskStatus": "failed",
+  "changedFiles": [],
+  "transcriptCount": 0,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
+    "pendingCount": 1,
+    "taskList": "Active\n    \n    \n      \n        \n        请创建一个新任务并立即开始执行以下工作： 日记软件 PRD 1. 文档信息 产品名称：Moment Diary（暂定） 文档版本：V1.0...\n      \n      Planning\n      19:36:28 / .../Local/Temp/opencorvus-overlay-benchmark-project-MCGFUC",
+    "reasoning": "正在分析请求",
+    "assistantText": "..."
+  },
+  "streaming": {
+    "reasoning": "正在分析请求",
+    "assistantText": "...",
+    "reasoningVisible": true,
+    "assistantVisible": false
+  },
+  "materialization": {
+    "boardTaskID": "tsk_cf148bb63001FCOiOe364tb5o2",
+    "boardStatus": "planning",
+    "specVersion": null,
+    "goalCount": 0,
+    "goalRunCount": 0,
+    "criteriaCount": 0
+  },
+  "screenshot": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1773574782486.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 21134
+  },
+  "timings_ms": {
+    "online": 230,
+    "submit": 3475,
+    "planning_visible": 3613,
+    "streaming_visible": 3614,
+    "task_created": 17881,
+    "task_selected": 17889,
+    "board_loaded": 17890,
+    "resumed": 21134,
+    "completed": 197889,
+    "execution": 194414
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 1,
+        "taskIDs": [],
+        "taskList": "Active\n    \n    \n      \n        \n        请创建一个新任务并立即开始执行以下工作： 日记软件 PRD 1. 文档信息 产品名称：Moment Diary（暂定） 文档版本：V1.0...\n      \n      Planning\n      19:36:28 / .../Local/Temp/opencorvus-overlay-benchmark-project-MCGFUC",
+        "reasoning": "正在分析请求",
+        "assistantText": "...",
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 1,
+        "taskIDs": [],
+        "taskList": "Active\n    \n    \n      \n        \n        请创建一个新任务并立即开始执行以下工作： 日记软件 PRD 1. 文档信息 产品名称：Moment Diary（暂定） 文档版本：V1.0...\n      \n      Planning\n      19:36:28 / .../Local/Temp/opencorvus-overlay-benchmark-project-MCGFUC",
+        "reasoning": "正在分析请求",
+        "assistantText": "...",
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_cf148bb63001FCOiOe364tb5o2",
+        "boardTaskID": "tsk_cf148bb63001FCOiOe364tb5o2",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": false,
+      "sample": {
+        "taskStatus": "failed",
+        "verdict": "",
+        "localExit": 0
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+}

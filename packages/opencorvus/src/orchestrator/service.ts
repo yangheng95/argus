@@ -540,6 +540,7 @@ export namespace OrchestratorService {
         goals: input.goals,
         executor,
         routing: input.routing,
+        budget: input.budget,
         metadata,
       }).catch(async (error) => {
       if (!(error instanceof PlannerFailureError)) throw error
@@ -585,6 +586,7 @@ export namespace OrchestratorService {
         metadata,
         channelBinding: input.channelBinding,
         milestones: input.milestones,
+        promptOverride: input.promptOverride,
         compiled,
         projectID: Instance.project.id,
       })
@@ -1488,6 +1490,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
           goals,
           executor: run.executor,
           routing,
+          budget: task.budget ? { maxWallTimeMs: task.budget.max_wall_time_ms } : undefined,
           metadata: task.metadata ?? {},
         })
   )

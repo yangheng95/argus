@@ -80,6 +80,7 @@ type CompileInitialInput = {
   goals?: GoalInput[]
   executor: RunRow["executor"]
   routing?: RoutingInput
+  budget?: BudgetInput
   metadata: Record<string, unknown>
 }
 
@@ -113,6 +114,23 @@ type PlannerFailureWithSpec = PlannerFailureError & {
   specDraft?: SpecDraft
 }
 
+function stageTimeouts(input: CompileTransitionInput) {
+  const totalMs = input.mode === "initial"
+    ? input.budget?.maxWallTimeMs
+    : input.task.budget?.max_wall_time_ms
+  if (!totalMs || totalMs <= 0) return {}
+  const complex = input.request.length >= 4_000 || input.request.split(/\r?\n/).length >= 80
+  const reserveMs = complex ? 90_000 : 60_000
+  const planningShare = complex ? 0.7 : 0.45
+  const planningMs = Math.max(90_000, Math.min(Math.floor(totalMs * planningShare), totalMs - reserveMs))
+  const specMs = Math.max(90_000, Math.min(planningMs - 90_000, Math.floor(planningMs * (complex ? 0.45 : 0.45))))
+  const plannerMs = Math.max(90_000, planningMs - specMs)
+  return {
+    specMs,
+    plannerMs,
+  }
+}
+
 type PersistInitialInput = {
   taskID: string
   planID: string
@@ -131,6 +149,7 @@ type PersistInitialInput = {
   milestones?: MilestoneInput[]
   compiled: CompileTransitionResult
   projectID: string
+  promptOverride?: string
 }
 
 type PersistInitialDraftInput = {
@@ -300,9 +319,10 @@ function blockedPlanDraft(input: {
 export async function compileTransition(input: CompileTransitionInput): Promise<CompileTransitionResult> {
   installRuntimeShims()
   const unattended = await unattendedProject()
+  const timeouts = stageTimeouts(input)
   const specLive = agentStream({ taskID: input.taskID, stage: "spec" })
   await specLive.start(input.mode === "replan" ? "Spec rewrite started" : "Spec generation started")
-  const rawSpecDraft = await compileSpec(input, specLive.hooks).then(async (result) => {
+  const rawSpecDraft = await compileSpec(input, specLive.hooks, timeouts.specMs).then(async (result) => {
     await specLive.finish(input.mode === "replan" ? "Spec rewrite finished" : "Spec generation finished")
     return result
   }).catch(async (error) => {
@@ -349,6 +369,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
+            timeoutMs: timeouts.plannerMs,
             stream: planLive.hooks,
           })
         : PlannerService.replan({
@@ -362,6 +383,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
+            timeoutMs: timeouts.plannerMs,
             stream: planLive.hooks,
           })
     ).then(async (result) => {
@@ -691,6 +713,7 @@ export function persistInitialTransition(input: PersistInitialInput) {
           ...(input.compiled.planDraft.metadata?.stage_sources
             ? { stage_sources: input.compiled.planDraft.metadata.stage_sources }
             : {}),
+          ...(input.promptOverride?.trim() ? { prompt_override: input.promptOverride.trim() } : {}),
         },
         time_created: input.now,
         time_updated: input.now,
@@ -1314,17 +1337,43 @@ export function insertPlanItems(
     milestones: MilestoneInput[]
   },
 ) {
+  // Extract agentMilestones first so we can compute depends_on_ids before inserting goal nodes
+  const agentMilestonesForDeps = Array.isArray(input.planDraft.metadata?.milestones)
+    ? input.planDraft.metadata.milestones as Array<{ title: string; description?: string; goal_indices: number[] }>
+    : undefined
+
+  // Pre-generate plan node IDs so sibling goals can reference each other in depends_on_ids
+  const goalNodeIDs = input.goals.map(() => Identifier.ascending("plan_node"))
+
+  // Build goal_index → milestone_index map
+  const goalMilestoneIndex = new Map<number, number>()
+  if (agentMilestonesForDeps) {
+    for (const [msIndex, ms] of agentMilestonesForDeps.entries()) {
+      for (const goalIdx of ms.goal_indices) {
+        goalMilestoneIndex.set(goalIdx, msIndex)
+      }
+    }
+  }
+
   for (const [index, goal] of input.goals.entries()) {
+    // depends_on_ids: all plan_node IDs of goals in earlier milestones
+    const myMilestone = goalMilestoneIndex.get(index)
+    const dependsOnIds = myMilestone !== undefined && myMilestone > 0
+      ? input.goals
+          .map((_, i) => ({ i, ms: goalMilestoneIndex.get(i) }))
+          .filter(({ ms }) => ms !== undefined && ms < myMilestone)
+          .map(({ i }) => goalNodeIDs[i])
+      : undefined
     db.insert(OrchestratorPlanNodeTable)
       .values({
-        id: Identifier.ascending("plan_node"),
+        id: goalNodeIDs[index],
         task_id: input.taskID,
         plan_version_id: input.planID,
         kind: "goal",
         goal_id: goal.id,
         title: goal.description,
         brief: goal.criteria,
-        depends_on_ids: undefined,
+        depends_on_ids: dependsOnIds?.length ? dependsOnIds : undefined,
         order_index: index,
         metadata: goal.metadata,
         time_created: input.now,
@@ -1366,10 +1415,8 @@ export function insertPlanItems(
       })
       .run()
   }
-  const agentMilestones = Array.isArray(input.planDraft.metadata?.milestones)
-    ? input.planDraft.metadata.milestones as Array<{ title: string; description?: string; goal_indices: number[] }>
-    : undefined
-  if (agentMilestones && agentMilestones.length > 0 && input.milestones.length === 0) {
+  if (agentMilestonesForDeps && agentMilestonesForDeps.length > 0 && input.milestones.length === 0) {
+    const agentMilestones = agentMilestonesForDeps
     for (const [msIndex, ms] of agentMilestones.entries()) {
       const milestoneID = Identifier.ascending("milestone")
       db.insert(OrchestratorMilestoneTable)
@@ -1405,7 +1452,7 @@ export function insertPlanItems(
   const steps = Array.isArray(input.planDraft.metadata?.steps)
     ? input.planDraft.metadata.steps.filter((step): step is string => typeof step === "string" && step.trim().length > 0)
     : []
-  const baseOrder = input.goals.length + Math.max(input.milestones.length, agentMilestones?.length ?? 0)
+  const baseOrder = input.goals.length + Math.max(input.milestones.length, agentMilestonesForDeps?.length ?? 0)
   for (const [index, step] of steps.entries()) {
     db.insert(OrchestratorPlanNodeTable)
       .values({
@@ -1494,7 +1541,7 @@ export function insertSpecItems(
   }
 }
 
-async function compileSpec(input: CompileTransitionInput, stream?: TextHooks) {
+async function compileSpec(input: CompileTransitionInput, stream?: TextHooks, timeoutMs?: number) {
   const specRoute = input.routing?.spec ?? "opencorvus"
   if (specRoute === "executor" && input.executor !== "opencode" && ExecutorPlanner.supports(input.executor, "spec")) {
     const raw = await ExecutorPlanner.spec({
@@ -1511,6 +1558,7 @@ async function compileSpec(input: CompileTransitionInput, stream?: TextHooks) {
       title: input.title,
       request: input.request,
       goals: input.goals,
+      timeoutMs,
       stream,
       rewriteContext: {
         previousSpec: input.replanContext?.previousSummary ?? input.previousPlan.summary,
@@ -1533,6 +1581,7 @@ async function compileSpec(input: CompileTransitionInput, stream?: TextHooks) {
     title: input.title,
     request: input.request,
     goals: input.goals,
+    timeoutMs,
     stream,
   })
 }
@@ -1902,7 +1951,7 @@ export function persistEvaluation(input: {
     diffs: Array<{ file: string; [key: string]: unknown }>
   }
   result: EvaluationOutput
-  analysis: EvaluatorAnalysisType
+  analysis?: EvaluatorAnalysisType
   analysisError?: string
   finalVerdict: string
   finalStatus: string
@@ -1996,32 +2045,33 @@ export function persistEvaluation(input: {
         })
         .run()
     }
-    db.insert(OrchestratorArtifactTable)
-      .values({
-        id: Identifier.ascending("artifact"),
-        task_id: input.task.id,
-        run_id: input.run.id,
-        goal_run_id: input.goalRunID,
-        delivery_id: input.deliveryID,
-        kind: "report",
-        label: "evaluator-agent-analysis",
-        payload: input.analysis as unknown as Record<string, unknown>,
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
+    if (input.analysis) {
+      db.insert(OrchestratorArtifactTable)
+        .values({
+          id: Identifier.ascending("artifact"),
+          task_id: input.task.id,
+          run_id: input.run.id,
+          goal_run_id: input.goalRunID,
+          delivery_id: input.deliveryID,
+          kind: "report",
+          label: "evaluator-agent-analysis",
+          payload: input.analysis as unknown as Record<string, unknown>,
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+    }
     if (input.goals.length > 0) {
       const now2 = Date.now()
+      const analysisGoals = Array.isArray(input.analysis?.goal_statuses) ? input.analysis.goal_statuses : []
       const goalStatuses =
-        input.goalRunID && input.goals.length === 1 && (!Array.isArray(input.analysis.goal_statuses) || input.analysis.goal_statuses.length === 0)
+        input.goalRunID && input.goals.length === 1 && analysisGoals.length === 0
           ? [{
               goal_index: 0,
               status: input.finalStatus === "passed" ? "passed" as const : "failed" as const,
               evidence: input.finalSummary,
             }]
-          : Array.isArray(input.analysis.goal_statuses)
-            ? input.analysis.goal_statuses
-            : []
+          : analysisGoals
       for (const gs of goalStatuses) {
         const goal = input.goals[gs.goal_index]
         if (!goal) continue
