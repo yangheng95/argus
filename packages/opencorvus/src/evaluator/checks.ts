@@ -24,6 +24,14 @@ import { Log } from "@/util/log"
 
 const evaluatorLog = Log.create({ service: "evaluator-checks" })
 
+function commandShell(command: string) {
+  const shell = Shell.acceptable()
+  if (process.platform !== "win32") return shell
+  if (!/[&|]{2}/.test(command)) return shell
+  if (!/powershell|pwsh/i.test(String(shell))) return shell
+  return process.env.COMSPEC || "cmd.exe"
+}
+
 export async function commandChecks(
   commands: CommandGroup[],
   timeout: number,
@@ -76,7 +84,7 @@ export async function commandChecks(
 export async function commandResult(input: string | EvaluatorCommand, timeout: number) {
   const command = typeof input === "string" ? input : input.command
   const cwd = typeof input === "string" ? Instance.directory : input.cwd ?? Instance.directory
-  const shell = Shell.acceptable()
+  const shell = commandShell(command)
   const proc = spawn(command, {
     shell,
     cwd,
@@ -128,7 +136,7 @@ export async function startupResult(config: z.infer<typeof CheckConfig>["startup
   const mode = config.mode ?? "soft"
   const timeout = config.timeout_ms ?? 20_000
   const warmup = config.warmup_ms ?? 1_500
-  const shell = Shell.acceptable()
+  const shell = commandShell(config.command)
   const proc = spawn(config.command, {
     shell,
     cwd: Instance.directory,

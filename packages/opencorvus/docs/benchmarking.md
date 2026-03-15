@@ -13,7 +13,7 @@ All runnable benchmark scripts live under [script/benchmark](/D:/myhexin-local/a
 ## Env Loading
 
 Benchmark scripts and benchmark-style live tests auto-load `.env` before resolving models or credentials.
-Live benchmarks first honor `OPENCORVUS_BENCHMARK_MODEL`, and otherwise default to `alibaba-cn/qwen3.5-plus` when that model is available.
+Live benchmarks first honor `OPENCORVUS_BENCHMARK_MODEL`, and otherwise default to `alibaba-coding-plan-cn/kimi-k2.5` when that model is available.
 
 Load order:
 
@@ -60,7 +60,7 @@ bun test test/e2e/full-pipeline.test.ts --timeout 120000
 `overlay-web-benchmark.ts`
 
 - `--report=<file>`: write JSON report to a fixed path
-- `--timeout-ms=<ms>`: override end-to-end timeout, default 300000
+- `--timeout-ms=<ms>`: override end-to-end timeout, default 480000
 - `--mode=full|materialize`: `full` requires final delivery acceptance; `materialize` only requires pending visibility, streamed output, and task/board materialization
 - `--executor=opencode|codex|claude-code`
 - `--request-file=<file>`: load the task request from a file
@@ -75,7 +75,7 @@ bun test test/e2e/full-pipeline.test.ts --timeout 120000
 `overlay-stream-benchmark.ts`
 
 - `--report=<file>`: write JSON report to a fixed path
-- `--timeout-ms=<ms>`: override end-to-end timeout
+- `--timeout-ms=<ms>`: override end-to-end timeout, default 480000
 - `--headed`: run browser visibly
 - `--keep`: keep temp home and temp project
 

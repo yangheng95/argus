@@ -6,7 +6,7 @@
  *   - EvaluatorAgent: Independent LLM (15 steps, 3min) — investigates failures → verdict + goal assessment
  *   - Goal evaluation: Two-layer — (1) automated checks (exit codes), (2) LLM assessment
  *
- * Requires a live benchmark model. Defaults to alibaba-cn/qwen3.5-plus when available.
+ * Requires a live benchmark model. Defaults to alibaba-coding-plan-cn/kimi-k2.5 when available.
  * Run: bun run script/benchmark/agent-quality-benchmark.ts
  */
 import { generateText, stepCountIs } from "ai"

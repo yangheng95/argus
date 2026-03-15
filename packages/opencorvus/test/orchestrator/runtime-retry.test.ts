@@ -5,6 +5,7 @@ import {
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
+  OrchestratorGoalRunTable,
   OrchestratorPlanVersionTable,
   OrchestratorRunTable,
   OrchestratorSpecSnapshotTable,
@@ -368,6 +369,157 @@ test("syncRun queues a retry when executor status lookup fails", async () => {
       expect(active?.id).not.toBe(runID)
       expect(active?.status).toBe("queued")
       expect(active?.metadata?.previous_run_id).toBe(runID)
+    },
+  })
+})
+
+test("syncRun times out a long-running goal run and queues a retry", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const goalID = Identifier.ascending("goal")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "ship the change",
+            status: "running",
+            priority: "normal",
+            budget: {
+              max_runs: 2,
+              max_replans: 1,
+              max_wall_time_ms: 60_000,
+            },
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            summary: "plan",
+            prompt: "Execute the plan",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalTable)
+          .values({
+            id: goalID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            description: "Finish the task",
+            criteria: "Task is complete.",
+            priority: "blocking",
+            source: "spec",
+            status: "pending",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 0,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      })
+
+      const goalRun = createGoalRun({
+        taskID,
+        goalID,
+        coordinatorRunID: runID,
+        executor: "opencode",
+        now,
+      })
+      updateGoalRun(goalRun.id, {
+        status: "running",
+        time_started: now - 61_000,
+        metadata: {
+          queue_task_id: "queue-1",
+        },
+      })
+
+      const status = spyOn(ExecutorRegistry.require("opencode"), "status").mockResolvedValue({
+        queueTaskID: "queue-1",
+        status: "running",
+        error: null,
+      })
+      const abort = spyOn(ExecutorRegistry.require("opencode"), "abort").mockResolvedValue(true)
+      const dispatch = spyOn(OrchestratorRuntime, "dispatch").mockResolvedValue(undefined)
+
+      await OrchestratorRuntime.syncRun(runID, hooks())
+
+      const rows = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).all(),
+      )
+      const previous = rows.find((row) => row.id === runID)
+      const task = Database.use((db) =>
+        db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+      )
+      const active = rows.find((row) => row.id === task?.active_run_id)
+      const evaluation = Database.use((db) =>
+        db.select().from(OrchestratorEvaluationTable).where(eq(OrchestratorEvaluationTable.goal_run_id, goalRun.id)).get(),
+      )
+      const goal = Database.use((db) =>
+        db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalID)).get(),
+      )
+      const failedGoalRun = Database.use((db) =>
+        db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.id, goalRun.id)).get(),
+      )
+
+      expect(status).toHaveBeenCalledTimes(1)
+      expect(abort).toHaveBeenCalled()
+      expect(dispatch).toHaveBeenCalledTimes(1)
+      expect(previous?.status).toBe("failed")
+      expect(previous?.error).toContain("Goal run exceeded maximum execution time")
+      expect(active?.id).not.toBe(runID)
+      expect(active?.status).toBe("queued")
+      expect(active?.metadata?.previous_run_id).toBe(runID)
+      expect(task?.status).toBe("running")
+      expect(evaluation?.summary).toContain("Goal run exceeded maximum execution time")
+      expect(goal?.status).toBe("pending")
+      expect(failedGoalRun?.status).toBe("failed")
+      expect(failedGoalRun?.error).toContain("Goal run exceeded maximum execution time")
     },
   })
 })

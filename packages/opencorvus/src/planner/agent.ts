@@ -97,10 +97,14 @@ export interface ReplanContext {
 // HeadlessPlannerAgent
 // ---------------------------------------------------------------------------
 
-const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.5
 const MAX_PLAN_ATTEMPTS = 2
+
+function timeoutMs(input?: number) {
+  if (input && input > 0) return input
+  return Number.parseInt(Env.get("OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS") ?? Env.get("OPENCORVUS_PLANNER_TIMEOUT_MS") ?? "", 10) || 120_000
+}
 
 function maxSteps() {
   const value = Number.parseInt(Env.get("OPENCORVUS_PLANNER_AGENT_MAX_STEPS") ?? "", 10)
@@ -115,6 +119,7 @@ export namespace HeadlessPlannerAgent {
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
+    timeoutMs?: number
     /** External abort signal (overrides internal timeout when provided) */
     signal?: AbortSignal
     stream?: TextHooks
@@ -125,6 +130,7 @@ export namespace HeadlessPlannerAgent {
     const resolved = await agentLanguageModel()
     if (!resolved) throw new Error("no LLM model available for planner agent")
     const { language, isReasoning } = resolved
+    const limit = timeoutMs(input.timeoutMs)
     if (input.signal?.aborted) throw new Error("planner aborted after model resolution")
 
     // Extract working directory from request (eval tasks specify it explicitly)
@@ -222,8 +228,8 @@ export namespace HeadlessPlannerAgent {
           tools: allTools,
           toolChoice: "auto",
           maxOutputTokens: 32768,
-          timeoutMs: TIMEOUT_MS,
-          abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+          timeoutMs: limit,
+          abortSignal: input.signal ?? AbortSignal.timeout(limit),
         system: await plannerSystem(),
         prompt: userPrompt,
         ...(input.stream ?? {}),
@@ -403,6 +409,7 @@ async function finalizePlan(
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
+    timeoutMs?: number
     signal?: AbortSignal
     stream?: TextHooks
   },
@@ -444,8 +451,8 @@ async function finalizePlan(
     tools: summaryTool,
     toolChoice: isReasoning ? "auto" : "required",
     maxOutputTokens: 16384,
-    timeoutMs: 120_000,
-    abortSignal: signal ?? AbortSignal.timeout(120_000),
+    timeoutMs: timeoutMs(input.timeoutMs),
+    abortSignal: signal ?? AbortSignal.timeout(timeoutMs(input.timeoutMs)),
     system:
       "You are finalizing a plan after an exploration attempt. " +
       "Do not explore again. Use the transcript if it is helpful, but do not claim that a weak transcript prevents planning. " +
@@ -1203,7 +1210,7 @@ The submit_plan tool accepts these fields:
 - **summary**: One-line summary of the plan
 - **subtasks**: Array of {title, description (file paths + changes + patterns), order}
 - **risks**: Array of specific risks with mitigation
-- **milestones** (optional): Array of {title, goal_indices}
+- **milestones** (optional): Array of {title, goal_indices}. CRITICAL: milestones define EXECUTION ORDER — goals in milestone N only start after ALL goals in milestones 0..N-1 have passed. Goals within the same milestone run in parallel. You MUST group goals that modify the same files into separate sequential milestones to prevent silent overwrites from parallel execution.
 - **assumptions** (optional): Array of {question, assumption}
 - **prd**: Technical spec with bullet points: files to modify, exact changes, patterns, verification commands. ≤ 2000 chars.
 

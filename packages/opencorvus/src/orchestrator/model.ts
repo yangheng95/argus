@@ -182,6 +182,7 @@ export const CreateTaskInput = z.object({
   goals: GoalInput.array().optional(),
   milestones: MilestoneInput.array().optional(),
   channelBinding: ChannelBinding.optional(),
+  promptOverride: z.string().optional(),
   metadata: z.record(z.string(), z.any()).optional(),
 })
 

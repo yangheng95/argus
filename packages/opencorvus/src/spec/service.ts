@@ -16,8 +16,9 @@ import { type TextHooks } from "@/llm/api"
 
 const log = Log.create({ service: "spec-service" })
 
-function specTimeoutMs() {
-  return Number(Env.get("OPENCORVUS_SPEC_TIMEOUT_MS")) || 300_000
+function specTimeoutMs(timeoutMs?: number) {
+  if (timeoutMs && timeoutMs > 0) return timeoutMs
+  return Number(Env.get("OPENCORVUS_SPEC_TIMEOUT_MS")) || 120_000
 }
 
 export class SpecFailureError extends Error {
@@ -50,10 +51,11 @@ export namespace HeadlessSpecService {
     title: string
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    timeoutMs?: number
     signal?: AbortSignal
     stream?: TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
-    const timeoutMs = specTimeoutMs()
+    const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     const signal = input.signal ?? controller.signal
@@ -74,6 +76,7 @@ export namespace HeadlessSpecService {
             criteria: g.criteria,
             priority: g.priority,
           })),
+          timeoutMs,
           signal,
           stream: input.stream,
         }).finally(() => clearTimeout(specTimer)),
@@ -113,10 +116,11 @@ export namespace HeadlessSpecService {
     request: string
     rewriteContext: SpecRewriteContext
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    timeoutMs?: number
     signal?: AbortSignal
     stream?: TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
-    const timeoutMs = specTimeoutMs()
+    const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     const signal = input.signal ?? controller.signal
@@ -138,6 +142,7 @@ export namespace HeadlessSpecService {
             criteria: g.criteria,
             priority: g.priority,
           })),
+          timeoutMs,
           signal,
           stream: input.stream,
         }).finally(() => clearTimeout(rewriteTimer)),

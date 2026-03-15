@@ -29,7 +29,7 @@ import {
 } from "./shared"
 import { type TextHooks } from "@/llm/api"
 
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
+const DEFAULT_TIMEOUT_MS = 8 * 60 * 1000
 
 const OPTIONAL_CHECK_DEFS = [
   { name: "startup", label: "Startup", family: "runtime", run: (config) => startupResult(config.startup) },

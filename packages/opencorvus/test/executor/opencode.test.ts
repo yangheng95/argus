@@ -63,6 +63,37 @@ describe("executor.opencode", () => {
     })
   })
 
+  test("events also receive session activity published from another instance", async () => {
+    await using tmp = await tmpdir({ git: true })
+    await using other = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "cross instance events" })
+        const stream = OpencodeExecutor.events({ sessionID: session.id })
+        const next = stream.next()
+        await Instance.provide({
+          directory: other.path,
+          fn: async () => {
+            await Bus.publish(MessageV2.Event.PartDelta, {
+              sessionID: session.id,
+              messageID: "msg_cross",
+              partID: "prt_cross",
+              field: "text",
+              delta: "cross-instance",
+            })
+          },
+        })
+        const item = await next
+        expect(item.done).toBe(false)
+        expect(item.value?.type).toBe("message.part.delta")
+        expect(item.value?.payload?.delta).toBe("cross-instance")
+        await stream.return?.(undefined)
+      },
+    })
+  })
+
   test("events ignores other sessions and includes permission requests", async () => {
     await using tmp = await tmpdir({ git: true })
 

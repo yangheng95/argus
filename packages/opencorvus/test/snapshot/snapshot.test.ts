@@ -2,6 +2,7 @@ import { test, expect } from "bun:test"
 import { $ } from "bun"
 import fs from "fs/promises"
 import path from "path"
+import { Global } from "../../src/global"
 import { Snapshot } from "../../src/snapshot"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
@@ -673,6 +674,35 @@ test("patch detects changes in secondary worktree", async () => {
         expect(patch.files).toContain(worktreeFile)
       },
     })
+  } finally {
+    await $`git worktree remove --force ${worktreePath}`.cwd(tmp.path).quiet().nothrow()
+    await $`rm -rf ${worktreePath}`.quiet()
+  }
+})
+
+test("allocates a separate snapshot index per git worktree", async () => {
+  await using tmp = await bootstrap()
+  const worktreePath = `${tmp.path}-worktree`
+  await $`git worktree add ${worktreePath} HEAD`.cwd(tmp.path).quiet()
+
+  try {
+    const projectID = await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        expect(await Snapshot.track()).toBeTruthy()
+        return Instance.project.id
+      },
+    })
+
+    await Instance.provide({
+      directory: worktreePath,
+      fn: async () => {
+        expect(await Snapshot.track()).toBeTruthy()
+      },
+    })
+
+    const indexes = await fs.readdir(path.join(Global.Path.data, "snapshot", projectID, "indexes"))
+    expect(indexes.length).toBeGreaterThanOrEqual(2)
   } finally {
     await $`git worktree remove --force ${worktreePath}`.cwd(tmp.path).quiet().nothrow()
     await $`rm -rf ${worktreePath}`.quiet()

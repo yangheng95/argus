@@ -15,10 +15,11 @@ import { type TextHooks } from "@/llm/api"
 const log = Log.create({ service: "planner" })
 
 /** Max time to wait for PlannerAgent before surfacing a planner failure.
- *  Must be >= the agent's internal TIMEOUT_MS (300s) to avoid killing the agent
+ *  Must be >= the agent's internal timeout to avoid killing the agent
  *  mid-exploration. Override via OPENCORVUS_PLANNER_TIMEOUT_MS env var. */
-function plannerTimeoutMs() {
-  return Number(Env.get("OPENCORVUS_PLANNER_TIMEOUT_MS")) || 300_000
+function plannerTimeoutMs(timeoutMs?: number) {
+  if (timeoutMs && timeoutMs > 0) return timeoutMs
+  return Number(Env.get("OPENCORVUS_PLANNER_TIMEOUT_MS")) || 120_000
 }
 
 type StageInfo = {
@@ -140,12 +141,14 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    timeoutMs?: number
     stream?: TextHooks
   }): Promise<PlanDraft> {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
     const spec = unattended && input.spec ? suppressClarifications(input.spec) : input.spec
     const goals = resolveGoals(input.request, spec, input.goals)
+    const timeoutMs = plannerTimeoutMs(input.timeoutMs)
     const clarification = specClarification(spec)
     if (clarification) {
       return blockedPlanDraft({
@@ -166,7 +169,7 @@ export namespace HeadlessPlannerService {
         request: input.request,
         spec,
         goals,
-        signal: AbortSignal.timeout(plannerTimeoutMs()),
+        signal: AbortSignal.timeout(timeoutMs),
       }).catch((error) => {
         throw new PlannerFailureError("executor-native planner failed", { cause: error })
       })
@@ -187,7 +190,6 @@ export namespace HeadlessPlannerService {
       )
     }
 
-    const timeoutMs = plannerTimeoutMs()
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let planTimeout: ReturnType<typeof setTimeout>
@@ -201,6 +203,7 @@ export namespace HeadlessPlannerService {
           priority: g.priority,
         })),
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+        timeoutMs,
         signal: controller.signal,
         stream: input.stream,
       }).catch((error) => {
@@ -248,12 +251,14 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    timeoutMs?: number
     stream?: TextHooks
   }): Promise<PlanDraft> {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
     const spec = unattended && input.spec ? suppressClarifications(input.spec) : input.spec
     const goals = resolveGoals(input.request, spec, input.goals)
+    const timeoutMs = plannerTimeoutMs(input.timeoutMs)
     const clarification = specClarification(spec)
     if (clarification) {
       return blockedPlanDraft({
@@ -294,7 +299,7 @@ export namespace HeadlessPlannerService {
         spec,
         goals,
         replanContext: replanCtx,
-        signal: AbortSignal.timeout(plannerTimeoutMs()),
+        signal: AbortSignal.timeout(timeoutMs),
       }).catch((error) => {
         throw new PlannerFailureError("executor-native planner replan failed", { cause: error })
       })
@@ -315,7 +320,6 @@ export namespace HeadlessPlannerService {
       )
     }
 
-    const timeoutMs = plannerTimeoutMs()
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let replanTimeout: ReturnType<typeof setTimeout>
@@ -325,6 +329,7 @@ export namespace HeadlessPlannerService {
         request: input.request,
         replanContext: replanCtx,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+        timeoutMs,
         signal: controller.signal,
         stream: input.stream,
       }).catch((error) => {

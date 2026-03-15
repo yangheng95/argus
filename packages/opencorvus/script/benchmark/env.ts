@@ -70,7 +70,18 @@ export function dashscopeCodingKey() {
   return key?.startsWith("sk-sp-") ? key : undefined
 }
 
-const preferredProviders = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface", "github-copilot"]
+const preferredProviders = [
+  "alibaba-coding-plan-cn",
+  "alibaba-coding-plan",
+  "alibaba-cn",
+  "google",
+  "deepseek",
+  "gitlab",
+  "moonshotai-cn",
+  "moonshotai",
+  "huggingface",
+  "github-copilot",
+]
 
 async function resetBenchmarkState() {
   Config.global.reset()
@@ -110,7 +121,9 @@ export async function resolveBenchmarkModel(
       const providers = await Provider.list()
       const explicit = env(...(options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]))
       if (explicit) return explicitModel(providers, explicit, options?.allowOpenAICodex)
-      if (providers["alibaba-cn"]?.models["qwen3.5-plus"]) return "alibaba-cn/qwen3.5-plus"
+      if (providers["alibaba-coding-plan-cn"]?.models["kimi-k2.5"]) return "alibaba-coding-plan-cn/kimi-k2.5"
+      if (providers["alibaba-coding-plan"]?.models["kimi-k2.5"]) return "alibaba-coding-plan/kimi-k2.5"
+      if (providers["alibaba-cn"]?.models["kimi-k2.5"]) return "alibaba-cn/kimi-k2.5"
 
       for (const providerID of preferredProviders) {
         const provider = providers[providerID]

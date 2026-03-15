@@ -20,7 +20,15 @@ function flag(name: string) {
   return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
 }
 
-const timeoutMs = Number(flag("--timeout-ms")) || 5 * 60 * 1000
+function stageTimeout(name: string, totalMs: number, share: number, fallback: number) {
+  const value = Number(flag(name))
+  if (Number.isFinite(value) && value > 0) return value
+  return Math.max(fallback, Math.min(totalMs, Math.floor(totalMs * share) || fallback))
+}
+
+const timeoutMs = Number(flag("--timeout-ms")) || 8 * 60 * 1000
+const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.3, 150_000)
+const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.35, 180_000)
 const report = flag("--report")
 const keep = process.argv.includes("--keep")
 const headless = !process.argv.includes("--headed")
@@ -93,6 +101,11 @@ temp.dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark
 process.env.OPENCORVUS_HOME = temp.home
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
+process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS = String(timeoutMs)
+process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
+process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
+process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
+process.env.OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS = String(plannerTimeoutMs)
 
 await resetDatabase()
 await scaffoldProject(temp.dir, model)
@@ -165,6 +178,17 @@ try {
 
   taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
   marks.createdAt = Date.now()
+  await api(`/task/${taskID}/budget`, {
+    method: "PATCH",
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      budget: {
+        maxWallTimeMs: timeoutMs,
+      },
+    }),
+  })
   await page.evaluate(async (id) => {
     const state = window.eval("state")
     if (state.selectedTaskID === id) return
@@ -211,6 +235,10 @@ try {
     request_file: requestFile ? path.resolve(requestFile) : null,
     executor,
     model,
+    stage_timeout_ms: {
+      spec: specTimeoutMs,
+      planner: plannerTimeoutMs,
+    },
     directory: temp.dir,
     server: server.url.toString(),
     taskID,
@@ -330,12 +358,20 @@ try {
   console.error(`report: ${file}`)
   process.exitCode = 1
 } finally {
-  await page.close().catch(() => undefined)
-  await browser.close().catch(() => undefined)
-  await server.stop(true)
-  await Instance.disposeAll().catch(() => undefined)
-  if (!keep && temp.dir) await fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined)
-  if (!keep && temp.home) await fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined)
+  if (taskID) {
+    await cleanup("task.cancel", () =>
+      api(`/task/${taskID}/cancel`, {
+        method: "POST",
+      }).catch(() => undefined),
+    )
+  }
+  await cleanup("page.close", () => page.close().catch(() => undefined))
+  await cleanup("browser.close", () => browser.close().catch(() => undefined), () => browser.process()?.kill("SIGKILL"))
+  await cleanup("server.stop", () => server.stop(true))
+  await cleanup("instance.disposeAll", () => Instance.disposeAll().catch(() => undefined))
+  if (!keep && temp.dir) await cleanup("temp.dir", () => fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined))
+  if (!keep && temp.home) await cleanup("temp.home", () => fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined))
+  process.exit(process.exitCode ?? 0)
 }
 
 async function scaffoldProject(dir: string, model: string) {
@@ -352,7 +388,7 @@ async function scaffoldProject(dir: string, model: string) {
       provider: {
         [providerID]: {
           options: {
-            timeout: 300000,
+            timeout: timeoutMs,
           },
         },
       },
@@ -410,6 +446,26 @@ async function findBrowser() {
     if (await Bun.file(item).exists()) return item
   }
   throw new Error("No local Edge/Chrome executable found for overlay benchmark")
+}
+
+async function cleanup(
+  label: string,
+  run: () => Promise<unknown>,
+  force?: () => void | Promise<void>,
+  timeout = 10_000,
+) {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const wait = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeout}ms`)), timeout)
+  })
+  try {
+    await Promise.race([run(), wait])
+  } catch (error) {
+    console.error(`[cleanup] ${label}: ${String(error)}`)
+    await force?.()
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 async function waitForFinal(taskID: string, timeoutMs: number, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
