@@ -1,13 +1,35 @@
 import { Tool } from "./tool"
 import { OrchestratorService } from "@/orchestrator/service"
+import { Budget } from "@/orchestrator/model"
 import { captureWindowScreenshot } from "@/gui/screenshot"
 import { PanelActionSchema } from "@/panel/capability"
 import { PanelApi } from "@/panel/api"
 import { Server } from "@/server/server"
 import { Instance } from "@/project/instance"
+import { asRecord } from "@/util/object"
 
 const localOnly = (ctx: Tool.Context) => ctx.extra?.surface === "panel"
 const allowTaskCreate = (ctx: Tool.Context) => ctx.extra?.allowCreate !== false
+
+function createTaskBudget(metadata: unknown, extra: unknown) {
+  const raw = [
+    asRecord(asRecord(metadata)?.create_task)?.budget,
+    asRecord(extra)?.budget,
+  ]
+  for (const item of raw) {
+    const parsed = Budget.safeParse(item)
+    if (parsed.success) return parsed.data
+  }
+  return undefined
+}
+
+function createTaskMetadata(value: unknown) {
+  const raw = asRecord(value)
+  if (!raw) return undefined
+  const next = { ...raw }
+  delete next.create_task
+  return Object.keys(next).length > 0 ? next : undefined
+}
 
 function ignored(message: string) {
   return {
@@ -107,11 +129,12 @@ export const PanelTool = Tool.define("panel", {
         if (params.allow_create === false || !allowTaskCreate(ctx)) {
           return ignored("Task creation requires an explicit user request.")
         }
+        const metadata = createTaskMetadata(params.metadata)
         const taskID = await OrchestratorService.createTask({
           requestID: params.request_id ?? ctx.extra?.requestID,
           request: params.request,
           executor: params.executor,
-          budget: params.budget,
+          budget: params.budget ?? createTaskBudget(params.metadata, ctx.extra?.createTask),
           checks: params.checks,
           routing: params.routing,
           source: params.source ?? ctx.extra?.source ?? (params.platform ? `channel:${params.platform}` : "panel"),
@@ -121,11 +144,11 @@ export const PanelTool = Tool.define("panel", {
                   platform: params.platform,
                   channel: params.channel,
                   thread: params.thread,
-                  payload: params.metadata ?? {},
+                  payload: metadata ?? {},
                 },
               }
             : {}),
-          metadata: params.metadata,
+          metadata,
         })
         return {
           title: "Task created",

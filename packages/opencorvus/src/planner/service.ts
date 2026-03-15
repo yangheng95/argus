@@ -11,6 +11,7 @@ import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agen
 import { type ClarificationResult, type SpecDraft } from "@/spec/agent"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
+import { normalizePlanWaves, waveMilestones, type WaveContractType } from "@/orchestrator/wave"
 
 const log = Log.create({ service: "planner" })
 
@@ -76,6 +77,7 @@ export type PlanDraft = {
     steps: string[]
     failure_summary?: string
     previous_plan_id?: string
+    waves?: WaveContractType[]
     milestones?: Array<{ title: string; description?: string; goal_indices: number[] }>
     risks?: string[]
     spec?: {
@@ -523,7 +525,7 @@ function agentOutputToDraft(
     subtasks: Array.isArray(output.subtasks) ? output.subtasks : [],
     risks: Array.isArray(output.risks) ? output.risks : [],
     assumptions: Array.isArray(output.assumptions) ? output.assumptions : undefined,
-    milestones: Array.isArray(output.milestones) ? output.milestones : undefined,
+    waves: Array.isArray(output.waves) ? output.waves : undefined,
     clarifications: Array.isArray(output.clarifications) ? output.clarifications : undefined,
   }
   // Authoritative goals come from the spec (or user goals when no spec exists).
@@ -531,6 +533,8 @@ function agentOutputToDraft(
   const spec = stage?.spec
   const assumptions = mergeAssumptions(stage?.spec?.assumptions, output.assumptions)
   const risks = mergeStrings(stage?.spec?.risks ?? [], output.risks)
+  const waves = normalizePlanWaves({ waves: output.waves, goals })
+  const milestones = waveMilestones(waves)
 
   // Planner agent's PRD is grounded in codebase exploration and takes priority.
   // Spec content provides the requirements context; planner output provides
@@ -544,7 +548,7 @@ function agentOutputToDraft(
     risks,
     assumptions,
     strategy,
-    milestones: output.milestones?.map((m) => ({ title: m.title })),
+    waves: waves.map((wave) => ({ title: wave.title, objective: wave.objective })),
   })
 
   const steps = output.subtasks
@@ -568,7 +572,8 @@ function agentOutputToDraft(
       steps,
       failure_summary: failureSummary,
       previous_plan_id: previousPlanID,
-      milestones: output.milestones,
+      waves,
+      milestones,
       risks,
       planner: plannerMeta({
         quality: "compiled",
@@ -605,7 +610,7 @@ function renderAgentPrompt(input: {
   risks: string[]
   assumptions?: Array<{ question: string; assumption: string }>
   strategy?: "initial" | "replan"
-  milestones?: Array<{ title: string }>
+  waves?: Array<{ title: string; objective?: string }>
 }) {
   const sections = [
     `You are executing a headless coding task inside OpenCorvus.
@@ -657,7 +662,7 @@ ${input.prd.trim()}`,
     taskType: input.strategy ?? "initial",
     hasRelevantMemory: false,
     hasPriorFailure: input.strategy === "replan",
-    milestones: input.milestones,
+    waves: input.waves,
   }))
 
   return sections.join("\n\n")
@@ -812,7 +817,7 @@ function buildWorkflowSection(input: {
   hasRelevantMemory: boolean
   hasPriorFailure: boolean
   failureClassification?: string
-  milestones?: Array<{ title: string }>
+  waves?: Array<{ title: string; objective?: string }>
 }): string {
   const sections: string[] = ["## Execution Guide"]
 
@@ -841,9 +846,9 @@ function buildWorkflowSection(input: {
     )
   }
 
-  if (input.milestones && input.milestones.length > 0) {
+  if (input.waves && input.waves.length > 0) {
     sections.push(
-      `\n**Milestones**: ${input.milestones.map((m, i) => `${i + 1}. ${m.title}`).join(" | ")}`,
+      `\n**Waves**: ${input.waves.map((wave, index) => `${index + 1}. ${wave.title}${wave.objective ? ` (${wave.objective})` : ""}`).join(" | ")}`,
     )
   }
 

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
 import { DeliveryService } from "../../src/orchestrator/delivery"
 import { OrchestratorService } from "../../src/orchestrator/service"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { PlannerService } from "../../src/planner/service"
@@ -77,7 +77,7 @@ describe("orchestrator.goal evaluation workspace", () => {
       status: "completed",
       error: null,
     })
-    spyOn(EvaluatorService, "evaluate").mockImplementation(async () => {
+    spyOn(CheckRunner, "evaluate").mockImplementation(async () => {
       dirs.push(Instance.directory)
       const exists = await Bun.file(path.join(Instance.directory, "src", "from-goal.ts")).exists()
       return {
@@ -97,9 +97,9 @@ describe("orchestrator.goal evaluation workspace", () => {
           },
         ],
         artifacts: [],
-      } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+      } as Awaited<ReturnType<typeof CheckRunner.evaluate>>
     })
-    spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
+    spyOn(CheckRunner, "analyzeDelivery").mockImplementation(async (input) => {
       const failed = input.checkResults.some((item) => item.status === "failed")
       return {
         verdict: failed ? "rejected" : "accepted",

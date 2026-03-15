@@ -3,8 +3,8 @@
  * Verifies that different failure classifications lead to correct actions.
  */
 import { describe, test, expect } from "bun:test"
-import type { EvaluatorAnalysisType } from "@/evaluator/agent"
-import { FailureClassification, EvaluatorAnalysis, GoalAssessment, ReplanGuidance, parseEvaluatorAnalysis } from "@/evaluator/agent"
+import type { GoalJudgmentType } from "@/evaluator/agent"
+import { FailureClassification, GoalJudgment, GoalAssessment, ReplanGuidance, parseGoalJudgment } from "@/evaluator/agent"
 
 describe("FailureClassification enum", () => {
   test("all classification values are valid", () => {
@@ -19,7 +19,7 @@ describe("FailureClassification enum", () => {
   })
 })
 
-describe("EvaluatorAnalysis schema validation", () => {
+describe("GoalJudgment schema validation", () => {
   test("parses a complete accepted analysis", () => {
     const raw = {
       verdict: "accepted",
@@ -34,7 +34,7 @@ describe("EvaluatorAnalysis schema validation", () => {
         },
       ],
     }
-    const parsed = EvaluatorAnalysis.parse(raw)
+    const parsed = GoalJudgment.parse(raw)
     expect(parsed.verdict).toBe("accepted")
     expect(parsed.classification).toBe("evaluation")
     expect(parsed.goal_statuses).toHaveLength(1)
@@ -61,7 +61,7 @@ describe("EvaluatorAnalysis schema validation", () => {
         avoid_approaches: ["Don't use Express"],
       },
     }
-    const parsed = EvaluatorAnalysis.parse(raw)
+    const parsed = GoalJudgment.parse(raw)
     expect(parsed.verdict).toBe("rejected")
     expect(parsed.classification).toBe("strategy")
     expect(parsed.replan_guidance).toBeDefined()
@@ -71,7 +71,7 @@ describe("EvaluatorAnalysis schema validation", () => {
 
   test("rejects analysis with invalid verdict", () => {
     expect(() =>
-      EvaluatorAnalysis.parse({
+      GoalJudgment.parse({
         verdict: "maybe",
         classification: "evaluation",
         summary: "test",
@@ -103,7 +103,7 @@ describe("EvaluatorAnalysis schema validation", () => {
       "  }",
     ].join("\n")
 
-    const parsed = parseEvaluatorAnalysis(raw, 2)
+    const parsed = parseGoalJudgment(raw, 2)
     expect(parsed.verdict).toBe("rejected")
     expect(parsed.goal_statuses).toHaveLength(2)
     expect(parsed.goal_statuses[0]?.status).toBe("failed")
@@ -207,7 +207,7 @@ describe("Per-goal status update logic", () => {
       { id: "g3", description: "Lint passes", status: "pending" },
     ]
 
-    const analysis: EvaluatorAnalysisType = {
+    const analysis: GoalJudgmentType = {
       verdict: "rejected",
       classification: "evaluation",
       summary: "Tests failed",
@@ -234,7 +234,7 @@ describe("Per-goal status update logic", () => {
   })
 
   test("inconclusive goals are not updated", () => {
-    const analysis: EvaluatorAnalysisType = {
+    const analysis: GoalJudgmentType = {
       verdict: "inconclusive",
       classification: "unknown",
       summary: "Cannot determine",

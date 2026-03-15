@@ -1,7 +1,4 @@
 import path from "path"
-import { Config } from "../../src/config/config"
-import { Instance } from "../../src/project/instance"
-import { Provider } from "../../src/provider/provider"
 
 export async function loadBenchmarkEnv(metaDir: string, options?: { cwd?: string }) {
   const locked = new Set(
@@ -83,13 +80,22 @@ const preferredProviders = [
   "github-copilot",
 ]
 
+async function providerList() {
+  const { Provider } = await import("../../src/provider/provider")
+  return Provider.list()
+}
+
 async function resetBenchmarkState() {
+  const [{ Config }, { Instance }] = await Promise.all([
+    import("../../src/config/config"),
+    import("../../src/project/instance"),
+  ])
   Config.global.reset()
   await Instance.disposeAll().catch(() => undefined)
 }
 
 function explicitModel(
-  providers: Awaited<ReturnType<typeof Provider.list>>,
+  providers: Awaited<ReturnType<typeof providerList>>,
   explicit: string,
   allowOpenAICodex = false,
 ) {
@@ -115,6 +121,10 @@ export async function resolveBenchmarkModel(
 ) {
   await resetBenchmarkState()
   const root = path.resolve(metaDir, "../..")
+  const [{ Instance }, { Provider }] = await Promise.all([
+    import("../../src/project/instance"),
+    import("../../src/provider/provider"),
+  ])
   return Instance.provide({
     directory: root,
     fn: async () => {
@@ -150,6 +160,10 @@ export async function resolveBenchmarkModel(
 
 export async function ensureBenchmarkModel(metaDir: string, model: string) {
   await resetBenchmarkState()
+  const [{ Instance }, { Provider }] = await Promise.all([
+    import("../../src/project/instance"),
+    import("../../src/provider/provider"),
+  ])
   return Instance.provide({
     directory: path.resolve(metaDir, "../.."),
     fn: async () => {

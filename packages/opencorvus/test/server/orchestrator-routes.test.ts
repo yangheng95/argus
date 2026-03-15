@@ -3,7 +3,7 @@ import { Bus } from "../../src/bus"
 import { parseSSE } from "../../src/control-plane/sse"
 import { Database, eq } from "../../src/storage/db"
 import { type ExecutorAdapter } from "../../src/executor/compat"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
@@ -63,7 +63,7 @@ function mockLLM() {
     evidence_sources: [],
     unresolved_questions: [],
   }))
-  spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
+  spyOn(CheckRunner, "analyzeDelivery").mockImplementation(async (input) => {
     const allPassed = input.checkResults.every((c) => c.status === "passed")
     return {
       verdict: allPassed ? "accepted" : "rejected",
@@ -1026,7 +1026,7 @@ describe("orchestrator routes", () => {
       summary: "executor finished",
       diffs: [],
     })
-    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+    spyOn(CheckRunner, "evaluate").mockResolvedValue({
       status: "failed",
       verdict: "rejected",
       summary: "Some checks failed",
@@ -1099,7 +1099,7 @@ describe("orchestrator routes", () => {
       summary: "executor finished",
       diffs: [],
     })
-    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+    spyOn(CheckRunner, "evaluate").mockResolvedValue({
       status: "failed",
       verdict: "rejected",
       summary: "Some checks failed",

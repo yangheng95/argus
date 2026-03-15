@@ -10,10 +10,10 @@ import z from "zod"
 import puppeteer from "puppeteer-core"
 import {
   type CommandGroup,
-  type EvaluationArtifact,
-  type EvaluationDelivery,
-  type EvaluationOutcome,
-  type EvaluatorCommand,
+  type CheckArtifact,
+  type CheckDelivery,
+  type CheckOutcome,
+  type CheckCommand,
   checkResult,
   clip,
   emptyOptional,
@@ -35,7 +35,7 @@ function commandShell(command: string) {
 export async function commandChecks(
   commands: CommandGroup[],
   timeout: number,
-  delivery: EvaluationDelivery,
+  delivery: CheckDelivery,
 ) {
   const tasks = commands.flatMap((group) =>
     group.commands.map((command, index) => ({
@@ -59,7 +59,7 @@ export async function commandChecks(
       evidence: clip(item.result.output) || `${typeof item.command === "string" ? item.command : item.command.command} ${item.result.code === 0 ? "passed" : "failed"}`,
     }),
   }))
-  const artifacts: EvaluationArtifact[] = results.map((item) => ({
+  const artifacts: CheckArtifact[] = results.map((item) => ({
     kind: "log",
     label: `evaluation:${item.name}`,
     payload: {
@@ -81,7 +81,7 @@ export async function commandChecks(
   return { checks, artifacts }
 }
 
-export async function commandResult(input: string | EvaluatorCommand, timeout: number) {
+export async function commandResult(input: string | CheckCommand, timeout: number) {
   const command = typeof input === "string" ? input : input.command
   const cwd = typeof input === "string" ? Instance.directory : input.cwd ?? Instance.directory
   const shell = commandShell(command)
@@ -131,7 +131,7 @@ export async function commandResult(input: string | EvaluatorCommand, timeout: n
   }
 }
 
-export async function startupResult(config: z.infer<typeof CheckConfig>["startup"]): Promise<EvaluationOutcome> {
+export async function startupResult(config: z.infer<typeof CheckConfig>["startup"]): Promise<CheckOutcome> {
   if (!config) return emptyOptional()
   const mode = config.mode ?? "soft"
   const timeout = config.timeout_ms ?? 20_000
@@ -278,7 +278,7 @@ async function waitForStartup(input: {
 export async function artifactResult(
   config: z.infer<typeof CheckConfig>["artifact"],
   delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<EvaluationOutcome> {
+): Promise<CheckOutcome> {
   if (!config) return emptyOptional()
   const changedFiles = delivery.changedFiles ?? delivery.diffs?.map((item) => item.file) ?? []
   const diffs = delivery.diffs ?? []
@@ -366,7 +366,7 @@ export async function artifactResult(
   }
 }
 
-export async function visualResult(config: z.infer<typeof CheckConfig>["visual"]): Promise<EvaluationOutcome> {
+export async function visualResult(config: z.infer<typeof CheckConfig>["visual"]): Promise<CheckOutcome> {
   if (!config) return emptyOptional()
   const mode = config.mode ?? "soft"
   const page = await webPage(config.url, config.timeout_ms ?? 10_000)
@@ -502,7 +502,7 @@ export async function visualResult(config: z.infer<typeof CheckConfig>["visual"]
   }
 }
 
-export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppeteer"]): Promise<EvaluationOutcome> {
+export async function puppeteerResult(config: z.infer<typeof CheckConfig>["puppeteer"]): Promise<CheckOutcome> {
   if (!config) return emptyOptional()
   const mode = config.mode ?? "soft"
   const executable = await resolvePuppeteerExecutable(config)

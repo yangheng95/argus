@@ -6,7 +6,7 @@ import { which } from "@/util/which"
 import fs from "fs/promises"
 import path from "path"
 import z from "zod"
-import type { EvaluatorCommand, CommandGroup, EvaluationTask } from "./shared"
+import type { CheckCommand, CommandGroup, CheckTask } from "./shared"
 import { Log } from "@/util/log"
 
 const discoveryLog = Log.create({ service: "evaluator-discovery" })
@@ -20,7 +20,7 @@ export async function resolveConfig(metadata?: Record<string, unknown>) {
   })
 }
 
-export function autoSpecCheck(task?: EvaluationTask): Record<string, unknown> {
+export function autoSpecCheck(task?: CheckTask): Record<string, unknown> {
   void task
   return { spec_check: requiredSpecCheck(undefined) }
 }
@@ -88,7 +88,7 @@ export async function discoverChecks(changedFiles?: unknown) {
     return undefined
   }) as { scripts?: Record<string, string> } | undefined
   const scripts = json?.scripts ?? {}
-  const run = (name: string): EvaluatorCommand[] => [{ command: `bun run ${name}`, cwd }]
+  const run = (name: string): CheckCommand[] => [{ command: `bun run ${name}`, cwd }]
   const files = Array.isArray(changedFiles)
     ? changedFiles
         .filter((item): item is string => typeof item === "string" && /\.(spec|test)\.[cm]?[jt]sx?$/.test(item))
@@ -169,7 +169,7 @@ function explicitCommands(configured?: string[] | false) {
   return
 }
 
-function commandSpecs(configured?: string[] | false, discovered: EvaluatorCommand[] = []) {
+function commandSpecs(configured?: string[] | false, discovered: CheckCommand[] = []) {
   if (configured === false) return []
   if (configured && configured.length > 0) {
     return configured.map((command) => ({ command }))
@@ -180,7 +180,7 @@ function commandSpecs(configured?: string[] | false, discovered: EvaluatorComman
 function group(
   name: "build" | "test" | "lint" | "verify_cmd",
   configured: string[] | false | undefined,
-  discovered: EvaluatorCommand[],
+  discovered: CheckCommand[],
   label: string,
   family: z.infer<typeof NamedCheckFamily>,
 ) {

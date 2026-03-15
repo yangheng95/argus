@@ -3,7 +3,7 @@
  * PRD 全链路端到端测试
  *
  * 用 OpenAI Codex OAuth 将 PRD 喂给 PlannerAgent，
- * 生成完整开发计划，然后用 EvaluatorAgent 评估模拟交付结果。
+ * 生成完整开发计划，然后用 GoalJudge 评估模拟交付结果。
  *
  * 用法:
  *   bun run script/prd-e2e.ts [--prd <path>]
@@ -14,7 +14,7 @@ import path from "path"
 import * as fs from "fs/promises"
 import { generateText, stepCountIs } from "ai"
 import z from "zod"
-import { EvaluatorAnalysis, type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { GoalJudgment, type GoalJudgmentType } from "@/evaluator/agent"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { GoalInput } from "@/orchestrator/model"
 import {
@@ -359,13 +359,13 @@ if (plan.assumptions && plan.assumptions.length > 0) {
 console.log("\n── PRD (技术 PRD 全文) ──────────────────────────────────")
 console.log(plan.prd)
 
-// ── Phase 2: EvaluatorAgent — 模拟评估 ──────────────────────────────────────
+// ── Phase 2: GoalJudge — 模拟评估 ──────────────────────────────────────
 
 console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-console.log("  Phase 2: EvaluatorAgent — 模拟交付评估")
+console.log("  Phase 2: GoalJudge — 模拟交付评估")
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 
-const EVALUATOR_SYSTEM = `You are a senior code reviewer. Analyze the results of a coding task.
+const GOAL_JUDGE_SYSTEM = `You are a senior code reviewer. Analyze the results of a coding task.
 
 ## Process
 1. REVIEW automated check results
@@ -426,16 +426,16 @@ const evalResult = await generateText({
   model,
   stopWhen: stepCountIs(5),
   abortSignal: AbortSignal.timeout(120_000),
-  system: EVALUATOR_SYSTEM,
+  system: GOAL_JUDGE_SYSTEM,
   prompt: evalPrompt,
 })
 const evalDuration = ((Date.now() - evalStart) / 1000).toFixed(1)
 
-let analysis: EvaluatorAnalysisType
+let analysis: GoalJudgmentType
 try {
-  analysis = extractJSON(evalResult, EvaluatorAnalysis)
+  analysis = extractJSON(evalResult, GoalJudgment)
 } catch (err) {
-  console.error("EvaluatorAgent JSON 解析失败:", err)
+  console.error("GoalJudge JSON 解析失败:", err)
   process.exit(1)
 }
 

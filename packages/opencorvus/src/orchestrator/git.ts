@@ -3,6 +3,7 @@ import { Instance } from "@/project/instance"
 import { Vcs } from "@/project/vcs"
 import { Database, eq } from "@/storage/db"
 import { git } from "@/util/git"
+import { dict } from "@/util/object"
 import { Identifier } from "@/id/id"
 import { OrchestratorProgressSnapshotTable, OrchestratorTaskTable } from "./orchestrator.sql"
 import { requireTask, type DeliveryRow, type PlanRow, type TaskRow } from "./store"
@@ -10,12 +11,6 @@ import { requireTask, type DeliveryRow, type PlanRow, type TaskRow } from "./sto
 const AUTHOR = {
   name: "OpenCorvus",
   email: "opencorvus@local",
-}
-
-function dict(input: unknown) {
-  return input && typeof input === "object" && !Array.isArray(input)
-    ? input as Record<string, unknown>
-    : {}
 }
 
 function clean(input: string) {

@@ -19,7 +19,7 @@ import {
 import { DEFAULT_CORE_HEADER } from "@/session/system"
 import { PLANNER_SYSTEM } from "@/planner/agent"
 import { SPEC_SYSTEM } from "@/spec/agent"
-import { EVALUATOR_SYSTEM } from "@/evaluator/agent"
+import { GOAL_JUDGE_SYSTEM } from "@/evaluator/agent"
 
 const log = Log.create({ service: "server" })
 
@@ -146,9 +146,9 @@ export const ConfigRoutes = lazy(() =>
             group: "orchestrator",
             label: "Evaluator Agent",
             description: "System prompt for the orchestrator evaluation stage.",
-            prompt: promptValue(config.prompt?.evaluator_system) ?? EVALUATOR_SYSTEM,
+            prompt: promptValue(config.prompt?.evaluator_system) ?? GOAL_JUDGE_SYSTEM,
             configured_prompt: promptValue(config.prompt?.evaluator_system),
-            default_prompt: EVALUATOR_SYSTEM,
+            default_prompt: GOAL_JUDGE_SYSTEM,
           },
         ]
         const agentItems = agents.map((item) => {

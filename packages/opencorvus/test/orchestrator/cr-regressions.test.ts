@@ -1,9 +1,9 @@
 import { readdir } from "fs/promises"
 import path from "path"
 import { afterEach, expect, mock, spyOn, test } from "bun:test"
-import { EvaluatorService } from "../../src/evaluator/service"
-import { type EvaluatorAnalysisType } from "../../src/evaluator/agent"
-import { type EvaluationOutput } from "../../src/evaluator/shared"
+import { CheckRunner } from "../../src/evaluator/service"
+import { type GoalJudgmentType } from "../../src/evaluator/agent"
+import { type CheckReport } from "../../src/evaluator/shared"
 import { Identifier } from "../../src/id/id"
 import {
   OrchestratorDeliveryTable,
@@ -142,7 +142,7 @@ test("persistEvaluation writes goal snapshots from transaction state", async () 
         db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get()!,
       )
       const goals = listGoalsBySpec(specID)
-      const result: EvaluationOutput = {
+      const result: CheckReport = {
         status: "passed",
         verdict: "accepted",
         summary: "accepted",
@@ -155,7 +155,7 @@ test("persistEvaluation writes goal snapshots from transaction state", async () 
         }],
         artifacts: [],
       }
-      const analysis: EvaluatorAnalysisType = {
+      const analysis: GoalJudgmentType = {
         verdict: "accepted",
         classification: "unknown",
         summary: "accepted",
@@ -438,7 +438,7 @@ test("syncRun skips reevaluation while a coordinator evaluation is pending", asy
       )
       beginEvaluation({ task, run, deliveryID, evaluationID, now, summary: "working" })
 
-      const evaluate = spyOn(EvaluatorService, "evaluate").mockImplementation(async () => {
+      const evaluate = spyOn(CheckRunner, "evaluate").mockImplementation(async () => {
         throw new Error("should not rerun")
       })
 
@@ -527,7 +527,7 @@ test("syncRun fails a stale pending coordinator evaluation instead of rerunning 
       )
       beginEvaluation({ task, run, deliveryID, evaluationID, now, summary: "working" })
 
-      const evaluate = spyOn(EvaluatorService, "evaluate").mockImplementation(async () => {
+      const evaluate = spyOn(CheckRunner, "evaluate").mockImplementation(async () => {
         throw new Error("should not rerun")
       })
 

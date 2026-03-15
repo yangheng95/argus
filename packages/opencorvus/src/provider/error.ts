@@ -98,6 +98,24 @@ export namespace ProviderError {
     return undefined
   }
 
+  function transportMessage(input: unknown) {
+    if (typeof input === "string") return input
+    if (input instanceof Error) return input.message
+    return undefined
+  }
+
+  function retryableTransport(message: string) {
+    return [
+      /unable to connect/i,
+      /fetch failed/i,
+      /connection (?:refused|reset|closed|timed out)/i,
+      /\beconn(?:refused|reset)\b/i,
+      /socket.*(?:closed|hang up|reset)/i,
+      /network (?:is )?(?:unreachable|down|error)/i,
+      /timed out/i,
+    ].some((pattern) => pattern.test(message))
+  }
+
   export type ParsedStreamError =
     | {
         type: "context_overflow"
@@ -107,11 +125,21 @@ export namespace ProviderError {
     | {
         type: "api_error"
         message: string
-        isRetryable: false
+        isRetryable: boolean
         responseBody: string
       }
 
   export function parseStreamError(input: unknown): ParsedStreamError | undefined {
+    const message = transportMessage(input)?.trim()
+    if (message && retryableTransport(message)) {
+      return {
+        type: "api_error",
+        message,
+        isRetryable: true,
+        responseBody: message,
+      }
+    }
+
     const body = json(input)
     if (!body) return
 

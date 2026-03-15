@@ -21,7 +21,7 @@ export const ReviewResultSchema = z.object({
   concerns: z.array(z.string()),
 })
 
-export type EvaluatorCommand = {
+export type CheckCommand = {
   command: string
   cwd?: string
 }
@@ -30,41 +30,41 @@ export type CommandGroup = {
   name: string
   label?: string
   family?: z.infer<typeof NamedCheckFamily>
-  commands: EvaluatorCommand[]
+  commands: CheckCommand[]
 }
 
-export type EvaluationTask = {
+export type CheckTask = {
   taskID?: string
   activeSpecVersionID?: string
   request?: string
   metadata?: Record<string, unknown>
 }
 
-export type EvaluationDelivery = {
+export type CheckDelivery = {
   summary: string
   diffs?: Snapshot.FileDiff[]
   changedFiles?: string[]
 }
 
-export type EvaluationArtifact = {
+export type CheckArtifact = {
   kind: "log" | "report" | "image"
   label: string
   payload: Record<string, unknown>
 }
 
-export type EvaluationOutcome = {
+export type CheckOutcome = {
   outcome: "passed" | "failed" | "skipped"
   summary: string
   checks: z.infer<typeof EvaluationCheck>[]
-  artifacts: EvaluationArtifact[]
+  artifacts: CheckArtifact[]
 }
 
-export type EvaluationOutput = {
+export type CheckReport = {
   status: "passed" | "failed"
   verdict: "accepted" | "rejected"
   summary: string
   checks: z.infer<typeof EvaluationCheck>[]
-  artifacts: EvaluationArtifact[]
+  artifacts: CheckArtifact[]
 }
 
 export type PluginCheck = {
@@ -72,7 +72,7 @@ export type PluginCheck = {
   mode: "soft" | "strict"
   run: (ctx: {
     request?: string
-    delivery: EvaluationDelivery
+    delivery: CheckDelivery
   }) => Promise<{
     status: "passed" | "failed" | "skipped"
     evidence: string
@@ -87,7 +87,7 @@ export type CheckDef = {
 }
 
 export type OptionalCheckDef = CheckDef & {
-  run: (config: z.infer<typeof CheckConfig>, task: EvaluationTask, delivery: EvaluationDelivery) => Promise<EvaluationOutcome>
+  run: (config: z.infer<typeof CheckConfig>, task: CheckTask, delivery: CheckDelivery) => Promise<CheckOutcome>
 }
 
 export const CORE_CHECK_DEFS = [
@@ -130,12 +130,12 @@ export function clip(input: string, maxLength?: number) {
   return value.slice(0, limit) + "\n...[truncated]"
 }
 
-export function emptyOptional(): EvaluationOutcome & { artifacts: EvaluationArtifact[] } {
+export function emptyOptional(): CheckOutcome & { artifacts: CheckArtifact[] } {
   return {
     outcome: "passed" as const,
     summary: "",
     checks: [],
-    artifacts: [] as Array<{ kind: "log" | "report" | "image"; label: string; payload: Record<string, unknown> }>,
+    artifacts: [] as CheckArtifact[],
   }
 }
 
@@ -145,7 +145,7 @@ export function softOrStrict(input: {
   summary: string
   evidence: string
   payload: Record<string, unknown>
-}): EvaluationOutcome {
+}): CheckOutcome {
   if (input.mode === "strict") {
     return {
       outcome: "failed" as const,
@@ -227,7 +227,7 @@ export function stripHtml(input: string) {
 
 export function normalizeArtifacts(input?: Array<{ kind: string; label: string; payload: Record<string, unknown> }>) {
   return (input ?? []).map((item) => ({
-    kind: item.kind as EvaluationArtifact["kind"],
+    kind: item.kind as CheckArtifact["kind"],
     label: item.label,
     payload: item.payload,
   }))

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { CheckConfig } from "../../src/orchestrator/model"
-import { blockingEvaluationFailure, evaluateGoal, goalEvaluationOutcome } from "../../src/orchestrator/goal-runner"
+import { blockingEvaluationFailure, evaluateGoal, goalCheckOutcome } from "../../src/orchestrator/goal-runner"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 
@@ -35,7 +35,7 @@ describe("orchestrator.goal checks", () => {
 
   test("scopes goal evaluation checks to the selected goal families and named selectors", async () => {
     let checks: unknown
-    spyOn(EvaluatorService, "evaluate").mockImplementation(async (task) => {
+    spyOn(CheckRunner, "evaluate").mockImplementation(async (task) => {
       checks = task.metadata?.checks
       return {
         status: "passed",
@@ -45,7 +45,7 @@ describe("orchestrator.goal checks", () => {
         artifacts: [],
       }
     })
-    spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue(analysis)
+    spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue(analysis)
 
     await withinInstance(() =>
       evaluateGoal({
@@ -143,7 +143,7 @@ describe("orchestrator.goal checks", () => {
 
   test("creates a valid minimal ui review config for ui review goals", async () => {
     let checks: unknown
-    spyOn(EvaluatorService, "evaluate").mockImplementation(async (task) => {
+    spyOn(CheckRunner, "evaluate").mockImplementation(async (task) => {
       checks = task.metadata?.checks
       return {
         status: "passed",
@@ -153,7 +153,7 @@ describe("orchestrator.goal checks", () => {
         artifacts: [],
       }
     })
-    spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue(analysis)
+    spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue(analysis)
 
     await withinInstance(() =>
       evaluateGoal({
@@ -212,7 +212,7 @@ describe("orchestrator.goal checks", () => {
     } as const
 
     expect(blockingEvaluationFailure(result as any)).toBe(false)
-    expect(goalEvaluationOutcome(result as any, analysis)).toEqual({
+    expect(goalCheckOutcome(result as any, analysis)).toEqual({
       verdict: "accepted",
       status: "passed",
       summary: "Goal accepted.",

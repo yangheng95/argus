@@ -5,16 +5,6 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
-import { ExecutorBootstrap } from "../../src/executor/bootstrap"
-import { OrchestratorService } from "../../src/orchestrator/service"
-import { Instance } from "../../src/project/instance"
-import { InstanceBootstrap } from "../../src/project/bootstrap"
-import { Server } from "../../src/server/server"
-import { Log } from "../../src/util/log"
-import { resetDatabase } from "../../test/fixture/db"
-import { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } from "./env"
-
-Log.init({ print: true })
 
 function flag(name: string) {
   return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
@@ -26,9 +16,11 @@ function stageTimeout(name: string, totalMs: number, share: number, fallback: nu
   return Math.max(fallback, Math.min(totalMs, Math.floor(totalMs * share) || fallback))
 }
 
-const timeoutMs = Number(flag("--timeout-ms")) || 8 * 60 * 1000
-const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.3, 150_000)
-const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.35, 180_000)
+const timeoutMs = Number(flag("--timeout-ms")) || 20 * 60 * 1000
+const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.35, 360_000)
+const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 480_000)
+const specMaxSteps = Number(flag("--spec-max-steps")) || 48
+const plannerMaxSteps = Number(flag("--planner-max-steps")) || 56
 const report = flag("--report")
 const keep = process.argv.includes("--keep")
 const headless = !process.argv.includes("--headed")
@@ -83,6 +75,19 @@ const AUTO_REPLY =
 
 const FINAL = new Set(["completed", "failed", "cancelled"])
 const STREAM_PLACEHOLDERS = new Set(["", "...", "……", "思考中", "Thinking"])
+const DIAG_TYPES = new Set([
+  "orchestrator.agent.updated",
+  "orchestrator.run.created",
+  "orchestrator.run.updated",
+  "orchestrator.task.created",
+  "orchestrator.task.updated",
+  "orchestrator.spec.created",
+  "orchestrator.spec.updated",
+  "orchestrator.plan.created",
+  "orchestrator.plan.activated",
+  "orchestrator.interaction.requested",
+  "orchestrator.interaction.resolved",
+])
 const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || Math.min(timeoutMs, 30_000)
 const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || timeoutMs
 const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || Math.min(timeoutMs, 2 * 60 * 1000)
@@ -91,14 +96,24 @@ const temp = {
   home: "",
 }
 
+temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-home-"))
+temp.dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
+process.env.OPENCORVUS_HOME = temp.home
+const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } = await import("./env")
+const { Log } = await import("../../src/util/log")
+Log.init({ print: true })
+const { GlobalBus } = await import("../../src/bus/global")
+const { ExecutorBootstrap } = await import("../../src/executor/bootstrap")
+const { Instance } = await import("../../src/project/instance")
+const { InstanceBootstrap } = await import("../../src/project/bootstrap")
+const { Server } = await import("../../src/server/server")
+const { resetDatabase } = await import("../../test/fixture/db")
+
 await loadBenchmarkEnv(import.meta.dir)
 prepareDashscopeEnv()
 const model = await resolveBenchmarkModel(import.meta.dir)
 await ensureBenchmarkModel(import.meta.dir, model)
 
-temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-home-"))
-temp.dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
-process.env.OPENCORVUS_HOME = temp.home
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
 process.env.OPENCORVUS_EXECUTOR_CLAUDE_PERMISSION_MODE = "bypassPermissions"
 process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS = String(timeoutMs)
@@ -106,6 +121,8 @@ process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
 process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
 process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
 process.env.OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS = String(plannerTimeoutMs)
+process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
+process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
 await resetDatabase()
 await scaffoldProject(temp.dir, model)
@@ -136,6 +153,39 @@ const marks = {
   completedAt: 0,
 }
 let taskID = ""
+const reportFile = report ? path.resolve(report) : path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
+const eventFile = reportFile.endsWith(".json")
+  ? reportFile.slice(0, -".json".length) + ".events.json"
+  : `${reportFile}.events.json`
+const eventLogFile = reportFile.endsWith(".json")
+  ? reportFile.slice(0, -".json".length) + ".events.ndjson"
+  : `${reportFile}.events.ndjson`
+const events: Array<Record<string, unknown>> = []
+let flushed = Promise.resolve()
+const onEvent = ({ directory, payload }: { directory?: string; payload: any }) => {
+  if (directory && temp.dir && directory !== temp.dir) return
+  if (!payload || typeof payload !== "object" || !("type" in payload)) return
+  const type = String(payload.type || "")
+  if (!DIAG_TYPES.has(type)) return
+  const props = payload.properties && typeof payload.properties === "object" ? payload.properties as Record<string, unknown> : {}
+  const entry = {
+    at: new Date().toISOString(),
+    elapsed_ms: Date.now() - marks.startedAt,
+    type,
+    taskID: typeof props.taskID === "string" ? props.taskID : "",
+    runID: typeof props.runID === "string" ? props.runID : "",
+    stage: typeof props.stage === "string" ? props.stage : "",
+    kind: typeof props.kind === "string" ? props.kind : "",
+    status: typeof props.status === "string" ? props.status : "",
+    toolName: typeof props.toolName === "string" ? props.toolName : "",
+    summary: clipText(typeof props.summary === "string" ? props.summary : "", 600),
+    text: clipText(typeof props.text === "string" ? props.text : "", 2000),
+  }
+  events.push(entry)
+  flushed = flushed
+    .then(() => fs.appendFile(eventLogFile, `${JSON.stringify(entry)}\n`))
+    .catch(() => undefined)
+}
 
 const api = async (pathname: string, init?: RequestInit) => {
   const url = new URL(pathname, server.url)
@@ -146,6 +196,8 @@ const api = async (pathname: string, init?: RequestInit) => {
 }
 
 try {
+  await Bun.write(eventLogFile, "")
+  GlobalBus.on("event", onEvent)
   await page.evaluateOnNewDocument((serverUrl, directory) => {
     localStorage.setItem("oc_server_url", serverUrl)
     localStorage.setItem("oc_auto_server", "false")
@@ -163,6 +215,15 @@ try {
   const overlay = await syncDirectory(page, temp.dir)
   console.log(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
 
+  await page.evaluate((budget) => {
+    window.__ocNextChatMetadata = {
+      create_task: {
+        budget: {
+          maxWallTimeMs: budget,
+        },
+      },
+    }
+  }, timeoutMs)
   await page.$eval("#chatTextarea", (node, value) => {
     const input = node as HTMLTextAreaElement
     input.value = String(value)
@@ -238,6 +299,10 @@ try {
     stage_timeout_ms: {
       spec: specTimeoutMs,
       planner: plannerTimeoutMs,
+    },
+    stage_max_steps: {
+      spec: specMaxSteps,
+      planner: plannerMaxSteps,
     },
     directory: temp.dir,
     server: server.url.toString(),
@@ -316,12 +381,26 @@ try {
       },
     },
     local_verify: localVerify,
+    diagnostics: {
+      event_file: eventFile,
+      event_count: events.length,
+      stage_summary: summarizeEvents(events, taskID),
+    },
   }
 
-  const file = report || path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
-  await Bun.write(file, JSON.stringify(out, null, 2))
+  await flushed
+  await Bun.write(eventFile, JSON.stringify({
+    generated_at: new Date().toISOString(),
+    taskID,
+    event_count: events.length,
+    stage_summary: summarizeEvents(events, taskID),
+    events,
+  }, null, 2))
+  await Bun.write(reportFile, JSON.stringify(out, null, 2))
   console.log(JSON.stringify(out, null, 2))
-  console.log(`report: ${file}`)
+  console.log(`report: ${reportFile}`)
+  console.log(`events: ${eventFile}`)
+  console.log(`events_ndjson: ${eventLogFile}`)
 
   const pass = mode === "materialize"
     ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass
@@ -330,7 +409,6 @@ try {
     process.exit(1)
   }
 } catch (error) {
-  const file = report || path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
   const out = {
     generated_at: new Date().toISOString(),
     executor,
@@ -339,6 +417,10 @@ try {
     server: server.url.toString(),
     taskID,
     error: String(error),
+    stage_max_steps: {
+      spec: specMaxSteps,
+      planner: plannerMaxSteps,
+    },
     timings_ms: {
       online: marks.onlineAt ? marks.onlineAt - marks.startedAt : null,
       submit: marks.submittedAt ? marks.submittedAt - marks.startedAt : null,
@@ -352,12 +434,30 @@ try {
       execution: marks.submittedAt && marks.completedAt ? marks.completedAt - marks.submittedAt : null,
     },
     overlay: await overlaySnapshot(page).catch((cause) => ({ error: String(cause) })),
+    diagnostics: {
+      event_file: eventFile,
+      event_count: events.length,
+      stage_summary: summarizeEvents(events, taskID),
+    },
   }
-  await Bun.write(file, JSON.stringify(out, null, 2))
+  await flushed
+  await Bun.write(eventFile, JSON.stringify({
+    generated_at: new Date().toISOString(),
+    taskID,
+    error: String(error),
+    event_count: events.length,
+    stage_summary: summarizeEvents(events, taskID),
+    events,
+  }, null, 2))
+  await Bun.write(reportFile, JSON.stringify(out, null, 2))
   console.error(JSON.stringify(out, null, 2))
-  console.error(`report: ${file}`)
+  console.error(`report: ${reportFile}`)
+  console.error(`events: ${eventFile}`)
+  console.error(`events_ndjson: ${eventLogFile}`)
   process.exitCode = 1
 } finally {
+  GlobalBus.off("event", onEvent)
+  await flushed.catch(() => undefined)
   if (taskID) {
     await cleanup("task.cancel", () =>
       api(`/task/${taskID}/cancel`, {
@@ -662,6 +762,56 @@ function meaningfulLiveText(value: string) {
   const text = String(value || "").trim()
   if (!text) return false
   return !STREAM_PLACEHOLDERS.has(text)
+}
+
+function clipText(value: string, max: number) {
+  if (!value) return ""
+  return value.length <= max ? value : `${value.slice(0, max - 3)}...`
+}
+
+function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string) {
+  const filtered = events.filter((item) => !taskID || item.taskID === taskID)
+  const agents = filtered.filter((item) => item.type === "orchestrator.agent.updated")
+  const kinds = filtered.reduce<Record<string, number>>((map, item) => {
+    const type = typeof item.type === "string" ? item.type : ""
+    if (!type) return map
+    map[type] = (map[type] ?? 0) + 1
+    return map
+  }, {})
+  const stages = ["spec", "planner", "judge"].flatMap((stage) => {
+    const list = agents.filter((item) => item.stage === stage)
+    if (list.length === 0) return []
+    const toolCalls = list
+      .filter((item) => item.kind === "tool_call")
+      .reduce<Record<string, number>>((map, item) => {
+        const name = typeof item.toolName === "string" ? item.toolName : ""
+        if (!name) return map
+        map[name] = (map[name] ?? 0) + 1
+        return map
+      }, {})
+    const byKind = list.reduce<Record<string, number>>((map, item) => {
+      const kind = typeof item.kind === "string" ? item.kind : ""
+      if (!kind) return map
+      map[kind] = (map[kind] ?? 0) + 1
+      return map
+    }, {})
+    return [[stage, {
+      event_count: list.length,
+      first_event_ms: list[0]?.elapsed_ms ?? null,
+      first_message_ms: list.find((item) => item.kind === "message_delta")?.elapsed_ms ?? null,
+      first_tool_call_ms: list.find((item) => item.kind === "tool_call")?.elapsed_ms ?? null,
+      first_tool_result_ms: list.find((item) => item.kind === "tool_result")?.elapsed_ms ?? null,
+      submit_tool_ms: list.find((item) => item.kind === "tool_call" && (item.toolName === "submit_spec" || item.toolName === "submit_plan" || item.toolName === "submit_analysis"))?.elapsed_ms ?? null,
+      error_ms: list.find((item) => item.kind === "error")?.elapsed_ms ?? null,
+      last_event_ms: list.at(-1)?.elapsed_ms ?? null,
+      kind_counts: byKind,
+      tool_calls: toolCalls,
+    }]]
+  })
+  return {
+    types: kinds,
+    stages: Object.fromEntries(stages),
+  }
 }
 
 async function debugSnapshot(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {

@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
-import type { EvaluatorAnalysisType } from "@/evaluator/agent"
+import type { GoalJudgmentType } from "@/evaluator/agent"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import type { EvaluationRow, GoalRow, MilestoneRow, PlanRow, RunRow, TaskRow } from "./store"
@@ -317,7 +317,7 @@ function evaluationText(input: {
   goalRunID?: string
   evaluation: Pick<EvaluationRow, "id" | "status" | "verdict" | "summary"> & { checks: Check[] }
   goals: GoalRow[]
-  analysis?: EvaluatorAnalysisType
+  analysis?: GoalJudgmentType
   delivery?: {
     summary: string
     diffs: Array<{ file: string }>
@@ -461,7 +461,7 @@ export function writeEvaluationSnapshot(input: {
   goalRunID?: string
   evaluation: Pick<EvaluationRow, "id" | "status" | "verdict" | "summary"> & { checks: Check[] }
   goals: GoalRow[]
-  analysis?: EvaluatorAnalysisType
+  analysis?: GoalJudgmentType
   delivery?: {
     summary: string
     diffs: Array<{ file: string }>
