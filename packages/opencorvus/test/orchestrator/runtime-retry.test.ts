@@ -14,6 +14,7 @@ import { ExecutorRegistry } from "../../src/executor/registry"
 import { executorLeaseOwner } from "../../src/orchestrator/lease"
 import { OrchestratorRuntime } from "../../src/orchestrator/runtime"
 import { hooks } from "../../src/orchestrator/state"
+import { renewExecutorSessionLease } from "../../src/orchestrator/transition"
 import { createGoalRun, updateGoalRun } from "../../src/orchestrator/transition"
 import { Instance } from "../../src/project/instance"
 import { Database, eq } from "../../src/storage/db"
@@ -371,7 +372,7 @@ test("syncRun queues a retry when executor status lookup fails", async () => {
   })
 })
 
-test("syncRun retries immediately when executor lease belongs to a previous runtime", async () => {
+test("syncRun leaves runs untouched when another runtime still owns the executor lease", async () => {
   await using tmp = await tmpdir({ git: true })
 
   await Instance.provide({
@@ -467,8 +468,6 @@ test("syncRun retries immediately when executor lease belongs to a previous runt
       })
 
       const status = spyOn(ExecutorRegistry.require("opencode"), "status")
-      const dispatch = spyOn(OrchestratorRuntime, "dispatch").mockResolvedValue(undefined)
-
       await OrchestratorRuntime.syncRun(runID, hooks())
 
       const rows = Database.use((db) =>
@@ -478,13 +477,134 @@ test("syncRun retries immediately when executor lease belongs to a previous runt
       const task = Database.use((db) =>
         db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
       )
-      const active = rows.find((row) => row.id === task?.active_run_id)
 
       expect(status).toHaveBeenCalledTimes(0)
-      expect(dispatch).toHaveBeenCalledTimes(1)
-      expect(previous?.status).toBe("failed")
-      expect(previous?.error).toContain("different runtime")
-      expect(active?.status).toBe("queued")
+      expect(previous?.status).toBe("running")
+      expect(previous?.error ?? null).toBe(null)
+      expect(task?.status).toBe("running")
+    },
+  })
+})
+
+test("syncRun takes over an expired executor lease before checking status", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const executorSessionID = Identifier.ascending("executor_session")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "ship the change",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            summary: "plan",
+            prompt: "Execute the plan",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 0,
+            executor_ref: {
+              session_id: "session-1",
+              queue_task_id: "queue-1",
+            },
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorExecutorSessionTable)
+          .values({
+            id: executorSessionID,
+            task_id: taskID,
+            run_id: runID,
+            provider: "opencode",
+            protocol: "task_queue",
+            protocol_version: "1",
+            transport: "local",
+            status: "active",
+            refs: {
+              session_id: "session-1",
+              queue_task_id: "queue-1",
+            },
+            lease_owner: "old-runtime",
+            lease_until: now - 1_000,
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      })
+
+      const status = spyOn(ExecutorRegistry.require("opencode"), "status").mockResolvedValue({
+        queueTaskID: "queue-1",
+        status: "running",
+        error: null,
+      })
+
+      await OrchestratorRuntime.syncRun(runID, hooks())
+
+      const executorSession = Database.use((db) =>
+        db.select().from(OrchestratorExecutorSessionTable).where(eq(OrchestratorExecutorSessionTable.id, executorSessionID)).get(),
+      )
+      const run = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get(),
+      )
+      const task = Database.use((db) =>
+        db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+      )
+
+      expect(status).toHaveBeenCalledTimes(1)
+      expect(executorSession?.lease_owner).toBe(executorLeaseOwner())
+      expect((executorSession?.lease_until ?? 0) > now).toBe(true)
+      expect(run?.status).toBe("running")
+      expect(task?.status).toBe("running")
     },
   })
 })
@@ -599,6 +719,78 @@ test("syncRun renews executor lease after a successful status check", async () =
 
       expect(executorSession?.lease_owner).toBe(executorLeaseOwner())
       expect((executorSession?.lease_until ?? 0) > now + 1_000).toBe(true)
+    },
+  })
+})
+
+test("renewExecutorSessionLease does not steal a live lease from another runtime", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const runID = Identifier.ascending("run")
+      const executorSessionID = Identifier.ascending("executor_session")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "ship the change",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 0,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorExecutorSessionTable)
+          .values({
+            id: executorSessionID,
+            task_id: taskID,
+            run_id: runID,
+            provider: "opencode",
+            protocol: "task_queue",
+            protocol_version: "1",
+            transport: "local",
+            status: "active",
+            lease_owner: "old-runtime",
+            lease_until: now + 60_000,
+            time_started: now,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      })
+
+      const renewed = renewExecutorSessionLease({
+        executorSessionID,
+        now: now + 1_000,
+      })
+      const executorSession = Database.use((db) =>
+        db.select().from(OrchestratorExecutorSessionTable).where(eq(OrchestratorExecutorSessionTable.id, executorSessionID)).get(),
+      )
+
+      expect(renewed).toBeUndefined()
+      expect(executorSession?.lease_owner).toBe("old-runtime")
+      expect(executorSession?.lease_until).toBe(now + 60_000)
     },
   })
 })

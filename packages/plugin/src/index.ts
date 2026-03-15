@@ -274,6 +274,53 @@ export interface Hooks {
     },
   ) => Promise<void>
   /**
+   * Provide structured evaluation analysis without invoking the default evaluator model.
+   */
+  "evaluation.analysis"?: (
+    input: {
+      task: {
+        title: string
+        request: string
+        sessionID?: string
+      }
+      goals: Array<{
+        description: string
+        criteria: string
+        priority: "blocking" | "advisory"
+        check_selector?: string[]
+      }>
+      delivery: {
+        summary: string
+        changedFiles: string[]
+        diffs?: Array<{ file: string; diff?: string }>
+      }
+      checkResults: Array<{
+        name: string
+        status: "passed" | "failed" | "skipped"
+        evidence?: string
+      }>
+    },
+    output: {
+      analysis?: {
+        verdict: "accepted" | "rejected" | "inconclusive"
+        classification: "transient" | "environment" | "input" | "permission" | "evaluation" | "strategy" | "unknown"
+        summary: string
+        goal_statuses: Array<{
+          goal_index: number
+          status: "passed" | "failed" | "inconclusive"
+          evidence: string
+          reasoning: string
+        }>
+        replan_guidance?: {
+          root_cause: string
+          what_failed: string
+          suggested_strategy: string
+          avoid_approaches: string[]
+        } | null
+      }
+    },
+  ) => Promise<void>
+  /**
    * Called after delivery is persisted. Plugins can trigger deployment, doc generation, etc.
    */
   "delivery.ready"?: (

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
+import { EvaluatorAgent } from "../../src/evaluator/agent"
 import { BunProc } from "../../src/bun"
 import { EvaluatorService } from "../../src/evaluator/service"
 import { Identifier } from "../../src/id/id"
@@ -44,6 +45,66 @@ describe("evaluator.service", () => {
         expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
       },
     })
+  })
+
+  test("uses plugin supplied evaluation analysis before calling the evaluator agent", async () => {
+    const analyze = spyOn(EvaluatorAgent, "analyze").mockRejectedValue(new Error("should not be called"))
+    spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
+      if (name !== "evaluation.analysis") return output
+      const next = output as {
+        analysis?: {
+          verdict: "accepted" | "rejected" | "inconclusive"
+          classification: "transient" | "environment" | "input" | "permission" | "evaluation" | "strategy" | "unknown"
+          summary: string
+          goal_statuses: Array<{
+            goal_index: number
+            status: "passed" | "failed" | "inconclusive"
+            evidence: string
+            reasoning: string
+          }>
+          replan_guidance?: null
+        }
+      }
+      next.analysis = {
+        verdict: "accepted",
+        classification: "evaluation",
+        summary: "Plugin accepted the delivery.",
+        goal_statuses: [{
+          goal_index: 0,
+          status: "passed",
+          evidence: "All required checks passed.",
+          reasoning: "Benchmark evaluator plugin accepted the delivery.",
+        }],
+        replan_guidance: null,
+      }
+      return output
+    })
+
+    const result = await EvaluatorService.analyzeDelivery({
+      task: {
+        title: "benchmark",
+        request: "benchmark",
+      },
+      goals: [{
+        description: "Ship the change",
+        criteria: "Checks pass",
+        priority: "blocking",
+      }],
+      delivery: {
+        summary: "done",
+        changedFiles: ["src/catalog.ts"],
+        diffs: [],
+      },
+      checkResults: [{
+        name: "catalog_test",
+        status: "passed",
+        evidence: "ok",
+      }],
+    })
+
+    expect(result.verdict).toBe("accepted")
+    expect(result.summary).toBe("Plugin accepted the delivery.")
+    expect(analyze).not.toHaveBeenCalled()
   })
 
   test("fails when verify_cmd exits non-zero", async () => {

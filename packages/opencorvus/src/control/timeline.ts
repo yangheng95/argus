@@ -59,6 +59,7 @@ const AppendInput = z.object({
     z.object({
       role: z.enum(["user", "assistant", "system"]),
       text: z.string(),
+      time_created: z.number().int().optional(),
       metadata: z.record(z.string(), z.unknown()).optional(),
     }),
   ),
@@ -99,6 +100,7 @@ export namespace ControlTimeline {
     const now = Date.now()
     Database.transaction((db) => {
       for (const item of input.entries) {
+        const created = item.time_created ?? now
         db.insert(ControlMessageTable)
           .values({
             id: Identifier.ascending("message"),
@@ -116,8 +118,8 @@ export namespace ControlTimeline {
             request_id: input.requestID,
             text: item.text,
             metadata: item.metadata,
-            time_created: now,
-            time_updated: now,
+            time_created: created,
+            time_updated: created,
           })
           .run()
       }

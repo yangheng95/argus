@@ -21,7 +21,8 @@ import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
-import { generateText } from "@/llm/api"
+import { completeText, type TextHooks } from "@/llm/api"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "evaluator-agent" })
 
@@ -103,6 +104,7 @@ type AnalyzeInput = {
   goals: GoalInfo[]
   delivery: DeliveryInfo
   checkResults: CheckResult[]
+  stream?: TextHooks
 }
 
 export namespace EvaluatorAgent {
@@ -153,9 +155,13 @@ export namespace EvaluatorAgent {
       }
       submittedAnalysis = undefined
 
-      let result: any
+      let result: {
+        text?: string
+        finishReason?: string
+        steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
+      }
       try {
-        result = await generateText({
+        result = await completeText({
           model: language,
           stopWhen: stepCountIs(MAX_STEPS),
           tools,
@@ -164,8 +170,9 @@ export namespace EvaluatorAgent {
           maxOutputTokens: 16384,
           timeoutMs,
           abortSignal: AbortSignal.timeout(timeoutMs),
-          system: EVALUATOR_SYSTEM,
+          system: await evaluatorSystem(),
           prompt: userPrompt,
+          ...(input.stream ?? {}),
         })
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
@@ -200,7 +207,7 @@ export namespace EvaluatorAgent {
               steps: result.steps.length,
               finishReason: result.finishReason,
             })
-            const forced = await finalizeAnalysis(language, input, result.steps, timeoutMs, isReasoning)
+            const forced = await finalizeAnalysis(language, input, result.steps, timeoutMs, isReasoning, input.stream)
             if (forced.submittedAnalysis) {
               submittedAnalysis = forced.submittedAnalysis
               parsed = normalizeAnalysis(submittedAnalysis, input.goals.length)
@@ -509,6 +516,7 @@ async function finalizeAnalysis(
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   timeoutMs: number,
   isReasoning = false,
+  stream?: TextHooks,
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -536,7 +544,7 @@ async function finalizeAnalysis(
     }),
   }
 
-  const result = await generateText({
+  const result = await completeText({
     model: language,
     stopWhen: stepCountIs(8),
     tools,
@@ -553,6 +561,7 @@ async function finalizeAnalysis(
       transcript || "(no transcript captured)",
       "Now synthesize the final evaluation analysis and call submit_analysis exactly once.",
     ].join("\n\n"),
+    ...(stream ?? {}),
   })
 
   return { result, submittedAnalysis }
@@ -739,7 +748,7 @@ function indent(text: string, prefix = "   "): string {
 // System prompt
 // ---------------------------------------------------------------------------
 
-const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer acting as the evaluation brain for OpenCorvus, an autonomous coding orchestrator. Your job is to rigorously analyze a coding task delivery: review automated check outputs, investigate failures by reading actual code, assess whether each goal was truly met, and produce structured replan guidance when needed.
+export const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer acting as the evaluation brain for OpenCorvus, an autonomous coding orchestrator. Your job is to rigorously analyze a coding task delivery: review automated check outputs, investigate failures by reading actual code, assess whether each goal was truly met, and produce structured replan guidance when needed.
 
 A shallow evaluation is WORSE than no evaluation — it causes the orchestrator to retry blindly. You must investigate deeply enough to give the next attempt actionable guidance.
 
@@ -892,3 +901,8 @@ Before outputting JSON, verify:
 5. Did you check convention compliance against preferences? Convention violations are real failures.
 
 If any answer is NO, go back and fill the gap before outputting.`
+
+export async function evaluatorSystem() {
+  const config = await Config.get()
+  return typeof config.prompt?.evaluator_system === "string" ? config.prompt.evaluator_system : EVALUATOR_SYSTEM
+}

@@ -728,6 +728,11 @@ export const TaskEvent = z.object({
   payload: z.record(z.string(), z.any()),
 })
 
+export const AgentStage = z.enum(["spec", "planner", "evaluator"])
+export type AgentStageType = z.infer<typeof AgentStage>
+export const AgentEventKind = z.enum(["status", "message_delta", "tool_call", "tool_delta", "tool_result", "error"])
+export type AgentEventKindType = z.infer<typeof AgentEventKind>
+
 export const Event = {
   TaskCreated: BusEvent.define("orchestrator.task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("orchestrator.task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
@@ -748,7 +753,43 @@ export const Event = {
   DeliveryReady: BusEvent.define("orchestrator.delivery.ready", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), deliveryID: Identifier.schema("delivery"), summary: z.string() })),
   EvaluationCompleted: BusEvent.define("orchestrator.evaluation.completed", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), evaluationID: Identifier.schema("evaluation"), status: Evaluation.shape.status, verdict: Evaluation.shape.verdict, summary: z.string() })),
   TaskMessageRecorded: BusEvent.define("orchestrator.task.message", z.object({ taskID: Identifier.schema("task"), kind: TaskMessageResult.shape.kind, source: z.string(), text: z.string(), summary: z.string() })),
-  RunProgress: BusEvent.define("orchestrator.run.progress", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), summary: z.string(), payload: z.record(z.string(), z.any()).optional() })),
-  RunOutput: BusEvent.define("orchestrator.run.output", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), type: z.string(), text: z.string() })),
+  RunProgress: BusEvent.define("orchestrator.run.progress", z.object({
+    taskID: Identifier.schema("task"),
+    runID: Identifier.schema("run"),
+    goalRunID: Identifier.schema("goal_run").optional(),
+    executorSessionID: z.string().optional(),
+    type: z.string(),
+    summary: z.string(),
+    sourceID: z.string().optional(),
+    sourceKind: z.string().optional(),
+    sourceLabel: z.string().optional(),
+    status: z.string().optional(),
+    payload: z.record(z.string(), z.any()).optional(),
+  })),
+  RunOutput: BusEvent.define("orchestrator.run.output", z.object({
+    taskID: Identifier.schema("task"),
+    runID: Identifier.schema("run"),
+    goalRunID: Identifier.schema("goal_run").optional(),
+    executorSessionID: z.string().optional(),
+    type: z.string(),
+    text: z.string(),
+    summary: z.string().optional(),
+    sourceID: z.string().optional(),
+    sourceKind: z.string().optional(),
+    sourceLabel: z.string().optional(),
+    status: z.string().optional(),
+    payload: z.record(z.string(), z.any()).optional(),
+  })),
+  AgentUpdated: BusEvent.define("orchestrator.agent.updated", z.object({
+    taskID: Identifier.schema("task"),
+    runID: Identifier.schema("run").optional(),
+    stage: AgentStage,
+    kind: AgentEventKind,
+    id: z.string().optional(),
+    toolName: z.string().optional(),
+    text: z.string().optional(),
+    payload: z.record(z.string(), z.any()).optional(),
+    summary: z.string(),
+  })),
   MessageInjected: BusEvent.define("orchestrator.message.injected", z.object({ taskID: Identifier.schema("task"), runID: Identifier.schema("run"), text: z.string(), summary: z.string() })),
 }

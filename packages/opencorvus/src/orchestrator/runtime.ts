@@ -31,7 +31,7 @@ import {
   goalRunLocalSessionID,
   removeGoalRunSession,
 } from "./goal-runner"
-import { nextGoalNode, pendingBlockingGoals } from "./goal-scheduler"
+import { pendingBlockingGoals, readyGoalNodes } from "./goal-scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import { autoRejectInteraction } from "./interaction-actions"
@@ -51,6 +51,7 @@ import {
 import {
   appendExecutorEvent,
   beginEvaluation,
+  claimExecutorSessionLease,
   createGoalRun,
   createReplanRun,
   createRetryRun,
@@ -82,7 +83,9 @@ import {
   findTask,
   goalRunQueueTaskID,
   latestGoalRunByCoordinator,
+  listActiveGoalRunsByCoordinator,
   listGoalsBySpec,
+  listGoalRunsByCoordinator,
   listPlanNodesByPlan,
   requireRun,
   requireTask,
@@ -94,7 +97,7 @@ import {
   type TaskRow,
 } from "./store"
 import { Identifier } from "@/id/id"
-import { EXECUTOR_LEASE_MS, executorLeaseOwner } from "./lease"
+import { EXECUTOR_LEASE_MS, executorLeaseHeldByOther, executorLeaseOwner } from "./lease"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 
@@ -109,6 +112,7 @@ const evaluatingRuns = new Map<string, number>() // runID → start timestamp, g
 const finalizingRuns = new Set<string>() // guards against concurrent finalizeCoordinatorRun for the same run
 const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
 const finalizingGoalRuns = new Set<string>() // guards against concurrent finalizeGoalRun for the same goal run
+const goalRunFinalizeLocks = new Map<string, Promise<void>>()
 const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
 const FOLLOWUP_RUN_SYNC_GRACE_MS = 250
@@ -118,6 +122,7 @@ const EXECUTOR_OUTPUT_FLUSH_CHARS = 1024
 // Unattended-mode safeguards
 const RUN_MAX_EXECUTION_MS = safeParseInt(process.env.OPENCORVUS_RUN_TIMEOUT_MS, 2 * 60 * 60 * 1000) // max run execution time (2h default)
 const EXECUTOR_STATUS_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EXECUTOR_STATUS_TIMEOUT_MS, 15_000)
+const GOAL_RUN_PARALLELISM = Math.max(1, safeParseInt(process.env.OPENCORVUS_GOAL_PARALLELISM, 4))
 // Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
 // Default is off so automated pipelines continue without interruption.
 const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
@@ -148,6 +153,10 @@ function activeGoalRun(run: RunRow) {
   return activeGoalRunByCoordinator(run.id)
 }
 
+function activeGoalRuns(run: RunRow) {
+  return listActiveGoalRunsByCoordinator(run.id)
+}
+
 function activeExecutorSession(run: RunRow, goalRun = activeGoalRun(run)) {
   return goalRun ? findExecutorSessionByGoalRun(goalRun.id) : findExecutorSessionByRun(run.id)
 }
@@ -161,6 +170,24 @@ function runExecutionTarget(run: RunRow, goalRun = activeGoalRun(run)) {
     goalRun,
     sessionID: goalRun?.session_id ?? run.session_id ?? undefined,
     queueTaskID: goalRunQueueTaskID(goalRun) ?? run.executor_ref?.queue_task_id,
+  }
+}
+
+async function withGoalRunFinalizeLock<R>(runID: string, fn: () => Promise<R>) {
+  const previous = goalRunFinalizeLocks.get(runID) ?? Promise.resolve()
+  let release = () => {}
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  goalRunFinalizeLocks.set(runID, previous.then(() => current, () => current))
+  await previous.catch(() => undefined)
+  try {
+    return await fn()
+  } finally {
+    release()
+    if (goalRunFinalizeLocks.get(runID) === current) {
+      goalRunFinalizeLocks.delete(runID)
+    }
   }
 }
 
@@ -229,10 +256,13 @@ function stalledEvaluationSummary() {
   return `Evaluation stalled after ${Math.round(EVALUATION_HARD_TIMEOUT_MS / 60000)}min without completion`
 }
 
-async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
-  const goals = listGoalsBySpec(plan.spec_snapshot_id)
-  const next = nextGoalNode(listPlanNodesByPlan(plan.id), goals)
-  if (!next) return false
+async function queueGoalRun(
+  task: TaskRow,
+  run: RunRow,
+  plan: PlanRow,
+  next: ReturnType<typeof readyGoalNodes>[number],
+  hooks: RuntimeHooks,
+) {
   const brief = WorkbenchService.compileBrief({
     taskID: task.id,
     runID: run.id,
@@ -309,7 +339,7 @@ async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks
     run,
     {
       status: "accepted",
-      phase: run.phase === "replan" ? "replan" : "dispatch",
+      phase: run.phase === "replan" || run.metadata?.strategy === "replan" ? "replan" : "dispatch",
       time_started: run.time_started ?? now,
     },
     `Goal queued: ${next.goal.description}`,
@@ -349,7 +379,22 @@ async function queueNextGoalRun(task: TaskRow, run: RunRow, plan: PlanRow, hooks
     },
   })
   consumeExecutorEvents(task.id, run.id, goalRun.id, run.executor, submission.sessionID, executorSession.id)
-  return true
+  return goalRun
+}
+
+async function queueReadyGoalRuns(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
+  const capacity = GOAL_RUN_PARALLELISM - activeGoalRuns(run).length
+  if (capacity <= 0) return 0
+  const ready = readyGoalNodes(
+    listPlanNodesByPlan(plan.id),
+    listGoalsBySpec(plan.spec_snapshot_id),
+    activeGoalRuns(run),
+  ).slice(0, capacity)
+  if (ready.length === 0) return 0
+  for (const next of ready) {
+    await queueGoalRun(task, run, plan, next, hooks)
+  }
+  return ready.length
 }
 
 async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
@@ -357,7 +402,8 @@ async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHo
   if (!plan) throw new Error(`Task ${task.id} has no plan`)
   const refreshedTask = requireTask(task.id)
   const refreshedRun = requireRun(run.id)
-  if (await queueNextGoalRun(refreshedTask, refreshedRun, plan, hooks)) return
+  if (await queueReadyGoalRuns(refreshedTask, refreshedRun, plan, hooks)) return
+  if (activeGoalRuns(refreshedRun).length > 0) return
   const pending = pendingBlockingGoals(goalsForRun(refreshedRun))
   if (pending.length > 0) {
     await handleEvaluationFailure(
@@ -372,6 +418,7 @@ async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHo
 }
 
 async function finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
+  if (activeGoalRuns(run).length > 0) return
   if (finalizingRuns.has(run.id)) {
     log.info("already finalizing run, skipping concurrent call", { runID: run.id })
     return
@@ -499,7 +546,7 @@ async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, 
   }
   finalizingGoalRuns.add(goalRun.id)
   try {
-    await _finalizeGoalRun(task, run, goalRun, hooks)
+    await withGoalRunFinalizeLock(run.id, () => _finalizeGoalRun(task, run, goalRun, hooks))
   } finally {
     finalizingGoalRuns.delete(goalRun.id)
   }
@@ -626,7 +673,6 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       )
     }
     if (outcome.status === "passed" || goal.priority === "advisory") {
-      await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, `Goal finished: ${goal.description}`)
       await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
       return
     }
@@ -650,6 +696,252 @@ async function prepareRun(task: TaskRow, run: RunRow, plan: PlanRow | undefined,
     await hooks.updateTask(task, { status: "failed", error: prepared.error, blocking_reason: null, time_completed: now }, prepared.error)
   }
   return
+}
+
+function goalRunSyncState(goalRun: GoalRunRow) {
+  if (goalRun.status === "running") return "running" as const
+  if (goalRun.status === "blocked") return "blocked" as const
+  return "accepted" as const
+}
+
+async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
+  const target = runExecutionTarget(run, goalRun)
+  const queueTaskID = target.queueTaskID
+  if (!queueTaskID) return goalRunSyncState(goalRun)
+  let executorSession = activeExecutorSession(run, goalRun)
+  const now = Date.now()
+  if (executorSession?.status === "active") {
+    const previousOwner = executorSession.lease_owner
+    const claimed = claimExecutorSessionLease({
+      executorSessionID: executorSession.id,
+      now,
+    })
+    if (!claimed) {
+      executorSession = activeExecutorSession(run, goalRun)
+    } else {
+      executorSession = claimed
+    }
+    if (executorLeaseHeldByOther(executorSession, now)) {
+      log.info("skipping goal run sync because executor lease is owned by another runtime", {
+        runID: run.id,
+        goalRunID: goalRun.id,
+        taskID: task.id,
+        leaseOwner: executorSession?.lease_owner,
+        leaseUntil: executorSession?.lease_until,
+      })
+      return goalRunSyncState(goalRun)
+    }
+    if (!claimed) {
+      await handleExecutionFailure(
+        run,
+        `Executor lease expired after ${Math.round(EXECUTOR_LEASE_MS / 1000)}s without renewal`,
+        hooks,
+        goalRun,
+      )
+      return "handled" as const
+    }
+    if (previousOwner && previousOwner !== executorLeaseOwner() && previousOwner !== claimed.lease_owner) {
+      log.info("claimed expired executor lease from another runtime", {
+        runID: run.id,
+        goalRunID: goalRun.id,
+        taskID: task.id,
+        previousOwner,
+        leaseOwner: claimed.lease_owner,
+      })
+    }
+  }
+  const executor = ExecutorRegistry.require(run.executor)
+  let queue
+  try {
+    queue = await withTimeout(executor.status(queueTaskID), EXECUTOR_STATUS_TIMEOUT_MS)
+  } catch (error) {
+    await handleExecutionFailure(run, `Executor status unavailable: ${String(error)}`, hooks, goalRun)
+    return "handled" as const
+  }
+  if (executorSession?.id) {
+    renewExecutorSessionLease({ executorSessionID: executorSession.id })
+  }
+
+  if (queue.status === "blocked") {
+    if (goalRun.status !== "blocked") {
+      updateGoalRun(goalRun.id, { status: "blocked", blocking_reason: "executor" })
+    }
+    return "blocked" as const
+  }
+
+  if (queue.status === "queued" || queue.status === "retrying") {
+    if (goalRun.status === "blocked") {
+      updateGoalRun(goalRun.id, { status: "accepted", blocking_reason: null })
+    }
+    return "accepted" as const
+  }
+
+  if (queue.status === "running") {
+    const started = goalRun.time_started ?? run.time_started ?? run.time_created
+    if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
+      log.warn("goal run exceeded max execution time", {
+        runID: run.id,
+        goalRunID: goalRun.id,
+        maxMs: RUN_MAX_EXECUTION_MS,
+        elapsedMs: Date.now() - started,
+      })
+      try {
+        await executor.abort({
+          sessionID: target.sessionID,
+          queueTaskID,
+        })
+      } catch (abortErr) {
+        log.warn("failed to abort timed-out goal run executor", {
+          runID: run.id,
+          goalRunID: goalRun.id,
+          error: String(abortErr),
+        })
+      }
+      await handleExecutionFailure(
+        run,
+        `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`,
+        hooks,
+        goalRun,
+      )
+      return "handled" as const
+    }
+    if (goalRun.status !== "running") {
+      updateGoalRun(goalRun.id, { status: "running", blocking_reason: null })
+    }
+    return "running" as const
+  }
+
+  if (queue.status === "failed") {
+    await handleExecutionFailure(run, queue.error ?? "Executor run failed", hooks, goalRun)
+    return "handled" as const
+  }
+
+  if (queue.status === "completed") {
+    await finalizeGoalRun(task, run, goalRun, hooks)
+    return "handled" as const
+  }
+
+  return goalRunSyncState(goalRun)
+}
+
+async function syncCoordinatorExecutor(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
+  const target = runExecutionTarget(run, undefined)
+  const queueTaskID = target.queueTaskID
+  if (!queueTaskID) return false
+  let executorSession = activeExecutorSession(run, undefined)
+  const now = Date.now()
+  if (executorSession?.status === "active") {
+    const previousOwner = executorSession.lease_owner
+    const claimed = claimExecutorSessionLease({
+      executorSessionID: executorSession.id,
+      now,
+    })
+    if (!claimed) {
+      executorSession = activeExecutorSession(run, undefined)
+    } else {
+      executorSession = claimed
+    }
+    if (executorLeaseHeldByOther(executorSession, now)) {
+      log.info("skipping coordinator executor sync because executor lease is owned by another runtime", {
+        runID: run.id,
+        taskID: task.id,
+        leaseOwner: executorSession?.lease_owner,
+        leaseUntil: executorSession?.lease_until,
+      })
+      return true
+    }
+    if (!claimed) {
+      await handleExecutionFailure(
+        run,
+        `Executor lease expired after ${Math.round(EXECUTOR_LEASE_MS / 1000)}s without renewal`,
+        hooks,
+      )
+      return true
+    }
+    if (previousOwner && previousOwner !== executorLeaseOwner() && previousOwner !== claimed.lease_owner) {
+      log.info("claimed expired coordinator executor lease from another runtime", {
+        runID: run.id,
+        taskID: task.id,
+        previousOwner,
+        leaseOwner: claimed.lease_owner,
+      })
+    }
+  }
+  const executor = ExecutorRegistry.require(run.executor)
+  let queue
+  try {
+    queue = await withTimeout(executor.status(queueTaskID), EXECUTOR_STATUS_TIMEOUT_MS)
+  } catch (error) {
+    await handleExecutionFailure(run, `Executor status unavailable: ${String(error)}`, hooks)
+    return true
+  }
+  if (executorSession?.id) {
+    renewExecutorSessionLease({ executorSessionID: executorSession.id })
+  }
+
+  if (queue.status === "blocked") {
+    if (run.status !== "blocked") {
+      await hooks.updateRun(run, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
+    }
+    if (task.status !== "blocked") {
+      await hooks.updateTask(task, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
+    }
+    return true
+  }
+
+  if (queue.status === "queued" || queue.status === "retrying") {
+    if (run.status === "blocked") {
+      await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
+    }
+    if (task.status === "blocked") {
+      await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
+    }
+    return true
+  }
+
+  if (queue.status === "running") {
+    const started = run.time_started ?? run.time_created
+    if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
+      log.warn("run exceeded max execution time", {
+        runID: run.id,
+        maxMs: RUN_MAX_EXECUTION_MS,
+        elapsedMs: Date.now() - started,
+      })
+      try {
+        await executor.abort({
+          sessionID: target.sessionID,
+          queueTaskID,
+        })
+      } catch (abortErr) {
+        log.warn("failed to abort timed-out executor", { runID: run.id, error: String(abortErr) })
+      }
+      await handleExecutionFailure(
+        run,
+        `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`,
+        hooks,
+      )
+      return true
+    }
+    if (run.status !== "running") {
+      await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
+    }
+    if (task.status !== "running") {
+      await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
+    }
+    return true
+  }
+
+  if (queue.status === "failed") {
+    await handleExecutionFailure(run, queue.error ?? "Executor run failed", hooks)
+    return true
+  }
+
+  if (queue.status === "completed") {
+    await completeRun(run, hooks)
+    return true
+  }
+
+  return true
 }
 
 export namespace OrchestratorRuntime {
@@ -702,7 +994,7 @@ export namespace OrchestratorRuntime {
     const prepared = await prepareRun(task, run, plan, hooks)
     if (!prepared) return
     task = prepared
-    if (await queueNextGoalRun(task, run, plan, hooks)) return
+    if (await queueReadyGoalRuns(task, run, plan, hooks)) return
     await finalizeCoordinatorRun(task, run, hooks)
   }
 
@@ -717,10 +1009,6 @@ export namespace OrchestratorRuntime {
     let run = findRun(runID)
     if (!run) throw new Error(`Run not found: ${runID}`)
     let task = requireTask(run.task_id)
-    const delivery = findDeliveryByRun(run.id)
-    const goalRun = activeGoalRun(run)
-    const latest = goalRun ?? latestGoalRun(run)
-    const goalDelivery = latest ? findDeliveryByGoalRun(latest.id) : undefined
     const pending = findPendingInteractions(run.id)
     if (pending.length > 0) {
       const unattended = await unattendedProject()
@@ -751,134 +1039,120 @@ export namespace OrchestratorRuntime {
           task = requireTask(run.task_id)
         }
       }
-
-      const remaining = findPendingInteractions(run.id)
-      if (remaining.length > 0) {
-        if (run.status !== "blocked") {
-          await hooks.updateRun(run, { status: "blocked", blocking_reason: remaining[0].request_type }, "Run blocked")
-        }
-        if (task.status !== "blocked") {
-          await hooks.updateTask(task, { status: "blocked", blocking_reason: remaining[0].request_type }, "Awaiting user input")
-        }
+    }
+    const interactionReason = findPendingInteractions(run.id)[0]?.request_type
+    const recoverableGoalRuns = listGoalRunsByCoordinator(run.id)
+      .filter((goalRun) => goalRun.status === "completed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
+    for (const goalRun of recoverableGoalRuns) {
+      await finalizeGoalRun(task, run, goalRun, hooks)
+      run = requireRun(runID)
+      task = requireTask(run.task_id)
+      const delivery = findDeliveryByRun(run.id)
+      if (run.status === "completed" && delivery) {
+        await completeRun(run, hooks)
+        return
+      }
+      if (run.status === "failed" || run.status === "aborted") {
         return
       }
     }
-
-    if (!delivery && latest?.status === "completed" && goalDelivery) {
-      await finalizeGoalRun(task, run, latest, hooks)
+    const failedGoalRun = listGoalRunsByCoordinator(run.id)
+      .find((goalRun) => goalRun.status === "failed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
+    if (failedGoalRun && run.status !== "failed" && run.status !== "aborted") {
+      const evaluation = findEvaluationByGoalRun(failedGoalRun.id)
+      await handleEvaluationFailure(task, run, evaluation?.summary ?? failedGoalRun.error ?? "Goal run failed", hooks)
       return
     }
-
-    if (!delivery && latest?.status === "failed" && run.status !== "failed" && run.status !== "aborted") {
-      const evaluation = findEvaluationByGoalRun(latest.id)
-      await handleEvaluationFailure(task, run, evaluation?.summary ?? latest.error ?? "Goal run failed", hooks)
-      return
-    }
-
+    const delivery = findDeliveryByRun(run.id)
     if (run.status === "completed" && delivery) {
       await completeRun(run, hooks)
       return
     }
-
     if (run.status === "failed" || run.status === "aborted") {
       return
     }
     if (run.status === "accepted" && typeof run.metadata?.previous_run_id === "string") {
       const started = run.time_started ?? run.time_created ?? 0
-      if (started > 0 && (Date.now() - started) < FOLLOWUP_RUN_SYNC_GRACE_MS) {
+      if (activeGoalRuns(run).length === 0 && started > 0 && (Date.now() - started) < FOLLOWUP_RUN_SYNC_GRACE_MS) {
         return
       }
     }
-
-    const target = runExecutionTarget(run, goalRun)
-    const queueTaskID = target.queueTaskID
-    if (!queueTaskID) return
-    const executorSession = activeExecutorSession(run, goalRun)
-    const now = Date.now()
-    if (executorSession?.status === "active") {
-      if (executorSession.lease_owner && executorSession.lease_owner !== executorLeaseOwner()) {
-        await handleExecutionFailure(
-          run,
-          `Executor lease belongs to a different runtime: ${executorSession.lease_owner}`,
-          hooks,
-        )
-        return
-      }
-      if ((executorSession.lease_until ?? 0) > 0 && (executorSession.lease_until ?? 0) < now) {
-        await handleExecutionFailure(
-          run,
-          `Executor lease expired after ${Math.round(EXECUTOR_LEASE_MS / 1000)}s without renewal`,
-          hooks,
-        )
-        return
-      }
-    }
-    const executor = ExecutorRegistry.require(run.executor)
-    let queue
-    try {
-      queue = await withTimeout(executor.status(queueTaskID), EXECUTOR_STATUS_TIMEOUT_MS)
-    } catch (error) {
-      await handleExecutionFailure(run, `Executor status unavailable: ${String(error)}`, hooks)
+    if (activeGoalRuns(run).length === 0 && await syncCoordinatorExecutor(task, run, hooks)) {
       return
     }
-    if (executorSession?.id) {
-      renewExecutorSessionLease({ executorSessionID: executorSession.id })
-    }
-
-    if (queue.status === "blocked") {
-      if (run.status !== "blocked") {
-        await hooks.updateRun(run, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
-      }
-      if (task.status !== "blocked") {
-        await hooks.updateTask(task, { status: "blocked", blocking_reason: "executor" }, "Executor is awaiting input")
-      }
-      return
-    }
-
-    if (queue.status === "queued" || queue.status === "retrying") {
-      if (run.status === "blocked") {
-        await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
-      }
-      if (task.status === "blocked") {
-        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
-      }
-      return
-    }
-
-    if (queue.status === "running") {
-      // Run execution timeout — fail runs that have been running too long
-      const started = run.time_started ?? run.time_created
-      if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
-        log.warn("run exceeded max execution time", { runID: run.id, maxMs: RUN_MAX_EXECUTION_MS, elapsedMs: Date.now() - started })
-        try { await executor.abort({ sessionID: target.sessionID, queueTaskID }) } catch (abortErr) {
-          log.warn("failed to abort timed-out executor", { runID: run.id, error: String(abortErr) })
-        }
-        await handleExecutionFailure(run, `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`, hooks)
+    if (activeGoalRuns(run).length === 0 && !interactionReason && planForRun(run)) {
+      await continueGoalPipeline(task, run, hooks)
+      run = requireRun(runID)
+      task = requireTask(run.task_id)
+      const nextDelivery = findDeliveryByRun(run.id)
+      if (run.status === "completed" && nextDelivery) {
+        await completeRun(run, hooks)
         return
       }
+      if (run.status === "failed" || run.status === "aborted") {
+        return
+      }
+    }
+
+    for (const goalRun of activeGoalRuns(run)) {
+      await syncActiveGoalRun(task, run, goalRun, hooks)
+      run = requireRun(runID)
+      task = requireTask(run.task_id)
+      const nextDelivery = findDeliveryByRun(run.id)
+      if (run.status === "completed" && nextDelivery) {
+        await completeRun(run, hooks)
+        return
+      }
+      if (run.status === "failed" || run.status === "aborted") {
+        return
+      }
+    }
+
+    run = requireRun(runID)
+    task = requireTask(run.task_id)
+    if (!interactionReason && !["failed", "aborted", "completed"].includes(run.status) && planForRun(run)) {
+      await continueGoalPipeline(task, run, hooks)
+      run = requireRun(runID)
+      task = requireTask(run.task_id)
+    }
+    const nextDelivery = findDeliveryByRun(run.id)
+    if (run.status === "completed" && nextDelivery) {
+      await completeRun(run, hooks)
+      return
+    }
+    if (run.status === "failed" || run.status === "aborted") {
+      return
+    }
+    const active = activeGoalRuns(run)
+    const hasRunning = active.some((goalRun) => goalRun.status === "running")
+    const hasAccepted = active.some((goalRun) => goalRun.status === "accepted" || goalRun.status === "queued")
+    const hasBlocked = active.some((goalRun) => goalRun.status === "blocked") || !!interactionReason
+
+    if (hasRunning) {
       if (run.status !== "running") {
         await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
-      }
-      if (goalRun && goalRun.status !== "running") {
-        updateGoalRun(goalRun.id, { status: "running", blocking_reason: null })
       }
       if (task.status !== "running") {
         await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
       }
       return
     }
-
-    if (queue.status === "failed") {
-      await handleExecutionFailure(run, queue.error ?? "Executor run failed", hooks)
+    if (hasAccepted) {
+      if (run.status !== "accepted" || run.blocking_reason) {
+        await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
+      }
+      if (task.status !== "running" || task.blocking_reason) {
+        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
+      }
       return
     }
-
-    if (queue.status === "completed") {
-      if (goalRun) {
-        await finalizeGoalRun(task, run, goalRun, hooks)
-        return
+    if (hasBlocked) {
+      if (run.status !== "blocked" || run.blocking_reason !== (interactionReason ?? "executor")) {
+        await hooks.updateRun(run, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Run blocked")
       }
-      await completeRun(run, hooks)
+      if (task.status !== "blocked" || task.blocking_reason !== (interactionReason ?? "executor")) {
+        await hooks.updateTask(task, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Awaiting user input")
+      }
     }
   }
 
@@ -1094,9 +1368,41 @@ async function pruneGoalRuns() {
   }
 }
 
-async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
+async function abortActiveGoalRuns(run: RunRow, summary: string, exceptGoalRunID?: string) {
+  const executor = ExecutorRegistry.require(run.executor)
+  for (const goalRun of activeGoalRuns(run).filter((item) => item.id !== exceptGoalRunID)) {
+    const target = runExecutionTarget(run, goalRun)
+    OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
+    if (target.sessionID || target.queueTaskID) {
+      await withTimeout(
+        executor.abort({
+          sessionID: target.sessionID,
+          queueTaskID: target.queueTaskID,
+        }),
+        5_000,
+      ).catch((error) => {
+        log.warn("failed to abort sibling goal run", {
+          runID: run.id,
+          goalRunID: goalRun.id,
+          error: String(error),
+        })
+        return false
+      })
+    }
+    updateGoalRun(goalRun.id, {
+      status: "aborted",
+      error: summary,
+      blocking_reason: null,
+      time_completed: Date.now(),
+    })
+    updateGoalRunExecutorSessionStatus(goalRun.id, "aborted")
+    await cleanupGoalWorkspace(goalRun.workspace_dir ?? undefined)
+    await removeGoalRunSession(goalRun)
+  }
+}
+
+async function failRun(run: RunRow, error: string, hooks: RuntimeHooks, goalRun = activeGoalRun(run)) {
   const task = requireTask(run.task_id)
-  const goalRun = activeGoalRun(run)
   OrchestratorRuntime.stopExecutorEventBridge(goalRun?.session_id ?? run.session_id ?? undefined)
   const now = Date.now()
   if (goalRun) {
@@ -1109,7 +1415,6 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
     await removeGoalRunSession(goalRun)
     const goal = currentGoal(goalRun, goalsForRun(run))
     if (goal?.priority === "advisory") {
-      await hooks.updateRun(run, { status: "queued", executor_ref: null, session_id: null, blocking_reason: null }, error)
       await continueGoalPipeline(task, requireRun(run.id), hooks)
       return
     }
@@ -1125,9 +1430,8 @@ async function failRun(run: RunRow, error: string, hooks: RuntimeHooks) {
   }
 }
 
-async function handleExecutionFailure(run: RunRow, summary: string, hooks: RuntimeHooks) {
+async function handleExecutionFailure(run: RunRow, summary: string, hooks: RuntimeHooks, goalRun = activeGoalRun(run)) {
   const task = requireTask(run.task_id)
-  const goalRun = activeGoalRun(run)
   const goal = goalRun ? currentGoal(goalRun, goalsForRun(run)) : undefined
   const target = runExecutionTarget(run, goalRun)
   try {
@@ -1142,8 +1446,9 @@ async function handleExecutionFailure(run: RunRow, summary: string, hooks: Runti
   } catch (error) {
     log.warn("failed to abort executor after execution failure", { runID: run.id, error: String(error) })
   }
-  await failRun(run, summary, hooks)
+  await failRun(run, summary, hooks, goalRun)
   if (goal?.priority === "advisory") return
+  await abortActiveGoalRuns(requireRun(run.id), summary, goalRun?.id)
   const failedTask = requireTask(task.id)
   const failedRun = requireRun(run.id)
   const retryContext = buildRetryContext(failedRun, summary)
@@ -1232,6 +1537,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
 async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType) {
   if (task.active_run_id !== run.id) return
 
+  await abortActiveGoalRuns(run, summary)
   const retryContext = buildRetryContext(run, summary, analysis)
   const decision = decideRetryOrReplan(task, run, summary, analysis, retryContext)
 
@@ -1382,48 +1688,101 @@ function consumeExecutorEvents(
   OrchestratorRuntime.stopExecutorEventBridge(sessionID)
   const controller = new AbortController()
   executorEventBridges.set(sessionID, controller)
-  let output = ""
-  let outputAt = Date.now()
-  const flushOutput = () => {
-    if (!output) return
-    Bus.publish(Event.RunOutput, {
-      taskID,
-      runID,
-      type: "text_delta",
-      text: output,
-    })
-    output = ""
-    outputAt = Date.now()
+  const active = new Map<string, ReturnType<typeof executorSource>>()
+  const outputs = new Map<string, { text: string; at: number; source: NonNullable<ReturnType<typeof executorSource>> }>()
+  const flushOutput = (id?: string) => {
+    const ids = id ? [id] : [...outputs.keys()]
+    for (const key of ids) {
+      const item = outputs.get(key)
+      if (!item?.text) continue
+      const payload = {
+        sourceID: item.source.id,
+        sourceKind: item.source.kind,
+        sourceLabel: item.source.label,
+        status: item.source.status,
+        text: item.text,
+        goalRunID,
+        executorSessionID,
+      }
+      appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
+        provider: executorName,
+        kind: "message_delta",
+        summary: item.source.label,
+        payload,
+        raw: {
+          type: "message.part.delta",
+          summary: item.source.label,
+          payload,
+        },
+      })
+      Bus.publish(Event.RunOutput, {
+        taskID,
+        runID,
+        goalRunID,
+        executorSessionID,
+        type: "text_delta",
+        text: item.text,
+        summary: item.source.label,
+        sourceID: item.source.id,
+        sourceKind: item.source.kind,
+        sourceLabel: item.source.label,
+        status: item.source.status,
+        payload,
+      })
+      outputs.set(key, {
+        ...item,
+        text: "",
+        at: Date.now(),
+      })
+    }
   }
   // 异步消费 — 不阻塞 dispatch 返回
   ;(async () => {
     try {
       for await (const event of executor.events({ sessionID, signal: controller.signal })) {
         try {
+          const source = executorSource(event, active)
           if (event.type === "message.part.delta") {
             const delta = typeof event.payload?.delta === "string" ? event.payload.delta : event.summary ?? ""
             if (delta) {
-              output += delta
+              const next = source ?? {
+                id: "assistant",
+                kind: "assistant",
+                label: "Assistant",
+                status: "running",
+              }
               const now = Date.now()
-              if (output.length >= EXECUTOR_OUTPUT_FLUSH_CHARS || now - outputAt >= EXECUTOR_OUTPUT_FLUSH_MS) {
-                flushOutput()
+              const current = outputs.get(next.id) ?? {
+                text: "",
+                at: now,
+                source: next,
+              }
+              outputs.set(next.id, {
+                text: current.text + delta,
+                at: current.at,
+                source: next,
+              })
+              if (current.text.length + delta.length >= EXECUTOR_OUTPUT_FLUSH_CHARS || now - current.at >= EXECUTOR_OUTPUT_FLUSH_MS) {
+                flushOutput(next.id)
               }
             }
             continue
           }
 
           flushOutput()
-          upsertExecutorInteraction(taskID, runID, sessionID, executorSessionID, executorName, event)
+          syncExecutorSource(active, source)
+          const payload = executorProgressPayload(event, source)
+          upsertExecutorInteraction(taskID, runID, goalRunID, sessionID, executorSessionID, executorName, event)
           if (shouldPersistExecutorEvent(event.type)) {
             appendExecutorEvent(executorSessionID, taskID, runID, executorName, goalRunID, {
               provider: executorName,
               kind: protocolEventKind(event.type),
               summary: event.summary ?? event.type,
-              payload: event.payload,
+              payload,
               raw: {
                 type: event.type,
                 summary: event.summary,
-                payload: event.payload,
+                payload,
               },
             })
           }
@@ -1431,9 +1790,15 @@ function consumeExecutorEvents(
             Bus.publish(Event.RunProgress, {
               taskID,
               runID,
+              goalRunID,
+              executorSessionID,
               type: event.type,
               summary: event.summary ?? event.type,
-              payload: event.payload,
+              sourceID: source?.id,
+              sourceKind: source?.kind,
+              sourceLabel: source?.label,
+              status: source?.status,
+              payload,
             })
           }
         } catch (eventErr) {
@@ -1449,6 +1814,142 @@ function consumeExecutorEvents(
       }
     }
   })().catch((err) => log.error("executor event bridge crashed", { taskID, runID, error: String(err) }))
+}
+
+function executorProgressPayload(
+  event: {
+    type: string
+    summary?: string
+    payload?: Record<string, unknown>
+  },
+  source?: {
+    id: string
+    kind: string
+    label: string
+    status: string
+  },
+) {
+  if (!source) return event.payload
+  return {
+    ...(event.payload ?? {}),
+    sourceID: source.id,
+    sourceKind: source.kind,
+    sourceLabel: source.label,
+    status: source.status,
+  }
+}
+
+function executorSource(
+  event: {
+    type: string
+    summary?: string
+    payload?: Record<string, unknown>
+  },
+  active = new Map<string, { id: string; kind: string; label: string; status: string } | undefined>(),
+) {
+  const payload = event.payload ?? {}
+  if (event.type === "message.part.delta") {
+    const live = Array.from(active.values()).pop()
+    if (live) return live
+    const partID = typeof payload.partID === "string" && payload.partID
+      ? payload.partID
+      : typeof payload.messageID === "string" && payload.messageID
+        ? payload.messageID
+        : "assistant"
+    return {
+      id: `assistant:${partID}`,
+      kind: "assistant",
+      label: "Assistant",
+      status: "running",
+    }
+  }
+  const kind = executorSourceKind(event.type)
+  const id = executorSourceID(kind, payload)
+  if (!id) return
+  return {
+    id,
+    kind,
+    label: executorSourceLabel(kind, event.summary, payload),
+    status: executorSourceStatus(event.type, event.summary, payload),
+  }
+}
+
+function executorSourceKind(type: string) {
+  const text = type.toLowerCase()
+  if (text.includes("command")) return "command"
+  if (text.includes("tool")) return "tool"
+  if (text.includes("approval")) return "approval"
+  if (text.includes("input")) return "input"
+  if (text.includes("mcp")) return "mcp"
+  if (text.includes("error")) return "error"
+  if (text.includes("reason")) return "assistant"
+  if (text.includes("message")) return "assistant"
+  return "status"
+}
+
+function executorSourceID(kind: string, payload: Record<string, unknown>) {
+  for (const key of ["sourceID", "id", "itemID", "item_id", "callID", "call_id", "requestID", "request_id"]) {
+    const value = payload[key]
+    if (typeof value === "string" && value.trim()) return value.trim()
+  }
+  const command = executorSourceCommand(payload)
+  if (kind === "command" && command) return `command:${command}`
+  if (kind === "tool" && typeof payload.name === "string" && payload.name.trim()) return `tool:${payload.name.trim()}`
+  if (kind === "mcp" && typeof payload.serverName === "string" && payload.serverName.trim()) return `mcp:${payload.serverName.trim()}`
+  if (kind === "approval" && typeof payload.approval === "string" && payload.approval.trim()) {
+    return `approval:${payload.approval.trim()}`
+  }
+  return ""
+}
+
+function executorSourceLabel(kind: string, summary: string | undefined, payload: Record<string, unknown>) {
+  const command = executorSourceCommand(payload)
+  if (kind === "command" && command) return command
+  if (kind === "tool" && typeof payload.name === "string" && payload.name.trim()) return payload.name.trim()
+  if (kind === "approval" && typeof payload.approval === "string" && payload.approval.trim()) return payload.approval.trim()
+  if (kind === "mcp" && typeof payload.serverName === "string" && payload.serverName.trim()) return payload.serverName.trim()
+  if (typeof summary === "string" && summary.trim()) return summary.trim()
+  return kind
+}
+
+function executorSourceStatus(type: string, summary: string | undefined, payload: Record<string, unknown>) {
+  const state = typeof payload.status === "string" ? payload.status.trim().toLowerCase() : ""
+  if (state.includes("fail") || state.includes("error")) return "failed"
+  if (state.includes("complete") || state.includes("done")) return "completed"
+  if (state.includes("block")) return "blocked"
+  if (state.includes("queue") || state.includes("pending")) return "queued"
+  if (state.includes("run") || state.includes("start")) return "running"
+  const text = `${type} ${summary ?? ""}`.toLowerCase()
+  if (text.includes("fail") || text.includes("error")) return "failed"
+  if (text.includes("complete") || text.includes("done") || text.includes("result")) return "completed"
+  if (text.includes("block")) return "blocked"
+  if (text.includes("queue") || text.includes("pending")) return "queued"
+  return "running"
+}
+
+function executorSourceCommand(payload: Record<string, unknown>) {
+  const value = payload.command ?? payload.argv ?? payload.cmd
+  if (typeof value === "string") return value.trim()
+  if (!Array.isArray(value)) return ""
+  return value
+    .flatMap((item) => typeof item === "string" && item.trim() ? [item.trim()] : [])
+    .join(" ")
+    .trim()
+}
+
+function syncExecutorSource(
+  active: Map<string, { id: string; kind: string; label: string; status: string } | undefined>,
+  source?: {
+    id: string
+    kind: string
+    label: string
+    status: string
+  },
+) {
+  if (!source || source.kind === "assistant" || source.kind === "status") return
+  active.delete(source.id)
+  if (source.status === "completed" || source.status === "failed") return
+  active.set(source.id, source)
 }
 
 type RuntimeHooks = {
@@ -1495,6 +1996,7 @@ export function shouldPublishExecutorProgress(type: string) {
 function upsertExecutorInteraction(
   taskID: string,
   runID: string,
+  goalRunID: string | undefined,
   sessionID: string,
   executorSessionID: string,
   provider: RunRow["executor"],
@@ -1535,6 +2037,7 @@ function upsertExecutorInteraction(
         payload: {
           protocol_request: true,
           provider,
+          goal_run_id: goalRunID,
           executor_session_id: executorSessionID,
           request_id: requestID,
           request_kind: event.type,

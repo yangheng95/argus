@@ -74,6 +74,7 @@ import {
   ensureExecutorSession,
   insertGoalRows,
   insertPlanItems,
+  persistInitialTaskDraft,
   insertSpecItems,
   persistInitialTransition,
   persistInitialTransitionFailure,
@@ -82,13 +83,14 @@ import {
   updateGoalRunExecutorSessionStatus,
 } from "./transition"
 import {
-  activeGoalRunByCoordinator,
   activeRunBySession,
   findArtifacts,
   findDeliveryByRun,
+  findExecutorSession,
   findExecutorSessionByRun,
   findEvaluationByRun,
   findEvaluations,
+  findGoalRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
@@ -99,12 +101,14 @@ import {
   findTask,
   findTaskByRequest,
   goalRunQueueTaskID,
+  listActiveGoalRunsByCoordinator,
   listGlobalTasks,
   listProjectTasks,
   listTaskRows,
   searchProjectTasks,
   listGoalsBySpec,
   listExecutorEvents as listExecutorProtocolEvents,
+  listExecutorSessionsByRun,
   listGoalRunsByTask,
   listInteractions,
   listMilestones,
@@ -148,12 +152,6 @@ function initialTaskChecks(input: z.infer<typeof CreateTaskInput>["checks"]) {
   if (checks.test === false) delete checks.test
   if (checks.lint === false) delete checks.lint
   if (checks.verify_cmd === false) delete checks.verify_cmd
-  if (checks.spec_check) {
-    checks.spec_check = {
-      ...checks.spec_check,
-      enabled: true,
-    }
-  }
   if (checks.named) {
     checks.named = Object.fromEntries(
       Object.entries(checks.named).map(([name, value]) => [
@@ -217,21 +215,58 @@ function taskItems(rows: TaskListRow[]) {
   })
 }
 
-function activeGoalRun(run: RunRow) {
-  return activeGoalRunByCoordinator(run.id)
+function activeGoalRuns(run: RunRow) {
+  return listActiveGoalRunsByCoordinator(run.id)
 }
 
-function executionTarget(run: RunRow) {
-  const goalRun = activeGoalRun(run)
+function interactionGoalRun(row: InteractionRow) {
+  const goalRunID = typeof row.payload?.goal_run_id === "string" ? row.payload.goal_run_id : undefined
+  if (goalRunID) {
+    const goalRun = findGoalRun(goalRunID)
+    if (goalRun) return goalRun
+  }
+  const executorSessionID = typeof row.payload?.executor_session_id === "string" ? row.payload.executor_session_id : undefined
+  const executorSession = executorSessionID ? findExecutorSession(executorSessionID) : undefined
+  const nextGoalRunID = executorSession?.goal_run_id ?? undefined
+  return nextGoalRunID ? findGoalRun(nextGoalRunID) : undefined
+}
+
+function executionTarget(run: RunRow, row?: InteractionRow) {
+  const goalRun = row ? interactionGoalRun(row) : undefined
+  if (goalRun) {
+    return {
+      goalRun,
+      sessionID: goalRun.session_id ?? undefined,
+      queueTaskID: goalRunQueueTaskID(goalRun),
+    }
+  }
+  const active = activeGoalRuns(run)
+  const single = active.length === 1 ? active[0] : undefined
   return {
-    goalRun,
-    sessionID: goalRun?.session_id ?? run.session_id ?? undefined,
-    queueTaskID: goalRunQueueTaskID(goalRun) ?? run.executor_ref?.queue_task_id,
+    goalRun: single,
+    sessionID: single?.session_id ?? run.session_id ?? undefined,
+    queueTaskID: goalRunQueueTaskID(single) ?? run.executor_ref?.queue_task_id,
   }
 }
 
+function executionTargets(run: RunRow) {
+  const active = activeGoalRuns(run)
+  if (active.length === 0) {
+    return [{
+      goalRun: undefined,
+      sessionID: run.session_id ?? undefined,
+      queueTaskID: run.executor_ref?.queue_task_id,
+    }]
+  }
+  return active.map((goalRun) => ({
+    goalRun,
+    sessionID: goalRun.session_id ?? undefined,
+    queueTaskID: goalRunQueueTaskID(goalRun),
+  }))
+}
+
 async function supersedeRunForSpecRewrite(task: TaskRow, run: RunRow, summary: string) {
-  const target = executionTarget(run)
+  const targets = executionTargets(run)
   const now = Date.now()
   const pending = findPendingInteractions(run.id)
   if (pending.length > 0) {
@@ -250,15 +285,16 @@ async function supersedeRunForSpecRewrite(task: TaskRow, run: RunRow, summary: s
         .run(),
     )
   }
-  if (target.sessionID || target.queueTaskID) {
-    OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
-    await ExecutorRegistry.require(run.executor).abort({
-      sessionID: target.sessionID,
-      queueTaskID: target.queueTaskID,
-    })
-  }
-  if (target.goalRun) {
+  for (const target of targets) {
+    if (target.sessionID || target.queueTaskID) {
+      OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
+      await ExecutorRegistry.require(run.executor).abort({
+        sessionID: target.sessionID,
+        queueTaskID: target.queueTaskID,
+      })
+    }
     const goalRun = target.goalRun
+    if (!goalRun) continue
     updateGoalRun(goalRun.id, {
       status: "aborted",
       error: summary,
@@ -467,6 +503,34 @@ export namespace OrchestratorService {
         { permission: "schedule", pattern: "*", action: "ask" },
       ],
     })
+    try {
+      persistInitialTaskDraft({
+        taskID,
+        sessionID: session.id,
+        now,
+        title,
+        request: input.request,
+        requestID,
+        source: input.source,
+        priority: input.priority,
+        budget: input.budget,
+        metadata,
+        channelBinding: input.channelBinding,
+        projectID: Instance.project.id,
+      })
+    } catch (error) {
+      const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
+      if (existing) return existing
+      const bound = recoverTaskByChannelBinding(input.channelBinding, error)
+      if (bound) return bound
+      throw error
+    }
+    WorkbenchService.recordTaskRequest({
+      taskID,
+      content: input.request,
+      source: input.source ?? "api",
+      userID: slackUser(metadata),
+    })
     const compiled = await compileTransition({
         mode: "initial",
         taskID,
@@ -501,12 +565,6 @@ export namespace OrchestratorService {
       } catch {
         // Best effort: planner failure should still surface even if persistence also fails.
       }
-      WorkbenchService.recordTaskRequest({
-        taskID,
-        content: input.request,
-        source: input.source ?? "api",
-        userID: slackUser(metadata),
-      })
       throw error
     })
 
@@ -537,12 +595,6 @@ export namespace OrchestratorService {
       if (bound) return bound
       throw error
     }
-    WorkbenchService.recordTaskRequest({
-      taskID,
-      content: input.request,
-      source: input.source ?? "api",
-      userID: slackUser(metadata),
-    })
 
     await OrchestratorRuntime.dispatch(runID, hooks())
     return taskID
@@ -699,9 +751,14 @@ export namespace OrchestratorService {
   export async function listExecutorEvents(runID: string) {
     await OrchestratorRuntime.syncRun(runID, hooks())
     requireRun(runID)
-    const row = findExecutorSessionByRun(runID)
-    if (!row) return []
-    return listExecutorProtocolEvents(row.id).map(viewExecutorEvent)
+    return listExecutorSessionsByRun(runID)
+      .flatMap((row) => listExecutorProtocolEvents(row.id).map(viewExecutorEvent))
+      .sort((a, b) =>
+        (a.time.created - b.time.created) ||
+        (a.time.observed - b.time.observed) ||
+        (a.sequence - b.sequence) ||
+        a.id.localeCompare(b.id),
+      )
   }
 
   export async function listTaskInteractions(taskID: string) {
@@ -898,16 +955,16 @@ export namespace OrchestratorService {
   export async function cancelTask(taskID: string) {
     const task = requireTask(taskID)
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-    const target = run ? executionTarget(run) : undefined
     if (run) {
-      if (target?.sessionID || target?.queueTaskID) {
-        OrchestratorRuntime.stopExecutorEventBridge(target?.sessionID)
-        await ExecutorRegistry.require(run.executor).abort({
-          sessionID: target.sessionID,
-          queueTaskID: target.queueTaskID,
-        })
-      }
-      if (target?.goalRun) {
+      for (const target of executionTargets(run)) {
+        if (target.sessionID || target.queueTaskID) {
+          OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
+          await ExecutorRegistry.require(run.executor).abort({
+            sessionID: target.sessionID,
+            queueTaskID: target.queueTaskID,
+          })
+        }
+        if (!target.goalRun) continue
         updateGoalRun(target.goalRun.id, {
           status: "aborted",
           error: "task cancelled",
@@ -998,6 +1055,30 @@ export namespace OrchestratorService {
       await cleanupGoalWorkspace(dir)
     }
     await Session.remove(sessionID)
+    return true
+  }
+
+  export async function deleteTask(taskID: string) {
+    const task = requireTask(taskID)
+    if (task.session_id) {
+      await deleteSession(task.session_id, { deleteTasks: true })
+      return true
+    }
+    if (!["completed", "failed", "cancelled"].includes(task.status)) {
+      await cancelTask(taskID)
+    }
+    Database.use((db) =>
+      db
+        .delete(OrchestratorChannelBindingTable)
+        .where(eq(OrchestratorChannelBindingTable.task_id, taskID))
+        .run(),
+    )
+    Database.use((db) =>
+      db
+        .delete(OrchestratorTaskTable)
+        .where(and(eq(OrchestratorTaskTable.project_id, Instance.project.id), eq(OrchestratorTaskTable.id, taskID)))
+        .run(),
+    )
     return true
   }
 
@@ -1211,14 +1292,14 @@ export namespace OrchestratorService {
 
   export async function abortRun(runID: string) {
     const run = requireRun(runID)
-    const target = executionTarget(run)
-    if (target.sessionID || target.queueTaskID) {
-      await ExecutorRegistry.require(run.executor).abort({
-        sessionID: target.sessionID,
-        queueTaskID: target.queueTaskID,
-      })
-    }
-    if (target.goalRun) {
+    for (const target of executionTargets(run)) {
+      if (target.sessionID || target.queueTaskID) {
+        await ExecutorRegistry.require(run.executor).abort({
+          sessionID: target.sessionID,
+          queueTaskID: target.queueTaskID,
+        })
+      }
+      if (!target.goalRun) continue
       updateGoalRun(target.goalRun.id, {
         status: "aborted",
         error: "run aborted",
@@ -1286,7 +1367,7 @@ async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<ty
   const payload = row.payload ?? {}
   const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
   const now = Date.now()
-  const target = executionTarget(run)
+  const target = executionTarget(run, row)
 
   if (row.request_type === "permission") {
     await executor.resolve({

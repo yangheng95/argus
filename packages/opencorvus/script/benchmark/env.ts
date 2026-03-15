@@ -1,4 +1,7 @@
 import path from "path"
+import { Config } from "../../src/config/config"
+import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
 
 export async function loadBenchmarkEnv(metaDir: string, options?: { cwd?: string }) {
   const locked = new Set(
@@ -6,7 +9,7 @@ export async function loadBenchmarkEnv(metaDir: string, options?: { cwd?: string
       .flatMap(([key, value]) => typeof value === "string" && value.trim() ? [key] : []),
   )
   const packageRoot = path.resolve(metaDir, "../..")
-  const repoRoot = path.resolve(metaDir, "../../..")
+  const repoRoot = path.resolve(metaDir, "../../../..")
   const cwd = options?.cwd ? path.resolve(options.cwd) : process.cwd()
   const files = [...new Set([
     path.join(repoRoot, ".env"),
@@ -65,4 +68,90 @@ export function prepareDashscopeEnv() {
 export function dashscopeCodingKey() {
   const key = env("DASHSCOPE_API_KEY", "CODING_DASHSCOPE_API_KEY", "ALIBABA_CODING_PLAN_API_KEY", "OPENCORVUS_EMBEDDED_DASHSCOPE_KEY")
   return key?.startsWith("sk-sp-") ? key : undefined
+}
+
+const preferredProviders = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface", "github-copilot"]
+
+async function resetBenchmarkState() {
+  Config.global.reset()
+  await Instance.disposeAll().catch(() => undefined)
+}
+
+function explicitModel(
+  providers: Awaited<ReturnType<typeof Provider.list>>,
+  explicit: string,
+  allowOpenAICodex = false,
+) {
+  if (explicit.includes("/")) return explicit
+  for (const providerID of preferredProviders) {
+    const provider = providers[providerID]
+    if (provider?.models[explicit]) return `${providerID}/${explicit}`
+  }
+  for (const provider of Object.values(providers)) {
+    if (!allowOpenAICodex && provider.id === "openai-codex") continue
+    if (provider.models[explicit]) return `${provider.id}/${explicit}`
+  }
+  throw new Error(`benchmark model not found: ${explicit}`)
+}
+
+export async function resolveBenchmarkModel(
+  metaDir: string,
+  options?: {
+    cwd?: string
+    explicitKeys?: string[]
+    allowOpenAICodex?: boolean
+  },
+) {
+  await resetBenchmarkState()
+  const root = path.resolve(metaDir, "../..")
+  return Instance.provide({
+    directory: root,
+    fn: async () => {
+      const providers = await Provider.list()
+      const explicit = env(...(options?.explicitKeys ?? ["OPENCORVUS_BENCHMARK_MODEL", "OPENCORVUS_E2E_MODEL"]))
+      if (explicit) return explicitModel(providers, explicit, options?.allowOpenAICodex)
+      if (providers["alibaba-cn"]?.models["qwen3.5-plus"]) return "alibaba-cn/qwen3.5-plus"
+
+      for (const providerID of preferredProviders) {
+        const provider = providers[providerID]
+        if (!provider) continue
+        const [model] = Provider.sort(Object.values(provider.models))
+        if (model) return `${providerID}/${model.id}`
+      }
+
+      const fallback = await Provider.defaultModel()
+      if (options?.allowOpenAICodex || !["openai-codex", "github-copilot"].includes(fallback.providerID)) {
+        return `${fallback.providerID}/${fallback.modelID}`
+      }
+
+      for (const provider of Object.values(providers)) {
+        if (provider.id === "openai-codex" || provider.id === "github-copilot") continue
+        const [model] = Provider.sort(Object.values(provider.models))
+        if (model) return `${provider.id}/${model.id}`
+      }
+
+      throw new Error("No live benchmark model available")
+    },
+  })
+}
+
+export async function ensureBenchmarkModel(metaDir: string, model: string) {
+  await resetBenchmarkState()
+  return Instance.provide({
+    directory: path.resolve(metaDir, "../.."),
+    fn: async () => {
+      const parsed = Provider.parseModel(model)
+      const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
+      await Provider.getLanguage(resolved)
+    },
+  })
+}
+
+export async function hasBenchmarkModel(metaDir: string, model: string) {
+  try {
+    await ensureBenchmarkModel(metaDir, model)
+    return true
+  } catch {
+    return false
+  }
 }

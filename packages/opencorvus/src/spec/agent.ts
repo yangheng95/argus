@@ -20,9 +20,10 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
 import { Env } from "@/env"
-import { generateText } from "@/llm/api"
+import { completeText, type TextHooks } from "@/llm/api"
 import fs from "fs"
 import path from "path"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "spec-agent" })
 
@@ -166,6 +167,7 @@ export namespace HeadlessSpecAgent {
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
     signal?: AbortSignal
+    stream?: TextHooks
   }): Promise<SpecOutputType> {
     return run({ ...input, mode: "initial" })
   }
@@ -179,6 +181,7 @@ export namespace HeadlessSpecAgent {
     rewriteContext: SpecRewriteContext
     goals?: Array<{ description: string; criteria: string; priority?: string }>
     signal?: AbortSignal
+    stream?: TextHooks
   }): Promise<SpecOutputType> {
     return run({ ...input, mode: "rewrite" })
   }
@@ -198,6 +201,7 @@ async function run(input: {
   goals?: Array<{ description: string; criteria: string; priority?: string }>
   rewriteContext?: SpecRewriteContext
   signal?: AbortSignal
+  stream?: TextHooks
 }): Promise<SpecOutputType> {
   if (input.signal?.aborted) throw new Error("spec agent aborted before model resolution")
 
@@ -283,7 +287,7 @@ async function run(input: {
     let toolCallCount: number
 
     if (consolidationOnly) {
-      const forced = await finalizeSpec(language, input, lastSteps!, input.signal, retryContext, isReasoning)
+      const forced = await finalizeSpec(language, input, lastSteps!, input.signal, retryContext, isReasoning, input.stream)
       if (forced.submittedSpec) submittedSpec = forced.submittedSpec
       result = forced.result
       toolCallCount = lastToolCallCount
@@ -293,7 +297,7 @@ async function run(input: {
         reusedToolCalls: toolCallCount,
       })
     } else {
-      result = await generateText({
+      result = await completeText({
         model: language,
         stopWhen: stepCountIs(stepLimit),
         tools: allTools,
@@ -301,8 +305,9 @@ async function run(input: {
         maxOutputTokens: 32768,
         timeoutMs: TIMEOUT_MS,
         abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-        system: SPEC_SYSTEM,
+        system: await specSystem(),
         prompt: userPrompt,
+        ...(input.stream ?? {}),
       })
 
       toolCallCount = result.steps.reduce(
@@ -353,7 +358,7 @@ async function run(input: {
           finishReason: result.finishReason,
           attempt: attempt + 1,
         })
-        const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning)
+        const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning, input.stream)
         if (forced.submittedSpec) {
           submittedSpec = forced.submittedSpec
         }
@@ -388,7 +393,7 @@ async function run(input: {
             textLength: allText.length,
             attempt: attempt + 1,
           })
-          const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning)
+          const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning, input.stream)
           if (forced.submittedSpec) {
             parsed = normalizeSpecOutput(forced.submittedSpec)
           } else {
@@ -582,11 +587,13 @@ async function finalizeSpec(
     goals?: Array<{ description: string; criteria: string; priority?: string }>
     rewriteContext?: SpecRewriteContext
     signal?: AbortSignal
+    stream?: TextHooks
   },
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   signal?: AbortSignal,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
   isReasoning = false,
+  stream?: TextHooks,
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -614,7 +621,7 @@ async function finalizeSpec(
     }),
   }
 
-  const result = await generateText({
+  const result = await completeText({
     model: language,
     stopWhen: stepCountIs(8),
     tools: summaryTool,
@@ -658,6 +665,7 @@ async function finalizeSpec(
       "For greenfield tasks, define modules, data structures, APIs, tests, constraints, and acceptance criteria in detail.",
       "Now synthesize the final specification and call submit_spec exactly once.",
     ].join("\n\n"),
+    ...(stream ?? {}),
   })
   return { result, submittedSpec }
 }
@@ -1101,7 +1109,7 @@ function readFileSafe(absPath: string, maxLen = 6000): string | null {
 // System prompt
 // ---------------------------------------------------------------------------
 
-const SPEC_SYSTEM = `You are a senior software architect acting as the specification brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, understand the context, and produce a precise, grounded specification that downstream planning and execution agents can rely on.
+export const SPEC_SYSTEM = `You are a senior software architect acting as the specification brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, understand the context, and produce a precise, grounded specification that downstream planning and execution agents can rely on.
 
 CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specification. A spec produced without tool calls is ALWAYS rejected. You are scored on exploration depth — specs that don't reference specific file paths, types, APIs, and patterns discovered via tools will be automatically retried.
 
@@ -1238,3 +1246,8 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 - For greenfield projects (creating something new with no existing codebase): Include detailed technical design in the content section — data structures, algorithms, UI layout, state management, interaction flows. Use web_search if needed for reference implementations.
 - Call submit_spec exactly once after exploration is complete.
 - Do NOT output raw JSON. Use the submit_spec tool call.`
+
+export async function specSystem() {
+  const config = await Config.get()
+  return typeof config.prompt?.spec_system === "string" ? config.prompt.spec_system : SPEC_SYSTEM
+}

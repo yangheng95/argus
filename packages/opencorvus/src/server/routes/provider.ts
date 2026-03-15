@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { generateText } from "@/llm/api"
+import { completeText } from "@/llm/api"
 import { Config } from "../../config/config"
 import { Provider } from "../../provider/provider"
 import { ModelsDev } from "../../provider/models"
@@ -192,7 +192,7 @@ export const ProviderRoutes = lazy(() =>
         try {
           const model = await Provider.getModel(providerID, modelID)
           const language = await Provider.getLanguage(model)
-          await generateText({
+          await completeText({
             model: language,
             maxOutputTokens: 1,
             timeoutMs: 20_000,

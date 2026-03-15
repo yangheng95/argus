@@ -9,25 +9,32 @@ import { ExecutorBootstrap } from "../../src/executor/bootstrap"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { Instance } from "../../src/project/instance"
 import { InstanceBootstrap } from "../../src/project/bootstrap"
-import { Provider } from "../../src/provider/provider"
 import { Server } from "../../src/server/server"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../../test/fixture/db"
-import { dashscopeCodingKey, env, loadBenchmarkEnv, prepareDashscopeEnv } from "./env"
+import { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } from "./env"
 
 Log.init({ print: true })
 
-const timeoutMs = Number(process.argv.find((item) => item.startsWith("--timeout-ms="))?.split("=")[1]) || 20 * 60 * 1000
-const report = process.argv.find((item) => item.startsWith("--report="))?.slice("--report=".length)
+function flag(name: string) {
+  return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
+}
+
+const timeoutMs = Number(flag("--timeout-ms")) || 5 * 60 * 1000
+const report = flag("--report")
 const keep = process.argv.includes("--keep")
 const headless = !process.argv.includes("--headed")
-const executor = (process.argv.find((item) => item.startsWith("--executor="))?.split("=")[1] || "opencode") as
+const executor = (flag("--executor") || "opencode") as
   | "opencode"
   | "codex"
   | "claude-code"
+const requestFile = flag("--request-file")
+const verifyCmd = flag("--verify-cmd")
+const skipLocalVerify = process.argv.includes("--skip-local-verify")
+const mode = (flag("--mode") || (requestFile ? "materialize" : "full")) === "materialize" ? "materialize" : "full"
 
-const TASK_TITLE = "Overlay Web Benchmark NoteStore"
-const TASK_REQUEST = `
+const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
+const DEFAULT_TASK_REQUEST = `
 # 任务
 
 实现一个最小可用的 NoteStore，并补充测试。
@@ -58,15 +65,19 @@ const TASK_REQUEST = `
 - 可以自由组织项目并新增必要文件，只要最终交付合理、可运行、易于理解
 - 运行 \`bun test src/note-store.test.ts\` 必须通过
 `.trim()
-
+const TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
+const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
 const PANEL_REQUEST = `请创建一个新任务并立即开始执行以下工作：\n\n${TASK_REQUEST}`
+const LOCAL_VERIFY_CMD = skipLocalVerify ? "" : (verifyCmd?.trim() || (requestFile ? "" : "bun test src/note-store.test.ts"))
 
 const AUTO_REPLY =
   "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
 
 const FINAL = new Set(["completed", "failed", "cancelled"])
-const TASK_CREATE_TIMEOUT_MS = 4 * 60 * 1000
-const TASK_RESUME_TIMEOUT_MS = 4 * 60 * 1000
+const STREAM_PLACEHOLDERS = new Set(["", "...", "……", "思考中", "Thinking"])
+const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || Math.min(timeoutMs, 30_000)
+const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || timeoutMs
+const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || Math.min(timeoutMs, 2 * 60 * 1000)
 const temp = {
   dir: "",
   home: "",
@@ -74,8 +85,8 @@ const temp = {
 
 await loadBenchmarkEnv(import.meta.dir)
 prepareDashscopeEnv()
-const model = await resolveModel()
-await ensureLiveModel(model)
+const model = await resolveBenchmarkModel(import.meta.dir)
+await ensureBenchmarkModel(import.meta.dir, model)
 
 temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-home-"))
 temp.dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
@@ -103,6 +114,9 @@ const marks = {
   startedAt: Date.now(),
   onlineAt: 0,
   submittedAt: 0,
+  planningAt: 0,
+  streamingAt: 0,
+  createdAt: 0,
   selectedAt: 0,
   boardAt: 0,
   resumedAt: 0,
@@ -144,7 +158,13 @@ try {
   marks.submittedAt = Date.now()
   await page.click("#chatSend")
 
-  taskID = await waitForTaskCreated(page, api)
+  const planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
+  marks.planningAt = Date.now()
+  const streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+  marks.streamingAt = Date.now()
+
+  taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
+  marks.createdAt = Date.now()
   await page.evaluate(async (id) => {
     const state = window.eval("state")
     if (state.selectedTaskID === id) return
@@ -168,41 +188,58 @@ try {
     }
   }, { timeout: 120_000 })
   marks.boardAt = Date.now()
-  page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir)
+  page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
   marks.resumedAt = Date.now()
+  const board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
-  let progress = await waitForFinal(taskID, timeoutMs, api)
+  const progress = mode === "full" ? await waitForFinal(taskID, timeoutMs, api) : null
   marks.completedAt = Date.now()
 
   const transcript = await api(`/task/${taskID}/transcript`).then((res) => res.json())
   const timeline = await api(`/control/timeline?taskID=${encodeURIComponent(taskID)}`).then((res) => res.json())
   const runs = await api(`/task/${taskID}/runs`).then((res) => res.json())
 
-  const localTest = await Bun.spawn(["bun", "test", "src/note-store.test.ts"], {
-    cwd: temp.dir,
-    stdout: "pipe",
-    stderr: "pipe",
-  })
-  const localStdout = await new Response(localTest.stdout).text()
-  const localStderr = await new Response(localTest.stderr).text()
-  const localExit = await localTest.exited
+  const localVerify = await runLocalVerify(temp.dir, LOCAL_VERIFY_CMD)
 
   const screenshot = path.join(process.cwd(), `overlay-web-benchmark-${Date.now()}.png`)
   await page.screenshot({ path: screenshot, fullPage: true })
 
   const out = {
     generated_at: new Date().toISOString(),
+    mode,
+    title: TASK_TITLE,
+    request_file: requestFile ? path.resolve(requestFile) : null,
     executor,
     model,
     directory: temp.dir,
     server: server.url.toString(),
     taskID,
-    taskStatus: progress.task.status,
-    evaluation: progress.evaluation?.verdict,
-    changedFiles: progress.delivery?.result?.changedFiles ?? [],
+    taskStatus: progress?.task?.status || board?.task?.status || "",
+    evaluation: progress?.evaluation?.verdict,
+    changedFiles: progress?.delivery?.result?.changedFiles ?? [],
     transcriptCount: Array.isArray(transcript) ? transcript.length : 0,
     timelineCount: Array.isArray(timeline) ? timeline.length : 0,
     runCount: Array.isArray(runs) ? runs.length : 0,
+    planning: {
+      pendingCount: planning.pendingCount,
+      taskList: planning.taskList,
+      reasoning: planning.reasoning,
+      assistantText: planning.assistantText,
+    },
+    streaming: {
+      reasoning: streaming.reasoning,
+      assistantText: streaming.assistantText,
+      reasoningVisible: meaningfulLiveText(streaming.reasoning),
+      assistantVisible: meaningfulLiveText(streaming.assistantText),
+    },
+    materialization: {
+      boardTaskID: board?.task?.id || "",
+      boardStatus: board?.task?.status || "",
+      specVersion: board?.spec?.version ?? null,
+      goalCount: Array.isArray(board?.goals) ? board.goals.length : 0,
+      goalRunCount: Array.isArray(board?.goalRuns) ? board.goalRuns.length : 0,
+      criteriaCount: Array.isArray(board?.checks) ? board.checks.length : 0,
+    },
     screenshot,
     resume: {
       restored: marks.resumedAt > 0,
@@ -211,17 +248,46 @@ try {
     timings_ms: {
       online: marks.onlineAt - marks.startedAt,
       submit: marks.submittedAt - marks.startedAt,
+      planning_visible: marks.planningAt - marks.startedAt,
+      streaming_visible: marks.streamingAt - marks.startedAt,
+      task_created: marks.createdAt - marks.startedAt,
       task_selected: marks.selectedAt - marks.startedAt,
       board_loaded: marks.boardAt - marks.startedAt,
       resumed: marks.resumedAt - marks.startedAt,
       completed: marks.completedAt - marks.startedAt,
       execution: marks.completedAt - marks.submittedAt,
     },
-    local_verify: {
-      exitCode: localExit,
-      stdout: localStdout.trim(),
-      stderr: localStderr.trim(),
+    assertions: {
+      planning_visible: {
+        pass: planning.pendingCount > 0 || planning.taskIDs.length > 0 || !!planning.selectedTaskID,
+        sample: planning,
+      },
+      streaming_visible: {
+        pass: meaningfulLiveText(streaming.reasoning) || meaningfulLiveText(streaming.assistantText),
+        sample: streaming,
+      },
+      materialized: {
+        pass: !!taskID && (board?.task?.id || "") === taskID && marks.resumedAt > 0,
+        sample: {
+          taskID,
+          boardTaskID: board?.task?.id || "",
+          resumed: marks.resumedAt > 0,
+        },
+      },
+      delivery: {
+        pass: mode === "materialize"
+          ? null
+          : progress?.task?.status === "completed" && progress?.evaluation?.verdict === "accepted" && localVerify.exitCode === 0,
+        sample: progress
+          ? {
+              taskStatus: progress.task.status,
+              verdict: progress.evaluation?.verdict || "",
+              localExit: localVerify.exitCode,
+            }
+          : null,
+      },
     },
+    local_verify: localVerify,
   }
 
   const file = report || path.join(process.cwd(), `overlay-web-benchmark-report-${Date.now()}.json`)
@@ -229,7 +295,10 @@ try {
   console.log(JSON.stringify(out, null, 2))
   console.log(`report: ${file}`)
 
-  if (progress.task.status !== "completed" || progress.evaluation?.verdict !== "accepted" || localExit !== 0) {
+  const pass = mode === "materialize"
+    ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass
+    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass
+  if (!pass) {
     process.exit(1)
   }
 } catch (error) {
@@ -245,6 +314,9 @@ try {
     timings_ms: {
       online: marks.onlineAt ? marks.onlineAt - marks.startedAt : null,
       submit: marks.submittedAt ? marks.submittedAt - marks.startedAt : null,
+      planning_visible: marks.planningAt ? marks.planningAt - marks.startedAt : null,
+      streaming_visible: marks.streamingAt ? marks.streamingAt - marks.startedAt : null,
+      task_created: marks.createdAt ? marks.createdAt - marks.startedAt : null,
       task_selected: marks.selectedAt ? marks.selectedAt - marks.startedAt : null,
       board_loaded: marks.boardAt ? marks.boardAt - marks.startedAt : null,
       resumed: marks.resumedAt ? marks.resumedAt - marks.startedAt : null,
@@ -264,59 +336,6 @@ try {
   await Instance.disposeAll().catch(() => undefined)
   if (!keep && temp.dir) await fs.rm(temp.dir, { recursive: true, force: true }).catch(() => undefined)
   if (!keep && temp.home) await fs.rm(temp.home, { recursive: true, force: true }).catch(() => undefined)
-}
-
-async function resolveModel() {
-  return Instance.provide({
-    directory: path.resolve(import.meta.dir, "../../.."),
-    fn: async () => {
-      const providers = await Provider.list()
-      const explicit = env("OPENCORVUS_E2E_MODEL")
-      if (explicit) {
-        if (explicit.includes("/")) return explicit
-        const preferred = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface", "github-copilot"]
-        for (const providerID of preferred) {
-          const provider = providers[providerID]
-          if (provider?.models[explicit]) return `${providerID}/${explicit}`
-        }
-        for (const provider of Object.values(providers)) {
-          if (provider.models[explicit]) return `${provider.id}/${explicit}`
-        }
-        throw new Error(`OPENCORVUS_E2E_MODEL not found: ${explicit}`)
-      }
-
-      if (dashscopeCodingKey() && providers["alibaba-cn"]?.models["qwen3.5-plus"]) {
-        return "alibaba-cn/qwen3.5-plus"
-      }
-      const preferred = ["alibaba-cn", "google", "deepseek", "gitlab", "moonshotai-cn", "moonshotai", "huggingface"]
-      for (const providerID of preferred) {
-        const provider = providers[providerID]
-        if (!provider) continue
-        const [entry] = Provider.sort(Object.values(provider.models))
-        if (entry) return `${providerID}/${entry.id}`
-      }
-
-      const fallback = await Provider.defaultModel()
-      if (fallback.providerID !== "github-copilot") return `${fallback.providerID}/${fallback.modelID}`
-      for (const provider of Object.values(providers)) {
-        if (provider.id === "github-copilot" || provider.id === "openai-codex") continue
-        const [entry] = Provider.sort(Object.values(provider.models))
-        if (entry) return `${provider.id}/${entry.id}`
-      }
-      return `${fallback.providerID}/${fallback.modelID}`
-    },
-  })
-}
-
-async function ensureLiveModel(model: string) {
-  await Instance.provide({
-    directory: path.resolve(import.meta.dir, "../../.."),
-    fn: async () => {
-      const parsed = Provider.parseModel(model)
-      const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
-      await Provider.getLanguage(resolved)
-    },
-  })
 }
 
 async function scaffoldProject(dir: string, model: string) {
@@ -343,6 +362,31 @@ async function scaffoldProject(dir: string, model: string) {
   )
   await Bun.write(path.join(dir, "opencorvus.json"), config)
   await Bun.write(path.join(dir, ".opencorvus", "opencorvus.json"), config)
+}
+
+async function runLocalVerify(cwd: string, cmd: string) {
+  if (!cmd) {
+    return {
+      mode: "skipped",
+      command: null,
+      exitCode: 0,
+      stdout: "",
+      stderr: "",
+    }
+  }
+  const shell = process.platform === "win32" ? ["powershell", "-Command", cmd] : ["bash", "-lc", cmd]
+  const proc = Bun.spawn(shell, {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+  })
+  return {
+    mode: "command",
+    command: cmd,
+    exitCode: await proc.exited,
+    stdout: (await new Response(proc.stdout).text()).trim(),
+    stderr: (await new Response(proc.stderr).text()).trim(),
+  }
 }
 
 async function launchBrowser(headless: boolean) {
@@ -384,9 +428,37 @@ async function waitForFinal(taskID: string, timeoutMs: number, api: (pathname: s
   throw new Error(`Task did not finish within ${timeoutMs}ms`)
 }
 
-async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
+async function waitForPlanningVisible(
+  page: Page,
+  api: (pathname: string, init?: RequestInit) => Promise<Response>,
+  timeoutMs: number,
+) {
   const startedAt = Date.now()
-  while (Date.now() - startedAt < TASK_CREATE_TIMEOUT_MS) {
+  while (Date.now() - startedAt < timeoutMs) {
+    const overlay = await overlaySnapshot(page)
+    if (overlay.pendingCount > 0 || overlay.selectedTaskID || overlay.taskIDs[0]) return overlay
+    const board = await api("/tasks").then((res) => res.json()).catch(() => null)
+    const taskID = Array.isArray(board?.tasks) ? board.tasks[0]?.task?.id || "" : ""
+    if (taskID) return { ...overlay, taskIDs: [taskID, ...overlay.taskIDs].filter(Boolean).slice(0, 5) }
+    await Bun.sleep(250)
+  }
+  throw new Error(`Overlay did not expose planning state within ${timeoutMs}ms: ${JSON.stringify(await debugSnapshot(page, api))}`)
+}
+
+async function waitForStreamingVisible(page: Page, timeoutMs: number) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < timeoutMs) {
+    const overlay = await overlaySnapshot(page)
+    if (meaningfulLiveText(overlay.reasoning)) return overlay
+    if (meaningfulLiveText(overlay.assistantText)) return overlay
+    await Bun.sleep(250)
+  }
+  throw new Error(`Overlay did not render streamed assistant output within ${timeoutMs}ms`)
+}
+
+async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>, timeoutMs: number) {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < timeoutMs) {
     const overlay = await overlaySnapshot(page)
     if (overlay.selectedTaskID) return overlay.selectedTaskID
     if (overlay.taskIDs[0]) return overlay.taskIDs[0]
@@ -395,10 +467,17 @@ async function waitForTaskCreated(page: Page, api: (pathname: string, init?: Req
     if (taskID) return taskID
     await Bun.sleep(1_000)
   }
-  throw new Error(`Overlay did not create a task within ${TASK_CREATE_TIMEOUT_MS}ms: ${JSON.stringify(await debugSnapshot(page, api))}`)
+  throw new Error(`Overlay did not create a task within ${timeoutMs}ms: ${JSON.stringify(await debugSnapshot(page, api))}`)
 }
 
-async function verifyResume(browser: Awaited<ReturnType<typeof launchBrowser>>, current: Page, serverUrl: string, taskID: string, directory: string) {
+async function verifyResume(
+  browser: Awaited<ReturnType<typeof launchBrowser>>,
+  current: Page,
+  serverUrl: string,
+  taskID: string,
+  directory: string,
+  api: (pathname: string, init?: RequestInit) => Promise<Response>,
+) {
   const next = await browser.newPage()
   await next.setViewport({ width: 1600, height: 1200 })
   await next.evaluateOnNewDocument((origin, dir, id) => {
@@ -414,10 +493,17 @@ async function verifyResume(browser: Awaited<ReturnType<typeof launchBrowser>>, 
   }, serverUrl, directory, taskID)
   await next.goto(new URL("/ui/index.html", serverUrl).toString(), { waitUntil: "load" })
   await next.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
+  await syncDirectory(next, directory)
+  await waitForTaskCreated(next, api, TASK_RESUME_TIMEOUT_MS)
+  await next.evaluate(async (id) => {
+    const state = window.eval("state")
+    if (state.selectedTaskID === id && state.board?.task?.id === id) return
+    await window.eval("selectTask")(id)
+  }, taskID)
   await next.waitForFunction((id, dir) => {
     try {
       const state = window.eval("state")
-      return state.directory === dir && state.selectedTaskID === id && state.workspaceTaskID === id
+      return state.directory === dir && state.board?.task?.id === id && state.workspaceTaskID === id
     } catch {
       return false
     }
@@ -426,6 +512,7 @@ async function verifyResume(browser: Awaited<ReturnType<typeof launchBrowser>>, 
     try {
       await window.eval("persistOverlaySettings")()
       if (!window.eval("state").board?.task?.id) await window.eval("loadBoard")()
+      await window.eval("loadConversation")()
     } catch {
       return
     }
@@ -488,9 +575,13 @@ async function overlaySnapshot(page: Page) {
         savedDirectory: state.savedDirectory || "",
         workspaceDirectory: state.workspaceDirectory || "",
         selectedTaskID: state.selectedTaskID || "",
+        pendingCount: Array.isArray(state.pendingTasks) ? state.pendingTasks.length : 0,
         taskIDs: Array.isArray(state.tasks)
           ? state.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "").filter(Boolean).slice(0, 5)
           : [],
+        taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
+        reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent?.trim() || "",
+        assistantText: document.querySelector('.turn[data-role="assistant"] .msg-text')?.textContent?.trim() || "",
         storage,
       }
     } catch (error) {
@@ -499,12 +590,22 @@ async function overlaySnapshot(page: Page) {
         savedDirectory: "",
         workspaceDirectory: "",
         selectedTaskID: "",
+        pendingCount: 0,
         taskIDs: [],
+        taskList: "",
+        reasoning: "",
+        assistantText: "",
         storage: {},
         error: String(error),
       }
     }
   })
+}
+
+function meaningfulLiveText(value: string) {
+  const text = String(value || "").trim()
+  if (!text) return false
+  return !STREAM_PLACEHOLDERS.has(text)
 }
 
 async function debugSnapshot(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>) {

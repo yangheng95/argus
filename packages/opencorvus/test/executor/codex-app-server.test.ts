@@ -403,6 +403,135 @@ describe("codex app server executor", () => {
     expect(done?.output).toBe("Wrote file successfully.")
   })
 
+  test("maps command, file, and mcp notifications to progress events", async () => {
+    const provider = CodexAppServerExecutor.create(client([
+      {
+        type: "notification",
+        method: "item/commandExecution/started",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          itemId: "item_cmd",
+          command: ["git", "status", "--short"],
+        },
+      },
+      {
+        type: "notification",
+        method: "item/commandExecution/outputDelta",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          itemId: "item_cmd",
+          command: ["git", "status", "--short"],
+          delta: "M README.md",
+        },
+      },
+      {
+        type: "notification",
+        method: "item/mcpToolCall/progress",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          itemId: "item_mcp",
+          serverName: "github",
+          message: "Fetching repository metadata",
+        },
+      },
+      {
+        type: "notification",
+        method: "item/fileChange/outputDelta",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          itemId: "item_patch",
+          delta: "diff --git a/README.md b/README.md",
+        },
+      },
+      {
+        type: "notification",
+        method: "item/completed",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          item: {
+            id: "item_cmd",
+            type: "commandExecution",
+            command: ["git", "status", "--short"],
+            output: {
+              stdout: "done",
+            },
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "item/completed",
+        params: {
+          threadId: "thr_1",
+          turnId: "turn_1",
+          item: {
+            id: "item_patch",
+            type: "fileChange",
+            tool: "apply_patch",
+            files: ["README.md"],
+            output: "patched",
+          },
+        },
+      },
+      {
+        type: "notification",
+        method: "turn/completed",
+        params: {
+          threadId: "thr_1",
+          turn: {
+            id: "turn_1",
+            items: [],
+            status: "completed",
+            error: null,
+          },
+        },
+      },
+    ]))
+
+    const result = await collect(provider.run({ prompt: "test" }))
+    const command = result.find((item): item is Extract<CodingEventInfo, { type: "progress" }> =>
+      item.type === "progress" &&
+      item.kind === "command" &&
+      item.id === "item_cmd" &&
+      item.status === "running",
+    )
+    const commandDone = result.find((item): item is Extract<CodingEventInfo, { type: "progress" }> =>
+      item.type === "progress" &&
+      item.kind === "command" &&
+      item.id === "item_cmd" &&
+      item.status === "completed",
+    )
+    const mcp = result.find((item): item is Extract<CodingEventInfo, { type: "progress" }> =>
+      item.type === "progress" &&
+      item.kind === "mcp" &&
+      item.id === "item_mcp",
+    )
+    const patch = result.find((item): item is Extract<CodingEventInfo, { type: "progress" }> =>
+      item.type === "progress" &&
+      item.kind === "tool" &&
+      item.id === "item_patch",
+    )
+    const patchDone = result.find((item): item is Extract<CodingEventInfo, { type: "progress" }> =>
+      item.type === "progress" &&
+      item.kind === "tool" &&
+      item.id === "item_patch" &&
+      item.status === "completed",
+    )
+    const diff = result.find((item): item is Extract<CodingEventInfo, { type: "diff_delta" }> => item.type === "diff_delta")
+
+    expect(command?.meta?.["command"]).toBe("git status --short")
+    expect(commandDone?.output).toBe("done")
+    expect(mcp?.meta?.["serverName"]).toBe("github")
+    expect(patch?.meta?.["name"]).toBe("file change")
+    expect(patchDone?.meta?.["name"]).toBe("apply_patch")
+    expect(diff?.summary).toContain("diff --git")
+  })
+
   test("stops streaming once the current turn completes", async () => {
     const provider = CodexAppServerExecutor.create({
       async initialize() {

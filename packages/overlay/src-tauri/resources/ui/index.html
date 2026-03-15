@@ -207,6 +207,7 @@
       <div class="task-meta">
         <div class="task-cwd">
           <span class="task-dir" id="taskDir" title="" data-i18n="cwd.unavailable">Working directory unavailable</span>
+          <span class="task-workspace" id="taskWorkspaceDir" hidden></span>
         </div>
         <div class="task-meta-actions">
           <button type="button" class="task-git" id="taskGit" data-state="idle" data-actionable="false" disabled data-i18n="git.unavailable">Git unavailable</button>
@@ -753,6 +754,13 @@
         </div>
       </div>
       <div class="config-dialog-sections">
+        <details class="config-section" id="promptSection" open>
+          <summary class="config-section-head"><span data-i18n="prompt.title">Agent Prompts</span> <span class="section-badge" id="promptBadge"></span></summary>
+          <div class="config-section-body" id="promptBody">
+            <div class="empty-hint" data-i18n="prompt.loading">Loading prompts...</div>
+          </div>
+        </details>
+
         <details class="config-section" id="channelSection">
           <summary class="config-section-head" data-i18n="channel.title">Channel</summary>
           <div class="config-section-body" id="channelConfigBody">

@@ -27,6 +27,7 @@ type StreamState = {
   assistant: Set<string>
   raw: Map<string, string>
   text: Map<string, string>
+  reasoning: Map<string, string>
 }
 type SessionInfo = Awaited<ReturnType<typeof Session.create>>
 type ControlSession = {
@@ -91,10 +92,12 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
     })
 
     if (onEvent) {
+      const locale = streamLocale(input.text)
       const stream: StreamState = {
         assistant: new Set(),
         raw: new Map(),
         text: new Map(),
+        reasoning: new Map(),
       }
       unsubs.push(
         Bus.subscribe(MessageV2.Event.Updated, (event) => {
@@ -114,8 +117,14 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
             const part = event.properties.part
             if (part.sessionID !== control?.info.id) return
             if (!stream.assistant.has(part.messageID)) return
+            if (part.type === "reasoning") {
+              stream.reasoning.set(part.id, typeof part.text === "string" ? part.text : "")
+              if (typeof part.text === "string") emitStreamReasoning(stream, part.id, part.text, onEvent)
+              return
+            }
             if (part.type !== "tool") return
             if (part.tool !== "StructuredOutput") {
+              emitToolReasoning(stream, part, locale, onEvent)
               onEvent({ type: "tool", tool: part.tool })
               return
             }
@@ -133,8 +142,8 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
             const part = event.properties
             if (part.sessionID !== control?.info.id) return
             if (!stream.assistant.has(part.messageID)) return
-            if (part.field === "text") {
-              onEvent({ type: "message_delta", delta: part.delta })
+            if (part.field === "text" && stream.reasoning.has(part.partID)) {
+              emitStreamReasoning(stream, part.partID, `${stream.reasoning.get(part.partID) ?? ""}${part.delta}`, onEvent)
               return
             }
             if (part.field !== "raw") return
@@ -149,6 +158,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
         }),
       )
       onEvent({ type: "start" })
+      emitStreamReasoning(stream, "control:start", controlStreamIntro(locale), onEvent)
     }
 
     const agent = await Agent.defaultAgent()
@@ -226,6 +236,8 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
 }
 
 function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {
+  const now = Date.now()
+  const userTime = typeof input.time_created === "number" ? input.time_created : now
   ControlTimeline.append({
     ...scope(input, result),
     surface: input.surface,
@@ -238,6 +250,7 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
       {
         role: "user",
         text: input.text,
+        time_created: userTime,
         metadata: {
           ...(input.metadata ?? {}),
           allow_create: input.allow_create,
@@ -247,6 +260,7 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
       {
         role: "assistant",
         text: result.message,
+        time_created: Math.max(now, userTime + 1),
         metadata: {
           kind: result.kind,
           ...(result.task_id ? { task_id: result.task_id } : {}),
@@ -269,6 +283,117 @@ function emitStreamText(state: StreamState, partID: string, text: string, onEven
     return
   }
   onEvent({ type: "message_replace", text })
+}
+
+function emitStreamReasoning(state: StreamState, partID: string, text: string, onEvent: StreamCallback) {
+  const prev = state.reasoning.get(partID) ?? ""
+  if (!text || text === prev) return
+  state.reasoning.set(partID, text)
+  if (text.startsWith(prev)) {
+    onEvent({ type: "reasoning_delta", delta: text.slice(prev.length) })
+    return
+  }
+  onEvent({ type: "reasoning_replace", text })
+}
+
+function emitToolReasoning(
+  state: StreamState,
+  part: MessageV2.ToolPart,
+  locale: "zh" | "en",
+  onEvent: StreamCallback,
+) {
+  const text = toolReasoning(part, locale)
+  if (!text) return
+  emitStreamReasoning(state, `tool:${part.id}`, text, onEvent)
+}
+
+function toolReasoning(part: MessageV2.ToolPart, locale: "zh" | "en") {
+  const status = typeof part.state?.status === "string" ? part.state.status : ""
+  const input = part.state?.input && typeof part.state.input === "object" && !Array.isArray(part.state.input)
+    ? part.state.input
+    : {}
+  const action = typeof input.action === "string" ? input.action : ""
+  const name = toolActionLabel(part.tool, action, locale)
+  if (!name) return ""
+  if (status === "completed") {
+    return locale === "zh"
+      ? `${name}已完成。`
+      : `${name} completed.`
+  }
+  if (status === "error") {
+    return locale === "zh"
+      ? `${name}失败。`
+      : `${name} failed.`
+  }
+  return locale === "zh"
+    ? `正在${name}...`
+    : `Running ${name}...`
+}
+
+function toolActionLabel(tool: string, action: string, locale: "zh" | "en") {
+  if (tool !== "panel") {
+    if (!tool) return ""
+    return locale === "zh" ? `调用 ${tool}` : `tool ${tool}`
+  }
+  if (action === "create_task") {
+    return locale === "zh" ? "创建任务并启动规划" : "task creation and planning"
+  }
+  if (action === "send_task_message") {
+    return locale === "zh" ? "发送任务消息" : "task messaging"
+  }
+  if (action === "reply_interaction") {
+    return locale === "zh" ? "回复待处理交互" : "replying to the pending interaction"
+  }
+  if (action === "reject_interaction") {
+    return locale === "zh" ? "拒绝待处理交互" : "rejecting the pending interaction"
+  }
+  if (action === "update_checks") {
+    return locale === "zh" ? "更新验收检查" : "updating acceptance checks"
+  }
+  if (action === "view_spec") {
+    return locale === "zh" ? "读取规格" : "loading the specification"
+  }
+  if (action === "view_plan") {
+    return locale === "zh" ? "读取计划" : "loading the plan"
+  }
+  if (action === "view_board" || action === "view_tasks") {
+    return locale === "zh" ? "读取任务看板" : "loading the task board"
+  }
+  if (action === "retry_task") {
+    return locale === "zh" ? "重新排队任务" : "queueing a retry"
+  }
+  if (action === "replan_task") {
+    return locale === "zh" ? "重新生成计划" : "queueing a replan"
+  }
+  if (action === "cancel_task") {
+    return locale === "zh" ? "取消任务" : "cancelling the task"
+  }
+  if (action === "update_budget") {
+    return locale === "zh" ? "更新任务预算" : "updating the task budget"
+  }
+  if (action === "capture_overlay_screenshot") {
+    return locale === "zh" ? "截取面板截图" : "capturing the panel screenshot"
+  }
+  if (action === "call_panel_api") {
+    return locale === "zh" ? "调用控制面 API" : "calling the panel API"
+  }
+  if (action === "set_executor") {
+    return locale === "zh" ? "切换执行器" : "switching the executor"
+  }
+  if (action === "select_task") {
+    return locale === "zh" ? "切换任务" : "selecting the task"
+  }
+  return locale === "zh" ? "执行控制面操作" : "running the panel action"
+}
+
+function controlStreamIntro(text: "zh" | "en") {
+  return text === "zh"
+    ? "正在分析请求并规划下一步..."
+    : "Analyzing the request and planning the next action..."
+}
+
+function streamLocale(text: string) {
+  return /[\u3400-\u9fff]/.test(text) ? "zh" : "en"
 }
 
 function structuredMessageText(input: unknown) {
@@ -420,6 +545,7 @@ function buildUserParts(input: z.infer<typeof ControlMessageInput>) {
       text: JSON.stringify({
         surface: input.surface,
         text: input.text,
+        time_created: input.time_created,
         taskID: input.taskID,
         sessionID: input.sessionID,
         executor: input.executor,
@@ -608,6 +734,7 @@ function loggedInput(input: z.infer<typeof ControlMessageInput>) {
   return {
     surface: input.surface,
     text: input.text,
+    ...(typeof input.time_created === "number" ? { time_created: input.time_created } : {}),
     ...(input.taskID ? { taskID: input.taskID } : {}),
     ...(input.sessionID ? { sessionID: input.sessionID } : {}),
     ...(input.executor ? { executor: input.executor } : {}),

@@ -29,6 +29,7 @@ export namespace Flag {
   export const OPENCORVUS_SERVER_PASSWORD = process.env["OPENCORVUS_SERVER_PASSWORD"]
   export const OPENCORVUS_SERVER_USERNAME = process.env["OPENCORVUS_SERVER_USERNAME"]
   export const OPENCORVUS_ENABLE_QUESTION_TOOL = truthy("OPENCORVUS_ENABLE_QUESTION_TOOL")
+  export declare const OPENCORVUS_ENABLE_TUI_TOOL: boolean
 
   // Experimental
   export const OPENCORVUS_EXPERIMENTAL = truthy("OPENCORVUS_EXPERIMENTAL")
@@ -110,6 +111,14 @@ Object.defineProperty(Flag, "OPENCORVUS_CLIENT", {
 Object.defineProperty(Flag, "OPENCORVUS_DISABLE_CLAUDE_CODE", {
   get() {
     return truthy("OPENCORVUS_DISABLE_CLAUDE_CODE")
+  },
+  enumerable: true,
+  configurable: false,
+})
+
+Object.defineProperty(Flag, "OPENCORVUS_ENABLE_TUI_TOOL", {
+  get() {
+    return truthy("OPENCORVUS_ENABLE_TUI_TOOL")
   },
   enumerable: true,
   configurable: false,

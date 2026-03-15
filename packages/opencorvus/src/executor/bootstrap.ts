@@ -22,39 +22,55 @@ export namespace ExecutorBootstrap {
     const found = await ExecutorDiscovery.scan()
 
     if (found.codex.available && found.codex.command) {
-      ExecutorRegistry.registerCoding("codex", codexProvider(found.codex.command), {
-        model: () => process.env.OPENCORVUS_EXECUTOR_CODEX_MODEL,
-        cwd: () => Instance.directory,
-        system: () => process.env.OPENCORVUS_EXECUTOR_CODEX_SYSTEM,
-        maxTurns: () => number(process.env.OPENCORVUS_EXECUTOR_CODEX_MAX_TURNS),
-        planning: {
-          spec: true,
-          plan: true,
-        },
-      })
-      log.info("registered external executor", {
-        executor: "codex",
-        path: found.codex.path,
-        version: found.codex.version,
-      })
+      if (ExecutorRegistry.has("codex")) {
+        log.info("skipping auto-register for existing executor", {
+          executor: "codex",
+          path: found.codex.path,
+          version: found.codex.version,
+        })
+      } else {
+        ExecutorRegistry.registerCoding("codex", codexProvider(found.codex.command), {
+          model: () => process.env.OPENCORVUS_EXECUTOR_CODEX_MODEL,
+          cwd: () => Instance.directory,
+          system: () => process.env.OPENCORVUS_EXECUTOR_CODEX_SYSTEM,
+          maxTurns: () => number(process.env.OPENCORVUS_EXECUTOR_CODEX_MAX_TURNS),
+          planning: {
+            spec: true,
+            plan: true,
+          },
+        })
+        log.info("registered external executor", {
+          executor: "codex",
+          path: found.codex.path,
+          version: found.codex.version,
+        })
+      }
     }
 
     if (found["claude-code"].available && found["claude-code"].command) {
-      ExecutorRegistry.registerCoding("claude-code", claudeProvider(found["claude-code"].command), {
-        model: () => process.env.OPENCORVUS_EXECUTOR_CLAUDE_MODEL,
-        cwd: () => Instance.directory,
-        system: () => process.env.OPENCORVUS_EXECUTOR_CLAUDE_SYSTEM,
-        maxTurns: () => number(process.env.OPENCORVUS_EXECUTOR_CLAUDE_MAX_TURNS),
-        planning: {
-          spec: false,
-          plan: false,
-        },
-      })
-      log.info("registered external executor", {
-        executor: "claude-code",
-        path: found["claude-code"].path,
-        version: found["claude-code"].version,
-      })
+      if (ExecutorRegistry.has("claude-code")) {
+        log.info("skipping auto-register for existing executor", {
+          executor: "claude-code",
+          path: found["claude-code"].path,
+          version: found["claude-code"].version,
+        })
+      } else {
+        ExecutorRegistry.registerCoding("claude-code", claudeProvider(found["claude-code"].command), {
+          model: () => process.env.OPENCORVUS_EXECUTOR_CLAUDE_MODEL,
+          cwd: () => Instance.directory,
+          system: () => process.env.OPENCORVUS_EXECUTOR_CLAUDE_SYSTEM,
+          maxTurns: () => number(process.env.OPENCORVUS_EXECUTOR_CLAUDE_MAX_TURNS),
+          planning: {
+            spec: false,
+            plan: false,
+          },
+        })
+        log.info("registered external executor", {
+          executor: "claude-code",
+          path: found["claude-code"].path,
+          version: found["claude-code"].version,
+        })
+      }
     }
 
     return found

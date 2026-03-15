@@ -49,12 +49,14 @@
       return !!state.selectedTaskID;
     }
 
-    function clearWorkspaceRuntime() {
+    function clearWorkspaceRuntime(options = {}) {
       state.workspaceEpoch = (state.workspaceEpoch || 0) + 1;
       deps.stopPolling();
       deps.stopSSE();
       if (typeof deps.stopEventStream === "function") deps.stopEventStream();
-      if (typeof deps.stopChatRequest === "function") void deps.stopChatRequest();
+      if (options.preserveChatRequest !== true && typeof deps.stopChatRequest === "function") {
+        void deps.stopChatRequest();
+      }
       if (state.boardKick) clearTimeout(state.boardKick);
       if (state.tasksKick) clearTimeout(state.tasksKick);
       if (state.conversationKick) clearTimeout(state.conversationKick);
@@ -74,7 +76,7 @@
       state.executorEventsFetchedAt = 0;
       state.conversationUpdatedAt = 0;
       state.messages = [];
-      state.pendingTaskMessages = null;
+      if (options.preserveChatRequest !== true) state.pendingTaskMessages = null;
       renderWorkspaceState();
     }
 
@@ -92,7 +94,7 @@
       if (options.globalView !== undefined) state.globalView = !!options.globalView;
       state.selectedTaskID = "";
       if (options.restoreDirectory !== false) restoreWorkspaceDirectory();
-      clearWorkspaceRuntime();
+      clearWorkspaceRuntime(options);
       if (typeof deps.renderMeta === "function") deps.renderMeta();
       deps.renderTaskList();
     }
@@ -102,7 +104,7 @@
         setWorkspaceDirectory(options.directory, "task");
       }
       state.selectedTaskID = taskID || "";
-      clearWorkspaceRuntime();
+      clearWorkspaceRuntime(options);
       if (typeof deps.renderMeta === "function") deps.renderMeta();
       deps.renderTaskList();
     }

@@ -24,39 +24,41 @@
  *     E4. Evidence specificity — references files, tests, error messages (not vague)
  *     E5. Replan guidance quality — root cause is specific, strategy is actionable
  *
- * Requires OpenAI OAuth credentials in auth.json.
+ * Requires a live benchmark model. Defaults to alibaba-cn/qwen3.5-plus when available.
  * Run once: bun run packages/opencorvus/src/index.ts auth login
  * Run: bun test test/benchmark/agent-quality.test.ts --timeout 300000
  */
 import { describe, test, expect } from "bun:test"
 import { generateText, stepCountIs } from "ai"
-import z from "zod"
 import { PlannerOutput, type PlannerOutputType } from "@/planner/agent"
 import { EvaluatorAnalysis, type EvaluatorAnalysisType } from "@/evaluator/agent"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
-import {
-  DEFAULT_OPENAI_CODEX_MODEL,
-  getOpenAICodexLanguage,
-  hasOpenAICodexAuth,
-  normalizeOpenAICodexModel,
-} from "@/provider/codex-live"
-import { loadBenchmarkEnv } from "../../script/benchmark/env"
+import { Provider } from "@/provider/provider"
+import { Instance } from "@/project/instance"
+import { hasBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } from "../../script/benchmark/env"
 
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
 
 await loadBenchmarkEnv(import.meta.dir)
+prepareDashscopeEnv()
 
-const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_BENCHMARK_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
-const HAS_LLM = await hasOpenAICodexAuth()
+const MODEL = await resolveBenchmarkModel(import.meta.dir)
+const HAS_LLM = await hasBenchmarkModel(import.meta.dir, MODEL)
 const TIMEOUT = 180_000
+let lang: Promise<Awaited<ReturnType<typeof Provider.getLanguage>>> | undefined
 
 function createModel() {
-  return getOpenAICodexLanguage({
+  lang ??= Instance.provide({
     directory: process.cwd(),
-    model: MODEL,
+    fn: async () => {
+      const parsed = Provider.parseModel(MODEL)
+      const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
+      return Provider.getLanguage(resolved)
+    },
   })
+  return lang
 }
 
 // System prompts (same as production agents)

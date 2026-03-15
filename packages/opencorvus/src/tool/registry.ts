@@ -112,6 +112,7 @@ export namespace ToolRegistry {
     const custom = await state().then((x) => x.custom)
     const config = await Config.get()
     const question = ["app", "cli", "desktop"].includes(Flag.OPENCORVUS_CLIENT) || Flag.OPENCORVUS_ENABLE_QUESTION_TOOL
+    const tui = Flag.OPENCORVUS_ENABLE_TUI_TOOL || Flag.OPENCORVUS_CLIENT !== "app"
 
     return [
       InvalidTool,
@@ -139,7 +140,7 @@ export namespace ToolRegistry {
       ScheduleTool,
       PlannerTool,
       PanelTool,
-      TuiTool,
+      ...(tui ? [TuiTool] : []),
       TaskReportTool,
       AnalyticsTool,
       ...(Flag.OPENCORVUS_EXPERIMENTAL_LSP_TOOL ? [LspTool] : []),

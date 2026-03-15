@@ -1,4 +1,4 @@
-import { type GoalRow, type PlanNodeRow } from "./store"
+import { type GoalRow, type GoalRunRow, type PlanNodeRow } from "./store"
 
 function goalNodes(nodes: PlanNodeRow[]) {
   return nodes.filter((node): node is PlanNodeRow & { goal_id: string } => node.kind === "goal" && !!node.goal_id)
@@ -13,17 +13,25 @@ export function isGoalSatisfied(goal: GoalRow | undefined) {
 }
 
 export function nextGoalNode(nodes: PlanNodeRow[], goals: GoalRow[]) {
+  return readyGoalNodes(nodes, goals)[0]
+}
+
+export function readyGoalNodes(nodes: PlanNodeRow[], goals: GoalRow[], goalRuns: GoalRunRow[] = []) {
   const ordered = goalNodes(nodes)
-  for (const node of ordered) {
+  const activeGoalIDs = new Set(goalRuns.map((goalRun) => goalRun.goal_id))
+  const activeNodeIDs = new Set(goalRuns.flatMap((goalRun) => goalRun.plan_node_id ? [goalRun.plan_node_id] : []))
+  return ordered.flatMap((node) => {
     const goal = goals.find((item) => item.id === node.goal_id)
-    if (!goal || goal.status !== "pending") continue
+    if (!goal || goal.status !== "pending") return []
+    if (activeGoalIDs.has(goal.id) || activeNodeIDs.has(node.id)) return []
     const ready = (node.depends_on_ids ?? []).every((depID) => {
       const dep = ordered.find((item) => item.id === depID)
       if (!dep?.goal_id) return true
       return isGoalSatisfied(goals.find((item) => item.id === dep.goal_id))
     })
-    if (ready) return { node, goal }
-  }
+    if (!ready) return []
+    return [{ node, goal }]
+  })
 }
 
 export function pendingBlockingGoals(goals: GoalRow[]) {

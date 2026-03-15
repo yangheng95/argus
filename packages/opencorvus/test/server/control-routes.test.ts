@@ -222,4 +222,48 @@ describe("control routes", () => {
       },
     })
   })
+
+  test("GET /control/timeline orders entries by their original created time", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        ControlTimeline.append({
+          surface: "panel",
+          source: "panel",
+          taskID: "task-1",
+          entries: [
+            {
+              role: "assistant",
+              text: "Task accepted",
+              time_created: 200,
+            },
+            {
+              role: "user",
+              text: "创建一个个人主页",
+              time_created: 100,
+            },
+          ],
+        })
+
+        const app = Server.App()
+        const res = await app.request("/control/timeline?taskID=task-1", {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+        expect(res.status).toBe(200)
+        const body = await res.json() as Array<{
+          info: { role: string; time: { created: number } }
+          parts: Array<{ type: string; text?: string }>
+        }>
+
+        expect(body.map((item) => [item.info.role, item.parts[0]?.text, item.info.time.created])).toEqual([
+          ["user", "创建一个个人主页", 100],
+          ["assistant", "Task accepted", 200],
+        ])
+      },
+    })
+  })
 })

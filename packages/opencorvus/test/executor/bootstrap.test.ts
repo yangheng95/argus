@@ -110,4 +110,89 @@ describe("executor.bootstrap", () => {
     expect(cmd.some((item) => item === 'mcp_servers.opencorvus.command="bun"' || item.includes("mcp_servers.opencorvus.command"))).toBe(true)
     expect(cmd.some((item) => item.includes("mcp_servers.opencorvus.args"))).toBe(true)
   })
+
+  test("does not override an executor that is already registered", async () => {
+    spyOn(ExecutorDiscovery, "scan").mockResolvedValue({
+      opencode: {
+        name: "opencode",
+        available: true,
+        source: "builtin",
+        detail: "builtin",
+      },
+      codex: {
+        name: "codex",
+        available: true,
+        source: "path",
+        command: ["codex"],
+        path: "codex",
+        version: "test",
+        detail: "codex",
+      },
+      "claude-code": {
+        name: "claude-code",
+        available: false,
+        source: "missing",
+        detail: "missing",
+      },
+    })
+    const custom = {
+      capabilities() {
+        return {
+          submit: true,
+          status: true,
+          abort: true,
+          delivery: true,
+          resume: true,
+          events: true,
+        }
+      },
+      async submit(input: { sessionID: string }) {
+        return {
+          sessionID: input.sessionID,
+          queueTaskID: "task_custom",
+        }
+      },
+      async status(queueTaskID: string) {
+        return {
+          queueTaskID,
+          status: "queued" as const,
+          error: null,
+        }
+      },
+      async abort() {
+        return true
+      },
+      async delivery() {
+        return {
+          summary: "",
+          diffs: [],
+        }
+      },
+      async resume(input: { sessionID: string }) {
+        return {
+          sessionID: input.sessionID,
+          queueTaskID: "task_custom",
+        }
+      },
+      async *events() {},
+      planningCapabilities() {
+        return {
+          spec: true,
+          plan: true,
+        }
+      },
+      async generatePlanning() {
+        return {
+          output: "{}",
+        }
+      },
+    }
+    ExecutorRegistry.register("codex", custom)
+    const create = spyOn(CodexAppServerClientProcess, "create")
+
+    await ExecutorBootstrap.autoRegister(true)
+
+    expect(ExecutorRegistry.require("codex")).toBe(custom)
+    expect(create).not.toHaveBeenCalled()
+  })
 })

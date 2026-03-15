@@ -21,6 +21,12 @@ import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
 import { entries, values as objectValues } from "@/util/object"
 
+export const DEFAULT_GENERATE_PROMPT = PROMPT_GENERATE.trim()
+export const DEFAULT_COMPACTION_PROMPT = PROMPT_COMPACTION.trim()
+export const DEFAULT_EXPLORE_PROMPT = PROMPT_EXPLORE.trim()
+export const DEFAULT_SUMMARY_PROMPT = PROMPT_SUMMARY.trim()
+export const DEFAULT_TITLE_PROMPT = PROMPT_TITLE.trim()
+
 export namespace Agent {
   export const Info = z
     .object({
@@ -194,7 +200,7 @@ export namespace Agent {
           user,
         ),
         description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
-        prompt: PROMPT_EXPLORE,
+        prompt: DEFAULT_EXPLORE_PROMPT,
         options: {},
         mode: "subagent",
         native: true,
@@ -204,7 +210,7 @@ export namespace Agent {
         mode: "primary",
         native: true,
         hidden: true,
-        prompt: PROMPT_COMPACTION,
+        prompt: DEFAULT_COMPACTION_PROMPT,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({
@@ -228,7 +234,7 @@ export namespace Agent {
           }),
           user,
         ),
-        prompt: PROMPT_TITLE,
+        prompt: DEFAULT_TITLE_PROMPT,
       },
       summary: {
         name: "summary",
@@ -243,7 +249,7 @@ export namespace Agent {
           }),
           user,
         ),
-        prompt: PROMPT_SUMMARY,
+        prompt: DEFAULT_SUMMARY_PROMPT,
       },
     }
 
@@ -325,13 +331,18 @@ export namespace Agent {
     return primaryVisible.name
   }
 
+  export async function generatePrompt() {
+    const cfg = await Config.get()
+    return typeof cfg.prompt?.agent_generate === "string" ? cfg.prompt.agent_generate : DEFAULT_GENERATE_PROMPT
+  }
+
   export async function generate(input: { description: string; model?: { providerID: string; modelID: string } }) {
     const cfg = await Config.get()
     const defaultModel = input.model ?? (await Provider.defaultModel())
     const model = await Provider.getModel(defaultModel.providerID, defaultModel.modelID)
     const language = await Provider.getLanguage(model)
 
-    const system = [PROMPT_GENERATE]
+    const system = [await generatePrompt()]
     await Plugin.trigger("experimental.chat.system.transform", { model }, { system })
     const existing = await list()
 
@@ -368,7 +379,7 @@ export namespace Agent {
         ...params,
         timeoutMs: 30_000,
         providerOptions: ProviderTransform.providerOptions(model, {
-          instructions: SystemPrompt.instructions(),
+          instructions: await SystemPrompt.instructions(),
           store: false,
         }),
         onError: () => {},

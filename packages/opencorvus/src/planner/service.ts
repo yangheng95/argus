@@ -10,6 +10,7 @@ import { ExecutorPlanner } from "./executor"
 import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agent"
 import { type ClarificationResult, type SpecDraft } from "@/spec/agent"
 import { Env } from "@/env"
+import { type TextHooks } from "@/llm/api"
 
 const log = Log.create({ service: "planner" })
 
@@ -139,6 +140,7 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    stream?: TextHooks
   }): Promise<PlanDraft> {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
@@ -200,6 +202,7 @@ export namespace HeadlessPlannerService {
         })),
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         signal: controller.signal,
+        stream: input.stream,
       }).catch((error) => {
         throw new PlannerFailureError("planner agent failed", { cause: error })
       }).finally(() => clearTimeout(planTimeout)),
@@ -245,6 +248,7 @@ export namespace HeadlessPlannerService {
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
+    stream?: TextHooks
   }): Promise<PlanDraft> {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
@@ -322,6 +326,7 @@ export namespace HeadlessPlannerService {
         replanContext: replanCtx,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         signal: controller.signal,
+        stream: input.stream,
       }).catch((error) => {
         throw new PlannerFailureError("planner agent replan failed", { cause: error })
       }).finally(() => clearTimeout(replanTimeout)),

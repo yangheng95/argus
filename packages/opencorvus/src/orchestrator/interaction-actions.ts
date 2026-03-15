@@ -12,9 +12,11 @@ import {
   type OrchestratorInteractionStatus,
 } from "./orchestrator.sql"
 import {
-  activeGoalRunByCoordinator,
+  findExecutorSession,
+  findGoalRun,
   findInteraction,
   goalRunQueueTaskID,
+  listActiveGoalRunsByCoordinator,
   requireRun,
   requireTask,
   type InteractionRow,
@@ -23,11 +25,31 @@ import {
 import { updateRun, updateTask } from "./state"
 import { Identifier } from "@/id/id"
 
-function executionTarget(run: RunRow) {
-  const goalRun = activeGoalRunByCoordinator(run.id)
+function interactionGoalRun(row: InteractionRow) {
+  const goalRunID = typeof row.payload?.goal_run_id === "string" ? row.payload.goal_run_id : undefined
+  if (goalRunID) {
+    const goalRun = findGoalRun(goalRunID)
+    if (goalRun) return goalRun
+  }
+  const executorSessionID = typeof row.payload?.executor_session_id === "string" ? row.payload.executor_session_id : undefined
+  const executorSession = executorSessionID ? findExecutorSession(executorSessionID) : undefined
+  const nextGoalRunID = executorSession?.goal_run_id ?? undefined
+  return nextGoalRunID ? findGoalRun(nextGoalRunID) : undefined
+}
+
+function executionTarget(run: RunRow, row?: InteractionRow) {
+  const goalRun = row ? interactionGoalRun(row) : undefined
+  if (goalRun) {
+    return {
+      sessionID: goalRun.session_id ?? undefined,
+      queueTaskID: goalRunQueueTaskID(goalRun),
+    }
+  }
+  const active = listActiveGoalRunsByCoordinator(run.id)
+  const single = active.length === 1 ? active[0] : undefined
   return {
-    sessionID: goalRun?.session_id ?? run.session_id ?? undefined,
-    queueTaskID: goalRunQueueTaskID(goalRun) ?? run.executor_ref?.queue_task_id,
+    sessionID: single?.session_id ?? run.session_id ?? undefined,
+    queueTaskID: goalRunQueueTaskID(single) ?? run.executor_ref?.queue_task_id,
   }
 }
 
@@ -67,7 +89,7 @@ export async function rejectProtocolInteraction(row: InteractionRow, message?: s
   const payload = row.payload ?? {}
   const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
   const now = Date.now()
-  const target = executionTarget(run)
+  const target = executionTarget(run, row)
   if (row.request_type === "permission") {
     await executor.resolve({
       sessionID: target.sessionID,

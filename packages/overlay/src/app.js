@@ -108,6 +108,7 @@ const state = {
   coreVersion: "",
   connected: false,
   tasks: [],
+  pendingTasks: [],
   selectedTaskID: "",
   path: null,
   vcs: null,
@@ -132,6 +133,7 @@ const state = {
   tasksKick: null,
   messages: [],
   pendingTaskMessages: null,
+  agentEvents: [],
   executorEvents: [],
   executorRunID: "",
   executorEventsFetchedAt: 0,
@@ -157,10 +159,170 @@ const state = {
   memoryFiles: [],
   memorySearchMode: false,
   preferences: [],
+  promptEntries: [],
+  promptDrafts: {},
   criteriaSpecs: [],
   budgetDirty: false,
   budgetSaving: false,
 };
+
+const liveTextStreams = new Map();
+const LIVE_TEXT_INTERVAL = 18;
+const LIVE_TEXT_MIN_CHUNK = 6;
+const LIVE_TEXT_MAX_CHUNK = 48;
+
+function stopLiveText(key) {
+  const entry = liveTextStreams.get(key);
+  if (!entry) return;
+  if (entry.timer) clearTimeout(entry.timer);
+  liveTextStreams.delete(key);
+}
+
+function clearLiveTextStreams() {
+  for (const key of [...liveTextStreams.keys()]) {
+    stopLiveText(key);
+  }
+}
+
+function liveTextChunk(target, current = "") {
+  const remaining = Math.max(0, target.length - current.length);
+  if (!remaining) return 0;
+  return Math.min(
+    remaining,
+    Math.max(LIVE_TEXT_MIN_CHUNK, Math.min(LIVE_TEXT_MAX_CHUNK, Math.ceil(target.length / 12))),
+  );
+}
+
+function advanceLiveText(key) {
+  const entry = liveTextStreams.get(key);
+  if (!entry) return;
+  entry.timer = null;
+  if (!entry.target) {
+    entry.apply("");
+    liveTextStreams.delete(key);
+    return;
+  }
+  if (!entry.target.startsWith(entry.current)) {
+    entry.current = "";
+  }
+  const next = entry.target.slice(0, entry.current.length + liveTextChunk(entry.target, entry.current));
+  entry.current = next;
+  entry.apply(next);
+  state.conversationUpdatedAt = Date.now();
+  renderConversation();
+  if (entry.current.length >= entry.target.length) {
+    liveTextStreams.delete(key);
+    return;
+  }
+  entry.timer = setTimeout(() => advanceLiveText(key), LIVE_TEXT_INTERVAL);
+}
+
+function startLiveText(key, target, current, apply) {
+  const nextTarget = typeof target === "string" ? target : "";
+  const nextCurrent =
+    typeof current === "string" && nextTarget.startsWith(current)
+      ? current
+      : "";
+  if (!nextTarget) {
+    stopLiveText(key);
+    apply("");
+    return;
+  }
+  const entry = liveTextStreams.get(key);
+  if (!entry) {
+    const created = {
+      current: nextCurrent,
+      target: nextTarget,
+      apply,
+      timer: null,
+    };
+    liveTextStreams.set(key, created);
+    if (!created.current) {
+      created.current = nextTarget.slice(0, liveTextChunk(nextTarget));
+      created.apply(created.current);
+    }
+    if (created.current.length < created.target.length) {
+      created.timer = setTimeout(() => advanceLiveText(key), LIVE_TEXT_INTERVAL);
+    } else {
+      liveTextStreams.delete(key);
+    }
+    return;
+  }
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.target = nextTarget;
+  entry.apply = apply;
+  entry.current = nextTarget.startsWith(entry.current) ? entry.current : nextCurrent;
+  if (!entry.current) {
+    entry.current = nextTarget.slice(0, liveTextChunk(nextTarget));
+    entry.apply(entry.current);
+  }
+  if (entry.current.length < entry.target.length) {
+    entry.timer = setTimeout(() => advanceLiveText(key), LIVE_TEXT_INTERVAL);
+    return;
+  }
+  entry.apply(entry.target);
+  liveTextStreams.delete(key);
+}
+
+function streamMessagePart(part, target, field = "text", current = "") {
+  if (!record(part)) return;
+  const nextTarget = typeof target === "string" ? target : "";
+  if (field === "text") part._targetText = nextTarget;
+  const key = `message:${part.sessionID || ""}:${part.messageID || ""}:${part.id}:${field}`;
+  startLiveText(key, nextTarget, current, (value) => {
+    if (field === "text") part.text = value;
+    if (field === "output" && record(part.state)) part.state.output = value;
+  });
+}
+
+function hydrateLivePart(existing, part) {
+  if (!record(part)) return part;
+  if ((part.type === "text" || part.type === "reasoning") && typeof part.text === "string") {
+    const current = existing?.type === part.type && typeof existing.text === "string" ? existing.text : "";
+    const next = {
+      ...part,
+      text: part.text.startsWith(current) ? current : "",
+    };
+    streamMessagePart(next, part.text, "text", next.text);
+    return next;
+  }
+  if (part.type === "tool" && record(part.state) && typeof part.state.output === "string" && part.state.output) {
+    const previous =
+      existing?.type === "tool" &&
+      record(existing.state) &&
+      typeof existing.state.output === "string"
+        ? existing.state.output
+        : "";
+    const stateCopy = {
+      ...part.state,
+      output: part.state.output.startsWith(previous) ? previous : "",
+    };
+    const next = {
+      ...part,
+      state: stateCopy,
+    };
+    streamMessagePart(next, part.state.output, "output", stateCopy.output);
+    return next;
+  }
+  return part;
+}
+
+function ensureMessageReasoningPart(message, id) {
+  if (!record(message)) return null;
+  const parts = Array.isArray(message.parts) ? message.parts : [];
+  const existing = parts.find((part) => part?.type === "reasoning" && (!id || part.id === id))
+    || parts.find((part) => part?.type === "reasoning");
+  if (existing) return existing;
+  const next = {
+    id: id || `reasoning:${Date.now()}`,
+    type: "reasoning",
+    text: "",
+    messageID: message.info?.id || "",
+    sessionID: "",
+  };
+  message.parts = [...parts, next];
+  return next;
+}
 
 // ── DOM Refs ──
 
@@ -200,6 +362,7 @@ const dom = {
   rightPaneResizer: $("#rightPaneResizer"),
   sections: $("#sections"),
   taskDir: $("#taskDir"),
+  taskWorkspaceDir: $("#taskWorkspaceDir"),
   taskGit: $("#taskGit"),
   btnBrowseCwd: $("#btnBrowseCwd"),
   btnCreateCwd: $("#btnCreateCwd"),
@@ -212,6 +375,9 @@ const dom = {
   configToggleMeta: $("#configToggleMeta"),
   configDialog: $("#configDialog"),
   btnCloseConfigDialog: $("#btnCloseConfigDialog"),
+  promptSection: $("#promptSection"),
+  promptBody: $("#promptBody"),
+  promptBadge: $("#promptBadge"),
   overviewSection: $("#overviewSection"),
   specSection: $("#specSection"),
   planSection: $("#planSection"),
@@ -718,6 +884,14 @@ function toolStatusLabel(status) {
   return t("checks.pending");
 }
 
+function processStatusLabel(status) {
+  if (status === "completed") return t("task.status.completed");
+  if (status === "failed") return t("task.status.failed");
+  if (status === "blocked") return t("task.status.blocked");
+  if (status === "queued") return t("task.status.queued");
+  return t("task.status.running");
+}
+
 function roleLabel(role) {
   if (role === "user") return t("chat.role.user");
   if (role === "assistant") return t("chat.role.assistant");
@@ -761,6 +935,7 @@ function refreshLocalizedState() {
   renderMeta();
   renderExtensions();
   renderChannels();
+  renderPromptCatalog();
   renderTaskList();
   renderMemory();
   renderPreferences();
@@ -823,10 +998,10 @@ const reducedMotionMedia =
 
 const techFx = {
   colors: {
-    end: "#c6af72",
-    ghost: "#93a39c",
-    mid: "#71b3a8",
-    start: "#cf8b57",
+    glow: "#8bc1b5",
+    line: "#93a39c",
+    soft: "#d7ddd7",
+    warm: "#cf8b57",
   },
   ctx: null,
   dpr: 1,
@@ -850,71 +1025,62 @@ function techColor(name, fallback) {
 
 function refreshTechFxPalette() {
   techFx.colors = {
-    end: techColor("--accent-end", "#c6af72"),
-    ghost: techColor("--text-soft", "#93a39c"),
-    mid: techColor("--accent-mid", "#71b3a8"),
-    start: techColor("--accent-start", "#cf8b57"),
+    glow: techColor("--accent", "#8bc1b5"),
+    line: techColor("--text-soft", "#93a39c"),
+    soft: techColor("--border-strong", "#d7ddd7"),
+    warm: techColor("--accent-start", "#cf8b57"),
   };
 }
 
 function createTechPoint(width, height) {
-  const angle = Math.random() * Math.PI * 2;
-  const speed = 0.08 + Math.random() * 0.12;
+  const depth = Math.random();
+  const layer = depth < 0.56 ? "far" : depth < 0.86 ? "mid" : "near";
   return {
+    alpha:
+      layer === "far"
+        ? 0.04 + Math.random() * 0.025
+        : layer === "mid"
+          ? 0.07 + Math.random() * 0.04
+          : 0.11 + Math.random() * 0.05,
+    layer,
+    links: layer === "near" ? 2 : layer === "mid" ? 1 : 0,
+    link_dist: layer === "near" ? 170 + Math.random() * 28 : layer === "mid" ? 136 + Math.random() * 18 : 0,
+    orbit:
+      layer === "far"
+        ? 10 + Math.random() * 14
+        : layer === "mid"
+          ? 18 + Math.random() * 20
+          : 28 + Math.random() * 24,
     phase: Math.random() * Math.PI * 2,
-    r: 0.9 + Math.random() * 1.8,
-    vx: Math.cos(angle) * speed,
-    vy: Math.sin(angle) * speed,
-    x: Math.random() * width,
-    y: Math.random() * height,
+    pulse: 0.0008 + Math.random() * 0.001,
+    r:
+      layer === "far"
+        ? 0.7 + Math.random() * 0.75
+        : layer === "mid"
+          ? 1.1 + Math.random() * 0.9
+          : 1.5 + Math.random() * 1.1,
+    speed:
+      layer === "far"
+        ? 0.00002 + Math.random() * 0.000015
+        : layer === "mid"
+          ? 0.00003 + Math.random() * 0.00002
+          : 0.000045 + Math.random() * 0.000025,
+    warm: Math.random() > 0.9,
+    x: Math.random() * (width + 180) - 90,
+    y: Math.random() * (height + 180) - 90,
   };
 }
 
 function rebuildTechFxPoints() {
-  const total = clampNumber(Math.round((techFx.width * techFx.height) / 48000), 14, 34);
+  const total = clampNumber(Math.round((techFx.width * techFx.height) / 64000), 12, 24);
   const count = reduceMotion() ? Math.max(8, Math.round(total * 0.45)) : total;
   techFx.points = Array.from({ length: count }, () => createTechPoint(techFx.width, techFx.height));
 }
 
-function drawTechPolygon(ctx, x, y, radius, sides, rotation, color, alpha) {
-  ctx.save();
-  ctx.beginPath();
-  for (let i = 0; i < sides; i++) {
-    const angle = rotation + ((Math.PI * 2) / sides) * i;
-    const px = x + Math.cos(angle) * radius;
-    const py = y + Math.sin(angle) * radius;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.strokeStyle = color;
-  ctx.globalAlpha = alpha;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.restore();
-}
-
-function drawTechBeacon(ctx, x, y, radius, color, ts) {
-  const pulse = radius + Math.sin(ts * 0.0011 + x * 0.01) * 3;
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1;
-  ctx.globalAlpha = 0.1;
-  ctx.beginPath();
-  ctx.arc(x, y, pulse, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.globalAlpha = 0.06;
-  ctx.beginPath();
-  ctx.arc(x, y, pulse * 1.55, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.globalAlpha = 0.12;
-  ctx.beginPath();
-  ctx.moveTo(x - pulse * 0.65, y);
-  ctx.lineTo(x + pulse * 0.65, y);
-  ctx.moveTo(x, y - pulse * 0.65);
-  ctx.lineTo(x, y + pulse * 0.65);
-  ctx.stroke();
-  ctx.restore();
+function wrapTechCoord(value, size, margin) {
+  const span = size + margin * 2;
+  const next = (value + margin) % span;
+  return (next < 0 ? next + span : next) - margin;
 }
 
 function syncTechFxSize(force = false) {
@@ -949,64 +1115,103 @@ function drawTechFx(ts = performance.now(), staticMode = false) {
   const ctx = techFx.ctx;
   const width = techFx.width;
   const height = techFx.height;
-  const dt = techFx.last ? Math.min(32, ts - techFx.last) : 16;
-  techFx.last = ts;
+  const clock = staticMode ? 0 : ts;
+  const margin = 112;
   ctx.clearRect(0, 0, width, height);
+  const points = techFx.points
+    .map((point) => ({
+      ...point,
+      cx: wrapTechCoord(
+        point.x
+          + Math.cos(clock * point.speed + point.phase) * point.orbit
+          + Math.sin(clock * point.speed * 0.4 + point.phase * 1.6) * point.orbit * 0.46,
+        width,
+        margin,
+      ),
+      cy: wrapTechCoord(
+        point.y
+          + Math.sin(clock * point.speed * 0.92 + point.phase) * point.orbit * 0.82
+          + Math.cos(clock * point.speed * 0.34 + point.phase * 1.2) * point.orbit * 0.34,
+        height,
+        margin,
+      ),
+    }))
+    .sort((a, b) => a.orbit - b.orbit);
+  const links = [];
 
-  if (!staticMode) {
-    const drift = dt * 0.04;
-    techFx.points.forEach((point) => {
-      point.x += point.vx * drift + Math.cos(ts * 0.00035 + point.phase) * 0.06;
-      point.y += point.vy * drift + Math.sin(ts * 0.00028 + point.phase) * 0.05;
-      if (point.x <= -12 || point.x >= width + 12) point.vx *= -1;
-      if (point.y <= -12 || point.y >= height + 12) point.vy *= -1;
-    });
-  }
-
-  const maxDist = clampNumber(width * 0.12, 110, 180);
-  for (let i = 0; i < techFx.points.length; i++) {
-    const a = techFx.points[i];
-    for (let j = i + 1; j < techFx.points.length; j++) {
-      const b = techFx.points[j];
-      const dx = a.x - b.x;
-      const dy = a.y - b.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist > maxDist) continue;
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = (i + j) % 2 === 0 ? techFx.colors.mid : techFx.colors.end;
-      ctx.globalAlpha = (1 - dist / maxDist) * 0.16;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.restore();
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    for (let j = i + 1; j < points.length; j++) {
+      const b = points[j];
+      const limit = Math.min(a.link_dist, b.link_dist);
+      if (!limit) continue;
+      if (a.layer === "far" && b.layer === "far") continue;
+      const dist = Math.hypot(a.cx - b.cx, a.cy - b.cy);
+      if (dist > limit) continue;
+      links.push({
+        alpha: (1 - dist / limit) * (a.layer === "near" || b.layer === "near" ? 0.15 : 0.1),
+        dist,
+        i,
+        j,
+        warm: a.warm && b.warm,
+      });
     }
   }
 
-  techFx.points.forEach((point, index) => {
-    const glow = 1 + Math.sin(ts * 0.0022 + point.phase) * 0.32;
+  links.sort((a, b) => a.dist - b.dist);
+  const counts = Array.from({ length: points.length }, () => 0);
+
+  links.forEach((link) => {
+    const a = points[link.i];
+    const b = points[link.j];
+    if (counts[link.i] >= a.links || counts[link.j] >= b.links) return;
+    counts[link.i] += 1;
+    counts[link.j] += 1;
     ctx.save();
     ctx.beginPath();
-    ctx.fillStyle =
-      index % 3 === 0
-        ? techFx.colors.end
-        : index % 2 === 0
-          ? techFx.colors.mid
-          : techFx.colors.start;
-    ctx.globalAlpha = 0.16 + glow * 0.08;
-    ctx.shadowBlur = 12;
-    ctx.shadowColor = techFx.colors.end;
-    ctx.arc(point.x, point.y, point.r * glow, 0, Math.PI * 2);
+    ctx.moveTo(a.cx, a.cy);
+    ctx.lineTo(b.cx, b.cy);
+    ctx.strokeStyle = link.warm ? techFx.colors.warm : techFx.colors.line;
+    ctx.globalAlpha = link.alpha;
+    ctx.lineWidth = a.layer === "near" || b.layer === "near" ? 1 : 0.8;
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  points.forEach((point) => {
+    if (point.layer === "far") return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.fillStyle = point.warm ? techFx.colors.warm : techFx.colors.glow;
+    ctx.globalAlpha = point.alpha * (point.layer === "near" ? 0.2 : 0.12);
+    ctx.shadowBlur = point.layer === "near" ? 24 : 16;
+    ctx.shadowColor = point.warm ? techFx.colors.warm : techFx.colors.glow;
+    ctx.arc(point.cx, point.cy, point.r * (point.layer === "near" ? 5.4 : 4.1), 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   });
 
-  drawTechBeacon(ctx, width * 0.18, height * 0.66, 24, techFx.colors.start, ts);
-  drawTechBeacon(ctx, width * 0.7, height * 0.3, 28, techFx.colors.mid, ts);
-  drawTechPolygon(ctx, width * 0.74, height * 0.2, 52, 6, ts * 0.00022, techFx.colors.end, 0.11);
-  drawTechPolygon(ctx, width * 0.12, height * 0.24, 34, 3, -ts * 0.00028, techFx.colors.start, 0.08);
-  drawTechPolygon(ctx, width * 0.58, height * 0.76, 42, 5, ts * 0.00016, techFx.colors.ghost, 0.06);
+  points.forEach((point) => {
+    const pulse = 0.9 + Math.sin(clock * point.pulse + point.phase) * 0.14;
+    const color = point.warm ? techFx.colors.warm : point.layer === "far" ? techFx.colors.line : techFx.colors.glow;
+    ctx.save();
+    ctx.beginPath();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = point.alpha;
+    ctx.shadowBlur = point.layer === "near" ? 16 : point.layer === "mid" ? 10 : 6;
+    ctx.shadowColor = color;
+    ctx.arc(point.cx, point.cy, point.r * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    if (point.layer !== "far") {
+      ctx.beginPath();
+      ctx.fillStyle = techFx.colors.soft;
+      ctx.globalAlpha = point.alpha * 0.65;
+      ctx.shadowBlur = 0;
+      ctx.arc(point.cx, point.cy, Math.max(0.5, point.r * 0.42), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  });
 }
 
 function stopTechFx() {
@@ -1307,7 +1512,7 @@ function applyOverlaySettings(settings, options = {}) {
     typeof settings?.workspaceTaskID === "string" ? settings.workspaceTaskID.trim() : DEFAULT_OVERLAY_SETTINGS.workspaceTaskID;
   state.workspaceDirectory =
     typeof settings?.workspaceDirectory === "string"
-      ? settings.workspaceDirectory.trim()
+      ? workspaceRestoreDirectory(settings.workspaceDirectory)
       : DEFAULT_OVERLAY_SETTINGS.workspaceDirectory;
   state.savedDirectory = directory;
   if (options.resetTemp === true) state.tempDirectory = "";
@@ -1342,12 +1547,29 @@ function bootstrapOverlaySettings(input = state) {
 }
 
 function rememberWorkspace(input = {}) {
-  const taskID = typeof input.taskID === "string" ? input.taskID.trim() : state.selectedTaskID || "";
-  const directory = typeof input.directory === "string"
-    ? input.directory.trim()
-    : activeDirectory() || state.directory || "";
+  const taskID = typeof input.taskID === "string"
+    ? input.taskID.trim()
+    : state.selectedTaskID || state.workspaceTaskID || "";
+  const directory = workspaceRestoreDirectory(
+    typeof input.directory === "string"
+      ? input.directory.trim()
+      : state.savedDirectory || activeDirectory() || state.directory || "",
+  ) || workspaceRestoreDirectory(state.savedDirectory || "") || "";
   state.workspaceTaskID = taskID;
   state.workspaceDirectory = taskID ? directory : "";
+}
+
+function looksLikeExecutionWorkspace(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  return /(^|[\\/])goal-workspace([\\/]|$)/i.test(text);
+}
+
+function workspaceRestoreDirectory(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return "";
+  if (looksLikeExecutionWorkspace(text)) return "";
+  return text;
 }
 
 function clearWorkspaceMemory() {
@@ -1735,7 +1957,9 @@ async function stopChatRequest(options = {}) {
   const request = state.chatRequest;
   if (!request || request.stopping) return false;
   request.aborted = true;
+  request.manualAbort = options.manual !== false;
   request.stopping = true;
+  request.recovery?.stop();
   renderChatComposer();
   request.controller.abort();
   if (options.remote === false) return true;
@@ -1773,11 +1997,39 @@ function isPendingPlaceholderPart(part) {
   return part?.type === "text" && !part.id && ["……", "...", t("chat.thinking")].includes(part.text);
 }
 
+function overlayTestConfig() {
+  const value = window.__overlayTest;
+  return value && typeof value === "object" ? value : null;
+}
+
+function overlayTiming(name, fallback, min = 50) {
+  const value = Number(overlayTestConfig()?.[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.floor(value));
+}
+
+function chatRequestTimeoutMs() {
+  return overlayTiming("chatTimeoutMs", 10 * 60 * 1000, 1000);
+}
+
+function taskRecoveryTimeoutMs() {
+  return overlayTiming("taskRecoveryTimeoutMs", 10 * 60 * 1000, 1000);
+}
+
+function taskRecoveryPollMs() {
+  return overlayTiming("taskRecoveryPollMs", 2000, 50);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function panelRequestBody(text, metadata = {}, requestID) {
   const taskID = state.selectedTaskID || undefined;
   return {
     surface: "panel",
     text,
+    time_created: Date.now(),
     taskID,
     executor: state.executor,
     request_id: requestID || undefined,
@@ -1798,6 +2050,106 @@ function panelResultNavigates(result) {
   return false;
 }
 
+function cloneMessages(list) {
+  if (!Array.isArray(list) || list.length === 0) return [];
+  if (typeof structuredClone === "function") return structuredClone(list);
+  return JSON.parse(JSON.stringify(list));
+}
+
+function stashPendingTaskMessages() {
+  const next = cloneMessages(state.messages);
+  state.pendingTaskMessages = next.length ? next : null;
+}
+
+function optimisticTask(taskID, result) {
+  const now = Date.now();
+  const request =
+    typeof result?._request === "string" && result._request.trim()
+      ? result._request.trim()
+      : "";
+  const title = clipText(request || result?.message || taskID, 72) || taskID;
+  const directory = activeDirectory();
+  return {
+    task: {
+      id: taskID,
+      title,
+      status: "queued",
+      directory,
+      sessionID: "",
+      time: {
+        created: now,
+        updated: now,
+      },
+    },
+    overview: {
+      headline: title,
+    },
+    updated_at: now,
+    pending_interactions: 0,
+  };
+}
+
+function ensureTaskVisible(taskID, result) {
+  if (!taskID || state.tasks.some((item) => item?.task?.id === taskID)) return;
+  state.tasks = sortedTasks({
+    tasks: [optimisticTask(taskID, result), ...state.tasks],
+  });
+  renderTaskList();
+}
+
+function taskByRequestID(requestID, list = state.tasks) {
+  if (!requestID || !Array.isArray(list)) return null;
+  return list.find((item) => item?.task?.requestID === requestID) || null;
+}
+
+function startTaskRecovery(request) {
+  if (!request?.requestID) return null;
+  const recovery = {
+    active: true,
+    stop() {
+      recovery.active = false;
+    },
+  };
+  recovery.promise = (async () => {
+    const started = Date.now();
+    while (recovery.active && Date.now() - started < taskRecoveryTimeoutMs()) {
+      if (request.manualAbort) break;
+      if (state.workspaceEpoch !== request.workspaceEpoch && !request.recoveredTaskID) break;
+      const data = await apiJson("tasks").catch(() => null);
+      const tasks = Array.isArray(data?.tasks) ? sortedTasks(data) : [];
+      const match = taskByRequestID(request.requestID, tasks);
+      const taskID = match?.task?.id || "";
+      if (taskID) {
+        forgetPendingTask(request.requestID);
+        request.recoveredTaskID = taskID;
+        state.tasks = tasks;
+        renderTaskList();
+        if (state.selectedTaskID !== taskID) {
+          stashPendingTaskMessages();
+          scheduleTasks(300);
+          await selectTask(taskID, { preserveChatRequest: true });
+        }
+        if (!request.timedOut && !request.aborted) {
+          request.aborted = true;
+          request.controller.abort();
+        }
+        recovery.stop();
+        return taskID;
+      }
+      await delay(taskRecoveryPollMs());
+    }
+    recovery.stop();
+    if (request.timedOut && !request.manualAbort && !request.recoveredTaskID && state.workspaceEpoch === request.workspaceEpoch) {
+      forgetPendingTask(request.requestID);
+      const ph = chatPlaceholder();
+      if (ph) ph.parts[0].text = t("chat.interrupted_notice");
+      renderConversation();
+    }
+    return "";
+  })();
+  return recovery;
+}
+
 async function applyPanelResult(result) {
   if (result?.local_action?.type === "set_executor") {
     state.executor = result.local_action.executor;
@@ -1806,13 +2158,15 @@ async function applyPanelResult(result) {
   }
   if (result?.local_action?.type === "select_task" && result.local_action.taskID) {
     await loadTasks();
-    await selectTask(result.local_action.taskID);
+    await selectTask(result.local_action.taskID, { preserveChatRequest: true });
     return;
   }
   if (result?.task_id && state.selectedTaskID !== result.task_id) {
-    state.pendingTaskMessages = null;
+    stashPendingTaskMessages();
     await loadTasks();
-    await selectTask(result.task_id);
+    ensureTaskVisible(result.task_id, result);
+    scheduleTasks(300);
+    await selectTask(result.task_id, { preserveChatRequest: true });
     return;
   }
   if (state.selectedTaskID) {
@@ -1824,15 +2178,21 @@ async function applyPanelResult(result) {
   }
 }
 
-async function panelMessage(text, metadata, signal) {
+async function panelMessage(text, metadata, signal, options = {}) {
   AppLog.debug("panel", "message: " + text.slice(0, 80));
-  const requestSignal = signal ?? AbortSignal.timeout(120000);
-  return panelMessageStream(text, metadata, requestSignal, state.workspaceEpoch, crypto.randomUUID());
+  const requestSignal = signal ?? AbortSignal.timeout(chatRequestTimeoutMs());
+  return panelMessageStream(
+    text,
+    metadata,
+    requestSignal,
+    options.workspaceEpoch ?? state.workspaceEpoch,
+    options.requestID ?? crypto.randomUUID(),
+  );
 }
 
 async function panelMessageStream(text, metadata, signal, workspaceEpoch = state.workspaceEpoch, requestID = crypto.randomUUID()) {
   const body = JSON.stringify(panelRequestBody(text, metadata, requestID));
-  const requestSignal = signal ?? AbortSignal.timeout(120000);
+  const requestSignal = signal ?? AbortSignal.timeout(chatRequestTimeoutMs());
   const res = await fetch(apiUrl("panel/message/stream"), {
     method: "POST",
     headers: { ...apiHeaders(), "Content-Type": "application/json" },
@@ -1846,7 +2206,7 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   // Replace "……" thinking placeholder with a live indicator
   const placeholder = state.messages.find((m) => m.info?.role === "assistant" && m.parts?.[0]?.text === "……");
   if (state.workspaceEpoch === workspaceEpoch) {
-    if (placeholder) placeholder.parts[0].text = "...";
+    if (placeholder) streamMessagePart(placeholder.parts[0], "...", "text", placeholder.parts[0].text || "");
     renderConversation();
   }
 
@@ -1855,6 +2215,7 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
   let buf = "";
   let result = null;
   let live = "";
+  let reasoning = "";
   let streamed = false;
   const consume = (chunk, flush = false) => {
     buf += chunk;
@@ -1875,17 +2236,29 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
         const ev = JSON.parse(data);
         if (state.workspaceEpoch !== workspaceEpoch) continue;
         if (ev.type === "tool" && placeholder && !streamed) {
-          placeholder.parts[0].text = t("chat.thinking");
+          streamMessagePart(placeholder.parts[0], t("chat.thinking"), "text", placeholder.parts[0].text || "");
+          renderConversation();
+        } else if (ev.type === "reasoning_delta" && placeholder && typeof ev.delta === "string") {
+          reasoning += ev.delta;
+          const part = ensureMessageReasoningPart(placeholder, `panel-reasoning:${requestID}`);
+          if (!part) continue;
+          streamMessagePart(part, reasoning, "text", part.text || "");
+          renderConversation();
+        } else if (ev.type === "reasoning_replace" && placeholder && typeof ev.text === "string") {
+          reasoning = ev.text;
+          const part = ensureMessageReasoningPart(placeholder, `panel-reasoning:${requestID}`);
+          if (!part) continue;
+          streamMessagePart(part, reasoning, "text", part.text || "");
           renderConversation();
         } else if (ev.type === "message_delta" && placeholder && typeof ev.delta === "string") {
           streamed = true;
           live += ev.delta;
-          placeholder.parts[0].text = live;
+          streamMessagePart(placeholder.parts[0], live, "text", placeholder.parts[0].text || "");
           renderConversation();
         } else if (ev.type === "message_replace" && placeholder && typeof ev.text === "string") {
           streamed = true;
           live = ev.text;
-          placeholder.parts[0].text = live;
+          streamMessagePart(placeholder.parts[0], live, "text", placeholder.parts[0].text || "");
           renderConversation();
         } else if (ev.type === "done") {
           result = ev.result;
@@ -1907,35 +2280,30 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
     throw new Error("Panel stream ended without a final result");
   }
 
+  if (result?.task_id) {
+    forgetPendingTask(requestID);
+  } else if (result?.kind && result.kind !== "created") {
+    forgetPendingTask(requestID);
+  }
+
   if (state.workspaceEpoch !== workspaceEpoch) {
     return result;
   }
 
   if (panelResultNavigates(result)) {
+    if (placeholder && result.message) {
+      streamMessagePart(placeholder.parts[0], result.message, "text", placeholder.parts[0].text || "");
+      renderConversation();
+    }
     if (result && typeof result === "object") result._request = text;
     await applyPanelResult(result);
     return result;
   }
 
-  // Show final message with typewriter, then apply side-effects
+  // Finalize the streamed placeholder, then apply side-effects
   if (placeholder && result.message) {
-    if (streamed) {
-      placeholder.parts[0].text = result.message;
-      renderConversation();
-    } else {
-      const msg = result.message;
-      let i = 0;
-      await new Promise((resolve) => {
-        const step = () => {
-          i = Math.min(i + 2 + Math.floor(Math.random() * 2), msg.length);
-          placeholder.parts[0].text = msg.slice(0, i);
-          renderConversation();
-          if (i >= msg.length) { resolve(); return; }
-          requestAnimationFrame(step);
-        };
-        requestAnimationFrame(step);
-      });
-    }
+    streamMessagePart(placeholder.parts[0], result.message, "text", placeholder.parts[0].text || "");
+    renderConversation();
   }
 
   await applyPanelResult(result);
@@ -2071,6 +2439,7 @@ function skillRemovable(item) {
 function renderConfigToggleMeta() {
   if (!dom.configToggleMeta) return;
   const items = [
+    { label: t("prompt.title"), value: state.promptEntries.filter((item) => item.configured_prompt !== null).length },
     { label: t("skill.title"), value: state.skills.filter((item) => !item.builtin).length },
     { label: t("mcp.title"), value: Object.keys(state.mcp || {}).length },
     { label: t("memory.title"), value: state.memoryFiles.length },
@@ -2083,6 +2452,224 @@ function renderConfigToggleMeta() {
     )
     .join(`<span class="config-toggle-sep" aria-hidden="true">·</span>`);
   dom.configToggleMeta.title = items.map((item) => `${item.label} ${item.value}`).join(" · ");
+}
+
+function promptEntryID(entry) {
+  return `${entry.scope}:${entry.key}`;
+}
+
+function promptEntry(entryID) {
+  return state.promptEntries.find((item) => promptEntryID(item) === entryID) || null;
+}
+
+function promptEntryValue(entry) {
+  const entryID = promptEntryID(entry);
+  return Object.prototype.hasOwnProperty.call(state.promptDrafts, entryID)
+    ? state.promptDrafts[entryID]
+    : entry.prompt || "";
+}
+
+function syncPromptDrafts() {
+  const next = {};
+  for (const entry of state.promptEntries) {
+    const entryID = promptEntryID(entry);
+    next[entryID] = Object.prototype.hasOwnProperty.call(state.promptDrafts, entryID)
+      ? state.promptDrafts[entryID]
+      : entry.prompt || "";
+  }
+  state.promptDrafts = next;
+}
+
+function promptGroupLabel(group) {
+  if (group === "core") return t("prompt.group.core");
+  if (group === "generator") return t("prompt.group.generator");
+  if (group === "orchestrator") return t("prompt.group.orchestrator");
+  if (group === "subagent") return t("prompt.group.subagent");
+  if (group === "hidden_agent") return t("prompt.group.hidden_agent");
+  if (group === "custom_agent") return t("prompt.group.custom_agent");
+  return t("prompt.group.primary_agent");
+}
+
+function promptDescription(entry) {
+  if (entry.key === "core_header") return t("prompt.desc.core_header");
+  if (entry.key === "agent_generate") return t("prompt.desc.agent_generate");
+  if (entry.key === "planner_system") return t("prompt.desc.planner_system");
+  if (entry.key === "spec_system") return t("prompt.desc.spec_system");
+  if (entry.key === "evaluator_system") return t("prompt.desc.evaluator_system");
+  return entry.description || "";
+}
+
+function promptStatus(entry) {
+  if (entry.configured_prompt !== null) {
+    return { label: t("prompt.status.custom"), tone: "active" };
+  }
+  if (entry.scope === "system") {
+    return { label: t("prompt.status.default"), tone: "ready" };
+  }
+  if (entry.inherits_core) {
+    return { label: t("prompt.status.inherits_core"), tone: "warn" };
+  }
+  if (entry.prompt) {
+    return { label: t("prompt.status.default"), tone: "ready" };
+  }
+  return { label: t("prompt.status.empty"), tone: "" };
+}
+
+function promptHelper(entry) {
+  if (entry.scope === "system") {
+    return entry.configured_prompt !== null ? t("prompt.help.custom_system") : t("prompt.help.default_system");
+  }
+  if (entry.inherits_core) return t("prompt.help.inherits_core");
+  if (entry.configured_prompt !== null) return t("prompt.help.custom_agent");
+  if (entry.prompt) return t("prompt.help.default_agent");
+  return t("prompt.help.optional_agent");
+}
+
+function promptDirty(entry) {
+  return promptEntryValue(entry) !== (entry.prompt || "");
+}
+
+function renderPromptPreview(value) {
+  if (!value.trim()) return `<p class="empty-hint">${escapeHtml(t("prompt.preview_empty"))}</p>`;
+  return renderMarkdown(value);
+}
+
+function renderPromptCatalog() {
+  if (dom.promptBadge) {
+    dom.promptBadge.textContent = String(state.promptEntries.filter((item) => item.configured_prompt !== null).length);
+  }
+  renderConfigToggleMeta();
+  if (!dom.promptBody) return;
+  syncPromptDrafts();
+  if (!state.promptEntries.length) {
+    dom.promptBody.innerHTML = `<div class="empty-hint">${escapeHtml(t("prompt.none"))}</div>`;
+    return;
+  }
+  dom.promptBody.innerHTML = `<div class="prompt-grid">${state.promptEntries
+    .map((entry) => {
+      const entryID = promptEntryID(entry);
+      const value = promptEntryValue(entry);
+      const status = promptStatus(entry);
+      const description = promptDescription(entry);
+      const dirty = promptDirty(entry);
+      return `<div class="prompt-card" data-prompt-entry="${escapeHtml(entryID)}">
+        <div class="prompt-card-head">
+          <div class="prompt-card-copy">
+            <strong>${escapeHtml(entry.label || entry.key)}</strong>
+            <span>${escapeHtml(promptGroupLabel(entry.group))}${entry.mode ? ` · ${escapeHtml(entry.mode)}` : ""}</span>
+            ${description ? `<small>${escapeHtml(description)}</small>` : ""}
+          </div>
+          <span class="extension-status" data-state="${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>
+        </div>
+        <label class="field">
+          <span class="field-label">${escapeHtml(t("prompt.editor_label"))}</span>
+          <textarea class="field-input prompt-textarea" data-prompt-input="${escapeHtml(entryID)}" rows="12">${escapeHtml(value)}</textarea>
+        </label>
+        <div class="prompt-toolbar">
+          <span class="config-status-box" data-status="${escapeHtml(status.tone)}">${escapeHtml(promptHelper(entry))}</span>
+          <div class="dialog-actions compact">
+            <button type="button" class="btn btn-ghost mini" data-prompt-reset="${escapeHtml(entryID)}"${entry.configured_prompt !== null || dirty ? "" : " disabled"}>${escapeHtml(t("prompt.reset"))}</button>
+            <button type="button" class="btn btn-primary mini" data-prompt-save="${escapeHtml(entryID)}"${dirty ? "" : " disabled"}>${escapeHtml(t("common.save"))}</button>
+          </div>
+        </div>
+        <div class="prompt-preview-card">
+          <div class="prompt-preview-head">${escapeHtml(t("prompt.preview"))}</div>
+          <div class="md-content prompt-preview-body" data-prompt-preview="${escapeHtml(entryID)}">${renderPromptPreview(value)}</div>
+        </div>
+      </div>`;
+    })
+    .join("")}</div>`;
+}
+
+function applyPromptEntries(items) {
+  state.promptEntries = Array.isArray(items) ? items : [];
+  state.promptDrafts = Object.fromEntries(state.promptEntries.map((entry) => [promptEntryID(entry), entry.prompt || ""]));
+  renderPromptCatalog();
+}
+
+async function loadPromptCatalog() {
+  try {
+    applyPromptEntries(await apiJson("config/prompt"));
+  } catch (e) {
+    AppLog.debug("prompt", "loadPromptCatalog failed, resetting to empty", { error: String(e) });
+    state.promptEntries = [];
+    state.promptDrafts = {};
+    renderPromptCatalog();
+  }
+}
+
+async function savePromptEntry(entryID) {
+  const entry = promptEntry(entryID);
+  if (!entry) return;
+  const value = promptEntryValue(entry);
+  try {
+    const saved = await updateConfig((current) => {
+      if (entry.scope === "system") {
+        current.prompt = current.prompt || {};
+        if (value.trim()) current.prompt[entry.key] = value;
+        if (!value.trim()) delete current.prompt[entry.key];
+        if (Object.keys(current.prompt).length === 0) delete current.prompt;
+        return;
+      }
+      current.agent = current.agent || {};
+      const item =
+        current.agent?.[entry.key] && typeof current.agent[entry.key] === "object"
+          ? { ...current.agent[entry.key] }
+          : {};
+      if (value.trim()) item.prompt = value;
+      if (!value.trim()) delete item.prompt;
+      if (Object.keys(item).length === 0) delete current.agent[entry.key];
+      if (Object.keys(item).length > 0) current.agent[entry.key] = item;
+      if (Object.keys(current.agent).length === 0) delete current.agent;
+    });
+    state.config = saved;
+    await loadPromptCatalog();
+  } catch (e) {
+    AppLog.error("ui", "Failed to save prompt override", { error: String(e), entryID });
+    await nativeMessage(errorText("prompt.save_failed", e), {
+      title: t("prompt.title"),
+      kind: "error",
+    });
+  }
+}
+
+async function resetPromptEntry(entryID) {
+  const entry = promptEntry(entryID);
+  if (!entry) return;
+  if (entry.configured_prompt === null) {
+    state.promptDrafts[entryID] = entry.prompt || "";
+    renderPromptCatalog();
+    return;
+  }
+  try {
+    const saved = await updateConfig((current) => {
+      if (entry.scope === "system") {
+        if (current.prompt && typeof current.prompt === "object") {
+          delete current.prompt[entry.key];
+          if (Object.keys(current.prompt).length === 0) delete current.prompt;
+        }
+        return;
+      }
+      if (current.agent && typeof current.agent === "object" && current.agent[entry.key]) {
+        const item =
+          current.agent[entry.key] && typeof current.agent[entry.key] === "object"
+            ? { ...current.agent[entry.key] }
+            : {};
+        delete item.prompt;
+        if (Object.keys(item).length === 0) delete current.agent[entry.key];
+        if (Object.keys(item).length > 0) current.agent[entry.key] = item;
+        if (Object.keys(current.agent).length === 0) delete current.agent;
+      }
+    });
+    state.config = saved;
+    await loadPromptCatalog();
+  } catch (e) {
+    AppLog.error("ui", "Failed to reset prompt override", { error: String(e), entryID });
+    await nativeMessage(errorText("prompt.reset_failed", e), {
+      title: t("prompt.title"),
+      kind: "error",
+    });
+  }
 }
 
 async function removeSkillSource(source, kind) {
@@ -3457,6 +4044,7 @@ async function applyDirectory(next, options = {}) {
   if (save !== null) state.savedDirectory = save;
   if (temp !== null) state.tempDirectory = temp;
   state.directoryMode = state.savedDirectory ? "custom" : "temp";
+  state.pendingTasks = [];
   resetProjectScope();
 
   if (options.persist !== false) await persistOverlaySettings();
@@ -3597,7 +4185,8 @@ async function resetDirectory() {
 
 function renderMeta() {
   const dir = activeDirectory();
-  const key = hashText([state.locale, dir, signText(state.vcs)].join("\u001f"));
+  const workspace = currentExecutionDirectory();
+  const key = hashText([state.locale, dir, workspace, signText(state.vcs)].join("\u001f"));
   if (state._renderedMetaKey === key) {
     renderExecutor();
     return;
@@ -3607,6 +4196,12 @@ function renderMeta() {
   dom.taskDir.dataset.empty = dir ? "false" : "true";
   const path = dom.taskDir.querySelector(".task-dir-path");
   if (path) path.scrollLeft = path.scrollWidth;
+  if (dom.taskWorkspaceDir) {
+    const showWorkspace = !!workspace && workspace !== dir;
+    dom.taskWorkspaceDir.hidden = !showWorkspace;
+    dom.taskWorkspaceDir.textContent = showWorkspace ? t("cwd.execution_workspace", { value: workspace }) : "";
+    dom.taskWorkspaceDir.title = showWorkspace ? workspace : "";
+  }
 
   const actionable = canInitGit();
   const label = gitLabel(state.vcs, dir);
@@ -3687,6 +4282,74 @@ function sortedTasks(data) {
     .sort((a, b) => (b.updated_at || b.task?.time?.updated || 0) - (a.updated_at || a.task?.time?.updated || 0));
 }
 
+function pendingTaskKey(requestID) {
+  const value = typeof requestID === "string" ? requestID.trim() : "";
+  return value ? `pending:${value}` : "";
+}
+
+function rememberPendingTask(requestID, title) {
+  const value = typeof requestID === "string" ? requestID.trim() : "";
+  if (!value) return;
+  const headline = clipText(title || value, 72) || value;
+  const now = Date.now();
+  state.pendingTasks = [
+    {
+      _pending: true,
+      requestID: value,
+      task: {
+        id: pendingTaskKey(value),
+        requestID: value,
+        source: "panel",
+        title: headline,
+        status: "planning",
+        directory: activeDirectory(),
+        time: {
+          created: now,
+          updated: now,
+        },
+      },
+      overview: {
+        headline,
+      },
+      updated_at: now,
+      pending_interactions: 0,
+    },
+    ...state.pendingTasks.filter((item) => item?.requestID !== value),
+  ];
+  renderTaskList();
+}
+
+function forgetPendingTask(requestID) {
+  const value = typeof requestID === "string" ? requestID.trim() : "";
+  if (!value || !state.pendingTasks.some((item) => item?.requestID === value)) return false;
+  state.pendingTasks = state.pendingTasks.filter((item) => item?.requestID !== value);
+  renderTaskList();
+  return true;
+}
+
+function syncPendingTasks(items = state.tasks) {
+  if (state.pendingTasks.length === 0) return;
+  const seen = new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => item?.task?.requestID)
+      .filter(Boolean),
+  );
+  if (seen.size === 0) return;
+  const next = state.pendingTasks.filter((item) => !seen.has(item?.requestID));
+  if (next.length === state.pendingTasks.length) return;
+  state.pendingTasks = next;
+}
+
+function visibleTasks() {
+  const seen = new Set(
+    state.tasks
+      .map((item) => item?.task?.requestID || item?.task?.id)
+      .filter(Boolean),
+  );
+  return [...state.pendingTasks.filter((item) => !seen.has(item?.requestID || item?.task?.id)), ...state.tasks]
+    .sort((a, b) => taskUpdated(b) - taskUpdated(a));
+}
+
 function taskItem(taskID, items = state.tasks) {
   if (!taskID) return null;
   return items.find((item) => item?.task?.id === taskID) || null;
@@ -3705,6 +4368,7 @@ function taskListTitle(item) {
 }
 
 function taskListBadge(item) {
+  if (item?._pending) return statusLabel("planning");
   const pending = Number(item?.pending_interactions || 0) > 0;
   return pending ? t("detail.pending_interactions") : statusLabel(item?.task?.status || "idle");
 }
@@ -3716,13 +4380,52 @@ function taskListMeta(item) {
   ]);
 }
 
+function goalRunPriority(status) {
+  if (status === "running") return 0;
+  if (status === "blocked") return 1;
+  if (status === "accepted") return 2;
+  if (status === "queued") return 3;
+  if (status === "completed") return 4;
+  if (status === "failed") return 5;
+  if (status === "aborted") return 6;
+  return 7;
+}
+
+function currentExecutionDirectory() {
+  const rows = (Array.isArray(state.board?.goalRuns) ? state.board.goalRuns : [])
+    .filter((item) => typeof item?.workspaceDir === "string" && item.workspaceDir.trim())
+    .toSorted((a, b) =>
+      goalRunPriority(a?.status) - goalRunPriority(b?.status) ||
+      (b?.time?.updated || 0) - (a?.time?.updated || 0),
+    );
+  return rows[0]?.workspaceDir?.trim() || "";
+}
+
+function taskDeleteButton(item) {
+  if (item?._pending) return "";
+  const id = item?.task?.id || "";
+  if (!id) return "";
+  return `<button type="button" class="task-row-delete" data-task-delete="${escapeHtml(id)}" title="${escapeHtml(t("task.delete_button_title"))}" aria-label="${escapeHtml(t("task.delete_button_title"))}">
+    <span class="task-row-delete-icon" data-icon="delete" aria-hidden="true">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+        <path d="M3.5 4.5h9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M6 4.5V3.6c0-.5.4-.9.9-.9h2.2c.5 0 .9.4.9.9v.9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M5.2 6.2l.4 5.4c0 .5.4.9.9.9h2.9c.5 0 .9-.4.9-.9l.4-5.4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+    </span>
+  </button>`;
+}
+
 function taskRow(item) {
   const id = item?.task?.id || "";
-  const status = item?.task?.status || "idle";
-  const active = state.selectedTaskID === id ? ' data-active="true"' : "";
+  const pending = item?._pending === true;
+  const status = pending ? "planning" : item?.task?.status || "idle";
+  const active = !pending && state.selectedTaskID === id ? ' data-active="true"' : "";
   const title = escapeHtml(taskListTitle(item) || id);
+  const target = pending ? "" : ` data-task-id="${escapeHtml(id)}"`;
+  const disabled = pending ? ' disabled aria-disabled="true"' : "";
   return `<div class="task-row-mini global-task-row"${active} title="${title}">
-    <button type="button" class="task-row-main" data-task-id="${escapeHtml(id)}" title="${title}">
+    <button type="button" class="task-row-main"${target}${disabled} title="${title}">
       <div class="task-row-head">
         <span class="status-dot" data-status="${escapeHtml(status)}" aria-hidden="true"></span>
         <strong>${title}</strong>
@@ -3730,6 +4433,7 @@ function taskRow(item) {
       <span>${escapeHtml(taskListBadge(item))}</span>
       <small>${escapeHtml(taskListMeta(item))}</small>
     </button>
+    ${taskDeleteButton(item)}
   </div>`;
 }
 
@@ -3815,6 +4519,7 @@ async function loadTasks() {
     const data = await apiJson("tasks");
     if (epoch !== state.directoryEpoch || seq !== state.tasksSeq) return;
     state.tasks = sortedTasks(data);
+    syncPendingTasks(state.tasks);
     if (state.selectedTaskID && !state.tasks.some((item) => item.task.id === state.selectedTaskID)) {
       enterEmptyWorkspace();
       renderClear();
@@ -3834,6 +4539,7 @@ async function loadTasks() {
 async function selectTask(taskID, options = {}) {
   const nextTaskID = taskID || "";
   if (nextTaskID === state.selectedTaskID && state.board) return;
+  state.agentEvents = [];
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
   } else {
@@ -3855,11 +4561,10 @@ async function selectTask(taskID, options = {}) {
     return;
   }
 
-  if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
-    state.messages = state.pendingTaskMessages;
-    state.pendingTaskMessages = null;
-    renderConversation();
-  }
+    if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
+      state.messages = cloneMessages(state.pendingTaskMessages);
+      renderConversation();
+    }
 
   await Promise.all([loadBoard(), loadConversation(), loadMeta(), loadMemory()]);
   rememberWorkspace({
@@ -3872,6 +4577,34 @@ async function selectTask(taskID, options = {}) {
   const status = state.board?.task?.status;
   if (["running", "planning", "evaluating", "blocked", "queued"].includes(status)) {
     startSSE(nextTaskID);
+  }
+}
+
+async function deleteTask(taskID) {
+  const item = taskItem(taskID);
+  if (!taskID || !item) return false;
+  const accepted = await nativeConfirm(t("task.delete_confirm", { title: taskListTitle(item) }), {
+    title: t("task.delete_title"),
+    okLabel: t("common.delete"),
+    kind: "warning",
+  });
+  if (!accepted) return false;
+  try {
+    await apiJson(`task/${encodeURIComponent(taskID)}`, {
+      method: "DELETE",
+    });
+    if (state.selectedTaskID === taskID) {
+      await selectTask("");
+    }
+    await loadTasks();
+    return true;
+  } catch (e) {
+    AppLog.error("ui", "Failed to delete task", { error: String(e), taskID });
+    await nativeMessage(errorText("task.delete_failed", e), {
+      title: t("task.delete_title"),
+      kind: "error",
+    });
+    return false;
   }
 }
 
@@ -3910,6 +4643,7 @@ async function loadBoard() {
       const etag = res.headers.get("etag");
       if (etag) state.boardEtag = etag;
       state.board = await res.json();
+      pruneAgentEvents();
       state.boardUpdatedAt = Date.now();
       renderBoard();
       await Promise.all([
@@ -3983,18 +4717,29 @@ async function loadConversation() {
           loadConversationSource(`control/timeline?taskID=${encodeURIComponent(target.taskID)}`),
         ]);
         if (targetKey !== conversationTargetKey(conversationTarget())) return;
-        state.messages = sortMessages(mergeMessages(timeline, transcript));
+        const next = sortMessages(mergeMessages(timeline, transcript));
+        clearLiveTextStreams();
+        if (next.length > 0) {
+          state.pendingTaskMessages = null;
+          state.messages = next;
+        } else if (Array.isArray(state.pendingTaskMessages) && state.pendingTaskMessages.length > 0) {
+          state.messages = cloneMessages(state.pendingTaskMessages);
+        } else {
+          state.messages = [];
+        }
         state.conversationUpdatedAt = Date.now();
         renderConversation();
         return;
       }
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
+      clearLiveTextStreams();
       state.messages = [];
       state.conversationUpdatedAt = Date.now();
       renderConversation();
     } catch (e) {
       AppLog.error("ui", "Failed to load conversation", { error: String(e) });
       if (targetKey !== conversationTargetKey(conversationTarget())) return;
+      clearLiveTextStreams();
       state.messages = [];
       state.conversationUpdatedAt = Date.now();
       renderConversation();
@@ -4193,6 +4938,239 @@ function mergeMessages(...lists) {
   );
 }
 
+function agentRole(stage) {
+  if (stage === "spec") return "spec";
+  if (stage === "planner") return "planner";
+  if (stage === "evaluator") return "scheduler";
+  return "assistant";
+}
+
+function agentStageActive(stage) {
+  const status = String(state.board?.task?.status || "");
+  if (stage === "evaluator") return status === "evaluating";
+  return status === "planning" || status === "queued";
+}
+
+function agentStagePersisted(stage) {
+  if (stage === "spec") return !!state.board?.spec?.content;
+  if (stage === "planner") return !!state.board?.plan;
+  if (stage === "evaluator") return !!state.board?.evaluation?.verdict;
+  return false;
+}
+
+function pruneAgentEvents() {
+  if (!Array.isArray(state.agentEvents) || state.agentEvents.length === 0) return;
+  state.agentEvents = state.agentEvents.filter((event) => {
+    if (!event?.stage) return false;
+    if (event.kind === "error") return true;
+    if (!agentStagePersisted(event.stage)) return true;
+    return agentStageActive(event.stage);
+  });
+}
+
+function agentEventEntry(raw) {
+  const payload = record(raw?.payload) ? raw.payload : {};
+  const stage = typeof raw?.stage === "string"
+    ? raw.stage
+    : typeof payload.stage === "string"
+      ? payload.stage
+      : "";
+  if (!stage) return null;
+  const kind = typeof raw?.kind === "string"
+    ? raw.kind
+    : typeof payload.kind === "string"
+      ? payload.kind
+      : "status";
+  const summary = typeof raw?.summary === "string"
+    ? raw.summary.trim()
+    : typeof payload.summary === "string"
+      ? payload.summary.trim()
+      : "";
+  const text = typeof raw?.text === "string"
+    ? raw.text
+    : typeof payload.text === "string"
+      ? payload.text
+      : typeof payload.result === "string"
+        ? payload.result
+        : "";
+  const toolName = typeof raw?.toolName === "string"
+    ? raw.toolName
+    : typeof payload.toolName === "string"
+      ? payload.toolName
+      : "";
+  const eventID = typeof raw?.id === "string" && raw.id
+    ? raw.id
+    : typeof raw?.eventID === "string" && raw.eventID
+      ? raw.eventID
+      : `${stage}-${Date.now()}`;
+  const streamID = typeof payload.id === "string" && payload.id ? payload.id : eventID;
+  return {
+    id: eventID,
+    streamID,
+    stage,
+    kind,
+    summary: summary || text || `${stage} ${kind}`,
+    text,
+    toolName,
+    payload,
+    time: {
+      created: Number(raw?.timestamp) || Number(raw?.time?.created) || Date.now(),
+    },
+  };
+}
+
+function agentTargetText(event) {
+  if (typeof event?._targetText === "string") return event._targetText;
+  const summary = String(event?.summary || "").trim();
+  const text = typeof event?.text === "string" && event.text.trim()
+    ? event.text
+    : typeof event?.payload?.text === "string" && event.payload.text.trim()
+      ? event.payload.text
+      : typeof event?.payload?.result === "string" && event.payload.result.trim()
+        ? event.payload.result
+        : "";
+  if (event?.kind === "message_delta") return text || summary;
+  if (event?.kind === "tool_call") {
+    if (summary && text && summary !== text) return `${summary}\n${text}`;
+    return text || summary;
+  }
+  if (event?.kind === "tool_result") {
+    if (summary && text && summary !== text) return `${summary}\n${text}`;
+    return text || summary;
+  }
+  return summary || text;
+}
+
+function agentText(event) {
+  if (typeof event?._liveText === "string") return event._liveText;
+  return agentTargetText(event);
+}
+
+function visibleAgentEvent(event) {
+  if (!event) return false;
+  if (event.kind === "message_delta") return !!agentText(event);
+  if (event.kind === "tool_call") return !!agentText(event);
+  if (event.kind === "tool_result") return !!agentText(event);
+  if (event.kind === "status") return !!agentText(event);
+  if (event.kind === "error") return !!agentText(event);
+  return false;
+}
+
+function agentMessage(event) {
+  const text = agentText(event);
+  if (!text || !visibleAgentEvent(event)) return null;
+  return {
+    _synthetic: true,
+    info: {
+      id: event.streamID || event.id,
+      role: event.kind === "tool_call" || event.kind === "tool_result" ? "task_tool" : agentRole(event.stage),
+      time: { created: event.time?.created || Date.now() },
+    },
+    parts: [{ type: "text", text }],
+  };
+}
+
+function buildAgentMessages() {
+  if (!state.selectedTaskID) return [];
+  pruneAgentEvents();
+  return (Array.isArray(state.agentEvents) ? state.agentEvents : [])
+    .map((event) => agentMessage(event))
+    .filter(Boolean);
+}
+
+function syncAgentText(event) {
+  if (!event) return;
+  const key = `agent:${event.streamID || event.id || "unknown"}`;
+  const target = agentTargetText(event);
+  if (!target) {
+    delete event._targetText;
+    delete event._liveText;
+    stopLiveText(key);
+    return;
+  }
+  event._targetText = target;
+  startLiveText(key, target, typeof event._liveText === "string" ? event._liveText : "", (value) => {
+    event._liveText = value;
+  });
+}
+
+function appendAgentEvent(raw) {
+  const event = agentEventEntry(raw);
+  if (!event) return;
+  const index = state.agentEvents.findIndex((item) => (item.streamID || item.id) === (event.streamID || event.id));
+  if (index >= 0 && event.kind === "message_delta") {
+    const current = state.agentEvents[index];
+    const previous = agentTargetText(current);
+    const delta = event.text || event.summary || "";
+    const next = {
+      ...current,
+      kind: "message_delta",
+      summary: previous + delta,
+      text: previous + delta,
+      payload: {
+        ...(record(current.payload) ? current.payload : {}),
+        ...(record(event.payload) ? event.payload : {}),
+        text: previous + delta,
+      },
+      time: event.time,
+      _targetText: previous + delta,
+      _liveText: typeof current._liveText === "string" ? current._liveText : "",
+    };
+    state.agentEvents = [
+      ...state.agentEvents.slice(0, index),
+      next,
+      ...state.agentEvents.slice(index + 1),
+    ];
+    syncAgentText(next);
+  } else if (index >= 0 && event.kind === "tool_delta") {
+    const current = state.agentEvents[index];
+    const previous = agentTargetText(current);
+    const delta = event.text || event.summary || "";
+    const next = {
+      ...current,
+      kind: "tool_call",
+      summary: current.summary || event.summary,
+      text: previous + delta,
+      payload: {
+        ...(record(current.payload) ? current.payload : {}),
+        ...(record(event.payload) ? event.payload : {}),
+        text: previous + delta,
+      },
+      time: event.time,
+      _targetText: previous + delta,
+      _liveText: typeof current._liveText === "string" ? current._liveText : "",
+    };
+    state.agentEvents = [
+      ...state.agentEvents.slice(0, index),
+      next,
+      ...state.agentEvents.slice(index + 1),
+    ];
+    syncAgentText(next);
+  } else if (index >= 0) {
+    const next = {
+      ...state.agentEvents[index],
+      ...event,
+      payload: {
+        ...(record(state.agentEvents[index]?.payload) ? state.agentEvents[index].payload : {}),
+        ...(record(event.payload) ? event.payload : {}),
+      },
+      _targetText: event._targetText,
+      _liveText: typeof state.agentEvents[index]?._liveText === "string" ? state.agentEvents[index]._liveText : "",
+    };
+    state.agentEvents = [
+      ...state.agentEvents.slice(0, index),
+      next,
+      ...state.agentEvents.slice(index + 1),
+    ];
+    syncAgentText(next);
+  } else {
+    syncAgentText(event);
+    state.agentEvents = [...state.agentEvents, event].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  }
+  state.conversationUpdatedAt = Date.now();
+  renderConversation();
+}
+
 function handleEventStreamEvent(event) {
   const type = event.type || "";
   const properties = eventData(event);
@@ -4232,11 +5210,11 @@ function handleEventStreamEvent(event) {
     }
     const index = message.parts.findIndex((item) => item.id === part.id);
     if (index >= 0) {
-      message.parts[index] = part;
+      message.parts[index] = hydrateLivePart(message.parts[index], part);
     } else if (message.parts.length === 1 && isPendingPlaceholderPart(message.parts[0])) {
-      message.parts = [part];
+      message.parts = [hydrateLivePart(message.parts[0], part)];
     } else {
-      message.parts.push(part);
+      message.parts.push(hydrateLivePart(null, part));
     }
     state.conversationUpdatedAt = Date.now();
     renderConversation();
@@ -4249,12 +5227,16 @@ function handleEventStreamEvent(event) {
       scheduleConversation(0);
       return;
     }
-    const part = message.parts.find((item) => item.id === properties.partID && item.type === "text");
+    const part = message.parts.find((item) =>
+      item.id === properties.partID &&
+      (item.type === "text" || item.type === "reasoning"),
+    );
     if (!part) {
       scheduleConversation(0);
       return;
     }
-    part.text += properties.delta;
+    const target = `${typeof part._targetText === "string" ? part._targetText : part.text || ""}${properties.delta}`;
+    streamMessagePart(part, target, "text", part.text || "");
     state.conversationUpdatedAt = Date.now();
     renderConversation();
     return;
@@ -4276,6 +5258,15 @@ function handleEventStreamEvent(event) {
       runID: event.run_id || properties.runID,
       type: "message_delta",
       summary: typeof properties.text === "string" ? properties.text : event.summary,
+      payload: properties,
+      timestamp: event.timestamp,
+    });
+    return;
+  }
+  if (type === "agent.updated") {
+    appendAgentEvent({
+      id: event.event_id,
+      summary: event.summary,
       payload: properties,
       timestamp: event.timestamp,
     });
@@ -5576,9 +6567,10 @@ function isCriteriaEnabled(item) {
 
 function renderTaskList() {
   if (!dom.taskListPanel) return;
-  const active = state.tasks.filter((item) => !["completed", "failed", "cancelled"].includes(item?.task?.status || ""));
-  const recent = state.tasks.filter((item) => ["completed", "failed", "cancelled"].includes(item?.task?.status || ""));
-  const html = state.tasks.length === 0
+  const items = visibleTasks();
+  const active = items.filter((item) => !["completed", "failed", "cancelled"].includes(item?.task?.status || ""));
+  const recent = items.filter((item) => ["completed", "failed", "cancelled"].includes(item?.task?.status || ""));
+  const html = items.length === 0
     ? `<div class="empty-hint">${escapeHtml(t("task.none"))}</div>`
     : [
       taskSection(t("task.group.active"), active),
@@ -5633,11 +6625,22 @@ function formatTranscriptTool(part) {
   return [t("transcript.tool", { status: toolStatusLabel(status), tool: toolName }), detail].filter(Boolean).join(" ");
 }
 
+function formatTranscriptExecutorProcess(part) {
+  const process = record(part?.process) ? part.process : {};
+  const title = String(process.title || process.id || "").trim();
+  const detail = String(process.detail || "").trim();
+  const note = String(process.note || "").trim();
+  const output = String(process.output || "").trim();
+  const header = [processStatusLabel(String(process.status || "running")), title].filter(Boolean).join(" ");
+  return [header, detail, note, output].filter(Boolean).join("\n");
+}
+
 function formatTranscriptPart(part, role) {
   if (!part || typeof part !== "object") return "";
   if (part.type === "text") return formatTranscriptText(part, role);
   if (part.type === "reasoning") return part.text?.trim() ? `${t("transcript.reasoning")}\n${part.text.trim()}` : "";
   if (part.type === "tool") return formatTranscriptTool(part);
+  if (part.type === "executor_process") return formatTranscriptExecutorProcess(part);
   if (part.type === "file") return part.filename || part.url ? t("transcript.file", { value: part.filename || part.url }) : "";
   if (part.type === "subtask") {
     const text = part.description || part.prompt || "";
@@ -5866,6 +6869,19 @@ function executorEventKind(type) {
   return "status";
 }
 
+function executorEventSourceKind(kind, payload = {}) {
+  if (typeof payload.sourceKind === "string" && payload.sourceKind.trim()) return payload.sourceKind.trim();
+  if (kind === "tool_call" || kind === "tool_result") return "tool";
+  if (kind === "command") return "command";
+  if (kind === "approval_request") return "approval";
+  if (kind === "input_request") return "input";
+  if (kind === "mcp") return "mcp";
+  if (kind === "reasoning_delta") return "assistant";
+  if (kind === "message_delta") return "assistant";
+  if (kind === "error") return "error";
+  return "status";
+}
+
 function executorEventEntry(raw) {
   const kind = typeof raw?.kind === "string" && raw.kind ? raw.kind : executorEventKind(raw?.type);
   const payload =
@@ -5893,8 +6909,47 @@ function executorEventEntry(raw) {
         : typeof raw?.type === "string" && raw.type
           ? raw.type
           : "event";
+  const sourceID = typeof payload.sourceID === "string" && payload.sourceID
+    ? payload.sourceID
+    : typeof payload.id === "string" && payload.id
+      ? payload.id
+      : "";
+  const goalRunID = typeof raw?.goalRunID === "string" && raw.goalRunID
+    ? raw.goalRunID
+    : typeof raw?.goal_run_id === "string" && raw.goal_run_id
+      ? raw.goal_run_id
+      : typeof payload.goalRunID === "string" && payload.goalRunID
+        ? payload.goalRunID
+        : typeof payload.goal_run_id === "string" && payload.goal_run_id
+          ? payload.goal_run_id
+          : "";
+  const executorSessionID = typeof raw?.executorSessionID === "string" && raw.executorSessionID
+    ? raw.executorSessionID
+    : typeof raw?.executor_session_id === "string" && raw.executor_session_id
+      ? raw.executor_session_id
+      : typeof payload.executorSessionID === "string" && payload.executorSessionID
+        ? payload.executorSessionID
+        : typeof payload.executor_session_id === "string" && payload.executor_session_id
+          ? payload.executor_session_id
+          : "";
+  const sourceKind = executorEventSourceKind(kind, payload);
+  const sourceLabel = typeof payload.sourceLabel === "string" && payload.sourceLabel.trim()
+    ? payload.sourceLabel.trim()
+    : "";
+  const sourceStatus = typeof payload.status === "string" && payload.status.trim()
+    ? payload.status.trim()
+    : "";
+  const scope = goalRunID
+    ? `goal:${goalRunID}`
+    : executorSessionID
+      ? `session:${executorSessionID}`
+      : "";
   return {
-    id: typeof raw?.id === "string" && raw.id ? raw.id : `executor:${kind}:${created}:${summary || marker}`,
+    id: typeof raw?.id === "string" && raw.id
+      ? raw.id
+      : kind === "message_delta" && sourceID
+        ? `executor:${scope || "global"}:${sourceID}`
+        : `executor:${kind}:${created}:${summary || marker}`,
     runID: typeof raw?.runID === "string"
       ? raw.runID
       : typeof raw?.run_id === "string"
@@ -5905,8 +6960,29 @@ function executorEventEntry(raw) {
     kind,
     summary,
     payload,
+    sourceID,
+    sourceKind,
+    sourceLabel,
+    sourceStatus,
+    goalRunID,
+    executorSessionID,
     time: { created: Number.isFinite(created) ? created : Date.now() },
   };
+}
+
+function executorEventScopeID(event) {
+  if (!event) return "";
+  if (typeof event.goalRunID === "string" && event.goalRunID) return `goal:${event.goalRunID}`;
+  if (typeof event.executorSessionID === "string" && event.executorSessionID) return `session:${event.executorSessionID}`;
+  if (typeof event.runID === "string" && event.runID) return `run:${event.runID}`;
+  return "";
+}
+
+function sameExecutorEventScope(left, right) {
+  const a = executorEventScopeID(left);
+  const b = executorEventScopeID(right);
+  if (!a || !b) return true;
+  return a === b;
 }
 
 function genericExecutorSummary(event) {
@@ -5977,14 +7053,26 @@ function executorCall(events, index, event) {
     .find((item) =>
       item?.kind === "tool_call" &&
       item?.payload?.id === id &&
-      (!item.runID || !event.runID || item.runID === event.runID),
+      (!item.runID || !event.runID || item.runID === event.runID) &&
+      sameExecutorEventScope(item, event),
     ) || null;
 }
 
-function executorText(event, events = [], index = -1) {
+function executorTargetText(event, events = [], index = -1) {
+  if (typeof event?._targetText === "string") return event._targetText;
   const summary = String(event?.summary || "").trim();
   const command = executorCommand(event);
   const output = executorOutput(event);
+
+  if (event?.kind === "message_delta") {
+    if (typeof event?.payload?.text === "string" && event.payload.text.trim()) return event.payload.text;
+    return summary;
+  }
+
+  if (event?.kind === "reasoning_delta") {
+    if (typeof event?.payload?.text === "string" && event.payload.text.trim()) return event.payload.text;
+    return summary;
+  }
 
   if (event?.kind === "tool_call") {
     if (!command) return summary;
@@ -6016,8 +7104,15 @@ function executorText(event, events = [], index = -1) {
   return summary;
 }
 
+function executorText(event, events = [], index = -1) {
+  if (typeof event?._liveText === "string") return event._liveText;
+  return executorTargetText(event, events, index);
+}
+
 function visibleExecutorEvent(event) {
   if (!event) return false;
+  if (event.kind === "message_delta") return !!executorText(event);
+  if (event.kind === "reasoning_delta") return !!executorText(event);
   if (event.kind === "tool_call") return !!executorText(event);
   if (event.kind === "tool_result") return !!executorText(event);
   if (event.kind === "command") return !!executorText(event);
@@ -6038,19 +7133,260 @@ function executorMessage(event, events = [], index = -1) {
     _synthetic: true,
     info: {
       id: event.id,
-      role: "task_tool",
+      role: event.kind === "message_delta" || event.kind === "reasoning_delta" ? "assistant" : "task_tool",
       time: { created: event.time?.created || Date.now() },
     },
-    parts: [{ type: "text", text }],
+    parts: [{ type: event.kind === "reasoning_delta" ? "reasoning" : "text", text }],
+  };
+}
+
+function executorProcessBaseID(event) {
+  if (!event) return "";
+  if (typeof event.sourceID === "string" && event.sourceID) return event.sourceID;
+  if (typeof event?.payload?.sourceID === "string" && event.payload.sourceID) return event.payload.sourceID;
+  if (typeof event?.payload?.id === "string" && event.payload.id) return event.payload.id;
+  if (event.kind === "command") {
+    const command = executorCommand(event);
+    if (command) return `command:${command}`;
+  }
+  return "";
+}
+
+function executorProcessID(event) {
+  const base = executorProcessBaseID(event);
+  if (!base) return "";
+  const scope = executorEventScopeID(event);
+  return scope ? `${scope}:${base}` : base;
+}
+
+function executorProcessKind(event) {
+  if (!event) return "";
+  if (typeof event.sourceKind === "string" && event.sourceKind) return event.sourceKind;
+  return executorEventSourceKind(event.kind, record(event?.payload) ? event.payload : {});
+}
+
+function executorProcessStatus(event) {
+  const status = String(event?.sourceStatus || event?.payload?.status || "").trim().toLowerCase();
+  if (status.includes("fail") || status.includes("error")) return "failed";
+  if (status.includes("complete") || status.includes("done")) return "completed";
+  if (status.includes("block")) return "blocked";
+  if (status.includes("queue") || status.includes("pending")) return "queued";
+  if (event?.kind === "tool_result") return "completed";
+  if (event?.kind === "error") return "failed";
+  if (event?.kind === "approval_request" || event?.kind === "input_request") return "blocked";
+  const summary = String(event?.summary || "").trim().toLowerCase();
+  if (summary.includes("fail") || summary.includes("error")) return "failed";
+  if (summary.includes("complete") || summary.includes("done")) return "completed";
+  if (summary.includes("block")) return "blocked";
+  if (summary.includes("queue") || summary.includes("pending")) return "queued";
+  return "running";
+}
+
+function executorProcessTitle(event, events = [], index = -1) {
+  const call = event?.kind === "tool_result" ? executorCall(events, index, event) : null;
+  if (typeof event?.sourceLabel === "string" && event.sourceLabel.trim()) return event.sourceLabel.trim();
+  const command = executorCommand(event);
+  if (command) return command;
+  if (typeof event?.payload?.name === "string" && event.payload.name.trim()) return event.payload.name.trim();
+  if (typeof call?.payload?.name === "string" && call.payload.name.trim()) return call.payload.name.trim();
+  return String(event?.summary || "").trim() || String(event?.id || "");
+}
+
+function executorProcessDetail(event, events = [], index = -1) {
+  const kind = executorProcessKind(event);
+  const call = event?.kind === "tool_result" ? executorCall(events, index, event) : null;
+  const command = executorCommand(event) || executorCommand(call);
+  if (kind === "tool") {
+    if (command && command !== executorProcessTitle(event, events, index)) return command;
+    if (typeof event?.payload?.input === "string" && event.payload.input.trim()) {
+      return clipText(event.payload.input.replace(/\s+/g, " "), 120);
+    }
+    if (typeof call?.payload?.input === "string" && call.payload.input.trim()) {
+      return clipText(call.payload.input.replace(/\s+/g, " "), 120);
+    }
+  }
+  if (kind === "approval" && typeof event?.payload?.message === "string" && event.payload.message.trim()) {
+    return event.payload.message.trim();
+  }
+  if (kind === "input" && typeof event?.summary === "string" && event.summary.trim()) return event.summary.trim();
+  return "";
+}
+
+function executorProcessNote(event, events = [], index = -1) {
+  const summary = String(event?.summary || "").trim();
+  if (!summary || genericExecutorSummary(event)) return "";
+  const title = executorProcessTitle(event, events, index);
+  const detail = executorProcessDetail(event, events, index);
+  if (summary === title || summary === detail) return "";
+  return summary;
+}
+
+function executorProcessProgress(event, events = [], index = -1) {
+  const status = executorProcessStatus(event);
+  if (event?.kind === "message_delta") return processStatusLabel(status);
+  const summary = String(event?.summary || "").trim();
+  const title = executorProcessTitle(event, events, index);
+  const detail = executorProcessDetail(event, events, index);
+  const output = event?.kind === "message_delta" ? "" : executorOutput(event);
+  if (
+    summary &&
+    summary !== title &&
+    summary !== detail &&
+    summary !== output &&
+    (!genericExecutorSummary(event) || event?.kind === "command" || event?.kind === "mcp")
+  ) return summary;
+  return processStatusLabel(status);
+}
+
+function mergeExecutorProcessOutput(current, next, replace = false) {
+  if (!next) return current;
+  if (!current) return next;
+  if (replace && next.startsWith(current)) return next;
+  if (current.includes(next)) return current;
+  return `${current}\n${next}`.trim();
+}
+
+function buildExecutorProcesses(events = Array.isArray(state.executorEvents) ? state.executorEvents : []) {
+  const items = new Map();
+  events.forEach((event, index) => {
+    const id = executorProcessID(event);
+    const kind = executorProcessKind(event);
+    if (!id || !kind || kind === "assistant" || kind === "status") return;
+    const current = items.get(id) || {
+      id,
+      kind,
+      title: executorProcessTitle(event, events, index),
+      detail: "",
+      progress: executorProcessProgress(event, events, index),
+      note: "",
+      output: "",
+      status: executorProcessStatus(event),
+      time: {
+        created: event.time?.created || Date.now(),
+        updated: event.time?.created || Date.now(),
+      },
+    };
+    current.kind = kind;
+    current.title = executorProcessTitle(event, events, index) || current.title;
+    const detail = executorProcessDetail(event, events, index);
+    if (detail) current.detail = detail;
+    const progress = executorProcessProgress(event, events, index);
+    if (progress) current.progress = progress;
+    const note = executorProcessNote(event, events, index);
+    if (note) current.note = note;
+    current.status = executorProcessStatus(event) || current.status;
+    const output = event.kind === "message_delta" ? executorText(event, events, index) : executorOutput(event);
+    if (output) current.output = mergeExecutorProcessOutput(current.output, output, event.kind === "message_delta");
+    current.time.updated = event.time?.created || current.time.updated;
+    items.set(id, current);
+  });
+  return [...items.values()].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+}
+
+function executorProcessMessage(processes) {
+  if (!Array.isArray(processes) || processes.length === 0) return null;
+  return {
+    _synthetic: true,
+    info: {
+      id: `executor:processes:${state.executorRunID || state.selectedTaskID || "active"}`,
+      role: "task_tool",
+      time: { created: processes[0]?.time?.created || Date.now() },
+    },
+    parts: processes.map((process) => ({
+      type: "executor_process",
+      process,
+    })),
   };
 }
 
 function buildExecutorMessages() {
   if (!state.selectedTaskID) return [];
   const events = Array.isArray(state.executorEvents) ? state.executorEvents : [];
-  return events
+  const processes = buildExecutorProcesses(events);
+  const processIDs = new Set(processes.map((item) => item.id));
+  const messages = events
+    .filter((event) => {
+      const id = executorProcessID(event);
+      const kind = executorProcessKind(event);
+      return !(id && processIDs.has(id) && kind && kind !== "assistant" && kind !== "status");
+    })
     .map((event, index) => executorMessage(event, events, index))
     .filter(Boolean);
+  const processMessage = executorProcessMessage(processes);
+  return processMessage ? [processMessage, ...messages] : messages;
+}
+
+function syncExecutorText(event, index = -1) {
+  if (!event) return;
+  const key = `executor:${event.id || "unknown"}`;
+  const target = executorTargetText(event, state.executorEvents, index);
+  if (!target) {
+    delete event._targetText;
+    delete event._liveText;
+    stopLiveText(key);
+    return;
+  }
+  event._targetText = target;
+  startLiveText(key, target, typeof event._liveText === "string" ? event._liveText : "", (value) => {
+    event._liveText = value;
+  });
+}
+
+function executorDeltaKind(kind) {
+  return kind === "message_delta" || kind === "reasoning_delta";
+}
+
+function sameExecutorEventStream(left, right) {
+  return (!left?.runID || !right?.runID || left.runID === right.runID) &&
+    sameExecutorEventScope(left, right);
+}
+
+function mergeExecutorDelta(current, event, events, index) {
+  const delta = typeof event.payload?.text === "string" ? event.payload.text : event.summary || "";
+  const previous = executorTargetText(current, events, index);
+  return {
+    ...current,
+    summary: previous + delta,
+    payload: {
+      ...(record(current.payload) ? current.payload : {}),
+      ...(record(event.payload) ? event.payload : {}),
+      text: previous + delta,
+    },
+    _targetText: previous + delta,
+    _liveText: typeof current._liveText === "string" ? current._liveText : "",
+  };
+}
+
+function mergeExecutorEventList(events = [], event) {
+  const sourceIndex = executorDeltaKind(event?.kind) && event?.sourceID
+    ? events.findIndex((item) =>
+      item.kind === event.kind &&
+      item.sourceID === event.sourceID &&
+      sameExecutorEventStream(item, event),
+    )
+    : -1;
+  const last = events[events.length - 1];
+  if (sourceIndex >= 0) {
+    const next = mergeExecutorDelta(events[sourceIndex], event, events, sourceIndex);
+    return [
+      ...events.slice(0, sourceIndex),
+      next,
+      ...events.slice(sourceIndex + 1),
+    ];
+  }
+  if (
+    executorDeltaKind(event?.kind) &&
+    last?.kind === event.kind &&
+    !event.sourceID &&
+    !last.sourceID &&
+    sameExecutorEventStream(last, event)
+  ) {
+    return [
+      ...events.slice(0, -1),
+      mergeExecutorDelta(last, event, events, events.length - 1),
+    ];
+  }
+  return [...events, event].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
 }
 
 async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") {
@@ -6080,7 +7416,8 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
     if ((state.board?.task?.activeRunID || "") !== next) return state.executorEvents;
     state.executorEvents = (Array.isArray(events) ? events : [])
       .map(executorEventEntry)
-      .filter((item) => !!item);
+      .filter((item) => !!item)
+      .reduce((items, item) => mergeExecutorEventList(items, item), []);
     state.executorRunID = next;
     state.executorEventsFetchedAt = Date.now();
     renderConversation();
@@ -6099,14 +7436,23 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
 function appendExecutorEvent(raw) {
   const event = executorEventEntry(raw);
   if (!event) return;
-  if (state.executorEvents.some((item) => item.id === event.id)) return;
+  const exists = state.executorEvents.some((item) => item.id === event.id);
+  if (exists) return;
   if (event.runID && state.executorRunID && state.executorRunID !== event.runID) {
     // New run started — discard stale events from the previous run and adopt the new runID.
     state.executorEvents = [];
     state.executorRunID = event.runID;
   }
   if (event.runID && !state.executorRunID) state.executorRunID = event.runID;
-  state.executorEvents = [...state.executorEvents, event].sort((a, b) => (a.time?.created || 0) - (b.time?.created || 0));
+  state.executorEvents = mergeExecutorEventList(state.executorEvents, event);
+  const target = executorDeltaKind(event.kind) && event.sourceID
+    ? state.executorEvents.find((item) =>
+      item.kind === event.kind &&
+      item.sourceID === event.sourceID &&
+      sameExecutorEventStream(item, event),
+    ) || event
+    : state.executorEvents.find((item) => item.id === event.id) || state.executorEvents[state.executorEvents.length - 1];
+  syncExecutorText(target, state.executorEvents.findIndex((item) => item.id === target.id));
   state.executorEventsFetchedAt = Date.now();
   state.conversationUpdatedAt = Date.now();
   renderConversation();
@@ -6370,7 +7716,12 @@ function hasConversationRequest(messages, request) {
 }
 
 function conversationMessages() {
-  const boardMsgs = buildBoardContextMessages();
+  const agentMsgs = buildAgentMessages();
+  const hiddenRoles = new Set(
+    (Array.isArray(state.agentEvents) ? state.agentEvents : [])
+      .flatMap((event) => agentStageActive(event.stage) ? [agentRole(event.stage)] : []),
+  );
+  const boardMsgs = buildBoardContextMessages().filter((message) => !hiddenRoles.has(message?.info?.role));
   const executorMsgs = buildExecutorMessages();
   let realMessages = state.messages || [];
   if (boardMsgs.length > 0 && realMessages.length > 0) {
@@ -6379,7 +7730,7 @@ function conversationMessages() {
       return !text.includes("<assistant-brief>") && !text.includes("You are executing a headless coding task");
     });
   }
-  return [...realMessages, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
+  return [...realMessages, ...agentMsgs, ...executorMsgs, ...boardMsgs].sort((a, b) => (a.info?.time?.created || 0) - (b.info?.time?.created || 0));
 }
 
 function renderFilePart(part) {
@@ -6817,6 +8168,8 @@ function renderPart(part, role) {
   switch (part.type) {
     case "text":
       return renderTextPart(part, role);
+    case "executor_process":
+      return renderExecutorProcessPart(part);
     case "tool":
       return renderToolPart(part);
     case "reasoning":
@@ -6835,6 +8188,46 @@ function renderPart(part, role) {
     default:
       return "";
   }
+}
+
+function executorProcessKindTag(kind) {
+  if (kind === "command") return "CMD";
+  if (kind === "approval") return "ASK";
+  if (kind === "input") return "IN";
+  if (kind === "mcp") return "MCP";
+  if (kind === "error") return "ERR";
+  return "TOOL";
+}
+
+function renderExecutorProcessPart(part) {
+  const process = record(part?.process) ? part.process : {};
+  const kind = String(process.kind || "tool");
+  const status = String(process.status || "running");
+  const live = status === "running" || status === "queued";
+  const title = String(process.title || process.id || "").trim();
+  if (!title) return "";
+  const detail = String(process.detail || "").trim();
+  const progress = String(process.progress || processStatusLabel(status) || "").trim();
+  const note = String(process.note || "").trim();
+  const output = String(process.output || "").trim();
+  return `
+    <section class="executor-process-card" data-kind="${escapeHtml(kind)}" data-status="${escapeHtml(status)}" data-live="${live ? "true" : "false"}">
+      <div class="executor-process-head">
+        <span class="executor-process-kind">${escapeHtml(executorProcessKindTag(kind))}</span>
+        <div class="executor-process-meta">
+          <div class="executor-process-row">
+            <span class="executor-process-title">${escapeHtml(title)}</span>
+            <span class="executor-process-status" data-status="${escapeHtml(status)}">${escapeHtml(processStatusLabel(status))}</span>
+          </div>
+          ${detail ? `<div class="executor-process-detail">${escapeHtml(detail)}</div>` : ""}
+        </div>
+      </div>
+      <div class="executor-process-bar" aria-hidden="true"><span class="executor-process-bar-fill"></span></div>
+      ${progress ? `<div class="executor-process-progress">${live ? '<span class="executor-process-activity" aria-hidden="true"></span>' : ""}${escapeHtml(progress)}</div>` : ""}
+      ${note && note !== progress ? `<div class="executor-process-note">${escapeHtml(note)}</div>` : ""}
+      ${output ? `<pre class="executor-process-output">${escapeHtml(output)}</pre>` : ""}
+    </section>
+  `;
 }
 
 function renderToolPart(part) {
@@ -6931,17 +8324,30 @@ dom.chatForm.addEventListener("submit", async (e) => {
   if (!text) return;
 
   const emptyStart = workspaceMode() === "empty";
+  const requestID = crypto.randomUUID();
   const request = {
     controller: new AbortController(),
     target: chatAbortTarget(),
     aborted: false,
+    completed: false,
+    manualAbort: false,
+    recoveredTaskID: "",
+    recovery: null,
     stopping: false,
+    requestID,
+    timedOut: false,
     workspaceEpoch: state.workspaceEpoch,
   };
   const timeout = setTimeout(() => {
+    request.aborted = true;
+    request.timedOut = true;
     request.controller.abort(new DOMException("Timed out", "AbortError"));
-  }, 120000);
+  }, chatRequestTimeoutMs());
   state.chatRequest = request;
+  if (emptyStart) {
+    rememberPendingTask(requestID, text);
+    request.recovery = startTaskRecovery(request);
+  }
   dom.chatTextarea.value = "";
   sizeChat();
   renderChatComposer();
@@ -6955,18 +8361,30 @@ dom.chatForm.addEventListener("submit", async (e) => {
   renderConversation();
 
   try {
-    await panelMessage(text, undefined, request.controller.signal);
+    await panelMessage(text, undefined, request.controller.signal, {
+      requestID,
+      workspaceEpoch: request.workspaceEpoch,
+    });
+    request.completed = true;
   } catch (err) {
     if (request.workspaceEpoch !== state.workspaceEpoch) {
       return;
     }
     if (request.aborted || isAbortError(err)) {
       const ph = chatPlaceholder();
-      if (ph) ph.parts[0].text = t("chat.interrupted_notice");
+      if (request.timedOut && request.recovery?.active && !request.manualAbort && !request.recoveredTaskID) {
+        if (ph) ph.parts[0].text = t("chat.thinking");
+      } else if (ph) {
+        ph.parts[0].text = t("chat.interrupted_notice");
+      }
+      if (!request.timedOut || request.manualAbort || request.recoveredTaskID) {
+        forgetPendingTask(requestID);
+      }
       renderConversation();
       return;
     }
     if (emptyStart && workspaceMode() === "empty") {
+      forgetPendingTask(requestID);
       enterEmptyWorkspace();
       renderClear();
       return;
@@ -6975,9 +8393,18 @@ dom.chatForm.addEventListener("submit", async (e) => {
     const msg = t("interaction.error", { message: err?.message || err });
     if (ph) ph.parts[0].text = msg;
     else state.messages.push({ parts: [{ type: "text", text: msg }], info: { role: "assistant", time: { created: Date.now() } } });
+    forgetPendingTask(requestID);
     renderConversation();
   } finally {
     clearTimeout(timeout);
+    const keepRecovery =
+      request.recovery &&
+      !request.manualAbort &&
+      !request.recoveredTaskID &&
+      state.pendingTasks.some((item) => item?.requestID === requestID);
+    if (request.recovery && !keepRecovery && (request.completed || request.manualAbort || request.recoveredTaskID || !request.timedOut)) {
+      request.recovery.stop();
+    }
     if (state.chatRequest === request) {
       state.chatRequest = null;
     }
@@ -7042,6 +8469,13 @@ dom.rightPaneResizer?.addEventListener("pointerdown", (event) => {
 });
 
 dom.taskListPanel?.addEventListener("click", async (event) => {
+  const remove = eventClosest(event, "[data-task-delete]");
+  if (remove) {
+    event.preventDefault();
+    event.stopPropagation();
+    await deleteTask(remove.dataset.taskDelete || "");
+    return;
+  }
   const button = eventClosest(event, "[data-task-id]");
   if (!button) return;
   await selectTask(button.dataset.taskId || "");
@@ -7454,11 +8888,17 @@ function openServerSettings() {
 }
 
 function focusConfigSection(name) {
-  if (name !== "channel" || !dom.channelSection) return;
-  dom.channelSection.open = true;
+  const target =
+    name === "prompt"
+      ? dom.promptSection
+      : name === "channel"
+        ? dom.channelSection
+        : null;
+  if (!target) return;
+  target.open = true;
   requestAnimationFrame(() => {
-    dom.channelSection?.scrollIntoView?.({ block: "nearest" });
-    dom.channelList?.scrollTo?.({ top: 0 });
+    target?.scrollIntoView?.({ block: "nearest" });
+    if (name === "channel") dom.channelList?.scrollTo?.({ top: 0 });
   });
 }
 
@@ -7551,6 +8991,34 @@ dom.btnConfigToggle?.addEventListener("click", () => {
 
 dom.btnCloseConfigDialog?.addEventListener("click", () => {
   dom.configDialog?.close();
+});
+
+dom.promptBody?.addEventListener("input", (event) => {
+  const field = eventClosest(event, "[data-prompt-input]");
+  if (!(field instanceof HTMLTextAreaElement)) return;
+  const entryID = field.dataset.promptInput || "";
+  if (!entryID) return;
+  state.promptDrafts[entryID] = field.value;
+  const preview = dom.promptBody?.querySelector(`[data-prompt-preview="${CSS.escape(entryID)}"]`);
+  if (preview) preview.innerHTML = renderPromptPreview(field.value);
+  const entry = promptEntry(entryID);
+  const save = dom.promptBody?.querySelector(`[data-prompt-save="${CSS.escape(entryID)}"]`);
+  const reset = dom.promptBody?.querySelector(`[data-prompt-reset="${CSS.escape(entryID)}"]`);
+  const dirty = entry ? promptDirty(entry) : false;
+  if (save instanceof HTMLButtonElement) save.disabled = !dirty;
+  if (reset instanceof HTMLButtonElement && entry) reset.disabled = entry.configured_prompt === null && !dirty;
+});
+
+dom.promptBody?.addEventListener("click", (event) => {
+  const save = eventClosest(event, "[data-prompt-save]");
+  if (save) {
+    void savePromptEntry(save.dataset.promptSave);
+    return;
+  }
+  const reset = eventClosest(event, "[data-prompt-reset]");
+  if (reset) {
+    void resetPromptEntry(reset.dataset.promptReset);
+  }
 });
 
 dom.channelList?.addEventListener("click", (event) => {
@@ -8502,11 +9970,12 @@ setupDialogBackdropClose();
 
 async function loadConfigInfo() {
   try {
-    const [config, catalog, auth, channels] = await Promise.all([
+    const [config, catalog, auth, channels, prompts] = await Promise.all([
       apiJson("config"),
       apiJson("provider"),
       apiJson("provider/auth"),
       apiJson("channel"),
+      apiJson("config/prompt").catch(() => []),
     ]);
     state.config = config;
     const remoteUnattended = configUnattended(config);
@@ -8519,6 +9988,7 @@ async function loadConfigInfo() {
     state.providerCatalog = catalog;
     state.providerAuth = auth;
     state.channels = Array.isArray(channels) ? channels : [];
+    applyPromptEntries(prompts);
 
     populateProviderSelect(config, catalog);
     if (dom.cfgAvailableProviders) {
@@ -8542,7 +10012,7 @@ async function restoreInitialWorkspace() {
   if (hasWorkspaceSelection()) return false;
   const base = activeDirectory() || "";
   const taskID = state.workspaceTaskID || "";
-  const directory = state.workspaceDirectory || "";
+  const directory = workspaceRestoreDirectory(state.workspaceDirectory || "");
   const moved = !!directory && !!base && directory !== base;
   if (moved) {
     await setActiveDirectory(directory, {
