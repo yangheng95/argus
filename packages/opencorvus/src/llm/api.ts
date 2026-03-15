@@ -1,4 +1,16 @@
-import { APICallError, generateObject as generateObjectBase, generateText as generateTextBase, streamObject as streamObjectBase, streamText as streamTextBase } from "ai"
+import {
+  APICallError,
+  generateObject as generateObjectBase,
+  generateText as generateTextBase,
+  streamObject as streamObjectBase,
+  streamText as streamTextBase,
+  type StreamTextOnAbortCallback,
+  type StreamTextOnChunkCallback,
+  type StreamTextOnErrorCallback,
+  type StreamTextOnFinishCallback,
+  type StreamTextOnStepFinishCallback,
+  type ToolSet,
+} from "ai"
 import { Env } from "@/env"
 
 const DEFAULT_TIMEOUT_MS = 5_000
@@ -111,6 +123,40 @@ export async function generateText(
   )
 }
 
+export type TextHooks<TOOLS extends ToolSet = ToolSet> = {
+  onAbort?: StreamTextOnAbortCallback<TOOLS>
+  onChunk?: StreamTextOnChunkCallback<TOOLS>
+  onError?: StreamTextOnErrorCallback
+  onFinish?: StreamTextOnFinishCallback<TOOLS>
+  onStepFinish?: StreamTextOnStepFinishCallback<TOOLS>
+}
+
+export async function completeText<TOOLS extends ToolSet>(
+  input: Parameters<typeof generateTextBase>[0] & {
+    timeoutMs?: number | false
+    retries?: number
+    retryDelayMs?: number
+  } & TextHooks<TOOLS>,
+) {
+  const { onAbort, onChunk, onError, onFinish, onStepFinish, ...rest } = input
+  if (!onAbort && !onChunk && !onError && !onFinish && !onStepFinish) {
+    return generateText(rest)
+  }
+  const result = streamText<TOOLS>({
+    ...(rest as Parameters<typeof streamTextBase<TOOLS>>[0]),
+    onAbort,
+    onChunk,
+    onError,
+    onFinish,
+    onStepFinish,
+  })
+  return {
+    text: await result.text,
+    finishReason: await result.finishReason,
+    steps: await result.steps,
+  }
+}
+
 export async function generateObject(
   input: Parameters<typeof generateObjectBase>[0] & {
     timeoutMs?: number | false
@@ -134,15 +180,15 @@ export async function generateObject(
   )
 }
 
-export function streamText(
-  input: Parameters<typeof streamTextBase>[0] & {
+export function streamText<TOOLS extends ToolSet = ToolSet>(
+  input: Parameters<typeof streamTextBase<TOOLS>>[0] & {
     timeoutMs?: number | false
     retries?: number
   },
 ) {
   const { timeoutMs: timeout, retries: count, abortSignal, ...rest } = input
   return streamTextBase({
-    ...(rest as Parameters<typeof streamTextBase>[0]),
+    ...(rest as Parameters<typeof streamTextBase<TOOLS>>[0]),
     abortSignal: signal(abortSignal, timeout),
     maxRetries: retries(count),
   })

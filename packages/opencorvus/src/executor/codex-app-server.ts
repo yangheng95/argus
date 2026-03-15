@@ -241,6 +241,10 @@ function* notification(threadID: string, turnID: string, method: string, params?
   }
 
   if (method === "turn/diff/updated" || method === "item/fileChange/outputDelta") {
+    const live = method === "item/fileChange/outputDelta"
+      ? progressFromMethod(currentThread, currentTurn, method, data)
+      : undefined
+    if (live) yield live
     yield {
       type: "diff_delta",
       summary: text(data.delta || data.summary || "Diff updated"),
@@ -271,15 +275,8 @@ function* notification(threadID: string, turnID: string, method: string, params?
   }
 
   if (method === "item/mcpToolCall/progress") {
-    yield {
-      type: "raw",
-      name: "mcp.progress",
-      meta: {
-        thread_id: currentThread,
-        turn_id: currentTurn,
-        ...data,
-      },
-    }
+    const live = progressFromMethod(currentThread, currentTurn, method, data)
+    if (live) yield live
     return
   }
 
@@ -322,6 +319,12 @@ function* notification(threadID: string, turnID: string, method: string, params?
     return
   }
 
+  const live = progressFromMethod(currentThread, currentTurn, method, data)
+  if (live) {
+    yield live
+    return
+  }
+
   if (method === "item/completed") {
     const item = record(data.item)
     if (!item) return
@@ -341,16 +344,8 @@ function* notification(threadID: string, turnID: string, method: string, params?
       return
     }
     if (type === "commandExecution" || type === "fileChange" || type === "mcpToolCall") {
-      yield {
-        type: "raw",
-        name: `item.${type}`,
-        meta: {
-          thread_id: currentThread,
-          turn_id: currentTurn,
-          item_id: typeof item.id === "string" ? item.id : undefined,
-          ...item,
-        },
-      }
+      const done = progressFromItem(currentThread, currentTurn, item)
+      if (done) yield done
       return
     }
     if (type === "plan") {
@@ -576,9 +571,222 @@ function number(input: unknown) {
   return next
 }
 
-function toolID(input: Record<string, unknown>) {
+function progressFromMethod(threadID: string, turnID: string, method: string, data: Record<string, unknown>) {
+  const kind = progressKind(method)
+  if (!kind) return
+  const id = progressID(kind, data)
+  if (!id) return
+  const status = progressStatus(method, data)
+  const output = progressOutput(method, data)
+  return {
+    type: "progress",
+    kind,
+    id,
+    status,
+    summary: progressSummary(kind, method, status, data),
+    ...(output ? { output } : {}),
+    meta: progressMeta(threadID, turnID, kind, status, data),
+  } satisfies CodingEventInfo
+}
+
+function progressFromItem(threadID: string, turnID: string, item: Record<string, unknown>) {
+  const type = typeof item.type === "string" ? item.type : ""
+  const kind = progressKind(type)
+  if (!kind) return
+  const id = progressID(kind, item)
+  if (!id) return
+  const status = progressStatus(type, {
+    ...item,
+    status: typeof item.status === "string" && item.status ? item.status : "completed",
+  })
+  const output = progressOutput(type, item)
+  return {
+    type: "progress",
+    kind,
+    id,
+    status,
+    summary: progressSummary(kind, type, status, item),
+    ...(output ? { output } : {}),
+    meta: progressMeta(threadID, turnID, kind, status, item),
+  } satisfies CodingEventInfo
+}
+
+function progressKind(input: string) {
+  const value = input.toLowerCase()
+  if (value.includes("commandexecution")) return "command"
+  if (value.includes("mcptoolcall")) return "mcp"
+  if (value.includes("filechange")) return "tool"
+  return ""
+}
+
+function progressID(kind: string, data: Record<string, unknown>) {
+  const id = itemKey(data) || toolID(data)
+  if (id) return id
+  const label = progressLabel(kind, data)
+  if (!label) return ""
+  return `${kind}:${label}`
+}
+
+function progressLabel(kind: string, data: Record<string, unknown>) {
+  const cmd = commandText(data)
+  if (kind === "command" && cmd) return cmd
+  if (kind === "mcp") {
+    const server = serverName(data)
+    if (server) return server
+  }
+  const name = typeof data.tool === "string" && data.tool.trim()
+    ? data.tool.trim()
+    : typeof data.name === "string" && data.name.trim()
+      ? data.name.trim()
+      : fileText(data)
+  if (name) return name
+  return kind === "tool" ? "file change" : ""
+}
+
+function progressStatus(input: string, data: Record<string, unknown>) {
+  const state = typeof data.status === "string" ? data.status.trim().toLowerCase() : ""
+  if (state.includes("fail") || state.includes("error")) return "failed"
+  if (state.includes("complete") || state.includes("done")) return "completed"
+  if (state.includes("block")) return "blocked"
+  if (state.includes("queue") || state.includes("pending")) return "queued"
+  if (state.includes("run") || state.includes("start") || state.includes("progress")) return "running"
+  const value = input.toLowerCase()
+  if (value.includes("fail") || value.includes("error")) return "failed"
+  if (value.includes("complete") || value.includes("done") || value.includes("finished")) return "completed"
+  if (value.includes("block")) return "blocked"
+  if (value.includes("queue") || value.includes("pending")) return "queued"
+  return "running"
+}
+
+function progressSummary(kind: string, input: string, status: string, data: Record<string, unknown>) {
+  const value = input.toLowerCase()
+  const info = text(data.message || data.summary || "")
+  if (info && !value.includes("outputdelta")) return info
+  if (kind === "command") {
+    if (status === "completed") return "Command completed"
+    if (status === "failed") return "Command failed"
+    if (value.includes("outputdelta") || value.includes("stdout") || value.includes("stderr")) return "Streaming output"
+    if (status === "queued") return "Command queued"
+    return "Command started"
+  }
+  if (kind === "mcp") {
+    if (status === "completed") return "MCP completed"
+    if (status === "failed") return "MCP failed"
+    if (status === "queued") return "MCP queued"
+    return "MCP running"
+  }
+  if (status === "completed") return "File change completed"
+  if (status === "failed") return "File change failed"
+  if (status === "queued") return "File change queued"
+  return "Applying changes"
+}
+
+function progressOutput(input: string, data: Record<string, unknown>) {
+  const value = input.toLowerCase()
+  if (value.includes("outputdelta")) {
+    const delta = text(data.delta || data.output || data.stdout || data.stderr)
+    if (delta) return delta
+  }
+  const output = data.output
+  if (typeof output === "string" && output) return output
+  const recordOutput = record(output)
+  if (recordOutput) {
+    const textOutput = [
+      recordOutput.output,
+      recordOutput.stdout,
+      recordOutput.stderr,
+      recordOutput.result,
+      recordOutput.message,
+      recordOutput.content,
+    ]
+      .flatMap((item) => typeof item === "string" && item ? [item] : [])
+      .join("\n")
+    if (textOutput) return textOutput
+  }
+  const next = [
+    data.stdout,
+    data.stderr,
+    data.result,
+    data.content,
+    data.contentItems,
+  ]
+    .flatMap((item) => typeof item === "string" && item ? [item] : [])
+    .join("\n")
+  if (next) return next
+  return ""
+}
+
+function progressMeta(
+  threadID: string,
+  turnID: string,
+  kind: string,
+  status: string,
+  data: Record<string, unknown>,
+) {
+  const cmd = commandText(data)
+  const server = serverName(data)
+  const name = progressLabel(kind, data)
+  return {
+    thread_id: threadID,
+    turn_id: turnID,
+    ...data,
+    item_id: itemKey(data) || undefined,
+    call_id: callKey(data) || undefined,
+    ...(cmd ? { command: cmd } : {}),
+    ...(server ? { serverName: server } : {}),
+    ...(kind === "tool" && name ? { name } : {}),
+    status,
+  }
+}
+
+function commandText(data: Record<string, unknown>) {
+  const value = data.command ?? data.argv ?? data.cmd
+  if (typeof value === "string") return value.trim()
+  if (!Array.isArray(value)) return ""
+  return value
+    .flatMap((item) => typeof item === "string" && item.trim() ? [item.trim()] : [])
+    .join(" ")
+    .trim()
+}
+
+function serverName(data: Record<string, unknown>) {
+  if (typeof data.serverName === "string" && data.serverName.trim()) return data.serverName.trim()
+  if (typeof data.server_name === "string" && data.server_name.trim()) return data.server_name.trim()
+  return ""
+}
+
+function fileText(data: Record<string, unknown>) {
+  if (!Array.isArray(data.files)) return ""
+  return data.files
+    .flatMap((item) => {
+      if (typeof item === "string" && item.trim()) return [item.trim()]
+      const next = record(item)
+      if (!next) return []
+      if (typeof next.path === "string" && next.path.trim()) return [next.path.trim()]
+      if (typeof next.filePath === "string" && next.filePath.trim()) return [next.filePath.trim()]
+      return []
+    })
+    .slice(0, 3)
+    .join(", ")
+}
+
+function itemKey(input: Record<string, unknown>) {
+  if (typeof input.itemId === "string" && input.itemId) return input.itemId
+  if (typeof input.item_id === "string" && input.item_id) return input.item_id
+  return ""
+}
+
+function callKey(input: Record<string, unknown>) {
   if (typeof input.callId === "string" && input.callId) return input.callId
   if (typeof input.call_id === "string" && input.call_id) return input.call_id
+  return ""
+}
+
+function toolID(input: Record<string, unknown>) {
+  const call = callKey(input)
+  if (call) return call
+  const item = itemKey(input)
+  if (item) return item
   if (typeof input.id === "string" && input.id) return input.id
   return ""
 }

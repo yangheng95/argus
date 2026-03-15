@@ -209,6 +209,15 @@ export const CodingEvent = z.discriminatedUnion("type", [
     meta: Meta.optional(),
   }),
   z.object({
+    type: z.literal("progress"),
+    kind: z.string(),
+    id: z.string(),
+    status: z.string().optional(),
+    summary: z.string().optional(),
+    output: z.string().optional(),
+    meta: Meta.optional(),
+  }),
+  z.object({
     type: z.literal("raw"),
     name: z.string(),
     meta: Meta.optional(),

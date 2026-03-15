@@ -1104,8 +1104,10 @@ function boardOverview(input: {
       ? "Waiting on human input"
       : input.task.status === "completed"
         ? "Accepted delivery is ready"
-        : input.task.status === "delivering"
+      : input.task.status === "delivering"
           ? "Publishing the accepted delivery"
+        : input.task.status === "planning"
+          ? "Compiling the specification and plan"
         : input.task.status === "failed"
           ? "Current attempt failed acceptance"
           : input.task.status === "cancelled"
@@ -1122,8 +1124,10 @@ function boardOverview(input: {
       ? `${input.pendingInteractions.length} interaction${input.pendingInteractions.length > 1 ? "s" : ""} need attention before the task can continue.`
       : input.task.status === "completed" && input.acceptedDelivery
         ? clipBoard(input.acceptedDelivery.summary)
-        : input.task.status === "delivering" && input.candidateDelivery
+      : input.task.status === "delivering" && input.candidateDelivery
           ? clipBoard(input.candidateDelivery.summary)
+        : input.task.status === "planning"
+          ? "The task is materialized. OpenCorvus is refining the spec, goals, and execution plan before dispatch."
         : input.currentFailure?.summary ??
           (input.task.status === "evaluating"
             ? "Execution finished. Acceptance checks are running against the latest delivery."
@@ -1162,6 +1166,12 @@ function boardOverview(input: {
                     kind: "observe" as const,
                     title: "Wait for delivery exports",
                     detail: "Delivery artifacts are being published and summarized.",
+                  }
+              : input.task.status === "planning"
+                ? {
+                    kind: "observe" as const,
+                    title: "Watch spec and plan compilation",
+                    detail: "The task is visible now. Execution will begin after the spec and plan are finalized.",
                   }
               : active
               ? {

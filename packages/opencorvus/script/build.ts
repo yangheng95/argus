@@ -29,6 +29,8 @@ console.log("Generated models-snapshot.ts")
 const singleFlag = process.argv.includes("--single")
 const allFlag = process.argv.includes("--all")
 const baselineFlag = process.argv.includes("--baseline")
+const muslOnly = process.argv.includes("--musl-only")
+const noClean = process.argv.includes("--no-clean")
 const binaryOnly = process.argv.includes("--binary-only")
 const onefileFlag = process.argv.includes("--onefile") || process.env.OPENCORVUS_ONEFILE === "1"
 
@@ -169,6 +171,11 @@ const targets = single
         return false
       }
 
+      // --musl-only: build only musl abi variants (used in Alpine Docker for correct native modules)
+      if (muslOnly) {
+        return item.abi === "musl" && (item.avx2 !== false || baselineFlag)
+      }
+
       // When building for the current platform, prefer a single native binary by default.
       // Baseline binaries require additional Bun artifacts and can be flaky to download.
       if (item.avx2 === false) {
@@ -184,7 +191,7 @@ const targets = single
     })
   : allTargets
 
-await $`rm -rf dist`.nothrow()
+if (!noClean) await $`rm -rf dist`.nothrow()
 
 const binaries: Record<string, string> = {}
 for (const item of targets) {

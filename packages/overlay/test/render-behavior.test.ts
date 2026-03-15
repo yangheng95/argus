@@ -1309,6 +1309,107 @@ test("restoreInitialWorkspace does not auto-open the first session without an ex
   }
 }, { timeout: 20_000 })
 
+test("restoreInitialWorkspace ignores saved execution workspace directories", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("restoreInitialWorkspace") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.connected = true
+      state.directory = "D:/overlay/project"
+      state.savedDirectory = "D:/overlay/project"
+      state.workspaceTaskID = "task-1"
+      state.workspaceDirectory = "C:/Users/hengu/.local/share/opencorvus/goal-workspace/project/task-1/run-1"
+      state.selectedTaskID = ""
+      state.tasks = [{
+        task: {
+          id: "task-1",
+          sessionID: "session-task",
+          directory: "D:/overlay/project",
+        },
+      }]
+      window.eval("loadBoard = async () => { state.board = { task: { id: 'task-1', sessionID: 'session-task', status: 'running', time: {} }, lanes: [], interactions: [] } }")
+      window.eval("loadConversation = async () => {}")
+      window.eval("loadMeta = async () => {}")
+      window.eval("loadMemory = async () => {}")
+      window.eval("persistOverlaySettings = async () => {}")
+
+      const restored = await window.eval("restoreInitialWorkspace")()
+
+      return {
+        restored,
+        directory: state.directory,
+        selectedTaskID: state.selectedTaskID,
+      }
+    })
+
+    expect(result).toEqual({
+      restored: true,
+      directory: "D:/overlay/project",
+      selectedTaskID: "task-1",
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("persistOverlaySettings preserves a stored workspace target before task restore runs", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("persistOverlaySettings") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.directory = "D:/overlay/project"
+      state.savedDirectory = "D:/overlay/project"
+      state.selectedTaskID = ""
+      state.workspaceTaskID = "task-1"
+      state.workspaceDirectory = "D:/overlay/project"
+      await window.eval("persistOverlaySettings")()
+      return {
+        workspaceTaskID: state.workspaceTaskID,
+        workspaceDirectory: state.workspaceDirectory,
+        storedTask: localStorage.getItem("oc_workspace_task") || "",
+        storedDirectory: localStorage.getItem("oc_workspace_directory") || "",
+      }
+    })
+
+    expect(result).toEqual({
+      workspaceTaskID: "task-1",
+      workspaceDirectory: "D:/overlay/project",
+      storedTask: "task-1",
+      storedDirectory: "D:/overlay/project",
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
 test("task-scoped panel requests do not grant session mutation by default", async () => {
   const exe = await browser()
   const server = serve()
@@ -1794,7 +1895,7 @@ test("task SSE payloads refresh the transcript live", async () => {
         },
       })
 
-      await new Promise((resolve) => requestAnimationFrame(() => resolve()))
+      await new Promise((resolve) => setTimeout(resolve, 220))
 
       return {
         body: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
@@ -1804,6 +1905,113 @@ test("task SSE payloads refresh the transcript live", async () => {
 
     expect(result.body).toContain("Publishing")
     expect(result.count).not.toBe("")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task conversation streams agent stage output before falling back to board snapshots", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleEventStreamEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const renderConversation = window.eval("renderConversation")
+      const handleEventStreamEvent = window.eval("handleEventStreamEvent")
+
+      state.selectedTaskID = "task-1"
+      state.messages = []
+      state.agentEvents = []
+      state.board = {
+        task: {
+          id: "task-1",
+          status: "planning",
+          request: "Create a personal homepage",
+          time: { created: 1, updated: 5 },
+        },
+        plan: {
+          summary: "Persisted board plan",
+          time: { created: 3 },
+          metadata: {},
+        },
+        lanes: [],
+        interactions: [],
+      }
+
+      handleEventStreamEvent({
+        type: "agent.updated",
+        event_id: "evt-1",
+        timestamp: 11,
+        summary: "Build",
+        payload: {
+          stage: "planner",
+          kind: "message_delta",
+          id: "planner-live",
+          text: "Build",
+        },
+      })
+      handleEventStreamEvent({
+        type: "agent.updated",
+        event_id: "evt-2",
+        timestamp: 12,
+        summary: " homepage",
+        payload: {
+          stage: "planner",
+          kind: "message_delta",
+          id: "planner-live",
+          text: " homepage",
+        },
+      })
+
+      renderConversation()
+      const partial = {
+        text: document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || "",
+        count: document.querySelectorAll('.turn[data-role="planner"]').length,
+      }
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      const live = {
+        text: document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || "",
+        count: document.querySelectorAll('.turn[data-role="planner"]').length,
+      }
+
+      state.board = {
+        ...state.board,
+        task: {
+          ...state.board.task,
+          status: "running",
+        },
+      }
+      renderConversation()
+      const settled = {
+        text: document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || "",
+        count: document.querySelectorAll('.turn[data-role="planner"]').length,
+      }
+
+      return { partial, live, settled }
+    })
+
+    expect(result.partial.text.length).toBeGreaterThan(0)
+    expect(result.partial.text.length).toBeLessThan(result.live.text.length)
+    expect(result.live.text).toContain("Build homepage")
+    expect(result.live.text).not.toContain("Persisted board plan")
+    expect(result.live.count).toBe(1)
+    expect(result.settled.text).toContain("Persisted board plan")
+    expect(result.settled.count).toBe(1)
   } finally {
     await page.close()
     server.stop(true)
@@ -2084,7 +2292,7 @@ test("task SSE run progress appends visible process messages", async () => {
       }
     })
 
-    const result = await tab.evaluate(() => {
+    const result = await tab.evaluate(async () => {
       const state = window.eval("state")
       const handleSSEEvent = window.eval("handleSSEEvent")
       const renderConversation = window.eval("renderConversation")
@@ -2131,13 +2339,18 @@ test("task SSE run progress appends visible process messages", async () => {
         },
       })
 
+      const partial = document.querySelector('.turn[data-role="task_tool"] .msg-body')?.textContent || ""
+      await new Promise((resolve) => setTimeout(resolve, 220))
       return {
         count: state.executorEvents.length,
+        partial,
         body: document.querySelector('.turn[data-role="task_tool"] .msg-body')?.textContent || "",
       }
     })
 
     expect(result.count).toBe(1)
+    expect(result.partial.length).toBeGreaterThan(0)
+    expect(result.partial.length).toBeLessThan(result.body.length)
     expect(result.body).toContain("Tool call: read_file")
   } finally {
     await page.close()
@@ -2264,7 +2477,7 @@ test("task chat renders readable shell tool results", async () => {
       }
     })
 
-    expect(result.bodies).toContain("bun test render-behavior.test.ts --timeout 20000")
+    expect(result.bodies.some((body) => body.includes("bun test render-behavior.test.ts --timeout 20000"))).toBe(true)
     expect(result.bodies.some((body) =>
       body.includes("bun test render-behavior.test.ts --timeout 20000") &&
       body.includes("1 pass") &&
@@ -2292,7 +2505,7 @@ test("task SSE command progress renders real command lines", async () => {
       }
     })
 
-    const result = await tab.evaluate(() => {
+    const result = await tab.evaluate(async () => {
       const state = window.eval("state")
       const handleSSEEvent = window.eval("handleSSEEvent")
       const renderConversation = window.eval("renderConversation")
@@ -2339,15 +2552,440 @@ test("task SSE command progress renders real command lines", async () => {
         },
       })
 
+      await new Promise((resolve) => setTimeout(resolve, 220))
       return {
         count: state.executorEvents.length,
         body: document.querySelector('.turn[data-role="task_tool"] .msg-body')?.textContent || "",
+        status: document.querySelector(".executor-process-card")?.getAttribute("data-status") || "",
+        progress: document.querySelector(".executor-process-progress")?.textContent || "",
       }
     })
 
     expect(result.count).toBe(1)
+    expect(result.status).toBe("running")
     expect(result.body).toContain("git status --short")
-    expect(result.body).not.toContain("Command started")
+    expect(result.progress).toContain("Command started")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
+test("task SSE renders parallel executor process cards with independent output", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const handleSSEEvent = window.eval("handleSSEEvent")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          title: "Expose process",
+          request: "Expose the coding process.",
+          status: "running",
+          sessionID: "session-1",
+          activeRunID: "run-1",
+          time: { created: 1, updated: 2, started: 2 },
+        },
+        overview: null,
+        plan: null,
+        lanes: [],
+        evaluation: null,
+        delivery: null,
+        acceptedDelivery: null,
+        interactions: [],
+        spec: null,
+      }
+      state.messages = []
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      state._renderedGroupKey = ""
+      renderConversation()
+
+      handleSSEEvent({
+        event_id: "evt-p1",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 5,
+        summary: "Tool call: read_file",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "tool.call",
+          summary: "Tool call: read_file",
+          sourceID: "tool_1",
+          sourceKind: "tool",
+          sourceLabel: "read_file",
+          status: "running",
+          payload: { id: "tool_1", name: "read_file" },
+        },
+      })
+      handleSSEEvent({
+        event_id: "evt-o1",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.output",
+        timestamp: 6,
+        summary: "alpha",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "text_delta",
+          text: "alpha",
+          sourceID: "tool_1",
+          sourceKind: "tool",
+          sourceLabel: "read_file",
+          status: "running",
+        },
+      })
+      handleSSEEvent({
+        event_id: "evt-p2",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 7,
+        summary: "Tool call: rg",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "tool.call",
+          summary: "Tool call: rg",
+          sourceID: "tool_2",
+          sourceKind: "tool",
+          sourceLabel: "rg",
+          status: "running",
+          payload: { id: "tool_2", name: "rg", input: "{\"pattern\":\"TODO\"}" },
+        },
+      })
+      handleSSEEvent({
+        event_id: "evt-o2",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.output",
+        timestamp: 8,
+        summary: "beta",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "text_delta",
+          text: "beta",
+          sourceID: "tool_2",
+          sourceKind: "tool",
+          sourceLabel: "rg",
+          status: "running",
+        },
+      })
+      handleSSEEvent({
+        event_id: "evt-r1",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 9,
+        summary: "Tool result: tool_1",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "tool.result",
+          summary: "Tool result: tool_1",
+          sourceID: "tool_1",
+          sourceKind: "tool",
+          sourceLabel: "read_file",
+          status: "completed",
+          payload: { id: "tool_1", output: "alpha done" },
+        },
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      return [...document.querySelectorAll(".executor-process-card")].map((node) => ({
+        status: node.getAttribute("data-status") || "",
+        title: node.querySelector(".executor-process-title")?.textContent || "",
+        progress: node.querySelector(".executor-process-progress")?.textContent || "",
+        output: node.querySelector(".executor-process-output")?.textContent || "",
+      }))
+    })
+
+    expect(result).toHaveLength(2)
+    expect(result).toContainEqual(expect.objectContaining({
+      status: "completed",
+      title: "read_file",
+      progress: expect.stringMatching(/Completed|已完成/),
+      output: expect.stringContaining("alpha"),
+    }))
+    expect(result).toContainEqual(expect.objectContaining({
+      status: "running",
+      title: "rg",
+      progress: expect.stringMatching(/Running|执行中|运行中/),
+      output: expect.stringContaining("beta"),
+    }))
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
+test("task SSE keeps colliding source ids separate across parallel goal runs", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const handleSSEEvent = window.eval("handleSSEEvent")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          title: "Expose parallel process scopes",
+          request: "Expose the coding process.",
+          status: "running",
+          sessionID: "session-1",
+          activeRunID: "run-1",
+          time: { created: 1, updated: 2, started: 2 },
+        },
+        overview: null,
+        plan: null,
+        lanes: [],
+        evaluation: null,
+        delivery: null,
+        acceptedDelivery: null,
+        interactions: [],
+        spec: null,
+      }
+      state.messages = []
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      state._renderedGroupKey = ""
+      renderConversation()
+
+      handleSSEEvent({
+        event_id: "evt-g1-start",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 5,
+        summary: "Tool call: catalog_writer",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          goalRunID: "goal-run-1",
+          executorSessionID: "executor-1",
+          type: "tool.call",
+          summary: "Tool call: catalog_writer",
+          sourceID: "tool_shared",
+          sourceKind: "tool",
+          sourceLabel: "catalog_writer",
+          status: "running",
+          payload: { id: "tool_shared", name: "catalog_writer" },
+        },
+      })
+      handleSSEEvent({
+        event_id: "evt-g1-out",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.output",
+        timestamp: 6,
+        summary: "catalog alpha",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          goalRunID: "goal-run-1",
+          executorSessionID: "executor-1",
+          type: "text_delta",
+          text: "catalog alpha",
+          sourceID: "tool_shared",
+          sourceKind: "tool",
+          sourceLabel: "catalog_writer",
+          status: "running",
+        },
+      })
+      handleSSEEvent({
+        event_id: "evt-g2-start",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 7,
+        summary: "Tool call: cart_writer",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          goalRunID: "goal-run-2",
+          executorSessionID: "executor-2",
+          type: "tool.call",
+          summary: "Tool call: cart_writer",
+          sourceID: "tool_shared",
+          sourceKind: "tool",
+          sourceLabel: "cart_writer",
+          status: "running",
+          payload: { id: "tool_shared", name: "cart_writer" },
+        },
+      })
+      handleSSEEvent({
+        event_id: "evt-g2-out",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.output",
+        timestamp: 8,
+        summary: "cart beta",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          goalRunID: "goal-run-2",
+          executorSessionID: "executor-2",
+          type: "text_delta",
+          text: "cart beta",
+          sourceID: "tool_shared",
+          sourceKind: "tool",
+          sourceLabel: "cart_writer",
+          status: "running",
+        },
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      return [...document.querySelectorAll(".executor-process-card")].map((node) => ({
+        title: node.querySelector(".executor-process-title")?.textContent || "",
+        output: node.querySelector(".executor-process-output")?.textContent || "",
+      }))
+    })
+
+    expect(result).toHaveLength(2)
+    expect(result).toContainEqual(expect.objectContaining({
+      title: "catalog_writer",
+      output: expect.stringContaining("catalog alpha"),
+    }))
+    expect(result).toContainEqual(expect.objectContaining({
+      title: "cart_writer",
+      output: expect.stringContaining("cart beta"),
+    }))
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
+test("task SSE streams executor reasoning as visible assistant reasoning", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const handleSSEEvent = window.eval("handleSSEEvent")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          title: "Show reasoning",
+          request: "Show reasoning output.",
+          status: "running",
+          sessionID: "session-1",
+          activeRunID: "run-1",
+          time: { created: 1, updated: 2, started: 2 },
+        },
+        overview: null,
+        plan: null,
+        lanes: [],
+        evaluation: null,
+        delivery: null,
+        acceptedDelivery: null,
+        interactions: [],
+        spec: null,
+      }
+      state.messages = []
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      state._renderedGroupKey = ""
+      renderConversation()
+
+      handleSSEEvent({
+        event_id: "evt-reason-1",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 5,
+        summary: "Inspecting the first goal. ",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          goalRunID: "goal-run-1",
+          executorSessionID: "executor-1",
+          type: "reasoning.delta",
+          summary: "Inspecting the first goal. ",
+        },
+      })
+
+      const partial = document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent || ""
+
+      handleSSEEvent({
+        event_id: "evt-reason-2",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 6,
+        summary: "Drafting the file changes.",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          goalRunID: "goal-run-1",
+          executorSessionID: "executor-1",
+          type: "reasoning.delta",
+          summary: "Drafting the file changes.",
+        },
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      return {
+        partial,
+        live: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent || "",
+      }
+    })
+
+    expect(result.partial.length).toBeGreaterThan(0)
+    expect(result.partial.length).toBeLessThan(result.live.length)
+    expect(result.live).toContain("Inspecting the first goal.")
+    expect(result.live).toContain("Drafting the file changes.")
   } finally {
     await page.close()
     server.stop(true)
@@ -2600,6 +3238,406 @@ test("chat stop falls back to task cancel when no run or session exists", async 
     expect(result.ok).toBe(true)
     expect(result.aborted).toBe(true)
     expect(result.calls).toContain("POST /task/task-1/cancel")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("applyPanelResult keeps the new task alive while auto-selecting it", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("applyPanelResult") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const applyPanelResult = window.eval("applyPanelResult")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls = []
+      const json = (value: unknown, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
+
+      root.__overlayCalls = calls
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
+
+        if (url.pathname === "/tasks" && method === "GET") {
+          return json({
+            tasks: [
+              {
+                task: {
+                  id: "task-1",
+                  title: "创建一个个人主页",
+                  status: "completed",
+                  directory: "D:\\repo",
+                  sessionID: "",
+                  time: {
+                    created: 1,
+                    updated: 2,
+                  },
+                },
+                overview: {
+                  headline: "创建一个个人主页",
+                },
+                updated_at: 2,
+              },
+            ],
+          })
+        }
+        if (url.pathname === "/task/task-1/board" && method === "GET") {
+          return json({
+            task: {
+              id: "task-1",
+              status: "completed",
+              sessionID: "",
+              activeRunID: "",
+              time: {
+                created: 1,
+                updated: 2,
+              },
+            },
+            overview: {
+              headline: "创建一个个人主页",
+            },
+            plan: null,
+            lanes: [],
+            evaluation: null,
+            delivery: null,
+            interactions: [],
+            spec: null,
+          })
+        }
+        if (url.pathname === "/task/task-1/transcript" && method === "GET") {
+          return json([])
+        }
+        if (url.pathname === "/control/timeline" && method === "GET") {
+          return json([])
+        }
+        if (url.pathname === "/path" && method === "GET") {
+          return json({ directory: "D:\\repo" })
+        }
+        if (url.pathname === "/vcs" && method === "GET") {
+          return json({
+            branch: "dev",
+            clean: true,
+            dirty: false,
+            staged: 0,
+            modified: 0,
+            untracked: 0,
+            conflicts: 0,
+            ahead: 0,
+            behind: 0,
+          })
+        }
+        if (url.pathname === "/panel/knowledge/memory" && method === "GET") {
+          return json([])
+        }
+        if (url.pathname === "/task/task-1/cancel" && method === "POST") {
+          return json(true)
+        }
+        return new Response("not found", { status: 404 })
+      }
+
+      state.connected = true
+      state.selectedTaskID = ""
+      state.tasks = []
+      state.board = null
+      state.directory = "D:\\repo"
+      state.chatRequest = {
+        controller: new AbortController(),
+        aborted: false,
+        stopping: false,
+        workspaceEpoch: state.workspaceEpoch,
+        target: null,
+      }
+
+      await applyPanelResult({ task_id: "task-1" })
+
+      return {
+        aborted: state.chatRequest?.aborted ?? false,
+        selectedTaskID: state.selectedTaskID,
+        calls,
+      }
+    })
+
+    expect(result.selectedTaskID).toBe("task-1")
+    expect(result.aborted).toBe(false)
+    expect(result.calls).not.toContain("POST /task/task-1/cancel")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("applyPanelResult keeps pending messages visible until task history is available", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("applyPanelResult") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const applyPanelResult = window.eval("applyPanelResult")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls = []
+      const json = (value: unknown, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
+
+      root.__overlayCalls = calls
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
+
+        if (url.pathname === "/tasks" && method === "GET") return json({ tasks: [] })
+        if (url.pathname === "/task/task-1/board" && method === "GET") {
+          return json({
+            task: {
+              id: "task-1",
+              status: "completed",
+              sessionID: "",
+              activeRunID: "",
+              time: {
+                created: 1,
+                updated: 2,
+              },
+            },
+            overview: {
+              headline: "创建一个个人主页",
+            },
+            plan: null,
+            lanes: [],
+            evaluation: null,
+            delivery: null,
+            interactions: [],
+            spec: null,
+          })
+        }
+        if (url.pathname === "/task/task-1/transcript" && method === "GET") return json([])
+        if (url.pathname === "/control/timeline" && method === "GET") return json([])
+        if (url.pathname === "/path" && method === "GET") return json({ directory: "D:\\repo" })
+        if (url.pathname === "/vcs" && method === "GET") {
+          return json({
+            branch: "dev",
+            clean: true,
+            dirty: false,
+            staged: 0,
+            modified: 0,
+            untracked: 0,
+            conflicts: 0,
+            ahead: 0,
+            behind: 0,
+          })
+        }
+        if (url.pathname === "/panel/knowledge/memory" && method === "GET") return json([])
+        return new Response("not found", { status: 404 })
+      }
+
+      state.connected = true
+      state.selectedTaskID = ""
+      state.tasks = []
+      state.board = null
+      state.directory = "D:\\repo"
+      state.messages = [
+        { parts: [{ type: "text", text: "创建一个个人主页" }], info: { role: "user", time: { created: 1 } } },
+        { parts: [{ type: "text", text: "✅ 任务已创建成功！" }], info: { role: "assistant", time: { created: 2 } } },
+      ]
+
+      await applyPanelResult({ task_id: "task-1", message: "✅ 任务已创建成功！", _request: "创建一个个人主页" })
+
+      return {
+        selectedTaskID: state.selectedTaskID,
+        taskCount: state.tasks.length,
+        firstTaskID: state.tasks[0]?.task?.id || "",
+        messages: state.messages.map((item) => item.parts?.[0]?.text || ""),
+      }
+    })
+
+    expect(result.selectedTaskID).toBe("task-1")
+    expect(result.taskCount).toBe(1)
+    expect(result.firstTaskID).toBe("task-1")
+    expect(result.messages).toEqual(["创建一个个人主页", "✅ 任务已创建成功！"])
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task rows expose delete and call the delete route", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderTaskList") === "function" && typeof window.eval("deleteTask") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const renderTaskList = window.eval("renderTaskList")
+      const deleteTask = window.eval("deleteTask")
+      const root = window as Window & { __overlayCalls?: string[] }
+      const calls = []
+      const json = (value: unknown, status = 200) =>
+        new Response(JSON.stringify(value), {
+          status,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+          },
+        })
+
+      root.__overlayCalls = calls
+      window.eval("nativeConfirm = async () => true")
+      root.fetch = async (input, init = {}) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, root.location.origin)
+        const method = (init?.method || (typeof input === "string" ? "" : input.method) || "GET").toUpperCase()
+        calls.push(`${method} ${url.pathname}`)
+
+        if (url.pathname === "/task/task-1" && method === "DELETE") return json(true)
+        if (url.pathname === "/tasks" && method === "GET") return json({ tasks: [] })
+        return new Response("not found", { status: 404 })
+      }
+
+      state.connected = true
+      state.selectedTaskID = ""
+      state.tasks = [
+        {
+          task: {
+            id: "task-1",
+            title: "创建一个个人主页",
+            status: "completed",
+            directory: "D:\\repo",
+            sessionID: "",
+            time: {
+              created: 1,
+              updated: 2,
+            },
+          },
+          overview: {
+            headline: "创建一个个人主页",
+          },
+          updated_at: 2,
+          pending_interactions: 0,
+        },
+      ]
+      renderTaskList()
+      const hasDelete = !!document.querySelector('[data-task-delete="task-1"]')
+      const deleted = await deleteTask("task-1")
+      return {
+        hasDelete,
+        deleted,
+        calls,
+      }
+    })
+
+    expect(result.hasDelete).toBe(true)
+    expect(result.deleted).toBe(true)
+    expect(result.calls).toContain("DELETE /task/task-1")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("renderMeta exposes the active execution workspace when it differs from the project directory", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderMeta") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const renderMeta = window.eval("renderMeta")
+      state.directory = "D:\\repo"
+      state.vcs = {
+        branch: "dev",
+        clean: true,
+        dirty: false,
+        staged: 0,
+        modified: 0,
+        untracked: 0,
+        conflicts: 0,
+        ahead: 0,
+        behind: 0,
+      }
+      state.board = {
+        goalRuns: [
+          {
+            id: "goal-run-1",
+            status: "running",
+            workspaceDir: "C:\\Users\\hengu\\.local\\share\\opencorvus\\goal-workspace\\task-1\\personal-website",
+            time: {
+              updated: 2,
+            },
+          },
+        ],
+      }
+      renderMeta()
+
+      const node = document.querySelector("#taskWorkspaceDir") as HTMLElement | null
+      return {
+        hidden: node?.hidden ?? true,
+        text: node?.textContent || "",
+        title: node?.title || "",
+      }
+    })
+
+    expect(result.hidden).toBe(false)
+    expect(result.text).toContain("personal-website")
+    expect(result.title).toContain("goal-workspace")
   } finally {
     await page.close()
     server.stop(true)
@@ -3187,6 +4225,79 @@ test("task conversation reads the task transcript endpoint", async () => {
   }
 }, { timeout: 20_000 })
 
+test("task conversation keeps the original user request ahead of synthetic spec turns", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadConversation") === "function" && typeof window.eval("renderConversation") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          sessionID: "session-1",
+          request: "创建一个个人主页",
+          time: { created: 200, updated: 220 },
+        },
+        spec: {
+          content: "Spec after create",
+          time: { created: 201 },
+        },
+        lanes: [],
+        interactions: [],
+      }
+      state.serverUrl = window.location.origin
+      window.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        if (url.pathname === "/task/task-1/transcript") {
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        if (url.pathname === "/control/timeline") {
+          return new Response(JSON.stringify([
+            { info: { id: "u1", role: "user", time: { created: 100 } }, parts: [{ id: "p1", type: "text", text: "创建一个个人主页" }] },
+            { info: { id: "a1", role: "assistant", time: { created: 300 } }, parts: [{ id: "p2", type: "text", text: "任务已创建" }] },
+          ]), {
+            status: 200,
+            headers: { "content-type": "application/json; charset=utf-8" },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+
+      await window.eval("loadConversation")()
+      window.eval("renderConversation")()
+
+      return [...document.querySelectorAll(".turn")].map((node) => ({
+        role: (node as HTMLElement).dataset.role || "",
+        text: (node.querySelector(".msg-body")?.textContent || "").trim(),
+      }))
+    })
+
+    expect(result[0]?.role).toBe("user")
+    expect(result[0]?.text).toContain("创建一个个人主页")
+    expect(result[1]?.role).toBe("spec")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
 test("budget section renders task limits and saves edits through the budget route", async () => {
   const exe = await browser()
   const server = serve()
@@ -3703,6 +4814,601 @@ test("auto question does not invent a fallback answer when choices are missing",
     expect(view.interactionCalls).toEqual([])
     expect(view.modalId).toBe("interaction-q1")
     expect(view.inline).toBe(1)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("overlay recovers a created task even when the panel stream never finishes", async () => {
+  const exe = await browser()
+  const dir = "D:/overlay/task-recovery"
+  let requestID = ""
+  let taskReadyAt = 0
+  const taskID = "tsk_recovered"
+  const send = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+    })
+  const taskRow = () => ({
+    task: {
+      id: taskID,
+      projectID: "project-1",
+      requestID,
+      source: "panel",
+      title: "创建一个电商网站",
+      request: "创建一个电商网站",
+      status: "queued",
+      priority: "normal",
+      time: {
+        created: taskReadyAt,
+        updated: taskReadyAt,
+      },
+    },
+    overview: {
+      headline: "创建一个电商网站",
+    },
+    updated_at: taskReadyAt,
+    pending_interactions: 0,
+  })
+  const board = () => ({
+    task: {
+      id: taskID,
+      projectID: "project-1",
+      requestID,
+      source: "panel",
+      title: "创建一个电商网站",
+      request: "创建一个电商网站",
+      status: "queued",
+      priority: "normal",
+      time: {
+        created: taskReadyAt,
+        updated: taskReadyAt,
+      },
+    },
+    goals: [],
+    specItems: [],
+    planNodes: [],
+    goalRuns: [],
+    milestones: [],
+    interactions: [],
+    artifacts: [],
+    snapshots: [],
+    overview: {
+      headline: "创建一个电商网站",
+      summary: "Task accepted",
+      nextStep: {
+        kind: "observe",
+        title: "等待执行",
+      },
+      controls: {
+        canRetry: false,
+        canReplan: false,
+        canCancel: true,
+      },
+    },
+    brief: {
+      content: "",
+      updated_at: taskReadyAt,
+    },
+    lanes: [],
+  })
+  const timeline = () => [
+    {
+      info: {
+        id: "msg-user",
+        role: "user",
+        surface: "panel",
+        taskID,
+        time: {
+          created: taskReadyAt,
+          updated: taskReadyAt,
+        },
+      },
+      parts: [{ id: "msg-user-text", type: "text", text: "创建一个电商网站" }],
+    },
+    {
+      info: {
+        id: "msg-assistant",
+        role: "assistant",
+        surface: "panel",
+        taskID,
+        time: {
+          created: taskReadyAt + 1,
+          updated: taskReadyAt + 1,
+        },
+      },
+      parts: [{ id: "msg-assistant-text", type: "text", text: `任务已创建：${taskID}` }],
+    },
+  ]
+  const server = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url)
+      const path = url.pathname.replace(/\/+$/, "") || "/"
+      const ready = !!requestID && Date.now() >= taskReadyAt
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks") return send({ tasks: ready ? [taskRow()] : [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/task/tsk_recovered/board") return send(board())
+      if (path === "/task/tsk_recovered/transcript") return send([])
+      if (path === "/control/timeline") {
+        const task = url.searchParams.get("taskID") || ""
+        return send(task === taskID && ready ? timeline() : [])
+      }
+      if (path === "/path") {
+        return send({
+          home: "C:/Users/test",
+          state: "C:/Users/test/.opencorvus/state",
+          config: "C:/Users/test/.opencorvus/config",
+          worktree: dir,
+          directory: dir,
+        })
+      }
+      if (path === "/vcs") {
+        return send({
+          branch: "",
+          clean: false,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/config") return send({})
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send(true)
+      if (path === "/panel/message/stream" && req.method === "POST") {
+        const body = await req.json() as { request_id?: string }
+        requestID = body.request_id || ""
+        taskReadyAt = Date.now() + 250
+        const encoder = new TextEncoder()
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "message_delta", delta: "正在处理请求" })}\n\n`))
+            setTimeout(() => {
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
+              } catch {}
+            }, 20)
+          },
+        }), {
+          headers: {
+            "content-type": "text/event-stream; charset=utf-8",
+            "cache-control": "no-cache",
+          },
+        })
+      }
+
+      const name = path === "/" ? "index.html" : path.slice(1)
+      const file = Bun.file(new URL(name, src))
+      const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
+      return file.exists().then((ok) => (ok ? new Response(file, { headers: { "content-type": type } }) : new Response("not found", { status: 404 })))
+    },
+  })
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    const serverUrl = `http://127.0.0.1:${server.port}`
+    await tab.evaluateOnNewDocument((value, directory) => {
+      const state = {
+        settings: {
+          serverUrl: value,
+          autoServer: false,
+        },
+        directory,
+        chatTimeoutMs: 120,
+        taskRecoveryTimeoutMs: 4_000,
+        taskRecoveryPollMs: 50,
+      }
+      Object.defineProperty(window, "__overlayTest", {
+        configurable: true,
+        value: state,
+      })
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string, args: Record<string, unknown> = {}) => {
+            if (command === "overlay_settings_load") {
+              return {
+                ...state.settings,
+                directory,
+                directoryMode: "custom",
+              }
+            }
+            if (command === "overlay_settings_save") {
+              state.settings = { ...((args.settings as Record<string, unknown>) || {}) }
+              return true
+            }
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              setAlwaysOnTop: async () => undefined,
+              isAlwaysOnTop: async () => false,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
+    }, serverUrl, dir)
+
+    await tab.goto(serverUrl, { waitUntil: "load" })
+    await tab.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
+    await tab.waitForFunction((directory) => {
+      try {
+        const state = window.eval("state")
+        return state.directory === directory
+      } catch {
+        return false
+      }
+    }, {}, dir)
+
+    await tab.$eval("#chatTextarea", (node, value) => {
+      const input = node as HTMLTextAreaElement
+      input.value = String(value)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    }, "创建一个电商网站")
+    await tab.click("#chatSend")
+
+    await tab.waitForFunction((id) => {
+      try {
+        const state = window.eval("state")
+        const messages = Array.isArray(state.messages) ? state.messages : []
+        const text = messages
+          .flatMap((item: { parts?: Array<{ text?: string; type?: string }> }) => Array.isArray(item?.parts) ? item.parts : [])
+          .map((part: { text?: string; type?: string }) => part?.type === "text" ? part.text || "" : "")
+          .join("\n")
+        return state.selectedTaskID === id
+          && !state.chatRequest
+          && Array.isArray(state.tasks)
+          && state.tasks.some((item: { task?: { id?: string } }) => item?.task?.id === id)
+          && text.includes(`任务已创建：${id}`)
+          && !text.includes("已中断")
+      } catch {
+        return false
+      }
+    }, { timeout: 8_000 }, taskID)
+
+    const view = await tab.evaluate(() => {
+      const state = window.eval("state")
+      const messages = Array.isArray(state.messages)
+        ? state.messages
+            .flatMap((item: { parts?: Array<{ text?: string; type?: string }> }) => Array.isArray(item?.parts) ? item.parts : [])
+            .map((part: { text?: string; type?: string }) => part?.type === "text" ? part.text || "" : "")
+            .filter(Boolean)
+        : []
+      return {
+        selectedTaskID: state.selectedTaskID,
+        taskIDs: Array.isArray(state.tasks) ? state.tasks.map((item: { task?: { id?: string } }) => item?.task?.id || "") : [],
+        busy: !!state.chatRequest,
+        messages,
+      }
+    })
+
+    expect(view.selectedTaskID).toBe(taskID)
+    expect(view.taskIDs).toContain(taskID)
+    expect(view.busy).toBe(false)
+    expect(view.messages.some((item) => item.includes(`任务已创建：${taskID}`))).toBe(true)
+    expect(view.messages.some((item) => item.includes("已中断"))).toBe(false)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("empty-start chat shows a pending task row and streams reasoning before the task is ready", async () => {
+  const exe = await browser()
+  const dir = "D:/overlay/pending-task"
+  let requestID = ""
+  let taskReadyAt = 0
+  const taskID = "tsk_pending_reasoning"
+  const reasoning = "先确认需求，再创建任务并准备计划。"
+  const send = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+      },
+    })
+  const taskRow = () => ({
+    task: {
+      id: taskID,
+      projectID: "project-1",
+      requestID,
+      source: "panel",
+      title: "创建一个电商网站",
+      request: "创建一个电商网站",
+      status: "queued",
+      priority: "normal",
+      time: {
+        created: taskReadyAt,
+        updated: taskReadyAt,
+      },
+    },
+    overview: {
+      headline: "创建一个电商网站",
+    },
+    updated_at: taskReadyAt,
+    pending_interactions: 0,
+  })
+  const board = () => ({
+    task: {
+      id: taskID,
+      projectID: "project-1",
+      requestID,
+      source: "panel",
+      title: "创建一个电商网站",
+      request: "创建一个电商网站",
+      status: "queued",
+      priority: "normal",
+      time: {
+        created: taskReadyAt,
+        updated: taskReadyAt,
+      },
+    },
+    goals: [],
+    specItems: [],
+    planNodes: [],
+    goalRuns: [],
+    milestones: [],
+    interactions: [],
+    artifacts: [],
+    snapshots: [],
+    overview: {
+      headline: "创建一个电商网站",
+      summary: "Task accepted",
+      nextStep: {
+        kind: "observe",
+        title: "等待执行",
+      },
+      controls: {
+        canRetry: false,
+        canReplan: false,
+        canCancel: true,
+      },
+    },
+    brief: {
+      content: "",
+      updated_at: taskReadyAt,
+    },
+    lanes: [],
+  })
+  const timeline = () => [
+    {
+      info: {
+        id: "msg-user",
+        role: "user",
+        surface: "panel",
+        taskID,
+        time: {
+          created: taskReadyAt,
+          updated: taskReadyAt,
+        },
+      },
+      parts: [{ id: "msg-user-text", type: "text", text: "创建一个电商网站" }],
+    },
+    {
+      info: {
+        id: "msg-assistant",
+        role: "assistant",
+        surface: "panel",
+        taskID,
+        time: {
+          created: taskReadyAt + 1,
+          updated: taskReadyAt + 1,
+        },
+      },
+      parts: [{ id: "msg-assistant-text", type: "text", text: `任务已创建：${taskID}` }],
+    },
+  ]
+  const server = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const url = new URL(req.url)
+      const path = url.pathname.replace(/\/+$/, "") || "/"
+      const ready = !!requestID && Date.now() >= taskReadyAt
+      if (path === "/global/health") return send({ version: "1.2.3" })
+      if (path === "/tasks") return send({ tasks: ready ? [taskRow()] : [] })
+      if (path === "/global/tasks") return send({ tasks: [] })
+      if (path === "/session") return send([])
+      if (path === "/task/tsk_pending_reasoning/board") return send(board())
+      if (path === "/task/tsk_pending_reasoning/transcript") return send([])
+      if (path === "/control/timeline") {
+        const task = url.searchParams.get("taskID") || ""
+        return send(task === taskID && ready ? timeline() : [])
+      }
+      if (path === "/path") {
+        return send({
+          home: "C:/Users/test",
+          state: "C:/Users/test/.opencorvus/state",
+          config: "C:/Users/test/.opencorvus/config",
+          worktree: dir,
+          directory: dir,
+        })
+      }
+      if (path === "/vcs") {
+        return send({
+          branch: "",
+          clean: false,
+          dirty: false,
+          staged: 0,
+          modified: 0,
+          untracked: 0,
+          conflicts: 0,
+          ahead: 0,
+          behind: 0,
+        })
+      }
+      if (path === "/skill/installed" || path === "/skill") return send([])
+      if (path === "/mcp") return send({})
+      if (path === "/config") return send({})
+      if (path === "/provider") return send({ all: [], connected: [], default: {} })
+      if (path === "/provider/auth") return send({})
+      if (path === "/channel") return send([])
+      if (path === "/executor") return send([])
+      if (path === "/panel/knowledge/memory") return send([])
+      if (path === "/panel/knowledge/preference") return send([])
+      if (path === "/log" && req.method === "POST") return send(true)
+      if (path === "/panel/message/stream" && req.method === "POST") {
+        const body = await req.json() as { request_id?: string }
+        requestID = body.request_id || ""
+        taskReadyAt = Date.now() + 320
+        const encoder = new TextEncoder()
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "tool", tool: "panel" })}\n\n`))
+            setTimeout(() => {
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "reasoning_delta", delta: "先确认需求，" })}\n\n`))
+              } catch {}
+            }, 30)
+            setTimeout(() => {
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "reasoning_delta", delta: "再创建任务并准备计划。" })}\n\n`))
+              } catch {}
+            }, 140)
+            setTimeout(() => {
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done", result: { kind: "created", task_id: taskID, message: `任务已创建：${taskID}` } })}\n\n`))
+                controller.close()
+              } catch {}
+            }, 260)
+          },
+        }), {
+          headers: {
+            "content-type": "text/event-stream; charset=utf-8",
+            "cache-control": "no-cache",
+          },
+        })
+      }
+
+      const name = path === "/" ? "index.html" : path.slice(1)
+      const file = Bun.file(new URL(name, src))
+      const type = types[name.slice(name.lastIndexOf(".")) as keyof typeof types] || "application/octet-stream"
+      return file.exists().then((ok) => (ok ? new Response(file, { headers: { "content-type": type } }) : new Response("not found", { status: 404 })))
+    },
+  })
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    const serverUrl = `http://127.0.0.1:${server.port}`
+    await tab.evaluateOnNewDocument((value, directory) => {
+      const state = {
+        settings: {
+          serverUrl: value,
+          autoServer: false,
+        },
+        directory,
+        chatTimeoutMs: 5_000,
+        taskRecoveryTimeoutMs: 5_000,
+        taskRecoveryPollMs: 50,
+      }
+      Object.defineProperty(window, "__overlayTest", {
+        configurable: true,
+        value: state,
+      })
+      window.__TAURI__ = {
+        core: {
+          invoke: async (command: string, args: Record<string, unknown> = {}) => {
+            if (command === "overlay_settings_load") {
+              return {
+                ...state.settings,
+                directory,
+                directoryMode: "custom",
+              }
+            }
+            if (command === "overlay_settings_save") {
+              state.settings = { ...((args.settings as Record<string, unknown>) || {}) }
+              return true
+            }
+            return null
+          },
+        },
+        window: {
+          getCurrentWindow() {
+            return {
+              close: async () => undefined,
+              minimize: async () => undefined,
+              startDragging: async () => undefined,
+              setAlwaysOnTop: async () => undefined,
+              isAlwaysOnTop: async () => false,
+              isMaximized: async () => false,
+              onResized: async () => ({ unlisten: async () => undefined }),
+            }
+          },
+        },
+      }
+    }, serverUrl, dir)
+
+    await tab.goto(serverUrl, { waitUntil: "load" })
+    await tab.waitForFunction(() => document.querySelector("#connBadge")?.getAttribute("data-status") === "online")
+    await tab.$eval("#chatTextarea", (node, value) => {
+      const input = node as HTMLTextAreaElement
+      input.value = String(value)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    }, "创建一个电商网站")
+    await tab.click("#chatSend")
+
+    await new Promise((resolve) => setTimeout(resolve, 90))
+    const early = await tab.evaluate(() => {
+      const state = window.eval("state")
+      return {
+        pendingTasks: Array.isArray(state.pendingTasks) ? state.pendingTasks.length : 0,
+        taskList: document.querySelector("#taskListPanel")?.textContent || "",
+        reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent || "",
+      }
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 160))
+    const mid = await tab.evaluate(() => ({
+      reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent || "",
+    }))
+
+    await tab.waitForFunction((id) => {
+      try {
+        return window.eval("state").selectedTaskID === id
+      } catch {
+        return false
+      }
+    }, { timeout: 5_000 }, taskID)
+
+    const final = await tab.evaluate(() => {
+      const state = window.eval("state")
+      return {
+        pendingTasks: Array.isArray(state.pendingTasks) ? state.pendingTasks.length : 0,
+        selectedTaskID: state.selectedTaskID || "",
+        taskList: document.querySelector("#taskListPanel")?.textContent || "",
+      }
+    })
+
+    expect(early.pendingTasks).toBe(1)
+    expect(early.taskList).toContain("创建一个电商网站")
+    expect(early.reasoning.length).toBeGreaterThan(0)
+    expect(mid.reasoning).toContain(reasoning)
+    expect(early.reasoning.length).toBeLessThan(mid.reasoning.length)
+    expect(final.pendingTasks).toBe(0)
+    expect(final.selectedTaskID).toBe(taskID)
+    expect(final.taskList).toContain("创建一个电商网站")
   } finally {
     await page.close()
     server.stop(true)

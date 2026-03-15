@@ -18,6 +18,7 @@ import { Identifier } from "@/id/id"
 import z from "zod"
 import { findRun, findTask, listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow } from "./store"
 import { updateGoalRun } from "./transition"
+import { agentStream } from "./agent-stream"
 
 const log = Log.create({ service: "goal-runner" })
 export const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
@@ -242,6 +243,7 @@ function analysisFailure(
 function goalChecks(goal: GoalRow, task: TaskRow) {
   const selectors = localSelectors(goal)
   const base = dict(task.metadata?.checks)
+  const pick = (name: string, family: string) => selectors.includes(name) || selectors.includes(family)
   const next: Record<string, unknown> = {
     spec_check: { enabled: false, mode: "strict" },
     build: selectors.includes("build") ? base.build : false,
@@ -257,7 +259,7 @@ function goalChecks(goal: GoalRow, task: TaskRow) {
             const value = raw as Record<string, unknown>
             if (value.enabled === false) return []
             const family = typeof value.family === "string" ? value.family : inferFamily(name)
-            return selectors.includes(family) ? [[name, { ...value, enabled: true }]] : []
+            return pick(name, family) ? [[name, { ...value, enabled: true }]] : []
           }),
         )
       : undefined
@@ -537,9 +539,22 @@ export async function evaluateGoal(input: {
       evidence: item.evidence,
     })),
   }
-  const analyzed = await EvaluatorService.analyzeDelivery(analysisInput)
-    .then((analysis) => ({ analysis }))
-    .catch((error) => {
+  const live = agentStream({
+    taskID: input.task.id,
+    runID: typeof input.task.active_run_id === "string" ? input.task.active_run_id : undefined,
+    stage: "evaluator",
+  })
+  await live.start("Evaluator started")
+  const analyzed = await EvaluatorService.analyzeDelivery({
+    ...analysisInput,
+    stream: live.hooks,
+  })
+    .then(async (analysis) => {
+      await live.finish("Evaluator finished")
+      return { analysis }
+    })
+    .catch(async (error) => {
+      await live.error(error)
       const message = error instanceof Error ? error.message : String(error)
       return {
         analysis: analysisFailure(checked, [input.goal], message),
@@ -597,9 +612,22 @@ export async function evaluateTask(input: {
       evidence: item.evidence,
     })),
   }
-  const analyzed = await EvaluatorService.analyzeDelivery(analysisInput)
-    .then((analysis) => ({ analysis }))
-    .catch((error) => {
+  const live = agentStream({
+    taskID: input.task.id,
+    runID: typeof input.task.active_run_id === "string" ? input.task.active_run_id : undefined,
+    stage: "evaluator",
+  })
+  await live.start("Evaluator started")
+  const analyzed = await EvaluatorService.analyzeDelivery({
+    ...analysisInput,
+    stream: live.hooks,
+  })
+    .then(async (analysis) => {
+      await live.finish("Evaluator finished")
+      return { analysis }
+    })
+    .catch(async (error) => {
+      await live.error(error)
       const message = error instanceof Error ? error.message : String(error)
       return {
         analysis: analysisFailure(result, input.goals, message),

@@ -562,6 +562,21 @@ function map(state: State, event: CodingEventInfo): Notify {
       },
     }
   }
+  if (event.type === "progress") {
+    const kind = event.kind === "command" || event.kind === "mcp" ? event.kind : "tool"
+    return {
+      type: `${kind}.progress`,
+      summary: event.summary ?? `${kind} progress`,
+      payload: {
+        sessionID: state.sessionID,
+        queueTaskID: state.id,
+        ...(event.meta ?? {}),
+        id: event.id,
+        status: event.status,
+        ...(event.output ? { output: event.output } : {}),
+      },
+    }
+  }
   if (event.type === "raw") {
     return {
       type: "protocol.raw",

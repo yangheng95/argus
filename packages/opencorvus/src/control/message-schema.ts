@@ -58,6 +58,7 @@ export const ControlMessageResult = z.object({
 export const ControlMessageInput = z.object({
   surface: ChannelSurface,
   text: z.string(),
+  time_created: z.number().int().optional(),
   taskID: z.string().optional(),
   sessionID: z.string().optional(),
   executor: z.enum(["opencode", "codex", "claude-code"]).optional(),

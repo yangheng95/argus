@@ -12,6 +12,7 @@ import z from "zod"
 import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft } from "./agent"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
+import { type TextHooks } from "@/llm/api"
 
 const log = Log.create({ service: "spec-service" })
 
@@ -50,6 +51,7 @@ export namespace HeadlessSpecService {
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     signal?: AbortSignal
+    stream?: TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs()
     const controller = new AbortController()
@@ -73,6 +75,7 @@ export namespace HeadlessSpecService {
             priority: g.priority,
           })),
           signal,
+          stream: input.stream,
         }).finally(() => clearTimeout(specTimer)),
         new Promise<never>((_, reject) => {
           specTimer = setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs)
@@ -111,6 +114,7 @@ export namespace HeadlessSpecService {
     rewriteContext: SpecRewriteContext
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     signal?: AbortSignal
+    stream?: TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs()
     const controller = new AbortController()
@@ -135,6 +139,7 @@ export namespace HeadlessSpecService {
             priority: g.priority,
           })),
           signal,
+          stream: input.stream,
         }).finally(() => clearTimeout(rewriteTimer)),
         new Promise<never>((_, reject) => {
           rewriteTimer = setTimeout(() => reject(new SpecFailureError(`spec agent rewrite timed out after ${timeoutMs}ms`)), timeoutMs)

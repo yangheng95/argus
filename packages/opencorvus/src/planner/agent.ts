@@ -21,8 +21,9 @@ import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
 import { Env } from "@/env"
-import { generateText } from "@/llm/api"
+import { completeText, type TextHooks } from "@/llm/api"
 import path from "path"
+import { Config } from "@/config/config"
 
 const log = Log.create({ service: "planner-agent" })
 
@@ -116,6 +117,7 @@ export namespace HeadlessPlannerAgent {
     replanContext?: ReplanContext
     /** External abort signal (overrides internal timeout when provided) */
     signal?: AbortSignal
+    stream?: TextHooks
   }): Promise<PlannerOutputType> {
     // Check abort signal early -- setup calls (model resolution, memory search) can be slow
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
@@ -204,7 +206,7 @@ export namespace HeadlessPlannerAgent {
       let toolCallCount: number
 
       if (consolidationOnly) {
-        const forced = await finalizePlan(language, input, lastSteps!, input.signal, retryContext, isReasoning)
+        const forced = await finalizePlan(language, input, lastSteps!, input.signal, retryContext, isReasoning, input.stream)
         if (forced.submittedPlan) submittedPlan = forced.submittedPlan
         result = forced.result
         toolCallCount = lastToolCallCount
@@ -214,7 +216,7 @@ export namespace HeadlessPlannerAgent {
           reusedToolCalls: toolCallCount,
         })
       } else {
-        result = await generateText({
+        result = await completeText({
           model: language,
           stopWhen: stepCountIs(stepLimit),
           tools: allTools,
@@ -222,9 +224,10 @@ export namespace HeadlessPlannerAgent {
           maxOutputTokens: 32768,
           timeoutMs: TIMEOUT_MS,
           abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-          system: PLANNER_SYSTEM,
-          prompt: userPrompt,
-        })
+        system: await plannerSystem(),
+        prompt: userPrompt,
+        ...(input.stream ?? {}),
+      })
 
         toolCallCount = result.steps.reduce(
           (sum, s) => {
@@ -282,7 +285,7 @@ export namespace HeadlessPlannerAgent {
             finishReason: result.finishReason,
             attempt: attempt + 1,
           })
-          const forced = await finalizePlan(language, input, result.steps, input.signal, undefined, isReasoning)
+          const forced = await finalizePlan(language, input, result.steps, input.signal, undefined, isReasoning, input.stream)
           if (forced.submittedPlan) {
             submittedPlan = forced.submittedPlan
           }
@@ -325,7 +328,7 @@ export namespace HeadlessPlannerAgent {
               textLength: allText.length,
               attempt: attempt + 1,
             })
-            const forced = await finalizePlan(language, input, result.steps, input.signal, retryContext, isReasoning)
+            const forced = await finalizePlan(language, input, result.steps, input.signal, retryContext, isReasoning, input.stream)
             if (forced.submittedPlan) {
               parsed = normalizePlanOutput(forced.submittedPlan)
             } else {
@@ -401,11 +404,13 @@ async function finalizePlan(
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
     signal?: AbortSignal
+    stream?: TextHooks
   },
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   signal?: AbortSignal,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
   isReasoning = false,
+  stream?: TextHooks,
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -433,7 +438,7 @@ async function finalizePlan(
     }),
   }
 
-  const result = await generateText({
+  const result = await completeText({
     model: language,
     stopWhen: stepCountIs(8),
     tools: summaryTool,
@@ -464,6 +469,7 @@ async function finalizePlan(
       "Subtasks must reference exact file paths, include explicit verification steps, and may introduce small supporting src/ helper files when justified.",
       "Now synthesize the final plan and call submit_plan exactly once.",
     ].filter(Boolean).join("\n\n"),
+    ...(stream ?? {}),
   })
 
   return { result, submittedPlan }
@@ -1114,7 +1120,7 @@ function buildUserPrompt(
 // System prompt
 // ---------------------------------------------------------------------------
 
-const PLANNER_SYSTEM = `You are a senior software architect acting as the planning brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, then produce a plan so detailed and specific that an executor agent can implement it without guessing.
+export const PLANNER_SYSTEM = `You are a senior software architect acting as the planning brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, then produce a plan so detailed and specific that an executor agent can implement it without guessing.
 
 CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. A plan produced without tool calls is ALWAYS rejected. You are scored on exploration depth -- plans that don't reference specific file paths, function signatures, and code patterns discovered via tools will be automatically retried.
 
@@ -1235,3 +1241,8 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 - Subtasks: Include file paths and verification steps.
 - Call submit_plan exactly once after exploration is complete.
 - Do NOT output raw JSON. Use the submit_plan tool call.`
+
+export async function plannerSystem() {
+  const config = await Config.get()
+  return typeof config.prompt?.planner_system === "string" ? config.prompt.planner_system : PLANNER_SYSTEM
+}

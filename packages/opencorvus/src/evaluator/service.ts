@@ -27,6 +27,7 @@ import {
   normalizeArtifacts,
   softOrStrict,
 } from "./shared"
+import { type TextHooks } from "@/llm/api"
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -83,7 +84,16 @@ export namespace EvaluatorService {
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]
+    stream?: TextHooks
   }): Promise<EvaluatorAnalysisType> {
+    const output = { analysis: undefined as EvaluatorAnalysisType | undefined }
+    await Plugin.trigger("evaluation.analysis", {
+      task: input.task,
+      goals: input.goals,
+      delivery: input.delivery,
+      checkResults: input.checkResults,
+    }, output)
+    if (output.analysis) return output.analysis
     return EvaluatorAgent.analyze(input)
   }
 }

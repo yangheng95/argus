@@ -1086,6 +1086,10 @@ export namespace Config {
         .string()
         .optional()
         .describe("Custom username to display in conversations instead of system username"),
+      prompt: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("Prompt overrides for core agent headers and orchestrator system prompts"),
       mode: z
         .object({
           build: Agent.optional(),

@@ -108,10 +108,16 @@ async function cleanUnusedOutputs() {
   ])
 }
 
-await $`bun run build`.cwd(opencorvus)
+const skipOpencorvusBuild = process.argv.includes("--skip-opencorvus-build")
+if (!skipOpencorvusBuild) {
+  await $`bun run build`.cwd(opencorvus)
+}
 
 if (!(await exists(distServer))) {
-  throw new Error(`Bundled opencorvus binary not found at ${distServer}`)
+  throw new Error(
+    `Bundled opencorvus binary not found at ${distServer}` +
+      (skipOpencorvusBuild ? "\nRun: cd packages/opencorvus && bun run build --all" : ""),
+  )
 }
 
 await fs.mkdir(resources, { recursive: true })

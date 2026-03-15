@@ -1,7 +1,7 @@
 import { Instance } from "@/project/instance"
 import { ProjectTable } from "@/project/project.sql"
 import { SessionTable } from "@/session/session.sql"
-import { Database, NotFoundError, and, desc, eq, inArray, isNull, like, lt } from "@/storage/db"
+import { Database, NotFoundError, and, asc, desc, eq, inArray, isNull, like, lt } from "@/storage/db"
 import type { SQL } from "@/storage/db"
 import { Snapshot } from "@/snapshot"
 import { EvaluationCheck } from "./model"
@@ -271,6 +271,17 @@ export function findExecutorSessionByRun(runID: string) {
   )
 }
 
+export function listExecutorSessionsByRun(runID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.run_id, runID))
+      .orderBy(asc(OrchestratorExecutorSessionTable.time_created), asc(OrchestratorExecutorSessionTable.id))
+      .all(),
+  )
+}
+
 export function findExecutorSessionByGoalRun(goalRunID: string) {
   return Database.use((db) =>
     db
@@ -278,6 +289,16 @@ export function findExecutorSessionByGoalRun(goalRunID: string) {
       .from(OrchestratorExecutorSessionTable)
       .where(eq(OrchestratorExecutorSessionTable.goal_run_id, goalRunID))
       .orderBy(desc(OrchestratorExecutorSessionTable.time_created))
+      .get(),
+  )
+}
+
+export function findExecutorSession(executorSessionID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorSessionTable)
+      .where(eq(OrchestratorExecutorSessionTable.id, executorSessionID))
       .get(),
   )
 }
@@ -356,6 +377,22 @@ export function activeGoalRunByCoordinator(runID: string) {
       )
       .orderBy(desc(OrchestratorGoalRunTable.time_created), desc(OrchestratorGoalRunTable.id))
       .get(),
+  )
+}
+
+export function listActiveGoalRunsByCoordinator(runID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorGoalRunTable)
+      .where(
+        and(
+          eq(OrchestratorGoalRunTable.coordinator_run_id, runID),
+          inArray(OrchestratorGoalRunTable.status, ["queued", "accepted", "running", "blocked"]),
+        ),
+      )
+      .orderBy(asc(OrchestratorGoalRunTable.time_created), asc(OrchestratorGoalRunTable.id))
+      .all(),
   )
 }
 

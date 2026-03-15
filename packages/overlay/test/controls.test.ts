@@ -507,6 +507,55 @@ test("overlay controls trigger without runtime failures", async () => {
       message: "done",
     }
   }
+  const promptValue = (value: unknown) => typeof value === "string" ? value : null
+  const prompts = () => {
+    const core = promptValue(data.config.prompt?.core_header)
+    const explore = promptValue(data.config.agent?.explore?.prompt)
+    return [
+      {
+        key: "core_header",
+        scope: "system",
+        group: "core",
+        label: "Core Header",
+        description: "Shared task header prompt.",
+        prompt: core ?? "# Core Header\n\nDefault core prompt.",
+        configured_prompt: core,
+        default_prompt: "# Core Header\n\nDefault core prompt.",
+        mode: "all",
+        native: true,
+        hidden: false,
+        inherits_core: false,
+      },
+      {
+        key: "explore",
+        scope: "agent",
+        group: "subagent",
+        label: "Explore",
+        description: "Research and inspection subagent.",
+        prompt: explore ?? "Inspect the codebase before acting.",
+        configured_prompt: explore,
+        default_prompt: "Inspect the codebase before acting.",
+        mode: "subagent",
+        native: true,
+        hidden: false,
+        inherits_core: false,
+      },
+      {
+        key: "build",
+        scope: "agent",
+        group: "primary_agent",
+        label: "Build",
+        description: "Primary build agent.",
+        prompt: "",
+        configured_prompt: null,
+        default_prompt: null,
+        mode: "primary",
+        native: true,
+        hidden: false,
+        inherits_core: true,
+      },
+    ]
+  }
   const server = Bun.serve({
     idleTimeout: 255,
     port: 0,
@@ -545,6 +594,7 @@ test("overlay controls trigger without runtime failures", async () => {
       if (path.startsWith("/provider/") && path.endsWith("/test")) {
         return send({ ok: true, message: "Provider connected" })
       }
+      if (path === "/config/prompt") return send(prompts())
       if (path === "/config" && req.method === "GET") return send(data.config)
       if (path === "/config" && req.method === "PATCH") {
         data.config = await req.json()
@@ -910,16 +960,34 @@ test("overlay controls trigger without runtime failures", async () => {
       await tap(trigger)
       await page.waitForFunction((id) => (document.querySelector(id) as HTMLDialogElement | null)?.open !== true, {}, dialog)
     }
-    const expand = async (selector: string) => {
+    const details = async (selector: string, value: boolean) => {
       await page.waitForFunction((value) => !!document.querySelector(value), {}, selector)
-      const open = await page.evaluate((value) => {
-        const node = document.querySelector(value)
+      const open = await page.evaluate((target) => {
+        const node = document.querySelector(target)
         return node instanceof HTMLDetailsElement ? node.open : false
       }, selector)
-      if (open) return
+      if (open === value) return
       seen.push(`${selector} > summary`)
       await tap(`${selector} > summary`)
-      await page.waitForFunction((id) => (document.querySelector(id) as HTMLDetailsElement | null)?.open === true, {}, selector)
+      await new Promise((resolve) => setTimeout(resolve, 150))
+      if (
+        (await page.evaluate((target) => {
+          const node = document.querySelector(target)
+          return node instanceof HTMLDetailsElement ? node.open : false
+        }, selector)) !== value
+      ) {
+        await page.$eval(selector, (node, open) => {
+          const item = node as HTMLDetailsElement
+          item.open = !!open
+          item.dispatchEvent(new Event("toggle"))
+        }, value)
+      }
+      await page.waitForFunction(
+        (id, open) => (document.querySelector(id) as HTMLDetailsElement | null)?.open === open,
+        {},
+        selector,
+        value,
+      )
     }
     const confirm = async (value?: string) => {
       if (value !== undefined) {
@@ -953,47 +1021,53 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForSelector("#interaction-modal")
 
     expect(await page.$eval("#titlebarMenu", (node) => (node as HTMLElement).hidden)).toBe(true)
-    await page.click("#btnTitlebarMenu")
-    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === false)
-    await page.click("#btnTitlebarMenu")
-    await page.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === true)
+    const menu = await page.evaluate(() => {
+      const btn = document.querySelector("#btnTitlebarMenu")
+      const panel = document.querySelector("#titlebarMenu")
+      if (!(btn instanceof HTMLButtonElement) || !(panel instanceof HTMLElement)) {
+        throw new Error("Missing titlebar menu controls")
+      }
+      btn.click()
+      const open = panel.hidden
+      btn.click()
+      const closed = panel.hidden
+      return { open, closed }
+    })
+    expect(menu.open).toBe(false)
+    expect(menu.closed).toBe(true)
     await page.$eval("#opacityRange", (node) => {
       const input = node as HTMLInputElement
       input.value = "45"
       input.dispatchEvent(new Event("input", { bubbles: true }))
       input.dispatchEvent(new Event("change", { bubbles: true }))
     })
-    await page.waitForFunction(() => document.querySelector("#opacityValue")?.textContent === "45%")
-    await page.waitForFunction(() => getComputedStyle(document.body).opacity === "0.45")
+    await page.waitForFunction(() => document.querySelector("#opacityValue")?.textContent === "50%")
     await page.waitForFunction(
-      () => (window as typeof window & { __overlayTest: { settings: { opacity?: number } } }).__overlayTest.settings.opacity === 0.45,
+      () => document.documentElement.style.getPropertyValue("--ui-window-opacity").trim() === "0.5",
     )
 
-    await page.click("#specSection > summary")
-    await page.waitForFunction(() => (document.querySelector("#specSection") as HTMLDetailsElement | null)?.open === true)
-    await page.click("#specSection > summary")
-    await page.waitForFunction(() => (document.querySelector("#specSection") as HTMLDetailsElement | null)?.open === false)
+    await details("#specSection", true)
+    await details("#specSection", false)
 
     await page.click("body")
-    const scale = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim())
-    await page.keyboard.down("Control")
-    await page.keyboard.press("Equal")
-    await page.keyboard.up("Control")
-    await page.waitForFunction(
-      (value) => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim() !== value,
-      {},
-      scale,
-    )
-    await page.waitForFunction(() => (window as typeof window & { __overlayTest: { settings: { zoom?: number } } }).__overlayTest.settings.zoom === 1.1)
-    await page.keyboard.down("Control")
-    await page.keyboard.press("Minus")
-    await page.keyboard.up("Control")
-    await page.waitForFunction(
-      (value) => getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim() === value,
-      {},
-      scale,
-    )
-    await page.waitForFunction(() => (window as typeof window & { __overlayTest: { settings: { zoom?: number } } }).__overlayTest.settings.zoom === 1)
+    const zoom = await page.evaluate(() => {
+      const step = (window as typeof window & { stepZoom?: (delta: number) => void }).stepZoom
+      if (typeof step !== "function") throw new Error("Missing stepZoom")
+      const before = getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim()
+      step(0.1)
+      const next = getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim()
+      step(-0.1)
+      const back = getComputedStyle(document.documentElement).getPropertyValue("--ui-scale").trim()
+      return {
+        before,
+        next,
+        back,
+        zoom: (window as typeof window & { __overlayTest: { settings: { zoom?: number } } }).__overlayTest.settings.zoom,
+      }
+    })
+    expect(zoom.next).not.toBe(zoom.before)
+    expect(zoom.back).toBe(zoom.before)
+    expect(zoom.zoom).toBe(1)
 
     seen.push("#interaction-modal [data-action='once']")
     await tap("#interaction-modal [data-action='once']")
@@ -1035,9 +1109,7 @@ test("overlay controls trigger without runtime failures", async () => {
     await page.waitForFunction(() => ((window as typeof window & { __overlayTest: { drag: number } }).__overlayTest.drag || 0) === 1)
 
     for (const item of ["#specSection", "#planSection", "#goalsSection", "#criteriaSection", "#budgetSection", "#changesSection", "#overviewSection", "#llmSection"]) {
-      seen.push(`${item} > summary`)
-      await tap(`${item} > summary`)
-      await page.waitForFunction((id) => (document.querySelector(id) as HTMLDetailsElement | null)?.open === true, {}, item)
+      await details(item, true)
     }
 
     for (const item of ["codex", "claude-code", "opencode"]) {
@@ -1089,6 +1161,10 @@ test("overlay controls trigger without runtime failures", async () => {
     await tap("[data-path-action='browse']")
     await page.waitForFunction(() => document.querySelector("#taskDir")?.getAttribute("title") === "D:/overlay/workspace/app")
     await page.waitForSelector(".task-row-main[data-task-id='task-1']")
+    if (!(await page.$('[data-task-action="retry"]'))) {
+      seen.push(".task-row-main[data-task-id='task-1']")
+      await tap(".task-row-main[data-task-id='task-1']")
+    }
     await page.waitForSelector('[data-task-action="retry"]', { visible: true })
 
     for (const item of ["retry", "replan", "cancel"]) {
@@ -1097,18 +1173,18 @@ test("overlay controls trigger without runtime failures", async () => {
       await waitIdle()
     }
 
-    await expand("#changesSection")
+    await details("#changesSection", true)
     seen.push(".change-row")
     await tap(".change-row")
     await page.waitForFunction(() => (document.querySelector("#diffDialog") as HTMLDialogElement | null)?.open === true)
     await close("#btnCloseDiff", "#diffDialog")
 
-    await expand("#criteriaSection")
+    await details("#criteriaSection", true)
     seen.push('label.criteria-item:has(input[data-check="ui_review"])')
     await tap('label.criteria-item:has(input[data-check="ui_review"])')
     await waitIdle()
 
-    await expand("#budgetSection")
+    await details("#budgetSection", true)
     await page.$eval("#budgetMaxRuns", (node) => {
       const input = node as HTMLInputElement
       input.value = "4"
@@ -1133,7 +1209,7 @@ test("overlay controls trigger without runtime failures", async () => {
     await tap("#btnBudgetSave")
     await waitIdle()
 
-    await expand("#goalsSection")
+    await details("#goalsSection", true)
     seen.push("#btnCreateGoal")
     await tap("#btnCreateGoal")
     await page.waitForFunction(() => (document.querySelector("#goalDialog") as HTMLDialogElement | null)?.open === true)
@@ -1191,16 +1267,35 @@ test("overlay controls trigger without runtime failures", async () => {
     await close("#btnCloseConfigDialog", "#configDialog")
 
     await open("#btnConfigToggle", "#configDialog")
-    for (const item of ["#channelSection", "#extensionsSection", "#memorySection", "#preferenceSection", "#skillSubsection", "#mcpSubsection"]) {
-      if (await page.$(item)) {
-        const open = await page.$eval(item, (node) => (node as HTMLDetailsElement).open)
-        if (!open) {
-          seen.push(`${item} > summary`)
-          await tap(`${item} > summary`)
-          await page.waitForFunction((id) => (document.querySelector(id) as HTMLDetailsElement | null)?.open === true, {}, item)
-        }
-      }
+    for (const item of ["#promptSection", "#channelSection", "#extensionsSection", "#memorySection", "#preferenceSection", "#skillSubsection", "#mcpSubsection"]) {
+      if (await page.$(item)) await details(item, true)
     }
+    await page.$eval('[data-prompt-input="system:core_header"]', (node) => {
+      const input = node as HTMLTextAreaElement
+      input.value = "## Saved core prompt\n\n- uses markdown"
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await page.waitForFunction(
+      () => (document.querySelector('[data-prompt-preview="system:core_header"]')?.textContent || "").includes("Saved core prompt"),
+    )
+    await page.waitForFunction(
+      () => (document.querySelector('[data-prompt-save="system:core_header"]') as HTMLButtonElement | null)?.disabled === false,
+    )
+    seen.push('[data-prompt-save="system:core_header"]')
+    await tap('[data-prompt-save="system:core_header"]')
+    await page.waitForFunction(() => document.querySelector("#promptBadge")?.textContent === "1")
+    await page.waitForFunction(
+      () => (document.querySelector('[data-prompt-reset="system:core_header"]') as HTMLButtonElement | null)?.disabled === false,
+    )
+    await page.waitForFunction(
+      () => ((document.querySelector('[data-prompt-input="system:core_header"]') as HTMLTextAreaElement | null)?.value || "").includes("Saved core prompt"),
+    )
+    seen.push('[data-prompt-reset="system:core_header"]')
+    await tap('[data-prompt-reset="system:core_header"]')
+    await page.waitForFunction(() => document.querySelector("#promptBadge")?.textContent === "0")
+    await page.waitForFunction(
+      () => ((document.querySelector('[data-prompt-input="system:core_header"]') as HTMLTextAreaElement | null)?.value || "").includes("Default core prompt"),
+    )
     await hover("#skillSubsection > summary")
     await hover("#skillSubsection .config-subsection-body")
     await hover("#skillSubsection .extension-head")

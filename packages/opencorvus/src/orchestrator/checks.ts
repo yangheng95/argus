@@ -8,6 +8,13 @@ function requiredSpecCheck(current: unknown) {
     current && typeof current === "object" && !Array.isArray(current)
       ? structuredClone(current as Record<string, unknown>)
       : {}
+  if (base.enabled === false) {
+    return {
+      ...base,
+      enabled: false,
+      mode: base.mode ?? "strict",
+    }
+  }
   return {
     ...base,
     enabled: true,
@@ -76,7 +83,14 @@ export function mergeTaskChecks(raw: unknown, selection: Record<string, boolean>
     }
 
     if (key === "spec_check") {
-      checks.spec_check = requiredSpecCheck(checks.spec_check)
+      checks.spec_check = enabled
+        ? requiredSpecCheck(checks.spec_check)
+        : requiredSpecCheck({
+            ...(checks.spec_check && typeof checks.spec_check === "object" && !Array.isArray(checks.spec_check)
+              ? checks.spec_check as Record<string, unknown>
+              : {}),
+            enabled: false,
+          })
       continue
     }
 

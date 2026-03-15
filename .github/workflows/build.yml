@@ -64,9 +64,23 @@ jobs:
             --repo "$GITHUB_REPOSITORY" || true
 
   package-cli:
-    name: cli (cross-platform archives)
-    runs-on: ubuntu-latest
+    name: cli (${{ matrix.platform }})
     needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+          - runner: macos-latest
+            platform: darwin-arm64
+          - runner: macos-15-intel
+            platform: darwin-x64
+          - runner: windows-latest
+            platform: windows-x64
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
     defaults:
@@ -83,27 +97,15 @@ jobs:
       - name: Fetch models.dev snapshot
         run: curl -fsSL https://models.dev/api.json | tr -d '\n\r' > /tmp/models-api-clean.json
 
-      - name: Cache Bun cross-compilation runtimes
+      - name: Cache Bun install cache
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
-          key: bun-runtimes-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          key: bun-cli-${{ matrix.platform }}-${{ hashFiles('**/bun.lock') }}
           restore-keys: |
-            bun-runtimes-${{ runner.os }}-
+            bun-cli-${{ matrix.platform }}-
 
-      - name: Pre-cache Bun cross-compilation runtimes
-        run: |
-          echo 'console.log(1)' > /tmp/_warmup.ts
-          for target in \
-            bun-linux-aarch64 bun-linux-x64 bun-linux-x64-baseline \
-            bun-linux-aarch64-musl bun-linux-x64-musl \
-            bun-darwin-aarch64 bun-darwin-x64 bun-darwin-x64-baseline \
-            bun-windows-x64 bun-windows-x64-baseline; do
-            bun build --compile --target=$target /tmp/_warmup.ts --outfile /tmp/_warmup_out 2>/dev/null || true
-          done
-          rm -f /tmp/_warmup.ts /tmp/_warmup_out*
-
-      - name: Build CLI archives
+      - name: Build CLI (native + baseline)
         working-directory: packages/opencorvus
         env:
           MODELS_DEV_API_JSON: /tmp/models-api-clean.json
@@ -112,10 +114,31 @@ jobs:
           OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: bun run script/build.ts --all
+        run: bun run script/build.ts --single --baseline
+
+      - name: Build CLI (musl, Linux only)
+        if: runner.os == 'Linux'
+        env:
+          MODELS_DEV_API_JSON: /tmp/models-api-clean.json
+          OPENCORVUS_RELEASE: ${{ needs.prepare.outputs.release == '1' && '1' || '' }}
+          OPENCORVUS_VERSION: ${{ needs.prepare.outputs.version }}
+          OPENCORVUS_CHANNEL: ${{ needs.prepare.outputs.release == '1' && 'latest' || '' }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace/packages/opencorvus \
+            -e MODELS_DEV_API_JSON=/tmp/models-api-clean.json \
+            -e OPENCORVUS_RELEASE="${OPENCORVUS_RELEASE}" \
+            -e OPENCORVUS_VERSION="${OPENCORVUS_VERSION}" \
+            -e OPENCORVUS_CHANNEL="${OPENCORVUS_CHANNEL}" \
+            -e GH_REPO="${GH_REPO}" \
+            -e GH_TOKEN="${GH_TOKEN}" \
+            oven/bun:alpine \
+            sh -c "bun install && bun run script/build.ts --single --baseline --musl-only --no-clean"
 
       - name: Validate CLI assets
-        shell: bash
         run: |
           EXTRA=""
           if [[ "${{ needs.prepare.outputs.release }}" == "1" ]]; then
@@ -123,14 +146,14 @@ jobs:
           fi
           bun ./script/check-release-assets.ts cli \
             --dir packages/opencorvus/dist \
-            --platforms linux-x64,linux-arm64,darwin-x64,darwin-arm64,windows-x64 \
+            --platforms "${{ matrix.platform }}" \
             --version "${{ needs.prepare.outputs.version }}" \
             $EXTRA
 
       - name: Upload CLI dist artifact
         uses: actions/upload-artifact@v4
         with:
-          name: opencorvus-dist
+          name: opencorvus-dist-${{ matrix.platform }}
           path: packages/opencorvus/dist/
           retention-days: 7
 
@@ -227,6 +250,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
+          pattern: overlay-*
           path: /tmp/release-assets
 
       - name: Upload overlay assets to GitHub Release
@@ -256,15 +280,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download CLI dist artifact
+      - name: Download CLI dist artifacts
         uses: actions/download-artifact@v4
         with:
-          name: opencorvus-dist
+          pattern: opencorvus-dist-*
           path: /tmp/dist
+          merge-multiple: true
 
       - name: Download overlay artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: overlay-*
           path: /tmp/overlay
 
       - name: Assemble and push release branch
@@ -305,3 +331,4 @@ jobs:
           git add -A
           git commit -m "release: v${VERSION}"
           git push origin release --force
+

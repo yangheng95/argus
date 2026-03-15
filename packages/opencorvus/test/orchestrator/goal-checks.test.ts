@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { EvaluatorService } from "../../src/evaluator/service"
 import { CheckConfig } from "../../src/orchestrator/model"
 import { blockingEvaluationFailure, evaluateGoal, goalEvaluationOutcome } from "../../src/orchestrator/goal-runner"
+import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 
 const analysis = {
@@ -19,13 +20,20 @@ const analysis = {
   replan_guidance: null,
 }
 
+function withinInstance<T>(fn: () => Promise<T>) {
+  return Instance.provide({
+    directory: process.cwd(),
+    fn,
+  })
+}
+
 describe("orchestrator.goal checks", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
   })
 
-  test("scopes goal evaluation checks to the selected goal families", async () => {
+  test("scopes goal evaluation checks to the selected goal families and named selectors", async () => {
     let checks: unknown
     spyOn(EvaluatorService, "evaluate").mockImplementation(async (task) => {
       checks = task.metadata?.checks
@@ -39,70 +47,72 @@ describe("orchestrator.goal checks", () => {
     })
     spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue(analysis)
 
-    await evaluateGoal({
-      task: {
-        id: "task_goal_checks",
-        title: "goal checks",
-        request: "goal checks",
-        metadata: {
-          checks: {
-            verify_cmd: ["bun run verify"],
-            startup: {
-              command: "bun run dev",
-              ready_text: "ready",
-              mode: "soft",
-            },
-            ui_review: {
-              target: "web",
-              url: "https://example.com",
-              mode: "soft",
-            },
-            code_review: {
-              enabled: true,
-              max_diffs: 2,
-              mode: "soft",
-            },
-            named: {
-              typecheck: {
-                label: "Type Check",
-                family: "lint",
-                commands: ["bun run typecheck"],
+    await withinInstance(() =>
+      evaluateGoal({
+        task: {
+          id: "task_goal_checks",
+          title: "goal checks",
+          request: "goal checks",
+          metadata: {
+            checks: {
+              verify_cmd: ["bun run verify"],
+              startup: {
+                command: "bun run dev",
+                ready_text: "ready",
+                mode: "soft",
               },
-              smoke: {
-                label: "Smoke",
-                family: "verify_cmd",
-                commands: ["bun run smoke"],
+              ui_review: {
+                target: "web",
+                url: "https://example.com",
+                mode: "soft",
               },
-            },
-            timeout_ms: 1234,
-            custom: {
-              sample: {
+              code_review: {
                 enabled: true,
+                max_diffs: 2,
+                mode: "soft",
+              },
+              named: {
+                typecheck: {
+                  label: "Type Check",
+                  family: "lint",
+                  commands: ["bun run typecheck"],
+                },
+                smoke: {
+                  label: "Smoke",
+                  family: "verify_cmd",
+                  commands: ["bun run smoke"],
+                },
+              },
+              timeout_ms: 1234,
+              custom: {
+                sample: {
+                  enabled: true,
+                },
               },
             },
           },
+        } as any,
+        goal: {
+          description: "run startup and verify",
+          criteria: "startup and verify pass",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["startup", "smoke"],
+          },
+        } as any,
+        delivery: {
+          summary: "delivery",
+          diffs: [],
         },
-      } as any,
-      goal: {
-        description: "run startup and verify",
-        criteria: "startup and verify pass",
-        priority: "blocking",
-        metadata: {
-          check_selector: ["startup", "verify_cmd"],
-        },
-      } as any,
-      delivery: {
-        summary: "delivery",
-        diffs: [],
-      },
-    })
+      }),
+    )
 
     expect(CheckConfig.safeParse(checks).success).toBe(true)
     expect(checks).toMatchObject({
       build: false,
       test: false,
       lint: false,
-      verify_cmd: ["bun run verify"],
+      verify_cmd: false,
       startup: {
         command: "bun run dev",
         ready_text: "ready",
@@ -145,30 +155,32 @@ describe("orchestrator.goal checks", () => {
     })
     spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue(analysis)
 
-    await evaluateGoal({
-      task: {
-        id: "task_goal_ui_review",
-        title: "goal ui review",
-        request: "goal ui review",
-        metadata: {
-          checks: {
-            verify_cmd: ["bun run verify"],
+    await withinInstance(() =>
+      evaluateGoal({
+        task: {
+          id: "task_goal_ui_review",
+          title: "goal ui review",
+          request: "goal ui review",
+          metadata: {
+            checks: {
+              verify_cmd: ["bun run verify"],
+            },
           },
+        } as any,
+        goal: {
+          description: "review ui",
+          criteria: "ui review passes",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["ui_review"],
+          },
+        } as any,
+        delivery: {
+          summary: "delivery",
+          diffs: [],
         },
-      } as any,
-      goal: {
-        description: "review ui",
-        criteria: "ui review passes",
-        priority: "blocking",
-        metadata: {
-          check_selector: ["ui_review"],
-        },
-      } as any,
-      delivery: {
-        summary: "delivery",
-        diffs: [],
-      },
-    })
+      }),
+    )
 
     expect(CheckConfig.safeParse(checks).success).toBe(true)
     expect(checks).toMatchObject({

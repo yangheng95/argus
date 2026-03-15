@@ -6,21 +6,16 @@
  *   - EvaluatorAgent: Independent LLM (15 steps, 3min) — investigates failures → verdict + goal assessment
  *   - Goal evaluation: Two-layer — (1) automated checks (exit codes), (2) LLM assessment
  *
- * Run once: bun run packages/opencorvus/src/index.ts auth login
+ * Requires a live benchmark model. Defaults to alibaba-cn/qwen3.5-plus when available.
  * Run: bun run script/benchmark/agent-quality-benchmark.ts
  */
 import { generateText, stepCountIs } from "ai"
 import z from "zod"
 import path from "path"
 import fs from "fs"
-import {
-  DEFAULT_OPENAI_CODEX_MODEL,
-  getOpenAICodexLanguage,
-  hasOpenAICodexAuth,
-  normalizeOpenAICodexModel,
-  openAICodexAuthHelp,
-} from "../../src/provider/codex-live"
-import { loadBenchmarkEnv } from "./env"
+import { Instance } from "../../src/project/instance"
+import { Provider } from "../../src/provider/provider"
+import { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } from "./env"
 
 // ---------------------------------------------------------------------------
 // Schema (inline to avoid import issues with @/ aliases)
@@ -84,21 +79,26 @@ type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
 // ---------------------------------------------------------------------------
 
 await loadBenchmarkEnv(import.meta.dir)
+prepareDashscopeEnv()
 
-const MODEL = normalizeOpenAICodexModel(process.env.OPENCORVUS_BENCHMARK_MODEL ?? DEFAULT_OPENAI_CODEX_MODEL)
-if (!(await hasOpenAICodexAuth())) {
-  console.error(`OpenAI OAuth credentials are required. ${openAICodexAuthHelp()}`)
+const MODEL = await resolveBenchmarkModel(import.meta.dir)
+if (!(await ensureBenchmarkModel(import.meta.dir, MODEL).then(() => true).catch(() => false))) {
+  console.error(`Live benchmark model is unavailable: ${MODEL}`)
   process.exit(1)
 }
 
 const TIMEOUT = 300_000
 const PROJECT_ROOT = path.resolve(import.meta.dir, "../..")
-let lang: ReturnType<typeof getOpenAICodexLanguage> | undefined
+let lang: Promise<Awaited<ReturnType<typeof Provider.getLanguage>>> | undefined
 
 function createModel() {
-  lang ??= getOpenAICodexLanguage({
+  lang ??= Instance.provide({
     directory: PROJECT_ROOT,
-    model: MODEL,
+    fn: async () => {
+      const parsed = Provider.parseModel(MODEL)
+      const resolved = await Provider.getModel(parsed.providerID, parsed.modelID)
+      return Provider.getLanguage(resolved)
+    },
   })
   return lang
 }

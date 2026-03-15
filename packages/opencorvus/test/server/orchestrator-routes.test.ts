@@ -7,6 +7,7 @@ import { EvaluatorService } from "../../src/evaluator/service"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
+import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
 import { OrchestratorGoalRunTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { PlannerFailureError } from "../../src/orchestrator/service"
 import { Preference } from "../../src/preference"
@@ -227,6 +228,60 @@ describe("orchestrator routes", () => {
         )
         expect(tasks.length).toBe(1)
         expect(tasks[0]?.request_id).toBe("req-123")
+      },
+    })
+
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  test("DELETE /task/:id removes the task and its root session", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "implement feature x",
+          }),
+        })
+        const { task_id } = (await created.json()) as { task_id: string }
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, task_id)).get(),
+        )
+
+        expect(task?.session_id).toBeTruthy()
+
+        const removed = await app.request(`/task/${task_id}`, {
+          method: "DELETE",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(removed.status).toBe(200)
+        expect(await removed.json()).toBe(true)
+
+        const nextTask = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, task_id)).get(),
+        )
+        const nextSession = task?.session_id
+          ? await Session.get(task.session_id).catch(() => null)
+          : null
+
+        expect(nextTask).toBeUndefined()
+        expect(nextSession).toBeNull()
       },
     })
 
@@ -704,6 +759,93 @@ describe("orchestrator routes", () => {
           payload: expect.objectContaining({
             sessionID: task!.session_id,
             delta: "Hello from task session",
+          }),
+        }))
+      },
+    })
+
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  test("GET /task/:id/events forwards agent stream events for the task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "stream planner output",
+          }),
+        })
+
+        expect(created.status).toBe(202)
+        const { task_id } = (await created.json()) as { task_id: string }
+        const stop = new AbortController()
+        const response = await app.request(`/task/${task_id}/events`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+          signal: stop.signal,
+        })
+
+        expect(response.status).toBe(200)
+        expect(response.body).toBeDefined()
+
+        const seen: unknown[] = []
+        try {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error("timed out waiting for agent task event"))
+            }, 3000)
+
+            void parseSSE(response.body!, stop.signal, (event) => {
+              seen.push(event)
+              const next = event as { type?: string }
+              if (next.type === "task.connected") {
+                void Bus.publish(OrchestratorEvent.AgentUpdated, {
+                  taskID: task_id,
+                  stage: "planner",
+                  kind: "message_delta",
+                  id: "planner-live",
+                  text: "Build homepage",
+                  summary: "Build homepage",
+                }).catch((error) => {
+                  clearTimeout(timeout)
+                  reject(error)
+                })
+                return
+              }
+              if (next.type !== "agent.updated") return
+              clearTimeout(timeout)
+              resolve()
+            }).catch((error) => {
+              clearTimeout(timeout)
+              reject(error)
+            })
+          })
+        } finally {
+          stop.abort()
+        }
+
+        expect(seen).toContainEqual(expect.objectContaining({
+          type: "agent.updated",
+          payload: expect.objectContaining({
+            taskID: task_id,
+            stage: "planner",
+            kind: "message_delta",
+            text: "Build homepage",
           }),
         }))
       },

@@ -12,6 +12,8 @@
     "dev": "bun --preload @opentui/solid/preload --conditions=browser ./src/index.ts",
     "benchmark:agent-quality": "bun run script/benchmark/agent-quality-benchmark.ts",
     "benchmark:overlay-web": "bun run script/benchmark/overlay-web-benchmark.ts",
+    "benchmark:overlay-repro": "bun run script/benchmark/overlay-repro-benchmark.ts",
+    "benchmark:overlay-stream": "bun run script/benchmark/overlay-stream-benchmark.ts",
     "benchmark:channel-v1": "bun run script/benchmark/channel-v1-benchmark.ts"
   },
   "bin": {
@@ -31,6 +33,12 @@
     "@parcel/watcher-linux-x64-glibc": "2.5.1",
     "@parcel/watcher-linux-x64-musl": "2.5.1",
     "@parcel/watcher-win32-x64": "2.5.1",
+    "node-screenshots-darwin-arm64": "0.2.8",
+    "node-screenshots-darwin-x64": "0.2.8",
+    "node-screenshots-linux-arm64-gnu": "0.2.8",
+    "node-screenshots-linux-x64-gnu": "0.2.8",
+    "node-screenshots-linux-x64-musl": "0.2.8",
+    "node-screenshots-win32-x64-msvc": "0.2.8",
     "@tsconfig/bun": "catalog:",
     "@types/babel__core": "7.20.5",
     "@types/bun": "catalog:",

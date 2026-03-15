@@ -164,6 +164,28 @@ export const OrchestratorRoutes = lazy(() =>
         return c.json(await OrchestratorService.getTask(c.req.valid("param").taskID))
       },
     )
+    .delete(
+      "/task/:taskID",
+      describeRoute({
+        summary: "Delete task",
+        operationId: "task.delete",
+        responses: {
+          200: {
+            description: "Task deleted",
+            content: {
+              "application/json": {
+                schema: resolver(z.boolean()),
+              },
+            },
+          },
+          ...errors(404),
+        },
+      }),
+      validator("param", z.object({ taskID: Task.shape.id })),
+      async (c) => {
+        return c.json(await OrchestratorService.deleteTask(c.req.valid("param").taskID))
+      },
+    )
     .get(
       "/task/:taskID/progress",
       describeRoute({

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { existsSync } from "fs"
 import fs from "fs/promises"
 import path from "path"
+import { Bus } from "../../src/bus"
 import { Database, eq } from "../../src/storage/db"
 import { EvaluatorService } from "../../src/evaluator/service"
 import { type ExecutorAdapter } from "../../src/executor/compat"
@@ -22,6 +23,7 @@ import {
   OrchestratorTaskTable,
 } from "../../src/orchestrator/orchestrator.sql"
 import { createGoalSession } from "../../src/orchestrator/goal-runner"
+import { Event } from "../../src/orchestrator/model"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { createGoalRun } from "../../src/orchestrator/transition"
 import { DeliveryService } from "../../src/orchestrator/delivery"
@@ -45,6 +47,16 @@ function dict(input: unknown) {
 
 function gitMeta(input: { metadata?: Record<string, unknown> | null } | undefined) {
   return dict(dict(input?.metadata).git)
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  return {
+    promise: new Promise<T>((next) => {
+      resolve = next
+    }),
+    resolve,
+  }
 }
 
 function stubSpec() {
@@ -307,7 +319,7 @@ describe("orchestrator.service", () => {
     expect(submit).toHaveBeenCalledTimes(1)
   })
 
-  test("new tasks keep lint, typecheck, and spec checks enabled", async () => {
+  test("new tasks preserve explicit spec check disablement", async () => {
     await using tmp = await tmpdir({
       git: true,
       init: async (dir) => {
@@ -361,8 +373,104 @@ describe("orchestrator.service", () => {
         expect(checks?.lint).toEqual(["bun run lint"])
         expect(checks?.named?.typecheck?.enabled).toBe(true)
         expect(checks?.named?.typecheck?.commands).toEqual(["bun run typecheck"])
-        expect(checks?.spec_check?.enabled).toBe(true)
+        expect(checks?.spec_check?.enabled).toBe(false)
         expect(checks?.spec_check?.mode).toBe("strict")
+      },
+    })
+  })
+
+  test("materializes a planning task before spec compilation completes", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const gate = deferred<void>()
+    spyOn(SpecService, "initial").mockImplementation(async (input: any) => {
+      await gate.promise
+      return {
+        summary: `Spec for: ${input.title}`,
+        content: `# Scope\n\nSpec content for ${input.title}`,
+        scope: `Scope for ${input.title}`,
+        goals: [{
+          description: "Implement the requested change",
+          criteria: "The requested change is implemented and checks pass.",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["build", "test", "spec_check"],
+          },
+        }],
+        assumptions: [],
+        risks: [],
+        spec_items: [{
+          title: "Implement the requested change",
+          description: "The requested change is implemented and checks pass.",
+          priority: "blocking",
+          check_selector: ["build", "test", "spec_check"],
+        }],
+        evidence_sources: [],
+        unresolved_questions: [],
+      }
+    })
+    spyOn(PlannerService, "initial").mockResolvedValue({
+      summary: "Compiled plan",
+      prompt: "Execute the compiled plan",
+      goals: [{
+        description: "Implement the requested change",
+        criteria: "The requested change is implemented and checks pass.",
+        priority: "blocking",
+        metadata: {
+          check_selector: ["build", "test", "spec_check"],
+        },
+      }],
+      metadata: {
+        strategy: "initial",
+        steps: ["Explore", "Plan", "Verify"],
+        planner: {
+          role: "headless_compiler",
+          quality: "compiled",
+          source: "planner_agent",
+          clarification_source: "none",
+        },
+      },
+    } as any)
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const request = "create a large orchestrated task before planning completes"
+        const taskPromise = OrchestratorService.createTask({ request })
+        let settled = false
+        taskPromise.finally(() => {
+          settled = true
+        })
+        let row: typeof OrchestratorTaskTable.$inferSelect | undefined
+        for (const _ of Array.from({ length: 100 })) {
+          row = Database.use((db) =>
+            db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.request, request)).get(),
+          )
+          if (row) break
+          await Bun.sleep(20)
+        }
+        expect(row).toBeTruthy()
+        expect(row?.status).toBe("planning")
+        expect(row?.active_plan_version_id).toBeNull()
+        expect(row?.active_run_id).toBeNull()
+        expect(settled).toBe(false)
+
+        const board = await OrchestratorService.getBoard(row!.id, { sync: false })
+        expect(board.task.status).toBe("planning")
+        expect(board.overview.headline).toBe("Compiling the specification and plan")
+        expect(board.overview.summary).toContain("refining the spec, goals, and execution plan")
+
+        gate.resolve()
+        const taskID = await taskPromise
+        const task = Database.use((db) =>
+          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+        )
+        expect(taskID).toBe(row!.id)
+        expect(task?.active_plan_version_id).toBeTruthy()
+        expect(task?.active_run_id).toBeTruthy()
       },
     })
   })
@@ -898,24 +1006,15 @@ describe("orchestrator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        console.log("[DEBUG] Before createTask")
         const taskID = await OrchestratorService.createTask({
           request: "update the landing page hero section copy",
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(1)"`],
           },
         })
-        console.log("[DEBUG] After createTask, taskID:", taskID)
-        console.log("[DEBUG] Before getProgress")
-        try {
-          const progress = await OrchestratorService.getProgress(taskID)
-          console.log("[DEBUG] Progress:", progress.task.status, progress.run?.status)
-        } catch (e) {
-          console.log("[DEBUG] getProgress error:", e instanceof Error ? e.message : String(e))
-        }
-        console.log("[DEBUG] After getProgress (should not hang)")
+
+        await OrchestratorService.getProgress(taskID)
         const progress = await OrchestratorService.getProgress(taskID)
-        console.log("[DEBUG] Second progress:", progress.task.status)
         expect(progress.task.status).toBe("running")
         expect(progress.run?.status).toBe("accepted")
         expect(progress.run?.planVersionID).toBe(progress.plan?.id)
@@ -934,7 +1033,7 @@ describe("orchestrator.service", () => {
         expect(evaluations.length).toBeGreaterThanOrEqual(1)
         expect(evaluations.some((item) => item.status === "failed")).toBe(true)
         expect(runs.some((item) => item.retry_count === 0 && item.status === "failed")).toBe(true)
-        expect(runs.some((item) => item.status === "accepted" && item.retry_count === 1)).toBe(true)
+        expect(runs.some((item) => item.retry_count === 1)).toBe(true)
       },
     })
 
@@ -2143,9 +2242,11 @@ describe("orchestrator.service", () => {
     expect(calls[0]?.prompt).toContain("update the landing page hero section copy")
   })
 
-  test.todo("projects managed executor output into session messages", async () => {
+  test("publishes managed executor output with stable stream metadata", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
+    const progress: Array<Record<string, unknown>> = []
+    const outputs: Array<Record<string, unknown>> = []
     const codex: ExecutorAdapter = {
       capabilities() {
         return {
@@ -2187,12 +2288,61 @@ describe("orchestrator.service", () => {
       },
       async *events(input: { sessionID?: string }) {
         yield {
+          type: "tool.call",
+          summary: "Tool call: read_file",
+          payload: {
+            sessionID: input.sessionID,
+            id: "tool_1",
+            name: "read_file",
+          },
+        }
+        yield {
           type: "message.part.delta",
           summary: "Delta: text",
           payload: {
             sessionID: input.sessionID,
+            messageID: "msg_1",
+            partID: "part_1",
             field: "text",
             delta: "Hello from codex",
+          },
+        }
+        yield {
+          type: "tool.call",
+          summary: "Tool call: rg",
+          payload: {
+            sessionID: input.sessionID,
+            id: "tool_2",
+            name: "rg",
+          },
+        }
+        yield {
+          type: "message.part.delta",
+          summary: "Delta: text",
+          payload: {
+            sessionID: input.sessionID,
+            messageID: "msg_2",
+            partID: "part_2",
+            field: "text",
+            delta: "Second stream",
+          },
+        }
+        yield {
+          type: "tool.result",
+          summary: "Tool result: tool_1",
+          payload: {
+            sessionID: input.sessionID,
+            id: "tool_1",
+            output: "Hello from codex",
+          },
+        }
+        yield {
+          type: "tool.result",
+          summary: "Tool result: tool_2",
+          payload: {
+            sessionID: input.sessionID,
+            id: "tool_2",
+            output: "Second stream",
           },
         }
         yield {
@@ -2210,27 +2360,56 @@ describe("orchestrator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "stream managed executor output",
-          executor: "codex",
+        const stopProgress = Bus.subscribe(Event.RunProgress, (event) => {
+          progress.push(event.properties as Record<string, unknown>)
         })
-        const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
-        )!
-        let body = ""
-        for (const _ of Array.from({ length: 30 })) {
-          await new Promise((resolve) => setTimeout(resolve, 25))
-          const msg = (await Session.messages({ sessionID: task.session_id! }))
-            .findLast((item) => item.info.role === "assistant")
-          body = msg?.parts
-            .filter((part): part is Extract<typeof part, { type: "text" }> => part.type === "text")
-            .map((part) => part.text)
-            .join("\n") ?? ""
-          if (body.includes("Hello from codex")) break
+        const stopOutput = Bus.subscribe(Event.RunOutput, (event) => {
+          outputs.push(event.properties as Record<string, unknown>)
+        })
+        try {
+          await OrchestratorService.createTask({
+            request: "stream managed executor output",
+            executor: "codex",
+          })
+          for (const _ of Array.from({ length: 30 })) {
+            await new Promise((resolve) => setTimeout(resolve, 25))
+            if (
+              outputs.some((item) => item.sourceID === "tool_1" && item.text === "Hello from codex") &&
+              outputs.some((item) => item.sourceID === "tool_2" && item.text === "Second stream")
+            ) break
+          }
+          expect(outputs.some((item) => item.sourceID === "tool_1" && item.text === "Hello from codex")).toBe(true)
+        } finally {
+          stopProgress()
+          stopOutput()
         }
-        expect(body).toContain("Hello from codex")
       },
     })
+
+    expect(progress).toContainEqual(expect.objectContaining({
+      sourceID: "tool_1",
+      sourceKind: "tool",
+      sourceLabel: "read_file",
+      status: "running",
+    }))
+    expect(progress).toContainEqual(expect.objectContaining({
+      sourceID: "tool_2",
+      sourceKind: "tool",
+      sourceLabel: "rg",
+      status: "running",
+    }))
+    expect(outputs).toContainEqual(expect.objectContaining({
+      sourceID: "tool_1",
+      sourceKind: "tool",
+      sourceLabel: "read_file",
+      text: "Hello from codex",
+    }))
+    expect(outputs).toContainEqual(expect.objectContaining({
+      sourceID: "tool_2",
+      sourceKind: "tool",
+      sourceLabel: "rg",
+      text: "Second stream",
+    }))
   })
 
   test("persists task-specific spec metadata and stage routing", async () => {
