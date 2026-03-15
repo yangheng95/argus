@@ -13,6 +13,7 @@ import { ControlMessageInput, ControlMessageResult, PanelLocalAction } from "./m
 import { ControlTimeline } from "./timeline"
 import { Bus } from "@/bus"
 import { Log } from "@/util/log"
+import { asRecord } from "@/util/object"
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "control-message" })
@@ -170,6 +171,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       source: input.source ?? defaultSource(input.surface),
       allowCreate: input.allow_create,
       allowSessionMutation: input.allow_session_mutation,
+      ...(asRecord(input.metadata?.create_task) ? { createTask: input.metadata?.create_task } : {}),
       ...(input.request_id ? { requestID: input.request_id } : {}),
     }
 

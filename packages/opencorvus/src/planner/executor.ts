@@ -232,6 +232,7 @@ function planPrompt(input: {
         ].filter(Boolean).join("\n")
       : "",
     "Return only JSON matching the planner schema.",
+    "For multi-goal plans, emit layered waves with valid zero-based goal_indices, explicit owned_paths, and realistic parallelism.",
   ].filter(Boolean).join("\n\n")
 }
 
@@ -249,6 +250,7 @@ const PLAN_SYSTEM = [
   "You may inspect the codebase and documentation, but you must not modify files, apply patches, or run commands with side effects.",
   "Produce a detailed implementation plan as JSON only.",
   "Use the authoritative goals from the specification as execution constraints, but do not redefine them in your output.",
+  "For multi-goal tasks, organize execution into dependency-driven waves and declare owned_paths for each wave.",
 ].join("\n")
 
 const PLANNING_WARNING_PROMPT = [

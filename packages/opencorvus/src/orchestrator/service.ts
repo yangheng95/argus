@@ -1,7 +1,7 @@
 import z from "zod"
 import { Bus } from "@/bus"
 import { discoverChecks } from "@/evaluator/discovery"
-import { EvaluatorService } from "@/evaluator/service"
+import { CheckRunner } from "@/evaluator/service"
 import { ExecutorNotConfiguredError } from "@/executor/compat"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
@@ -470,7 +470,7 @@ export namespace OrchestratorService {
     const session = await Session.create({ title })
     const checks = initialTaskChecks(input.checks)
     const [resolvedChecks, discoveredChecks] = await Promise.all([
-      EvaluatorService.resolveChecks(checks ? { checks } : undefined),
+      CheckRunner.resolveChecks(checks ? { checks } : undefined),
       discoverChecks(),
     ])
     const materializedChecks = {

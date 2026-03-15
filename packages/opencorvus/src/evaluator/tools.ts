@@ -1,5 +1,5 @@
 /**
- * Enhanced tool set for the EvaluatorAgent.
+ * Enhanced tool set for the GoalJudge.
  *
  * Extends basic codebase tools with memory search and preference awareness,
  * giving the evaluator deeper context for failure analysis and goal assessment.
@@ -15,7 +15,7 @@ import { Log } from "@/util/log"
 const log = Log.create({ service: "evaluator-tools" })
 
 /**
- * Creates the tool set for the EvaluatorAgent.
+ * Creates the tool set for the GoalJudge.
  *
  * Includes:
  * - 4 codebase tools: read_file, find_files, search_code, list_directory

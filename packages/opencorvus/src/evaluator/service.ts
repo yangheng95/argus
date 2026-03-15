@@ -1,6 +1,6 @@
 import { Plugin } from "@/plugin"
 import { CheckConfig, EvaluationCheck } from "@/orchestrator/model"
-import { EvaluatorAgent, type EvaluatorAnalysisType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
+import { GoalJudge, type GoalJudgmentType, type GoalInfo, type CheckResult, type DeliveryInfo } from "./agent"
 import { Log } from "@/util/log"
 import z from "zod"
 import { resolveConfig, discoverChecks, resolvedChecks, commandGroups } from "./discovery"
@@ -11,11 +11,11 @@ import { visualResult } from "./checks"
 import { puppeteerResult } from "./checks"
 import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, specCheckResult } from "./review"
 import {
-  type EvaluationTask,
-  type EvaluationDelivery,
-  type EvaluationArtifact,
-  type EvaluationOutcome,
-  type EvaluationOutput,
+  type CheckTask,
+  type CheckDelivery,
+  type CheckArtifact,
+  type CheckOutcome,
+  type CheckReport,
   type PluginCheck,
   type OptionalCheckDef,
   CORE_CHECK_DEFS,
@@ -46,7 +46,7 @@ const OPTIONAL_CHECK_DEFS = [
 const BUILTIN_CHECK_DEFS = [...CORE_CHECK_DEFS, ...OPTIONAL_CHECK_DEFS]
 initBuiltinCheckIndex(BUILTIN_CHECK_DEFS)
 
-export namespace EvaluatorService {
+export namespace CheckRunner {
   export async function resolveChecks(metadata?: Record<string, unknown>, changedFiles?: unknown) {
     const config = await resolveConfig(metadata)
     const discovered = await discoverChecks(changedFiles)
@@ -54,8 +54,8 @@ export namespace EvaluatorService {
   }
 
   export async function evaluate(
-    task: EvaluationTask,
-    delivery: EvaluationDelivery,
+    task: CheckTask,
+    delivery: CheckDelivery,
   ) {
     const config = await resolveConfig(task.metadata)
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
@@ -85,8 +85,8 @@ export namespace EvaluatorService {
     delivery: DeliveryInfo
     checkResults: CheckResult[]
     stream?: TextHooks
-  }): Promise<EvaluatorAnalysisType> {
-    const output = { analysis: undefined as EvaluatorAnalysisType | undefined }
+  }): Promise<GoalJudgmentType> {
+    const output = { analysis: undefined as GoalJudgmentType | undefined }
     await Plugin.trigger("evaluation.analysis", {
       task: input.task,
       goals: input.goals,
@@ -94,13 +94,13 @@ export namespace EvaluatorService {
       checkResults: input.checkResults,
     }, output)
     if (output.analysis) return output.analysis
-    return EvaluatorAgent.analyze(input)
+    return GoalJudge.analyze(input)
   }
 }
 
 const evaluatorLog = Log.create({ service: "evaluator" })
 
-function taskRefs(task: EvaluationTask) {
+function taskRefs(task: CheckTask) {
   return {
     taskID: typeof task.metadata?.taskID === "string" ? task.metadata.taskID : undefined,
     runID: typeof task.metadata?.runID === "string" ? task.metadata.runID : undefined,
@@ -108,7 +108,7 @@ function taskRefs(task: EvaluationTask) {
   }
 }
 
-async function publishResult(task: EvaluationTask, output: EvaluationOutput) {
+async function publishResult(task: CheckTask, output: CheckReport) {
   await Plugin.trigger("evaluation.result", taskRefs(task), output).catch((err) => {
     evaluatorLog.warn("evaluation.result plugin trigger failed", { error: String(err) })
   })
@@ -119,8 +119,8 @@ const LOCAL_CHECK_NAMES = new Set(["startup", "artifact", "visual", "puppeteer"]
 
 async function optionalChecks(
   config: z.infer<typeof CheckConfig>,
-  task: EvaluationTask,
-  delivery: EvaluationDelivery,
+  task: CheckTask,
+  delivery: CheckDelivery,
 ) {
   // Phase 1: run local (non-LLM) checks concurrently
   const phase1 = await Promise.all(
@@ -147,8 +147,8 @@ async function optionalChecks(
 
 async function pluginChecks(
   config: z.infer<typeof CheckConfig>,
-  task: EvaluationTask,
-  delivery: EvaluationDelivery,
+  task: CheckTask,
+  delivery: CheckDelivery,
 ) {
   const output = { checks: [] as PluginCheck[] }
   await Plugin.trigger("evaluation.checks", {
@@ -162,9 +162,9 @@ async function pluginChecks(
 
 async function pluginCheck(
   input: PluginCheck,
-  task: EvaluationTask,
-  delivery: EvaluationDelivery,
-): Promise<EvaluationOutcome> {
+  task: CheckTask,
+  delivery: CheckDelivery,
+): Promise<CheckOutcome> {
   const result = await input.run({ request: task.request, delivery }).catch((error) => pluginErrorResult(input.name, error))
   const artifacts = [
     {
@@ -223,10 +223,10 @@ function orderChecks(input: z.infer<typeof EvaluationCheck>[]) {
 function finalizeEvaluation(
   commands: { name: string }[],
   checks: z.infer<typeof EvaluationCheck>[],
-  artifacts: EvaluationArtifact[],
-  optional: EvaluationOutcome[],
+  artifacts: CheckArtifact[],
+  optional: CheckOutcome[],
   requireSpecCheck: boolean,
-): EvaluationOutput {
+): CheckReport {
   const ordered = orderChecks(checks)
   const failed = ordered.filter((item) => item.status === "failed")
   if (failed.length > 0 || optional.some((item) => item.outcome === "failed")) {

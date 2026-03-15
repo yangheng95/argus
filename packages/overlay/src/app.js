@@ -2042,6 +2042,12 @@ function panelRequestBody(text, metadata = {}, requestID) {
   };
 }
 
+function takeChatMetadata() {
+  const meta = record(window.__ocNextChatMetadata) ? window.__ocNextChatMetadata : undefined;
+  delete window.__ocNextChatMetadata;
+  return meta;
+}
+
 function panelResultNavigates(result) {
   if (!result || typeof result !== "object") return false;
   const action = result.local_action?.type;
@@ -4953,20 +4959,20 @@ function mergeMessages(...lists) {
 function agentRole(stage) {
   if (stage === "spec") return "spec";
   if (stage === "planner") return "planner";
-  if (stage === "evaluator") return "scheduler";
+  if (stage === "judge") return "scheduler";
   return "assistant";
 }
 
 function agentStageActive(stage) {
   const status = String(state.board?.task?.status || "");
-  if (stage === "evaluator") return status === "evaluating";
+  if (stage === "judge") return status === "evaluating";
   return status === "planning" || status === "queued";
 }
 
 function agentStagePersisted(stage) {
   if (stage === "spec") return !!state.board?.spec?.content;
   if (stage === "planner") return !!state.board?.plan;
-  if (stage === "evaluator") return !!state.board?.evaluation?.verdict;
+  if (stage === "judge") return !!state.board?.evaluation?.verdict;
   return false;
 }
 
@@ -8358,6 +8364,7 @@ dom.chatForm.addEventListener("submit", async (e) => {
   if (!canComposeChat()) return;
   const text = chatInputText();
   if (!text) return;
+  const metadata = takeChatMetadata();
 
   const emptyStart = workspaceMode() === "empty";
   const requestID = crypto.randomUUID();
@@ -8397,7 +8404,7 @@ dom.chatForm.addEventListener("submit", async (e) => {
   renderConversation();
 
   try {
-    await panelMessage(text, undefined, request.controller.signal, {
+    await panelMessage(text, metadata, request.controller.signal, {
       requestID,
       workspaceEpoch: request.workspaceEpoch,
     });

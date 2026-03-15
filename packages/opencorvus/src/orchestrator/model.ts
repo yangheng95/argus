@@ -729,7 +729,7 @@ export const TaskEvent = z.object({
   payload: z.record(z.string(), z.any()),
 })
 
-export const AgentStage = z.enum(["spec", "planner", "evaluator"])
+export const AgentStage = z.enum(["spec", "planner", "judge"])
 export type AgentStageType = z.infer<typeof AgentStage>
 export const AgentEventKind = z.enum(["status", "message_delta", "tool_call", "tool_delta", "tool_result", "error"])
 export type AgentEventKindType = z.infer<typeof AgentEventKind>

@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
-import { EvaluatorAgent } from "../../src/evaluator/agent"
+import { GoalJudge } from "../../src/evaluator/agent"
 import { BunProc } from "../../src/bun"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { Identifier } from "../../src/id/id"
 import { OrchestratorSpecSnapshotTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { Plugin } from "../../src/plugin"
@@ -38,7 +38,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready" })
+        const result = await CheckRunner.evaluate({}, { summary: "delivery ready" })
         expect(result.status).toBe("failed")
         expect(result.verdict).toBe("rejected")
         expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["build", "test", "lint", "spec_check"]))
@@ -48,7 +48,7 @@ describe("evaluator.service", () => {
   })
 
   test("uses plugin supplied evaluation analysis before calling the evaluator agent", async () => {
-    const analyze = spyOn(EvaluatorAgent, "analyze").mockRejectedValue(new Error("should not be called"))
+    const analyze = spyOn(GoalJudge, "analyze").mockRejectedValue(new Error("should not be called"))
     spyOn(Plugin, "trigger").mockImplementation(async (name, _input, output) => {
       if (name !== "evaluation.analysis") return output
       const next = output as {
@@ -80,7 +80,7 @@ describe("evaluator.service", () => {
       return output
     })
 
-    const result = await EvaluatorService.analyzeDelivery({
+    const result = await CheckRunner.analyzeDelivery({
       task: {
         title: "benchmark",
         request: "benchmark",
@@ -113,7 +113,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             metadata: {
               checks: {
@@ -137,7 +137,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             metadata: {
               checks: {
@@ -179,7 +179,7 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const started = Date.now()
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             metadata: {
               checks: {
@@ -216,7 +216,7 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const started = Date.now()
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             metadata: {
               checks: {
@@ -252,12 +252,12 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const resolved = await EvaluatorService.resolveChecks()
+        const resolved = await CheckRunner.resolveChecks()
         expect(resolved.named?.typecheck?.label).toBe("Type Check")
         expect(resolved.named?.typecheck?.family).toBe("lint")
         expect(resolved.named?.typecheck?.commands).toEqual(["bun run typecheck"])
 
-        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready" })
+        const result = await CheckRunner.evaluate({}, { summary: "delivery ready" })
         expect(result.status).toBe("failed")
         expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["typecheck", "spec_check"]))
         expect(result.checks.find((item) => item.name === "typecheck")?.family).toBe("lint")
@@ -283,7 +283,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const resolved = await EvaluatorService.resolveChecks({
+        const resolved = await CheckRunner.resolveChecks({
           checks: {
             build: false,
             test: false,
@@ -296,7 +296,7 @@ describe("evaluator.service", () => {
         expect(resolved.lint).toBe(false)
         expect(resolved.verify_cmd).toBe(false)
 
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             metadata: {
               checks: {
@@ -323,7 +323,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const resolved = await EvaluatorService.resolveChecks({
+        const resolved = await CheckRunner.resolveChecks({
           checks: {
             verify_cmd: [`"${BunProc.which()}" -e "process.exit(0)"`],
             spec_check: {
@@ -337,7 +337,7 @@ describe("evaluator.service", () => {
           mode: "strict",
         })
 
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             activeSpecVersionID: Identifier.ascending("spec"),
             metadata: {
@@ -366,7 +366,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             metadata: {
               checks: {
@@ -392,7 +392,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             metadata: {
               checks: {
@@ -428,7 +428,7 @@ describe("evaluator.service", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const result = await EvaluatorService.evaluate(
+          const result = await CheckRunner.evaluate(
             {
               metadata: {
                 checks: {
@@ -488,7 +488,7 @@ describe("evaluator.service", () => {
             })
             .run()
         })
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "implement feature",
             activeSpecVersionID: specID,
@@ -544,7 +544,7 @@ describe("evaluator.service", () => {
             .run()
         })
 
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "implement feature",
             activeSpecVersionID: specID,
@@ -596,7 +596,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "validate delivery",
             metadata: {
@@ -642,7 +642,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "start the service",
             metadata: {
@@ -678,7 +678,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "start the service",
             metadata: {
@@ -717,7 +717,7 @@ describe("evaluator.service", () => {
       await Instance.provide({
         directory: tmp.path,
         fn: async () => {
-          const result = await EvaluatorService.evaluate(
+          const result = await CheckRunner.evaluate(
             {
               request: "verify browser render",
               metadata: {
@@ -752,7 +752,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "Review the UI hierarchy.",
             metadata: {
@@ -779,7 +779,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "Check code quality.",
             metadata: {
@@ -819,7 +819,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "Do a code review.",
             metadata: {
@@ -859,7 +859,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "Review dead code cleanup.",
             metadata: {
@@ -899,7 +899,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "Review the implementation quality.",
             metadata: {
@@ -961,7 +961,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "run the startup command once",
             metadata: {
@@ -989,7 +989,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "Review the delivery.",
             metadata: {
@@ -1049,7 +1049,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
+        const result = await CheckRunner.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
         expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("passed")
         expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
@@ -1086,7 +1086,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
+        const result = await CheckRunner.evaluate({}, { summary: "delivery ready", changedFiles: [], diffs: [] })
         expect(result.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
         expect(result.checks.find((item) => item.name === "plugin_gate")?.status).toBe("skipped")
@@ -1129,7 +1129,7 @@ describe("evaluator.service", () => {
             })
             .run()
         })
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "review the delivery",
             activeSpecVersionID: specID,
@@ -1194,7 +1194,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "run browser test",
             metadata: {
@@ -1255,7 +1255,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "run browser test",
             metadata: {
@@ -1297,7 +1297,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "run unit test",
             metadata: {
@@ -1344,7 +1344,7 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const result = await EvaluatorService.evaluate(
+        const result = await CheckRunner.evaluate(
           {
             request: "create a tank battle game",
             metadata: {

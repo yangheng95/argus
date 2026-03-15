@@ -8,11 +8,9 @@
  *   - initial()  — Generate initial spec when task is created
  *   - rewrite()  — Revise spec based on failure analysis (replan)
  */
-import z from "zod"
 import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft } from "./agent"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
-import { type TextHooks } from "@/llm/api"
 
 const log = Log.create({ service: "spec-service" })
 
@@ -28,17 +26,44 @@ export class SpecFailureError extends Error {
   }
 }
 
+
+function deriveGoals(output: SpecOutputType, explicitGoalCount: number) {
+  if (explicitGoalCount > 0 || output.spec_items.length < 1) {
+    return {
+      goals: [] as Array<{ description: string; criteria: string; priority: string; metadata?: { check_selector: string[] } }>,
+      derived: false,
+    }
+  }
+  return {
+    goals: output.spec_items.map((item) => ({
+      description: item.title,
+      criteria: item.description,
+      priority: item.priority,
+      metadata: item.check_selector?.length
+        ? {
+            check_selector: item.check_selector,
+          }
+        : undefined,
+    })),
+    derived: true,
+  }
+}
+
 /**
  * Convert SpecAgent output to the shared spec draft used by the orchestrator.
  */
-function toSpecDraft(output: SpecOutputType): SpecDraft {
+function toSpecDraft(output: SpecOutputType, explicitGoalCount = 0) {
+  const next = deriveGoals(output, explicitGoalCount)
   return {
-    summary: output.summary,
-    content: output.content,
-    goals: output.goals,
-    assumptions: output.assumptions,
-    risks: output.risks,
-    clarifications: output.clarifications,
+    draft: {
+      summary: output.summary,
+      content: output.content,
+      goals: next.goals,
+      assumptions: output.assumptions,
+      risks: output.risks,
+      clarifications: output.clarifications,
+    } satisfies SpecDraft,
+    derived: next.derived,
   }
 }
 
@@ -53,7 +78,6 @@ export namespace HeadlessSpecService {
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     timeoutMs?: number
     signal?: AbortSignal
-    stream?: TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
@@ -76,9 +100,7 @@ export namespace HeadlessSpecService {
             criteria: g.criteria,
             priority: g.priority,
           })),
-          timeoutMs,
           signal,
-          stream: input.stream,
         }).finally(() => clearTimeout(specTimer)),
         new Promise<never>((_, reject) => {
           specTimer = setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs)
@@ -92,9 +114,17 @@ export namespace HeadlessSpecService {
         evidenceSources: output.evidence_sources.length,
         hasClarifications: (output.clarifications?.length ?? 0) > 0,
       })
+      const spec = toSpecDraft(output, input.goals?.length ?? 0)
+      if (spec.derived) {
+        log.info("spec service derived execution goals from spec items", {
+          title: input.title,
+          specItems: output.spec_items.length,
+          derivedGoals: spec.draft.goals.length,
+        })
+      }
 
       return {
-        ...toSpecDraft(output),
+        ...spec.draft,
         spec_items: output.spec_items,
         evidence_sources: output.evidence_sources,
         unresolved_questions: output.unresolved_questions,
@@ -118,7 +148,6 @@ export namespace HeadlessSpecService {
     goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
     timeoutMs?: number
     signal?: AbortSignal
-    stream?: TextHooks
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
@@ -142,9 +171,7 @@ export namespace HeadlessSpecService {
             criteria: g.criteria,
             priority: g.priority,
           })),
-          timeoutMs,
           signal,
-          stream: input.stream,
         }).finally(() => clearTimeout(rewriteTimer)),
         new Promise<never>((_, reject) => {
           rewriteTimer = setTimeout(() => reject(new SpecFailureError(`spec agent rewrite timed out after ${timeoutMs}ms`)), timeoutMs)
@@ -155,9 +182,17 @@ export namespace HeadlessSpecService {
         title: input.title,
         specItems: output.spec_items.length,
       })
+      const spec = toSpecDraft(output, input.goals?.length ?? 0)
+      if (spec.derived) {
+        log.info("spec service derived execution goals from spec items", {
+          title: input.title,
+          specItems: output.spec_items.length,
+          derivedGoals: spec.draft.goals.length,
+        })
+      }
 
       return {
-        ...toSpecDraft(output),
+        ...spec.draft,
         spec_items: output.spec_items,
         evidence_sources: output.evidence_sources,
         unresolved_questions: output.unresolved_questions,

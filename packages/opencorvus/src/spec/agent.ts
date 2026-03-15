@@ -10,20 +10,14 @@
  * 5. Structured output — scope, requirements, acceptance criteria, spec items
  * 6. Rewrite — receives failure analysis and revises spec for replan
  */
-import { stepCountIs, tool } from "ai"
-import type { LanguageModelV2 } from "@ai-sdk/provider"
+import { generateText, stepCountIs, tool } from "ai"
 import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
-import { unattendedProject } from "@/orchestrator/unattended"
-import { Env } from "@/env"
-import { completeText, type TextHooks } from "@/llm/api"
-import fs from "fs"
 import path from "path"
-import { Config } from "@/config/config"
 
 const log = Log.create({ service: "spec-agent" })
 
@@ -47,18 +41,6 @@ export type ClarificationResult = z.infer<typeof Clarification>
 export const SpecDraftSchema = z.object({
   summary: z.string(),
   content: z.string(),
-  goals: z.array(
-    z.object({
-      description: z.string(),
-      criteria: z.string(),
-      priority: z.enum(["blocking", "advisory"]).default("blocking"),
-      metadata: z
-        .object({
-          check_selector: z.array(z.string()).optional(),
-        })
-        .optional(),
-    }),
-  ).default([]),
   assumptions: z.array(
     z.object({
       question: z.string(),
@@ -82,24 +64,11 @@ export const SpecItemSchema = z.object({
 })
 export type SpecItem = z.infer<typeof SpecItemSchema>
 
-export const SpecGoalSchema = z.object({
-  description: z.string().describe("Goal contract this task must satisfy"),
-  criteria: z.string().describe("How to verify the goal as satisfied"),
-  priority: z.enum(["blocking", "advisory"]).default("blocking"),
-  metadata: z
-    .object({
-      check_selector: z.array(z.string()).optional(),
-    })
-    .optional(),
-})
-export type SpecGoal = z.infer<typeof SpecGoalSchema>
-
 export const SpecOutput = z.object({
   summary: z.string().describe("One-line summary of the specification"),
   content: z.string().describe("Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria, Out-of-Scope, Open Questions"),
   scope: z.string().describe("What is in scope for this task"),
   out_of_scope: z.string().optional().describe("Explicitly excluded items"),
-  goals: z.array(SpecGoalSchema).describe("Authoritative task goals owned by this specification"),
   spec_items: z.array(SpecItemSchema).describe("Required spec items — each must be verifiably implemented"),
   assumptions: z.array(
     z.object({
@@ -147,19 +116,11 @@ export interface SpecRewriteContext {
 // HeadlessSpecAgent
 // ---------------------------------------------------------------------------
 
+const MAX_STEPS = 30
+const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
-const QUALITY_RETRY_THRESHOLD = 0.4
+const QUALITY_RETRY_THRESHOLD = 0.6
 const MAX_SPEC_ATTEMPTS = 2
-
-function timeoutMs(input?: number) {
-  if (input && input > 0) return input
-  return Number.parseInt(Env.get("OPENCORVUS_SPEC_AGENT_TIMEOUT_MS") ?? Env.get("OPENCORVUS_SPEC_TIMEOUT_MS") ?? "", 10) || 120_000
-}
-
-function maxSteps() {
-  const value = Number.parseInt(Env.get("OPENCORVUS_SPEC_AGENT_MAX_STEPS") ?? "", 10)
-  return Number.isFinite(value) && value > 0 ? value : 20
-}
 
 export namespace HeadlessSpecAgent {
   /**
@@ -170,11 +131,23 @@ export namespace HeadlessSpecAgent {
     title: string
     request: string
     goals?: Array<{ description: string; criteria: string; priority?: string }>
-    timeoutMs?: number
     signal?: AbortSignal
-    stream?: TextHooks
   }): Promise<SpecOutputType> {
     return run({ ...input, mode: "initial" })
+  }
+
+  /**
+   * Compile/fill a spec during the spec compilation phase.
+   * Called when the spec is in "blocked" state and needs gap-filling.
+   */
+  export async function compile(input: {
+    title: string
+    request: string
+    previousSpec?: string
+    goals?: Array<{ description: string; criteria: string; priority?: string }>
+    signal?: AbortSignal
+  }): Promise<SpecOutputType> {
+    return run({ ...input, mode: "compile" })
   }
 
   /**
@@ -185,16 +158,13 @@ export namespace HeadlessSpecAgent {
     request: string
     rewriteContext: SpecRewriteContext
     goals?: Array<{ description: string; criteria: string; priority?: string }>
-    timeoutMs?: number
     signal?: AbortSignal
-    stream?: TextHooks
   }): Promise<SpecOutputType> {
     return run({ ...input, mode: "rewrite" })
   }
 }
 
 export { HeadlessSpecAgent as SpecAgent }
-export const parseSpecOutput = extractJSON
 
 // ---------------------------------------------------------------------------
 // Internal implementation
@@ -203,22 +173,18 @@ export const parseSpecOutput = extractJSON
 async function run(input: {
   title: string
   request: string
-  mode: "initial" | "rewrite"
+  mode: "initial" | "compile" | "rewrite"
   goals?: Array<{ description: string; criteria: string; priority?: string }>
+  previousSpec?: string
   rewriteContext?: SpecRewriteContext
-  timeoutMs?: number
   signal?: AbortSignal
-  stream?: TextHooks
 }): Promise<SpecOutputType> {
   if (input.signal?.aborted) throw new Error("spec agent aborted before model resolution")
-  const limit = timeoutMs(input.timeoutMs)
 
-  // No model configured → throw below with clear error
   const def = await Provider.defaultModel().catch(() => undefined)
   if (!def) throw new Error("no LLM model available for spec agent")
   const model = await Provider.getModel(def.providerID, def.modelID)
   const language = await Provider.getLanguage(model)
-  const isReasoning = model.capabilities?.reasoning === true
 
   if (input.signal?.aborted) throw new Error("spec agent aborted after model resolution")
 
@@ -227,13 +193,8 @@ async function run(input: {
     input.request.match(/(?:绝对路径|absolute path)[：:\s]*([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i) ??
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
-  const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
-  if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
 
-  const context = prefetchContext(input.title, input.request)
-  const recallEnabled = context.length === 0
-  const explorationTools = createPlannerTools(taskWorkDir, { recall: recallEnabled })
-  const unattended = await unattendedProject()
+  const explorationTools = createPlannerTools(taskWorkDir)
 
   // -----------------------------------------------------------------------
   // submit_spec tool — the model calls this to deliver structured spec data.
@@ -253,12 +214,16 @@ async function run(input: {
         submittedSpec = args as SpecOutputType
         return "Specification submitted successfully."
       },
-      }),
+    }),
   }
 
+  const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
+  if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
+
+  const context = prefetchContext(input.title, input.request)
+
+  let lastParsed: SpecOutputType | undefined
   let lastQuality: { score: number; reasons: string[] } | undefined
-  let lastSteps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }> | undefined
-  let lastToolCallCount = 0
 
   for (let attempt = 0; attempt < MAX_SPEC_ATTEMPTS; attempt++) {
     if (input.signal?.aborted) throw new Error("spec agent aborted before attempt " + (attempt + 1))
@@ -267,9 +232,7 @@ async function run(input: {
     const retryContext = attempt > 0 && lastQuality
       ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
       : undefined
-    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, unattended)
-    const stepLimit = maxSteps()
-    const consolidationOnly = attempt > 0 && !!lastSteps && lastToolCallCount >= MIN_TOOL_CALLS
+    const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext)
 
     log.info("spec agent starting", {
       title: input.title,
@@ -279,64 +242,24 @@ async function run(input: {
       fileRefsFound: fileRefs.length,
       taskWorkDir,
       toolCount: Object.keys(allTools).length,
-      recallEnabled,
-      unattended,
       attempt: attempt + 1,
-      maxSteps: stepLimit,
-      consolidationOnly,
       retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
-    let result: {
-      text?: string
-      finishReason?: string
-      steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
-    }
-    let toolCallCount: number
+    const result = await generateText({
+      model: language,
+      stopWhen: stepCountIs(MAX_STEPS),
+      tools: allTools,
+      maxOutputTokens: 32768,
+      abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
+      system: SPEC_SYSTEM,
+      prompt: userPrompt,
+    })
 
-    if (consolidationOnly) {
-      const forced = await finalizeSpec(language, input, lastSteps!, input.signal, retryContext, isReasoning, input.stream)
-      if (forced.submittedSpec) submittedSpec = forced.submittedSpec
-      result = forced.result
-      toolCallCount = lastToolCallCount
-      log.info("spec agent retrying via consolidation", {
-        attempt: attempt + 1,
-        stepCount: result.steps.length,
-        reusedToolCalls: toolCallCount,
-      })
-    } else {
-        result = await completeText({
-          model: language,
-        stopWhen: stepCountIs(stepLimit),
-        tools: allTools,
-        toolChoice: "auto",
-        maxOutputTokens: 32768,
-        timeoutMs: limit,
-        abortSignal: input.signal ?? AbortSignal.timeout(limit),
-        system: await specSystem(),
-        prompt: userPrompt,
-        ...(input.stream ?? {}),
-      })
-
-      toolCallCount = result.steps.reduce(
-        (sum, s) => {
-          const step = s as { toolCalls?: unknown[] }
-          return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
-        },
-        0,
-      )
-      lastSteps = result.steps
-      lastToolCallCount = toolCallCount
-      const toolUsage = summarizeToolUsage(result.steps)
-      log.info("spec agent tool usage", {
-        attempt: attempt + 1,
-        finishReason: result.finishReason,
-        stepCount: result.steps.length,
-        toolCallCount,
-        submitSpecCalls: toolUsage["submit_spec"] ?? 0,
-        toolUsage,
-      })
-    }
+    const toolCallCount = result.steps.reduce(
+      (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
+      0,
+    )
 
     // -----------------------------------------------------------------------
     // Priority 1: extract from submit_spec tool call (guaranteed valid JSON)
@@ -353,65 +276,42 @@ async function run(input: {
         attempt: attempt + 1,
       })
       // Normalize arrays — tool call args may not have Zod defaults applied
-      parsed = normalizeSpecOutput(submitted)
+      parsed = {
+        ...submitted,
+        summary: submitted.summary ?? "",
+        content: submitted.content ?? "",
+        scope: submitted.scope ?? "",
+        spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
+        assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
+        risks: Array.isArray(submitted.risks) ? submitted.risks : [],
+        evidence_sources: Array.isArray(submitted.evidence_sources) ? submitted.evidence_sources : [],
+        unresolved_questions: Array.isArray(submitted.unresolved_questions) ? submitted.unresolved_questions : [],
+      }
     } else {
       // Fallback: parse from text output
       let allText = result.text?.trim() || ""
       if (!allText || !allText.includes("{")) {
         allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
       }
-      if (!allText.trim()) {
-        log.warn("spec: primary run produced no final text or submit_spec call, forcing consolidation", {
-          steps: result.steps.length,
-          finishReason: result.finishReason,
-          attempt: attempt + 1,
-        })
-        const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning, input.stream)
-        if (forced.submittedSpec) {
-          submittedSpec = forced.submittedSpec
-        }
-        allText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
-      }
 
-      if (submittedSpec) {
-        const submitted = submittedSpec as SpecOutputType
-        log.info("spec agent finished via forced submit_spec tool call", {
-          steps: result.steps.length,
-          specItems: submitted.spec_items?.length ?? 0,
-          contentLength: submitted.content?.length ?? 0,
-          attempt: attempt + 1,
-        })
-        parsed = normalizeSpecOutput(submitted)
-      } else {
-        log.info("spec agent finished via text output (no submit_spec call)", {
-          steps: result.steps.length,
-          finishReason: result.finishReason,
-          textLength: allText.length,
-          textPreview: allText.slice(0, 200),
-          attempt: attempt + 1,
-        })
-        const extracted = tryExtractSpecOutput(allText)
-        if (extracted.ok) {
-          parsed = extracted.value
-        } else {
-          log.warn("spec: text output was not valid JSON, forcing consolidation", {
-            error: extracted.error.message,
-            steps: result.steps.length,
-            finishReason: result.finishReason,
-            textLength: allText.length,
-            attempt: attempt + 1,
-          })
-          const forced = await finalizeSpec(language, input, result.steps, input.signal, undefined, isReasoning, input.stream)
-          if (forced.submittedSpec) {
-            parsed = normalizeSpecOutput(forced.submittedSpec)
-          } else {
-            const forcedText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
-            const forcedExtracted = tryExtractSpecOutput(forcedText)
-            if (!forcedExtracted.ok) throw forcedExtracted.error
-            parsed = forcedExtracted.value
-          }
-        }
-      }
+      log.info("spec agent finished via text output (no submit_spec call)", {
+        steps: result.steps.length,
+        finishReason: result.finishReason,
+        textLength: allText.length,
+        textPreview: allText.slice(0, 200),
+        attempt: attempt + 1,
+      })
+
+      parsed = extractJSON(allText)
+    }
+
+    // If output was truncated or empty, synthesize from exploration
+    if (parsed.content.length < 100 || parsed.spec_items.length < 1) {
+      log.warn("spec: output seems truncated, synthesizing from exploration", {
+        contentLength: parsed.content.length,
+        specItemsCount: parsed.spec_items.length,
+      })
+      parsed = synthesizeFromExploration(parsed, input, result.steps)
     }
 
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
@@ -427,22 +327,14 @@ async function run(input: {
       attempt: attempt + 1,
     })
 
+    lastParsed = parsed
     lastQuality = specQuality
 
-    if (specQuality.score >= QUALITY_RETRY_THRESHOLD) {
+    if (specQuality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_SPEC_ATTEMPTS - 1) {
+      if (specQuality.score < 0.3) {
+        log.warn("spec: final spec quality is very low", { ...specQuality, attempt: attempt + 1 })
+      }
       return parsed
-    }
-
-    if (attempt >= MAX_SPEC_ATTEMPTS - 1) {
-      log.error("spec: output quality below threshold", {
-        score: specQuality.score,
-        threshold: QUALITY_RETRY_THRESHOLD,
-        reasons: specQuality.reasons,
-        attempt: attempt + 1,
-      })
-      throw new Error(
-        `spec output quality below threshold (${specQuality.score.toFixed(2)} < ${QUALITY_RETRY_THRESHOLD}): ${specQuality.reasons.join("; ") || "unknown quality failure"}`,
-      )
     }
 
     log.warn("spec: spec quality below threshold, retrying", {
@@ -454,7 +346,7 @@ async function run(input: {
     })
   }
 
-  throw new Error("spec exhausted retries without producing a valid specification")
+  return lastParsed!
 }
 
 // ---------------------------------------------------------------------------
@@ -465,29 +357,16 @@ function buildUserPrompt(
   input: {
     title: string
     request: string
-    mode: "initial" | "rewrite"
+    mode: "initial" | "compile" | "rewrite"
     goals?: Array<{ description: string; criteria: string; priority?: string }>
+    previousSpec?: string
     rewriteContext?: SpecRewriteContext
   },
   fileRefs: Array<{ ref: string; content: string }>,
   context: string,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  unattended = false,
 ): string {
   const sections = [`# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`]
-
-  if (unattended) {
-    sections.push(
-      [
-        "# Unattended Execution Policy",
-        "",
-        "This project runs unattended by default.",
-        "Complete the task end-to-end autonomously.",
-        "When details are missing but a reasonable default can unblock progress, choose it, record it in assumptions, and continue execution.",
-        "Only emit clarifications when the request is contradictory or impossible to execute safely without explicit human input.",
-      ].join("\n"),
-    )
-  }
 
   if (retryContext) {
     sections.push(
@@ -524,6 +403,10 @@ function buildUserPrompt(
         .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
         .join("\n")}`,
     )
+  }
+
+  if (input.previousSpec) {
+    sections.push(`# Previous Specification (for revision)\n\n${input.previousSpec}`)
   }
 
   if (context) {
@@ -586,99 +469,6 @@ function buildUserPrompt(
   return sections.join("\n\n")
 }
 
-async function finalizeSpec(
-  language: LanguageModelV2,
-  input: {
-    title: string
-    request: string
-    mode: "initial" | "rewrite"
-    goals?: Array<{ description: string; criteria: string; priority?: string }>
-    rewriteContext?: SpecRewriteContext
-    timeoutMs?: number
-    signal?: AbortSignal
-    stream?: TextHooks
-  },
-  steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
-  signal?: AbortSignal,
-  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  isReasoning = false,
-  stream?: TextHooks,
-) {
-  const transcript = steps
-    .flatMap((step, index) => {
-      const calls = Array.isArray(step.toolCalls)
-        ? step.toolCalls.map((item) => `Step ${index + 1} tool_call: ${JSON.stringify(item).slice(0, 1200)}`)
-        : []
-      const results = Array.isArray(step.toolResults)
-        ? step.toolResults.map((item) => `Step ${index + 1} tool_result: ${JSON.stringify(item).slice(0, 4000)}`)
-        : []
-      return [...calls, ...results]
-    })
-    .join("\n\n")
-
-  let submittedSpec: SpecOutputType | undefined
-  const summaryTool = {
-    submit_spec: tool({
-      description:
-        "Submit the final specification after codebase exploration. " +
-        "Call this tool ONCE using the exploration transcript that was already gathered.",
-      inputSchema: SpecOutput,
-      execute: async (args) => {
-        submittedSpec = args as SpecOutputType
-        return "Specification submitted successfully."
-      },
-    }),
-  }
-
-  const result = await completeText({
-    model: language,
-    stopWhen: stepCountIs(8),
-    tools: summaryTool,
-    toolChoice: isReasoning ? "auto" : "required",
-    maxOutputTokens: 16384,
-    timeoutMs: timeoutMs(input.timeoutMs),
-    abortSignal: signal ?? AbortSignal.timeout(timeoutMs(input.timeoutMs)),
-    system:
-      "You are finalizing a specification after an exploration attempt. " +
-      "Do not explore again. Use the transcript if it is helpful, but do not claim that a missing or weak transcript blocks you. " +
-      "If the repository is greenfield or nearly empty, use the task request as the primary source of truth and produce a concrete technical design. " +
-      "Never return a placeholder saying more context is required when the request already contains implementation requirements. " +
-      "Call submit_spec exactly once.",
-    prompt: [
-      `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
-      input.goals && input.goals.length > 0
-        ? `# Requested Goals\n\n${input.goals.map((goal, index) => `${index + 1}. [${goal.priority ?? "blocking"}] ${goal.description}\n   Criteria: ${goal.criteria}`).join("\n")}`
-        : "",
-      input.rewriteContext
-        ? [
-            "# Rewrite Context",
-            "",
-            `Previous Spec:\n${input.rewriteContext.previousSpec}`,
-            "",
-            `Failure: ${input.rewriteContext.failureAnalysis.summary}`,
-            `Root Cause: ${input.rewriteContext.failureAnalysis.rootCause}`,
-            `Suggested Strategy: ${input.rewriteContext.failureAnalysis.suggestedStrategy}`,
-          ].join("\n")
-        : "",
-      retryContext
-        ? [
-            "# Quality Retry Feedback",
-            "",
-            `Previous score: ${retryContext.previousScore.toFixed(2)}`,
-            ...retryContext.reasons.map((reason) => `- ${reason}`),
-          ].join("\n")
-        : "",
-      "# Exploration Transcript",
-      transcript || "(no transcript captured)",
-      "If the transcript is sparse, repetitive, or mostly memory lookups, synthesize a concrete greenfield specification from the request instead of reporting missing context.",
-      "For greenfield tasks, define modules, data structures, APIs, tests, constraints, and acceptance criteria in detail.",
-      "Now synthesize the final specification and call submit_spec exactly once.",
-    ].join("\n\n"),
-    ...(stream ?? {}),
-  })
-  return { result, submittedSpec }
-}
-
 // ---------------------------------------------------------------------------
 // JSON extraction & repair (mirrors planner/agent.ts logic)
 // ---------------------------------------------------------------------------
@@ -728,27 +518,12 @@ function extractJSON(text: string): SpecOutputType {
       log.error("spec: JSON parse failed after all repair attempts", {
         error: String(parseErr.error),
         rawLength: raw.length,
-        rawHead: process.env.OPENCORVUS_DEBUG_SPEC === "1" ? raw.slice(0, 400) : undefined,
-        rawTail: process.env.OPENCORVUS_DEBUG_SPEC === "1" ? raw.slice(-400) : undefined,
       })
-      if (process.env.OPENCORVUS_DEBUG_SPEC === "1") {
-        console.log("[spec-debug] raw-head:\n" + raw.slice(0, 400))
-        console.log("[spec-debug] raw-tail:\n" + raw.slice(-400))
-      }
-      throw new Error(`spec output invalid JSON: ${parseErr.error instanceof Error ? parseErr.error.message : String(parseErr.error)}`)
+      obj = { summary: "", content: "", scope: "", spec_items: [], assumptions: [], risks: [], evidence_sources: [], unresolved_questions: [] }
     }
   }
 
   // Normalize
-  if (Array.isArray(obj.goals)) {
-    obj.goals = obj.goals.filter((goal: any) => goal && typeof goal === "object" && goal.description && goal.criteria)
-    for (const goal of obj.goals) {
-      if (goal.priority && goal.priority !== "blocking" && goal.priority !== "advisory") goal.priority = "blocking"
-      if (goal.metadata?.check_selector && !Array.isArray(goal.metadata.check_selector)) {
-        goal.metadata.check_selector = [String(goal.metadata.check_selector)]
-      }
-    }
-  }
   if (Array.isArray(obj.spec_items)) {
     obj.spec_items = obj.spec_items.filter((s: any) => s && typeof s === "object" && s.title)
     for (const s of obj.spec_items) {
@@ -764,14 +539,9 @@ function extractJSON(text: string): SpecOutputType {
     obj.clarifications = obj.clarifications.filter((c: any) => c && typeof c === "object" && c.question)
   }
 
-  if (!obj || typeof obj !== "object" || Array.isArray(obj) || Object.keys(obj).length === 0) {
-    throw new Error("spec output invalid JSON: parsed object is empty")
-  }
-
   if (!obj.summary) obj.summary = ""
   if (!obj.content) obj.content = ""
   if (!obj.scope) obj.scope = ""
-  if (!Array.isArray(obj.goals)) obj.goals = []
   if (!Array.isArray(obj.spec_items)) obj.spec_items = []
   if (!Array.isArray(obj.assumptions)) obj.assumptions = []
   if (!Array.isArray(obj.risks)) obj.risks = []
@@ -781,48 +551,17 @@ function extractJSON(text: string): SpecOutputType {
   try {
     return SpecOutput.parse(obj)
   } catch (zodErr) {
-    log.error("spec: Zod validation failed", { error: String(zodErr) })
-    throw new Error(`spec output failed schema validation: ${zodErr instanceof Error ? zodErr.message : String(zodErr)}`)
-  }
-}
-
-function normalizeSpecOutput(input: SpecOutputType): SpecOutputType {
-  return {
-    ...input,
-    summary: input.summary ?? "",
-    content: input.content ?? "",
-    scope: input.scope ?? "",
-    goals: Array.isArray(input.goals) ? input.goals : [],
-    spec_items: Array.isArray(input.spec_items) ? input.spec_items : [],
-    assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
-    risks: Array.isArray(input.risks) ? input.risks : [],
-    evidence_sources: Array.isArray(input.evidence_sources) ? input.evidence_sources : [],
-    unresolved_questions: Array.isArray(input.unresolved_questions) ? input.unresolved_questions : [],
-  }
-}
-
-function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
-  const map: Record<string, number> = {}
-  for (const step of steps) {
-    const calls = Array.isArray(step.toolCalls) ? step.toolCalls : []
-    for (const call of calls) {
-      if (!call || typeof call !== "object" || !("toolName" in call)) continue
-      const name = String((call as { toolName?: unknown }).toolName || "")
-      if (!name) continue
-      map[name] = (map[name] ?? 0) + 1
-    }
-  }
-  return map
-}
-
-function tryExtractSpecOutput(text: string): { ok: true; value: SpecOutputType } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: extractJSON(text) }
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error : new Error(String(error)),
-    }
+    log.error("spec: Zod validation failed, returning with defaults", { error: String(zodErr) })
+    return SpecOutput.parse({
+      summary: obj.summary || "",
+      content: obj.content || "",
+      scope: obj.scope || "",
+      spec_items: [],
+      assumptions: [],
+      risks: Array.isArray(obj.risks) ? obj.risks : [],
+      evidence_sources: [],
+      unresolved_questions: [],
+    })
   }
 }
 
@@ -1009,14 +748,6 @@ function validateSpecQuality(
     reasons.push("No spec items — define at least 4 concrete, verifiable spec items for non-trivial tasks")
   }
 
-  if (spec.goals.length >= 2) {
-    score += 0.1
-  } else if (spec.goals.length >= 1) {
-    score += 0.05
-  } else {
-    reasons.push("No goals — define authoritative blocking/advisory goals in the spec")
-  }
-
   // Evidence sources (did the agent actually discover things?) (0.1 max)
   if (spec.evidence_sources.length >= 2) {
     score += 0.1
@@ -1040,16 +771,6 @@ function validateSpecQuality(
     reasons.push("Spec content lacks specific file paths or detailed technical design keywords")
   }
 
-  const nonTrivial = request.trim().length >= 200 || request.includes("\n")
-  if (nonTrivial && spec.content.length < 500) {
-    score = Math.min(score, QUALITY_RETRY_THRESHOLD - 0.01)
-    reasons.push("Non-trivial task requires spec content >= 500 chars")
-  }
-  if (nonTrivial && spec.spec_items.length < 2) {
-    score = Math.min(score, QUALITY_RETRY_THRESHOLD - 0.01)
-    reasons.push("Non-trivial task requires at least 2 spec items")
-  }
-
   return { score: Math.min(score, 1), reasons }
 }
 
@@ -1060,6 +781,63 @@ function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string
   if (/^#+\s/.test(trimmed)) return fallbackTitle
   if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return fallbackTitle
   return trimmed
+}
+
+// ---------------------------------------------------------------------------
+// Synthesis fallback
+// ---------------------------------------------------------------------------
+
+function synthesizeFromExploration(
+  partial: SpecOutputType,
+  input: { title: string; request: string },
+  steps: any[],
+): SpecOutputType {
+  const result = { ...partial }
+
+  const discoveredFiles = new Set<string>()
+  const explorationNotes: string[] = []
+
+  for (const step of steps) {
+    if (!step.toolCalls) continue
+    for (let i = 0; i < step.toolCalls.length; i++) {
+      const call = step.toolCalls[i]
+      if (call.toolName === "read_file" && call.args?.path) {
+        discoveredFiles.add(call.args.path)
+      }
+      const toolResult = step.toolResults?.[i]
+      if (toolResult?.result && typeof toolResult.result === "string") {
+        const preview = toolResult.result.slice(0, 200)
+        if (call.toolName === "read_file") {
+          explorationNotes.push(`Read ${call.args.path}: ${preview}`)
+        } else if (call.toolName === "search_code") {
+          explorationNotes.push(`Search "${call.args.pattern}": ${preview}`)
+        }
+      }
+    }
+  }
+
+  if (result.content.length < 200) {
+    const parts: string[] = []
+    parts.push(`## Scope\n\n${input.request.split("\n")[0]}`)
+    if (discoveredFiles.size > 0) {
+      parts.push(`## Relevant Files\n\n${Array.from(discoveredFiles).slice(0, 10).map(f => `- ${f}`).join("\n")}`)
+    }
+    if (explorationNotes.length > 0) {
+      parts.push(`## Exploration Notes\n\n${explorationNotes.slice(0, 5).map(n => `- ${n}`).join("\n")}`)
+    }
+    const existing = result.content.trim()
+    result.content = existing ? existing + "\n\n" + parts.join("\n\n") : parts.join("\n\n")
+  }
+
+  if (!result.scope) {
+    result.scope = input.request.split("\n").find(l => l.trim())?.trim() || input.title
+  }
+
+  if (result.evidence_sources.length === 0 && discoveredFiles.size > 0) {
+    result.evidence_sources = Array.from(discoveredFiles).slice(0, 15)
+  }
+
+  return result
 }
 
 // ---------------------------------------------------------------------------
@@ -1106,6 +884,7 @@ async function resolveFileReferences(
 
 function readFileSafe(absPath: string, maxLen = 6000): string | null {
   try {
+    const fs = require("fs")
     const content = fs.readFileSync(absPath, "utf-8")
     if (!content) return null
     return content.length > maxLen ? content.slice(0, maxLen) + "\n... (truncated)" : content
@@ -1141,8 +920,7 @@ You are NOT the planner. You do NOT decompose tasks into subtasks or implementat
 2. **Explore** the codebase to ground requirements in reality
 3. **Identify** gaps, ambiguities, constraints, and risks
 4. **Define** precise, verifiable spec items (acceptance criteria)
-5. **Define** authoritative goals the execution system must satisfy
-6. **Surface** unresolved questions that need user input
+5. **Surface** unresolved questions that need user input
 
 The downstream PlannerAgent will take your spec and create implementation plans.
 
@@ -1151,7 +929,7 @@ The downstream PlannerAgent will take your spec and create implementation plans.
 ### Phase 0: RECALL (1-3 tool calls)
 
 1. **Search memory** (memory_search) with task keywords. If pre-fetched memory exists, only search for gaps.
-2. **List preferences** (preference_list) unless pre-fetched. Preferences guide default conventions, but explicit task constraints and approved scope boundaries override them on conflict.
+2. **List preferences** (preference_list) unless pre-fetched. Preferences are BINDING.
 
 ### Phase 1: EXPLORE (5-15 tool calls — MOST IMPORTANT phase)
 
@@ -1192,7 +970,7 @@ Your spec must be CONCRETE, not abstract. Reference specific files, functions, a
 Think: "Could a planner create implementation steps from this spec without exploring the codebase again?"
 
 **Spec Items** — Each must be independently verifiable:
-- GOOD: "The SpecAgent module in spec/agent.ts exposes initial() and rewrite() for grounded specification generation and revision"
+- GOOD: "The SpecAgent class in spec/agent.ts exports initial(), compile(), and rewrite() methods, each returning SpecOutputType"
 - BAD: "Create a spec agent" (too vague)
 
 **Content** — Must include these markdown sections:
@@ -1211,7 +989,6 @@ The submit_spec tool accepts these fields:
 - **summary**: One-line summary of the specification
 - **scope**: What is in scope for this task
 - **out_of_scope** (optional): What is explicitly excluded
-- **goals**: Array of authoritative goals with description, criteria, priority, optional check_selector metadata
 - **spec_items**: Array of verifiable items, each with title, description, check_selector, priority
 - **assumptions**: Array of {question, assumption} pairs
 - **risks**: Array of specific risks with codebase context
@@ -1223,13 +1000,10 @@ The submit_spec tool accepts these fields:
 ## Rules
 
 - ALWAYS explore the codebase before writing the spec. No exceptions.
-- If a recall tool response contains \`RECALL_COMPLETE\`, stop recall immediately and do not call memory_search, memory_get, or preference_list again in this run.
-- Do not spam identical exploration calls. Repeating the same tool with the same arguments more than twice is invalid; switch tools or submit_spec.
 - Every file path in the spec MUST come from actual tool results or pre-read files.
 - spec_items must be verifiable — each should have clear success/failure criteria.
 - spec_items.check_selector maps to: build, test, lint, verify_cmd, startup, ui_review, code_quality, code_review, dead_code_review, spec_check
 - Every blocking spec item MUST have at least one check_selector.
-- Explicit task constraints override preferences. Do not create spec items that require edits outside a user-declared file boundary.
 - Write in the same language as the request (Chinese request → Chinese spec).
 - If rewriting after failure: revise the spec to address the root cause.
 - After finishing exploration, call submit_spec with your specification. Do NOT output raw JSON text.
@@ -1242,11 +1016,10 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
 2. Does the content reference specific file paths discovered via tools?
 3. Are all spec items concrete and verifiable (not vague aspirations)?
-4. Are authoritative goals present and aligned with the specification?
-5. Does each blocking spec item have a check_selector?
-6. Are evidence_sources populated with actual files I consulted?
-7. Could a planner create implementation steps from this spec WITHOUT further exploration?
-8. Does the summary accurately describe the specification in one line?
+4. Does each blocking spec item have a check_selector?
+5. Are evidence_sources populated with actual files I consulted?
+6. Could a planner create implementation steps from this spec WITHOUT further exploration?
+7. Does the summary accurately describe the specification in one line?
 
 ## Output Format
 
@@ -1255,8 +1028,3 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 - For greenfield projects (creating something new with no existing codebase): Include detailed technical design in the content section — data structures, algorithms, UI layout, state management, interaction flows. Use web_search if needed for reference implementations.
 - Call submit_spec exactly once after exploration is complete.
 - Do NOT output raw JSON. Use the submit_spec tool call.`
-
-export async function specSystem() {
-  const config = await Config.get()
-  return typeof config.prompt?.spec_system === "string" ? config.prompt.spec_system : SPEC_SYSTEM
-}

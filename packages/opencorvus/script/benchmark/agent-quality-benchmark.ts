@@ -1,9 +1,9 @@
 /**
- * Agent Quality Benchmark — evaluates PlannerAgent and EvaluatorAgent output quality.
+ * Agent Quality Benchmark — evaluates PlannerAgent and GoalJudge output quality.
  *
  * Architecture:
  *   - PlannerAgent: Independent LLM (30 steps, 5min) — explores codebase → structured plan
- *   - EvaluatorAgent: Independent LLM (15 steps, 3min) — investigates failures → verdict + goal assessment
+ *   - GoalJudge: Independent LLM (15 steps, 3min) — investigates failures → verdict + goal assessment
  *   - Goal evaluation: Two-layer — (1) automated checks (exit codes), (2) LLM assessment
  *
  * Requires a live benchmark model. Defaults to alibaba-coding-plan-cn/kimi-k2.5 when available.
@@ -53,7 +53,7 @@ const PlannerOutput = z.object({
   })).optional(),
 })
 
-const EvaluatorAnalysis = z.object({
+const GoalJudgment = z.object({
   verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   classification: z.enum(["transient", "environment", "input", "permission", "evaluation", "strategy", "unknown"]),
   summary: z.string(),
@@ -72,7 +72,7 @@ const EvaluatorAnalysis = z.object({
 })
 
 type PlannerOutputType = z.infer<typeof PlannerOutput>
-type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
+type GoalJudgmentType = z.infer<typeof GoalJudgment>
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -215,7 +215,7 @@ Rules:
 - Write in the same language as the request
 - After tool calls, output JSON immediately`
 
-const EVALUATOR_SYSTEM = `You are a senior code reviewer. Analyze coding task results.
+const GOAL_JUDGE_SYSTEM = `You are a senior code reviewer. Analyze coding task results.
 
 ## Available Tools
 - **read_file**: Read file contents
@@ -444,11 +444,11 @@ async function b5_evaluatorAllPass(): Promise<Score[]> {
     model,
     stopWhen: stepCountIs(5),
     abortSignal: AbortSignal.timeout(TIMEOUT),
-    system: EVALUATOR_SYSTEM,
+    system: GOAL_JUDGE_SYSTEM,
     prompt: `# Task\n\nTitle: Add GET /health endpoint\nRequest: Add GET /health that returns { status: "ok" }. Include unit test.\n\n# Goals (2)\n\n0. [blocking] GET /health returns { status: "ok" }\n   Criteria: HTTP 200 response with JSON body\n   Checks: build, test\n\n1. [advisory] Unit test covers the endpoint\n   Criteria: test/server/health.test.ts exists and passes\n   Checks: test\n\n# Automated Check Results\n\nPassed: 3 | Failed: 0 | Total: 3\n\n[PASS] build — compilation successful\n[PASS] test — 3 tests passed\n   Output: PASS test/server/health.test.ts\n     ✓ GET /health returns 200\n     ✓ body contains status ok\n[PASS] lint\n\n# Delivery\n\nSummary: Added GET /health with unit tests\nChanged files: src/server/routes/health.ts, test/server/health.test.ts\n\nProduce your analysis as JSON.`,
   })
 
-  const a = extractJSON(result, EvaluatorAnalysis)
+  const a = extractJSON(result, GoalJudgment)
   console.log(`  Verdict: ${a.verdict}, Classification: ${a.classification}`)
 
   return [
@@ -470,11 +470,11 @@ async function b6_evaluatorTestFail(): Promise<Score[]> {
     stopWhen: stepCountIs(10),
     tools: { read_file: tools.read_file, search_code: tools.search_code },
     abortSignal: AbortSignal.timeout(TIMEOUT),
-    system: EVALUATOR_SYSTEM,
+    system: GOAL_JUDGE_SYSTEM,
     prompt: `# Task\n\nTitle: 实现用户列表 API\nRequest: 新增 GET /api/users 返回用户列表\n\n# Goals (2)\n\n0. [blocking] GET /api/users 返回用户列表\n   Criteria: HTTP 200 响应，body 为 JSON 数组\n   Checks: build, test\n\n1. [blocking] 有单元测试\n   Criteria: test 目录下有测试文件且通过\n   Checks: test\n\n# Automated Check Results\n\nPassed: 2 | Failed: 1 | Total: 3\n\n[PASS] build\n[FAIL] test\n   Output:\n   FAIL test/server/users.test.ts\n     ✗ GET /api/users returns user list\n       Expected: Array with length > 0\n       Received: { error: "Not found" }\n       Status code: 404 (expected 200)\n[PASS] lint\n\n# Delivery\n\nSummary: Added user list API but route registration missing\nChanged files: src/server/routes/users.ts, test/server/users.test.ts\n\nInvestigate the failure. Produce analysis as JSON.`,
   })
 
-  const a = extractJSON(result, EvaluatorAnalysis)
+  const a = extractJSON(result, GoalJudgment)
   console.log(`  Verdict: ${a.verdict}, Classification: ${a.classification}`)
   const g0 = a.goal_statuses.find(g => g.goal_index === 0)
   const evAll = a.goal_statuses.map(g => `${g.evidence} ${g.reasoning}`).join(" ").toLowerCase()
@@ -498,11 +498,11 @@ async function b7_evaluatorStrategy(): Promise<Score[]> {
     model,
     stopWhen: stepCountIs(5),
     abortSignal: AbortSignal.timeout(TIMEOUT),
-    system: EVALUATOR_SYSTEM,
+    system: GOAL_JUDGE_SYSTEM,
     prompt: `# Task\n\nTitle: Add REST API with Hono\nRequest: Implement REST API using Hono (the project's framework)\n\n# Goals (1)\n\n0. [blocking] REST API runs\n   Criteria: bun run build succeeds\n   Checks: build\n\n# Automated Check Results\n\nPassed: 0 | Failed: 1 | Total: 1\n\n[FAIL] build\n   Output:\n   error: Cannot find module 'express'\n   at src/api.ts:1:22\n   import express from 'express'  // Express is NOT installed\n   This project uses Hono, not Express.\n\n# Delivery\n\nSummary: Created REST API but used Express instead of Hono\nChanged files: src/api.ts\n\nProduce analysis as JSON.`,
   })
 
-  const a = extractJSON(result, EvaluatorAnalysis)
+  const a = extractJSON(result, GoalJudgment)
   console.log(`  Verdict: ${a.verdict}, Classification: ${a.classification}`)
 
   return [
@@ -523,11 +523,11 @@ async function b9_evaluatorMixed(): Promise<Score[]> {
     model,
     stopWhen: stepCountIs(5),
     abortSignal: AbortSignal.timeout(TIMEOUT),
-    system: EVALUATOR_SYSTEM,
+    system: GOAL_JUDGE_SYSTEM,
     prompt: `# Task\n\nTitle: Dashboard with charts and export\nRequest: Build dashboard with 3 charts and CSV export\n\n# Goals (3)\n\n0. [blocking] Dashboard renders without errors\n   Criteria: build succeeds\n   Checks: build\n\n1. [blocking] Three charts display correctly\n   Criteria: Charts for revenue, users, orders are visible\n   Checks: test, ui_review\n\n2. [advisory] CSV export works\n   Criteria: Export button downloads valid CSV\n   Checks: test\n\n# Automated Check Results\n\nPassed: 2 | Failed: 2 | Total: 4\n\n[PASS] build\n[PASS] test — 8/10 passed\n   Output:\n   PASS test/dashboard/render.test.ts (4 passed)\n   FAIL test/dashboard/export.test.ts\n     ✗ export button triggers CSV download\n       button click handler is undefined\n     ✗ CSV contains correct headers\n       export function not implemented\n[FAIL] ui_review\n   Output: Revenue chart has wrong Y-axis label. Expected "Revenue ($)", got "Revenue"\n\n# Delivery\n\nSummary: Dashboard with 3 charts but export stub not implemented\nChanged files: src/dashboard/page.tsx, src/dashboard/charts.tsx, src/dashboard/export.ts\n\nProduce analysis as JSON.`,
   })
 
-  const a = extractJSON(result, EvaluatorAnalysis)
+  const a = extractJSON(result, GoalJudgment)
   console.log(`  Verdict: ${a.verdict}, Goals: ${a.goal_statuses.map(g => `${g.goal_index}:${g.status}`).join(", ")}`)
 
   const g0 = a.goal_statuses.find(g => g.goal_index === 0)

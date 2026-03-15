@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
 import { DeliveryService } from "../../src/orchestrator/delivery"
 import { OrchestratorService } from "../../src/orchestrator/service"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { PlannerService } from "../../src/planner/service"
@@ -73,7 +73,7 @@ describe("orchestrator.goal analysis-only acceptance", () => {
       status: "completed",
       error: null,
     })
-    spyOn(EvaluatorService, "evaluate").mockImplementation(async (input) =>
+    spyOn(CheckRunner, "evaluate").mockImplementation(async (input) =>
       input.activeSpecVersionID
         ? {
             status: "passed",
@@ -93,8 +93,8 @@ describe("orchestrator.goal analysis-only acceptance", () => {
               { name: "evaluation_config", status: "skipped", evidence: "goal local checks are unavailable" },
             ],
             artifacts: [],
-          } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>)
-    spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue({
+          } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
+    spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue({
       verdict: "accepted",
       classification: "unknown",
       summary: "Implementation is complete and correct.",
@@ -164,7 +164,7 @@ describe("orchestrator.goal analysis-only acceptance", () => {
       status: "completed",
       error: null,
     })
-    spyOn(EvaluatorService, "evaluate").mockImplementation(async (input) =>
+    spyOn(CheckRunner, "evaluate").mockImplementation(async (input) =>
       input.activeSpecVersionID
         ? {
             status: "passed",
@@ -184,8 +184,8 @@ describe("orchestrator.goal analysis-only acceptance", () => {
               { name: "verify_cmd", status: "passed", evidence: "verified" },
             ],
             artifacts: [],
-          } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>)
-    spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue({
+          } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
+    spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue({
       verdict: "rejected",
       classification: "strategy",
       summary: "The required behavior is still missing even though the generic checks passed.",

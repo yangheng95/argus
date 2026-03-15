@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Identifier } from "../../src/id/id"
+import { OpencodeExecutor } from "../../src/executor/opencode"
+import { PlannerService } from "../../src/planner/service"
 import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
+import { SpecService } from "../../src/spec/service"
 import { Database, eq } from "../../src/storage/db"
 import { PanelTool } from "../../src/tool/panel"
 import { Log } from "../../src/util/log"
@@ -15,6 +18,113 @@ describe("panel tool", () => {
   afterEach(async () => {
     mock.restore()
     await resetDatabase()
+  })
+
+  test("create_task applies create-task budget defaults before initial planning", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const total = 480_000
+    const specMs = 97_200
+    const plannerMs = 118_800
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    const spec = spyOn(SpecService, "initial").mockImplementation(async (input) => {
+      expect(input.timeoutMs).toBe(specMs)
+      return {
+        summary: "Spec",
+        content: "# Scope\n\nImplement feature x",
+        goals: [{
+          description: "Implement feature x",
+          criteria: "Feature x works",
+          priority: "blocking" as const,
+        }],
+        assumptions: [],
+        risks: [],
+        clarifications: [],
+        spec_items: [{
+          title: "Implement feature x",
+          description: "Feature x works",
+          priority: "blocking" as const,
+          check_selector: ["spec_check"],
+        }],
+        evidence_sources: [],
+        unresolved_questions: [],
+      }
+    })
+    const plan = spyOn(PlannerService, "initial").mockImplementation(async (input) => {
+      expect(input.timeoutMs).toBe(plannerMs)
+      return {
+        summary: "Plan",
+        prompt: "Implement feature x",
+        goals: [{
+          description: "Implement feature x",
+          criteria: "Feature x works",
+          priority: "blocking" as const,
+        }],
+        metadata: {
+          strategy: "initial" as const,
+          steps: ["Implement feature x"],
+        },
+      }
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const tool = await PanelTool.init()
+        const result = await tool.execute(
+          {
+            action: "create_task",
+            request: "Implement feature x",
+            metadata: {
+              ui_context: "benchmark",
+              create_task: {
+                budget: {
+                  maxWallTimeMs: total,
+                },
+              },
+            },
+          },
+          {
+            sessionID: Identifier.ascending("session"),
+            messageID: Identifier.ascending("message"),
+            agent: "panel-test",
+            abort: new AbortController().signal,
+            messages: [],
+            metadata() {},
+            async ask() {},
+            extra: {
+              surface: "panel",
+              createTask: {
+                budget: {
+                  maxWallTimeMs: total,
+                },
+              },
+            },
+          },
+        )
+        const output = JSON.parse(result.output)
+        const row = Database.use((db) =>
+          db
+            .select({
+              budget: OrchestratorTaskTable.budget,
+              metadata: OrchestratorTaskTable.metadata,
+            })
+            .from(OrchestratorTaskTable)
+            .where(eq(OrchestratorTaskTable.id, output.task_id))
+            .get(),
+        )
+
+        expect(row?.budget?.max_wall_time_ms).toBe(total)
+        expect(row?.metadata?.ui_context).toBe("benchmark")
+        expect(row?.metadata?.create_task).toBeUndefined()
+      },
+    })
+
+    expect(spec).toHaveBeenCalledTimes(1)
+    expect(plan).toHaveBeenCalledTimes(1)
+    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("delete_session deletes every linked task", async () => {

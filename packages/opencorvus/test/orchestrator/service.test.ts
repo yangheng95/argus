@@ -5,7 +5,7 @@ import fs from "fs/promises"
 import path from "path"
 import { Bus } from "../../src/bus"
 import { Database, eq } from "../../src/storage/db"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { type ExecutorAdapter } from "../../src/executor/compat"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
@@ -181,7 +181,7 @@ function stubPlanner() {
       spec_analysis: undefined,
     },
   } as any)
-  const analyze = spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
+  const analyze = spyOn(CheckRunner, "analyzeDelivery").mockImplementation(async (input) => {
     const failed = input.checkResults.some((item) => item.status === "failed")
     const goal_statuses = input.goals.map((goal, goal_index) => {
       const selectors = goal.check_selector ?? []
@@ -506,7 +506,7 @@ describe("orchestrator.service", () => {
         },
       ],
     })
-    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+    spyOn(CheckRunner, "evaluate").mockResolvedValue({
       status: "passed",
       verdict: "accepted",
       summary: "All checks passed.",
@@ -516,7 +516,7 @@ describe("orchestrator.service", () => {
         { name: "spec_check", status: "passed", evidence: "verified" },
       ],
       artifacts: [],
-    } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>)
+    } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
     spyOn(DeliveryService, "deliver").mockResolvedValue({
       status: "delivered",
       summary: "Delivery finalized.",
@@ -600,7 +600,7 @@ describe("orchestrator.service", () => {
         },
       ],
     })
-    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+    spyOn(CheckRunner, "evaluate").mockResolvedValue({
       status: "passed",
       verdict: "accepted",
       summary: "All checks passed.",
@@ -610,7 +610,7 @@ describe("orchestrator.service", () => {
         { name: "spec_check", status: "passed", evidence: "verified" },
       ],
       artifacts: [],
-    } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>)
+    } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
     spyOn(DeliveryService, "deliver").mockResolvedValue({
       status: "delivered",
       summary: "Delivery finalized.",
@@ -1018,8 +1018,8 @@ describe("orchestrator.service", () => {
         expect(progress.task.status).toBe("running")
         expect(progress.run?.status).toBe("accepted")
         expect(progress.run?.planVersionID).toBe(progress.plan?.id)
-        expect(submit.mock.calls[0]?.[0]?.prompt).toContain("Plan context:\nExecute the compiled plan")
-        expect(submit.mock.calls[1]?.[0]?.prompt).toContain("Plan context:\nExecute the compiled plan")
+        expect(submit.mock.calls[0]?.[0]?.prompt).toContain("Coordinator context:\n- Plan summary: Compiled plan")
+        expect(submit.mock.calls[1]?.[0]?.prompt).toContain("Coordinator context:\n- Plan summary: Compiled plan")
         expect(submit.mock.calls[1]?.[0]?.prompt).toContain("## Run Context")
         expect(submit.mock.calls[1]?.[0]?.prompt).toContain("The previous attempt did not satisfy the acceptance checks.")
 
@@ -1849,7 +1849,7 @@ describe("orchestrator.service", () => {
   test("fails when a blocking goal's required selector never runs", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
-    spyOn(EvaluatorService, "evaluate").mockImplementation(async (input) => {
+    spyOn(CheckRunner, "evaluate").mockImplementation(async (input) => {
       if (input.request?.includes("Focused goal:\nBuild passes")) {
         return {
           status: "passed",
@@ -1949,7 +1949,7 @@ describe("orchestrator.service", () => {
   test("completes task when evaluation passes and all blocking goals are satisfied", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
-    spyOn(EvaluatorService, "evaluate").mockImplementation(async (input) => {
+    spyOn(CheckRunner, "evaluate").mockImplementation(async (input) => {
       if (input.request?.includes("Focused goal:\nBuild passes")) {
         return {
           status: "passed",

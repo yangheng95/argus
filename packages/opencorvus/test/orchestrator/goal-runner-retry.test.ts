@@ -1,7 +1,7 @@
 import { mkdir } from "fs/promises"
 import path from "path"
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { evaluateGoal, evaluateTask } from "../../src/orchestrator/goal-runner"
 import { OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { Instance } from "../../src/project/instance"
@@ -34,8 +34,8 @@ describe("orchestrator.goal runner retry fallback", () => {
     await using tmp = await tmpdir({ git: true })
     let captured:
       | {
-          task: Parameters<typeof EvaluatorService.evaluate>[0]
-          delivery: Parameters<typeof EvaluatorService.evaluate>[1]
+          task: Parameters<typeof CheckRunner.evaluate>[0]
+          delivery: Parameters<typeof CheckRunner.evaluate>[1]
         }
       | undefined
 
@@ -79,7 +79,7 @@ describe("orchestrator.goal runner retry fallback", () => {
             .run()
         })
 
-        spyOn(EvaluatorService, "evaluate").mockImplementation(async (task, delivery) => {
+        spyOn(CheckRunner, "evaluate").mockImplementation(async (task, delivery) => {
           captured = { task, delivery }
           return {
             status: "passed",
@@ -89,7 +89,7 @@ describe("orchestrator.goal runner retry fallback", () => {
             artifacts: [],
           }
         })
-        spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue(analysis)
+        spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue(analysis)
 
         const task = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, "task_goal_retry")).get()!,
@@ -135,8 +135,8 @@ describe("orchestrator.goal runner retry fallback", () => {
     await using tmp = await tmpdir({ git: true })
     let captured:
       | {
-          task: Parameters<typeof EvaluatorService.evaluate>[0]
-          delivery: Parameters<typeof EvaluatorService.evaluate>[1]
+          task: Parameters<typeof CheckRunner.evaluate>[0]
+          delivery: Parameters<typeof CheckRunner.evaluate>[1]
         }
       | undefined
 
@@ -180,7 +180,7 @@ describe("orchestrator.goal runner retry fallback", () => {
             .run()
         })
 
-        spyOn(EvaluatorService, "evaluate").mockImplementation(async (task, delivery) => {
+        spyOn(CheckRunner, "evaluate").mockImplementation(async (task, delivery) => {
           captured = { task, delivery }
           return {
             status: "passed",
@@ -190,7 +190,7 @@ describe("orchestrator.goal runner retry fallback", () => {
             artifacts: [],
           }
         })
-        spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue({
+        spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue({
           ...analysis,
           goal_statuses: [],
         })
@@ -241,8 +241,8 @@ describe("orchestrator.goal runner retry fallback", () => {
     await using tmp = await tmpdir({ git: true })
     let captured:
       | {
-          task: Parameters<typeof EvaluatorService.evaluate>[0]
-          delivery: Parameters<typeof EvaluatorService.evaluate>[1]
+          task: Parameters<typeof CheckRunner.evaluate>[0]
+          delivery: Parameters<typeof CheckRunner.evaluate>[1]
         }
       | undefined
 
@@ -279,7 +279,7 @@ describe("orchestrator.goal runner retry fallback", () => {
             .run()
         })
 
-        spyOn(EvaluatorService, "evaluate").mockImplementation(async (task, delivery) => {
+        spyOn(CheckRunner, "evaluate").mockImplementation(async (task, delivery) => {
           captured = { task, delivery }
           return {
             status: "passed",
@@ -289,7 +289,7 @@ describe("orchestrator.goal runner retry fallback", () => {
             artifacts: [],
           }
         })
-        spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue({
+        spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue({
           ...analysis,
           goal_statuses: [],
         })

@@ -1,5 +1,5 @@
 /**
- * EvaluatorAgent — An independent-context agent that analyzes evaluation results,
+ * GoalJudge — An independent-context agent that analyzes evaluation results,
  * classifies failures, assesses each goal individually, and produces structured
  * replan guidance.
  *
@@ -10,7 +10,7 @@
  * 4. Evaluates each goal independently against the delivery
  * 5. Produces targeted replan guidance when needed
  */
-import { stepCountIs, tool } from "ai"
+import { hasToolCall, stepCountIs, tool } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { verificationHints } from "@/check/policy"
@@ -21,7 +21,8 @@ import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
-import { completeText, type TextHooks } from "@/llm/api"
+import { completeText, generateText, type TextHooks } from "@/llm/api"
+import { createToolInputCapture } from "@/llm/tool-hooks"
 import { Config } from "@/config/config"
 
 const log = Log.create({ service: "evaluator-agent" })
@@ -54,7 +55,7 @@ export const GoalAssessment = z.object({
   reasoning: z.string().describe("Why this goal was assessed this way"),
 })
 
-export const EvaluatorAnalysis = z.object({
+export const GoalJudgment = z.object({
   verdict: z.enum(["accepted", "rejected", "inconclusive"]),
   classification: FailureClassification,
   summary: z.string(),
@@ -62,7 +63,7 @@ export const EvaluatorAnalysis = z.object({
   replan_guidance: ReplanGuidance.nullish(),
 })
 
-export type EvaluatorAnalysisType = z.infer<typeof EvaluatorAnalysis>
+export type GoalJudgmentType = z.infer<typeof GoalJudgment>
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -88,7 +89,7 @@ export interface DeliveryInfo {
 }
 
 // ---------------------------------------------------------------------------
-// EvaluatorAgent
+// GoalJudge
 // ---------------------------------------------------------------------------
 
 const MAX_STEPS = 25
@@ -107,8 +108,8 @@ type AnalyzeInput = {
   stream?: TextHooks
 }
 
-export namespace EvaluatorAgent {
-  export async function analyze(input: AnalyzeInput): Promise<EvaluatorAnalysisType> {
+export namespace GoalJudge {
+  export async function analyze(input: AnalyzeInput): Promise<GoalJudgmentType> {
     const resolved = await agentLanguageModel()
     if (!resolved) throw new Error("Evaluator analysis model is unavailable")
     const { language, isReasoning } = resolved
@@ -116,16 +117,16 @@ export namespace EvaluatorAgent {
 
     // Full evaluator tool set: codebase exploration + memory + preferences
     const explorationTools = createEvaluatorTools({ sessionID: input.task.sessionID })
-    let submittedAnalysis: EvaluatorAnalysisType | undefined
+    let submittedAnalysis: GoalJudgmentType | undefined
     const tools = {
       ...explorationTools,
       submit_analysis: tool({
         description:
           "Submit the final evaluation analysis after investigation. " +
           "Call this tool ONCE when you have finished investigating and are ready to deliver the analysis.",
-        inputSchema: EvaluatorAnalysis,
+        inputSchema: GoalJudgment,
         execute: async (args) => {
-          submittedAnalysis = args as EvaluatorAnalysisType
+          submittedAnalysis = args as GoalJudgmentType
           return "Evaluation analysis submitted successfully."
         },
       }),
@@ -145,7 +146,7 @@ export namespace EvaluatorAgent {
     })
 
     const MAX_RETRIES = 2
-    let parsed: EvaluatorAnalysisType | undefined
+    let parsed: GoalJudgmentType | undefined
     let lastError: Error | undefined
     let toolCallCount = 0
 
@@ -161,19 +162,26 @@ export namespace EvaluatorAgent {
         steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
       }
       try {
+        const capture = createToolInputCapture()
+        const streamOnChunk = input.stream?.onChunk
         result = await completeText({
           model: language,
-          stopWhen: stepCountIs(MAX_STEPS),
+          stopWhen: [stepCountIs(MAX_STEPS), hasToolCall("submit_analysis")],
           tools,
           // reasoning models (e.g. qwen3.5-plus) reject toolChoice="required" — use "auto" instead
           toolChoice: isReasoning ? "auto" : "required",
           maxOutputTokens: 16384,
           timeoutMs,
           abortSignal: AbortSignal.timeout(timeoutMs),
-          system: await evaluatorSystem(),
+          system: await goalJudgeSystem(),
           prompt: userPrompt,
           ...(input.stream ?? {}),
+          onChunk: async (event) => {
+            await streamOnChunk?.(event)
+            await capture.hooks.onChunk(event)
+          },
         })
+        submittedAnalysis ??= capture.recover("submit_analysis", GoalJudgment)
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         log.warn("evaluator agent generateText failed", { attempt, error: lastError.message })
@@ -207,7 +215,7 @@ export namespace EvaluatorAgent {
               steps: result.steps.length,
               finishReason: result.finishReason,
             })
-            const forced = await finalizeAnalysis(language, input, result.steps, timeoutMs, isReasoning, input.stream)
+            const forced = await finalizeAnalysis(language, input, result.steps, timeoutMs, isReasoning)
             if (forced.submittedAnalysis) {
               submittedAnalysis = forced.submittedAnalysis
               parsed = normalizeAnalysis(submittedAnalysis, input.goals.length)
@@ -256,13 +264,13 @@ export namespace EvaluatorAgent {
   }
 }
 
-export const parseEvaluatorAnalysis = extractJSON
+export const parseGoalJudgment = extractJSON
 
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
 
-function extractJSON(text: string, goalCount: number): EvaluatorAnalysisType {
+function extractJSON(text: string, goalCount: number): GoalJudgmentType {
   let raw = text.trim()
 
   const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -471,7 +479,7 @@ function sanitizeJSON(raw: string) {
   return out
 }
 
-function normalizeAnalysis(input: unknown, goalCount: number): EvaluatorAnalysisType {
+function normalizeAnalysis(input: unknown, goalCount: number): GoalJudgmentType {
   const obj = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
 
   if (!obj.classification) obj.classification = "evaluation"
@@ -501,7 +509,7 @@ function normalizeAnalysis(input: unknown, goalCount: number): EvaluatorAnalysis
     }
   }
 
-  return EvaluatorAnalysis.parse(obj)
+  return GoalJudgment.parse(obj)
 }
 
 function collectText(result: { text?: string; steps: Array<{ text?: string }> }) {
@@ -516,7 +524,6 @@ async function finalizeAnalysis(
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
   timeoutMs: number,
   isReasoning = false,
-  stream?: TextHooks,
 ) {
   const transcript = steps
     .flatMap((step, index) => {
@@ -530,23 +537,23 @@ async function finalizeAnalysis(
     })
     .join("\n\n")
 
-  let submittedAnalysis: EvaluatorAnalysisType | undefined
+  let submittedAnalysis: GoalJudgmentType | undefined
   const tools = {
     submit_analysis: tool({
       description:
         "Submit the final evaluation analysis after investigation. " +
         "Call this tool ONCE using the investigation transcript that was already gathered.",
-      inputSchema: EvaluatorAnalysis,
+      inputSchema: GoalJudgment,
       execute: async (args) => {
-        submittedAnalysis = args as EvaluatorAnalysisType
+        submittedAnalysis = args as GoalJudgmentType
         return "Evaluation analysis submitted successfully."
       },
     }),
   }
 
-  const result = await completeText({
+  const result = await generateText({
     model: language,
-    stopWhen: stepCountIs(8),
+    stopWhen: [stepCountIs(8), hasToolCall("submit_analysis")],
     tools,
     toolChoice: isReasoning ? "auto" : "required",
     maxOutputTokens: 16384,
@@ -561,7 +568,6 @@ async function finalizeAnalysis(
       transcript || "(no transcript captured)",
       "Now synthesize the final evaluation analysis and call submit_analysis exactly once.",
     ].join("\n\n"),
-    ...(stream ?? {}),
   })
 
   return { result, submittedAnalysis }
@@ -748,7 +754,7 @@ function indent(text: string, prefix = "   "): string {
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer acting as the evaluation brain for OpenCorvus, an autonomous coding orchestrator. Your job is to rigorously analyze a coding task delivery: review automated check outputs, investigate failures by reading actual code, assess whether each goal was truly met, and produce structured replan guidance when needed.
+export const GOAL_JUDGE_SYSTEM = `You are a senior code reviewer and QA engineer acting as the evaluation brain for OpenCorvus, an autonomous coding orchestrator. Your job is to rigorously analyze a coding task delivery: review automated check outputs, investigate failures by reading actual code, assess whether each goal was truly met, and produce structured replan guidance when needed.
 
 A shallow evaluation is WORSE than no evaluation — it causes the orchestrator to retry blindly. You must investigate deeply enough to give the next attempt actionable guidance.
 
@@ -902,7 +908,7 @@ Before outputting JSON, verify:
 
 If any answer is NO, go back and fill the gap before outputting.`
 
-export async function evaluatorSystem() {
+export async function goalJudgeSystem() {
   const config = await Config.get()
-  return typeof config.prompt?.evaluator_system === "string" ? config.prompt.evaluator_system : EVALUATOR_SYSTEM
+  return typeof config.prompt?.evaluator_system === "string" ? config.prompt.evaluator_system : GOAL_JUDGE_SYSTEM
 }

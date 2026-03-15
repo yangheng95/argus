@@ -1,6 +1,6 @@
 /**
  * HeadlessPlannerAgent — the orchestrator-owned planning stage that expands a
- * task request into PRD/milestones/subtasks/risks for downstream
+ * task request into PRD/waves/subtasks/risks for downstream
  * execution.
  *
  * Capabilities:
@@ -8,10 +8,10 @@
  * 2. Preference awareness — respects project conventions and constraints
  * 3. Codebase exploration — reads files, searches code, lists directories
  * 4. Web research — searches external documentation when needed
- * 5. Structured output — PRD, milestones, subtasks, risks, assumptions
+ * 5. Structured output — PRD, waves, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
-import { stepCountIs, tool } from "ai"
+import { hasToolCall, stepCountIs, tool } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
@@ -22,8 +22,10 @@ import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
 import { Env } from "@/env"
 import { completeText, type TextHooks } from "@/llm/api"
+import { createToolInputCapture, mergeTextHooks } from "@/llm/tool-hooks"
 import path from "path"
 import { Config } from "@/config/config"
+import { WaveContract, normalizePlanWaves } from "@/orchestrator/wave"
 
 const log = Log.create({ service: "planner-agent" })
 
@@ -34,15 +36,7 @@ const log = Log.create({ service: "planner-agent" })
 export const PlannerOutput = z.object({
   prd: z.string().describe("Expanded PRD with full technical context from codebase exploration"),
   summary: z.string().describe("One-line summary of the plan"),
-  milestones: z
-    .array(
-      z.object({
-        title: z.string(),
-        description: z.string().optional(),
-        goal_indices: z.array(z.number()),
-      }),
-    )
-    .optional(),
+  waves: z.array(WaveContract).optional(),
   subtasks: z.array(
     z.object({
       title: z.string(),
@@ -77,6 +71,13 @@ export type PlannerOutputType = z.infer<typeof PlannerOutput>
 // Replan context — structured failure information from the evaluator agent
 // ---------------------------------------------------------------------------
 
+export interface WaveStatus {
+  title: string
+  waveIndex: number
+  status: "passed" | "partial" | "failed" | "pending"
+  goals: Array<{ description: string; status: string }>
+}
+
 export interface ReplanContext {
   previousSummary: string
   failureAnalysis: {
@@ -91,6 +92,7 @@ export interface ReplanContext {
     status: string
     evidence: string
   }>
+  previousWaves?: WaveStatus[]
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +111,17 @@ function timeoutMs(input?: number) {
 function maxSteps() {
   const value = Number.parseInt(Env.get("OPENCORVUS_PLANNER_AGENT_MAX_STEPS") ?? "", 10)
   return Number.isFinite(value) && value > 0 ? value : 20
+}
+
+function remainingMs(deadline: number) {
+  return Math.max(1_000, deadline - Date.now())
+}
+
+function deadlineSignal(deadline: number, signal?: AbortSignal) {
+  const timeout = AbortSignal.timeout(remainingMs(deadline))
+  if (!signal) return timeout
+  if (signal.aborted) return signal
+  return AbortSignal.any([signal, timeout])
 }
 
 export namespace HeadlessPlannerAgent {
@@ -131,6 +144,7 @@ export namespace HeadlessPlannerAgent {
     if (!resolved) throw new Error("no LLM model available for planner agent")
     const { language, isReasoning } = resolved
     const limit = timeoutMs(input.timeoutMs)
+    const deadline = Date.now() + limit
     if (input.signal?.aborted) throw new Error("planner aborted after model resolution")
 
     // Extract working directory from request (eval tasks specify it explicitly)
@@ -212,7 +226,7 @@ export namespace HeadlessPlannerAgent {
       let toolCallCount: number
 
       if (consolidationOnly) {
-        const forced = await finalizePlan(language, input, lastSteps!, input.signal, retryContext, isReasoning, input.stream)
+        const forced = await finalizePlan(language, input, lastSteps!, deadline, input.signal, retryContext, isReasoning, input.stream)
         if (forced.submittedPlan) submittedPlan = forced.submittedPlan
         result = forced.result
         toolCallCount = lastToolCallCount
@@ -222,18 +236,21 @@ export namespace HeadlessPlannerAgent {
           reusedToolCalls: toolCallCount,
         })
       } else {
+        const capture = createToolInputCapture()
+        const attemptTimeout = remainingMs(deadline)
         result = await completeText({
           model: language,
-          stopWhen: stepCountIs(stepLimit),
+          stopWhen: [stepCountIs(stepLimit), hasToolCall("submit_plan")],
           tools: allTools,
           toolChoice: "auto",
           maxOutputTokens: 32768,
-          timeoutMs: limit,
-          abortSignal: input.signal ?? AbortSignal.timeout(limit),
+          timeoutMs: attemptTimeout,
+          abortSignal: deadlineSignal(deadline, input.signal),
         system: await plannerSystem(),
         prompt: userPrompt,
-        ...(input.stream ?? {}),
+        ...mergeTextHooks(input.stream, capture.hooks),
       })
+        submittedPlan ??= capture.recover("submit_plan", PlannerOutput)
 
         toolCallCount = result.steps.reduce(
           (sum, s) => {
@@ -291,7 +308,7 @@ export namespace HeadlessPlannerAgent {
             finishReason: result.finishReason,
             attempt: attempt + 1,
           })
-          const forced = await finalizePlan(language, input, result.steps, input.signal, undefined, isReasoning, input.stream)
+          const forced = await finalizePlan(language, input, result.steps, deadline, input.signal, undefined, isReasoning, input.stream)
           if (forced.submittedPlan) {
             submittedPlan = forced.submittedPlan
           }
@@ -334,7 +351,7 @@ export namespace HeadlessPlannerAgent {
               textLength: allText.length,
               attempt: attempt + 1,
             })
-            const forced = await finalizePlan(language, input, result.steps, input.signal, retryContext, isReasoning, input.stream)
+            const forced = await finalizePlan(language, input, result.steps, deadline, input.signal, retryContext, isReasoning, input.stream)
             if (forced.submittedPlan) {
               parsed = normalizePlanOutput(forced.submittedPlan)
             } else {
@@ -351,10 +368,10 @@ export namespace HeadlessPlannerAgent {
       parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
       // Validate plan quality
-      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount)
+      const planQuality = validatePlanQuality(parsed, input.request, toolCallCount, input.userGoals?.length ?? 0)
       log.info("planner agent output", {
         subtasks: parsed.subtasks.length,
-        milestones: parsed.milestones?.length ?? 0,
+        waves: parsed.waves?.length ?? 0,
         risks: parsed.risks.length,
         prdLength: parsed.prd.length,
         toolCalls: toolCallCount,
@@ -414,6 +431,7 @@ async function finalizePlan(
     stream?: TextHooks
   },
   steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
+  deadline: number,
   signal?: AbortSignal,
   retryContext?: { previousScore: number; reasons: string[]; attempt: number },
   isReasoning = false,
@@ -445,14 +463,15 @@ async function finalizePlan(
     }),
   }
 
+  const capture = createToolInputCapture()
   const result = await completeText({
     model: language,
-    stopWhen: stepCountIs(8),
+    stopWhen: [stepCountIs(8), hasToolCall("submit_plan")],
     tools: summaryTool,
     toolChoice: isReasoning ? "auto" : "required",
     maxOutputTokens: 16384,
-    timeoutMs: timeoutMs(input.timeoutMs),
-    abortSignal: signal ?? AbortSignal.timeout(timeoutMs(input.timeoutMs)),
+    timeoutMs: remainingMs(deadline),
+    abortSignal: deadlineSignal(deadline, signal),
     system:
       "You are finalizing a plan after an exploration attempt. " +
       "Do not explore again. Use the transcript if it is helpful, but do not claim that a weak transcript prevents planning. " +
@@ -476,8 +495,9 @@ async function finalizePlan(
       "Subtasks must reference exact file paths, include explicit verification steps, and may introduce small supporting src/ helper files when justified.",
       "Now synthesize the final plan and call submit_plan exactly once.",
     ].filter(Boolean).join("\n\n"),
-    ...(stream ?? {}),
+    ...mergeTextHooks(stream, capture.hooks),
   })
+  submittedPlan ??= capture.recover("submit_plan", PlannerOutput)
 
   return { result, submittedPlan }
 }
@@ -570,12 +590,20 @@ function extractJSON(text: string): PlannerOutputType {
       if (!obj.subtasks[i].description) obj.subtasks[i].description = obj.subtasks[i].title
     }
   }
-  if (Array.isArray(obj.milestones)) {
-    // Filter out incomplete milestones
-    obj.milestones = obj.milestones.filter((m: any) => m && typeof m === "object" && m.title)
-    for (const m of obj.milestones) {
-      if (!Array.isArray(m.goal_indices)) m.goal_indices = []
-    }
+  if (!Array.isArray(obj.waves) && Array.isArray(obj.milestones)) {
+    obj.waves = obj.milestones
+      .filter((item: unknown) => item && typeof item === "object" && !Array.isArray(item))
+      .map((item: unknown) => {
+        const wave = item as Record<string, unknown>
+        return {
+          title: wave.title,
+          objective: wave.description,
+          goal_indices: wave.goal_indices,
+        }
+      })
+  }
+  if (Array.isArray(obj.waves)) {
+    obj.waves = obj.waves.filter((wave: unknown) => wave && typeof wave === "object" && !Array.isArray(wave))
   }
   if (Array.isArray(obj.assumptions)) {
     obj.assumptions = obj.assumptions.filter((a: any) => a && typeof a === "object" && a.question && a.assumption)
@@ -590,6 +618,7 @@ function extractJSON(text: string): PlannerOutputType {
   if (!obj.summary) obj.summary = ""
   if (!Array.isArray(obj.subtasks)) obj.subtasks = []
   if (!Array.isArray(obj.risks)) obj.risks = []
+  if (!Array.isArray(obj.waves)) obj.waves = []
 
   try {
     return PlannerOutput.parse(obj)
@@ -825,6 +854,7 @@ function validatePlanQuality(
   plan: PlannerOutputType,
   request: string,
   toolCallCount: number,
+  goalCount: number,
 ): { score: number; reasons: string[] } {
   let score = 0
   const reasons: string[] = []
@@ -879,6 +909,33 @@ function validatePlanQuality(
     score += 0.25
   } else {
     reasons.push(`PRD too short (${plan.prd.length} chars)`)
+  }
+
+  if (goalCount >= 4) {
+    const waves = Array.isArray(plan.waves)
+      ? plan.waves.flatMap((wave) => wave && typeof wave === "object" ? [wave] : [])
+      : []
+    const explicitCoverage = new Set<number>()
+    const hasOwnedPaths = waves.every((wave) => Array.isArray(wave.owned_paths) && wave.owned_paths.length > 0)
+    for (const wave of waves) {
+      for (const goalIndex of wave.goal_indices) {
+        if (Number.isInteger(goalIndex) && goalIndex >= 0 && goalIndex < goalCount) explicitCoverage.add(goalIndex)
+      }
+    }
+    const normalized = normalizePlanWaves({
+      waves,
+      goals: Array.from({ length: goalCount }, (_, index) => ({ description: `Goal ${index + 1}` })),
+    })
+    if (waves.length === 0) reasons.push("plan missing wave contracts for a multi-goal task")
+    if (explicitCoverage.size < goalCount) reasons.push(`waves cover only ${explicitCoverage.size}/${goalCount} goals`)
+    if (!hasOwnedPaths) reasons.push("waves must declare owned_paths for every multi-goal wave")
+    if (normalized.length < 2) reasons.push("wave plan is not sufficiently layered for a multi-goal task")
+    if (reasons.some((reason) => reason.includes("wave"))) {
+      return {
+        score: Math.min(score, 0.49),
+        reasons,
+      }
+    }
   }
 
   return { score: Math.min(1, score), reasons }
@@ -1048,7 +1105,7 @@ function buildUserPrompt(
   // Include spec-owned goals so the planner can build an execution graph around them.
   if (input.userGoals && input.userGoals.length > 0) {
     sections.push(
-      `# Authoritative Goals\n\nThese goals come from the approved specification. Do not redefine them or invent new acceptance goals here. Use them to shape the plan, milestones, subtasks, and verification strategy.\n\n${input.userGoals
+      `# Authoritative Goals\n\nThese goals come from the approved specification. Do not redefine them or invent new acceptance goals here. Use them to shape the plan, waves, subtasks, and verification strategy.\n\n${input.userGoals
         .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
         .join("\n")}`,
     )
@@ -1105,6 +1162,21 @@ function buildUserPrompt(
         ...ctx.previousGoalStatuses.map(
           (g) => `- ${g.description}: **${g.status}** — ${g.evidence}`,
         ),
+        ...(ctx.previousWaves && ctx.previousWaves.length > 0
+          ? [
+              "",
+              `## Previous Wave Structure`,
+              "",
+              "The previous plan organized goals into these waves. Waves marked **passed** completed successfully — preserve their structure where possible and focus changes on failed/partial waves.",
+              "",
+              ...ctx.previousWaves.map((wave) =>
+                [
+                  `### ${wave.title} — **${wave.status}**`,
+                  ...wave.goals.map((g) => `  - ${g.description}: ${g.status}`),
+                ].join("\n"),
+              ),
+            ]
+          : []),
       ].join("\n"),
     )
   }
@@ -1210,7 +1282,7 @@ The submit_plan tool accepts these fields:
 - **summary**: One-line summary of the plan
 - **subtasks**: Array of {title, description (file paths + changes + patterns), order}
 - **risks**: Array of specific risks with mitigation
-- **milestones** (optional): Array of {title, goal_indices}. CRITICAL: milestones define EXECUTION ORDER — goals in milestone N only start after ALL goals in milestones 0..N-1 have passed. Goals within the same milestone run in parallel. You MUST group goals that modify the same files into separate sequential milestones to prevent silent overwrites from parallel execution.
+- **waves** (optional but expected for multi-goal plans): Array of {title, objective, goal_indices, owned_paths, produces, consumes, parallelism}. CRITICAL: waves define EXECUTION ORDER — goals in wave N only start after ALL goals in waves 0..N-1 have passed. Goals within the same wave may run in parallel only when their owned_paths do not overlap.
 - **assumptions** (optional): Array of {question, assumption}
 - **prd**: Technical spec with bullet points: files to modify, exact changes, patterns, verification commands. ≤ 2000 chars.
 
@@ -1221,6 +1293,8 @@ The submit_plan tool accepts these fields:
 - Do not spam identical exploration calls. Repeating the same tool with the same arguments more than twice is invalid; switch tools or submit_plan.
 - Every file path in your plan MUST come from actual tool results or pre-read files -- never guess paths.
 - Goals are authoritative input from the specification. The planner must not redefine or mutate them.
+- For multi-goal plans, provide wave contracts that cover every goal exactly once.
+- Every wave must declare owned_paths. If two goals may touch the same path, put them in different waves.
 - Clarifications are only for execution-strategy blockers. Do NOT ask for missing scope, requirements, or acceptance criteria; that belongs to the spec stage.
 - Explicit task constraints override preferences. Do not plan edits outside a user-declared file boundary just to satisfy a preference.
 - subtask descriptions must reference specific files, functions, and patterns discovered during exploration.

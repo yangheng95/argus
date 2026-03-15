@@ -1,122 +1,123 @@
 {
-  "generated_at": "2026-03-15T11:39:42.987Z",
-  "mode": "full",
-  "title": "prd",
-  "request_file": "D:\\myhexin-local\\argus-opencode\\specs\\prd.txt",
+  "generated_at": "2026-03-15T16:54:33.385Z",
   "executor": "opencode",
   "model": "alibaba-coding-plan-cn/kimi-k2.5",
-  "stage_timeout_ms": {
-    "spec": 96000,
-    "planner": 120000
-  },
-  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
   "server": "http://127.0.0.1:7878/",
-  "taskID": "tsk_cf148bb63001FCOiOe364tb5o2",
-  "taskStatus": "failed",
-  "changedFiles": [],
-  "transcriptCount": 0,
-  "timelineCount": 0,
-  "runCount": 1,
-  "planning": {
-    "pendingCount": 1,
-    "taskList": "Active\n    \n    \n      \n        \n        请创建一个新任务并立即开始执行以下工作： 日记软件 PRD 1. 文档信息 产品名称：Moment Diary（暂定） 文档版本：V1.0...\n      \n      Planning\n      19:36:28 / .../Local/Temp/opencorvus-overlay-benchmark-project-MCGFUC",
-    "reasoning": "正在分析请求",
-    "assistantText": "..."
-  },
-  "streaming": {
-    "reasoning": "正在分析请求",
-    "assistantText": "...",
-    "reasoningVisible": true,
-    "assistantVisible": false
-  },
-  "materialization": {
-    "boardTaskID": "tsk_cf148bb63001FCOiOe364tb5o2",
-    "boardStatus": "planning",
-    "specVersion": null,
-    "goalCount": 0,
-    "goalRunCount": 0,
-    "criteriaCount": 0
-  },
-  "screenshot": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1773574782486.png",
-  "resume": {
-    "restored": true,
-    "selectedAt": 21134
+  "taskID": "tsk_cf263c3c9001hiHvkWZ1zmYko6",
+  "error": "TimeoutError: The operation timed out.",
+  "stage_max_steps": {
+    "spec": 48,
+    "planner": 56
   },
   "timings_ms": {
-    "online": 230,
-    "submit": 3475,
-    "planning_visible": 3613,
-    "streaming_visible": 3614,
-    "task_created": 17881,
-    "task_selected": 17889,
-    "board_loaded": 17890,
-    "resumed": 21134,
-    "completed": 197889,
-    "execution": 194414
+    "online": 275,
+    "submit": 4097,
+    "planning_visible": 4246,
+    "streaming_visible": 4247,
+    "task_created": 13341,
+    "task_selected": 13412,
+    "board_loaded": 13413,
+    "resumed": 17128,
+    "completed": null,
+    "execution": null
   },
-  "assertions": {
-    "planning_visible": {
-      "pass": true,
-      "sample": {
-        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
-        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
-        "workspaceDirectory": "",
-        "selectedTaskID": "",
-        "pendingCount": 1,
-        "taskIDs": [],
-        "taskList": "Active\n    \n    \n      \n        \n        请创建一个新任务并立即开始执行以下工作： 日记软件 PRD 1. 文档信息 产品名称：Moment Diary（暂定） 文档版本：V1.0...\n      \n      Planning\n      19:36:28 / .../Local/Temp/opencorvus-overlay-benchmark-project-MCGFUC",
-        "reasoning": "正在分析请求",
-        "assistantText": "...",
-        "storage": {
-          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
-          "directoryMode": "",
-          "workspaceDirectory": "",
-          "workspaceTaskID": ""
-        }
-      }
-    },
-    "streaming_visible": {
-      "pass": true,
-      "sample": {
-        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
-        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
-        "workspaceDirectory": "",
-        "selectedTaskID": "",
-        "pendingCount": 1,
-        "taskIDs": [],
-        "taskList": "Active\n    \n    \n      \n        \n        请创建一个新任务并立即开始执行以下工作： 日记软件 PRD 1. 文档信息 产品名称：Moment Diary（暂定） 文档版本：V1.0...\n      \n      Planning\n      19:36:28 / .../Local/Temp/opencorvus-overlay-benchmark-project-MCGFUC",
-        "reasoning": "正在分析请求",
-        "assistantText": "...",
-        "storage": {
-          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-MCGFUC",
-          "directoryMode": "",
-          "workspaceDirectory": "",
-          "workspaceTaskID": ""
-        }
-      }
-    },
-    "materialized": {
-      "pass": true,
-      "sample": {
-        "taskID": "tsk_cf148bb63001FCOiOe364tb5o2",
-        "boardTaskID": "tsk_cf148bb63001FCOiOe364tb5o2",
-        "resumed": true
-      }
-    },
-    "delivery": {
-      "pass": false,
-      "sample": {
-        "taskStatus": "failed",
-        "verdict": "",
-        "localExit": 0
-      }
+  "overlay": {
+    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
+    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
+    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
+    "selectedTaskID": "tsk_cf263c3c9001hiHvkWZ1zmYko6",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_cf263c3c9001hiHvkWZ1zmYko6"
+    ],
+    "taskList": "Active\n    \n    \n      \n        \n        根据提供的日记软件PRD文档，开发一个完整的日记应用程序。需要实现以下核心功能：\n      \n      Evaluating\n      00:53:31 / .../Local/Temp/opencorvus-overlay-benchmark-project-7hBMc2",
+    "reasoning": "",
+    "assistantText": "",
+    "storage": {
+      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
+      "directoryMode": "",
+      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
+      "workspaceTaskID": "tsk_cf263c3c9001hiHvkWZ1zmYko6"
     }
   },
-  "local_verify": {
-    "mode": "skipped",
-    "command": null,
-    "exitCode": 0,
-    "stdout": "",
-    "stderr": ""
+  "diagnostics": {
+    "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\prd-full-benchmark-report.events.json",
+    "event_count": 1408,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.agent.updated": 1391,
+        "orchestrator.task.updated": 5,
+        "orchestrator.spec.created": 2,
+        "orchestrator.plan.created": 2,
+        "orchestrator.plan.activated": 2,
+        "orchestrator.run.created": 2,
+        "orchestrator.run.updated": 3
+      },
+      "stages": {
+        "spec": {
+          "event_count": 6,
+          "first_event_ms": 12702,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 517584,
+          "kind_counts": {
+            "status": 6
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 178,
+          "first_event_ms": 17184,
+          "first_message_ms": 28950,
+          "first_tool_call_ms": 21748,
+          "first_tool_result_ms": 21861,
+          "submit_tool_ms": 30309,
+          "error_ms": null,
+          "last_event_ms": 526295,
+          "kind_counts": {
+            "status": 5,
+            "tool_call": 57,
+            "tool_result": 27,
+            "message_delta": 89
+          },
+          "tool_calls": {
+            "list_directory": 18,
+            "find_files": 6,
+            "read_file": 16,
+            "web_search": 10,
+            "submit_plan": 7
+          }
+        },
+        "judge": {
+          "event_count": 1207,
+          "first_event_ms": 285560,
+          "first_message_ms": 319201,
+          "first_tool_call_ms": 287702,
+          "first_tool_result_ms": 287841,
+          "submit_tool_ms": 504072,
+          "error_ms": null,
+          "last_event_ms": 512665,
+          "kind_counts": {
+            "status": 4,
+            "tool_call": 76,
+            "tool_result": 38,
+            "message_delta": 1089
+          },
+          "tool_calls": {
+            "list_directory": 30,
+            "memory_search": 6,
+            "read_file": 30,
+            "find_files": 6,
+            "search_code": 2,
+            "submit_analysis": 2
+          }
+        }
+      }
+    }
   }
 }

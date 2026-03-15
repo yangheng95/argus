@@ -1,5 +1,5 @@
 import { Bus } from "@/bus"
-import { type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { type GoalJudgmentType } from "@/evaluator/agent"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PlannerFailureError } from "@/planner/service"
 import { Plugin } from "@/plugin"
@@ -10,6 +10,7 @@ import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
+import { withKeyedLock } from "@/util/lock"
 import { withTimeout } from "@/util/timeout"
 import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
@@ -30,8 +31,8 @@ import {
   goalRunExpired,
   goalRunLocalSessionID,
   removeGoalRunSession,
-} from "./goal-runner"
-import { pendingBlockingGoals, readyGoalNodes } from "./goal-scheduler"
+} from "@/goal/runner"
+import { pendingBlockingGoals, readyGoalNodes } from "@/goal/scheduler"
 import { OrchestratorGit } from "./git"
 import { OrchestratorMemoryBridge } from "./memory-bridge"
 import { autoRejectInteraction } from "./interaction-actions"
@@ -113,6 +114,7 @@ const finalizingRuns = new Set<string>() // guards against concurrent finalizeCo
 const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
 const finalizingGoalRuns = new Set<string>() // guards against concurrent finalizeGoalRun for the same goal run
 const runAppliedFiles = new Map<string, Set<string>>() // runID → files applied by goal deliveries, for conflict detection
+const runLocks = new Map<string, Promise<void>>()
 const goalRunFinalizeLocks = new Map<string, Promise<void>>()
 const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
@@ -177,22 +179,12 @@ function runExecutionTarget(run: RunRow, goalRun = activeGoalRun(run)) {
   }
 }
 
-async function withGoalRunFinalizeLock<R>(runID: string, fn: () => Promise<R>) {
-  const previous = goalRunFinalizeLocks.get(runID) ?? Promise.resolve()
-  let release = () => {}
-  const current = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  goalRunFinalizeLocks.set(runID, previous.then(() => current, () => current))
-  await previous.catch(() => undefined)
-  try {
-    return await fn()
-  } finally {
-    release()
-    if (goalRunFinalizeLocks.get(runID) === current) {
-      goalRunFinalizeLocks.delete(runID)
-    }
-  }
+function withGoalRunFinalizeLock<R>(runID: string, fn: () => Promise<R>) {
+  return withKeyedLock(goalRunFinalizeLocks, runID, fn)
+}
+
+function withRunLock<R>(runID: string, fn: () => Promise<R>) {
+  return withKeyedLock(runLocks, runID, fn)
 }
 
 async function provideWorkspace<R>(directory: string | undefined, fn: () => Promise<R>) {
@@ -260,6 +252,76 @@ function stalledEvaluationSummary() {
   return `Evaluation stalled after ${Math.round(EVALUATION_HARD_TIMEOUT_MS / 60000)}min without completion`
 }
 
+function nodeMeta(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
+  return node.metadata && typeof node.metadata === "object" && !Array.isArray(node.metadata)
+    ? node.metadata as Record<string, unknown>
+    : {}
+}
+
+function nodeWaveIndex(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
+  const value = nodeMeta(node).wave_index
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined
+}
+
+function nodeWaveParallelism(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
+  const meta = nodeMeta(node)
+  const value = meta.wave_parallelism
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+function nodeOwnedPaths(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
+  const value = nodeMeta(node).owned_paths
+  return [...new Set(Array.isArray(value)
+    ? value.flatMap((item) => {
+        if (typeof item !== "string") return []
+        const next = item.trim().replace(/\\/g, "/").replace(/\/+$/, "").replace(/^\.\//, "").toLowerCase()
+        return next ? [next] : []
+      })
+    : [])]
+}
+
+function pathsConflict(left: string[], right: string[]) {
+  return left.some((item) =>
+    right.some((other) => item === other || item.startsWith(`${other}/`) || other.startsWith(`${item}/`))
+  )
+}
+
+function selectDispatchBatch(
+  nodes: ReturnType<typeof listPlanNodesByPlan>,
+  ready: ReturnType<typeof readyGoalNodes>,
+  active: GoalRunRow[],
+  capacity: number,
+) {
+  const byID = new Map(nodes.map((node) => [node.id, node]))
+  const activeWaveCounts = new Map<number, number>()
+  const activeOwnedPaths = active.flatMap((goalRun) => {
+    const node = goalRun.plan_node_id ? byID.get(goalRun.plan_node_id) : undefined
+    if (!node) return []
+    const waveIndex = nodeWaveIndex(node)
+    if (waveIndex !== undefined) {
+      activeWaveCounts.set(waveIndex, (activeWaveCounts.get(waveIndex) ?? 0) + 1)
+    }
+    return nodeOwnedPaths(node)
+  })
+  const selected: ReturnType<typeof readyGoalNodes> = []
+  const selectedOwnedPaths: string[] = []
+  for (const next of ready) {
+    if (selected.length >= capacity) break
+    const waveIndex = nodeWaveIndex(next.node)
+    const parallelism = nodeWaveParallelism(next.node)
+    if (waveIndex !== undefined && parallelism && (activeWaveCounts.get(waveIndex) ?? 0) >= parallelism) continue
+    const ownedPaths = nodeOwnedPaths(next.node)
+    if (ownedPaths.length > 0 && (pathsConflict(ownedPaths, activeOwnedPaths) || pathsConflict(ownedPaths, selectedOwnedPaths))) continue
+    selected.push(next)
+    selectedOwnedPaths.push(...ownedPaths)
+    if (waveIndex !== undefined) {
+      activeWaveCounts.set(waveIndex, (activeWaveCounts.get(waveIndex) ?? 0) + 1)
+    }
+  }
+  if (selected.length === 0 && active.length === 0 && ready.length > 0) return [ready[0]]
+  return selected
+}
+
 async function queueGoalRun(
   task: TaskRow,
   run: RunRow,
@@ -307,6 +369,7 @@ async function queueGoalRun(
       ...plan,
       prompt: planPrompt(plan, run),
     },
+    node: next.node,
     goal: next.goal,
   })
   const source: "planner" | "scheduler" | "system" = run.metadata?.strategy === "operator_note" ? "system" : "scheduler"
@@ -389,16 +452,21 @@ async function queueGoalRun(
 async function queueReadyGoalRuns(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
   const capacity = GOAL_RUN_PARALLELISM - activeGoalRuns(run).length
   if (capacity <= 0) return 0
-  const ready = readyGoalNodes(
-    listPlanNodesByPlan(plan.id),
-    listGoalsBySpec(plan.spec_snapshot_id),
-    activeGoalRuns(run),
-  ).slice(0, capacity)
-  if (ready.length === 0) return 0
-  for (const next of ready) {
-    await queueGoalRun(task, run, plan, next, hooks)
-  }
-  return ready.length
+  const nodes = listPlanNodesByPlan(plan.id)
+  const active = activeGoalRuns(run)
+  const ready = readyGoalNodes(nodes, listGoalsBySpec(plan.spec_snapshot_id), active)
+  const selected = selectDispatchBatch(nodes, ready, active, capacity)
+  if (selected.length === 0) return 0
+  log.info("dispatching goal wave batch", {
+    runID: run.id,
+    ready: ready.length,
+    selected: selected.length,
+    capacity,
+    goals: selected.map((item) => item.goal.description),
+    waves: selected.map((item) => nodeMeta(item.node).wave_title).filter((item): item is string => typeof item === "string"),
+  })
+  await Promise.all(selected.map((next) => queueGoalRun(task, run, plan, next, hooks)))
+  return selected.length
 }
 
 async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
@@ -1002,18 +1070,20 @@ export namespace OrchestratorRuntime {
   }
 
   export async function dispatch(runID: string, hooks: RuntimeHooks) {
-    installRuntimeShims()
-    const run = requireRun(runID)
-    if (run.status !== "queued") return
-    let task = requireTask(run.task_id)
-    const plan = planForRun(run)
-    if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
-    if (!plan) throw new Error(`Task ${task.id} has no plan`)
-    const prepared = await prepareRun(task, run, plan, hooks)
-    if (!prepared) return
-    task = prepared
-    if (await queueReadyGoalRuns(task, run, plan, hooks)) return
-    await finalizeCoordinatorRun(task, run, hooks)
+    await withRunLock(runID, async () => {
+      installRuntimeShims()
+      const run = requireRun(runID)
+      if (run.status !== "queued") return
+      let task = requireTask(run.task_id)
+      const plan = planForRun(run)
+      if (!task.session_id) throw new Error(`Task ${task.id} has no session`)
+      if (!plan) throw new Error(`Task ${task.id} has no plan`)
+      const prepared = await prepareRun(task, run, plan, hooks)
+      if (!prepared) return
+      task = prepared
+      if (await queueReadyGoalRuns(task, run, plan, hooks)) return
+      await finalizeCoordinatorRun(task, run, hooks)
+    })
   }
 
   export async function syncTask(taskID: string, hooks: RuntimeHooks) {
@@ -1024,47 +1094,64 @@ export namespace OrchestratorRuntime {
   }
 
   export async function syncRun(runID: string, hooks: RuntimeHooks) {
-    let run = findRun(runID)
-    if (!run) throw new Error(`Run not found: ${runID}`)
-    let task = requireTask(run.task_id)
-    const pending = findPendingInteractions(run.id)
-    if (pending.length > 0) {
-      const unattended = await unattendedProject()
-      if (unattended) {
-        for (const interaction of pending) {
-          const answered = await autoAnswerInteraction(interaction).catch((error) => {
-            log.warn("failed to auto-answer unattended interaction", { id: interaction.id, error: String(error) })
-            return false
-          })
-          if (!answered) continue
-        }
-        run = requireRun(runID)
-        task = requireTask(run.task_id)
-        const now = Date.now()
-        const timeout = interactionStaleMs()
-        const stale = findPendingInteractions(run.id).filter((p) => (now - (p.time_created ?? 0)) > timeout)
-        if (stale.length > 0) {
-          for (const interaction of stale) {
-            log.info("auto-rejecting stale interaction", {
-              id: interaction.id,
-              type: interaction.request_type,
-              ageMs: now - (interaction.time_created ?? 0),
-              timeoutMs: timeout,
+    await withRunLock(runID, async () => {
+      let run = findRun(runID)
+      if (!run) throw new Error(`Run not found: ${runID}`)
+      let task = requireTask(run.task_id)
+      const pending = findPendingInteractions(run.id)
+      if (pending.length > 0) {
+        const unattended = await unattendedProject()
+        if (unattended) {
+          for (const interaction of pending) {
+            const answered = await autoAnswerInteraction(interaction).catch((error) => {
+              log.warn("failed to auto-answer unattended interaction", { id: interaction.id, error: String(error) })
+              return false
             })
-            await autoRejectInteraction(interaction, "Timed out waiting for operator response")
+            if (!answered) continue
           }
           run = requireRun(runID)
           task = requireTask(run.task_id)
+          const now = Date.now()
+          const timeout = interactionStaleMs()
+          const stale = findPendingInteractions(run.id).filter((p) => (now - (p.time_created ?? 0)) > timeout)
+          if (stale.length > 0) {
+            for (const interaction of stale) {
+              log.info("auto-rejecting stale interaction", {
+                id: interaction.id,
+                type: interaction.request_type,
+                ageMs: now - (interaction.time_created ?? 0),
+                timeoutMs: timeout,
+              })
+              await autoRejectInteraction(interaction, "Timed out waiting for operator response")
+            }
+            run = requireRun(runID)
+            task = requireTask(run.task_id)
+          }
         }
       }
-    }
-    const interactionReason = findPendingInteractions(run.id)[0]?.request_type
-    const recoverableGoalRuns = listGoalRunsByCoordinator(run.id)
-      .filter((goalRun) => goalRun.status === "completed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
-    for (const goalRun of recoverableGoalRuns) {
-      await finalizeGoalRun(task, run, goalRun, hooks)
-      run = requireRun(runID)
-      task = requireTask(run.task_id)
+      const interactionReason = findPendingInteractions(run.id)[0]?.request_type
+      const recoverableGoalRuns = listGoalRunsByCoordinator(run.id)
+        .filter((goalRun) => goalRun.status === "completed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
+      for (const goalRun of recoverableGoalRuns) {
+        await finalizeGoalRun(task, run, goalRun, hooks)
+        run = requireRun(runID)
+        task = requireTask(run.task_id)
+        const delivery = findDeliveryByRun(run.id)
+        if (run.status === "completed" && delivery) {
+          await completeRun(run, hooks)
+          return
+        }
+        if (run.status === "failed" || run.status === "aborted") {
+          return
+        }
+      }
+      const failedGoalRun = listGoalRunsByCoordinator(run.id)
+        .find((goalRun) => goalRun.status === "failed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
+      if (failedGoalRun && run.status !== "failed" && run.status !== "aborted") {
+        const evaluation = findEvaluationByGoalRun(failedGoalRun.id)
+        await handleEvaluationFailure(task, run, evaluation?.summary ?? failedGoalRun.error ?? "Goal run failed", hooks)
+        return
+      }
       const delivery = findDeliveryByRun(run.id)
       if (run.status === "completed" && delivery) {
         await completeRun(run, hooks)
@@ -1073,35 +1160,50 @@ export namespace OrchestratorRuntime {
       if (run.status === "failed" || run.status === "aborted") {
         return
       }
-    }
-    const failedGoalRun = listGoalRunsByCoordinator(run.id)
-      .find((goalRun) => goalRun.status === "failed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
-    if (failedGoalRun && run.status !== "failed" && run.status !== "aborted") {
-      const evaluation = findEvaluationByGoalRun(failedGoalRun.id)
-      await handleEvaluationFailure(task, run, evaluation?.summary ?? failedGoalRun.error ?? "Goal run failed", hooks)
-      return
-    }
-    const delivery = findDeliveryByRun(run.id)
-    if (run.status === "completed" && delivery) {
-      await completeRun(run, hooks)
-      return
-    }
-    if (run.status === "failed" || run.status === "aborted") {
-      return
-    }
-    if (run.status === "accepted" && typeof run.metadata?.previous_run_id === "string") {
-      const started = run.time_started ?? run.time_created ?? 0
-      if (activeGoalRuns(run).length === 0 && started > 0 && (Date.now() - started) < FOLLOWUP_RUN_SYNC_GRACE_MS) {
+      if (run.status === "accepted" && typeof run.metadata?.previous_run_id === "string") {
+        const started = run.time_started ?? run.time_created ?? 0
+        if (activeGoalRuns(run).length === 0 && started > 0 && (Date.now() - started) < FOLLOWUP_RUN_SYNC_GRACE_MS) {
+          return
+        }
+      }
+      if (activeGoalRuns(run).length === 0 && await syncCoordinatorExecutor(task, run, hooks)) {
         return
       }
-    }
-    if (activeGoalRuns(run).length === 0 && await syncCoordinatorExecutor(task, run, hooks)) {
-      return
-    }
-    if (activeGoalRuns(run).length === 0 && !interactionReason && planForRun(run)) {
-      await continueGoalPipeline(task, run, hooks)
+      if (activeGoalRuns(run).length === 0 && !interactionReason && planForRun(run)) {
+        await continueGoalPipeline(task, run, hooks)
+        run = requireRun(runID)
+        task = requireTask(run.task_id)
+        const nextDelivery = findDeliveryByRun(run.id)
+        if (run.status === "completed" && nextDelivery) {
+          await completeRun(run, hooks)
+          return
+        }
+        if (run.status === "failed" || run.status === "aborted") {
+          return
+        }
+      }
+
+      for (const goalRun of activeGoalRuns(run)) {
+        await syncActiveGoalRun(task, run, goalRun, hooks)
+        run = requireRun(runID)
+        task = requireTask(run.task_id)
+        const nextDelivery = findDeliveryByRun(run.id)
+        if (run.status === "completed" && nextDelivery) {
+          await completeRun(run, hooks)
+          return
+        }
+        if (run.status === "failed" || run.status === "aborted") {
+          return
+        }
+      }
+
       run = requireRun(runID)
       task = requireTask(run.task_id)
+      if (!interactionReason && !["failed", "aborted", "completed"].includes(run.status) && planForRun(run)) {
+        await continueGoalPipeline(task, run, hooks)
+        run = requireRun(runID)
+        task = requireTask(run.task_id)
+      }
       const nextDelivery = findDeliveryByRun(run.id)
       if (run.status === "completed" && nextDelivery) {
         await completeRun(run, hooks)
@@ -1110,68 +1212,38 @@ export namespace OrchestratorRuntime {
       if (run.status === "failed" || run.status === "aborted") {
         return
       }
-    }
+      const active = activeGoalRuns(run)
+      const hasRunning = active.some((goalRun) => goalRun.status === "running")
+      const hasAccepted = active.some((goalRun) => goalRun.status === "accepted" || goalRun.status === "queued")
+      const hasBlocked = active.some((goalRun) => goalRun.status === "blocked") || !!interactionReason
 
-    for (const goalRun of activeGoalRuns(run)) {
-      await syncActiveGoalRun(task, run, goalRun, hooks)
-      run = requireRun(runID)
-      task = requireTask(run.task_id)
-      const nextDelivery = findDeliveryByRun(run.id)
-      if (run.status === "completed" && nextDelivery) {
-        await completeRun(run, hooks)
+      if (hasRunning) {
+        if (run.status !== "running") {
+          await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
+        }
+        if (task.status !== "running") {
+          await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
+        }
         return
       }
-      if (run.status === "failed" || run.status === "aborted") {
+      if (hasAccepted) {
+        if (run.status !== "accepted" || run.blocking_reason) {
+          await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
+        }
+        if (task.status !== "running" || task.blocking_reason) {
+          await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
+        }
         return
       }
-    }
-
-    run = requireRun(runID)
-    task = requireTask(run.task_id)
-    if (!interactionReason && !["failed", "aborted", "completed"].includes(run.status) && planForRun(run)) {
-      await continueGoalPipeline(task, run, hooks)
-      run = requireRun(runID)
-      task = requireTask(run.task_id)
-    }
-    const nextDelivery = findDeliveryByRun(run.id)
-    if (run.status === "completed" && nextDelivery) {
-      await completeRun(run, hooks)
-      return
-    }
-    if (run.status === "failed" || run.status === "aborted") {
-      return
-    }
-    const active = activeGoalRuns(run)
-    const hasRunning = active.some((goalRun) => goalRun.status === "running")
-    const hasAccepted = active.some((goalRun) => goalRun.status === "accepted" || goalRun.status === "queued")
-    const hasBlocked = active.some((goalRun) => goalRun.status === "blocked") || !!interactionReason
-
-    if (hasRunning) {
-      if (run.status !== "running") {
-        await hooks.updateRun(run, { status: "running", blocking_reason: null }, "Run executing")
+      if (hasBlocked) {
+        if (run.status !== "blocked" || run.blocking_reason !== (interactionReason ?? "executor")) {
+          await hooks.updateRun(run, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Run blocked")
+        }
+        if (task.status !== "blocked" || task.blocking_reason !== (interactionReason ?? "executor")) {
+          await hooks.updateTask(task, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Awaiting user input")
+        }
       }
-      if (task.status !== "running") {
-        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run executing")
-      }
-      return
-    }
-    if (hasAccepted) {
-      if (run.status !== "accepted" || run.blocking_reason) {
-        await hooks.updateRun(run, { status: "accepted", blocking_reason: null }, "Run resumed")
-      }
-      if (task.status !== "running" || task.blocking_reason) {
-        await hooks.updateTask(task, { status: "running", blocking_reason: null }, "Run resumed")
-      }
-      return
-    }
-    if (hasBlocked) {
-      if (run.status !== "blocked" || run.blocking_reason !== (interactionReason ?? "executor")) {
-        await hooks.updateRun(run, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Run blocked")
-      }
-      if (task.status !== "blocked" || task.blocking_reason !== (interactionReason ?? "executor")) {
-        await hooks.updateTask(task, { status: "blocked", blocking_reason: interactionReason ?? "executor" }, "Awaiting user input")
-      }
-    }
+    })
   }
 
   export async function createOperatorRun(task: TaskRow, run: RunRow, note: string) {
@@ -1552,7 +1624,7 @@ async function publishAcceptedDelivery(task: TaskRow, run: RunRow, delivery: Del
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: result.summary, time_completed: completed }, result.summary)
 }
 
-async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: EvaluatorAnalysisType) {
+async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: string, hooks: RuntimeHooks, analysis?: GoalJudgmentType) {
   if (task.active_run_id !== run.id) return
 
   await abortActiveGoalRuns(run, summary)

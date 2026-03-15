@@ -6,8 +6,8 @@ import { generateObject } from "@/llm/api"
 import z from "zod"
 import { Log } from "@/util/log"
 import {
-  type EvaluationDelivery,
-  type EvaluationOutcome,
+  type CheckDelivery,
+  type CheckOutcome,
   SpecCheckResult,
   ReviewResultSchema,
   clip,
@@ -24,7 +24,7 @@ export async function uiReviewResult(
   config: z.infer<typeof CheckConfig>["ui_review"],
   request: string | undefined,
   delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<EvaluationOutcome> {
+): Promise<CheckOutcome> {
   if (!config) return emptyOptional()
   const mode = config.mode ?? "soft"
   const page = config.url ? await webPage(config.url, config.timeout_ms ?? 10_000) : undefined
@@ -75,7 +75,7 @@ export async function codeQualityResult(
   config: z.infer<typeof CheckConfig>["code_quality"],
   request: string | undefined,
   delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<EvaluationOutcome> {
+): Promise<CheckOutcome> {
   if (!config?.enabled) return emptyOptional()
   const mode = config.mode ?? "soft"
   const result = await reviewResult({
@@ -106,7 +106,7 @@ export async function codeReviewResult(
   config: z.infer<typeof CheckConfig>["code_review"],
   request: string | undefined,
   delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<EvaluationOutcome> {
+): Promise<CheckOutcome> {
   if (!config?.enabled) return emptyOptional()
   const mode = config.mode ?? "soft"
   const result = await reviewResult({
@@ -137,7 +137,7 @@ export async function deadCodeReviewResult(
   config: z.infer<typeof CheckConfig>["dead_code_review"],
   request: string | undefined,
   delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<EvaluationOutcome> {
+): Promise<CheckOutcome> {
   if (!config?.enabled) return emptyOptional()
   const mode = config.mode ?? "soft"
   const result = await reviewResult({
@@ -255,7 +255,7 @@ function reviewOutcome(
     | { ok: false; summary: string; evidence: string; payload: Record<string, unknown> }
     | { ok: true; object: z.infer<typeof ReviewResultSchema> },
   extra: Record<string, unknown>,
-): EvaluationOutcome {
+): CheckOutcome {
   if (!result.ok) {
     return softOrStrict({
       mode,
@@ -305,7 +305,7 @@ export async function specCheckResult(
   request: string | undefined,
   activeSpecVersionID: string | undefined,
   delivery: { summary: string; diffs?: Snapshot.FileDiff[]; changedFiles?: string[] },
-): Promise<EvaluationOutcome> {
+): Promise<CheckOutcome> {
   if (!config?.enabled) return emptyOptional()
   const mode = config.mode ?? "strict"
   if (!activeSpecVersionID) {

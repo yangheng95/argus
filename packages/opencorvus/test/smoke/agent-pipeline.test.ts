@@ -1,15 +1,15 @@
 /**
  * End-to-end smoke test for the independent-context agent pipeline.
  *
- * Tests the full flow: PlannerAgent → PlannerService → EvaluatorAgent → Runtime
+ * Tests the full flow: PlannerAgent → PlannerService → GoalJudge → Runtime
  * without requiring actual LLM calls (mocks the Provider layer).
  */
 import { describe, test, expect, mock, beforeEach, spyOn } from "bun:test"
 import { PlannerAgent, type PlannerOutputType } from "@/planner/agent"
 import { PlannerService } from "@/planner/service"
 import {
-  EvaluatorAgent,
-  type EvaluatorAnalysisType,
+  GoalJudge,
+  type GoalJudgmentType,
   type CheckResult,
   type GoalInfo,
   type DeliveryInfo,
@@ -23,16 +23,18 @@ import type { ReplanContext } from "@/planner/agent"
 const MOCK_PLAN_OUTPUT: PlannerOutputType = {
   prd: "Expanded PRD: Add a greeting endpoint to the API that returns 'Hello, World!'.\n\nBased on codebase exploration:\n- Server uses Hono framework\n- Routes are in src/server/routes/\n- Tests use bun:test",
   summary: "Add GET /hello endpoint returning Hello World",
-  milestones: [
+  waves: [
     {
       title: "Core Implementation",
-      description: "Implement the greeting endpoint",
+      objective: "Implement the greeting endpoint",
       goal_indices: [0],
+      owned_paths: ["src/server/routes/hello.ts", "test/server/hello.test.ts"],
     },
     {
       title: "Polish",
-      description: "Error handling and edge cases",
+      objective: "Error handling and edge cases",
       goal_indices: [1],
+      owned_paths: ["src/server/routes/hello.ts"],
     },
   ],
   subtasks: [
@@ -74,7 +76,7 @@ const MOCK_GOALS = [
   },
 ]
 
-const MOCK_ANALYSIS_ACCEPTED: EvaluatorAnalysisType = {
+const MOCK_ANALYSIS_ACCEPTED: GoalJudgmentType = {
   verdict: "accepted",
   classification: "evaluation",
   summary: "All checks passed. The greeting endpoint is correctly implemented.",
@@ -94,7 +96,7 @@ const MOCK_ANALYSIS_ACCEPTED: EvaluatorAnalysisType = {
   ],
 }
 
-const MOCK_ANALYSIS_REJECTED: EvaluatorAnalysisType = {
+const MOCK_ANALYSIS_REJECTED: GoalJudgmentType = {
   verdict: "rejected",
   classification: "evaluation",
   summary: "Build passed but test for greeting endpoint failed — wrong response body.",
@@ -120,7 +122,7 @@ const MOCK_ANALYSIS_REJECTED: EvaluatorAnalysisType = {
   },
 }
 
-const MOCK_ANALYSIS_STRATEGY: EvaluatorAnalysisType = {
+const MOCK_ANALYSIS_STRATEGY: GoalJudgmentType = {
   verdict: "rejected",
   classification: "strategy",
   summary: "Fundamental approach is wrong — tried to use Express but project uses Hono.",
@@ -157,11 +159,11 @@ describe("PlannerAgent output structure", () => {
     expect(orders).toEqual([...orders].sort((a, b) => a - b))
   })
 
-  test("milestones reference valid goal indices", () => {
+  test("waves reference valid goal indices", () => {
     const output = MOCK_PLAN_OUTPUT
-    expect(output.milestones).toBeDefined()
-    for (const ms of output.milestones!) {
-      for (const idx of ms.goal_indices) {
+    expect(output.waves).toBeDefined()
+    for (const wave of output.waves!) {
+      for (const idx of wave.goal_indices) {
         expect(idx).toBeGreaterThanOrEqual(0)
         expect(idx).toBeLessThan(MOCK_GOALS.length)
       }
@@ -169,7 +171,7 @@ describe("PlannerAgent output structure", () => {
   })
 })
 
-describe("EvaluatorAgent output structure", () => {
+describe("GoalJudge output structure", () => {
   test("accepted analysis has all goals assessed", () => {
     const analysis = MOCK_ANALYSIS_ACCEPTED
     expect(analysis.verdict).toBe("accepted")

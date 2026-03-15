@@ -1,5 +1,5 @@
 import { afterEach, expect, mock, spyOn, test } from "bun:test"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
@@ -54,7 +54,7 @@ test(
   async () => {
     await using tmp = await tmpdir({ git: true })
     mockSpec()
-    spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+    spyOn(CheckRunner, "evaluate").mockResolvedValue({
       status: "passed",
       verdict: "accepted",
       summary: "Automated checks passed.",
@@ -104,7 +104,7 @@ test(
       },
     })
     spyOn(OrchestratorGit, "complete").mockImplementation(async (task) => ({ task }))
-    spyOn(EvaluatorService, "analyzeDelivery").mockRejectedValue(new Error("ProviderModelNotFoundError"))
+    spyOn(CheckRunner, "analyzeDelivery").mockRejectedValue(new Error("ProviderModelNotFoundError"))
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),

@@ -4,7 +4,7 @@ import path from "path"
 import { Glob } from "../../src/util/glob"
 import { DeliveryService } from "../../src/orchestrator/delivery"
 import { OrchestratorService } from "../../src/orchestrator/service"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
@@ -102,7 +102,7 @@ function stubPipeline() {
       },
     ],
   })
-  spyOn(EvaluatorService, "evaluate").mockResolvedValue({
+  spyOn(CheckRunner, "evaluate").mockResolvedValue({
     status: "passed",
     verdict: "accepted",
     summary: "All checks passed.",
@@ -117,7 +117,7 @@ function stubPipeline() {
     ],
     artifacts: [],
   } as any)
-  spyOn(EvaluatorService, "analyzeDelivery").mockResolvedValue({
+  spyOn(CheckRunner, "analyzeDelivery").mockResolvedValue({
     verdict: "accepted",
     classification: "unknown",
     summary: "Delivery accepted.",

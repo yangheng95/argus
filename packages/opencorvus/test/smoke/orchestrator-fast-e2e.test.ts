@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
-import { EvaluatorService } from "../../src/evaluator/service"
+import { CheckRunner } from "../../src/evaluator/service"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { DeliveryService } from "../../src/orchestrator/delivery"
@@ -88,7 +88,7 @@ function stubPlanner() {
 }
 
 function stubEvaluation() {
-  spyOn(EvaluatorService, "evaluate").mockImplementation(async (_task, delivery) => {
+  spyOn(CheckRunner, "evaluate").mockImplementation(async (_task, delivery) => {
     if (!delivery.changedFiles?.length) {
       return {
         status: "failed",
@@ -96,7 +96,7 @@ function stubEvaluation() {
         summary: "No file changes were detected.",
         checks: [],
         artifacts: [],
-      } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+      } as Awaited<ReturnType<typeof CheckRunner.evaluate>>
     }
     return {
       status: "passed",
@@ -107,10 +107,10 @@ function stubEvaluation() {
         { name: "test", status: "passed", evidence: "test ok" },
       ],
       artifacts: [],
-    } as Awaited<ReturnType<typeof EvaluatorService.evaluate>>
+    } as Awaited<ReturnType<typeof CheckRunner.evaluate>>
   })
 
-  spyOn(EvaluatorService, "analyzeDelivery").mockImplementation(async (input) => {
+  spyOn(CheckRunner, "analyzeDelivery").mockImplementation(async (input) => {
     if (input.delivery.changedFiles.length === 0) {
       return {
         verdict: "rejected",

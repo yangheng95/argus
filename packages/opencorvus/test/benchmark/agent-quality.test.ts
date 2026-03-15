@@ -4,9 +4,9 @@
  * Architecture overview:
  *   - **PlannerAgent**: Independent LLM agent (30 steps, 5min timeout) with codebase exploration tools.
  *     Receives task request → explores codebase → produces structured plan (PRD, goals, subtasks, risks).
- *   - **EvaluatorAgent**: Independent LLM agent (15 steps, 3min timeout) with investigation tools.
+ *   - **GoalJudge**: Independent LLM agent (15 steps, 3min timeout) with investigation tools.
  *     Receives check results + delivery → investigates failures → produces verdict + per-goal assessment + replan guidance.
- *   - **Goal evaluation**: Two-layer — (1) automated checks (build/test/lint exit codes), (2) EvaluatorAgent LLM assessment.
+ *   - **Goal evaluation**: Two-layer — (1) automated checks (build/test/lint exit codes), (2) GoalJudge LLM assessment.
  *
  * Quality dimensions measured:
  *   Planner:
@@ -31,7 +31,7 @@
 import { describe, test, expect } from "bun:test"
 import { generateText, stepCountIs } from "ai"
 import { PlannerOutput, type PlannerOutputType } from "@/planner/agent"
-import { EvaluatorAnalysis, type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { GoalJudgment, type GoalJudgmentType } from "@/evaluator/agent"
 import { createCodebaseTools } from "@/orchestrator/codebase-tools"
 import { Provider } from "@/provider/provider"
 import { Instance } from "@/project/instance"
@@ -98,7 +98,7 @@ Respond with ONLY a JSON object (no markdown fences):
   "prd": "Expanded PRD with file paths and conventions from exploration...",
   "summary": "One-line summary",
   "goals": [{ "description": "...", "criteria": "...", "priority": "blocking", "check_selector": ["build","test"] }],
-  "milestones": [{ "title": "...", "description": "...", "goal_indices": [0] }],
+  "waves": [{ "title": "...", "objective": "...", "goal_indices": [0], "owned_paths": ["src/app.tsx"] }],
   "subtasks": [{ "title": "...", "description": "...", "order": 1 }],
   "risks": ["..."],
   "assumptions": [{ "question": "...", "assumption": "..." }],
@@ -114,7 +114,7 @@ Rules:
 - Write in the same language as the request
 - After finishing tool calls, STOP and output JSON immediately`
 
-const EVALUATOR_SYSTEM = `You are a senior code reviewer and QA engineer. Analyze the results of a coding task.
+const GOAL_JUDGE_SYSTEM = `You are a senior code reviewer and QA engineer. Analyze the results of a coding task.
 
 ## Available Tools
 - **read_file**: Read file contents with line numbers
@@ -382,11 +382,11 @@ describe.skipIf(!HAS_LLM)("Planner Agent Quality", () => {
       `${plan.risks.length} risks`,
     ))
 
-    // P7: Milestones for complex tasks
+    // P7: Waves for complex tasks
     scores.push(score(
-      "P7: Has milestones",
-      (plan.milestones?.length ?? 0) > 0,
-      `${plan.milestones?.length ?? 0} milestones`,
+      "P7: Has waves",
+      (plan.waves?.length ?? 0) > 0,
+      `${plan.waves?.length ?? 0} waves`,
     ))
 
     printScorecard("B2: Planner — Complex Task", scores)
@@ -530,7 +530,7 @@ describe.skipIf(!HAS_LLM)("Evaluator Agent Quality", () => {
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: EVALUATOR_SYSTEM,
+      system: GOAL_JUDGE_SYSTEM,
       prompt: `# Task
 
 Title: Add GET /health endpoint
@@ -574,7 +574,7 @@ Changed files (2):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, EvaluatorAnalysis)
+    const analysis = extractJSON(result, GoalJudgment)
 
     const scores: Score[] = []
 
@@ -614,7 +614,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
       stopWhen: stepCountIs(10),
       tools: { read_file: tools.read_file, search_code: tools.search_code },
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: EVALUATOR_SYSTEM,
+      system: GOAL_JUDGE_SYSTEM,
       prompt: `# Task
 
 Title: 实现用户列表 API
@@ -662,7 +662,7 @@ Changed files (2):
 Analyze the results. Investigate the failure using tools. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, EvaluatorAnalysis)
+    const analysis = extractJSON(result, GoalJudgment)
 
     const scores: Score[] = []
 
@@ -717,7 +717,7 @@ Analyze the results. Investigate the failure using tools. Then produce your anal
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: EVALUATOR_SYSTEM,
+      system: GOAL_JUDGE_SYSTEM,
       prompt: `# Task
 
 Title: Add REST API with Hono
@@ -754,7 +754,7 @@ Changed files (1):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, EvaluatorAnalysis)
+    const analysis = extractJSON(result, GoalJudgment)
 
     const scores: Score[] = []
 
@@ -795,7 +795,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: EVALUATOR_SYSTEM,
+      system: GOAL_JUDGE_SYSTEM,
       prompt: `# Task
 
 Title: Add cache expiry
@@ -841,7 +841,7 @@ Changed files (2):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, EvaluatorAnalysis)
+    const analysis = extractJSON(result, GoalJudgment)
 
     const scores: Score[] = []
 
@@ -880,7 +880,7 @@ Analyze the results. Then produce your analysis as a JSON object.`,
       model,
       stopWhen: stepCountIs(5),
       abortSignal: AbortSignal.timeout(TIMEOUT),
-      system: EVALUATOR_SYSTEM,
+      system: GOAL_JUDGE_SYSTEM,
       prompt: `# Task
 
 Title: Dashboard with charts and export
@@ -939,7 +939,7 @@ Changed files (4):
 Analyze the results. Then produce your analysis as a JSON object.`,
     })
 
-    const analysis = extractJSON(result, EvaluatorAnalysis)
+    const analysis = extractJSON(result, GoalJudgment)
 
     const scores: Score[] = []
 

@@ -879,9 +879,7 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
-      case e instanceof Error:
-        return new NamedError.Unknown({ message: e.toString() }, { cause: e }).toObject()
-      default:
+      case !!ProviderError.parseStreamError(e):
         try {
           const parsed = ProviderError.parseStreamError(e)
           if (parsed) {
@@ -908,6 +906,9 @@ export namespace MessageV2 {
         } catch {
           // Stream error parsing itself failed; fall through to generic Unknown error
         }
+      case e instanceof Error:
+        return new NamedError.Unknown({ message: e.toString() }, { cause: e }).toObject()
+      default:
         return new NamedError.Unknown({ message: JSON.stringify(e) }, { cause: e }).toObject()
     }
   }

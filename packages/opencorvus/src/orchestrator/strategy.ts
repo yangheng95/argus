@@ -1,4 +1,4 @@
-import { type EvaluatorAnalysisType } from "@/evaluator/agent"
+import { type GoalJudgmentType } from "@/evaluator/agent"
 import { Log } from "@/util/log"
 import {
   DEFAULT_MAX_REPLANS,
@@ -30,7 +30,7 @@ export type RetryDecision = {
 export type ReplanDecision = {
   action: "replan"
   summary: string
-  analysis?: EvaluatorAnalysisType
+  analysis?: GoalJudgmentType
 }
 
 export type FailDecision = {
@@ -45,7 +45,7 @@ export function decideRetryOrReplan(
   task: TaskRow,
   run: RunRow,
   summary: string,
-  analysis?: EvaluatorAnalysisType,
+  analysis?: GoalJudgmentType,
   retryContext?: RetryContext,
 ): StrategyDecision {
   const ctx = retryContext ?? {}
@@ -113,7 +113,7 @@ export function decideRetryOrReplan(
 export function buildRetryContext(
   run: RunRow,
   summary: string,
-  analysis?: EvaluatorAnalysisType,
+  analysis?: GoalJudgmentType,
 ): RetryContext {
   const goalRun = latestGoalRunByCoordinator(run.id)
   const runDelivery = findDeliveryByRun(run.id)

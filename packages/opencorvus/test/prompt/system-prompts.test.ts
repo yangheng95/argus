@@ -3,8 +3,8 @@ import { tmpdir } from "../fixture/fixture"
 import { Instance } from "../../src/project/instance"
 import { SystemPrompt } from "../../src/session/system"
 import { plannerSystem } from "../../src/planner/agent"
-import { specSystem } from "../../src/spec/agent"
-import { evaluatorSystem } from "../../src/evaluator/agent"
+import { SPEC_SYSTEM, specSystem } from "../../src/spec/agent"
+import { goalJudgeSystem } from "../../src/evaluator/agent"
 import { Agent } from "../../src/agent/agent"
 
 test("system prompt overrides resolve from config", async () => {
@@ -28,7 +28,13 @@ test("system prompt overrides resolve from config", async () => {
       expect(await Agent.generatePrompt()).toBe("Custom generator prompt")
       expect(await plannerSystem()).toBe("Custom planner prompt")
       expect(await specSystem()).toBe("Custom spec prompt")
-      expect(await evaluatorSystem()).toBe("Custom evaluator prompt")
+      expect(await goalJudgeSystem()).toBe("Custom evaluator prompt")
     },
   })
+})
+
+test("default spec system prompt requires execution-sized goals", () => {
+  expect(SPEC_SYSTEM).toContain("execution-sized")
+  expect(SPEC_SYSTEM).toContain("Build the complete app architecture")
+  expect(SPEC_SYSTEM).toContain("For non-trivial tasks, usually produce 3-8 execution-sized goals")
 })
