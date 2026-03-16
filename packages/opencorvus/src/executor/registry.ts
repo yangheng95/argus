@@ -1,7 +1,7 @@
 import { OpencodeExecutor } from "./opencode"
 import { ManagedCodingExecutor } from "./managed"
-import type { CodingProvider, CodingToolInfo, ExecutorAdapter, ExecutorNameInfo } from "./compat"
-import { ExecutorNotConfiguredError } from "./compat"
+import type { CodingProvider, CodingToolInfo, ExecutorAdapter, ExecutorNameInfo } from "./contracts"
+import { ExecutorNotConfiguredError } from "./contracts"
 
 const base = () =>
   new Map<ExecutorNameInfo, ExecutorAdapter>([

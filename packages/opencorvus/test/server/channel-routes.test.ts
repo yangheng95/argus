@@ -7,11 +7,13 @@ import { parseSSE } from "../../src/control-plane/sse"
 import { Config } from "../../src/config/config"
 import { Database, eq } from "../../src/storage/db"
 import { Identifier } from "../../src/id/id"
-import { type ExecutorAdapter } from "../../src/executor/compat"
+import { type ExecutorAdapter } from "../../src/executor/contracts"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import * as GuiScreenshot from "../../src/gui/screenshot"
 import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
+import { OrchestratorProtocol } from "../../src/orchestrator/protocol"
+import { ProtocolStore } from "../../src/protocol/store"
 import {
   OrchestratorChannelBindingTable,
   OrchestratorInteractionRequestTable,
@@ -309,8 +311,12 @@ describe("channel routes", () => {
       fn: async () => {
         const app = Server.App()
         const seen: string[] = []
-        const unsub = Bus.subscribe(OrchestratorEvent.TaskMessageRecorded, (event) => {
-          seen.push(event.properties.source)
+        const unsub = ProtocolStore.subscribeEvents((event) => {
+          if (event.type !== OrchestratorEvent.TaskMessageRecorded.type) return
+          const source = typeof event.payload?.source === "string" ? event.payload.source : undefined
+          if (source) seen.push(source)
+        }, {
+          types: [OrchestratorEvent.TaskMessageRecorded.type],
         })
 
         try {
@@ -890,6 +896,13 @@ describe("channel routes", () => {
 
         const seen: unknown[] = []
         try {
+          setTimeout(() => {
+            void OrchestratorProtocol.emit(OrchestratorEvent.TaskUpdated, {
+              taskID,
+              status: "running",
+              summary: "Task event mirrored to channel",
+            }, { source: "test.channel.route" })
+          }, 25)
           await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
               reject(new Error("timed out waiting for channel event"))
@@ -898,17 +911,6 @@ describe("channel routes", () => {
             void parseSSE(response.body!, stop.signal, (item) => {
               seen.push(item)
               const next = item as { type?: string; event?: { type?: string } }
-              if (next.type === "channel_event" && next.event?.type === "channel.connected") {
-                void Bus.publish(OrchestratorEvent.TaskUpdated, {
-                  taskID,
-                  status: "running",
-                  summary: "Task event mirrored to channel",
-                }).catch((error) => {
-                  clearTimeout(timeout)
-                  reject(error)
-                })
-                return
-              }
               if (next.type !== "channel_event") return
               if (next.event?.type !== "task.updated") return
               clearTimeout(timeout)

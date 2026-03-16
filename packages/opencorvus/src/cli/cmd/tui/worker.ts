@@ -9,9 +9,9 @@ import { Config } from "@/config/config"
 import { GlobalBus } from "@/bus/global"
 import { createOpenCorvusClient, type Event } from "@opencorvus-ai/sdk/v2"
 import { IN_PROCESS_BASE_URL, createInProcessFetch, fetchInProcessServer } from "@/server/in-process-client"
-import { installRuntimeShims } from "@/runtime/shims"
+import { installProcessBootstrap } from "@/runtime/bootstrap"
 
-installRuntimeShims()
+installProcessBootstrap()
 
 await Log.init({
   print: process.argv.includes("--print-logs"),

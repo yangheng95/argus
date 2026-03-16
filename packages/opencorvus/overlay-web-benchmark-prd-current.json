@@ -1,133 +1,216 @@
 {
-  "generated_at": "2026-03-16T15:21:56.953Z",
+  "generated_at": "2026-03-16T16:43:18.349Z",
+  "mode": "materialize",
+  "title": "prd",
+  "request_file": "D:\\myhexin-local\\argus-opencode\\specs\\prd.txt",
   "executor": "opencode",
   "model": "alibaba-coding-plan-cn/qwen3.5-plus",
-  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Mk3w7d",
-  "server": "http://127.0.0.1:7878/",
-  "taskID": "tsk_cf730d7630012MNP8zxp0Msthp",
-  "error": "Error: Task stalled: no event/progress change for 300000ms or no activity log output for 300000ms (last progress: {\"task\":\"running\",\"run\":\"running\",\"phase\":\"dispatch\",\"verdict\":\"\",\"delivery\":\"\",\"goals\":[\"gol_cf733b89c002ggYERVGTEx1FBr:running:\"],\"pending\":[]}, activity log age: 301241ms, last log age: 10096ms)",
+  "stage_timeout_ms": {
+    "spec": 5760000,
+    "planner": 6480000,
+    "tool": 2160000,
+    "standby": 14400000,
+    "stall": 2880000
+  },
   "stage_max_steps": {
     "spec": 80,
     "planner": 96
   },
-  "stall_timeout_ms": 300000,
-  "timings_ms": {
-    "online": 373,
-    "submit": 4015,
-    "planning_visible": 194326,
-    "streaming_visible": 198526,
-    "task_created": 194333,
-    "task_selected": 194621,
-    "board_loaded": 194625,
-    "resumed": 202763,
-    "completed": null,
-    "execution": null
-  },
-  "overlay": {
-    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Mk3w7d",
-    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Mk3w7d",
-    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Mk3w7d",
-    "selectedTaskID": "tsk_cf730d7630012MNP8zxp0Msthp",
+  "stall_timeout_ms": 2880000,
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+  "server": "http://127.0.0.1:7878/",
+  "taskID": "tsk_cf785d5af0015kUiG5VsQHWTyf",
+  "taskStatus": "running",
+  "changedFiles": [],
+  "transcriptCount": 0,
+  "timelineCount": 0,
+  "runCount": 1,
+  "planning": {
     "pendingCount": 0,
-    "taskIDs": [
-      "tsk_cf730d7630012MNP8zxp0Msthp"
-    ],
-    "taskList": "进行中\n    \n    \n      \n        \n        prd\n      \n      运行中\n      23:11:29 / .../Local/Temp/opencorvus-overlay-benchmark-project-Mk3w7d",
+    "taskList": "还没有任务",
     "reasoning": "",
-    "assistantText": "Part updated: tool",
-    "storage": {
-      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Mk3w7d",
-      "directoryMode": "",
-      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Mk3w7d",
-      "workspaceTaskID": "tsk_cf730d7630012MNP8zxp0Msthp"
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "Part updated: step-startPart updated: reas",
+    "reasoningVisible": false,
+    "assistantVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_cf785d5af0015kUiG5VsQHWTyf",
+    "boardStatus": "running",
+    "specVersion": 1,
+    "goalCount": 10,
+    "goalRunCount": 1,
+    "criteriaCount": 0
+  },
+  "screenshot": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1773679397874.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 132823
+  },
+  "timings_ms": {
+    "online": 299,
+    "submit": 3885,
+    "planning_visible": 125843,
+    "streaming_visible": 128627,
+    "task_created": 125849,
+    "task_selected": 126074,
+    "board_loaded": 126078,
+    "resumed": 132823,
+    "completed": 132851,
+    "execution": 128966
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_cf785d5af0015kUiG5VsQHWTyf"
+        ],
+        "taskList": "还没有任务",
+        "reasoning": "",
+        "assistantText": "",
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+        "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+        "selectedTaskID": "tsk_cf785d5af0015kUiG5VsQHWTyf",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_cf785d5af0015kUiG5VsQHWTyf"
+        ],
+        "taskList": "进行中\n    \n    \n      \n        \n        prd\n      \n      运行中\n      00:43:10 / .../Local/Temp/opencorvus-overlay-benchmark-project-Hk2fct",
+        "reasoning": "",
+        "assistantText": "Part updated: step-startPart updated: reas",
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+          "directoryMode": "",
+          "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Hk2fct",
+          "workspaceTaskID": "tsk_cf785d5af0015kUiG5VsQHWTyf"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_cf785d5af0015kUiG5VsQHWTyf",
+        "boardTaskID": "tsk_cf785d5af0015kUiG5VsQHWTyf",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": null,
+      "sample": null
     }
+  },
+  "local_verify": {
+    "mode": "skipped",
+    "command": null,
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": ""
   },
   "diagnostics": {
     "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-prd-current.events.json",
-    "event_count": 4057,
+    "event_count": 2217,
     "stage_summary": {
       "types": {
         "orchestrator.task.created": 1,
-        "orchestrator.agent.updated": 2636,
+        "orchestrator.agent.updated": 2168,
         "orchestrator.task.updated": 2,
         "orchestrator.spec.created": 1,
         "orchestrator.plan.created": 1,
         "orchestrator.plan.activated": 1,
         "orchestrator.run.created": 1,
         "orchestrator.run.updated": 2,
-        "orchestrator.run.progress": 273,
-        "orchestrator.run.output": 1139
+        "orchestrator.run.progress": 28,
+        "orchestrator.run.output": 12
       },
       "stages": {
         "spec": {
-          "event_count": 939,
-          "first_event_ms": 4503,
-          "first_message_ms": 37672,
-          "first_tool_call_ms": 8941,
-          "first_tool_result_ms": 9454,
+          "event_count": 968,
+          "first_event_ms": 4310,
+          "first_message_ms": 28763,
+          "first_tool_call_ms": 9042,
+          "first_tool_result_ms": 9268,
           "submit_tool_ms": null,
           "error_ms": null,
-          "last_event_ms": 74976,
+          "last_event_ms": 65714,
           "kind_counts": {
             "status": 2,
-            "tool_call": 40,
-            "tool_delta": 104,
-            "tool_result": 20,
-            "message_delta": 773
+            "tool_call": 28,
+            "tool_delta": 69,
+            "tool_result": 14,
+            "message_delta": 855
           },
           "tool_calls": {
-            "memory_search": 6,
-            "list_directory": 10,
+            "list_directory": 6,
             "preference_list": 2,
-            "read_file": 14,
-            "find_files": 6,
+            "memory_search": 4,
+            "read_file": 12,
+            "find_files": 2,
             "search_code": 2
           }
         },
         "planner": {
-          "event_count": 1697,
-          "first_event_ms": 74977,
-          "first_message_ms": 116088,
-          "first_tool_call_ms": 79786,
-          "first_tool_result_ms": 79951,
+          "event_count": 1200,
+          "first_event_ms": 65716,
+          "first_message_ms": 77845,
+          "first_tool_call_ms": 68178,
+          "first_tool_result_ms": 68368,
           "submit_tool_ms": null,
           "error_ms": null,
-          "last_event_ms": 193216,
+          "last_event_ms": 124725,
           "kind_counts": {
             "status": 2,
-            "tool_call": 24,
-            "tool_delta": 70,
-            "tool_result": 12,
-            "message_delta": 1589
+            "tool_call": 18,
+            "tool_delta": 38,
+            "tool_result": 9,
+            "message_delta": 1133
           },
           "tool_calls": {
-            "list_directory": 4,
+            "list_directory": 6,
             "read_file": 8,
             "find_files": 2,
-            "search_code": 2,
-            "web_search": 8
+            "search_code": 2
           }
         },
         "execution": {
-          "event_count": 1412,
-          "first_event_ms": 194249,
-          "first_progress_ms": 194249,
-          "first_output_ms": 198444,
-          "last_event_ms": 521033,
+          "event_count": 40,
+          "first_event_ms": 125757,
+          "first_progress_ms": 125757,
+          "first_output_ms": 128595,
+          "last_event_ms": 131269,
           "types": {
-            "orchestrator.run.progress": 273,
-            "orchestrator.run.output": 1139
+            "orchestrator.run.progress": 28,
+            "orchestrator.run.output": 12
           },
           "progress_types": {
-            "message.part.updated": 168,
-            "message.updated": 59,
-            "session.status": 30,
-            "session.diff": 15,
-            "text_delta": 1139,
-            "todo.updated": 1
+            "message.part.updated": 15,
+            "message.updated": 7,
+            "session.status": 4,
+            "session.diff": 2,
+            "text_delta": 12
           },
           "goal_runs": [
-            "grn_cf733bc7f001AmpGTGoob4TvDN"
+            "grn_cf787affd001V4J2d9BP2ep8j3"
           ]
         }
       }

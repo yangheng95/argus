@@ -17,8 +17,8 @@ import {
 import { ChannelRegistry } from "@/channel/registry"
 import { ChannelSupervisor } from "@/channel/supervisor"
 import { ChannelAttachment } from "@/channel/attachment"
-import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
-import { Database, eq } from "@/storage/db"
+import { ProtocolStore } from "@/protocol/store"
+import { taskSession, matchesTaskEvent } from "./task-event"
 import { lazy } from "../../util/lazy"
 import { errors } from "../error"
 import z from "zod"
@@ -159,15 +159,6 @@ export const ChannelRoutes = lazy(() =>
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          await stream.writeSSE({
-            data: JSON.stringify(ChannelProtocol.event(input, event(binding?.task_id, {
-              type: "channel.connected",
-              properties: {
-                ...(binding?.task_id ? { taskID: binding.task_id } : {}),
-                summary: "Channel thread event stream connected",
-              },
-            }))),
-          })
           if (!binding) {
             await stream.writeSSE({
               data: JSON.stringify(ChannelProtocol.event(input, event(undefined, {
@@ -180,8 +171,14 @@ export const ChannelRoutes = lazy(() =>
             return
           }
           const sessionID = taskSession(binding.task_id)
+          const stopProtocol = ProtocolStore.subscribeEvents(async (item) => {
+            await stream.writeSSE({
+              data: JSON.stringify(ChannelProtocol.event(input, protocolEvent(item))),
+            })
+          }, { taskID: binding.task_id })
           const unsub = Bus.subscribeAll(async (item) => {
             if (!matchesTaskEvent(item, binding.task_id, sessionID)) return
+            if (item.type.startsWith("orchestrator.")) return
             await stream.writeSSE({
               data: JSON.stringify(ChannelProtocol.event(input, event(binding.task_id, item))),
             })
@@ -200,6 +197,7 @@ export const ChannelRoutes = lazy(() =>
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
               clearInterval(heartbeat)
+              stopProtocol()
               unsub()
               resolve()
             })
@@ -341,36 +339,22 @@ function event(taskID: string | undefined, input: { type: string; properties: Re
   }
 }
 
-function taskSession(taskID: string) {
-  const row = Database.use((db) =>
-    db
-      .select({ sessionID: OrchestratorTaskTable.session_id })
-      .from(OrchestratorTaskTable)
-      .where(eq(OrchestratorTaskTable.id, taskID))
-      .get(),
-  )
-  return row?.sessionID ?? undefined
-}
-
-function matchesTaskEvent(
-  input: { type: string; properties: Record<string, unknown> },
-  taskID: string,
-  sessionID?: string,
-) {
-  if (input.properties?.taskID === taskID) return true
-  if (!sessionID) return false
-  return eventSession(input.properties) === sessionID
-}
-
-function eventSession(properties: Record<string, unknown>) {
-  if (typeof properties.sessionID === "string") return properties.sessionID
-  const info = properties.info
-  if (info && typeof info === "object" && "sessionID" in info && typeof info.sessionID === "string") {
-    return info.sessionID
+function protocolEvent(input: {
+  id: string
+  taskID?: string
+  runID?: string
+  type: string
+  summary: string
+  payload?: Record<string, unknown>
+  time: { emitted: number }
+}) {
+  return {
+    event_id: input.id,
+    task_id: input.taskID,
+    run_id: input.runID,
+    type: input.type.replace("orchestrator.", ""),
+    timestamp: input.time.emitted,
+    summary: input.summary,
+    payload: input.payload ?? {},
   }
-  const part = properties.part
-  if (part && typeof part === "object" && "sessionID" in part && typeof part.sessionID === "string") {
-    return part.sessionID
-  }
-  return undefined
 }

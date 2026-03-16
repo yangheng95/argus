@@ -1,5 +1,5 @@
 import z from "zod"
-import { ExecutorName } from "../compat"
+import { ExecutorName } from "../contracts"
 
 export const ProtocolTransportKind = z.enum(["inproc", "stdio", "ws", "http"])
 export type ProtocolTransportKindInfo = z.infer<typeof ProtocolTransportKind>

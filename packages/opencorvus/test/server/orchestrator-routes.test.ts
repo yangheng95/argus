@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { Bus } from "../../src/bus"
 import { parseSSE } from "../../src/control-plane/sse"
 import { Database, eq } from "../../src/storage/db"
-import { type ExecutorAdapter } from "../../src/executor/compat"
+import { type ExecutorAdapter } from "../../src/executor/contracts"
 import { CheckRunner } from "../../src/evaluator/service"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
 import { OrchestratorGoalRunTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
+import { OrchestratorProtocol } from "../../src/orchestrator/protocol"
 import { PlannerFailureError } from "../../src/orchestrator/service"
 import { Preference } from "../../src/preference"
 import { Instance } from "../../src/project/instance"
@@ -721,6 +722,15 @@ describe("orchestrator routes", () => {
 
         const seen: unknown[] = []
         try {
+          setTimeout(() => {
+            void Bus.publish(MessageV2.Event.PartDelta, {
+              sessionID: task!.session_id!,
+              messageID: "msg_1",
+              partID: "part_1",
+              field: "text",
+              delta: "Hello from task session",
+            })
+          }, 25)
           await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
               reject(new Error("timed out waiting for task session event"))
@@ -729,19 +739,6 @@ describe("orchestrator routes", () => {
             void parseSSE(response.body!, stop.signal, (event) => {
               seen.push(event)
               const next = event as { type?: string }
-              if (next.type === "task.connected") {
-                void Bus.publish(MessageV2.Event.PartDelta, {
-                  sessionID: task!.session_id!,
-                  messageID: "msg_1",
-                  partID: "part_1",
-                  field: "text",
-                  delta: "Hello from task session",
-                }).catch((error) => {
-                  clearTimeout(timeout)
-                  reject(error)
-                })
-                return
-              }
               if (next.type !== "message.part.delta") return
               clearTimeout(timeout)
               resolve()
@@ -805,6 +802,16 @@ describe("orchestrator routes", () => {
 
         const seen: unknown[] = []
         try {
+          setTimeout(() => {
+            void OrchestratorProtocol.emit(OrchestratorEvent.AgentUpdated, {
+              taskID: task_id,
+              stage: "planner",
+              kind: "message_delta",
+              id: "planner-live",
+              text: "Build homepage",
+              summary: "Build homepage",
+            }, { source: "test.agent.updated" })
+          }, 25)
           await new Promise<void>((resolve, reject) => {
             const timeout = setTimeout(() => {
               reject(new Error("timed out waiting for agent task event"))
@@ -813,20 +820,6 @@ describe("orchestrator routes", () => {
             void parseSSE(response.body!, stop.signal, (event) => {
               seen.push(event)
               const next = event as { type?: string }
-              if (next.type === "task.connected") {
-                void Bus.publish(OrchestratorEvent.AgentUpdated, {
-                  taskID: task_id,
-                  stage: "planner",
-                  kind: "message_delta",
-                  id: "planner-live",
-                  text: "Build homepage",
-                  summary: "Build homepage",
-                }).catch((error) => {
-                  clearTimeout(timeout)
-                  reject(error)
-                })
-                return
-              }
               if (next.type !== "agent.updated") return
               clearTimeout(timeout)
               resolve()

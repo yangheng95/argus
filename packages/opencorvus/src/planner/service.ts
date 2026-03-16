@@ -1,7 +1,7 @@
 import z from "zod"
 import fs from "fs"
 import path from "path"
-import { type ExecutorNameInfo } from "@/executor/compat"
+import { type ExecutorNameInfo } from "@/executor/contracts"
 import { GoalInput, type EvaluationProvider, type PlanningProvider, type StageRouting } from "@/orchestrator/model"
 import { suppressClarifications, unattendedProject } from "@/orchestrator/unattended"
 import { Log } from "@/util/log"

@@ -1,17 +1,11 @@
 import z from "zod"
 import { BusEvent } from "@/bus/bus-event"
-import { ExecutorName } from "@/executor/compat"
+import { ExecutorName } from "@/executor/contracts"
 import { ProtocolCapabilities, ProtocolRefs, ProtocolSettings } from "@/executor/protocol"
 import { Identifier } from "@/id/id"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { Snapshot } from "@/snapshot"
-
-/** Task statuses that indicate a terminal or notable state change worth mirroring to channels. */
-export const TASK_TERMINAL_STATUSES = ["blocked", "completed", "failed", "cancelled"] as const
-
-/** Run statuses that indicate a terminal or notable state change worth mirroring to channels. */
-export const RUN_TERMINAL_STATUSES = ["blocked", "failed", "completed", "aborted"] as const
 
 export const Budget = z.object({
   maxRuns: z.number().int().positive().optional(),
@@ -719,14 +713,30 @@ export const GlobalTaskBoard = z.object({
   tasks: ProjectTaskSummary.array(),
 })
 
-export const TaskEvent = z.object({
-  event_id: z.string(),
-  task_id: Identifier.schema("task"),
-  run_id: Identifier.schema("run").optional(),
+export const ProtocolMessageKind = z.enum(["event", "command", "reply"])
+
+export const ProtocolMessage = z.object({
+  id: Identifier.schema("protocol_event"),
+  taskID: Identifier.schema("task"),
+  runID: Identifier.schema("run").optional(),
+  goalRunID: Identifier.schema("goal_run").optional(),
+  sessionID: Identifier.schema("session").optional(),
+  interactionID: Identifier.schema("interaction").optional(),
+  executorSessionID: z.string().optional(),
+  kind: ProtocolMessageKind,
   type: z.string(),
-  timestamp: z.number(),
+  source: z.string(),
+  target: z.string().optional(),
+  correlationID: z.string().optional(),
+  causationID: z.string().optional(),
+  sequence: z.number().int(),
   summary: z.string(),
-  payload: z.record(z.string(), z.any()),
+  payload: z.record(z.string(), z.unknown()).optional(),
+  time: z.object({
+    emitted: z.number(),
+    created: z.number(),
+    updated: z.number(),
+  }),
 })
 
 export const AgentStage = z.enum(["spec", "planner", "judge"])
@@ -738,8 +748,6 @@ export const Event = {
   TaskCreated: BusEvent.define("orchestrator.task.created", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   TaskUpdated: BusEvent.define("orchestrator.task.updated", z.object({ taskID: Identifier.schema("task"), status: Task.shape.status, summary: z.string() })),
   SpecCreated: BusEvent.define("orchestrator.spec.created", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
-  SpecUpdated: BusEvent.define("orchestrator.spec.updated", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), status: z.string(), summary: z.string() })),
-  SpecApproved: BusEvent.define("orchestrator.spec.approved", z.object({ taskID: Identifier.schema("task"), specID: Identifier.schema("spec"), summary: z.string() })),
   PlanCreated: BusEvent.define("orchestrator.plan.created", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   PlanActivated: BusEvent.define("orchestrator.plan.activated", z.object({ taskID: Identifier.schema("task"), planID: Identifier.schema("plan"), summary: z.string() })),
   GoalPassed: BusEvent.define("orchestrator.goal.passed", z.object({ taskID: Identifier.schema("task"), goalID: Identifier.schema("goal"), summary: z.string() })),

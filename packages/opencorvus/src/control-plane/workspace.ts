@@ -8,7 +8,7 @@ import { GlobalBus } from "@/bus/global"
 import { Log } from "@/util/log"
 import { WorkspaceTable } from "./workspace.sql"
 import { Config } from "./config"
-import { getAdaptor } from "./adaptors"
+import { getAdapter } from "./adapters"
 import { parseSSE } from "./sse"
 
 export namespace Workspace {
@@ -58,7 +58,7 @@ export namespace Workspace {
     async (input) => {
       const id = Identifier.ascending("workspace", input.id)
 
-      const { config, init } = await getAdaptor(input.config).create(input.config, input.branch)
+      const { config, init } = await getAdapter(input.config).create(input.config, input.branch)
 
       const info: Info = {
         id,
@@ -109,7 +109,7 @@ export namespace Workspace {
     const row = Database.use((db) => db.select().from(WorkspaceTable).where(eq(WorkspaceTable.id, id)).get())
     if (row) {
       const info = fromRow(row)
-      await getAdaptor(info.config).remove(info.config)
+      await getAdapter(info.config).remove(info.config)
       Database.use((db) => db.delete(WorkspaceTable).where(eq(WorkspaceTable.id, id)).run())
       return info
     }
@@ -118,7 +118,7 @@ export namespace Workspace {
 
   async function workspaceEventLoop(space: Info, stop: AbortSignal) {
     while (!stop.aborted) {
-      const res = await getAdaptor(space.config)
+      const res = await getAdapter(space.config)
         .request(space.config, "GET", "/event", undefined, stop)
         .catch((err) => {
           log.warn("workspace event request failed", { workspaceID: space.id, error: String(err) })

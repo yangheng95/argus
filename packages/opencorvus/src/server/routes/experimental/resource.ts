@@ -1,9 +1,9 @@
 import { Hono } from "hono"
 import { describeRoute, resolver } from "hono-openapi"
 import z from "zod"
-import { MCP } from "../../mcp"
+import { MCP } from "../../../mcp"
 
-export function ExperimentalResourceRoutes() {
+export function ResourceRoutes() {
   return new Hono()
     .get(
       "/resource",

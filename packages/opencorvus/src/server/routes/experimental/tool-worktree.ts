@@ -1,15 +1,15 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { ToolRegistry } from "../../tool/registry"
-import { Worktree } from "../../worktree"
-import { Instance } from "../../project/instance"
-import { Project } from "../../project/project"
+import { ToolRegistry } from "../../../tool/registry"
+import { Worktree } from "../../../worktree"
+import { Instance } from "../../../project/instance"
+import { Project } from "../../../project/project"
 import { zodToJsonSchema } from "zod-to-json-schema"
-import { errors } from "../error"
-import { WorkspaceRoutes } from "./workspace"
+import { errors } from "../../error"
+import { WorkspaceRoutes } from "../workspace"
 
-export function ExperimentalToolWorktreeRoutes() {
+export function ToolWorktreeRoutes() {
   return new Hono()
     .get(
       "/tool/ids",

@@ -681,6 +681,88 @@ CREATE INDEX IF NOT EXISTS orchestrator_executor_event_goal_run_idx ON orchestra
 CREATE INDEX IF NOT EXISTS orchestrator_executor_event_task_idx ON orchestrator_executor_event (task_id, sequence);
 CREATE INDEX IF NOT EXISTS orchestrator_executor_event_kind_idx ON orchestrator_executor_event (kind);
 
+-- ===== protocol_v2 =====
+
+CREATE TABLE IF NOT EXISTS protocol_event (
+  id             text PRIMARY KEY,
+  kind           text NOT NULL,
+  type           text NOT NULL,
+  aggregate_type text NOT NULL,
+  aggregate_id   text NOT NULL,
+  task_id        text,
+  run_id         text,
+  goal_run_id    text,
+  session_id     text,
+  interaction_id text,
+  stream_id      text,
+  source         text NOT NULL,
+  target         text,
+  causation_id   text,
+  correlation_id text,
+  reply_to       text,
+  seq            integer NOT NULL,
+  deadline_ms    integer,
+  emitted_at     integer NOT NULL,
+  payload        text,
+  time_created   integer NOT NULL,
+  time_updated   integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
+  FOREIGN KEY (run_id) REFERENCES orchestrator_run(id) ON DELETE SET NULL,
+  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
+  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL,
+  FOREIGN KEY (interaction_id) REFERENCES orchestrator_interaction_request(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS protocol_event_aggregate_seq_idx ON protocol_event (aggregate_type, aggregate_id, seq);
+CREATE INDEX IF NOT EXISTS protocol_event_task_idx ON protocol_event (task_id, seq);
+CREATE INDEX IF NOT EXISTS protocol_event_run_idx ON protocol_event (run_id, seq);
+CREATE INDEX IF NOT EXISTS protocol_event_session_idx ON protocol_event (session_id, seq);
+CREATE INDEX IF NOT EXISTS protocol_event_interaction_idx ON protocol_event (interaction_id, seq);
+CREATE INDEX IF NOT EXISTS protocol_event_stream_idx ON protocol_event (stream_id, seq);
+CREATE INDEX IF NOT EXISTS protocol_event_type_idx ON protocol_event (type);
+
+CREATE TABLE IF NOT EXISTS protocol_inbox (
+  id           text PRIMARY KEY,
+  envelope_id  text NOT NULL,
+  actor        text NOT NULL,
+  actor_id     text NOT NULL,
+  status       text NOT NULL,
+  lease_owner  text,
+  lease_until  integer,
+  attempt      integer NOT NULL DEFAULT 0,
+  visible_at   integer NOT NULL,
+  last_error   text,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL,
+  FOREIGN KEY (envelope_id) REFERENCES protocol_event(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS protocol_inbox_envelope_actor_idx ON protocol_inbox (envelope_id, actor, actor_id);
+CREATE INDEX IF NOT EXISTS protocol_inbox_visible_idx ON protocol_inbox (actor, status, visible_at);
+CREATE INDEX IF NOT EXISTS protocol_inbox_lease_idx ON protocol_inbox (actor, lease_until);
+
+CREATE TABLE IF NOT EXISTS protocol_stream_chunk (
+  id           text PRIMARY KEY,
+  stream_id    text NOT NULL,
+  task_id      text,
+  run_id       text,
+  goal_run_id  text,
+  session_id   text,
+  kind         text NOT NULL,
+  chunk_seq    integer NOT NULL,
+  text         text NOT NULL,
+  payload      text,
+  emitted_at   integer NOT NULL,
+  time_created integer NOT NULL,
+  time_updated integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
+  FOREIGN KEY (run_id) REFERENCES orchestrator_run(id) ON DELETE SET NULL,
+  FOREIGN KEY (goal_run_id) REFERENCES orchestrator_goal_run(id) ON DELETE SET NULL,
+  FOREIGN KEY (session_id) REFERENCES session(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS protocol_stream_chunk_stream_seq_idx ON protocol_stream_chunk (stream_id, chunk_seq);
+CREATE INDEX IF NOT EXISTS protocol_stream_chunk_task_idx ON protocol_stream_chunk (task_id, chunk_seq);
+CREATE INDEX IF NOT EXISTS protocol_stream_chunk_run_idx ON protocol_stream_chunk (run_id, chunk_seq);
+CREATE INDEX IF NOT EXISTS protocol_stream_chunk_session_idx ON protocol_stream_chunk (session_id, chunk_seq);
+
 CREATE TABLE IF NOT EXISTS orchestrator_channel_binding (
   id           text PRIMARY KEY,
   task_id      text NOT NULL,

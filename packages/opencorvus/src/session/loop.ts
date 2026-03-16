@@ -32,12 +32,9 @@ import { Scratchpad } from "@/memory/scratchpad"
 import { TaskPlan } from "@/memory/task-plan"
 import { messageControlOnly, textForBoth } from "./part-visibility"
 import { SessionSummary } from "./summary"
-import { SessionPromptState } from "./prompt-state"
+import { SessionActor } from "./actor"
 import { Preference } from "@/preference"
-import { muteAISdkWarnings } from "@/runtime/shims"
 import { Channel } from "@/util/channel"
-
-muteAISdkWarnings()
 
 const STRUCTURED_OUTPUT_DESCRIPTION = `Use this tool to return your final response in the requested structured format.
 
@@ -50,7 +47,7 @@ IMPORTANT:
 const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested structured output. You MUST use the StructuredOutput tool to provide your final response. Do NOT respond with plain text - you MUST call the StructuredOutput tool with your answer formatted according to the schema.`
 
 export namespace SessionLoop {
-  const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
+  const { log, cancel, owns, reject, resolve, start, resume, wait } = SessionActor
   const TOOL_TIMEOUT_MS = Math.max(Number.parseInt(process.env.OPENCORVUS_TOOL_TIMEOUT_MS ?? "", 10) || 30_000, 1_000)
   const STANDBY_TIMEOUT_MS = Math.max(Number.parseInt(process.env.OPENCORVUS_STANDBY_TIMEOUT_MS ?? "", 10) || 30 * 60_000, 1_000)
 
@@ -504,19 +501,9 @@ export namespace SessionLoop {
     const { sessionID, resume_existing } = input
 
     const abort = resume_existing ? resume(sessionID) : start(sessionID)
-    if (!abort) {
-      return new Promise<MessageV2.WithParts>((resolve, reject) => {
-        const s = state()[sessionID]
-        if (!s) return reject(new Error(`Session ${sessionID} not found`))
-        s.callbacks.push({ resolve, reject })
-      })
-    }
+    if (!abort) return wait(sessionID)
 
-    const firstResult = new Promise<MessageV2.WithParts>((resolve, reject) => {
-      const s = state()[sessionID]
-      if (!s) return reject(new Error(`Session ${sessionID} not found after start`))
-      s.callbacks.push({ resolve, reject })
-    })
+    const firstResult = wait(sessionID)
 
     void (async () => {
       try {
@@ -531,7 +518,7 @@ export namespace SessionLoop {
           if (shouldEnterStandby({ lastUser, lastAssistant })) {
             if (!lastAssistant) break
             const lastResult = msgs.find((m) => m.info.id === lastAssistant.id)
-            if (lastResult) flushCallbacks(sessionID, lastResult)
+            if (lastResult) resolve(sessionID, lastResult)
 
             const standby = await enterStandby({
               sessionID,
@@ -615,26 +602,15 @@ export namespace SessionLoop {
         let flushed = false
         for await (const item of MessageV2.stream(sessionID)) {
           if (item.info.role === "user") continue
-          flushCallbacks(sessionID, item)
+          resolve(sessionID, item)
           flushed = true
           break
         }
-        if (!flushed) {
-          const s = state()[sessionID]
-          if (s) {
-            for (const q of s.callbacks) q.reject(new Error("Session completed without response"))
-            s.callbacks = []
-          }
-        }
+        if (!flushed) reject(sessionID, new Error("Session completed without response"))
       } catch (e) {
-        const s = state()[sessionID]
-        if (s) {
-          for (const q of s.callbacks) q.reject(e)
-          s.callbacks = []
-        }
+        reject(sessionID, e)
       } finally {
-        const s = state()[sessionID]
-        if (s?.abort.signal === abort) cancel(sessionID)
+        if (owns(sessionID, abort)) cancel(sessionID)
       }
     })()
 

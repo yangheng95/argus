@@ -1,10 +1,10 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { TaskPlan } from "../../memory/task-plan"
-import { Scratchpad } from "../../memory/scratchpad"
+import { TaskPlan } from "../../../memory/task-plan"
+import { Scratchpad } from "../../../memory/scratchpad"
 
-export function ExperimentalMemoryViewRoutes() {
+export function MemoryViewRoutes() {
   return new Hono()
     .get(
       "/task-plan",

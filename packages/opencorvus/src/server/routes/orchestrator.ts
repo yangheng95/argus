@@ -4,9 +4,10 @@ import { streamSSE } from "hono/streaming"
 import { HTTPException } from "hono/http-exception"
 import z from "zod"
 import { Bus } from "@/bus"
-import { Database, eq } from "@/storage/db"
 import { Session } from "@/session"
 import { MessageV2 } from "@/session/message"
+import { Identifier } from "@/id/id"
+import { ProtocolStore } from "@/protocol/store"
 import {
   Artifact,
   CreateTaskInput,
@@ -17,6 +18,7 @@ import {
   GlobalTaskBoard,
   InjectMessageInput,
   Interaction,
+  ProtocolMessage,
   Progress,
   ProjectBoard,
   RejectInteractionInput,
@@ -27,15 +29,14 @@ import {
   TaskMessageInput,
   TaskMessageResult,
   TaskAccepted,
-  TaskEvent,
   Task,
   UpdateTaskChecksInput,
   UpdateTaskBudgetInput,
   UpdatePreferenceInput,
 } from "@/orchestrator/model"
-import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { ExecutorNotConfiguredError, OrchestratorService, PlannerFailureError } from "@/orchestrator/service"
 import { requireTask } from "@/orchestrator/store"
+import { matchesTaskEvent, taskSession } from "./task-event"
 import { errors } from "../error"
 import { lazy } from "../../util/lazy"
 
@@ -218,7 +219,7 @@ export const OrchestratorRoutes = lazy(() =>
             description: "Task event stream",
             content: {
               "text/event-stream": {
-                schema: resolver(TaskEvent),
+                schema: resolver(ProtocolMessage),
               },
             },
           },
@@ -231,33 +232,33 @@ export const OrchestratorRoutes = lazy(() =>
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          await stream.writeSSE({
-            data: JSON.stringify(taskEvent(taskID, {
-              type: "task.connected",
-              properties: {
-                taskID,
-                summary: "Task event stream connected",
-              },
-            })),
-          })
+          let sequence = ProtocolStore.latestTaskSequence(taskID)
+          const stopProtocol = ProtocolStore.subscribeEvents(async (event) => {
+            if (event.sequence <= sequence) return
+            sequence = Math.max(sequence, event.sequence)
+            await stream.writeSSE({ data: JSON.stringify(routeMessage(event)) })
+          }, { taskID })
+          for (const item of ProtocolStore.listTaskEventsAfter(taskID, sequence).map(routeMessage)) {
+            if (item.sequence <= sequence) continue
+            sequence = Math.max(sequence, item.sequence)
+            await stream.writeSSE({ data: JSON.stringify(item) })
+          }
           const unsub = Bus.subscribeAll(async (event) => {
             if (!matchesTaskEvent(event, taskID, sessionID)) return
-            await stream.writeSSE({ data: JSON.stringify(taskEvent(taskID, event)) })
+            await stream.writeSSE({ data: JSON.stringify(ephemeralEvent(taskID, event.type, event.properties)) })
           })
           const heartbeat = setInterval(() => {
             stream.writeSSE({
-              data: JSON.stringify(taskEvent(taskID, {
-                type: "task.heartbeat",
-                properties: {
-                  taskID,
-                  summary: "Task event stream heartbeat",
-                },
+              data: JSON.stringify(ephemeralEvent(taskID, "task.heartbeat", {
+                taskID,
+                summary: "Task event stream heartbeat",
               })),
             })
           }, 10_000)
           await new Promise<void>((resolve) => {
             stream.onAbort(() => {
               clearInterval(heartbeat)
+              stopProtocol()
               unsub()
               resolve()
             })
@@ -799,48 +800,32 @@ export const OrchestratorRoutes = lazy(() =>
     ),
 )
 
-function taskEvent(taskID: string, event: { type: string; properties: Record<string, unknown> }) {
+function ephemeralEvent(taskID: string, type: string, payload: Record<string, unknown>) {
   return {
-    event_id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-    task_id: taskID,
-    run_id: typeof event.properties.runID === "string" ? event.properties.runID : undefined,
-    type: event.type.replace("orchestrator.", ""),
-    timestamp: Date.now(),
-    summary: typeof event.properties.summary === "string" ? event.properties.summary : event.type,
-    payload: event.properties,
+    id: Identifier.ascending("protocol_event"),
+    taskID,
+    runID: typeof payload.runID === "string" ? payload.runID : undefined,
+    goalRunID: typeof payload.goalRunID === "string" ? payload.goalRunID : undefined,
+    sessionID: typeof payload.sessionID === "string" ? payload.sessionID : undefined,
+    interactionID: typeof payload.interactionID === "string" ? payload.interactionID : undefined,
+    executorSessionID: typeof payload.executorSessionID === "string" ? payload.executorSessionID : undefined,
+    kind: "event" as const,
+    type: type.replace("orchestrator.", ""),
+    source: "orchestrator.route",
+    sequence: 0,
+    summary: typeof payload.summary === "string" ? payload.summary : type,
+    payload,
+    time: {
+      emitted: Date.now(),
+      created: Date.now(),
+      updated: Date.now(),
+    },
   }
 }
 
-function taskSession(taskID: string) {
-  const row = Database.use((db) =>
-    db
-      .select({ sessionID: OrchestratorTaskTable.session_id })
-      .from(OrchestratorTaskTable)
-      .where(eq(OrchestratorTaskTable.id, taskID))
-      .get(),
-  )
-  return row?.sessionID ?? undefined
-}
-
-function matchesTaskEvent(
-  event: { type: string; properties: Record<string, unknown> },
-  taskID: string,
-  sessionID?: string,
-) {
-  if (event.properties?.taskID === taskID) return true
-  if (!sessionID) return false
-  return eventSession(event.properties) === sessionID
-}
-
-function eventSession(properties: Record<string, unknown>) {
-  if (typeof properties.sessionID === "string") return properties.sessionID
-  const info = properties.info
-  if (info && typeof info === "object" && "sessionID" in info && typeof info.sessionID === "string") {
-    return info.sessionID
+function routeMessage<T extends { type: string }>(message: T) {
+  return {
+    ...message,
+    type: message.type.replace("orchestrator.", ""),
   }
-  const part = properties.part
-  if (part && typeof part === "object" && "sessionID" in part && typeof part.sessionID === "string") {
-    return part.sessionID
-  }
-  return undefined
 }

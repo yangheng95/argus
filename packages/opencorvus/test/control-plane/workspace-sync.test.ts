@@ -18,8 +18,8 @@ Log.init({ print: false })
 const seen: string[] = []
 const remote = { type: "testing", name: "remote-a" } as unknown as typeof WorkspaceTable.$inferInsert.config
 
-mock.module("../../src/control-plane/adaptors", () => ({
-  getAdaptor: (config: { type: string }) => {
+mock.module("../../src/control-plane/adapters", () => ({
+  getAdapter: (config: { type: string }) => {
     seen.push(config.type)
     return {
       async create() {

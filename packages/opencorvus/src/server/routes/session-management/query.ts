@@ -1,16 +1,16 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { Session } from "../../session"
+import { Session } from "../../../session"
 import { SessionStatus } from "@/session/status"
-import { Todo } from "../../session/todo"
-import { Log } from "../../util/log"
-import { errors } from "../error"
-import { lazy } from "../../util/lazy"
+import { Todo } from "../../../session/todo"
+import { Log } from "../../../util/log"
+import { errors } from "../../error"
+import { lazy } from "../../../util/lazy"
 
 const log = Log.create({ service: "server" })
 
-export const SessionManagementQueryRoutes = lazy(() =>
+export const SessionQueryRoutes = lazy(() =>
   new Hono()
     .get(
       "/",
