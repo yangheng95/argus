@@ -6,6 +6,7 @@ import { Snapshot } from "@/snapshot"
 import { Filesystem } from "@/util/filesystem"
 import { which } from "@/util/which"
 import { spawn } from "child_process"
+import path from "path"
 import z from "zod"
 import puppeteer from "puppeteer-core"
 import {
@@ -23,6 +24,8 @@ import {
 import { Log } from "@/util/log"
 
 const evaluatorLog = Log.create({ service: "evaluator-checks" })
+const dependencyInstalls = new Map<string, Promise<void>>()
+const dependencyReady = new Set<string>()
 
 function commandShell(command: string) {
   const shell = Shell.acceptable()
@@ -84,6 +87,11 @@ export async function commandChecks(
 export async function commandResult(input: string | CheckCommand, timeout: number) {
   const command = typeof input === "string" ? input : input.command
   const cwd = typeof input === "string" ? Instance.directory : input.cwd ?? Instance.directory
+  await ensureDependencies(cwd, timeout)
+  return runCommand(command, cwd, timeout)
+}
+
+async function runCommand(command: string, cwd: string, timeout: number) {
   const shell = commandShell(command)
   const proc = spawn(command, {
     shell,
@@ -129,6 +137,90 @@ export async function commandResult(input: string | CheckCommand, timeout: numbe
     command,
     cwd,
   }
+}
+
+async function ensureDependencies(cwd: string, timeout: number) {
+  const plan = await dependencyInstallPlan(cwd)
+  if (!plan || dependencyReady.has(plan.cwd)) return
+  const pending = dependencyInstalls.get(plan.cwd)
+  if (pending) return pending
+  const install = runCommand(plan.command, plan.cwd, Math.max(timeout, 10 * 60 * 1000))
+    .then((result) => {
+      if (result.code !== 0) {
+        evaluatorLog.warn("dependency install failed before evaluator commands", {
+          cwd: plan.cwd,
+          command: plan.command,
+          code: result.code,
+          output: clip(result.output),
+        })
+        return
+      }
+      dependencyReady.add(plan.cwd)
+      evaluatorLog.info("dependency install completed before evaluator commands", {
+        cwd: plan.cwd,
+        command: plan.command,
+      })
+    })
+    .finally(() => {
+      dependencyInstalls.delete(plan.cwd)
+    })
+  dependencyInstalls.set(plan.cwd, install)
+  return install
+}
+
+export async function dependencyInstallPlan(cwd: string) {
+  const root = await dependencyInstallRoot(cwd)
+  if (!root || dependencyReady.has(root)) return
+  if (await Filesystem.exists(path.join(root, "node_modules"))) {
+    dependencyReady.add(root)
+    return
+  }
+  const command = await installCommand(root)
+  if (!command) return
+  return { cwd: root, command }
+}
+
+async function dependencyInstallRoot(cwd: string) {
+  let current = cwd
+  let candidate = ""
+  while (Filesystem.contains(Instance.directory, current)) {
+    const packageJson = await Filesystem.exists(path.join(current, "package.json"))
+    if (packageJson) {
+      candidate ||= current
+      if (await hasLockfile(current)) candidate = current
+    }
+    if (current === Instance.directory) break
+    const parent = path.dirname(current)
+    if (parent === current) break
+    current = parent
+  }
+  return candidate || undefined
+}
+
+async function hasLockfile(cwd: string) {
+  for (const file of [
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "bun.lock",
+    "bun.lockb",
+    "package-lock.json",
+    "yarn.lock",
+  ]) {
+    if (await Filesystem.exists(path.join(cwd, file))) return true
+  }
+  return false
+}
+
+async function installCommand(cwd: string) {
+  if (
+    (await Filesystem.exists(path.join(cwd, "pnpm-workspace.yaml")) || await Filesystem.exists(path.join(cwd, "pnpm-lock.yaml")))
+    && which("pnpm")
+  ) return "pnpm install"
+  if ((await Filesystem.exists(path.join(cwd, "bun.lock")) || await Filesystem.exists(path.join(cwd, "bun.lockb"))) && which("bun")) {
+    return "bun install"
+  }
+  if (await Filesystem.exists(path.join(cwd, "yarn.lock")) && which("yarn")) return "yarn install"
+  if (which("npm")) return "npm install"
 }
 
 export async function startupResult(config: z.infer<typeof CheckConfig>["startup"]): Promise<CheckOutcome> {

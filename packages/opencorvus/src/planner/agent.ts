@@ -11,7 +11,7 @@
  * 5. Structured output — PRD, waves, subtasks, risks, assumptions
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
-import { hasToolCall, stepCountIs, tool } from "ai"
+import { stepCountIs } from "ai"
 import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { Provider } from "@/provider/provider"
@@ -22,7 +22,6 @@ import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
 import { Env } from "@/env"
 import { completeText, type TextHooks } from "@/llm/api"
-import { createToolInputCapture, mergeTextHooks } from "@/llm/tool-hooks"
 import path from "path"
 import { Config } from "@/config/config"
 import { WaveContract, normalizePlanWaves } from "@/orchestrator/wave"
@@ -103,25 +102,9 @@ const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.5
 const MAX_PLAN_ATTEMPTS = 2
 
-function timeoutMs(input?: number) {
-  if (input && input > 0) return input
-  return Number.parseInt(Env.get("OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS") ?? Env.get("OPENCORVUS_PLANNER_TIMEOUT_MS") ?? "", 10) || 120_000
-}
-
 function maxSteps() {
   const value = Number.parseInt(Env.get("OPENCORVUS_PLANNER_AGENT_MAX_STEPS") ?? "", 10)
   return Number.isFinite(value) && value > 0 ? value : 20
-}
-
-function remainingMs(deadline: number) {
-  return Math.max(1_000, deadline - Date.now())
-}
-
-function deadlineSignal(deadline: number, signal?: AbortSignal) {
-  const timeout = AbortSignal.timeout(remainingMs(deadline))
-  if (!signal) return timeout
-  if (signal.aborted) return signal
-  return AbortSignal.any([signal, timeout])
 }
 
 export namespace HeadlessPlannerAgent {
@@ -142,9 +125,7 @@ export namespace HeadlessPlannerAgent {
 
     const resolved = await agentLanguageModel()
     if (!resolved) throw new Error("no LLM model available for planner agent")
-    const { language, isReasoning } = resolved
-    const limit = timeoutMs(input.timeoutMs)
-    const deadline = Date.now() + limit
+    const { language } = resolved
     if (input.signal?.aborted) throw new Error("planner aborted after model resolution")
 
     // Extract working directory from request (eval tasks specify it explicitly)
@@ -163,44 +144,19 @@ export namespace HeadlessPlannerAgent {
     const explorationTools = createPlannerTools(taskWorkDir, { recall: recallEnabled })
     const unattended = await unattendedProject()
 
-    // -----------------------------------------------------------------------
-    // submit_plan tool — the model calls this to deliver structured plan data.
-    // Tool-call arguments are parsed by the provider API, guaranteeing valid
-    // JSON without any manual sanitize/repair.
-    // -----------------------------------------------------------------------
-    let submittedPlan: PlannerOutputType | undefined
-    const allTools = {
-      ...explorationTools,
-      submit_plan: tool({
-        description:
-          "Submit the final plan after codebase exploration. " +
-          "Call this tool ONCE when you have finished exploring and are ready to deliver the plan. " +
-          "All fields are required except where noted optional.",
-        inputSchema: PlannerOutput,
-        execute: async (args) => {
-          submittedPlan = args as PlannerOutputType
-          return "Plan submitted successfully."
-        },
-        }),
-    }
-
     // Quality-gated retry loop: if the first plan attempt scores below
     // QUALITY_RETRY_THRESHOLD, retry once with enhanced prompt that includes
     // quality feedback from the previous attempt.
     let lastQuality: { score: number; reasons: string[] } | undefined
-    let lastSteps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }> | undefined
-    let lastToolCallCount = 0
 
     for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt++) {
       if (input.signal?.aborted) throw new Error("planner aborted before attempt " + (attempt + 1))
-      submittedPlan = undefined
 
       const retryContext = attempt > 0 && lastQuality
         ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
         : undefined
       const userPrompt = buildUserPrompt(input, fileRefs, context, retryContext, unattended)
       const stepLimit = maxSteps()
-      const consolidationOnly = attempt > 0 && !!lastSteps && lastToolCallCount >= MIN_TOOL_CALLS
 
       log.info("planner agent starting", {
         title: input.title,
@@ -209,12 +165,11 @@ export namespace HeadlessPlannerAgent {
         prefetchedContext: context.length > 0,
         fileRefsFound: fileRefs.length,
         taskWorkDir,
-        toolCount: Object.keys(allTools).length,
+        toolCount: Object.keys(explorationTools).length,
         recallEnabled,
         unattended,
         attempt: attempt + 1,
         maxSteps: stepLimit,
-        consolidationOnly,
         retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
       })
 
@@ -223,146 +178,52 @@ export namespace HeadlessPlannerAgent {
         finishReason?: string
         steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
       }
-      let toolCallCount: number
-
-      if (consolidationOnly) {
-        const forced = await finalizePlan(language, input, lastSteps!, deadline, input.signal, retryContext, isReasoning, input.stream)
-        if (forced.submittedPlan) submittedPlan = forced.submittedPlan
-        result = forced.result
-        toolCallCount = lastToolCallCount
-        log.info("planner agent retrying via consolidation", {
-          attempt: attempt + 1,
-          stepCount: result.steps.length,
-          reusedToolCalls: toolCallCount,
-        })
-      } else {
-        const capture = createToolInputCapture()
-        const attemptTimeout = remainingMs(deadline)
-        result = await completeText({
-          model: language,
-          stopWhen: [stepCountIs(stepLimit), hasToolCall("submit_plan")],
-          tools: allTools,
-          toolChoice: "auto",
-          maxOutputTokens: 32768,
-          timeoutMs: attemptTimeout,
-          abortSignal: deadlineSignal(deadline, input.signal),
+      result = await completeText({
+        model: language,
+        stopWhen: [stepCountIs(stepLimit)],
+        tools: explorationTools,
+        maxOutputTokens: 32768,
+        timeoutMs: false,
+        abortSignal: input.signal,
         system: await plannerSystem(),
         prompt: userPrompt,
-        ...mergeTextHooks(input.stream, capture.hooks),
+        ...(input.stream ?? {}),
       })
-        submittedPlan ??= capture.recover("submit_plan", PlannerOutput)
+      const toolCallCount = result.steps.reduce(
+        (sum, s) => {
+          const step = s as { toolCalls?: unknown[] }
+          return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
+        },
+        0,
+      )
+      const toolUsage = summarizeToolUsage(result.steps)
+      log.info("planner agent tool usage", {
+        attempt: attempt + 1,
+        finishReason: result.finishReason,
+        stepCount: result.steps.length,
+        toolCallCount,
+        toolUsage,
+      })
 
-        toolCallCount = result.steps.reduce(
-          (sum, s) => {
-            const step = s as { toolCalls?: unknown[] }
-            return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
-          },
-          0,
-        )
-        lastSteps = result.steps
-        lastToolCallCount = toolCallCount
-        const toolUsage = summarizeToolUsage(result.steps)
-        log.info("planner agent tool usage", {
-          attempt: attempt + 1,
-          finishReason: result.finishReason,
-          stepCount: result.steps.length,
-          toolCallCount,
-          submitPlanCalls: toolUsage["submit_plan"] ?? 0,
-          toolUsage,
-        })
-      }
-
-      // -----------------------------------------------------------------------
-      // Priority 1: extract from submit_plan tool call (guaranteed valid JSON)
-      // Priority 2: fallback to text JSON parsing (legacy / models that ignore tool)
-      // -----------------------------------------------------------------------
-      let parsed: PlannerOutputType
-
-      if (submittedPlan) {
-        const submitted = submittedPlan as PlannerOutputType
-        log.info("planner agent finished via submit_plan tool call", {
+      const allText = collectText(result)
+      if (!allText.trim()) {
+        log.error("planner: primary run produced no final text", {
           steps: result.steps.length,
-          subtasks: submitted.subtasks?.length ?? 0,
-          prdLength: submitted.prd?.length ?? 0,
+          finishReason: result.finishReason,
           attempt: attempt + 1,
         })
-        // Normalize arrays — tool call args may not have Zod defaults applied
-        parsed = {
-          ...submitted,
-          summary: submitted.summary ?? "",
-          prd: submitted.prd ?? "",
-          subtasks: Array.isArray(submitted.subtasks) ? submitted.subtasks : [],
-          risks: Array.isArray(submitted.risks) ? submitted.risks : [],
-          assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
-        }
-      } else {
-        // Fallback: parse from text output
-        let allText = result.text?.trim() || ""
-        if (!allText || !allText.includes("{")) {
-          allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
-        }
-
-        if (!allText.trim()) {
-          log.warn("planner: primary run produced no final text or submit_plan call, forcing consolidation", {
-            steps: result.steps.length,
-            finishReason: result.finishReason,
-            attempt: attempt + 1,
-          })
-          const forced = await finalizePlan(language, input, result.steps, deadline, input.signal, undefined, isReasoning, input.stream)
-          if (forced.submittedPlan) {
-            submittedPlan = forced.submittedPlan
-          }
-          allText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
-        }
-
-        if (submittedPlan) {
-          const submitted = submittedPlan as PlannerOutputType
-          log.info("planner agent finished via forced submit_plan tool call", {
-            steps: result.steps.length,
-            subtasks: submitted.subtasks?.length ?? 0,
-            prdLength: submitted.prd?.length ?? 0,
-            attempt: attempt + 1,
-          })
-          parsed = {
-            ...submitted,
-            summary: submitted.summary ?? "",
-            prd: submitted.prd ?? "",
-            subtasks: Array.isArray(submitted.subtasks) ? submitted.subtasks : [],
-            risks: Array.isArray(submitted.risks) ? submitted.risks : [],
-            assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
-          }
-        } else {
-          log.info("planner agent finished via text output (no submit_plan call)", {
-            steps: result.steps.length,
-            finishReason: result.finishReason,
-            textLength: allText.length,
-            textPreview: allText.slice(0, 200),
-            attempt: attempt + 1,
-          })
-
-          const extracted = tryExtractPlannerOutput(allText)
-          if (extracted.ok) {
-            parsed = extracted.value
-          } else {
-            log.warn("planner: text output was not valid JSON, forcing consolidation", {
-              error: extracted.error.message,
-              steps: result.steps.length,
-              finishReason: result.finishReason,
-              textLength: allText.length,
-              attempt: attempt + 1,
-            })
-            const forced = await finalizePlan(language, input, result.steps, deadline, input.signal, retryContext, isReasoning, input.stream)
-            if (forced.submittedPlan) {
-              parsed = normalizePlanOutput(forced.submittedPlan)
-            } else {
-              const forcedText = forced.result.text?.trim() || forced.result.steps.map((s) => s.text).filter(Boolean).join("\n")
-              const forcedExtracted = tryExtractPlannerOutput(forcedText)
-              if (!forcedExtracted.ok) throw forcedExtracted.error
-              parsed = forcedExtracted.value
-            }
-          }
-        }
+        throw new Error("planner agent produced no markdown output")
       }
+
+      log.info("planner agent finished via text output", {
+        steps: result.steps.length,
+        finishReason: result.finishReason,
+        textLength: allText.length,
+        textPreview: allText.slice(0, 200),
+        attempt: attempt + 1,
+      })
+
+      let parsed = extractPlannerText(allText)
 
       // Ensure summary is meaningful (not garbage like "## heading" or empty)
       parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
@@ -417,90 +278,6 @@ export const parsePlannerOutput = extractJSON
 // ---------------------------------------------------------------------------
 // Internals
 // ---------------------------------------------------------------------------
-
-async function finalizePlan(
-  language: LanguageModelV2,
-  input: {
-    title: string
-    request: string
-    userGoals?: Array<{ description: string; criteria: string; priority?: string }>
-    spec?: { summary?: string; content: string }
-    replanContext?: ReplanContext
-    timeoutMs?: number
-    signal?: AbortSignal
-    stream?: TextHooks
-  },
-  steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>,
-  deadline: number,
-  signal?: AbortSignal,
-  retryContext?: { previousScore: number; reasons: string[]; attempt: number },
-  isReasoning = false,
-  stream?: TextHooks,
-) {
-  const transcript = steps
-    .flatMap((step, index) => {
-      const calls = Array.isArray(step.toolCalls)
-        ? step.toolCalls.map((item) => `Step ${index + 1} tool_call: ${JSON.stringify(item).slice(0, 1200)}`)
-        : []
-      const results = Array.isArray(step.toolResults)
-        ? step.toolResults.map((item) => `Step ${index + 1} tool_result: ${JSON.stringify(item).slice(0, 4000)}`)
-        : []
-      return [...calls, ...results]
-    })
-    .join("\n\n")
-
-  let submittedPlan: PlannerOutputType | undefined
-  const summaryTool = {
-    submit_plan: tool({
-      description:
-        "Submit the final plan after codebase exploration. " +
-        "Call this tool ONCE using the exploration transcript that was already gathered.",
-      inputSchema: PlannerOutput,
-      execute: async (args) => {
-        submittedPlan = args as PlannerOutputType
-        return "Plan submitted successfully."
-      },
-    }),
-  }
-
-  const capture = createToolInputCapture()
-  const result = await completeText({
-    model: language,
-    stopWhen: [stepCountIs(8), hasToolCall("submit_plan")],
-    tools: summaryTool,
-    toolChoice: isReasoning ? "auto" : "required",
-    maxOutputTokens: 16384,
-    timeoutMs: remainingMs(deadline),
-    abortSignal: deadlineSignal(deadline, signal),
-    system:
-      "You are finalizing a plan after an exploration attempt. " +
-      "Do not explore again. Use the transcript if it is helpful, but do not claim that a weak transcript prevents planning. " +
-      "If the repository is greenfield or nearly empty, use the task request and approved specification as the primary source of truth and produce a concrete implementation plan. " +
-      "Never output a placeholder saying more context is required when the request already defines implementation work. " +
-      "Call submit_plan exactly once.",
-    prompt: [
-      `# Task\n\nTitle: ${input.title}\n\nRequest:\n${input.request}`,
-      input.spec ? `# Spec Context\n\n${input.spec.content}` : "",
-      retryContext
-        ? [
-            "# Quality Retry Feedback",
-            "",
-            `Previous score: ${retryContext.previousScore.toFixed(2)}`,
-            ...retryContext.reasons.map((reason) => `- ${reason}`),
-          ].join("\n")
-        : "",
-      "# Exploration Transcript",
-      transcript || "(no transcript captured)",
-      "If the transcript is sparse, repetitive, or mostly memory lookups, synthesize a concrete greenfield implementation plan from the request and spec instead of reporting missing context.",
-      "Subtasks must reference exact file paths, include explicit verification steps, and may introduce small supporting src/ helper files when justified.",
-      "Now synthesize the final plan and call submit_plan exactly once.",
-    ].filter(Boolean).join("\n\n"),
-    ...mergeTextHooks(stream, capture.hooks),
-  })
-  submittedPlan ??= capture.recover("submit_plan", PlannerOutput)
-
-  return { result, submittedPlan }
-}
 
 /**
  * Ensure the plan summary is meaningful -- not garbage like "## heading",
@@ -631,6 +408,31 @@ function extractJSON(text: string): PlannerOutputType {
   }
 }
 
+function collectText(result: {
+  text?: string
+  steps: Array<{ text?: string }>
+}) {
+  const direct = result.text?.trim() || ""
+  if (direct) return direct
+  return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
+}
+
+function extractPlannerText(text: string): PlannerOutputType {
+  const raw = text.trim()
+  if (!raw) throw new Error("planner output empty")
+  if (raw.startsWith("{") || raw.includes("```json")) return extractJSON(raw)
+
+  return normalizePlanOutput(PlannerOutput.parse({
+    summary: sectionBody(raw, ["Summary", "摘要"]).split("\n")[0]?.trim() || firstContentLine(raw),
+    prd: sectionBody(raw, ["PRD", "Plan", "Implementation Plan", "技术方案", "执行方案"]) || raw,
+    waves: parseWaves(sectionBody(raw, ["Waves", "Wave Contracts", "波次", "执行波次", "并行波次"])),
+    subtasks: parseSubtasks(sectionBody(raw, ["Subtasks", "Tasks", "执行步骤", "子任务"]) || raw),
+    risks: parseListSection(raw, ["Risks", "风险"]),
+    assumptions: parseNamedPairs(sectionBody(raw, ["Assumptions", "假设"])),
+    clarifications: parseClarifications(sectionBody(raw, ["Clarifications", "Questions", "澄清", "待确认问题"])),
+  }))
+}
+
 /**
  * Sanitize common LLM JSON output issues:
  * - Unescaped backslashes (e.g., Windows paths: C:\Users)
@@ -723,15 +525,161 @@ function normalizePlanOutput(input: PlannerOutputType): PlannerOutputType {
   }
 }
 
-function tryExtractPlannerOutput(text: string): { ok: true; value: PlannerOutputType } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: extractJSON(text) }
-  } catch (error) {
-    return {
-      ok: false,
-      error: error instanceof Error ? error : new Error(String(error)),
+function sectionBody(text: string, names: string[]) {
+  const lines = text.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const title = lines[i].trim().replace(/^#{1,6}\s*/, "")
+    if (!names.some((name) => title.localeCompare(name, "en", { sensitivity: "accent" }) === 0)) continue
+    const body: string[] = []
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^#{1,6}\s+/.test(lines[j].trim())) break
+      body.push(lines[j])
     }
+    return body.join("\n").trim()
   }
+  return ""
+}
+
+function parseListSection(text: string, names: string[]) {
+  return sectionBody(text, names)
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
+      return value ? [value] : []
+    })
+}
+
+function parseNamedPairs(text: string) {
+  return text.split(/\r?\n/).flatMap((line) => {
+    const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
+    if (!value) return []
+    const pair = value.split(/[:：]/)
+    if (pair.length < 2) return []
+    return [{
+      question: pair[0].trim(),
+      assumption: pair.slice(1).join(":").trim(),
+    }]
+  })
+}
+
+function parseClarifications(text: string) {
+  return text.split(/\r?\n/).flatMap((line, index) => {
+    const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
+    if (!value) return []
+    const parts = value.split(/\s+\|\s+/)
+    if (parts.length >= 2) {
+      return [{
+        header: parts[0].trim(),
+        question: parts[1].trim(),
+        context: parts[2]?.trim() || undefined,
+        default_assumption: parts[3]?.trim() || undefined,
+      }]
+    }
+    return [{
+      header: `Question ${index + 1}`,
+      question: value,
+    }]
+  })
+}
+
+function parseRecordLines(lines: string[]) {
+  const record: Record<string, string> = {}
+  for (const line of lines) {
+    const value = line.trim().replace(/^[-*•]\s+/, "")
+    const match = value.match(/^([a-zA-Z_ ]+|目标|路径|产物|依赖|并行度|描述|说明|验证|文件)[:：]\s*(.+)$/)
+    if (!match) continue
+    record[match[1].trim().toLowerCase()] = match[2].trim()
+  }
+  return record
+}
+
+function splitBlocks(text: string) {
+  const lines = text.split(/\r?\n/)
+  const blocks: string[][] = []
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line) continue
+    const numbered = /^\d+[.)、]\s+/.test(line)
+    const bulleted = /^[-*•]\s+/.test(line)
+    const current = blocks[blocks.length - 1]
+    const currentNumbered = current ? /^\d+[.)、]\s+/.test(current[0] || "") : false
+    if (numbered || (bulleted && !currentNumbered)) {
+      blocks.push([line])
+      continue
+    }
+    if (blocks.length === 0) {
+      blocks.push([line])
+      continue
+    }
+    blocks[blocks.length - 1].push(line)
+  }
+  return blocks
+}
+
+function parseCsv(value: string | undefined) {
+  if (!value) return []
+  return value
+    .split(/[,\n，；;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
+function parseGoalIndices(value: string | undefined) {
+  if (!value) return []
+  return [...value.matchAll(/\d+/g)].flatMap((match) => {
+    const next = Number.parseInt(match[0], 10)
+    return Number.isInteger(next) ? [next] : []
+  })
+}
+
+function parseSubtasks(text: string) {
+  return splitBlocks(text).map((block, index) => {
+    const title = block[0].replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "").trim()
+    const record = parseRecordLines(block.slice(1))
+    const description = [
+      record["description"],
+      record["描述"],
+      record["file"] ? `file: ${record["file"]}` : "",
+      record["文件"] ? `file: ${record["文件"]}` : "",
+      record["verify"] ? `verify: ${record["verify"]}` : "",
+      record["验证"] ? `verify: ${record["验证"]}` : "",
+      ...block.slice(1).filter((line) => !/^[a-zA-Z_ ]+[:：]\s*.+$/.test(line) && !/^(目标|路径|产物|依赖|并行度|描述|说明|验证|文件)[:：]\s*.+$/.test(line)),
+    ].filter(Boolean).join(" ")
+    return {
+      title: title || `Task ${index + 1}`,
+      description: description || title,
+      order: index + 1,
+    }
+  }).filter((item) => item.title)
+}
+
+function parseWaves(text: string) {
+  return splitBlocks(text).flatMap((block, index) => {
+    const title = block[0].replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "").trim()
+    if (!title) return []
+    const record = parseRecordLines(block.slice(1))
+    return [{
+      title,
+      objective: record["objective"] || record["description"] || record["说明"] || record["描述"] || undefined,
+      goal_indices: parseGoalIndices(record["goals"] || record["goal_indices"] || record["目标"]),
+      owned_paths: parseCsv(record["owned_paths"] || record["paths"] || record["路径"]),
+      produces: parseCsv(record["produces"] || record["产物"]),
+      consumes: parseCsv(record["consumes"] || record["依赖"]),
+      parallelism: (() => {
+        const raw = record["parallelism"] || record["并行度"]
+        const value = raw ? Number.parseInt(raw, 10) : undefined
+        return Number.isFinite(value) && value > 0 ? value : undefined
+      })(),
+    }]
+  })
+}
+
+function firstContentLine(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => !!line && !/^#{1,6}\s+/.test(line))
+    || ""
 }
 
 /**
@@ -905,7 +853,7 @@ function validatePlanQuality(
   }
 
   // 5. PRD length — detailed specs are longer
-  if (plan.prd.length >= 300) {
+  if (plan.prd.length >= 180) {
     score += 0.25
   } else {
     reasons.push(`PRD too short (${plan.prd.length} chars)`)
@@ -1185,11 +1133,11 @@ function buildUserPrompt(
     sections.push(
       "Pre-read files are provided above — analyze them before making tool calls. " +
         "Then use tools to explore related files, dependencies, test patterns, and build/test commands. " +
-        "Produce your plan by calling the submit_plan tool.",
+        "Produce your final answer as plain markdown using the required section headings and wave contract format.",
     )
   } else {
     sections.push(
-      "Now recall memory, check preferences, explore the codebase thoroughly, then produce your plan by calling the submit_plan tool.",
+      "Now recall memory, check preferences, explore the codebase thoroughly, then produce your final answer as plain markdown using the required section headings and wave contract format.",
     )
   }
   return sections.join("\n\n")
@@ -1199,9 +1147,9 @@ function buildUserPrompt(
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const PLANNER_SYSTEM = `You are a senior software architect acting as the planning brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, then produce a plan so detailed and specific that an executor agent can implement it without guessing.
+export const PLANNER_SYSTEM = `You are a senior software architect acting as the planning brain for OpenCorvus. Your job is to explore the codebase deeply, then emit an implementation plan as plain markdown that downstream agents can parse directly.
 
-CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. A plan produced without tool calls is ALWAYS rejected. You are scored on exploration depth -- plans that don't reference specific file paths, function signatures, and code patterns discovered via tools will be automatically retried.
+CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. A plan produced without tool calls is ALWAYS rejected. You are scored on exploration depth, concrete file paths, and wave quality.
 
 ## Available Tools
 
@@ -1213,115 +1161,96 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. 
 - **search_code**: Search file contents with regex (ripgrep)
 - **list_directory**: List files and directories at a path
 - **web_search**: Search the web for external documentation (use only when needed)
-- **submit_plan**: Submit the final plan (call ONCE after exploration is complete)
 
 ## Your Process
 
-Think of yourself as a tech lead doing code review BEFORE implementation starts. You need to understand the codebase well enough to give precise, actionable instructions.
+### Phase 0: RECALL
 
-### Phase 0: RECALL (1-3 tool calls)
+1. Search memory with task keywords unless pre-fetched context already covers it.
+2. List preferences unless pre-fetched.
 
-1. **Search memory** (memory_search) with task keywords. If pre-fetched memory exists, only search for gaps.
-2. **List preferences** (preference_list) unless pre-fetched. Preferences guide default conventions, but explicit task constraints and approved spec boundaries override them on conflict.
+### Phase 1: EXPLORE
 
-### Phase 1: EXPLORE (5-15 tool calls -- this is the MOST IMPORTANT phase)
-
-You MUST explore the codebase thoroughly. A plan without specific file paths is worthless.
 Minimum ${MIN_TOOL_CALLS} tool calls required. Aim for 8-15 for complex tasks.
 
-Strategy (adapt based on task type):
+You must discover:
+- Exact files to create or modify
+- Existing code patterns and naming conventions
+- Build/test/lint commands
+- Dependency and import chains
+- Existing test patterns
 
-**For modification tasks** (fix bug, add feature, refactor):
-1. **list_directory** on project root and relevant subdirectories -- understand layout
-2. **read_file** on package.json / tsconfig.json / build config -- tech stack, scripts, build commands
-3. **search_code** for key types, functions, interfaces mentioned in the request -- find exact locations
-4. **read_file** on 3-5 files directly related to the task -- understand existing patterns, APIs, conventions
-5. **find_files** to discover test files, related modules, config files in the affected area
-6. **search_code** for imports/usages of code you'll modify -- understand dependency chain
-7. **read_file** on existing test files -- understand test patterns and assertion styles
-8. **search_code** for error handling patterns in the area -- understand how errors propagate
+### Phase 2: PLAN
 
-**For new module/feature tasks**:
-1. **list_directory** on the target package and similar existing modules
-2. **read_file** on 2-3 existing modules in the same package -- copy their structure exactly
-3. **search_code** for export/registration patterns -- understand how modules are wired up
-4. **read_file** on the test directory for existing test patterns
-5. **search_code** for type definitions that the new module must implement
+Your plan must be concrete enough that an executor can implement it without guessing.
 
-After exploration, you should know:
-- The EXACT file paths to create or modify (from actual tool results, not guessed)
-- The existing code patterns and naming conventions to follow (from reading real code)
-- The build/test/lint commands and how to verify your changes (from package.json scripts)
-- What other code depends on what you'll change (from search_code on imports)
-- How existing tests are structured (from reading test files)
+Use wave contracts, not generic milestones:
+- Waves are dynamic and dependency-driven.
+- Goals in wave N start only after all goals in previous waves pass.
+- Goals may share a wave only if their \`owned_paths\` do not conflict and they consume only already-produced outputs.
+- Every multi-goal plan must cover every goal exactly once.
+- Use 0-based goal indices in the \`goals:\` field.
 
-### Phase 1.5: RESEARCH (if needed)
+### Phase 3: OUTPUT
 
-For external APIs, unfamiliar libraries, or protocols -- use web_search. Skip for internal-only tasks.
+Output plain markdown only. Do not output JSON. Do not call a submit tool.
 
-### Phase 2: PLAN -- Synthesize into Actionable Spec
+Use these exact top-level sections in order:
+- \`# Summary\`
+- \`# PRD\`
+- \`# Waves\`
+- \`# Subtasks\`
+- \`# Risks\`
+- \`# Assumptions\`
+- \`# Clarifications\`
 
-Your output must be CONCRETE, not abstract. Reference specific files, functions, and commands.
-Think: "Could an executor implement this plan without asking me any questions?" If not, add more detail.
+Required formatting rules:
 
-**Subtasks** -- Ordered implementation steps. Each subtask must specify:
-- WHAT to change (specific code change)
-- WHERE (exact file path from exploration)
-- HOW to verify (command to run after this step)
-- DEPENDENCIES (which subtask must complete first)
+Under \`# Waves\`, each wave must be a numbered block in this shape:
 
-**PRD** -- Bullet-point spec: files to modify, changes, patterns to follow, verification commands.
+1. Wave title
+- objective: one sentence
+- goals: 0, 1
+- owned_paths: path/a.ts, path/b.ts
+- produces: artifact-a, artifact-b
+- consumes: artifact-x
+- parallelism: 1
 
-### Phase 3: OUTPUT — Call submit_plan tool
+Under \`# Subtasks\`, each subtask must be a numbered block in this shape:
 
-When you have finished exploring and are ready to deliver the plan, call the **submit_plan** tool with all the required fields. Do NOT output raw JSON text — use the tool call instead.
+1. Subtask title
+- description: exact files, changes, and code patterns
+- file: path/to/file.ts
+- verify: exact command or check
 
-Keep PRD concise (bullet points, ≤ 2000 chars). Subtasks should be DETAILED — do not sacrifice clarity for brevity.
+Under \`# PRD\`, write bullet points only. Include files, architectural intent, verification strategy, and any wave-level constraints.
 
-The submit_plan tool accepts these fields:
-- **summary**: One-line summary of the plan
-- **subtasks**: Array of {title, description (file paths + changes + patterns), order}
-- **risks**: Array of specific risks with mitigation
-- **waves** (optional but expected for multi-goal plans): Array of {title, objective, goal_indices, owned_paths, produces, consumes, parallelism}. CRITICAL: waves define EXECUTION ORDER — goals in wave N only start after ALL goals in waves 0..N-1 have passed. Goals within the same wave may run in parallel only when their owned_paths do not overlap.
-- **assumptions** (optional): Array of {question, assumption}
-- **prd**: Technical spec with bullet points: files to modify, exact changes, patterns, verification commands. ≤ 2000 chars.
+Under \`# Assumptions\`, write one item per line as \`question: assumption\`.
+
+Under \`# Clarifications\`, only emit execution blockers. Format each line as:
+- \`header | question | context | default_assumption\`
 
 ## Rules
 
-- ALWAYS explore the codebase before planning. No exceptions. Plans without tool calls score 0.
-- If a recall tool response contains \`RECALL_COMPLETE\`, stop recall immediately and do not call memory_search, memory_get, or preference_list again in this run.
-- Do not spam identical exploration calls. Repeating the same tool with the same arguments more than twice is invalid; switch tools or submit_plan.
-- Every file path in your plan MUST come from actual tool results or pre-read files -- never guess paths.
-- Goals are authoritative input from the specification. The planner must not redefine or mutate them.
-- For multi-goal plans, provide wave contracts that cover every goal exactly once.
-- Every wave must declare owned_paths. If two goals may touch the same path, put them in different waves.
-- Clarifications are only for execution-strategy blockers. Do NOT ask for missing scope, requirements, or acceptance criteria; that belongs to the spec stage.
-- Explicit task constraints override preferences. Do not plan edits outside a user-declared file boundary just to satisfy a preference.
-- subtask descriptions must reference specific files, functions, and patterns discovered during exploration.
-- Write in the same language as the request (Chinese request -> Chinese plan).
-- If replanning: your new plan MUST differ from the previous failed approach.
-- The prd field must be detailed enough that an executor agent can implement everything without further exploration.
-- After finishing exploration, call submit_plan with your plan. Do NOT output raw JSON text.
-- If submit_plan is unavailable, output JSON as a fallback.
-- Do NOT produce generic advice like "follow best practices" or "handle edge cases" -- be specific about WHICH practices and WHICH edge cases.
+- ALWAYS explore before planning.
+- If a recall tool response contains \`RECALL_COMPLETE\`, stop recall immediately.
+- Do not spam identical exploration calls.
+- Every file path must come from actual tool results or pre-read files.
+- Goals are authoritative and must not be redefined.
+- Every wave in a multi-goal plan must declare \`owned_paths\`.
+- Write in the same language as the request.
+- If replanning, the new strategy must differ from the failed one.
+- Do not emit generic advice like "follow best practices". Name files, modules, commands, and concrete changes.
 
-## Quality Self-Check (MANDATORY)
+## Quality Self-Check
 
-Before outputting JSON, verify each of these. If ANY answer is NO, use more tools to fill the gap:
-
-1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
-2. Do subtasks reference specific file paths (not "relevant files" -- actual paths)?
-3. Does every subtask include an explicit verification step or command?
-4. Is the PRD concise but complete (bullet points, not paragraphs)?
-5. Could an executor implement this plan WITHOUT asking follow-up questions?
-6. Does the summary accurately describe the plan in one line? (not a file path or heading)
-
-## Output Format
-
-- PRD: Use bullet points, keep under 2000 chars.
-- Subtasks: Include file paths and verification steps.
-- Call submit_plan exactly once after exploration is complete.
-- Do NOT output raw JSON. Use the submit_plan tool call.`
+Before outputting markdown, verify:
+1. I made at least ${MIN_TOOL_CALLS} tool calls.
+2. PRD and subtasks reference concrete file paths.
+3. Every subtask includes an explicit verification step.
+4. Waves cover every goal exactly once for multi-goal tasks.
+5. Wave owned_paths do not overlap within the same wave.
+6. The summary is a real one-line plan summary, not a heading or file path.`
 
 export async function plannerSystem() {
   const config = await Config.get()

@@ -10,13 +10,15 @@
  * 5. Structured output — scope, requirements, acceptance criteria, spec items
  * 6. Rewrite — receives failure analysis and revises spec for replan
  */
-import { generateText, stepCountIs, tool } from "ai"
+import { stepCountIs } from "ai"
 import z from "zod"
 import { Provider } from "@/provider/provider"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
+import { Env } from "@/env"
+import { completeText } from "@/llm/api"
 import path from "path"
 
 const log = Log.create({ service: "spec-agent" })
@@ -116,11 +118,14 @@ export interface SpecRewriteContext {
 // HeadlessSpecAgent
 // ---------------------------------------------------------------------------
 
-const MAX_STEPS = 30
-const TIMEOUT_MS = 300_000
 const MIN_TOOL_CALLS = 3
 const QUALITY_RETRY_THRESHOLD = 0.6
 const MAX_SPEC_ATTEMPTS = 2
+
+function maxSteps() {
+  const value = Number.parseInt(Env.get("OPENCORVUS_SPEC_AGENT_MAX_STEPS") ?? "", 10)
+  return Number.isFinite(value) && value > 0 ? value : 30
+}
 
 export namespace HeadlessSpecAgent {
   /**
@@ -165,6 +170,7 @@ export namespace HeadlessSpecAgent {
 }
 
 export { HeadlessSpecAgent as SpecAgent }
+export const parseSpecOutput = (text: string) => extractJSON(text, true)
 
 // ---------------------------------------------------------------------------
 // Internal implementation
@@ -194,28 +200,7 @@ async function run(input: {
     input.request.match(/(?:工作目录|working dir(?:ectory)?)[^\n]*?([A-Z]:[/\\][^\s)）]+|\/[^\s)）]+)/i)
   const taskWorkDir = cwdMatch ? cwdMatch[1].replace(/[/\\]+$/, "") : undefined
 
-  const explorationTools = createPlannerTools(taskWorkDir)
-
-  // -----------------------------------------------------------------------
-  // submit_spec tool — the model calls this to deliver structured spec data.
-  // Tool-call arguments are parsed by the provider API, guaranteeing valid
-  // JSON without any manual sanitize/repair.
-  // -----------------------------------------------------------------------
-  let submittedSpec: SpecOutputType | undefined
-  const allTools = {
-    ...explorationTools,
-    submit_spec: tool({
-      description:
-        "Submit the final specification after codebase exploration. " +
-        "Call this tool ONCE when you have finished exploring and are ready to deliver the spec. " +
-        "All fields are required except where noted optional.",
-      inputSchema: SpecOutput,
-      execute: async (args) => {
-        submittedSpec = args as SpecOutputType
-        return "Specification submitted successfully."
-      },
-    }),
-  }
+  const allTools = createPlannerTools(taskWorkDir)
 
   const fileRefs = await resolveFileReferences(input.request, taskWorkDir)
   if (input.signal?.aborted) throw new Error("spec agent aborted before context prefetch")
@@ -227,7 +212,6 @@ async function run(input: {
 
   for (let attempt = 0; attempt < MAX_SPEC_ATTEMPTS; attempt++) {
     if (input.signal?.aborted) throw new Error("spec agent aborted before attempt " + (attempt + 1))
-    submittedSpec = undefined
 
     const retryContext = attempt > 0 && lastQuality
       ? { previousScore: lastQuality.score, reasons: lastQuality.reasons, attempt }
@@ -246,73 +230,61 @@ async function run(input: {
       retryReason: retryContext ? `score ${retryContext.previousScore} < ${QUALITY_RETRY_THRESHOLD}` : undefined,
     })
 
-    const result = await generateText({
-      model: language,
-      stopWhen: stepCountIs(MAX_STEPS),
-      tools: allTools,
-      maxOutputTokens: 32768,
-      abortSignal: input.signal ?? AbortSignal.timeout(TIMEOUT_MS),
-      system: SPEC_SYSTEM,
-      prompt: userPrompt,
-    })
-
+    let result: {
+      text?: string
+      finishReason?: string
+      steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
+    }
+    try {
+      result = await completeText({
+        model: language,
+        stopWhen: [stepCountIs(maxSteps())],
+        tools: allTools,
+        maxOutputTokens: 32768,
+        timeoutMs: false,
+        abortSignal: input.signal,
+        system: SPEC_SYSTEM,
+        prompt: userPrompt,
+      })
+    } catch (error) {
+      log.error("spec agent primary run failed", {
+        attempt: attempt + 1,
+        error: String(error),
+      })
+      throw error
+    }
     const toolCallCount = result.steps.reduce(
       (sum, s) => sum + (Array.isArray((s as any).toolCalls) ? (s as any).toolCalls.length : 0),
       0,
     )
+    const toolUsage = summarizeToolUsage(result.steps)
 
-    // -----------------------------------------------------------------------
-    // Priority 1: extract from submit_spec tool call (guaranteed valid JSON)
-    // Priority 2: fallback to text JSON parsing (legacy / models that ignore tool)
-    // -----------------------------------------------------------------------
-    let parsed: SpecOutputType
-
-    if (submittedSpec) {
-      const submitted = submittedSpec as SpecOutputType
-      log.info("spec agent finished via submit_spec tool call", {
-        steps: result.steps.length,
-        specItems: submitted.spec_items?.length ?? 0,
-        contentLength: submitted.content?.length ?? 0,
-        attempt: attempt + 1,
-      })
-      // Normalize arrays — tool call args may not have Zod defaults applied
-      parsed = {
-        ...submitted,
-        summary: submitted.summary ?? "",
-        content: submitted.content ?? "",
-        scope: submitted.scope ?? "",
-        spec_items: Array.isArray(submitted.spec_items) ? submitted.spec_items : [],
-        assumptions: Array.isArray(submitted.assumptions) ? submitted.assumptions : [],
-        risks: Array.isArray(submitted.risks) ? submitted.risks : [],
-        evidence_sources: Array.isArray(submitted.evidence_sources) ? submitted.evidence_sources : [],
-        unresolved_questions: Array.isArray(submitted.unresolved_questions) ? submitted.unresolved_questions : [],
-      }
-    } else {
-      // Fallback: parse from text output
-      let allText = result.text?.trim() || ""
-      if (!allText || !allText.includes("{")) {
-        allText = result.steps.map((s) => s.text).filter(Boolean).join("\n")
-      }
-
-      log.info("spec agent finished via text output (no submit_spec call)", {
+    log.info("spec agent tool usage", {
+      attempt: attempt + 1,
+      finishReason: result.finishReason,
+      stepCount: result.steps.length,
+      toolCallCount,
+      toolUsage,
+    })
+    let allText = collectText(result)
+    if (!allText.trim()) {
+      log.error("spec: primary run produced no final text", {
         steps: result.steps.length,
         finishReason: result.finishReason,
-        textLength: allText.length,
-        textPreview: allText.slice(0, 200),
         attempt: attempt + 1,
       })
-
-      parsed = extractJSON(allText)
+      throw new Error("spec agent produced no markdown output")
     }
 
-    // If output was truncated or empty, synthesize from exploration
-    if (parsed.content.length < 100 || parsed.spec_items.length < 1) {
-      log.warn("spec: output seems truncated, synthesizing from exploration", {
-        contentLength: parsed.content.length,
-        specItemsCount: parsed.spec_items.length,
-      })
-      parsed = synthesizeFromExploration(parsed, input, result.steps)
-    }
+    log.info("spec agent finished via raw text output", {
+      steps: result.steps.length,
+      finishReason: result.finishReason,
+      textLength: allText.length,
+      textPreview: allText.slice(0, 200),
+      attempt: attempt + 1,
+    })
+
+    let parsed = extractSpecText(allText)
 
     parsed.summary = ensureMeaningfulSummary(parsed.summary, input.title)
 
@@ -330,11 +302,20 @@ async function run(input: {
     lastParsed = parsed
     lastQuality = specQuality
 
-    if (specQuality.score >= QUALITY_RETRY_THRESHOLD || attempt >= MAX_SPEC_ATTEMPTS - 1) {
-      if (specQuality.score < 0.3) {
-        log.warn("spec: final spec quality is very low", { ...specQuality, attempt: attempt + 1 })
-      }
+    if (specQuality.score >= QUALITY_RETRY_THRESHOLD) {
       return parsed
+    }
+
+    if (attempt >= MAX_SPEC_ATTEMPTS - 1) {
+      log.error("spec: output quality below threshold", {
+        score: specQuality.score,
+        threshold: QUALITY_RETRY_THRESHOLD,
+        reasons: specQuality.reasons,
+        attempt: attempt + 1,
+      })
+      throw new Error(
+        `spec output quality below threshold (${specQuality.score.toFixed(2)} < ${QUALITY_RETRY_THRESHOLD}): ${specQuality.reasons.join("; ") || "unknown quality failure"}`,
+      )
     }
 
     log.warn("spec: spec quality below threshold, retrying", {
@@ -457,12 +438,12 @@ function buildUserPrompt(
     sections.push(
       "Pre-read files are provided above — analyze them before making tool calls. " +
         "Then use tools to explore related files, dependencies, and patterns. " +
-        "Produce your specification by calling the submit_spec tool.",
+        "Produce your specification as plain markdown with the required section headings.",
     )
   } else {
     sections.push(
       "Now recall memory, check preferences, explore the codebase thoroughly, " +
-        "then produce your specification by calling the submit_spec tool.",
+        "then produce your specification as plain markdown with the required section headings.",
     )
   }
 
@@ -473,7 +454,7 @@ function buildUserPrompt(
 // JSON extraction & repair (mirrors planner/agent.ts logic)
 // ---------------------------------------------------------------------------
 
-function extractJSON(text: string): SpecOutputType {
+function extractJSON(text: string, strict = false): SpecOutputType {
   let raw = text.trim()
 
   const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -501,6 +482,7 @@ function extractJSON(text: string): SpecOutputType {
   raw = sanitizeJSON(raw)
 
   if (raw.startsWith("{") && !raw.endsWith("}")) {
+    if (strict) throw new Error("spec output invalid JSON: truncated JSON")
     log.warn("spec: JSON appears truncated, attempting repair", { length: raw.length })
     raw = repairTruncatedJSON(raw)
   }
@@ -515,6 +497,9 @@ function extractJSON(text: string): SpecOutputType {
     if (retryErr.ok) {
       obj = retryErr.value
     } else {
+      if (strict) {
+        throw new Error(`spec output invalid JSON: ${parseErr.error instanceof Error ? parseErr.error.message : String(parseErr.error)}`)
+      }
       log.error("spec: JSON parse failed after all repair attempts", {
         error: String(parseErr.error),
         rawLength: raw.length,
@@ -551,6 +536,9 @@ function extractJSON(text: string): SpecOutputType {
   try {
     return SpecOutput.parse(obj)
   } catch (zodErr) {
+    if (strict) {
+      throw new Error(`spec output failed schema validation: ${zodErr instanceof Error ? zodErr.message : String(zodErr)}`)
+    }
     log.error("spec: Zod validation failed, returning with defaults", { error: String(zodErr) })
     return SpecOutput.parse({
       summary: obj.summary || "",
@@ -562,6 +550,53 @@ function extractJSON(text: string): SpecOutputType {
       evidence_sources: [],
       unresolved_questions: [],
     })
+  }
+}
+
+function collectText(result: {
+  text?: string
+  steps: Array<{ text?: string }>
+}) {
+  const direct = result.text?.trim() || ""
+  if (direct) return direct
+  return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
+}
+
+function extractSpecText(text: string): SpecOutputType {
+  const raw = text.trim()
+  if (!raw) throw new Error("spec output empty")
+  if (raw.startsWith("{") || raw.includes("```json")) return extractJSON(raw)
+
+  const items = parseSpecItems(raw)
+  const assumptions = parseNamedPairs(sectionBody(raw, ["Assumptions", "假设"]))
+  const risks = parseListSection(raw, ["Risks", "风险"])
+  const evidence = parseListSection(raw, ["Evidence", "Evidence Sources", "依据", "证据"])
+  const open = parseListSection(raw, ["Open Questions", "Unresolved Questions", "开放问题", "待确认问题"])
+
+  return normalizeSpecOutput({
+    summary: sectionBody(raw, ["Summary", "摘要"]).split("\n")[0]?.trim() || firstContentLine(raw),
+    content: raw,
+    scope: sectionBody(raw, ["Scope", "范围"]) || firstContentLine(raw),
+    out_of_scope: sectionBody(raw, ["Out-of-Scope", "Out of Scope", "范围外"]) || undefined,
+    spec_items: items,
+    assumptions,
+    risks,
+    evidence_sources: evidence,
+    unresolved_questions: open,
+  })
+}
+
+function normalizeSpecOutput(input: SpecOutputType): SpecOutputType {
+  return {
+    ...input,
+    summary: input.summary ?? "",
+    content: input.content ?? "",
+    scope: input.scope ?? "",
+    spec_items: Array.isArray(input.spec_items) ? input.spec_items : [],
+    assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
+    risks: Array.isArray(input.risks) ? input.risks : [],
+    evidence_sources: Array.isArray(input.evidence_sources) ? input.evidence_sources : [],
+    unresolved_questions: Array.isArray(input.unresolved_questions) ? input.unresolved_questions : [],
   }
 }
 
@@ -727,25 +762,25 @@ function validateSpecQuality(
   }
 
   // Content depth (0.25 max — spec should be thorough)
-  if (spec.content.length >= 2000) {
+  if (spec.content.length >= 1000) {
     score += 0.25
-  } else if (spec.content.length >= 1000) {
+  } else if (spec.content.length >= 600) {
     score += 0.15
-  } else if (spec.content.length >= 500) {
+  } else if (spec.content.length >= 250) {
     score += 0.08
   } else {
-    reasons.push("Spec content too short — must include detailed sections for Scope, Requirements, Constraints, Acceptance Criteria. Target 2000+ chars")
+    reasons.push("Spec content too short — must include Scope, Requirements, Constraints, Acceptance Criteria. Target 600+ chars")
   }
 
   // Spec items quality (0.3 max — most important dimension)
-  if (spec.spec_items.length >= 4) {
+  if (spec.spec_items.length >= 3) {
     score += 0.3
   } else if (spec.spec_items.length >= 2) {
     score += 0.2
   } else if (spec.spec_items.length >= 1) {
     score += 0.1
   } else {
-    reasons.push("No spec items — define at least 4 concrete, verifiable spec items for non-trivial tasks")
+    reasons.push("No spec items — define at least 3 concrete, verifiable spec items for non-trivial tasks")
   }
 
   // Evidence sources (did the agent actually discover things?) (0.1 max)
@@ -763,9 +798,9 @@ function validateSpecQuality(
   // For greenfield projects, technical keywords count as "grounding"
   const technicalKeywords = /\b(API|class|function|interface|module|component|state|event|handler|render|canvas|DOM|HTTP|WebSocket|database|schema|endpoint|route)\b/gi
   const techCount = (spec.content.match(technicalKeywords) || []).length
-  if (pathCount >= 3 || techCount >= 10) {
+  if (pathCount >= 2 || techCount >= 8) {
     score += 0.15
-  } else if (pathCount >= 1 || techCount >= 5) {
+  } else if (pathCount >= 1 || techCount >= 4) {
     score += 0.07
   } else {
     reasons.push("Spec content lacks specific file paths or detailed technical design keywords")
@@ -783,61 +818,215 @@ function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string
   return trimmed
 }
 
-// ---------------------------------------------------------------------------
-// Synthesis fallback
-// ---------------------------------------------------------------------------
-
-function synthesizeFromExploration(
-  partial: SpecOutputType,
-  input: { title: string; request: string },
-  steps: any[],
-): SpecOutputType {
-  const result = { ...partial }
-
-  const discoveredFiles = new Set<string>()
-  const explorationNotes: string[] = []
-
+function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
+  const map: Record<string, number> = {}
   for (const step of steps) {
-    if (!step.toolCalls) continue
-    for (let i = 0; i < step.toolCalls.length; i++) {
-      const call = step.toolCalls[i]
-      if (call.toolName === "read_file" && call.args?.path) {
-        discoveredFiles.add(call.args.path)
-      }
-      const toolResult = step.toolResults?.[i]
-      if (toolResult?.result && typeof toolResult.result === "string") {
-        const preview = toolResult.result.slice(0, 200)
-        if (call.toolName === "read_file") {
-          explorationNotes.push(`Read ${call.args.path}: ${preview}`)
-        } else if (call.toolName === "search_code") {
-          explorationNotes.push(`Search "${call.args.pattern}": ${preview}`)
-        }
-      }
+    const calls = Array.isArray(step.toolCalls) ? step.toolCalls : []
+    for (const call of calls) {
+      if (!call || typeof call !== "object" || !("toolName" in call)) continue
+      const name = String((call as { toolName?: unknown }).toolName || "")
+      if (!name) continue
+      map[name] = (map[name] ?? 0) + 1
     }
   }
+  return map
+}
 
-  if (result.content.length < 200) {
-    const parts: string[] = []
-    parts.push(`## Scope\n\n${input.request.split("\n")[0]}`)
-    if (discoveredFiles.size > 0) {
-      parts.push(`## Relevant Files\n\n${Array.from(discoveredFiles).slice(0, 10).map(f => `- ${f}`).join("\n")}`)
+function sectionBody(text: string, names: string[]) {
+  const lines = text.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const title = lines[i].trim().replace(/^#{1,6}\s*/, "")
+    if (!names.some((name) => title.localeCompare(name, "en", { sensitivity: "accent" }) === 0)) continue
+    const body: string[] = []
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^#{1,6}\s+/.test(lines[j].trim())) break
+      body.push(lines[j])
     }
-    if (explorationNotes.length > 0) {
-      parts.push(`## Exploration Notes\n\n${explorationNotes.slice(0, 5).map(n => `- ${n}`).join("\n")}`)
+    return body.join("\n").trim()
+  }
+  return ""
+}
+
+function parseListSection(text: string, names: string[]) {
+  return sectionBody(text, names)
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
+      return value ? [value] : []
+    })
+}
+
+function parseNamedPairs(text: string) {
+  return text.split(/\r?\n/).flatMap((line) => {
+    const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
+    if (!value) return []
+    const pair = value.split(/[:：]/)
+    if (pair.length < 2) return []
+    return [{
+      question: pair[0].trim(),
+      assumption: pair.slice(1).join(":").trim(),
+    }]
+  })
+}
+
+function parseSpecItems(text: string): SpecItem[] {
+  const body = sectionBody(text, ["Spec Items", "Specification Items", "Goals", "规格项", "目标"])
+  const source = body || sectionBody(text, ["Acceptance Criteria", "验收标准"]) || text
+  const items = splitSpecBlocks(source)
+    .flatMap((block) => {
+      const head = cleanSpecLine(block[0] || "")
+      if (!head || isSpecMetadataKey(head)) return []
+      const record = parseSpecRecordLines(block.slice(1))
+      const description = [
+        record.description,
+        record.criteria,
+        record.requirement,
+        record.verification,
+        record.evidence,
+        block.slice(1)
+          .map((line) => cleanSpecLine(line))
+          .filter((line) => line && !isSpecMetadataKey(line))
+          .join(" "),
+      ]
+        .map((item) => item?.trim() || "")
+        .find(Boolean)
+      const priority = inferSpecPriority(head, record.priority)
+      const selectors = parseCheckSelectors(record.check_selector)
+      const check_selector = priority === "blocking"
+        ? selectors.length > 0 ? selectors : inferSpecChecks([head, description].filter(Boolean).join(" "))
+        : undefined
+      return [{
+        title: specTitle(head),
+        description: (description || head).slice(0, 400),
+        priority,
+        check_selector,
+      }]
+    })
+    .filter((item) => item.title && item.description)
+  return items.slice(0, 8)
+}
+
+function inferSpecChecks(text: string) {
+  const selectors = new Set<string>()
+  if (/test|测试|用例/i.test(text)) selectors.add("test")
+  if (/lint|格式|风格/i.test(text)) selectors.add("lint")
+  if (/startup|启动|运行/i.test(text)) selectors.add("startup")
+  if (/ui|界面|交互|视觉/i.test(text)) selectors.add("ui_review")
+  if (selectors.size === 0) selectors.add("build")
+  return [...selectors]
+}
+
+function splitSpecBlocks(text: string) {
+  const blocks: string[][] = []
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    const numbered = /^\d+[.)、]\s+/.test(line)
+    const bulleted = /^[-*•]\s+/.test(line)
+    const current = blocks[blocks.length - 1]
+    const currentNumbered = current ? /^\d+[.)、]\s+/.test(current[0] || "") : false
+    const next = cleanSpecLine(line)
+    if (numbered) {
+      blocks.push([line])
+      continue
     }
-    const existing = result.content.trim()
-    result.content = existing ? existing + "\n\n" + parts.join("\n\n") : parts.join("\n\n")
+    if (bulleted && (!current || (!currentNumbered && !isSpecMetadataKey(next)))) {
+      blocks.push([line])
+      continue
+    }
+    if (!current) {
+      blocks.push([line])
+      continue
+    }
+    current.push(line)
   }
+  return blocks
+}
 
-  if (!result.scope) {
-    result.scope = input.request.split("\n").find(l => l.trim())?.trim() || input.title
+function cleanSpecLine(line: string) {
+  return line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "").trim()
+}
+
+function parseSpecRecordLines(lines: string[]) {
+  const record: Record<string, string> = {}
+  for (const line of lines) {
+    const value = cleanSpecLine(line)
+    const match = value.match(/^([a-zA-Z_ -]+|描述|说明|标准|验收|校验|验证|证据|优先级|检查|检查器)[:：]\s*(.+)$/)
+    if (!match) continue
+    record[normalizeSpecKey(match[1])] = match[2].trim()
   }
+  return record
+}
 
-  if (result.evidence_sources.length === 0 && discoveredFiles.size > 0) {
-    result.evidence_sources = Array.from(discoveredFiles).slice(0, 15)
-  }
+function normalizeSpecKey(key: string) {
+  const value = key.trim().toLowerCase()
+  if (["description", "desc", "描述", "说明"].includes(value)) return "description"
+  if (["criteria", "criterion", "acceptance", "验收", "标准"].includes(value)) return "criteria"
+  if (["requirement", "requirements", "要求"].includes(value)) return "requirement"
+  if (["verification", "verify", "校验", "验证"].includes(value)) return "verification"
+  if (["evidence", "证据"].includes(value)) return "evidence"
+  if (["priority", "优先级"].includes(value)) return "priority"
+  if (["check_selector", "check selectors", "checks", "检查", "检查器"].includes(value)) return "check_selector"
+  return value
+}
 
-  return result
+function isSpecMetadataKey(line: string) {
+  const match = cleanSpecLine(line).match(/^([^:：]+)[:：]/)
+  if (!match) return false
+  return [
+    "description",
+    "desc",
+    "criteria",
+    "criterion",
+    "acceptance",
+    "requirement",
+    "requirements",
+    "verification",
+    "verify",
+    "evidence",
+    "priority",
+    "check_selector",
+    "check selectors",
+    "checks",
+    "描述",
+    "说明",
+    "标准",
+    "验收",
+    "要求",
+    "验证",
+    "校验",
+    "证据",
+    "优先级",
+    "检查",
+    "检查器",
+  ].includes(match[1].trim().toLowerCase())
+}
+
+function specTitle(line: string) {
+  const cleaned = cleanSpecLine(line)
+  const [head] = cleaned.split(/[:：]/)
+  return head.trim().slice(0, 80)
+}
+
+function inferSpecPriority(head: string, value?: string) {
+  return /advisory|建议|可选/i.test(`${head} ${value ?? ""}`) ? "advisory" : "blocking"
+}
+
+function parseCheckSelectors(value?: string) {
+  return value
+    ? [...new Set(value
+      .split(/[,\s，；;|]+/)
+      .map((item) => item.trim())
+      .filter(Boolean))]
+    : []
+}
+
+function firstContentLine(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => !!line && !/^#{1,6}\s+/.test(line))
+    || ""
 }
 
 // ---------------------------------------------------------------------------
@@ -911,7 +1100,6 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specif
 - **search_code**: Search file contents with regex (ripgrep)
 - **list_directory**: List files and directories at a path
 - **web_search**: Search the web for external documentation (use only when needed)
-- **submit_spec**: Submit the final specification (call ONCE after exploration is complete)
 
 ## Your Role
 
@@ -981,21 +1169,22 @@ Think: "Could a planner create implementation steps from this spec without explo
 - **Out-of-Scope**: What is explicitly excluded
 - **Open Questions**: Remaining ambiguities
 
-### Phase 3: OUTPUT — Call submit_spec tool
+### Phase 3: OUTPUT — Emit markdown only
 
-When you have finished exploring and are ready to deliver the spec, call the **submit_spec** tool with all the required fields. Do NOT output raw JSON text — use the tool call instead.
+When you have finished exploring and are ready to deliver the spec, output plain markdown only. Do NOT output JSON.
 
-The submit_spec tool accepts these fields:
-- **summary**: One-line summary of the specification
-- **scope**: What is in scope for this task
-- **out_of_scope** (optional): What is explicitly excluded
-- **spec_items**: Array of verifiable items, each with title, description, check_selector, priority
-- **assumptions**: Array of {question, assumption} pairs
-- **risks**: Array of specific risks with codebase context
-- **evidence_sources**: Array of file paths, URLs, memory entries consulted
-- **unresolved_questions**: Questions that could not be answered
-- **content**: Full markdown specification with Scope, Requirements, Constraints, Acceptance Criteria sections. Reference specific file paths. For greenfield projects, include detailed technical design. Target 2000-6000 chars.
-- **clarifications** (optional): Array of {header, question, context, default_assumption}
+Use these exact sections in order:
+- \`# Summary\`
+- \`# Scope\`
+- \`# Requirements\`
+- \`# Constraints\`
+- \`# Acceptance Criteria\`
+- \`# Spec Items\`
+- \`# Evidence\`
+- \`# Risks\`
+- \`# Open Questions\`
+
+Under \`# Spec Items\`, include 3-6 numbered items. Each item must include a short title and one verification-oriented sentence.
 
 ## Rules
 
@@ -1006,12 +1195,11 @@ The submit_spec tool accepts these fields:
 - Every blocking spec item MUST have at least one check_selector.
 - Write in the same language as the request (Chinese request → Chinese spec).
 - If rewriting after failure: revise the spec to address the root cause.
-- After finishing exploration, call submit_spec with your specification. Do NOT output raw JSON text.
-- If submit_spec is unavailable, output JSON as a fallback.
+- After finishing exploration, output the markdown specification directly.
 
 ## Quality Self-Check (MANDATORY)
 
-Before outputting JSON, verify each of these. If ANY answer is NO, use more tools:
+Before outputting the final markdown, verify each of these. If ANY answer is NO, use more tools:
 
 1. Did I make at least ${MIN_TOOL_CALLS} tool calls to explore the codebase?
 2. Does the content reference specific file paths discovered via tools?
@@ -1023,8 +1211,7 @@ Before outputting JSON, verify each of these. If ANY answer is NO, use more tool
 
 ## Output Format
 
-- Content: Use markdown sections, target 2000-6000 chars. Be thorough and specific.
-- Spec Items: Be DETAILED — they drive downstream planning and acceptance. Include at least 4-6 spec items for non-trivial tasks. Each item should be independently verifiable.
-- For greenfield projects (creating something new with no existing codebase): Include detailed technical design in the content section — data structures, algorithms, UI layout, state management, interaction flows. Use web_search if needed for reference implementations.
-- Call submit_spec exactly once after exploration is complete.
-- Do NOT output raw JSON. Use the submit_spec tool call.`
+- Content: Use markdown headings exactly as specified above, target 800-2500 chars. Be concise but specific.
+- Spec Items: Include at least 3-6 concrete items for non-trivial tasks. Each item should be independently verifiable.
+- For greenfield projects (creating something new with no existing codebase): Include detailed technical design in the markdown sections — data structures, UI layout, state management, interaction flows. Use web_search if needed for reference implementations.
+- Output plain markdown only. Do NOT output JSON.`

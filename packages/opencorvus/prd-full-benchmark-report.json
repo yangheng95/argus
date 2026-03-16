@@ -1,120 +1,118 @@
 {
-  "generated_at": "2026-03-15T16:54:33.385Z",
+  "generated_at": "2026-03-16T00:20:26.032Z",
   "executor": "opencode",
-  "model": "alibaba-coding-plan-cn/kimi-k2.5",
-  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
+  "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
   "server": "http://127.0.0.1:7878/",
-  "taskID": "tsk_cf263c3c9001hiHvkWZ1zmYko6",
+  "taskID": "tsk_cf3bd210b001Pmy2s83HKm1XLI",
   "error": "TimeoutError: The operation timed out.",
   "stage_max_steps": {
-    "spec": 48,
-    "planner": 56
+    "spec": 80,
+    "planner": 96
   },
   "timings_ms": {
-    "online": 275,
-    "submit": 4097,
-    "planning_visible": 4246,
-    "streaming_visible": 4247,
-    "task_created": 13341,
-    "task_selected": 13412,
-    "board_loaded": 13413,
-    "resumed": 17128,
+    "online": 265,
+    "submit": 4218,
+    "planning_visible": 4410,
+    "streaming_visible": 4429,
+    "task_created": 38827,
+    "task_selected": 38834,
+    "board_loaded": 38835,
+    "resumed": 42582,
     "completed": null,
     "execution": null
   },
   "overlay": {
-    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
-    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
-    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
-    "selectedTaskID": "tsk_cf263c3c9001hiHvkWZ1zmYko6",
+    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
+    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
+    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
+    "selectedTaskID": "tsk_cf3bd210b001Pmy2s83HKm1XLI",
     "pendingCount": 0,
     "taskIDs": [
-      "tsk_cf263c3c9001hiHvkWZ1zmYko6"
+      "tsk_cf3bd210b001Pmy2s83HKm1XLI"
     ],
-    "taskList": "Active\n    \n    \n      \n        \n        根据提供的日记软件PRD文档，开发一个完整的日记应用程序。需要实现以下核心功能：\n      \n      Evaluating\n      00:53:31 / .../Local/Temp/opencorvus-overlay-benchmark-project-7hBMc2",
-    "reasoning": "",
-    "assistantText": "",
+    "taskList": "Active\n    \n    \n      \n        \n        日记软件 PRD 实施 - Moment Diary\n      \n      Evaluating\n      08:19:23 / .../Local/Temp/opencorvus-overlay-benchmark-project-PrrQ2E",
+    "reasoning": "I need to initialize a React Native project with TypeScript and create the modular architecture structure for the Moment Diary app, starting by creating the package.json with all required dependencies.",
+    "assistantText": "I'll start implementing the Moment Diary React Native project with the modular architecture. Let me begin with project initialization and setup.",
     "storage": {
-      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
+      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
       "directoryMode": "",
-      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-7hBMc2",
-      "workspaceTaskID": "tsk_cf263c3c9001hiHvkWZ1zmYko6"
+      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
+      "workspaceTaskID": "tsk_cf3bd210b001Pmy2s83HKm1XLI"
     }
   },
   "diagnostics": {
     "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\prd-full-benchmark-report.events.json",
-    "event_count": 1408,
+    "event_count": 2066,
     "stage_summary": {
       "types": {
         "orchestrator.task.created": 1,
-        "orchestrator.agent.updated": 1391,
+        "orchestrator.agent.updated": 2040,
         "orchestrator.task.updated": 5,
-        "orchestrator.spec.created": 2,
-        "orchestrator.plan.created": 2,
-        "orchestrator.plan.activated": 2,
+        "orchestrator.spec.created": 1,
+        "orchestrator.plan.created": 1,
+        "orchestrator.plan.activated": 1,
         "orchestrator.run.created": 2,
-        "orchestrator.run.updated": 3
+        "orchestrator.run.updated": 15
       },
       "stages": {
         "spec": {
-          "event_count": 6,
-          "first_event_ms": 12702,
+          "event_count": 2,
+          "first_event_ms": 38431,
           "first_message_ms": null,
           "first_tool_call_ms": null,
           "first_tool_result_ms": null,
           "submit_tool_ms": null,
           "error_ms": null,
-          "last_event_ms": 517584,
+          "last_event_ms": 95434,
           "kind_counts": {
-            "status": 6
+            "status": 2
           },
           "tool_calls": {}
         },
         "planner": {
-          "event_count": 178,
-          "first_event_ms": 17184,
-          "first_message_ms": 28950,
-          "first_tool_call_ms": 21748,
-          "first_tool_result_ms": 21861,
-          "submit_tool_ms": 30309,
+          "event_count": 1357,
+          "first_event_ms": 95435,
+          "first_message_ms": 142107,
+          "first_tool_call_ms": 97501,
+          "first_tool_result_ms": 97702,
+          "submit_tool_ms": null,
           "error_ms": null,
-          "last_event_ms": 526295,
+          "last_event_ms": 217424,
           "kind_counts": {
-            "status": 5,
-            "tool_call": 57,
-            "tool_result": 27,
-            "message_delta": 89
+            "status": 2,
+            "tool_call": 28,
+            "tool_result": 14,
+            "message_delta": 1313
           },
           "tool_calls": {
-            "list_directory": 18,
-            "find_files": 6,
-            "read_file": 16,
-            "web_search": 10,
-            "submit_plan": 7
+            "list_directory": 8,
+            "read_file": 8,
+            "find_files": 4,
+            "search_code": 4,
+            "web_search": 4
           }
         },
         "judge": {
-          "event_count": 1207,
-          "first_event_ms": 285560,
-          "first_message_ms": 319201,
-          "first_tool_call_ms": 287702,
-          "first_tool_result_ms": 287841,
-          "submit_tool_ms": 504072,
+          "event_count": 681,
+          "first_event_ms": 4518914,
+          "first_message_ms": 4576709,
+          "first_tool_call_ms": 4521372,
+          "first_tool_result_ms": 4521556,
+          "submit_tool_ms": null,
           "error_ms": null,
-          "last_event_ms": 512665,
+          "last_event_ms": 4670983,
           "kind_counts": {
-            "status": 4,
-            "tool_call": 76,
-            "tool_result": 38,
-            "message_delta": 1089
+            "status": 3,
+            "tool_call": 142,
+            "tool_result": 71,
+            "message_delta": 465
           },
           "tool_calls": {
-            "list_directory": 30,
-            "memory_search": 6,
-            "read_file": 30,
-            "find_files": 6,
-            "search_code": 2,
-            "submit_analysis": 2
+            "list_directory": 4,
+            "read_file": 130,
+            "search_code": 6,
+            "memory_search": 2
           }
         }
       }

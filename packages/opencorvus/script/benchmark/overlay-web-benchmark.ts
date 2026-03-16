@@ -16,11 +16,14 @@ function stageTimeout(name: string, totalMs: number, share: number, fallback: nu
   return Math.max(fallback, Math.min(totalMs, Math.floor(totalMs * share) || fallback))
 }
 
-const timeoutMs = Number(flag("--timeout-ms")) || 20 * 60 * 1000
-const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.35, 360_000)
-const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 480_000)
-const specMaxSteps = Number(flag("--spec-max-steps")) || 48
-const plannerMaxSteps = Number(flag("--planner-max-steps")) || 56
+const timeoutMs = Number(flag("--timeout-ms")) || 4 * 60 * 60 * 1000
+const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.4, 1_200_000)
+const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 1_500_000)
+const specMaxSteps = Number(flag("--spec-max-steps")) || 80
+const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
+const maxRuns = Number(flag("--max-runs")) || 20
+const maxReplans = Number(flag("--max-replans")) || 8
+const maxEvaluations = Number(flag("--max-evaluations")) || 200
 const report = flag("--report")
 const keep = process.argv.includes("--keep")
 const headless = !process.argv.includes("--headed")
@@ -219,11 +222,14 @@ try {
     window.__ocNextChatMetadata = {
       create_task: {
         budget: {
-          maxWallTimeMs: budget,
+          maxWallTimeMs: budget.timeoutMs,
+          maxRuns: budget.maxRuns,
+          maxReplans: budget.maxReplans,
+          maxEvaluations: budget.maxEvaluations,
         },
       },
     }
-  }, timeoutMs)
+  }, { timeoutMs, maxRuns, maxReplans, maxEvaluations })
   await page.$eval("#chatTextarea", (node, value) => {
     const input = node as HTMLTextAreaElement
     input.value = String(value)
@@ -247,6 +253,9 @@ try {
     body: JSON.stringify({
       budget: {
         maxWallTimeMs: timeoutMs,
+        maxRuns,
+        maxReplans,
+        maxEvaluations,
       },
     }),
   })
@@ -484,6 +493,14 @@ async function scaffoldProject(dir: string, model: string) {
       model,
       experimental: {
         unattended: true,
+      },
+      lsp: {
+        biome: {
+          disabled: true,
+        },
+        eslint: {
+          disabled: true,
+        },
       },
       provider: {
         [providerID]: {

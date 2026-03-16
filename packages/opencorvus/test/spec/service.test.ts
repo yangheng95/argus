@@ -45,6 +45,11 @@ const broad = {
   unresolved_questions: [],
 }
 
+const noDirectGoals = {
+  ...broad,
+  goals: undefined,
+}
+
 describe("spec.service goal derivation", () => {
   afterEach(() => {
     mock.restore()
@@ -84,5 +89,49 @@ describe("spec.service goal derivation", () => {
     expect(spec.goals).toHaveLength(1)
     expect(spec.goals[0]?.description).toContain("完整的React+TypeScript日记应用架构")
     expect(spec.goals[0]?.description).not.toBe(broad.spec_items[0]?.title)
+  })
+
+  test("rewrite preserves explicit goals when raw-text spec omits structured goals", async () => {
+    spyOn(SpecAgent, "rewrite").mockResolvedValue(noDirectGoals as any)
+
+    const spec = await SpecService.rewrite({
+      title: "实现日记应用",
+      request: "修复日记 CRUD 和状态管理问题。",
+      rewriteContext: {
+        previousSpec: broad.content,
+        failureAnalysis: {
+          classification: "strategy",
+          summary: "上一轮没有完成关键功能",
+          rootCause: "重规划丢失了目标",
+          suggestedStrategy: "保留已有 goals 并重新拆分",
+          avoidApproaches: [],
+        },
+        previousGoalStatuses: [],
+      },
+      goals: [
+        {
+          description: "修复日记 CRUD 服务",
+          criteria: "create/update/delete/search 全部可用",
+          priority: "blocking",
+        },
+        {
+          description: "补齐核心页面",
+          criteria: "首页、编辑页、搜索页、日历页可实际使用",
+          priority: "blocking",
+        },
+      ],
+    })
+
+    expect(spec.goals).toHaveLength(2)
+    expect(spec.goals[0]).toMatchObject({
+      description: "修复日记 CRUD 服务",
+      criteria: "create/update/delete/search 全部可用",
+      priority: "blocking",
+    })
+    expect(spec.goals[1]).toMatchObject({
+      description: "补齐核心页面",
+      criteria: "首页、编辑页、搜索页、日历页可实际使用",
+      priority: "blocking",
+    })
   })
 })

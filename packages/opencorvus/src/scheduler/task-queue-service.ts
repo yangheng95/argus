@@ -1,6 +1,9 @@
 import z from "zod"
+import { Bus } from "@/bus"
 import { Instance } from "@/project/instance"
+import { MessageV2 } from "@/session/message"
 import { SessionPrompt } from "@/session/prompt"
+import { SessionStatus } from "@/session/status"
 import { SessionTable } from "@/session/session.sql"
 import { Database, and, eq, sql } from "@/storage/db"
 import { Identifier } from "@/id/id"
@@ -29,6 +32,8 @@ export namespace TaskQueueService {
   const RUN_TIMEOUT_MS = 30 * 60 * 1000
   const HEARTBEAT_ENV = "OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS"
   const HEARTBEAT_MS = 15 * 1000
+  const STALL_TIMEOUT_ENV = "OPENCORVUS_TASK_QUEUE_STALL_TIMEOUT_MS"
+  const STALL_TIMEOUT_MS = 10 * 60 * 1000
   const BATCH_SIZE = 10
   const CONCURRENCY_ENV = "OPENCORVUS_TASK_QUEUE_CONCURRENCY"
   const CONCURRENCY_DEFAULT = 4
@@ -248,25 +253,21 @@ export namespace TaskQueueService {
     if (!metadata.success) {
       throw new Error("invalid queue metadata")
     }
-    const timer = setInterval(() => {
-      try {
-        touch(task.id)
-      } catch (error) {
-        log.warn("task heartbeat update failed", {
-          id: task.id,
-          sessionID: task.session_id,
-          error: message(error),
-        })
+    const watch = activity(task)
+    try {
+      await executePrompt({
+        sessionID: task.session_id,
+        prompt: metadata.data.input,
+        source: "task-queue-service",
+      })
+    } catch (error) {
+      if (watch.stalled) {
+        throw new Error("task stalled without session activity")
       }
-    }, heartbeat())
-    timer.unref()
-    await executePrompt({
-      sessionID: task.session_id,
-      prompt: metadata.data.input,
-      source: "task-queue-service",
-    }).finally(() => {
-      clearInterval(timer)
-    })
+      throw error
+    } finally {
+      watch.stop()
+    }
     const now = Date.now()
     Database.use((db) =>
       db
@@ -374,6 +375,73 @@ export namespace TaskQueueService {
     )
   }
 
+  function activity(task: typeof TaskQueueTable.$inferSelect) {
+    const beat = heartbeat()
+    const stall = stallTimeout()
+    let lastActivity = Date.now()
+    let lastTouch = task.time_updated ?? task.time_started ?? task.time_created ?? lastActivity
+    let stalled = false
+    const mark = () => {
+      const now = Date.now()
+      lastActivity = now
+      if (now - lastTouch < beat) return
+      lastTouch = now
+      try {
+        touch(task.id)
+      } catch (error) {
+        log.warn("task activity update failed", {
+          id: task.id,
+          sessionID: task.session_id,
+          error: message(error),
+        })
+      }
+    }
+    const sameSession = (sessionID: string) => sessionID === task.session_id
+    const unsubs = [
+      Bus.subscribe(MessageV2.Event.Updated, (event) => {
+        if (!sameSession(event.properties.info.sessionID)) return
+        mark()
+      }),
+      Bus.subscribe(MessageV2.Event.PartUpdated, (event) => {
+        if (!sameSession(event.properties.part.sessionID)) return
+        mark()
+      }),
+      Bus.subscribe(MessageV2.Event.PartDelta, (event) => {
+        if (!sameSession(event.properties.sessionID)) return
+        mark()
+      }),
+      Bus.subscribe(SessionStatus.Event.Status, (event) => {
+        if (!sameSession(event.properties.sessionID)) return
+        mark()
+      }),
+      Bus.subscribe(SessionStatus.Event.Idle, (event) => {
+        if (!sameSession(event.properties.sessionID)) return
+        mark()
+      }),
+    ]
+    const timer = setInterval(() => {
+      const now = Date.now()
+      if (now - lastActivity < stall || stalled) return
+      stalled = true
+      log.warn("task stalled without session activity", {
+        id: task.id,
+        sessionID: task.session_id,
+        stallMs: now - lastActivity,
+        timeoutMs: stall,
+      })
+      SessionPrompt.cancel(task.session_id)
+    }, Math.max(1_000, Math.min(beat, Math.floor(stall / 4))))
+    return {
+      get stalled() {
+        return stalled
+      },
+      stop() {
+        clearInterval(timer)
+        for (const unsub of unsubs) unsub()
+      },
+    }
+  }
+
   function runTimeout() {
     const raw = process.env[RUN_TIMEOUT_ENV]
     if (!raw) return RUN_TIMEOUT_MS
@@ -388,6 +456,15 @@ export namespace TaskQueueService {
     if (!raw) return HEARTBEAT_MS
     const value = Number(raw)
     if (!Number.isFinite(value)) return HEARTBEAT_MS
+    if (value < 1000) return 1000
+    return Math.floor(value)
+  }
+
+  function stallTimeout() {
+    const raw = process.env[STALL_TIMEOUT_ENV]
+    if (!raw) return STALL_TIMEOUT_MS
+    const value = Number(raw)
+    if (!Number.isFinite(value)) return STALL_TIMEOUT_MS
     if (value < 1000) return 1000
     return Math.floor(value)
   }
