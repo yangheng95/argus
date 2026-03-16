@@ -1,0 +1,252 @@
+{
+  "generated_at": "2026-03-16T15:06:23.674Z",
+  "mode": "full",
+  "title": "Overlay Web Benchmark NoteStore",
+  "request_file": null,
+  "executor": "opencode",
+  "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+  "stage_timeout_ms": {
+    "spec": 5760000,
+    "planner": 6480000,
+    "stall": 300000
+  },
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "stall_timeout_ms": 300000,
+  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+  "server": "http://127.0.0.1:7878/",
+  "taskID": "tsk_cf72833cc001jr3VroODs3REGg",
+  "taskStatus": "completed",
+  "evaluation": "accepted",
+  "changedFiles": [
+    "src/note-store.test.ts",
+    "src/note-store.ts"
+  ],
+  "transcriptCount": 17,
+  "timelineCount": 0,
+  "runCount": 2,
+  "planning": {
+    "pendingCount": 0,
+    "taskList": "还没有任务",
+    "reasoning": "",
+    "assistantText": ""
+  },
+  "streaming": {
+    "reasoning": "",
+    "assistantText": "Part updated: step-startPart updated: reas",
+    "reasoningVisible": false,
+    "assistantVisible": true
+  },
+  "materialization": {
+    "boardTaskID": "tsk_cf72833cc001jr3VroODs3REGg",
+    "boardStatus": "running",
+    "specVersion": 1,
+    "goalCount": 1,
+    "goalRunCount": 1,
+    "criteriaCount": 0
+  },
+  "screenshot": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-1773673583219.png",
+  "resume": {
+    "restored": true,
+    "selectedAt": 147800
+  },
+  "timings_ms": {
+    "online": 329,
+    "submit": 4835,
+    "planning_visible": 138889,
+    "streaming_visible": 143279,
+    "task_created": 138898,
+    "task_selected": 139115,
+    "board_loaded": 139118,
+    "resumed": 147800,
+    "completed": 455019,
+    "execution": 450184
+  },
+  "assertions": {
+    "planning_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+        "workspaceDirectory": "",
+        "selectedTaskID": "",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_cf72833cc001jr3VroODs3REGg"
+        ],
+        "taskList": "还没有任务",
+        "reasoning": "",
+        "assistantText": "",
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+          "directoryMode": "",
+          "workspaceDirectory": "",
+          "workspaceTaskID": ""
+        }
+      }
+    },
+    "streaming_visible": {
+      "pass": true,
+      "sample": {
+        "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+        "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+        "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+        "selectedTaskID": "tsk_cf72833cc001jr3VroODs3REGg",
+        "pendingCount": 0,
+        "taskIDs": [
+          "tsk_cf72833cc001jr3VroODs3REGg"
+        ],
+        "taskList": "进行中\n    \n    \n      \n        \n        Overlay Web Benchmark NoteStore\n      \n      运行中\n      23:01:06 / .../Local/Temp/opencorvus-overlay-benchmark-project-i6baZl",
+        "reasoning": "",
+        "assistantText": "Part updated: step-startPart updated: reas",
+        "storage": {
+          "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+          "directoryMode": "",
+          "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-i6baZl",
+          "workspaceTaskID": "tsk_cf72833cc001jr3VroODs3REGg"
+        }
+      }
+    },
+    "materialized": {
+      "pass": true,
+      "sample": {
+        "taskID": "tsk_cf72833cc001jr3VroODs3REGg",
+        "boardTaskID": "tsk_cf72833cc001jr3VroODs3REGg",
+        "resumed": true
+      }
+    },
+    "delivery": {
+      "pass": true,
+      "sample": {
+        "taskStatus": "completed",
+        "verdict": "accepted",
+        "localExit": 0
+      }
+    }
+  },
+  "local_verify": {
+    "mode": "command",
+    "command": "bun test ./src/note-store.test.ts",
+    "exitCode": 0,
+    "stdout": "bun test v1.3.10 (30e609e0)",
+    "stderr": "src\\note-store.test.ts:\n(pass) create adds a new note\n(pass) create trims whitespace from title\n(pass) create throws on empty title [16.00ms]\n(pass) get retrieves a note by id\n(pass) list returns all notes sorted by created_at ascending\n(pass) toggle flips the done status\n(pass) remove deletes a note\n\n 7 pass\n 0 fail\n 24 expect() calls\nRan 7 tests across 1 file. [92.00ms]"
+  },
+  "diagnostics": {
+    "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-current.events.json",
+    "event_count": 3162,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.agent.updated": 2561,
+        "orchestrator.task.updated": 6,
+        "orchestrator.spec.created": 2,
+        "orchestrator.plan.created": 2,
+        "orchestrator.plan.activated": 2,
+        "orchestrator.run.created": 2,
+        "orchestrator.run.updated": 8,
+        "orchestrator.run.progress": 268,
+        "orchestrator.run.output": 310
+      },
+      "stages": {
+        "spec": {
+          "event_count": 1008,
+          "first_event_ms": 5297,
+          "first_message_ms": 29582,
+          "first_tool_call_ms": 7702,
+          "first_tool_result_ms": 7904,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 249481,
+          "kind_counts": {
+            "status": 5,
+            "tool_call": 66,
+            "tool_delta": 139,
+            "tool_result": 33,
+            "message_delta": 765
+          },
+          "tool_calls": {
+            "list_directory": 16,
+            "preference_list": 4,
+            "find_files": 8,
+            "read_file": 24,
+            "search_code": 12,
+            "memory_search": 2
+          }
+        },
+        "planner": {
+          "event_count": 641,
+          "first_event_ms": 105701,
+          "first_message_ms": 120481,
+          "first_tool_call_ms": 109436,
+          "first_tool_result_ms": 109637,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 286304,
+          "kind_counts": {
+            "status": 4,
+            "tool_call": 22,
+            "tool_delta": 46,
+            "tool_result": 11,
+            "message_delta": 558
+          },
+          "tool_calls": {
+            "list_directory": 4,
+            "read_file": 12,
+            "find_files": 4,
+            "web_search": 2
+          }
+        },
+        "judge": {
+          "event_count": 912,
+          "first_event_ms": 211211,
+          "first_message_ms": 230070,
+          "first_tool_call_ms": 216457,
+          "first_tool_result_ms": 216802,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 454400,
+          "kind_counts": {
+            "status": 6,
+            "tool_call": 42,
+            "tool_delta": 98,
+            "tool_result": 21,
+            "message_delta": 745
+          },
+          "tool_calls": {
+            "read_file": 20,
+            "list_directory": 6,
+            "memory_search": 4,
+            "search_code": 8,
+            "preference_list": 4
+          }
+        },
+        "execution": {
+          "event_count": 578,
+          "first_event_ms": 138768,
+          "first_progress_ms": 138768,
+          "first_output_ms": 143277,
+          "last_event_ms": 346163,
+          "types": {
+            "orchestrator.run.progress": 268,
+            "orchestrator.run.output": 310
+          },
+          "progress_types": {
+            "message.part.updated": 149,
+            "message.updated": 64,
+            "session.status": 34,
+            "session.diff": 17,
+            "text_delta": 310,
+            "task.report": 2,
+            "session.idle": 2
+          },
+          "goal_runs": [
+            "grn_cf72a3d0e001ChAgpnErByqpw1",
+            "grn_cf72c7e62001phE8qIjRBGCfN5"
+          ]
+        }
+      }
+    }
+  }
+}

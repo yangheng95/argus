@@ -13,6 +13,7 @@ import { Database, eq } from "@/storage/db"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
 import { Log } from "@/util/log"
+import { Channel } from "@/util/channel"
 
 const SubmitInput = z.object({
   sessionID: Identifier.schema("session"),
@@ -137,40 +138,26 @@ export namespace OpencodeExecutor {
   export async function* events(input: { sessionID?: string; queueTaskID?: string; signal?: AbortSignal }) {
     if (!input.sessionID) return
     const sessionID = input.sessionID
-    const queue: Array<z.infer<typeof EventResult>> = []
-    let done = false
-    let wake: (() => void) | undefined
-    const push = (event: z.infer<typeof EventResult>) => {
-      queue.push(event)
-      wake?.()
-    }
+    const queue = new Channel<z.infer<typeof EventResult>>()
     const handler = (event: { payload: { type: string; properties: Record<string, unknown> } }) => {
       const next = mapEvent(event.payload, sessionID)
       if (!next) return
-      push(next)
+      queue.send(next)
     }
     GlobalBus.on("event", handler)
     const abort = () => {
-      done = true
       GlobalBus.off("event", handler)
-      wake?.()
+      queue.close()
     }
     input.signal?.addEventListener("abort", abort)
     try {
-      while (!done) {
-        if (queue.length === 0) {
-          await new Promise<void>((resolve) => {
-            wake = resolve
-          })
-          wake = undefined
-          if (done && queue.length === 0) break
-        }
-        const next = queue.shift()
-        if (next) yield next
+      for await (const next of queue) {
+        yield next
       }
     } finally {
       input.signal?.removeEventListener("abort", abort)
       GlobalBus.off("event", handler)
+      queue.close()
     }
   }
 }

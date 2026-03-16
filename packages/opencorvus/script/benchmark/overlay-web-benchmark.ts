@@ -17,9 +17,11 @@ function stageTimeout(name: string, totalMs: number, share: number, fallback: nu
 }
 
 const timeoutMs = Number(flag("--timeout-ms")) || 4 * 60 * 60 * 1000
-const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 5 * 60 * 1000
+const stallTimeoutMs = stageTimeout("--stall-timeout-ms", timeoutMs, 0.2, 15 * 60 * 1000)
 const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.4, 1_200_000)
 const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 1_500_000)
+const toolTimeoutMs = stageTimeout("--tool-timeout-ms", timeoutMs, 0.15, 10 * 60 * 1000)
+const standbyTimeoutMs = Number(flag("--standby-timeout-ms")) || timeoutMs
 const specMaxSteps = Number(flag("--spec-max-steps")) || 80
 const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
 const maxRuns = Number(flag("--max-runs")) || 20
@@ -39,40 +41,47 @@ const mode = (flag("--mode") || (requestFile ? "materialize" : "full")) === "mat
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
 const DEFAULT_TASK_REQUEST = `
-# ä»»åŠ¡
+Implement a minimal NoteStore.
 
-å®žçŽ°ä¸€ä¸ªæœ€å°å¯ç”¨çš„ NoteStoreï¼Œå¹¶è¡¥å……æµ‹è¯•ã€‚
+Only create or modify these files:
+- src/note-store.ts
+- src/note-store.test.ts
 
-## 1. åˆ›å»º src/note-store.ts
+Do not add package.json, tsconfig.json, README files, docs, or any other files unless they are strictly required.
+The Bun runtime and bun:test are already available, and the project scaffold is ready.
 
-- å¯¼å‡º \`Note\` interfaceï¼š{ id: string; title: string; done: boolean; created_at: number }
-- å¯¼å‡º \`NoteStore\` classï¼Œä½¿ç”¨å†…å­˜ Map
-- \`create(title: string)\`ï¼štitle trim åŽä¸èƒ½ä¸ºç©ºï¼›id ç”¨ crypto.randomUUID()ï¼›done=falseï¼›created_at=Date.now()
-- \`get(id: string)\`ï¼šè¿”å›ž Note æˆ– undefined
-- \`list()\`ï¼šè¿”å›žå…¨éƒ¨ Noteï¼ŒæŒ‰ created_at å‡åº
-- \`toggle(id: string)\`ï¼šåˆ‡æ¢ doneï¼Œè¿”å›žæ›´æ–°åŽçš„ Note æˆ– undefined
-- \`remove(id: string)\`ï¼šåˆ é™¤å¹¶è¿”å›ž boolean
+Requirements for src/note-store.ts:
+- export interface Note { id: string; title: string; done: boolean; created_at: number }
+- export class NoteStore backed by an in-memory Map<string, Note>
+- create(title: string): trim the title, throw on empty input, use crypto.randomUUID(), set done=false and created_at=Date.now()
+- get(id: string): return Note | undefined
+- list(): return all notes sorted by created_at ascending
+- toggle(id: string): flip done and return the updated note or undefined
+- remove(id: string): delete the note and return boolean
 
-## 2. åˆ›å»º src/note-store.test.ts
+Requirements for src/note-store.test.ts:
+- use bun:test
+- cover these cases:
+  1. create returns a complete Note
+  2. empty title throws
+  3. list preserves creation order
+  4. toggle flips done
+  5. remove deletes successfully and get then returns undefined
 
-ä½¿ç”¨ bun:test è¦†ç›–è¿™äº›ç”¨ä¾‹ï¼š
-
-1. create è¿”å›žå®Œæ•´ Note
-2. ç©º title ä¼šæŠ›é”™
-3. list ä¿æŒåˆ›å»ºé¡ºåº
-4. toggle ä¼šåˆ‡æ¢ done
-5. remove åˆ é™¤æˆåŠŸåŽï¼Œget è¿”å›ž undefined
-
-## 3. çº¦æŸ
-
-- Bun runtimeã€bun:test å’Œ crypto.randomUUID() å·²å¯ç›´æŽ¥ä½¿ç”¨ï¼Œä¸éœ€è¦è¡¥çŽ¯å¢ƒ
-- å¯ä»¥è‡ªç”±ç»„ç»‡é¡¹ç›®å¹¶æ–°å¢žå¿…è¦æ–‡ä»¶ï¼Œåªè¦æœ€ç»ˆäº¤ä»˜åˆç†ã€å¯è¿è¡Œã€æ˜“äºŽç†è§£
-- è¿è¡Œ \`bun test src/note-store.test.ts\` å¿…é¡»é€šè¿‡
+Acceptance:
+- run bun test ./src/note-store.test.ts
+- that command must pass
 `.trim()
 const TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
-const PANEL_REQUEST = `è¯·åˆ›å»ºä¸€ä¸ªæ–°ä»»åŠ¡å¹¶ç«‹å³å¼€å§‹æ‰§è¡Œä»¥ä¸‹å·¥ä½œï¼š\n\n${TASK_REQUEST}`
-const LOCAL_VERIFY_CMD = skipLocalVerify ? "" : (verifyCmd?.trim() || (requestFile ? "" : "bun test src/note-store.test.ts"))
+const LOCAL_VERIFY_CMD = skipLocalVerify ? "" : (verifyCmd?.trim() || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
+const TASK_GOALS = requestFile
+  ? undefined
+  : [{
+      description: "Implement NoteStore and tests",
+      criteria: "Create src/note-store.ts and src/note-store.test.ts so bun test ./src/note-store.test.ts passes.",
+      priority: "blocking" as const,
+    }]
 
 const AUTO_REPLY =
   "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
@@ -94,9 +103,9 @@ const DIAG_TYPES = new Set([
   "orchestrator.interaction.requested",
   "orchestrator.interaction.resolved",
 ])
-const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || Math.min(timeoutMs, 30_000)
+const PLANNING_VISIBLE_TIMEOUT_MS = Number(flag("--planning-timeout-ms")) || Math.min(timeoutMs, 2 * 60 * 1000)
 const TASK_CREATE_TIMEOUT_MS = Number(flag("--task-create-timeout-ms")) || timeoutMs
-const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || Math.min(timeoutMs, 2 * 60 * 1000)
+const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || Math.min(timeoutMs, 10 * 60 * 1000)
 const temp = {
   dir: "",
   home: "",
@@ -131,6 +140,8 @@ process.env.OPENCORVUS_SPEC_TIMEOUT_MS = String(specTimeoutMs)
 process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = String(plannerTimeoutMs)
 process.env.OPENCORVUS_SPEC_AGENT_TIMEOUT_MS = String(specTimeoutMs)
 process.env.OPENCORVUS_PLANNER_AGENT_TIMEOUT_MS = String(plannerTimeoutMs)
+process.env.OPENCORVUS_TOOL_TIMEOUT_MS = String(toolTimeoutMs)
+process.env.OPENCORVUS_STANDBY_TIMEOUT_MS = String(standbyTimeoutMs)
 process.env.OPENCORVUS_SPEC_AGENT_MAX_STEPS = String(specMaxSteps)
 process.env.OPENCORVUS_PLANNER_AGENT_MAX_STEPS = String(plannerMaxSteps)
 
@@ -286,31 +297,44 @@ try {
   marks.onlineAt = Date.now()
   const overlay = await syncDirectory(page, temp.dir)
   logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
-
-  await page.evaluate((budget) => {
-    window.__ocNextChatMetadata = {
-      create_task: {
-        budget: {
-          maxWallTimeMs: budget.timeoutMs,
-          maxRuns: budget.maxRuns,
-          maxReplans: budget.maxReplans,
-          maxEvaluations: budget.maxEvaluations,
+  marks.submittedAt = Date.now()
+  taskID = await api("/task", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+    },
+    body: JSON.stringify({
+      title: TASK_TITLE,
+      request: TASK_REQUEST,
+      executor,
+      budget: {
+        maxWallTimeMs: timeoutMs,
+        maxRuns,
+        maxReplans,
+        maxEvaluations,
+      },
+      routing: {
+        spec: "executor",
+        plan: "executor",
+      },
+      checks: {
+        build: false,
+        lint: false,
+        test: false,
+        verify_cmd: LOCAL_VERIFY_CMD ? [LOCAL_VERIFY_CMD] : false,
+        spec_check: {
+          enabled: false,
         },
       },
-    }
-  }, { timeoutMs, maxRuns, maxReplans, maxEvaluations })
-  await page.$eval("#chatTextarea", (node, value) => {
-    const input = node as HTMLTextAreaElement
-    input.value = String(value)
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-  }, PANEL_REQUEST)
-  marks.submittedAt = Date.now()
-  await page.click("#chatSend")
+      goals: TASK_GOALS,
+    }),
+  })
+    .then((res) => res.json())
+    .then((body) => String(body.task_id || ""))
+  if (!taskID) throw new Error("Task creation did not return task_id")
 
   const planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
   marks.planningAt = Date.now()
-  const streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
-  marks.streamingAt = Date.now()
 
   taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
   marks.createdAt = Date.now()
@@ -351,6 +375,8 @@ try {
     }
   }, { timeout: 120_000 })
   marks.boardAt = Date.now()
+  const streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+  marks.streamingAt = Date.now()
   page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
   marks.resumedAt = Date.now()
   const board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
@@ -377,6 +403,8 @@ try {
     stage_timeout_ms: {
       spec: specTimeoutMs,
       planner: plannerTimeoutMs,
+      tool: toolTimeoutMs,
+      standby: standbyTimeoutMs,
       stall: stallTimeoutMs,
     },
     stage_max_steps: {
@@ -559,6 +587,34 @@ async function scaffoldProject(dir: string, model: string) {
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
   await fs.mkdir(temp.config, { recursive: true })
+  await Bun.write(
+    path.join(dir, "package.json"),
+    JSON.stringify(
+      {
+        name: "overlay-web-benchmark",
+        private: true,
+        type: "module",
+      },
+      null,
+      2,
+    ),
+  )
+  await Bun.write(
+    path.join(dir, "tsconfig.json"),
+    JSON.stringify(
+      {
+        compilerOptions: {
+          target: "ES2022",
+          module: "Preserve",
+          moduleResolution: "Bundler",
+          strict: true,
+          types: ["bun-types"],
+        },
+      },
+      null,
+      2,
+    ),
+  )
   const providerID = model.split("/")[0] || "openai"
   const config = JSON.stringify(
     {

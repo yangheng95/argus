@@ -137,6 +137,39 @@ describe("executor.opencode", () => {
     })
   })
 
+  test("events preserves back-to-back session events", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({ title: "executor burst events" })
+        const stream = OpencodeExecutor.events({ sessionID: session.id })
+        const first = stream.next()
+        const second = stream.next()
+
+        await Bus.publish(MessageV2.Event.PartDelta, {
+          sessionID: session.id,
+          messageID: "msg_1",
+          partID: "prt_1",
+          field: "text",
+          delta: "first",
+        })
+        await Bus.publish(MessageV2.Event.PartDelta, {
+          sessionID: session.id,
+          messageID: "msg_1",
+          partID: "prt_1",
+          field: "text",
+          delta: "second",
+        })
+
+        expect((await first).value?.payload?.delta).toBe("first")
+        expect((await second).value?.payload?.delta).toBe("second")
+        await stream.return?.(undefined)
+      },
+    })
+  })
+
   test("delivery only includes messages since the current run start", async () => {
     await using tmp = await tmpdir({ git: true })
     const old = Date.now() - 10_000

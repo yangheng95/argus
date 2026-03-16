@@ -66,6 +66,7 @@ describe("scheduler.event-service", () => {
         await Bus.publish(TestEvent, { value: "stop" })
         await Bus.publish(TestEvent, { value: "go" })
         await Bus.publish(TestEvent, { value: "go" })
+        await waitUntil(() => wake.mock.calls.length === 1)
 
         const row = Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.id, id)).get())
         expect(wake).toHaveBeenCalledTimes(1)
@@ -104,6 +105,10 @@ describe("scheduler.event-service", () => {
         EventService.init()
         await Bus.publish(TestOnce, { value: "a" })
         await Bus.publish(TestOnce, { value: "b" })
+        await waitUntil(() => {
+          const row = Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.id, id)).get())
+          return wake.mock.calls.length === 1 && row?.enabled === false
+        })
 
         const row = Database.use((db) => db.select().from(EventJobTable).where(eq(EventJobTable.id, id)).get())
         expect(wake).toHaveBeenCalledTimes(1)
@@ -158,6 +163,12 @@ describe("scheduler.event-service", () => {
 
         EventService.init()
         await Bus.publish(TestEvent, { value: "go" })
+        await waitUntil(() => wake.mock.calls.length === 2)
+        await waitUntil(() =>
+          Database.use((db) =>
+            db.select().from(EventJobTable).where(eq(EventJobTable.project_id, Instance.project.id)).all(),
+          ).filter((row) => typeof row.last_run === "number").length === 1
+        )
 
         const rows = Database.use((db) =>
           db.select().from(EventJobTable).where(eq(EventJobTable.project_id, Instance.project.id)).all(),
@@ -219,6 +230,11 @@ describe("scheduler.event-service", () => {
         await waitUntil(() => wake.mock.calls.length === 2)
         release()
         await published
+        await waitUntil(() =>
+          Database.use((db) =>
+            db.select().from(EventJobTable).where(eq(EventJobTable.project_id, Instance.project.id)).all(),
+          ).filter((row) => typeof row.last_run === "number").length === 2
+        )
 
         const rows = Database.use((db) =>
           db.select().from(EventJobTable).where(eq(EventJobTable.project_id, Instance.project.id)).all(),
