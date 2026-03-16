@@ -35,6 +35,7 @@ import { SessionSummary } from "./summary"
 import { SessionPromptState } from "./prompt-state"
 import { Preference } from "@/preference"
 import { muteAISdkWarnings } from "@/runtime/shims"
+import { Channel } from "@/util/channel"
 
 muteAISdkWarnings()
 
@@ -50,6 +51,8 @@ const STRUCTURED_OUTPUT_SYSTEM_PROMPT = `IMPORTANT: The user has requested struc
 
 export namespace SessionLoop {
   const { log, state, cancel, flushCallbacks, start, resume } = SessionPromptState
+  const TOOL_TIMEOUT_MS = Math.max(Number.parseInt(process.env.OPENCORVUS_TOOL_TIMEOUT_MS ?? "", 10) || 30_000, 1_000)
+  const STANDBY_TIMEOUT_MS = Math.max(Number.parseInt(process.env.OPENCORVUS_STANDBY_TIMEOUT_MS ?? "", 10) || 30 * 60_000, 1_000)
 
   function collectLoopState(msgs: MessageV2.WithParts[]) {
     let lastUser: MessageV2.User | undefined
@@ -83,7 +86,7 @@ export namespace SessionLoop {
     SessionCompaction.prune({ sessionID: input.sessionID })
     log.info("entering standby", { sessionID: input.sessionID })
     SessionStatus.set(input.sessionID, { type: "idle" })
-    await waitForUserMessage(input.sessionID, input.abort, input.afterID)
+    return waitForUserMessage(input.sessionID, input.abort, input.afterID)
   }
 
   async function runSubtask(input: {
@@ -530,12 +533,12 @@ export namespace SessionLoop {
             const lastResult = msgs.find((m) => m.info.id === lastAssistant.id)
             if (lastResult) flushCallbacks(sessionID, lastResult)
 
-            await enterStandby({
+            const standby = await enterStandby({
               sessionID,
               abort,
               afterID: lastAssistant.id,
             })
-            if (abort.aborted) break
+            if (abort.aborted || standby !== "message") break
 
             step = 0
             continue
@@ -609,10 +612,19 @@ export namespace SessionLoop {
           continue
         }
         SessionCompaction.prune({ sessionID })
+        let flushed = false
         for await (const item of MessageV2.stream(sessionID)) {
           if (item.info.role === "user") continue
           flushCallbacks(sessionID, item)
+          flushed = true
           break
+        }
+        if (!flushed) {
+          const s = state()[sessionID]
+          if (s) {
+            for (const q of s.callbacks) q.reject(new Error("Session completed without response"))
+            s.callbacks = []
+          }
         }
       } catch (e) {
         const s = state()[sessionID]
@@ -629,44 +641,42 @@ export namespace SessionLoop {
     return firstResult
   })
 
-  function waitForUserMessage(sessionID: string, abort: AbortSignal, afterID: string): Promise<void> {
-    return new Promise<void>((resolve) => {
-      if (abort.aborted) {
-        resolve()
-        return
+  function waitForUserMessage(
+    sessionID: string,
+    abort: AbortSignal,
+    afterID: string,
+  ): Promise<"message" | "abort" | "timeout"> {
+    const signal = AbortSignal.any([
+      abort,
+      AbortSignal.timeout(STANDBY_TIMEOUT_MS),
+    ])
+    const events = new Channel<"message">()
+    const settle = async () => {
+      const result = await events.recv(signal)
+      return result === "message" ? "message" : (abort.aborted ? "abort" : "timeout")
+    }
+    const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
+      if (
+        event.properties.info.role === "user" &&
+        event.properties.info.sessionID === sessionID &&
+        event.properties.info.id > afterID
+      ) {
+        events.send("message")
       }
-
-      let settled = false
-      const settle = () => {
-        if (settled) return
-        settled = true
-        unsub()
-        resolve()
-      }
-
-      const unsub = Bus.subscribe(MessageV2.Event.Updated, (event) => {
-        if (
-          event.properties.info.role === "user" &&
-          event.properties.info.sessionID === sessionID &&
-          event.properties.info.id > afterID
-        ) {
-          settle()
-        }
-      })
-      abort.addEventListener("abort", settle, { once: true })
-
-      void (async () => {
+    })
+    return Promise.resolve()
+      .then(async () => {
+        if (abort.aborted) return "abort" as const
         for await (const item of MessageV2.stream(sessionID)) {
           if (item.info.id <= afterID) break
-          if (item.info.role === "user") {
-            settle()
-            return
-          }
+          if (item.info.role === "user") return "message" as const
         }
-      })().catch(() => {
-        settle()
+        return settle()
       })
-    })
+      .finally(() => {
+        unsub()
+        events.close()
+      })
   }
 
   export async function resolveTools(input: {
@@ -682,9 +692,9 @@ export namespace SessionLoop {
     using _ = log.time("resolveTools")
     const tools: Record<string, AITool> = {}
 
-    const context = (args: any, options: ToolCallOptions): Tool.Context => ({
+    const context = (args: any, options: ToolCallOptions, abort: AbortSignal = options.abortSignal!): Tool.Context => ({
       sessionID: input.session.id,
-      abort: options.abortSignal!,
+      abort,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
       extra: { ...(input.extra ?? {}), model: input.model, bypassAgentCheck: input.bypassAgentCheck },
@@ -729,7 +739,8 @@ export namespace SessionLoop {
         description: item.description,
         inputSchema: jsonSchema(schema as any),
         async execute(args, options) {
-          const ctx = context(args, options)
+          const abort = AbortSignal.any([options.abortSignal!, AbortSignal.timeout(TOOL_TIMEOUT_MS)])
+          const ctx = context(args, options, abort)
           await Plugin.trigger(
             "tool.execute.before",
             {

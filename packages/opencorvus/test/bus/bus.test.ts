@@ -10,6 +10,15 @@ const TestEvent = BusEvent.define("test.event", z.object({ value: z.string() }))
 
 const CounterEvent = BusEvent.define("test.counter", z.object({ count: z.number() }))
 
+async function waitUntil(check: () => boolean, timeout = 2000) {
+  const end = Date.now() + timeout
+  while (Date.now() < end) {
+    if (check()) return
+    await Bun.sleep(10)
+  }
+  throw new Error("timed out")
+}
+
 describe("Bus.subscribe / Bus.publish", () => {
   test("subscriber receives published event", async () => {
     await using tmp = await tmpdir()
@@ -91,6 +100,39 @@ describe("Bus.subscribe / Bus.publish", () => {
       },
     })
   })
+
+  test("publish does not wait for a slow async subscriber", async () => {
+    await using tmp = await tmpdir()
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        let release = () => {}
+        let finished = false
+        const gate = new Promise<void>((resolve) => {
+          release = () => resolve()
+        })
+        const received: string[] = []
+
+        const unsub = Bus.subscribe(TestEvent, async (evt) => {
+          received.push(evt.properties.value)
+          await gate
+          finished = true
+        })
+
+        const startedAt = Date.now()
+        await Bus.publish(TestEvent, { value: "slow" })
+        const elapsed = Date.now() - startedAt
+
+        expect(received).toEqual(["slow"])
+        expect(finished).toBe(false)
+        expect(elapsed < 250).toBe(true)
+
+        release()
+        await waitUntil(() => finished)
+        unsub()
+      },
+    })
+  })
 })
 
 describe("Bus.subscribeAll", () => {
@@ -106,6 +148,7 @@ describe("Bus.subscribeAll", () => {
 
         await Bus.publish(TestEvent, { value: "x" })
         await Bus.publish(CounterEvent, { count: 0 })
+        await waitUntil(() => types.includes("test.event") && types.includes("test.counter"))
         unsub()
 
         expect(types).toContain("test.event")
@@ -150,6 +193,7 @@ describe("Bus.once", () => {
 
         await Bus.publish(TestEvent, { value: "first" })
         await Bus.publish(TestEvent, { value: "second" })
+        await waitUntil(() => received.length === 2)
 
         expect(received).toEqual(["first", "second"])
       },

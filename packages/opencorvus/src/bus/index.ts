@@ -4,10 +4,15 @@ import { Instance } from "../project/instance"
 import { BusEvent } from "./bus-event"
 import { GlobalBus } from "./global"
 import { isBusTraceEnabled, traceBus } from "../util/debug-trace"
+import { Channel } from "../util/channel"
 
 export namespace Bus {
   const log = Log.create({ service: "bus" })
-  type Subscription = (event: any) => void
+  type Subscription = {
+    callback: (event: any) => void
+    dispatch(event: any): boolean
+    close(): void
+  }
   const source = new WeakMap<Subscription, string>()
 
   export const InstanceDisposed = BusEvent.define(
@@ -35,7 +40,7 @@ export namespace Bus {
         },
       }
       for (const sub of [...wildcard]) {
-        sub(event)
+        sub.dispatch(event)
       }
     },
   )
@@ -66,7 +71,6 @@ export namespace Bus {
     log.info("publishing", {
       type: def.type,
     })
-    const pending: Array<Promise<unknown>> = []
     let index = 0
     for (const key of [def.type, "*"]) {
       const match = state().subscriptions.get(key)
@@ -81,23 +85,14 @@ export namespace Bus {
             source: source.get(sub),
           })
         }
-        const result = sub(payload)
-        pending.push(
-          withTimeout(result, SUBSCRIBER_TIMEOUT_MS, `${def.type}/${source.get(sub) ?? "unknown"}`).catch((err) => {
-            log.warn("subscriber timed out or failed", {
-              type: def.type,
-              source: source.get(sub),
-              error: err instanceof Error ? err : String(err),
-            })
-          }),
-        )
+        sub.dispatch(payload)
       }
     }
     GlobalBus.emit("event", {
       directory: Instance.directory,
       payload,
     })
-    return Promise.allSettled(pending)
+    return Promise.resolve([])
   }
 
   export function subscribe<Definition extends BusEvent.Definition>(
@@ -125,13 +120,25 @@ export namespace Bus {
 
   function raw(type: string, callback: (event: any) => void) {
     log.info("subscribing", { type })
+    const events = new Channel<any>()
+    const controller = new AbortController()
+    const subscription: Subscription = {
+      callback,
+      dispatch(event) {
+        return events.send(event)
+      },
+      close() {
+        events.close()
+        controller.abort()
+      },
+    }
     if (isBusTraceEnabled()) {
       const stack = new Error().stack
         ?.split("\n")
         .slice(2, 6)
         .map((x) => x.trim())
         .join(" | ")
-      source.set(callback, stack ?? "unknown")
+      source.set(subscription, stack ?? "unknown")
       traceBus({
         phase: "subscribe",
         type,
@@ -139,19 +146,36 @@ export namespace Bus {
         source: stack,
       })
     }
+    void (async () => {
+      for await (const event of events) {
+        if (controller.signal.aborted) break
+        await withTimeout(
+          Promise.resolve(callback(event)),
+          SUBSCRIBER_TIMEOUT_MS,
+          `${type}/${source.get(subscription) ?? "unknown"}`,
+        ).catch((err) => {
+          log.warn("subscriber timed out or failed", {
+            type,
+            source: source.get(subscription),
+            error: err instanceof Error ? err : String(err),
+          })
+        })
+      }
+    })()
     const subscriptions = state().subscriptions
     let match = subscriptions.get(type) ?? []
-    if (match.includes(callback)) return () => {}
-    match.push(callback)
+    if (match.some((item) => item.callback === callback)) return () => {}
+    match.push(subscription)
     subscriptions.set(type, match)
 
     return () => {
       log.info("unsubscribing", { type })
       const match = subscriptions.get(type)
       if (!match) return
-      const index = match.indexOf(callback)
+      const index = match.indexOf(subscription)
       if (index === -1) return
       match.splice(index, 1)
+      subscription.close()
     }
   }
 }
