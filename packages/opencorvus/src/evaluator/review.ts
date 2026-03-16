@@ -2,7 +2,7 @@ import { findSpecSnapshot, findSpecItems } from "@/orchestrator/store"
 import { Provider } from "@/provider/provider"
 import { CheckConfig } from "@/orchestrator/model"
 import { Snapshot } from "@/snapshot"
-import { generateObject } from "@/llm/api"
+import { completeText, generateObject } from "@/llm/api"
 import z from "zod"
 import { Log } from "@/util/log"
 import {
@@ -18,7 +18,7 @@ import {
 } from "./shared"
 
 const evaluatorLog = Log.create({ service: "evaluator" })
-const REVIEW_TIMEOUT_MS = 120_000
+const REVIEW_TIMEOUT_MS = 480_000
 
 export async function uiReviewResult(
   config: z.infer<typeof CheckConfig>["ui_review"],
@@ -203,30 +203,35 @@ async function reviewResult(input: {
     }
   }
 
-  const result = await generateObject({
+  const result = await completeText({
     model: language,
     temperature: model.providerID.startsWith("moonshotai") ? 1 : 0,
-    timeoutMs: REVIEW_TIMEOUT_MS,
     abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
-    messages: [
-      {
-        role: "system",
-        content: input.prompt,
-      },
-      {
-        role: "user",
-        content: [
-          input.request ? `Task request:\n${input.request}` : "",
-          `Delivery summary:\n${input.delivery.summary}`,
-          input.context,
-        ]
-          .filter(Boolean)
-          .join("\n\n"),
-      },
-    ],
-    schema: ReviewResultSchema,
+    timeoutMs: false,
+    maxOutputTokens: 4096,
+    system: [
+      input.prompt,
+      "",
+      "Output plain markdown only.",
+      "Use these exact top-level sections in order:",
+      "- `# Verdict`",
+      "- `# Rationale`",
+      "- `# Strengths`",
+      "- `# Concerns`",
+      "",
+      "Under `# Verdict`, write exactly one of: accepted, rejected.",
+      "Under `# Strengths` and `# Concerns`, write bullet lists.",
+      "Do not output JSON.",
+    ].join("\n"),
+    prompt: [
+      input.request ? `Task request:\n${input.request}` : "",
+      `Delivery summary:\n${input.delivery.summary}`,
+      input.context,
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
   }).catch((err) => {
-    evaluatorLog.warn("review generateObject failed", { name: input.name, error: err })
+    evaluatorLog.warn("review text generation failed", { name: input.name, error: err })
     return undefined
   })
 
@@ -242,9 +247,35 @@ async function reviewResult(input: {
     }
   }
 
+  const text = collectText(result)
+  if (!text.trim()) {
+    return {
+      ok: false as const,
+      summary: `${input.name} returned no review text.`,
+      evidence: "Review model produced empty output.",
+      payload: {
+        available: true,
+        mode: input.mode,
+      },
+    }
+  }
+
+  const object = extractReviewText(text)
+  if (!object) {
+    return {
+      ok: false as const,
+      summary: `${input.name} returned an unparsable review.`,
+      evidence: clip(text, 2000),
+      payload: {
+        available: true,
+        mode: input.mode,
+      },
+    }
+  }
+
   return {
     ok: true as const,
-    object: result.object as z.infer<typeof ReviewResultSchema>,
+    object,
   }
 }
 
@@ -298,6 +329,109 @@ function reviewOutcome(
           ...result.object,
         },
       })
+}
+
+function collectText(result: { text?: string; steps: Array<{ text?: string }> }) {
+  const direct = result.text?.trim() || ""
+  if (direct) return direct
+  return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
+}
+
+function extractReviewText(text: string) {
+  const raw = text.trim()
+  if (!raw) return undefined
+  if (raw.startsWith("{") || raw.includes("```json")) return extractReviewJSON(raw)
+  return normalizeReviewResult({
+    verdict: sectionBody(raw, ["Verdict", "结论"]).split(/\r?\n/)[0]?.trim(),
+    rationale:
+      sectionBody(raw, ["Rationale", "Summary", "Reasoning", "理由", "摘要"]) ||
+      firstContentLine(raw),
+    strengths: parseList(sectionBody(raw, ["Strengths", "优点", "亮点"])),
+    concerns: parseList(sectionBody(raw, ["Concerns", "Issues", "Problems", "问题", "风险"])),
+  })
+}
+
+function extractReviewJSON(text: string) {
+  let raw = text.trim()
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenced) raw = fenced[1].trim()
+  if (!raw.startsWith("{")) {
+    const match = raw.match(/(\{[\s\S]*\})/)
+    if (!match) return undefined
+    raw = match[1]
+  }
+  try {
+    return normalizeReviewResult(JSON.parse(raw))
+  } catch {
+    return undefined
+  }
+}
+
+function normalizeReviewResult(input: unknown) {
+  const row = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
+  const verdict = normalizeVerdict(row.verdict)
+  const rationale = typeof row.rationale === "string"
+    ? row.rationale.trim()
+    : typeof row.summary === "string"
+    ? row.summary.trim()
+    : ""
+  if (!verdict || !rationale) return undefined
+  try {
+    return ReviewResultSchema.parse({
+      verdict,
+      rationale,
+      strengths: normalizeList(row.strengths),
+      concerns: normalizeList(row.concerns),
+    })
+  } catch {
+    return undefined
+  }
+}
+
+function normalizeVerdict(value: unknown) {
+  const text = typeof value === "string" ? value.trim().toLowerCase() : ""
+  if (!text) return undefined
+  if (/(^|\b)(accepted|accept|pass|passed|通过|接受)(\b|$)/i.test(text)) return "accepted"
+  if (/(^|\b)(rejected|reject|fail|failed|不通过|拒绝)(\b|$)/i.test(text)) return "rejected"
+  return undefined
+}
+
+function normalizeList(value: unknown) {
+  return Array.isArray(value)
+    ? value.flatMap((item) => typeof item === "string" && item.trim() ? [item.trim()] : [])
+    : []
+}
+
+function sectionBody(text: string, names: string[]) {
+  const lines = text.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const title = lines[i].trim().replace(/^#{1,6}\s*/, "")
+    if (!names.some((name) => title.localeCompare(name, "en", { sensitivity: "accent" }) === 0)) continue
+    const body: string[] = []
+    for (let j = i + 1; j < lines.length; j++) {
+      if (/^#{1,6}\s+/.test(lines[j].trim())) break
+      body.push(lines[j])
+    }
+    return body.join("\n").trim()
+  }
+  return ""
+}
+
+function parseList(text: string) {
+  return text
+    .split(/\r?\n/)
+    .flatMap((line) => {
+      const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
+      return value ? [value] : []
+    })
+}
+
+function firstContentLine(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => !!line && !/^#{1,6}\s+/.test(line))
+    || ""
 }
 
 export async function specCheckResult(

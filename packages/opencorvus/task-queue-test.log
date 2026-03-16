@@ -1,0 +1,23 @@
+bun test v1.3.10 (30e609e0)
+
+test\scheduler\task-queue-service.test.ts:
+(pass) scheduler.task-queue-service > executes queued prompt task [328.00ms]
+(pass) scheduler.task-queue-service > executes prompt immediately via shared executor [265.00ms]
+(pass) scheduler.task-queue-service > retries on failure and marks failed after max retries [297.00ms]
+(pass) scheduler.task-queue-service > retries reuse the same prompt ids [266.00ms]
+(pass) scheduler.task-queue-service > recover cancels stale running sessions before retry [265.00ms]
+(pass) scheduler.task-queue-service > poll only processes tasks for current project [547.00ms]
+(pass) scheduler.task-queue-service > runs queued tasks concurrently across sessions [328.00ms]
+(pass) scheduler.task-queue-service > only claims one task per session in a single run [266.00ms]
+(pass) scheduler.task-queue-service > prefers high priority task over older low priority task in same session [297.00ms]
+(pass) scheduler.task-queue-service > scans deep queue and still picks another session [297.00ms]
+(pass) scheduler.task-queue-service > does not claim queued task when same session already has running task [265.00ms]
+(pass) scheduler.task-queue-service > with concurrency=1 skips blocked session and executes another eligible session [266.00ms]
+(pass) scheduler.task-queue-service > recovery uses time_updated heartbeat for running tasks [281.00ms]
+(pass) scheduler.task-queue-service > retries stalled running prompt without session activity [1282.00ms]
+(pass) scheduler.task-queue-service > session activity keeps running prompt alive [1203.00ms]
+
+ 15 pass
+ 0 fail
+ 45 expect() calls
+Ran 15 tests across 1 file. [8.00s]

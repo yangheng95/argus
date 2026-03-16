@@ -14,6 +14,12 @@ import { Env } from "@/env"
 
 const log = Log.create({ service: "spec-service" })
 
+type ExplicitGoal = {
+  description: string
+  criteria: string
+  priority?: "blocking" | "advisory"
+}
+
 function specTimeoutMs(timeoutMs?: number) {
   if (timeoutMs && timeoutMs > 0) return timeoutMs
   return Number(Env.get("OPENCORVUS_SPEC_TIMEOUT_MS")) || 120_000
@@ -27,8 +33,25 @@ export class SpecFailureError extends Error {
 }
 
 
-function deriveGoals(output: SpecOutputType, explicitGoalCount: number) {
-  if (explicitGoalCount > 0 || output.spec_items.length < 1) {
+function deriveGoals(output: SpecOutputType, explicitGoals?: ExplicitGoal[]) {
+  const direct = Array.isArray((output as { goals?: unknown }).goals)
+    ? (output as {
+        goals: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: { check_selector?: string[] } }>
+      }).goals
+    : []
+  if ((explicitGoals?.length ?? 0) > 0) {
+    return {
+      goals: direct.length > 0
+        ? direct
+        : explicitGoals!.map((goal) => ({
+            description: goal.description,
+            criteria: goal.criteria,
+            priority: goal.priority,
+          })),
+      derived: false,
+    }
+  }
+  if (output.spec_items.length < 1) {
     return {
       goals: [] as Array<{ description: string; criteria: string; priority: string; metadata?: { check_selector: string[] } }>,
       derived: false,
@@ -52,8 +75,8 @@ function deriveGoals(output: SpecOutputType, explicitGoalCount: number) {
 /**
  * Convert SpecAgent output to the shared spec draft used by the orchestrator.
  */
-function toSpecDraft(output: SpecOutputType, explicitGoalCount = 0) {
-  const next = deriveGoals(output, explicitGoalCount)
+function toSpecDraft(output: SpecOutputType, explicitGoals?: ExplicitGoal[]) {
+  const next = deriveGoals(output, explicitGoals)
   return {
     draft: {
       summary: output.summary,
@@ -114,7 +137,7 @@ export namespace HeadlessSpecService {
         evidenceSources: output.evidence_sources.length,
         hasClarifications: (output.clarifications?.length ?? 0) > 0,
       })
-      const spec = toSpecDraft(output, input.goals?.length ?? 0)
+      const spec = toSpecDraft(output, input.goals)
       if (spec.derived) {
         log.info("spec service derived execution goals from spec items", {
           title: input.title,
@@ -130,6 +153,11 @@ export namespace HeadlessSpecService {
         unresolved_questions: output.unresolved_questions,
       }
     } catch (error) {
+      log.error("spec service initial failed", {
+        title: input.title,
+        error: String(error),
+        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
+      })
       if (error instanceof SpecFailureError) throw error
       throw new SpecFailureError("spec agent failed", { cause: error })
     } finally {
@@ -182,7 +210,7 @@ export namespace HeadlessSpecService {
         title: input.title,
         specItems: output.spec_items.length,
       })
-      const spec = toSpecDraft(output, input.goals?.length ?? 0)
+      const spec = toSpecDraft(output, input.goals)
       if (spec.derived) {
         log.info("spec service derived execution goals from spec items", {
           title: input.title,
@@ -198,6 +226,11 @@ export namespace HeadlessSpecService {
         unresolved_questions: output.unresolved_questions,
       }
     } catch (error) {
+      log.error("spec service rewrite failed", {
+        title: input.title,
+        error: String(error),
+        cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
+      })
       if (error instanceof SpecFailureError) throw error
       throw new SpecFailureError("spec agent rewrite failed", { cause: error })
     } finally {

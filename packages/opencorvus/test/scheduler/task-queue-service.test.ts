@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { Bus } from "../../src/bus"
 import { Session } from "../../src/session"
+import { MessageV2 } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
 import { TaskQueueService } from "../../src/scheduler/task-queue-service"
 import { TaskQueueTable } from "../../src/scheduler/task-queue.sql"
@@ -17,6 +19,8 @@ function result() {
 describe("scheduler.task-queue-service", () => {
   afterEach(async () => {
     delete process.env.OPENCORVUS_TASK_QUEUE_CONCURRENCY
+    delete process.env.OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS
+    delete process.env.OPENCORVUS_TASK_QUEUE_STALL_TIMEOUT_MS
     mock.restore()
     await Instance.disposeAll()
   })
@@ -683,5 +687,99 @@ describe("scheduler.task-queue-service", () => {
 
     delete process.env.OPENCORVUS_TASK_QUEUE_RUN_TIMEOUT_MS
     expect(prompt).toHaveBeenCalledTimes(0)
+  })
+
+  test("retries stalled running prompt without session activity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_STALL_TIMEOUT_MS = "1000"
+    let reject: ((error: Error) => void) | undefined
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail as (error: Error) => void
+        }) as ReturnType<typeof SessionPrompt.prompt>,
+    )
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => {
+      reject?.(new Error("Session cancelled"))
+      return undefined
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const id = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "stall me",
+              },
+            ],
+          },
+          source: "test",
+        })
+        await TaskQueueService.runNow()
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("retrying")
+        expect(row?.error_message).toBe("task stalled without session activity")
+        expect(cancel).toHaveBeenCalledWith(session.id)
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
+
+  test("session activity keeps running prompt alive", async () => {
+    await using tmp = await tmpdir({ git: true })
+    process.env.OPENCORVUS_TASK_QUEUE_STALL_TIMEOUT_MS = "1000"
+    process.env.OPENCORVUS_TASK_QUEUE_HEARTBEAT_MS = "1000"
+    const cancel = spyOn(SessionPrompt, "cancel").mockImplementation(() => undefined)
+    const prompt = spyOn(SessionPrompt, "prompt").mockImplementation(async (input) => {
+      await Bun.sleep(300)
+      await Bus.publish(MessageV2.Event.PartDelta, {
+        sessionID: input.sessionID,
+        messageID: "msg_keepalive",
+        partID: "prt_keepalive",
+        field: "text",
+        delta: "still running",
+      })
+      await Bun.sleep(300)
+      await Bus.publish(MessageV2.Event.PartDelta, {
+        sessionID: input.sessionID,
+        messageID: "msg_keepalive",
+        partID: "prt_keepalive",
+        field: "text",
+        delta: "and alive",
+      })
+      await Bun.sleep(300)
+      return result()
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const session = await Session.create({})
+        const id = TaskQueueService.enqueuePrompt({
+          sessionID: session.id,
+          prompt: {
+            parts: [
+              {
+                type: "text",
+                text: "stay alive",
+              },
+            ],
+          },
+          source: "test",
+        })
+        await TaskQueueService.runNow()
+        const row = Database.use((db) => db.select().from(TaskQueueTable).where(eq(TaskQueueTable.id, id)).get())
+        expect(row?.status).toBe("completed")
+      },
+    })
+
+    expect(prompt).toHaveBeenCalledTimes(1)
+    expect(cancel).toHaveBeenCalledTimes(0)
   })
 })

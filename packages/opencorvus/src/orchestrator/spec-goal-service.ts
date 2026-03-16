@@ -1,3 +1,4 @@
+import type { GoalJudgmentType } from "@/evaluator/agent"
 import { taskNotes } from "@/workbench/preference"
 import { listGoalsBySpec, type TaskRow } from "./store"
 
@@ -9,7 +10,14 @@ function goalCriteria(description: string) {
   return `The rewritten specification explicitly captures this operator goal and the delivered implementation satisfies it: ${description}`
 }
 
-export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string) {
+function passedGoalIndices(analysis?: GoalJudgmentType) {
+  return new Set(
+    (Array.isArray(analysis?.goal_statuses) ? analysis.goal_statuses : [])
+      .flatMap((item) => item.status === "passed" ? [item.goal_index] : []),
+  )
+}
+
+export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string, analysis?: GoalJudgmentType) {
   const notes = taskNotes(task.id, 24)
   const constraints = [...new Set(
     notes
@@ -30,9 +38,12 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string) {
       .filter(Boolean),
   )]
   const current = listGoalsBySpec(specSnapshotID)
+  const passed = passedGoalIndices(analysis)
+  const remaining = current.filter((_, index) => !passed.has(index))
+  const active = remaining.length > 0 ? remaining : current
   const existing = new Set(current.map((goal) => noteText(goal.description).toLowerCase()))
   const goals = [
-    ...current.map((goal) => ({
+    ...active.map((goal) => ({
       description: goal.description,
       criteria: goal.criteria,
       priority: goal.priority,
@@ -52,7 +63,22 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string) {
     ),
   ]
   const request = goalUpdates.length === 0 && planHints.length === 0 && constraints.length === 0
-    ? task.request
+    ? [
+        task.request,
+        passed.size > 0
+          ? [
+              "Goals already satisfied in previous runs. Preserve their implementation and do not expand them again in this rewrite:",
+              ...current
+                .flatMap((goal, index) => passed.has(index) ? [`- ${goal.description}`] : []),
+            ].join("\n")
+          : "",
+        remaining.length > 0 && remaining.length < current.length
+          ? [
+              "Focus this rewrite on the remaining unresolved goals:",
+              ...remaining.map((goal) => `- ${goal.description}`),
+            ].join("\n")
+          : "",
+      ].filter(Boolean).join("\n\n")
     : [
         task.request,
         constraints.length > 0
@@ -71,6 +97,19 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string) {
           ? [
               "Operator planning hints for the next plan version:",
               ...planHints.map((hint) => `- ${hint}`),
+            ].join("\n")
+          : "",
+        passed.size > 0
+          ? [
+              "Goals already satisfied in previous runs. Preserve their implementation and do not expand them again in this rewrite:",
+              ...current
+                .flatMap((goal, index) => passed.has(index) ? [`- ${goal.description}`] : []),
+            ].join("\n")
+          : "",
+        remaining.length > 0 && remaining.length < current.length
+          ? [
+              "Focus this rewrite on the remaining unresolved goals:",
+              ...remaining.map((goal) => `- ${goal.description}`),
             ].join("\n")
           : "",
       ].filter(Boolean).join("\n\n")

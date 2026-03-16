@@ -113,3 +113,47 @@ export function createToolInputCapture() {
     },
   }
 }
+
+export function createTrackedToolCapture<T>(toolName: string, schema: ZodType<T>, onCapture?: (value: T) => void | Promise<void>) {
+  const base = createToolInputCapture()
+  let captured: T | undefined
+  let notified = false
+  let total = 0
+  const usage: Record<string, number> = {}
+
+  const read = () => {
+    if (captured) return captured
+    const next = base.recover(toolName, schema)
+    if (!next) return
+    captured = next
+    return captured
+  }
+
+  return {
+    hooks: mergeTextHooks(base.hooks, {
+      onChunk: async (event) => {
+        const value = objectValue(event.chunk)
+        if (stringValue(value?.type) === "tool-call") {
+          const name = stringValue(value?.toolName)
+          if (name) {
+            usage[name] = (usage[name] ?? 0) + 1
+            total += 1
+          }
+        }
+        const next = read()
+        if (!next || notified) return
+        notified = true
+        await onCapture?.(next)
+      },
+    }),
+    recover() {
+      return read()
+    },
+    toolCallCount() {
+      return total
+    },
+    toolUsage() {
+      return { ...usage }
+    },
+  }
+}

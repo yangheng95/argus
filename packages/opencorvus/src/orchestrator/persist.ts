@@ -1942,7 +1942,7 @@ export function updateGoalRun(
 }
 
 export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow, summary: string, analysis?: GoalJudgmentType) {
-  const rewrite = buildSpecReplanInput(task, plan.spec_snapshot_id)
+  const rewrite = buildSpecReplanInput(task, plan.spec_snapshot_id, analysis)
   const goals = listGoalsBySpec(plan.spec_snapshot_id)
   const routing =
     task.metadata?.routing && typeof task.metadata.routing === "object" && !Array.isArray(task.metadata.routing)
