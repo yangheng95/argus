@@ -12,7 +12,6 @@ import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { withKeyedLock } from "@/util/lock"
 import { withTimeout } from "@/util/timeout"
-import { WorkbenchService } from "@/workbench/service"
 import { DeliveryService } from "./delivery"
 import {
   applyGoalDelivery,
@@ -21,7 +20,6 @@ import {
   cleanupGoalWorkspace,
   cleanupStaleGoalWorkspaces,
   createGoalSession,
-  createGoalWorkspace,
   currentGoal,
   deliveryFromSnapshot,
   evaluateGoal,
@@ -128,7 +126,6 @@ function goalRunTimeoutMs() {
   return safeParseInt(process.env.OPENCORVUS_GOAL_RUN_TIMEOUT_MS, 60_000)
 }
 const EXECUTOR_STATUS_TIMEOUT_MS = safeParseInt(process.env.OPENCORVUS_EXECUTOR_STATUS_TIMEOUT_MS, 15_000)
-const GOAL_RUN_PARALLELISM = Math.max(1, safeParseInt(process.env.OPENCORVUS_GOAL_PARALLELISM, 4))
 // Set OPENCORVUS_REQUIRE_REPLAN_CONFIRM=1 to require user approval before spec rewrite.
 // Default is off so automated pipelines continue without interruption.
 const REQUIRE_REPLAN_CONFIRM = process.env.OPENCORVUS_REQUIRE_REPLAN_CONFIRM === "1"
@@ -258,70 +255,6 @@ function nodeMeta(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
     : {}
 }
 
-function nodeWaveIndex(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
-  const value = nodeMeta(node).wave_index
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined
-}
-
-function nodeWaveParallelism(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
-  const meta = nodeMeta(node)
-  const value = meta.wave_parallelism
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined
-}
-
-function nodeOwnedPaths(node: ReturnType<typeof listPlanNodesByPlan>[number]) {
-  const value = nodeMeta(node).owned_paths
-  return [...new Set(Array.isArray(value)
-    ? value.flatMap((item) => {
-        if (typeof item !== "string") return []
-        const next = item.trim().replace(/\\/g, "/").replace(/\/+$/, "").replace(/^\.\//, "").toLowerCase()
-        return next ? [next] : []
-      })
-    : [])]
-}
-
-function pathsConflict(left: string[], right: string[]) {
-  return left.some((item) =>
-    right.some((other) => item === other || item.startsWith(`${other}/`) || other.startsWith(`${item}/`))
-  )
-}
-
-function selectDispatchBatch(
-  nodes: ReturnType<typeof listPlanNodesByPlan>,
-  ready: ReturnType<typeof readyGoalNodes>,
-  active: GoalRunRow[],
-  capacity: number,
-) {
-  const byID = new Map(nodes.map((node) => [node.id, node]))
-  const activeWaveCounts = new Map<number, number>()
-  const activeOwnedPaths = active.flatMap((goalRun) => {
-    const node = goalRun.plan_node_id ? byID.get(goalRun.plan_node_id) : undefined
-    if (!node) return []
-    const waveIndex = nodeWaveIndex(node)
-    if (waveIndex !== undefined) {
-      activeWaveCounts.set(waveIndex, (activeWaveCounts.get(waveIndex) ?? 0) + 1)
-    }
-    return nodeOwnedPaths(node)
-  })
-  const selected: ReturnType<typeof readyGoalNodes> = []
-  const selectedOwnedPaths: string[] = []
-  for (const next of ready) {
-    if (selected.length >= capacity) break
-    const waveIndex = nodeWaveIndex(next.node)
-    const parallelism = nodeWaveParallelism(next.node)
-    if (waveIndex !== undefined && parallelism && (activeWaveCounts.get(waveIndex) ?? 0) >= parallelism) continue
-    const ownedPaths = nodeOwnedPaths(next.node)
-    if (ownedPaths.length > 0 && (pathsConflict(ownedPaths, activeOwnedPaths) || pathsConflict(ownedPaths, selectedOwnedPaths))) continue
-    selected.push(next)
-    selectedOwnedPaths.push(...ownedPaths)
-    if (waveIndex !== undefined) {
-      activeWaveCounts.set(waveIndex, (activeWaveCounts.get(waveIndex) ?? 0) + 1)
-    }
-  }
-  if (selected.length === 0 && active.length === 0 && ready.length > 0) return [ready[0]]
-  return selected
-}
-
 async function queueGoalRun(
   task: TaskRow,
   run: RunRow,
@@ -329,24 +262,13 @@ async function queueGoalRun(
   next: ReturnType<typeof readyGoalNodes>[number],
   hooks: RuntimeHooks,
 ) {
-  const brief = WorkbenchService.compileBrief({
-    taskID: task.id,
-    runID: run.id,
-    planVersionID: plan.id,
-    sessionID: task.session_id ?? undefined,
-  })
   const startRef = taskBaselineRef(task)
   const baseRef = await Snapshot.track().catch(() => undefined)
-  const workspaceDir = await createGoalWorkspace({
-    task,
-    goal: next.goal,
-    snapshot: baseRef,
-  })
+  const workspaceDir = await taskDirectory(task)
   let session: Awaited<ReturnType<typeof createGoalSession>>
   try {
     session = await createGoalSession(task, next.goal, workspaceDir)
   } catch (err) {
-    await cleanupGoalWorkspace(workspaceDir).catch((e) => log.warn("cleanup after session create failure", { error: String(e) }))
     throw err
   }
   const goalRun = createGoalRun({
@@ -364,7 +286,6 @@ async function queueGoalRun(
     },
   })
   const prompt = buildGoalPrompt({
-    brief: brief.content,
     plan: {
       ...plan,
       prompt: planPrompt(plan, run),
@@ -387,7 +308,6 @@ async function queueGoalRun(
   } catch (err) {
     updateGoalRun(goalRun.id, { status: "failed", error: String(err), time_completed: Date.now() })
     await removeGoalRunSession(goalRun).catch((e) => log.warn("cleanup session after submit failure", { error: String(e) }))
-    await cleanupGoalWorkspace(workspaceDir).catch((e) => log.warn("cleanup workspace after submit failure", { error: String(e) }))
     throw err
   }
   const now = Date.now()
@@ -450,23 +370,19 @@ async function queueGoalRun(
 }
 
 async function queueReadyGoalRuns(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
-  const capacity = GOAL_RUN_PARALLELISM - activeGoalRuns(run).length
-  if (capacity <= 0) return 0
+  if (activeGoalRuns(run).length > 0) return 0
   const nodes = listPlanNodesByPlan(plan.id)
-  const active = activeGoalRuns(run)
-  const ready = readyGoalNodes(nodes, listGoalsBySpec(plan.spec_snapshot_id), active)
-  const selected = selectDispatchBatch(nodes, ready, active, capacity)
-  if (selected.length === 0) return 0
-  log.info("dispatching goal wave batch", {
+  const ready = readyGoalNodes(nodes, listGoalsBySpec(plan.spec_snapshot_id))
+  const next = ready[0]
+  if (!next) return 0
+  log.info("dispatching iterative goal stage", {
     runID: run.id,
     ready: ready.length,
-    selected: selected.length,
-    capacity,
-    goals: selected.map((item) => item.goal.description),
-    waves: selected.map((item) => nodeMeta(item.node).wave_title).filter((item): item is string => typeof item === "string"),
+    goal: next.goal.description,
+    wave: typeof nodeMeta(next.node).wave_title === "string" ? nodeMeta(next.node).wave_title : undefined,
   })
-  await Promise.all(selected.map((next) => queueGoalRun(task, run, plan, next, hooks)))
-  return selected.length
+  await queueGoalRun(task, run, plan, next, hooks)
+  return 1
 }
 
 async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHooks) {
@@ -741,7 +657,7 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       const appliedByRun = runAppliedFiles.get(run.id) ?? new Set<string>()
       const conflicts = delivered.diffs.filter((d) => d.status !== "deleted" && appliedByRun.has(d.file))
       if (conflicts.length > 0) {
-        log.warn("goal delivery: overwriting files already modified by a sibling goal — use milestone ordering to serialize these goals", {
+        log.warn("goal delivery: file was already written by an earlier iterative stage in this run — later stage is overwriting it", {
           goal: goal.description,
           conflicts: conflicts.map((d) => d.file),
         })
@@ -1131,7 +1047,7 @@ export namespace OrchestratorRuntime {
       }
       const interactionReason = findPendingInteractions(run.id)[0]?.request_type
       const recoverableGoalRuns = listGoalRunsByCoordinator(run.id)
-        .filter((goalRun) => goalRun.status === "completed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
+        .filter((goalRun) => goalRun.status === "completed")
       for (const goalRun of recoverableGoalRuns) {
         await finalizeGoalRun(task, run, goalRun, hooks)
         run = requireRun(runID)
@@ -1146,7 +1062,7 @@ export namespace OrchestratorRuntime {
         }
       }
       const failedGoalRun = listGoalRunsByCoordinator(run.id)
-        .find((goalRun) => goalRun.status === "failed" && (goalRun.session_id || !findEvaluationByGoalRun(goalRun.id)))
+        .find((goalRun) => goalRun.status === "failed")
       if (failedGoalRun && run.status !== "failed" && run.status !== "aborted") {
         const evaluation = findEvaluationByGoalRun(failedGoalRun.id)
         await handleEvaluationFailure(task, run, evaluation?.summary ?? failedGoalRun.error ?? "Goal run failed", hooks)
@@ -1471,7 +1387,7 @@ async function abortActiveGoalRuns(run: RunRow, summary: string, exceptGoalRunID
         }),
         5_000,
       ).catch((error) => {
-        log.warn("failed to abort sibling goal run", {
+        log.warn("failed to abort active goal run", {
           runID: run.id,
           goalRunID: goalRun.id,
           error: String(error),

@@ -1,24 +1,20 @@
-/**
- * HeadlessSpecService — orchestrator-facing specification stage.
+﻿/**
+ * HeadlessSpecService â€” orchestrator-facing specification stage.
  *
  * Wraps the SpecAgent with timeout handling, persistence, and integration
  * with the orchestrator lifecycle.
  *
  * Two entry points matching the current orchestrator lifecycle:
- *   - initial()  — Generate initial spec when task is created
- *   - rewrite()  — Revise spec based on failure analysis (replan)
+ *   - initial()  â€” Generate initial spec when task is created
+ *   - rewrite()  â€” Revise spec based on failure analysis (replan)
  */
-import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft } from "./agent"
+import z from "zod"
+import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft, SpecDraftGoal } from "./agent"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
+import { type TextHooks } from "@/llm/api"
 
 const log = Log.create({ service: "spec-service" })
-
-type ExplicitGoal = {
-  description: string
-  criteria: string
-  priority?: "blocking" | "advisory"
-}
 
 function specTimeoutMs(timeoutMs?: number) {
   if (timeoutMs && timeoutMs > 0) return timeoutMs
@@ -33,29 +29,22 @@ export class SpecFailureError extends Error {
 }
 
 
-function deriveGoals(output: SpecOutputType, explicitGoals?: ExplicitGoal[]) {
-  const direct = Array.isArray((output as { goals?: unknown }).goals)
-    ? (output as {
-        goals: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: { check_selector?: string[] } }>
-      }).goals
-    : []
+/**
+ * Derive execution goals (iterative stages) from spec output.
+ *
+ * Priority order:
+ * 1. Explicit goals passed by caller (e.g. user-supplied goals on replan)
+ * 2. spec_items from the spec agent — each item maps to one iterative stage
+ */
+function deriveGoals(output: SpecOutputType, explicitGoals?: Array<z.infer<typeof SpecDraftGoal>>): { goals: z.infer<typeof SpecDraftGoal>[]; derived: boolean } {
   if ((explicitGoals?.length ?? 0) > 0) {
     return {
-      goals: direct.length > 0
-        ? direct
-        : explicitGoals!.map((goal) => ({
-            description: goal.description,
-            criteria: goal.criteria,
-            priority: goal.priority,
-          })),
+      goals: explicitGoals!,
       derived: false,
     }
   }
   if (output.spec_items.length < 1) {
-    return {
-      goals: [] as Array<{ description: string; criteria: string; priority: string; metadata?: { check_selector: string[] } }>,
-      derived: false,
-    }
+    return { goals: [], derived: false }
   }
   return {
     goals: output.spec_items.map((item) => ({
@@ -63,9 +52,7 @@ function deriveGoals(output: SpecOutputType, explicitGoals?: ExplicitGoal[]) {
       criteria: item.description,
       priority: item.priority,
       metadata: item.check_selector?.length
-        ? {
-            check_selector: item.check_selector,
-          }
+        ? { check_selector: item.check_selector }
         : undefined,
     })),
     derived: true,
@@ -75,7 +62,7 @@ function deriveGoals(output: SpecOutputType, explicitGoals?: ExplicitGoal[]) {
 /**
  * Convert SpecAgent output to the shared spec draft used by the orchestrator.
  */
-function toSpecDraft(output: SpecOutputType, explicitGoals?: ExplicitGoal[]) {
+function toSpecDraft(output: SpecOutputType, explicitGoals?: z.infer<typeof SpecDraftGoal>[]) {
   const next = deriveGoals(output, explicitGoals)
   return {
     draft: {
@@ -98,9 +85,13 @@ export namespace HeadlessSpecService {
   export async function initial(input: {
     title: string
     request: string
-    goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    goals?: z.infer<typeof SpecDraftGoal>[]
+    sessionID?: string
+    metadata?: Record<string, unknown>
     timeoutMs?: number
     signal?: AbortSignal
+    stream?: TextHooks
+    onStatus?: (summary: string) => void | Promise<void>
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
@@ -118,12 +109,12 @@ export namespace HeadlessSpecService {
         SpecAgent.initial({
           title: input.title,
           request: input.request,
-          goals: input.goals?.map(g => ({
-            description: g.description,
-            criteria: g.criteria,
-            priority: g.priority,
-          })),
+          goals: input.goals,
+          sessionID: input.sessionID,
+          metadata: input.metadata,
           signal,
+          stream: input.stream,
+          onStatus: input.onStatus,
         }).finally(() => clearTimeout(specTimer)),
         new Promise<never>((_, reject) => {
           specTimer = setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs)
@@ -173,9 +164,13 @@ export namespace HeadlessSpecService {
     title: string
     request: string
     rewriteContext: SpecRewriteContext
-    goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory" }>
+    goals?: z.infer<typeof SpecDraftGoal>[]
+    sessionID?: string
+    metadata?: Record<string, unknown>
     timeoutMs?: number
     signal?: AbortSignal
+    stream?: TextHooks
+    onStatus?: (summary: string) => void | Promise<void>
   }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
@@ -194,12 +189,12 @@ export namespace HeadlessSpecService {
           title: input.title,
           request: input.request,
           rewriteContext: input.rewriteContext,
-          goals: input.goals?.map(g => ({
-            description: g.description,
-            criteria: g.criteria,
-            priority: g.priority,
-          })),
+          goals: input.goals,
+          sessionID: input.sessionID,
+          metadata: input.metadata,
           signal,
+          stream: input.stream,
+          onStatus: input.onStatus,
         }).finally(() => clearTimeout(rewriteTimer)),
         new Promise<never>((_, reject) => {
           rewriteTimer = setTimeout(() => reject(new SpecFailureError(`spec agent rewrite timed out after ${timeoutMs}ms`)), timeoutMs)
@@ -241,3 +236,8 @@ export namespace HeadlessSpecService {
 }
 
 export { HeadlessSpecService as SpecService }
+
+
+
+
+

@@ -564,3 +564,23 @@ EOF`
     })
   })
 })
+
+test("accepts /mnt-style paths on Windows", async () => {
+  if (process.platform !== "win32") return
+  await using fixture = await tmpdir({ git: true })
+  const { ctx } = makeCtx()
+
+  await Instance.provide({
+    directory: fixture.path,
+    fn: async () => {
+      const mntPath = fixture.path.replace(/\\/g, "/").replace(/^([A-Za-z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`)
+      const patchText = `*** Begin Patch
+*** Add File: ${mntPath}/mnt-added.txt
++hello from mnt path
+*** End Patch`
+
+      await execute({ patchText }, ctx)
+      expect(await fs.readFile(path.join(fixture.path, "mnt-added.txt"), "utf-8")).toBe("hello from mnt path\n")
+    },
+  })
+})

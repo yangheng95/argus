@@ -140,11 +140,14 @@ export namespace HeadlessPlannerService {
     request: string
     spec?: PlannerSpec
     goals?: z.infer<typeof GoalInput>[]
+    sessionID?: string
+    metadata?: Record<string, unknown>
     allowClarification?: boolean
     executor?: ExecutorNameInfo
     routing?: z.infer<typeof StageRouting>
     timeoutMs?: number
     stream?: TextHooks
+    onStatus?: (summary: string) => void | Promise<void>
   }): Promise<PlanDraft> {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
@@ -204,10 +207,13 @@ export namespace HeadlessPlannerService {
           criteria: g.criteria,
           priority: g.priority,
         })),
+        sessionID: input.sessionID,
+        metadata: input.metadata,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         timeoutMs,
         signal: controller.signal,
         stream: input.stream,
+        onStatus: input.onStatus,
       }).catch((error) => {
         throw new PlannerFailureError("planner agent failed", { cause: error })
       }).finally(() => clearTimeout(planTimeout)),
@@ -246,6 +252,8 @@ export namespace HeadlessPlannerService {
     request: string
     spec?: PlannerSpec
     goals?: z.infer<typeof GoalInput>[]
+    sessionID?: string
+    metadata?: Record<string, unknown>
     previousPrompt: string
     previousPlanID: string
     failureSummary: string
@@ -255,6 +263,7 @@ export namespace HeadlessPlannerService {
     routing?: z.infer<typeof StageRouting>
     timeoutMs?: number
     stream?: TextHooks
+    onStatus?: (summary: string) => void | Promise<void>
   }): Promise<PlanDraft> {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
@@ -330,10 +339,18 @@ export namespace HeadlessPlannerService {
         title: input.title,
         request: input.request,
         replanContext: replanCtx,
+        userGoals: goals.map((g) => ({
+          description: g.description,
+          criteria: g.criteria,
+          priority: g.priority,
+        })),
+        sessionID: input.sessionID,
+        metadata: input.metadata,
         spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
         timeoutMs,
         signal: controller.signal,
         stream: input.stream,
+        onStatus: input.onStatus,
       }).catch((error) => {
         throw new PlannerFailureError("planner agent replan failed", { cause: error })
       }).finally(() => clearTimeout(replanTimeout)),
@@ -634,15 +651,34 @@ ${input.prd.trim()}`,
     )
   }
 
-  // Goals with check selectors for self-verification
+  const selfRunChecks = [
+    "build",
+    "test",
+    "lint",
+    "verify_cmd",
+    "ui_review",
+    "code_quality",
+    "code_review",
+    "dead_code_review",
+    "spec_check",
+  ]
+  const evaluatorChecks = ["startup", "artifact", "visual", "puppeteer"]
+
   sections.push(
     `## Goals\n${input.goals
       .map((g, i) => {
         const checks = g.metadata?.check_selector
-        const checksLine = checks?.length ? `\n   Checks: ${checks.join(", ")}` : ""
-        return `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}${checksLine}`
+        const direct = checks?.filter((item) => selfRunChecks.includes(item)) ?? []
+        const evaluator = checks?.filter((item) => evaluatorChecks.includes(item)) ?? []
+        const other = checks?.filter((item) => !direct.includes(item) && !evaluator.includes(item)) ?? []
+        const checkLines = [
+          direct.length ? `\n   Run yourself: ${direct.join(", ")}` : "",
+          evaluator.length ? `\n   Evaluator-managed: ${evaluator.join(", ")}` : "",
+          other.length ? `\n   Additional checks: ${other.join(", ")}` : "",
+        ].join("")
+        return `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}${checkLines}`
       })
-      .join("\n\n")}\n\nAfter completing all subtasks, verify EVERY blocking goal by running its listed checks. A goal without evidence of passing is a goal not met.`,
+      .join("\n\n")}\n\nAfter completing all subtasks, run every blocking goal check that is safe to execute directly. Evaluator-managed checks are validated after delivery; prepare the project so they can pass without manual background orchestration.`,
   )
 
   sections.push(
@@ -837,23 +873,31 @@ function buildWorkflowSection(input: {
     )
   } else {
     sections.push(
-      `Execute the subtasks above in order. For each:`,
+      `Execute the subtasks above as one iterative implementation flow in the same workspace. For each stage:`,
       `1. Use \`planner\` tool to track progress (add_task → in_progress → completed).`,
       `2. Implement the change, then immediately verify it (typecheck, test, etc.).`,
       `3. Record discoveries via \`memory\` tool — written memories survive across sessions.`,
       ``,
-      `After all subtasks: run ALL checks listed in the Goals section and confirm every blocking goal is met.`,
+      `After all subtasks: run the direct checks listed in the Goals section and confirm every blocking goal is ready to pass evaluator-managed checks.`,
+    )
+    sections.push(
+      `Do NOT launch background or long-lived dev servers with \`&\`, \`Start-Process\`, \`nohup\`, \`tmux\`, or similar shell tricks.`,
+      `If a goal includes \`startup\`, \`artifact\`, \`visual\`, or \`puppeteer\`, make the project ready for evaluator validation instead of trying to keep services alive yourself.`,
     )
   }
 
   if (input.waves && input.waves.length > 0) {
     sections.push(
-      `\n**Waves**: ${input.waves.map((wave, index) => `${index + 1}. ${wave.title}${wave.objective ? ` (${wave.objective})` : ""}`).join(" | ")}`,
+      `\n**Stages**: ${input.waves.map((wave, index) => `${index + 1}. ${wave.title}${wave.objective ? ` (${wave.objective})` : ""}`).join(" | ")}`,
     )
   }
 
   sections.push(
-    `\n**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), task (parallel sub-agents), websearch/webfetch (external docs).`,
+    "\nNever split the implementation across sub-agents or parallel workspaces. Keep one agent advancing one shared workspace through these stages.",
+  )
+
+  sections.push(
+    `\n**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), websearch/webfetch (external docs).`,
   )
 
   return sections.join("\n")
@@ -896,10 +940,10 @@ ${truncatedPrevious}
 1. Analyze the failure. Understand what went wrong and why.
 2. Explore the codebase to verify your understanding — read the affected files.
 3. Use the planner tool to create a NEW task decomposition that avoids the previous failure.
-4. Execute the new plan. Verify each step immediately.
+4. Execute the new plan in the same workspace. Do not split work across sub-agents.
 5. Run ALL acceptance checks. Confirm every blocking goal is met.
 
-**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking), task (parallel sub-agents).`
+**Tools**: memory (search/write knowledge), preference (project conventions — binding), planner (task tracking).`
 }
 
 // ---------------------------------------------------------------------------
@@ -913,9 +957,14 @@ function resolveGoals(request: string, spec?: PlannerSpec, goals?: z.infer<typeo
       : Array.isArray(goals) && goals.length > 0
         ? goals
         : []
-  const selectors = goalSelectors(request, spec)
+  // Request-level selectors (inferred from request text + spec_check when spec exists).
+  // These are merged into every goal as a baseline.
+  // Per-goal selectors from spec_items are preserved in goal.metadata.check_selector
+  // by spec/service.ts and are NOT merged here across goals.
+  const baseSelectors = goalSelectors(request, spec)
   return source.map((goal) => {
-    const check_selector = [...new Set([...(goal.metadata?.check_selector ?? []), ...selectors])]
+    const perGoal = goal.metadata?.check_selector ?? []
+    const check_selector = [...new Set([...perGoal, ...baseSelectors])]
     return {
       ...goal,
       metadata: check_selector.length > 0
@@ -929,17 +978,18 @@ function resolveGoals(request: string, spec?: PlannerSpec, goals?: z.infer<typeo
 }
 
 function goalSelectors(request: string, spec?: PlannerSpec) {
+  // Return request-level selectors only (inferred from request text).
+  // Per-goal check_selectors from spec_items are already preserved in
+  // goal.metadata.check_selector by spec/service.ts deriveGoals() and must
+  // NOT be merged here — cross-item fan-out would apply every item's checks
+  // to every goal, breaking the per-goal binding set by the spec agent.
   const selectors = inferSelectors(request).filter((item) =>
     !["build", "test", "lint", "verify_cmd"].includes(item)
   )
   if (!spec) return [...new Set(selectors)]
+  // spec_check validates the delivery against the approved spec; add it when
+  // a spec exists and the goal does not already carry a more specific selector.
   selectors.push("spec_check")
-  for (const item of spec.spec_items ?? []) {
-    for (const sel of item.check_selector ?? []) {
-      if (["build", "test", "lint", "verify_cmd"].includes(sel)) continue
-      selectors.push(sel)
-    }
-  }
   return [...new Set(selectors)]
 }
 

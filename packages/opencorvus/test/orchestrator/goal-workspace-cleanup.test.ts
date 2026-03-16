@@ -12,7 +12,7 @@ describe("orchestrator.goal workspace cleanup", () => {
     await resetDatabase()
   })
 
-  test("cleans goal workspace directories without exposing them as sandboxes", async () => {
+  test("reuses the task workspace and skips cleanup outside the internal goal-workspace root", async () => {
     await using tmp = await tmpdir({ git: true })
 
     await Instance.provide({
@@ -25,13 +25,14 @@ describe("orchestrator.goal workspace cleanup", () => {
           snapshot,
         })
 
+        expect(directory).toBe(tmp.path)
         expect(existsSync(directory)).toBe(true)
         expect(Project.get(Instance.project.id)?.sandboxes ?? []).not.toContain(directory)
         expect(await Project.sandboxes(Instance.project.id)).not.toContain(directory)
 
         await cleanupGoalWorkspace(directory)
 
-        expect(existsSync(directory)).toBe(false)
+        expect(existsSync(directory)).toBe(true)
         expect(Project.get(Instance.project.id)?.sandboxes ?? []).not.toContain(directory)
       },
     })

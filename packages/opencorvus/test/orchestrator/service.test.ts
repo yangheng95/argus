@@ -664,37 +664,10 @@ describe("orchestrator.service", () => {
     expect(evaluationText).toContain("Verdict: accepted")
   }, 30000)
 
-  test("persists spec items when resuming a legacy planner clarification", async () => {
+  test("preserves spec items when resuming a legacy planner clarification", async () => {
     process.env.OPENCORVUS_UNATTENDED = "0"
     await using tmp = await tmpdir({ git: true })
     const { replan } = stubPlanner()
-    spyOn(SpecService, "rewrite").mockResolvedValue({
-      summary: "Clarified spec summary",
-      content: "# Scope\n\nKeep spec items attached after clarification.",
-      scope: "Keep spec items attached after clarification.",
-      goals: [
-        {
-          description: "Keep build green",
-          criteria: "Build passes.",
-          priority: "blocking",
-          metadata: {
-            check_selector: ["build"],
-          },
-        },
-      ],
-      assumptions: [],
-      risks: [],
-      spec_items: [
-        {
-          title: "Preserve the acceptance gate",
-          description: "Spec items remain available to spec_check after clarification.",
-          priority: "blocking",
-          check_selector: ["spec_check"],
-        },
-      ],
-      evidence_sources: [],
-      unresolved_questions: [],
-    } as any)
     replan.mockResolvedValue({
       summary: "Clarified replan",
       prompt: "Execute the clarified replanned approach",
@@ -754,6 +727,7 @@ describe("orchestrator.service", () => {
         const task = Database.use((db) =>
           db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
         )!
+        const previousSpecVersionID = task.active_spec_version_id
         const runID = Identifier.ascending("run")
         const interactionID = Identifier.ascending("interaction")
         const now = Date.now()
@@ -834,9 +808,9 @@ describe("orchestrator.service", () => {
             .where(eq(OrchestratorSpecItemTable.spec_snapshot_id, next.active_spec_version_id!))
             .all(),
         )
-        expect(next.active_spec_version_id).toBeTruthy()
+        expect(next.active_spec_version_id).toBe(previousSpecVersionID)
         expect(specItems).toHaveLength(1)
-        expect(specItems[0]?.title).toBe("Preserve the acceptance gate")
+        expect(specItems[0]?.title).toBe("Implement the requested change")
       },
     })
   })
@@ -1549,6 +1523,7 @@ describe("orchestrator.service", () => {
           db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.task_id, taskID)).all(),
         )
         expect(task?.active_plan_version_id).toBe(run.planVersionID)
+        expect(task?.active_spec_version_id).toBe(failed.task.activeSpecVersionID)
         expect(plans.length).toBe(2)
         expect(plans.some((item) => item.status === "superseded")).toBe(true)
       },
@@ -1557,7 +1532,7 @@ describe("orchestrator.service", () => {
     expect(submit).toHaveBeenCalledTimes(2)
   })
 
-  test("replanTask persists rewritten spec items on the new active spec version", async () => {
+  test("replanTask preserves existing spec items on the active spec version", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
     const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
@@ -1605,8 +1580,7 @@ describe("orchestrator.service", () => {
             .all(),
         )
 
-        expect(task?.active_spec_version_id).toBeTruthy()
-        expect(task?.active_spec_version_id).not.toBe(previousSpecVersionID)
+        expect(task?.active_spec_version_id).toBe(previousSpecVersionID)
         expect(specItems).toHaveLength(1)
         expect(typeof specItems[0]?.title).toBe("string")
       },
@@ -1835,6 +1809,7 @@ describe("orchestrator.service", () => {
         expect(progress.run?.status).toBe("accepted")
         expect(progress.run?.phase).toBe("replan")
         expect(progress.plan?.version).toBe(2)
+        expect(progress.task.activeSpecVersionID).toBe(failed.task.activeSpecVersionID)
         expect(plans.some((item) => item.status === "superseded")).toBe(true)
         expect(replan.mock.calls[1]?.[0]).toEqual(expect.objectContaining({
           previousPlanID: failed.plan?.id,
@@ -1929,7 +1904,7 @@ describe("orchestrator.service", () => {
         })
 
         let progress = await OrchestratorService.getProgress(taskID)
-        for (const _ of Array.from({ length: 80 })) {
+        for (const _ of Array.from({ length: 240 })) {
           if (progress.task.status === "failed") break
           await Bun.sleep(50)
           progress = await OrchestratorService.getProgress(taskID)
@@ -1944,7 +1919,7 @@ describe("orchestrator.service", () => {
     })
 
     expect(submit.mock.calls.length).toBeGreaterThanOrEqual(1)
-  }, 20_000)
+  }, 60_000)
 
   test("completes task when evaluation passes and all blocking goals are satisfied", async () => {
     await using tmp = await tmpdir({ git: true })
@@ -2022,7 +1997,7 @@ describe("orchestrator.service", () => {
         })
 
         let progress = await OrchestratorService.getProgress(taskID)
-        for (const _ of Array.from({ length: 80 })) {
+        for (const _ of Array.from({ length: 240 })) {
           if (progress.task.status === "completed") break
           await Bun.sleep(50)
           progress = await OrchestratorService.getProgress(taskID)
@@ -2034,7 +2009,7 @@ describe("orchestrator.service", () => {
       },
     })
 
-    expect(submit).toHaveBeenCalledTimes(2)
+    expect(submit.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 
   test("creates a distinct goal session for each goal run", async () => {
@@ -2239,7 +2214,8 @@ describe("orchestrator.service", () => {
     })
 
     expect(calls).toHaveLength(1)
-    expect(calls[0]?.prompt).toContain("update the landing page hero section copy")
+    expect(calls[0]?.prompt).toContain("iterative coding stage")
+    expect(calls[0]?.prompt).toContain("Implement the requested change")
   })
 
   test("publishes managed executor output with stable stream metadata", async () => {

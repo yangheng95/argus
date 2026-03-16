@@ -1547,7 +1547,9 @@ function bootstrapOverlaySettings(input = state) {
 }
 
 function rememberWorkspace(input = {}) {
-  const taskID = typeof input.taskID === "string" ? input.taskID.trim() : state.selectedTaskID || "";
+  const taskID = typeof input.taskID === "string"
+    ? input.taskID.trim()
+    : state.selectedTaskID || state.workspaceTaskID || "";
   const directory = workspaceRestoreDirectory(
     typeof input.directory === "string"
       ? input.directory.trim()
@@ -2038,6 +2040,12 @@ function panelRequestBody(text, metadata = {}, requestID) {
       ...metadata,
     },
   };
+}
+
+function takeChatMetadata() {
+  const meta = record(window.__ocNextChatMetadata) ? window.__ocNextChatMetadata : undefined;
+  delete window.__ocNextChatMetadata;
+  return meta;
 }
 
 function panelResultNavigates(result) {
@@ -2543,7 +2551,12 @@ function renderPromptCatalog() {
     dom.promptBody.innerHTML = `<div class="empty-hint">${escapeHtml(t("prompt.none"))}</div>`;
     return;
   }
-  dom.promptBody.innerHTML = `<div class="prompt-grid">${state.promptEntries
+  const activeStatuses = ["running", "planning", "evaluating", "queued"];
+  const taskActive = activeStatuses.includes(state.board?.task?.status);
+  const activeBanner = taskActive
+    ? `<div class="config-status-box" data-status="warn" style="margin-bottom:var(--sp-2)">${escapeHtml(t("prompt.active_task_notice"))}</div>`
+    : "";
+  dom.promptBody.innerHTML = activeBanner + `<div class="prompt-grid">${state.promptEntries
     .map((entry) => {
       const entryID = promptEntryID(entry);
       const value = promptEntryValue(entry);
@@ -2554,7 +2567,7 @@ function renderPromptCatalog() {
         <div class="prompt-card-head">
           <div class="prompt-card-copy">
             <strong>${escapeHtml(entry.label || entry.key)}</strong>
-            <span>${escapeHtml(promptGroupLabel(entry.group))}${entry.mode ? ` · ${escapeHtml(entry.mode)}` : ""}</span>
+            <span>${escapeHtml(promptGroupLabel(entry.group))}${entry.mode ? ` · ${escapeHtml(entry.mode)}` : ""}${entry.inherits_core ? " · ← core_header" : ""}</span>
             ${description ? `<small>${escapeHtml(description)}</small>` : ""}
           </div>
           <span class="extension-status" data-state="${escapeHtml(status.tone)}">${escapeHtml(status.label)}</span>
@@ -2570,6 +2583,13 @@ function renderPromptCatalog() {
             <button type="button" class="btn btn-primary mini" data-prompt-save="${escapeHtml(entryID)}"${dirty ? "" : " disabled"}>${escapeHtml(t("common.save"))}</button>
           </div>
         </div>
+        ${entry.configured_prompt !== null && entry.default_prompt ? `<details class="prompt-diff-details">
+          <summary class="prompt-diff-summary">${escapeHtml(t("prompt.show_default"))}</summary>
+          <div class="prompt-preview-card" style="margin-top:0;border-top:none;opacity:0.7">
+            <div class="prompt-preview-head">${escapeHtml(t("prompt.default_label"))}</div>
+            <div class="md-content prompt-preview-body">${renderPromptPreview(entry.default_prompt)}</div>
+          </div>
+        </details>` : ""}
         <div class="prompt-preview-card">
           <div class="prompt-preview-head">${escapeHtml(t("prompt.preview"))}</div>
           <div class="md-content prompt-preview-body" data-prompt-preview="${escapeHtml(entryID)}">${renderPromptPreview(value)}</div>
@@ -4939,20 +4959,20 @@ function mergeMessages(...lists) {
 function agentRole(stage) {
   if (stage === "spec") return "spec";
   if (stage === "planner") return "planner";
-  if (stage === "evaluator") return "scheduler";
+  if (stage === "judge") return "scheduler";
   return "assistant";
 }
 
 function agentStageActive(stage) {
   const status = String(state.board?.task?.status || "");
-  if (stage === "evaluator") return status === "evaluating";
+  if (stage === "judge") return status === "evaluating";
   return status === "planning" || status === "queued";
 }
 
 function agentStagePersisted(stage) {
   if (stage === "spec") return !!state.board?.spec?.content;
   if (stage === "planner") return !!state.board?.plan;
-  if (stage === "evaluator") return !!state.board?.evaluation?.verdict;
+  if (stage === "judge") return !!state.board?.evaluation?.verdict;
   return false;
 }
 
@@ -5689,6 +5709,11 @@ function renderOverview(overview, task) {
 }
 
 function goalItemsHtml(cards) {
+  const runningGoalIDs = new Set(
+    (state.board?.goalRuns || [])
+      .filter((gr) => gr.status === "running" || gr.status === "accepted")
+      .map((gr) => gr.goalID),
+  );
   return cards
     .map(
       (card) => `
@@ -5698,6 +5723,7 @@ function goalItemsHtml(cards) {
           <div class="goal-desc md-content">${renderMarkdown(card.title)}</div>
           ${card.detail ? `<div class="goal-criteria md-content">${renderMarkdown(card.detail)}</div>` : ""}
         </div>
+        ${runningGoalIDs.has(card.id) ? `<span class="extension-status" data-state="active">${escapeHtml(t("goal.running"))}</span>` : ""}
         ${card.metadata?.priority ? `<span class="goal-priority" data-priority="${card.metadata.priority}">${card.metadata.priority}</span>` : ""}
         <div class="goal-actions">
           <button
@@ -5935,10 +5961,28 @@ function splitDiffLines(text) {
 const performTaskAction = async function (action) {
   if (!state.selectedTaskID) return;
   try {
-    await panelMessage(`Perform ${action} on task ${state.selectedTaskID}.`, {
-      taskID: state.selectedTaskID,
-      ui_context: "task_controls",
-    });
+    if (action === "retry") {
+      const note = await nativePrompt(t("task.action.retry_note_placeholder"), {
+        title: t("task.action.retry_note_title"),
+        inputLabel: t("task.action.retry_note_label"),
+        inputPlaceholder: t("task.action.retry_note_placeholder"),
+        kind: "info",
+      });
+      if (note === null) return;
+      const message = note?.trim()
+        ? `Retry task ${state.selectedTaskID} with this operator guidance: ${note}`
+        : `Perform retry on task ${state.selectedTaskID}.`;
+      await panelMessage(message, {
+        taskID: state.selectedTaskID,
+        ui_context: "task_controls",
+        ...(note?.trim() ? { operator_note: note.trim() } : {}),
+      });
+    } else {
+      await panelMessage(`Perform ${action} on task ${state.selectedTaskID}.`, {
+        taskID: state.selectedTaskID,
+        ui_context: "task_controls",
+      });
+    }
     await loadBoard();
   } catch (e) {
     AppLog.error("ui", `Failed to ${action} task`, { error: String(e) });
@@ -8320,6 +8364,7 @@ dom.chatForm.addEventListener("submit", async (e) => {
   if (!canComposeChat()) return;
   const text = chatInputText();
   if (!text) return;
+  const metadata = takeChatMetadata();
 
   const emptyStart = workspaceMode() === "empty";
   const requestID = crypto.randomUUID();
@@ -8359,7 +8404,7 @@ dom.chatForm.addEventListener("submit", async (e) => {
   renderConversation();
 
   try {
-    await panelMessage(text, undefined, request.controller.signal, {
+    await panelMessage(text, metadata, request.controller.signal, {
       requestID,
       workspaceEpoch: request.workspaceEpoch,
     });

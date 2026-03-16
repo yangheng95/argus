@@ -3,9 +3,15 @@ import * as path from "path"
 import * as fs from "fs/promises"
 import { readFileSync } from "fs"
 import { Log } from "../util/log"
+import { Filesystem } from "../util/filesystem"
 
 export namespace Patch {
   const log = Log.create({ service: "patch" })
+
+  function resolvePatchPath(cwd: string, target: string) {
+    const value = Filesystem.windowsPath(target)
+    return path.isAbsolute(value) ? Filesystem.resolve(value) : Filesystem.resolve(path.resolve(cwd, value))
+  }
 
   // Schema definitions
   export const PatchSchema = z.object({
@@ -604,11 +610,11 @@ export namespace Patch {
     switch (result.type) {
       case MaybeApplyPatch.Body:
         const { args } = result
-        const effectiveCwd = args.workdir ? path.resolve(cwd, args.workdir) : cwd
+        const effectiveCwd = args.workdir ? resolvePatchPath(cwd, args.workdir) : Filesystem.resolve(cwd)
         const changes = new Map<string, ApplyPatchFileChange>()
 
         for (const hunk of args.hunks) {
-          const resolvedPath = path.resolve(
+          const resolvedPath = resolvePatchPath(
             effectiveCwd,
             hunk.type === "update" && hunk.move_path ? hunk.move_path : hunk.path,
           )
@@ -623,7 +629,7 @@ export namespace Patch {
 
             case "delete":
               // For delete, we need to read the current content
-              const deletePath = path.resolve(effectiveCwd, hunk.path)
+              const deletePath = resolvePatchPath(effectiveCwd, hunk.path)
               try {
                 const content = await fs.readFile(deletePath, "utf-8")
                 changes.set(resolvedPath, {
@@ -639,13 +645,13 @@ export namespace Patch {
               break
 
             case "update":
-              const updatePath = path.resolve(effectiveCwd, hunk.path)
+              const updatePath = resolvePatchPath(effectiveCwd, hunk.path)
               try {
                 const fileUpdate = deriveNewContentsFromChunks(updatePath, hunk.chunks)
                 changes.set(resolvedPath, {
                   type: "update",
                   unified_diff: fileUpdate.unified_diff,
-                  move_path: hunk.move_path ? path.resolve(effectiveCwd, hunk.move_path) : undefined,
+                  move_path: hunk.move_path ? resolvePatchPath(effectiveCwd, hunk.move_path) : undefined,
                   new_content: fileUpdate.content,
                 })
               } catch (error) {

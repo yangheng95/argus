@@ -9,15 +9,16 @@ import z from "zod"
 import path from "path"
 import fs from "fs"
 import { Instance } from "@/project/instance"
+import { Filesystem } from "@/util/filesystem"
+import { Ripgrep } from "@/file/ripgrep"
 
 export function createCodebaseTools(projectDir?: string) {
-  const dir = projectDir ?? Instance.directory
+  const dir = Filesystem.resolve(projectDir ?? Instance.directory)
 
-  function safePath(relPath: string): string | null {
-    const abs = path.resolve(dir, relPath)
-    const normalized = path.normalize(abs)
-    if (!normalized.startsWith(path.normalize(dir))) return null
-    return normalized
+  function safePath(input: string): string | null {
+    const value = Filesystem.windowsPath(input)
+    const abs = path.isAbsolute(value) ? Filesystem.resolve(value) : Filesystem.resolve(path.resolve(dir, value))
+    return Filesystem.contains(dir, abs) ? abs : null
   }
 
   return {
@@ -93,9 +94,10 @@ export function createCodebaseTools(projectDir?: string) {
         const target = searchPath ? safePath(searchPath) : dir
         if (!target) return "Error: search path is outside the project boundary."
         try {
+          const rgPath = await Ripgrep.filepath()
           const proc = Bun.spawn(
             [
-              "rg",
+              rgPath,
               "--no-heading",
               "--line-number",
               "--max-count",
@@ -113,8 +115,12 @@ export function createCodebaseTools(projectDir?: string) {
             { stdout: "pipe", stderr: "pipe" },
           )
           const output = await new Response(proc.stdout).text()
-          await proc.exited
+          const error = await new Response(proc.stderr).text()
+          const exitCode = await proc.exited
           const trimmed = output.trim()
+          if (trimmed) return trimmed
+          if (exitCode === 1 || exitCode === 2) return "No matches found."
+          if (error.trim()) return `Error searching code: ${error.trim()}`
           return trimmed || "No matches found."
         } catch {
           return "No matches found (or ripgrep not available)."

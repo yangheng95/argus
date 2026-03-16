@@ -78,6 +78,6 @@ test("buildSpecReplanInput keeps only unresolved goals during replan", () => {
   ])
   expect(rewrite.request).toContain("Goals already satisfied in previous runs")
   expect(rewrite.request).toContain("Bootstrap the project")
-  expect(rewrite.request).toContain("Focus this rewrite on the remaining unresolved goals")
+  expect(rewrite.request).toContain("Focus this replan on the remaining unresolved goals")
   expect(rewrite.request).not.toContain("- Bootstrap the project\n- Implement diary CRUD\n- Ship the reminder flow")
 })

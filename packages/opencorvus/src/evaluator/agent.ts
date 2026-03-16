@@ -11,17 +11,16 @@
  * 5. Produces targeted replan guidance when needed
  */
 import { stepCountIs } from "ai"
-import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
 import { verificationHints } from "@/check/policy"
-import { Provider } from "@/provider/provider"
+import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
 import { createEvaluatorTools } from "./tools"
 import { Memory } from "@/memory"
 import { Preference } from "@/preference"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
-import { completeText, type TextHooks } from "@/llm/api"
+import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
 
 const log = Log.create({ service: "evaluator-agent" })
@@ -100,7 +99,7 @@ function evaluatorTimeoutMs() {
 }
 
 type AnalyzeInput = {
-  task: { title: string; request: string; sessionID?: string }
+  task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
   goals: GoalInfo[]
   delivery: DeliveryInfo
   checkResults: CheckResult[]
@@ -109,9 +108,13 @@ type AnalyzeInput = {
 
 export namespace GoalJudge {
   export async function analyze(input: AnalyzeInput): Promise<GoalJudgmentType> {
-    const resolved = await agentLanguageModel()
+    const resolved = await resolveHeadlessLanguageModel({
+      label: "evaluator",
+      metadata: input.task.metadata,
+      sessionID: input.task.sessionID,
+    })
     if (!resolved) throw new Error("Evaluator analysis model is unavailable")
-    const { language } = resolved
+    const { language, model } = resolved
     const timeoutMs = evaluatorTimeoutMs()
 
     // Full evaluator tool set: codebase exploration + memory + preferences
@@ -146,8 +149,11 @@ export namespace GoalJudge {
         steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
       }
       try {
-        result = await completeText({
-          model: language,
+        result = await completeHeadlessText({
+          label: "evaluator",
+          model,
+          language,
+          sessionID: input.task.sessionID,
           stopWhen: [stepCountIs(MAX_STEPS)],
           tools: explorationTools,
           maxOutputTokens: 16384,
@@ -583,28 +589,12 @@ function collectText(result: { text?: string; steps: Array<{ text?: string }> })
   return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
 }
 
-async function agentLanguageModel(): Promise<{ language: LanguageModelV2; isReasoning: boolean } | undefined> {
-  try {
-    const def = await Provider.defaultModel()
-    if (!def) return undefined
-    log.info("evaluator: default model resolved", { providerID: def.providerID, modelID: def.modelID })
-    const model = await Provider.getModel(def.providerID, def.modelID)
-    const language = await Provider.getLanguage(model)
-    const isReasoning = model.capabilities?.reasoning === true
-    log.info("evaluator: model ready via Provider", { modelId: language.modelId, isReasoning })
-    return { language, isReasoning }
-  } catch (err) {
-    log.error("evaluator: model resolution failed — evaluator will be unavailable", { error: String(err) })
-    return undefined
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Pre-fetch context — give the evaluator a head start before tool calls
 // ---------------------------------------------------------------------------
 
 function prefetchEvaluatorContext(input: {
-  task: { title: string; request: string; sessionID?: string }
+  task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
   checkResults: CheckResult[]
   delivery: DeliveryInfo
 }): string {
@@ -833,7 +823,7 @@ Under \`# Goal Statuses\`, each goal must be a numbered block in this shape:
 - evidence: specific files, tests, line-level observations, or check outputs
 - reasoning: why this goal is passed, failed, or inconclusive
 
-Under \`# Replan Guidance\`, when classification is \`evaluation\` or \`strategy\`, include:
+Under \`# Replan Guidance\`, include whenever verdict is \`rejected\` — omit only when classification is \`transient\`, \`environment\`, \`input\`, or \`permission\`:
 - root_cause: ...
 - what_failed: ...
 - suggested_strategy: ...
@@ -845,7 +835,7 @@ Under \`# Replan Guidance\`, when classification is \`evaluation\` or \`strategy
 - Every file path, test name, and technical claim must come from actual tool results.
 - You must include every goal in \`# Goal Statuses\`.
 - Evidence must be specific, not generic.
-- Write in the same language as the task request.
+- Section headings must always use the English names shown in Phase 3 above. Write body text (evidence, reasoning, summaries, guidance) in the same language as the task request.
 - If required evidence is missing, reject or mark inconclusive instead of guessing.
 
 ## Quality Self-Check

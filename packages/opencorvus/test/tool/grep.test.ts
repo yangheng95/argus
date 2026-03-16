@@ -108,3 +108,28 @@ describe("CRLF regex handling", () => {
     expect(lines.length).toBe(3)
   })
 })
+
+test("accepts /mnt-style paths on Windows", async () => {
+  if (process.platform !== "win32") return
+  await using tmp = await tmpdir({
+    init: async (dir) => {
+      await Bun.write(path.join(dir, "test.txt"), "hello windows path")
+    },
+  })
+  const mntPath = tmp.path.replace(/\\/g, "/").replace(/^([A-Za-z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`)
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const grep = await GrepTool.init()
+      const result = await grep.execute(
+        {
+          pattern: "windows path",
+          path: mntPath,
+        },
+        ctx,
+      )
+      expect(result.metadata.matches).toBe(1)
+      expect(result.output).toContain("test.txt")
+    },
+  })
+})

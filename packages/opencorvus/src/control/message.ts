@@ -191,7 +191,8 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
 
     if (result.info.role === "assistant" && result.info.structured) {
       const output = finalizeResult(ControlMessageResult.parse(result.info.structured), control, input)
-      if (control?.keep) {
+      const removing = shouldRemoveSession(control)
+      if (control?.keep && !removing) {
         await appendSummary(control.info.id, result, output.message)
       }
       log.info("panel request completed", {

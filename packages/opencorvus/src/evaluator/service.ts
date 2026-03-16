@@ -80,7 +80,7 @@ export namespace CheckRunner {
   }
 
   export async function analyzeDelivery(input: {
-    task: { title: string; request: string; sessionID?: string }
+    task: { title: string; request: string; sessionID?: string; metadata?: Record<string, unknown> }
     goals: GoalInfo[]
     delivery: DeliveryInfo
     checkResults: CheckResult[]

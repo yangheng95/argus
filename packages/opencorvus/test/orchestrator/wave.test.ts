@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { normalizePlanWaves } from "../../src/orchestrator/wave"
 
-test("normalizePlanWaves converts one-based indices and appends uncovered goals", () => {
+test("normalizePlanWaves converts one-based indices and splits into one wave per goal", () => {
   const waves = normalizePlanWaves({
     waves: [{
       title: "Foundation",
@@ -16,10 +16,14 @@ test("normalizePlanWaves converts one-based indices and appends uncovered goals"
     ],
   })
 
-  expect(waves).toHaveLength(2)
-  expect(waves[0]?.goal_indices).toEqual([0, 1])
-  expect(waves[1]?.goal_indices).toEqual([2])
-  expect(waves[1]?.parallelism).toBe(1)
+  // normalizePlanWaves always produces one wave per goal (iterative stages)
+  expect(waves).toHaveLength(3)
+  expect(waves[0]?.goal_indices).toEqual([0])
+  expect(waves[1]?.goal_indices).toEqual([1])
+  expect(waves[2]?.goal_indices).toEqual([2])
+  expect(waves[0]?.title).toBe("Foundation \u00b7 Bootstrap app")
+  expect(waves[1]?.title).toBe("Foundation \u00b7 Build API")
+  expect(waves[2]?.title).toBe("Wave 3: Add theme")
 })
 
 test("normalizePlanWaves falls back to singleton waves when planner omits waves", () => {

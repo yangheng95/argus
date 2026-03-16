@@ -21,7 +21,7 @@ describe("evaluator.service", () => {
     await resetDatabase()
   })
 
-  test("discovers build test and lint scripts from package.json", async () => {
+  test("keeps discovered build test and lint scripts disabled by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -38,11 +38,20 @@ describe("evaluator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const resolved = await CheckRunner.resolveChecks()
+        expect(resolved).toEqual({
+          spec_check: {
+            enabled: true,
+            mode: "strict",
+          },
+        })
         const result = await CheckRunner.evaluate({}, { summary: "delivery ready" })
-        expect(result.status).toBe("failed")
-        expect(result.verdict).toBe("rejected")
-        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["build", "test", "lint", "spec_check"]))
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(result.status).toBe("passed")
+        expect(result.verdict).toBe("accepted")
+        expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
       },
     })
   })
@@ -237,7 +246,7 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("discovers typecheck script as a named lint check", async () => {
+  test("keeps discovered named checks disabled by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -253,15 +262,17 @@ describe("evaluator.service", () => {
       directory: tmp.path,
       fn: async () => {
         const resolved = await CheckRunner.resolveChecks()
-        expect(resolved.named?.typecheck?.label).toBe("Type Check")
-        expect(resolved.named?.typecheck?.family).toBe("lint")
-        expect(resolved.named?.typecheck?.commands).toEqual(["bun run typecheck"])
+        expect(resolved).toEqual({
+          spec_check: {
+            enabled: true,
+            mode: "strict",
+          },
+        })
 
         const result = await CheckRunner.evaluate({}, { summary: "delivery ready" })
-        expect(result.status).toBe("failed")
-        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["typecheck", "spec_check"]))
-        expect(result.checks.find((item) => item.name === "typecheck")?.family).toBe("lint")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "typecheck")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
       },
     })
   })
@@ -1162,7 +1173,7 @@ describe("evaluator.service", () => {
     })
   })
 
-  test("prefers changed puppeteer-core bun specs over root test script discovery", async () => {
+  test("keeps changed puppeteer-core bun specs disabled by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1203,14 +1214,14 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: ["sample.spec.ts"], diffs: [] },
         )
-        expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
       },
     })
   }, 30000)
 
-  test("runs changed bun specs even when another test embeds puppeteer-core text", async () => {
+  test("keeps mixed changed bun specs disabled by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1264,14 +1275,14 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: ["sample.spec.ts", "unit.test.ts"], diffs: [] },
         )
-        expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
       },
     })
   }, 30000)
 
-  test("runs changed bun tests before falling back to root scripts", async () => {
+  test("keeps changed bun tests disabled by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1306,14 +1317,14 @@ describe("evaluator.service", () => {
           },
           { summary: "delivery ready", changedFiles: ["unit.test.ts"], diffs: [] },
         )
-        expect(result.status).toBe("failed")
-        expect(result.checks.find((item) => item.name === "test")?.status).toBe("passed")
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
       },
     })
   })
 
-  test("prefers nearest subproject package scripts over repo root scripts", async () => {
+  test("keeps nearest subproject package scripts disabled by default", async () => {
     await using tmp = await tmpdir({ git: true })
     await Bun.write(
       path.join(tmp.path, "package.json"),
@@ -1357,13 +1368,15 @@ describe("evaluator.service", () => {
             diffs: [],
           },
         )
-        expect(result.status).toBe("failed")
-        expect(result.checks.map((item) => item.name)).toEqual(expect.arrayContaining(["build", "test", "lint", "spec_check"]))
+        expect(result.status).toBe("passed")
+        expect(result.checks.find((item) => item.name === "build")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "test")).toBeUndefined()
+        expect(result.checks.find((item) => item.name === "lint")).toBeUndefined()
         const commands = result.artifacts
           .filter((item) => item.kind === "log")
           .map((item) => String(item.payload.command ?? ""))
-        expect(commands.every((item) => item.includes("bun run"))).toBe(true)
-        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("failed")
+        expect(commands).toHaveLength(0)
+        expect(result.checks.find((item) => item.name === "spec_check")?.status).toBe("passed")
       },
     })
   })

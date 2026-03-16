@@ -1,4 +1,4 @@
-import z from "zod"
+﻿import z from "zod"
 import { text } from "node:stream/consumers"
 import { Tool } from "./tool"
 import { Filesystem } from "../util/filesystem"
@@ -35,8 +35,10 @@ export const GrepTool = Tool.define("grep", {
       },
     })
 
-    let searchPath = params.path ?? Instance.directory
-    searchPath = path.isAbsolute(searchPath) ? searchPath : path.resolve(Instance.directory, searchPath)
+    let searchPath = Filesystem.windowsPath(params.path ?? Instance.directory)
+    searchPath = path.isAbsolute(searchPath)
+      ? Filesystem.resolve(searchPath)
+      : Filesystem.resolve(path.resolve(Instance.directory, searchPath))
     await assertExternalDirectory(ctx, searchPath, { kind: "directory" })
 
     const rgPath = await Ripgrep.filepath()
@@ -90,11 +92,12 @@ export const GrepTool = Tool.define("grep", {
       const lineNum = parseInt(lineNumStr, 10)
       const lineText = lineTextParts.join("|")
 
-      const stats = Filesystem.stat(filePath)
+      const fullPath = Filesystem.resolve(filePath)
+      const stats = Filesystem.stat(fullPath)
       if (!stats) continue
 
       matches.push({
-        path: filePath,
+        path: fullPath,
         modTime: stats.mtime.getTime(),
         lineNum,
         lineText,
@@ -154,3 +157,5 @@ export const GrepTool = Tool.define("grep", {
     }
   },
 })
+
+

@@ -7,7 +7,7 @@ function noteText(input: string) {
 }
 
 function goalCriteria(description: string) {
-  return `The rewritten specification explicitly captures this operator goal and the delivered implementation satisfies it: ${description}`
+  return `The active specification and the delivered implementation both satisfy this operator goal: ${description}`
 }
 
 function passedGoalIndices(analysis?: GoalJudgmentType) {
@@ -67,14 +67,14 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string, anal
         task.request,
         passed.size > 0
           ? [
-              "Goals already satisfied in previous runs. Preserve their implementation and do not expand them again in this rewrite:",
+              "Goals already satisfied in previous runs. Preserve their implementation and do not expand them again in this replan:",
               ...current
                 .flatMap((goal, index) => passed.has(index) ? [`- ${goal.description}`] : []),
             ].join("\n")
           : "",
         remaining.length > 0 && remaining.length < current.length
           ? [
-              "Focus this rewrite on the remaining unresolved goals:",
+              "Focus this replan on the remaining unresolved goals:",
               ...remaining.map((goal) => `- ${goal.description}`),
             ].join("\n")
           : "",
@@ -83,13 +83,13 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string, anal
         task.request,
         constraints.length > 0
           ? [
-              "Operator requirement and spec updates for the next spec rewrite:",
+              "Operator requirements and constraints for the next replan:",
               ...constraints.map((item) => `- ${item}`),
             ].join("\n")
           : "",
         goalUpdates.length > 0
           ? [
-              "Operator goal updates for the next spec rewrite:",
+              "Operator goal notes for the next replan:",
               ...goalUpdates.map((goal) => `- ${goal}`),
             ].join("\n")
           : "",
@@ -101,14 +101,14 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string, anal
           : "",
         passed.size > 0
           ? [
-              "Goals already satisfied in previous runs. Preserve their implementation and do not expand them again in this rewrite:",
+              "Goals already satisfied in previous runs. Preserve their implementation and do not expand them again in this replan:",
               ...current
                 .flatMap((goal, index) => passed.has(index) ? [`- ${goal.description}`] : []),
             ].join("\n")
           : "",
         remaining.length > 0 && remaining.length < current.length
           ? [
-              "Focus this rewrite on the remaining unresolved goals:",
+              "Focus this replan on the remaining unresolved goals:",
               ...remaining.map((goal) => `- ${goal.description}`),
             ].join("\n")
           : "",

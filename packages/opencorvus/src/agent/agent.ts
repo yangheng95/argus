@@ -165,7 +165,7 @@ export namespace Agent {
       },
       general: {
         name: "general",
-        description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
+        description: `General-purpose agent for researching complex questions and executing multi-step tasks in one focused workspace.`,
         permission: PermissionNext.merge(
           defaults,
           PermissionNext.fromConfig({

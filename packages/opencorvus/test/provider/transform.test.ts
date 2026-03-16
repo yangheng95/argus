@@ -658,6 +658,48 @@ describe("ProviderTransform.schema - gemini non-object properties removal", () =
   })
 })
 
+describe("ProviderTransform.options - alibaba reasoning", () => {
+  const sessionID = "test-session-123"
+
+  test("enables thinking for alibaba-coding-plan-cn reasoning models", () => {
+    const model = {
+      id: "alibaba-coding-plan-cn/qwen3.5-plus",
+      providerID: "alibaba-coding-plan-cn",
+      api: {
+        id: "qwen3.5-plus",
+        url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        npm: "@ai-sdk/openai-compatible",
+      },
+      name: "Qwen3.5 Plus",
+      capabilities: {
+        temperature: true,
+        reasoning: true,
+        attachment: false,
+        toolcall: true,
+        input: { text: true, audio: false, image: false, video: false, pdf: false },
+        output: { text: true, audio: false, image: false, video: false, pdf: false },
+        interleaved: false,
+      },
+      cost: {
+        input: 0,
+        output: 0,
+        cache: { read: 0, write: 0 },
+      },
+      limit: {
+        context: 1_000_000,
+        output: 65_536,
+      },
+      status: "active",
+      options: {},
+      headers: {},
+      release_date: "2026-02-16",
+    } as any
+
+    const result = ProviderTransform.options({ model, sessionID, providerOptions: {} })
+    expect(result.enable_thinking).toBe(true)
+  })
+})
+
 describe("ProviderTransform.message - DeepSeek reasoning content", () => {
   test("DeepSeek with tool calls includes reasoning_content in providerOptions", () => {
     const msgs = [
