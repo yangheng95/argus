@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a09d69ce69ebb281"
+    "panel_revision": "a6a885889cae288c"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -489,7 +489,7 @@
   "task.action.retry": "重试",
   "task.action.retry_title": "沿用当前计划重新执行一次任务。",
   "task.action.retry_note_title": "重试并附加引导（可选）",
-  "task.action.retry_note_placeholder": "为本次重试补充执行引导，例如"只关注登录模块"或"不要修改公共工具函数"",
+  "task.action.retry_note_placeholder": "为本次重试补充执行引导，例如\"只关注登录模块\"或\"不要修改公共工具函数\"",
   "task.action.retry_note_label": "运维备注",
   "task.action.cancel_title": "停止当前任务，并保留目前已有的状态和结果。",
   "task.delete_button_title": "删除这个任务及其历史记录。",

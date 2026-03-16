@@ -17,7 +17,7 @@ function stageLabel(stage: AgentStageType) {
 async function publish(
   meta: Meta,
   input: {
-    kind: "status" | "message_delta" | "tool_call" | "tool_result" | "error"
+    kind: "status" | "message_delta" | "tool_call" | "tool_delta" | "tool_result" | "error"
     id?: string
     summary: string
     text?: string
@@ -74,6 +74,20 @@ export function agentStream(meta: Meta) {
           return
         }
 
+        if (chunk.type === "tool-input-delta") {
+          const id = (chunk as { id?: string }).id
+          const delta = (chunk as { delta?: string }).delta
+          if (!delta) return
+          await publish(meta, {
+            kind: "tool_delta",
+            id,
+            toolName: id ? tools.get(id) : undefined,
+            text: delta,
+            summary: delta,
+          })
+          return
+        }
+
         if (chunk.type === "tool-result") {
           await publish(meta, {
             kind: "tool_result",
@@ -111,6 +125,9 @@ export function agentStream(meta: Meta) {
         kind: "status",
         summary: summary ?? `${stageLabel(meta.stage)} finished`,
       })
+    },
+    statusHook(summary: string) {
+      return publish(meta, { kind: "status", summary })
     },
   }
 }

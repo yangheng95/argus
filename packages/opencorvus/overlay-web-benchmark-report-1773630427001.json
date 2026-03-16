@@ -1,0 +1,97 @@
+{
+  "generated_at": "2026-03-16T03:17:04.927Z",
+  "executor": "opencode",
+  "model": "alibaba-coding-plan-cn/qwen3.5-plus",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Rf7QVl",
+  "server": "http://127.0.0.1:64823/",
+  "taskID": "tsk_cf49cb85e001r3VcfxJ1pDPqBX",
+  "error": "TimeoutError: The operation timed out.",
+  "stage_max_steps": {
+    "spec": 80,
+    "planner": 96
+  },
+  "timings_ms": {
+    "online": 246,
+    "submit": 1013,
+    "planning_visible": 1207,
+    "streaming_visible": 1208,
+    "task_created": 10860,
+    "task_selected": 10953,
+    "board_loaded": 10958,
+    "resumed": 13221,
+    "completed": null,
+    "execution": null
+  },
+  "overlay": {
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Rf7QVl",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Rf7QVl",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Rf7QVl",
+    "selectedTaskID": "tsk_cf49cb85e001r3VcfxJ1pDPqBX",
+    "pendingCount": 0,
+    "taskIDs": [
+      "tsk_cf49cb85e001r3VcfxJ1pDPqBX"
+    ],
+    "taskList": "Active\n    \n    \n      \n        \n        实现一个最小可用的 NoteStore，并补充测试。\n      \n      Running\n      11:09:52 / .../Local/Temp/opencorvus-overlay-benchmark-project-Rf7QVl",
+    "reasoning": "",
+    "assistantText": "Part updated: textMessage updated: user",
+    "storage": {
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Rf7QVl",
+      "directoryMode": "",
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-Rf7QVl",
+      "workspaceTaskID": "tsk_cf49cb85e001r3VcfxJ1pDPqBX"
+    }
+  },
+  "diagnostics": {
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\overlay-web-benchmark-report-1773630427001.events.json",
+    "event_count": 965,
+    "stage_summary": {
+      "types": {
+        "orchestrator.task.created": 1,
+        "orchestrator.agent.updated": 956,
+        "orchestrator.task.updated": 2,
+        "orchestrator.spec.created": 1,
+        "orchestrator.plan.created": 1,
+        "orchestrator.plan.activated": 1,
+        "orchestrator.run.created": 1,
+        "orchestrator.run.updated": 2
+      },
+      "stages": {
+        "spec": {
+          "event_count": 2,
+          "first_event_ms": 10475,
+          "first_message_ms": null,
+          "first_tool_call_ms": null,
+          "first_tool_result_ms": null,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 48345,
+          "kind_counts": {
+            "status": 2
+          },
+          "tool_calls": {}
+        },
+        "planner": {
+          "event_count": 954,
+          "first_event_ms": 48347,
+          "first_message_ms": 92457,
+          "first_tool_call_ms": 52234,
+          "first_tool_result_ms": 52460,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 158071,
+          "kind_counts": {
+            "status": 2,
+            "tool_call": 46,
+            "tool_result": 23,
+            "message_delta": 883
+          },
+          "tool_calls": {
+            "list_directory": 12,
+            "find_files": 22,
+            "read_file": 12
+          }
+        }
+      }
+    }
+  }
+}

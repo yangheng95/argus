@@ -1,119 +1,158 @@
 {
-  "generated_at": "2026-03-16T00:20:26.032Z",
+  "generated_at": "2026-03-16T13:02:25.782Z",
   "executor": "opencode",
   "model": "alibaba-coding-plan-cn/qwen3.5-plus",
-  "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
+  "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-I8Fabh",
   "server": "http://127.0.0.1:7878/",
-  "taskID": "tsk_cf3bd210b001Pmy2s83HKm1XLI",
+  "taskID": "tsk_cf69f91f300148A0OKnvTi2Kwq",
   "error": "TimeoutError: The operation timed out.",
   "stage_max_steps": {
     "spec": 80,
     "planner": 96
   },
+  "stall_timeout_ms": 300000,
   "timings_ms": {
-    "online": 265,
-    "submit": 4218,
-    "planning_visible": 4410,
-    "streaming_visible": 4429,
-    "task_created": 38827,
-    "task_selected": 38834,
-    "board_loaded": 38835,
-    "resumed": 42582,
+    "online": 391,
+    "submit": 1304,
+    "planning_visible": 2220,
+    "streaming_visible": 2221,
+    "task_created": 10389,
+    "task_selected": 10445,
+    "board_loaded": 10448,
+    "resumed": 11600,
     "completed": null,
     "execution": null
   },
   "overlay": {
-    "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
-    "savedDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
-    "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
-    "selectedTaskID": "tsk_cf3bd210b001Pmy2s83HKm1XLI",
+    "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-I8Fabh",
+    "savedDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-I8Fabh",
+    "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-I8Fabh",
+    "selectedTaskID": "tsk_cf69f91f300148A0OKnvTi2Kwq",
     "pendingCount": 0,
     "taskIDs": [
-      "tsk_cf3bd210b001Pmy2s83HKm1XLI"
+      "tsk_cf69f91f300148A0OKnvTi2Kwq"
     ],
-    "taskList": "Active\n    \n    \n      \n        \n        日记软件 PRD 实施 - Moment Diary\n      \n      Evaluating\n      08:19:23 / .../Local/Temp/opencorvus-overlay-benchmark-project-PrrQ2E",
-    "reasoning": "I need to initialize a React Native project with TypeScript and create the modular architecture structure for the Moment Diary app, starting by creating the package.json with all required dependencies.",
-    "assistantText": "I'll start implementing the Moment Diary React Native project with the modular architecture. Let me begin with project initialization and setup.",
+    "taskList": "Active\n    \n    \n      \n        \n        根据提供的 Moment Diary 日记软件 PRD 文档，实现一个完整的日记应用 MVP 版本。\n      \n      Running\n      20:47:07 / .../Local/Temp/opencorvus-overlay-benchmark-project-I8Fabh",
+    "reasoning": "I need to initialize an Expo React Native project with TypeScript and all required dependencies. Let me start by checking the current workspace state and then create the project structure.",
+    "assistantText": "任务已成功创建并立即开始执行！任务 ID: tsk_cf69f91f300148A0OKnvTi2Kwq任务内容: Moment Diary 日记软件 MVP 开发根据您提供的完整 PRD 文档，任务将按以下阶段执行：需求分析与架构设计 - 解析 PRD 中的 P0 功能，设计技术架构项目初始化 - 搭建前端框架、目录结构、基础配置核心功能开发:用户认证模块（注册/登录/游客模式）日记 CRUD 功能（创建/编辑/删除/自动保存）心情与标签系统图片附件支持浏览回顾模块 - 时间轴首页、日历视图、日记详情页搜索与筛选 - 全文搜索、多维度筛选安全模块 - 应用锁、数据加密提醒与设置 - 日记提醒、基础设置测试与验收 - 验证 P0 功能验收标准预算配置:最大运行次数：20 次最大墙钟时间：4 小时最大重规划次数：8 次任务正在执行中，您可以随时查看进度。",
     "storage": {
-      "directory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
+      "directory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-I8Fabh",
       "directoryMode": "",
-      "workspaceDirectory": "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-PrrQ2E",
-      "workspaceTaskID": "tsk_cf3bd210b001Pmy2s83HKm1XLI"
+      "workspaceDirectory": "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-overlay-benchmark-project-I8Fabh",
+      "workspaceTaskID": "tsk_cf69f91f300148A0OKnvTi2Kwq"
     }
   },
   "diagnostics": {
-    "event_file": "D:\\myhexin-local\\argus-opencode\\packages\\opencorvus\\prd-full-benchmark-report.events.json",
-    "event_count": 2066,
+    "event_file": "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\packages\\opencorvus\\prd-full-benchmark-report.events.json",
+    "event_count": 7313,
     "stage_summary": {
       "types": {
         "orchestrator.task.created": 1,
-        "orchestrator.agent.updated": 2040,
-        "orchestrator.task.updated": 5,
+        "orchestrator.agent.updated": 3287,
+        "orchestrator.task.updated": 2,
         "orchestrator.spec.created": 1,
         "orchestrator.plan.created": 1,
         "orchestrator.plan.activated": 1,
-        "orchestrator.run.created": 2,
-        "orchestrator.run.updated": 15
+        "orchestrator.run.created": 1,
+        "orchestrator.run.updated": 4,
+        "orchestrator.run.progress": 1387,
+        "orchestrator.run.output": 2628
       },
       "stages": {
         "spec": {
-          "event_count": 2,
-          "first_event_ms": 38431,
-          "first_message_ms": null,
-          "first_tool_call_ms": null,
-          "first_tool_result_ms": null,
+          "event_count": 1122,
+          "first_event_ms": 10223,
+          "first_message_ms": 38397,
+          "first_tool_call_ms": 14221,
+          "first_tool_result_ms": 14428,
           "submit_tool_ms": null,
           "error_ms": null,
-          "last_event_ms": 95434,
+          "last_event_ms": 1977210,
           "kind_counts": {
-            "status": 2
-          },
-          "tool_calls": {}
-        },
-        "planner": {
-          "event_count": 1357,
-          "first_event_ms": 95435,
-          "first_message_ms": 142107,
-          "first_tool_call_ms": 97501,
-          "first_tool_result_ms": 97702,
-          "submit_tool_ms": null,
-          "error_ms": null,
-          "last_event_ms": 217424,
-          "kind_counts": {
-            "status": 2,
-            "tool_call": 28,
-            "tool_result": 14,
-            "message_delta": 1313
+            "status": 3,
+            "tool_call": 86,
+            "tool_delta": 207,
+            "tool_result": 43,
+            "message_delta": 783
           },
           "tool_calls": {
-            "list_directory": 8,
-            "read_file": 8,
-            "find_files": 4,
-            "search_code": 4,
+            "list_directory": 20,
+            "preference_list": 2,
+            "memory_search": 10,
+            "read_file": 50,
+            "find_files": 4
+          }
+        },
+        "planner": {
+          "event_count": 1281,
+          "first_event_ms": 73632,
+          "first_message_ms": 98214,
+          "first_tool_call_ms": 79147,
+          "first_tool_result_ms": 79192,
+          "submit_tool_ms": null,
+          "error_ms": null,
+          "last_event_ms": 169201,
+          "kind_counts": {
+            "status": 2,
+            "tool_call": 20,
+            "tool_delta": 59,
+            "tool_result": 10,
+            "message_delta": 1190
+          },
+          "tool_calls": {
+            "list_directory": 6,
+            "read_file": 4,
+            "find_files": 6,
             "web_search": 4
           }
         },
         "judge": {
-          "event_count": 681,
-          "first_event_ms": 4518914,
-          "first_message_ms": 4576709,
-          "first_tool_call_ms": 4521372,
-          "first_tool_result_ms": 4521556,
+          "event_count": 884,
+          "first_event_ms": 1025552,
+          "first_message_ms": 1050846,
+          "first_tool_call_ms": 1029068,
+          "first_tool_result_ms": 1029244,
           "submit_tool_ms": null,
           "error_ms": null,
-          "last_event_ms": 4670983,
+          "last_event_ms": 1890292,
           "kind_counts": {
-            "status": 3,
-            "tool_call": 142,
-            "tool_result": 71,
-            "message_delta": 465
+            "status": 4,
+            "tool_call": 118,
+            "tool_delta": 284,
+            "tool_result": 59,
+            "message_delta": 419
           },
           "tool_calls": {
-            "list_directory": 4,
-            "read_file": 130,
-            "search_code": 6,
-            "memory_search": 2
+            "read_file": 98,
+            "list_directory": 2,
+            "memory_search": 2,
+            "preference_list": 2,
+            "find_files": 8,
+            "search_code": 6
           }
+        },
+        "execution": {
+          "event_count": 4015,
+          "first_event_ms": 170196,
+          "first_progress_ms": 170196,
+          "first_output_ms": 173541,
+          "last_event_ms": 1734182,
+          "types": {
+            "orchestrator.run.progress": 1387,
+            "orchestrator.run.output": 2628
+          },
+          "progress_types": {
+            "message.part.updated": 840,
+            "message.updated": 310,
+            "session.status": 158,
+            "session.diff": 77,
+            "text_delta": 2628,
+            "session.idle": 2
+          },
+          "goal_runs": [
+            "grn_cf6a20299001uDh5XlVuH5c3di",
+            "grn_cf6af8bfe001hYYSfNUFEEIyDl"
+          ]
         }
       }
     }

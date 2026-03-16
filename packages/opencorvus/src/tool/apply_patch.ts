@@ -1,4 +1,4 @@
-import z from "zod"
+﻿import z from "zod"
 import * as path from "path"
 import * as fs from "fs/promises"
 import { Tool } from "./tool"
@@ -17,6 +17,13 @@ import { File } from "../file"
 const PatchParams = z.object({
   patchText: z.string().describe("The full patch text that describes all changes to be made"),
 })
+
+function resolvePatchPath(value: string) {
+  const normalized = Filesystem.windowsPath(value)
+  return path.isAbsolute(normalized)
+    ? Filesystem.resolve(normalized)
+    : Filesystem.resolve(path.resolve(Instance.directory, normalized))
+}
 
 export const ApplyPatchTool = Tool.define("apply_patch", {
   description: DESCRIPTION,
@@ -58,7 +65,7 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     let totalDiff = ""
 
     for (const hunk of hunks) {
-      const filePath = path.resolve(Instance.directory, hunk.path)
+      const filePath = resolvePatchPath(hunk.path)
       await assertExternalDirectory(ctx, filePath)
 
       switch (hunk.type) {
@@ -116,8 +123,8 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
             if (change.removed) deletions += change.count || 0
           }
 
-          const movePath = hunk.move_path ? path.resolve(Instance.directory, hunk.move_path) : undefined
-          await assertExternalDirectory(ctx, movePath)
+          const movePath = hunk.move_path ? resolvePatchPath(hunk.move_path) : undefined
+          if (movePath) await assertExternalDirectory(ctx, movePath)
 
           fileChanges.push({
             filePath,
@@ -279,3 +286,6 @@ export const ApplyPatchTool = Tool.define("apply_patch", {
     }
   },
 })
+
+
+

@@ -1,13 +1,19 @@
 import z from "zod"
 
+/**
+ * A Wave represents a single iterative stage in the execution plan.
+ * After normalization via normalizePlanWaves(), goal_indices always contains
+ * exactly one element — each stage is executed sequentially by a single agent
+ * in a single shared workspace.
+ */
 export const WaveContract = z.object({
   title: z.string(),
   objective: z.string().optional(),
+  /** Always exactly one goal index after normalization (one stage per wave). */
   goal_indices: z.array(z.number()),
   owned_paths: z.array(z.string()).optional(),
   produces: z.array(z.string()).optional(),
   consumes: z.array(z.string()).optional(),
-  parallelism: z.number().int().positive().optional(),
 })
 
 export type WaveContractType = z.infer<typeof WaveContract>
@@ -65,6 +71,19 @@ function defaultWaveTitle(index: number, goal: { description?: string } | undefi
   return `Wave ${index + 1}: ${description}`
 }
 
+function stageWaveTitle(input: {
+  title: string
+  description?: string
+  goal: { description?: string } | undefined
+  index: number
+  total: number
+}) {
+  const goal = cleanText(input.goal?.description)
+  if (input.total <= 1) return input.title
+  if (!goal) return `${input.title} · Stage ${input.index + 1}`
+  return `${input.title} · ${goal}`
+}
+
 export function normalizePlanWaves(input: {
   waves?: unknown
   goals: Array<{ description: string }>
@@ -86,15 +105,29 @@ export function normalizePlanWaves(input: {
       }))]
     if (goal_indices.length === 0) return []
     for (const goalIndex of goal_indices) claimed.add(goalIndex)
-    return [WaveContract.parse({
+    const base = {
       title: cleanText(item.title) || defaultWaveTitle(index, input.goals[goal_indices[0]]),
       objective: cleanText(item.objective) || cleanText(item.description) || undefined,
-      goal_indices,
       owned_paths: cleanList(item.owned_paths),
       produces: cleanList(item.produces),
       consumes: cleanList(item.consumes),
-      parallelism: cleanIndex(item.parallelism),
-    })]
+    }
+    return goal_indices.map((goalIndex, stageIndex) =>
+      WaveContract.parse({
+        title: stageWaveTitle({
+          title: base.title,
+          description: base.objective,
+          goal: input.goals[goalIndex],
+          index: stageIndex,
+          total: goal_indices.length,
+        }),
+        objective: base.objective || cleanText(input.goals[goalIndex]?.description) || undefined,
+        goal_indices: [goalIndex],
+        owned_paths: base.owned_paths,
+        produces: stageIndex === goal_indices.length - 1 ? base.produces : [],
+        consumes: stageIndex === 0 ? base.consumes : [],
+      })
+    )
   })
   let fallbackOffset = 0
   const fallback = input.goals.flatMap((goal, goalIndex) => {
@@ -107,7 +140,6 @@ export function normalizePlanWaves(input: {
       owned_paths: [],
       produces: [],
       consumes: [],
-      parallelism: 1,
     })]
   })
   return [...waves, ...fallback]

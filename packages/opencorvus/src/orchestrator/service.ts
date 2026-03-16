@@ -9,6 +9,7 @@ import { writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "@/orches
 import { PermissionNext } from "@/permission/next"
 import { type ReplanContext } from "@/planner/agent"
 import { PlannerFailureError } from "@/planner/service"
+import { configuredHeadlessModelRef } from "@/llm/headless"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
 import { Question } from "@/question"
@@ -78,6 +79,8 @@ import {
   insertSpecItems,
   persistInitialTransition,
   persistInitialTransitionFailure,
+  resetPlanGoals,
+  resolvePlanGoals,
   specDraftFromFailure,
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
@@ -481,10 +484,12 @@ export namespace OrchestratorService {
     const taskID = Identifier.ascending("task")
     const planID = Identifier.ascending("plan")
     const runID = Identifier.ascending("run")
+    const taskModel = await configuredHeadlessModelRef()
     const metadata = {
       ...(input.metadata ?? {}),
       ...(input.routing ? { routing: input.routing } : {}),
       ...(Object.keys(materializedChecks).length > 0 ? { checks: materializedChecks } : {}),
+      ...(taskModel ? { task_model: taskModel } : {}),
     }
     // Orchestrator-dispatched tasks: auto-approve common tools, ask for external/dangerous operations.
     // When a tool requires "ask" permission, an interaction popup is created for the user.
@@ -534,6 +539,7 @@ export namespace OrchestratorService {
     const compiled = await compileTransition({
         mode: "initial",
         taskID,
+        sessionID: session.id,
         now,
         title,
         request: input.request,
@@ -1484,6 +1490,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       : compileTransition({
           mode: "initial",
           taskID: task.id,
+          sessionID: task.session_id ?? undefined,
           now,
           title: task.title,
           request: clarifiedRequest,
@@ -1497,8 +1504,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
   const planDraft = compiled.planDraft
   const specDraft = compiled.specDraft
   const planID = Identifier.ascending("plan")
-  const specVersion = isReplan && previousPlan ? previousPlan.version + 1 : 1
-  const specSnapshotID = Identifier.ascending("spec")
+  const specSnapshotID = isReplan && previousPlan ? previousPlan.spec_snapshot_id : Identifier.ascending("spec")
   const taskMetadata = {
     ...compiled.taskMetadata,
     planner_clarification: false,
@@ -1538,44 +1544,52 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
         .where(eq(OrchestratorPlanVersionTable.id, previousPlan.id))
         .run()
     }
-    db.insert(OrchestratorSpecSnapshotTable)
-      .values({
-        id: specSnapshotID,
-        task_id: task.id,
-        version: specVersion,
-        status: "ready",
-        summary: specDraft.summary,
-        content: specDraft.content,
-        scope:
-          typeof (specDraft as { scope?: unknown }).scope === "string"
-            ? (specDraft as { scope?: string }).scope ?? ""
-            : "",
-        out_of_scope:
-          typeof (specDraft as { out_of_scope?: unknown }).out_of_scope === "string"
-            ? (specDraft as { out_of_scope?: string }).out_of_scope
-            : undefined,
-        evidence: specDraft.evidence_sources.length > 0 ? specDraft.evidence_sources : undefined,
-        metadata: {
-          assumptions: specDraft.assumptions,
-          risks: specDraft.risks,
-          unresolved_questions: specDraft.unresolved_questions,
-        },
-        time_created: now,
-        time_updated: now,
-      })
-      .run()
-    insertSpecItems(db, {
-      taskID: task.id,
-      specSnapshotID,
-      specItems: specDraft.spec_items ?? [],
-      now,
-    })
-    const goals = insertGoalRows(db, {
-      taskID: task.id,
-      specSnapshotID,
-      goals: specDraft.goals ?? [],
-      now,
-    })
+    const goals = isReplan
+      ? (() => {
+          const next = resolvePlanGoals(specSnapshotID, specDraft.goals ?? [])
+          resetPlanGoals(db, next, now)
+          return next
+        })()
+      : (() => {
+          db.insert(OrchestratorSpecSnapshotTable)
+            .values({
+              id: specSnapshotID,
+              task_id: task.id,
+              version: 1,
+              status: "ready",
+              summary: specDraft.summary,
+              content: specDraft.content,
+              scope:
+                typeof (specDraft as { scope?: unknown }).scope === "string"
+                  ? (specDraft as { scope?: string }).scope ?? ""
+                  : "",
+              out_of_scope:
+                typeof (specDraft as { out_of_scope?: unknown }).out_of_scope === "string"
+                  ? (specDraft as { out_of_scope?: string }).out_of_scope
+                  : undefined,
+              evidence: specDraft.evidence_sources.length > 0 ? specDraft.evidence_sources : undefined,
+              metadata: {
+                assumptions: specDraft.assumptions,
+                risks: specDraft.risks,
+                unresolved_questions: specDraft.unresolved_questions,
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          insertSpecItems(db, {
+            taskID: task.id,
+            specSnapshotID,
+            specItems: specDraft.spec_items ?? [],
+            now,
+          })
+          return insertGoalRows(db, {
+            taskID: task.id,
+            specSnapshotID,
+            goals: specDraft.goals ?? [],
+            now,
+          })
+        })()
     db.insert(OrchestratorPlanVersionTable)
       .values({
         id: planID,

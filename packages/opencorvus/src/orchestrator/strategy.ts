@@ -88,8 +88,12 @@ export function decideRetryOrReplan(
     return { action: "replan", summary, analysis }
   }
 
-  if (classification === "strategy") {
-    log.info("failure classified as strategy -> replanning", { classification, taskID: task.id })
+  if (classification === "strategy" || summaryNeedsReplan(summary)) {
+    log.info("failure requires replanning", {
+      classification,
+      summary_replan: summaryNeedsReplan(summary),
+      taskID: task.id,
+    })
     const replans = findPlans(task.id).length - 1
     if (replans >= limits.maxReplans) {
       return { action: "fail", summary, retryContext: ctx }
@@ -155,4 +159,9 @@ function inheritedChangedFiles(run: RunRow) {
     const previous = typeof current.metadata?.previous_run_id === "string" ? current.metadata.previous_run_id : undefined
     current = previous ? findRun(previous) ?? undefined : undefined
   }
+}
+
+
+function summaryNeedsReplan(summary: string) {
+  return /(placeholder|stub|todo|returns?\s+null|only\s+console\.log|only\s+log|not implemented|implementation is incomplete|critical .* incomplete|manual .* step|cannot be satisfied|\u65e0\u6cd5\u6ee1\u8db3|\u672a\u5b9e\u73b0|\u5360\u4f4d|\u4ec5\u65e5\u5fd7|\u8fd4\u56de\s*null)/i.test(summary)
 }

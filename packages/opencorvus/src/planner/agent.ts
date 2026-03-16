@@ -12,16 +12,15 @@
  * 6. Replan — receives structured failure analysis and produces alternative strategies
  */
 import { stepCountIs } from "ai"
-import type { LanguageModelV2 } from "@ai-sdk/provider"
 import z from "zod"
-import { Provider } from "@/provider/provider"
+import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
 import { createPlannerTools, prefetchContext } from "./tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { unattendedProject } from "@/orchestrator/unattended"
 import { Env } from "@/env"
-import { completeText, type TextHooks } from "@/llm/api"
+import { type TextHooks } from "@/llm/api"
 import path from "path"
 import { Config } from "@/config/config"
 import { WaveContract, normalizePlanWaves } from "@/orchestrator/wave"
@@ -113,19 +112,26 @@ export namespace HeadlessPlannerAgent {
     request: string
     /** Authoritative goals from spec -- planner uses them as execution constraints */
     userGoals?: Array<{ description: string; criteria: string; priority?: string }>
+    sessionID?: string
+    metadata?: Record<string, unknown>
     spec?: { summary?: string; content: string }
     replanContext?: ReplanContext
     timeoutMs?: number
     /** External abort signal (overrides internal timeout when provided) */
     signal?: AbortSignal
     stream?: TextHooks
+    onStatus?: (summary: string) => void | Promise<void>
   }): Promise<PlannerOutputType> {
     // Check abort signal early -- setup calls (model resolution, memory search) can be slow
     if (input.signal?.aborted) throw new Error("planner aborted before model resolution")
 
-    const resolved = await agentLanguageModel()
+    const resolved = await resolveHeadlessLanguageModel({
+      label: "planner",
+      metadata: input.metadata,
+      sessionID: input.sessionID,
+    })
     if (!resolved) throw new Error("no LLM model available for planner agent")
-    const { language } = resolved
+    const { language, model } = resolved
     if (input.signal?.aborted) throw new Error("planner aborted after model resolution")
 
     // Extract working directory from request (eval tasks specify it explicitly)
@@ -178,8 +184,11 @@ export namespace HeadlessPlannerAgent {
         finishReason?: string
         steps: Array<{ text?: string; toolCalls?: unknown[]; toolResults?: unknown[] }>
       }
-      result = await completeText({
-        model: language,
+      result = await completeHeadlessText({
+        label: "planner",
+        model,
+        language,
+        sessionID: input.sessionID,
         stopWhen: [stepCountIs(stepLimit)],
         tools: explorationTools,
         maxOutputTokens: 32768,
@@ -266,6 +275,7 @@ export namespace HeadlessPlannerAgent {
         toolCalls: toolCallCount,
         minToolCalls: MIN_TOOL_CALLS,
       })
+      await input.onStatus?.(`Planner retry attempt ${attempt + 2}: ${planQuality.reasons.join("; ")}`)
     }
 
     throw new Error("planner exhausted retries without producing a valid plan")
@@ -665,11 +675,6 @@ function parseWaves(text: string) {
       owned_paths: parseCsv(record["owned_paths"] || record["paths"] || record["路径"]),
       produces: parseCsv(record["produces"] || record["产物"]),
       consumes: parseCsv(record["consumes"] || record["依赖"]),
-      parallelism: (() => {
-        const raw = record["parallelism"] || record["并行度"]
-        const value = raw ? Number.parseInt(raw, 10) : undefined
-        return Number.isFinite(value) && value > 0 ? value : undefined
-      })(),
     }]
   })
 }
@@ -864,7 +869,8 @@ function validatePlanQuality(
       ? plan.waves.flatMap((wave) => wave && typeof wave === "object" ? [wave] : [])
       : []
     const explicitCoverage = new Set<number>()
-    const hasOwnedPaths = waves.every((wave) => Array.isArray(wave.owned_paths) && wave.owned_paths.length > 0)
+    const waveSizes = waves.map((wave) => Array.isArray(wave.goal_indices) ? wave.goal_indices.length : 0)
+    const multiGoalWaves = waveSizes.filter((size) => size > 1).length
     for (const wave of waves) {
       for (const goalIndex of wave.goal_indices) {
         if (Number.isInteger(goalIndex) && goalIndex >= 0 && goalIndex < goalCount) explicitCoverage.add(goalIndex)
@@ -874,11 +880,12 @@ function validatePlanQuality(
       waves,
       goals: Array.from({ length: goalCount }, (_, index) => ({ description: `Goal ${index + 1}` })),
     })
-    if (waves.length === 0) reasons.push("plan missing wave contracts for a multi-goal task")
+    if (waves.length === 0) reasons.push("plan missing stage waves for a multi-goal task")
     if (explicitCoverage.size < goalCount) reasons.push(`waves cover only ${explicitCoverage.size}/${goalCount} goals`)
-    if (!hasOwnedPaths) reasons.push("waves must declare owned_paths for every multi-goal wave")
-    if (normalized.length < 2) reasons.push("wave plan is not sufficiently layered for a multi-goal task")
-    if (reasons.some((reason) => reason.includes("wave"))) {
+    if (multiGoalWaves > 0) reasons.push("each wave must contain exactly one goal for iterative execution")
+    if (normalized.length < goalCount) reasons.push("plan must provide one iterative wave per goal")
+    if (normalized.length > goalCount + 2) reasons.push("plan creates unnecessary extra waves instead of a direct iterative sequence")
+    if (reasons.some((reason) => reason.includes("wave") || reason.includes("iterative"))) {
       return {
         score: Math.min(score, 0.49),
         reasons,
@@ -897,20 +904,6 @@ function validatePlanQuality(
  * 2. Load that exact model and language surface
  * 3. If that fails, surface the planner failure directly
  */
-async function agentLanguageModel(): Promise<{ language: LanguageModelV2; isReasoning: boolean } | undefined> {
-  const def = await Provider.defaultModel().catch((err) => {
-    log.error("planner: Provider.defaultModel() failed", { error: String(err) })
-    return undefined
-  })
-  if (!def) return undefined
-  log.info("planner: default model resolved", { providerID: def.providerID, modelID: def.modelID })
-  const model = await Provider.getModel(def.providerID, def.modelID)
-  const language = await Provider.getLanguage(model)
-  const isReasoning = model.capabilities?.reasoning === true
-  log.info("planner: model ready via Provider", { modelId: language.modelId, isReasoning })
-  return { language, isReasoning }
-}
-
 /**
  * 解析 request 中的文件引用，读取文件内容。
  * 支持格式：
@@ -1041,6 +1034,9 @@ function buildUserPrompt(
         retryContext.reasons.some((r) => r.includes("verification"))
           ? "- Add explicit verification language to subtasks (e.g., 'run bun test src/x.test.ts and confirm it passes')"
           : "",
+        retryContext.reasons.some((r) => r.includes("wave") || r.includes("iterative"))
+          ? "- Rewrite the plan into a strict iterative sequence with exactly one goal per wave in a single evolving workspace"
+          : "",
         retryContext.reasons.some((r) => r.includes("PRD"))
           ? "- Write a detailed PRD with bullet points (>300 chars)"
           : "",
@@ -1133,11 +1129,11 @@ function buildUserPrompt(
     sections.push(
       "Pre-read files are provided above — analyze them before making tool calls. " +
         "Then use tools to explore related files, dependencies, test patterns, and build/test commands. " +
-        "Produce your final answer as plain markdown using the required section headings and wave contract format.",
+        "Produce your final answer as plain markdown using the required section headings and iterative stage format.",
     )
   } else {
     sections.push(
-      "Now recall memory, check preferences, explore the codebase thoroughly, then produce your final answer as plain markdown using the required section headings and wave contract format.",
+      "Now recall memory, check preferences, explore the codebase thoroughly, then produce your final answer as plain markdown using the required section headings and iterative stage format.",
     )
   }
   return sections.join("\n\n")
@@ -1171,7 +1167,9 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any plan. 
 
 ### Phase 1: EXPLORE
 
-Minimum ${MIN_TOOL_CALLS} tool calls required. Aim for 8-15 for complex tasks.
+When a spec is provided: focus on VALIDATION, not re-discovery. The spec already grounded the requirements in the codebase. Use tool calls to verify specific file paths from the spec, discover implementation-level details the spec may have omitted (exact function signatures, import chains, test patterns), and confirm build/test commands. Minimum 3 tool calls.
+
+When NO spec is provided: full discovery mode. Minimum 5 tool calls. Aim for 8-15 for complex tasks.
 
 You must discover:
 - Exact files to create or modify
@@ -1184,10 +1182,10 @@ You must discover:
 
 Your plan must be concrete enough that an executor can implement it without guessing.
 
-Use wave contracts, not generic milestones:
-- Waves are dynamic and dependency-driven.
-- Goals in wave N start only after all goals in previous waves pass.
-- Goals may share a wave only if their \`owned_paths\` do not conflict and they consume only already-produced outputs.
+Use wave contracts as iterative stages in a single evolving workspace:
+- Each wave represents the next coding stage; the same agent advances the same workspace forward.
+- Every wave must contain exactly one goal.
+- Goal N starts only after all previous waves pass.
 - Every multi-goal plan must cover every goal exactly once.
 - Use 0-based goal indices in the \`goals:\` field.
 
@@ -1210,11 +1208,8 @@ Under \`# Waves\`, each wave must be a numbered block in this shape:
 
 1. Wave title
 - objective: one sentence
-- goals: 0, 1
-- owned_paths: path/a.ts, path/b.ts
-- produces: artifact-a, artifact-b
-- consumes: artifact-x
-- parallelism: 1
+- goals: 0
+- paths: path/to/file-a.ts, path/to/file-b.ts
 
 Under \`# Subtasks\`, each subtask must be a numbered block in this shape:
 
@@ -1237,20 +1232,22 @@ Under \`# Clarifications\`, only emit execution blockers. Format each line as:
 - Do not spam identical exploration calls.
 - Every file path must come from actual tool results or pre-read files.
 - Goals are authoritative and must not be redefined.
-- Every wave in a multi-goal plan must declare \`owned_paths\`.
+- Every multi-goal plan must use iterative one-goal-per-wave stages in the same single workspace.
 - Write in the same language as the request.
 - If replanning, the new strategy must differ from the failed one.
 - Do not emit generic advice like "follow best practices". Name files, modules, commands, and concrete changes.
+- clarifications are execution blockers only: emit them when the implementation path is genuinely unknowable (e.g., cannot determine which files to modify). Never ask about requirements, acceptance criteria, or scope — those are defined by the spec. Never ask what the user wants to build.
 
 ## Quality Self-Check
 
 Before outputting markdown, verify:
-1. I made at least ${MIN_TOOL_CALLS} tool calls.
+1. I made at least 3 tool calls (5+ when no spec was provided).
 2. PRD and subtasks reference concrete file paths.
 3. Every subtask includes an explicit verification step.
 4. Waves cover every goal exactly once for multi-goal tasks.
-5. Wave owned_paths do not overlap within the same wave.
-6. The summary is a real one-line plan summary, not a heading or file path.`
+5. Each wave contains exactly one goal and advances the same workspace forward.
+6. I did not create multi-goal waves or speculative future stages.
+7. The summary is a real one-line plan summary, not a heading or file path.`
 
 export async function plannerSystem() {
   const config = await Config.get()

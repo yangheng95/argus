@@ -139,6 +139,8 @@ describe("planner.service", () => {
 
     expect(plan.prompt).toContain("ui_review")
     expect(plan.prompt).toContain("startup")
+    expect(plan.prompt).toContain("Evaluator-managed: startup")
+    expect(plan.prompt).toContain("Do NOT launch background or long-lived dev servers")
   })
 
   test("keeps heavy command selectors goal-local", async () => {

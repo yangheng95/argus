@@ -42,7 +42,7 @@ import {
 import { plannerClarification } from "./planner-clarification"
 import { suppressClarifications, unattendedProject } from "./unattended"
 import { buildSpecReplanInput } from "./spec-goal-service"
-import { findPlan, findSpecItems, findTask, listGoalsBySpec, listMilestonesByPlan, listPlanNodesByPlan, type GoalRow, type PlanRow, type RunRow, type TaskRow } from "./store"
+import { findPlan, findSpecItems, findSpecSnapshot, findTask, listGoalsBySpec, listMilestonesByPlan, listPlanNodesByPlan, type GoalRow, type PlanRow, type RunRow, type TaskRow } from "./store"
 import { agentStream } from "./agent-stream"
 import { type TextHooks } from "@/llm/api"
 import { normalizePlanWaves } from "./wave"
@@ -75,6 +75,7 @@ export type TransitionMode = "initial" | "replan"
 type CompileInitialInput = {
   mode: "initial"
   taskID: string
+  sessionID?: string
   now: number
   title: string
   request: string
@@ -136,6 +137,91 @@ function stageTimeouts(input: CompileTransitionInput) {
   return {
     specMs: specFloor + specBonus,
     plannerMs: plannerFloor + (extra - specBonus),
+  }
+}
+
+function reuseSpecDraft(input: CompileReplanInput): SpecDraft & { spec_items: unknown[]; evidence_sources: string[]; unresolved_questions: string[]; scope?: string; out_of_scope?: string } {
+  const snapshot = findSpecSnapshot(input.previousPlan.spec_snapshot_id)
+  if (!snapshot) throw new PlannerFailureError(`Spec not found for replan: ${input.previousPlan.spec_snapshot_id}`)
+  const goals = input.goals.length > 0
+    ? input.goals
+    : listGoalsBySpec(input.previousPlan.spec_snapshot_id).map((goal) => ({
+        description: goal.description,
+        criteria: goal.criteria,
+        priority: goal.priority,
+        source: goal.source,
+        metadata: goal.metadata ?? undefined,
+      }))
+  const assumptions = Array.isArray(snapshot.metadata?.assumptions)
+    ? snapshot.metadata.assumptions
+      .filter((item): item is { question: string; assumption: string } =>
+        !!item
+        && typeof item === "object"
+        && "question" in item
+        && typeof item.question === "string"
+        && "assumption" in item
+        && typeof item.assumption === "string",
+      )
+    : []
+  const risks = Array.isArray(snapshot.metadata?.risks)
+    ? snapshot.metadata.risks.filter((item): item is string => typeof item === "string")
+    : []
+  const unresolved = Array.isArray(snapshot.metadata?.unresolved_questions)
+    ? snapshot.metadata.unresolved_questions.filter((item): item is string => typeof item === "string")
+    : []
+  return {
+    summary: snapshot.summary,
+    content: snapshot.content,
+    goals,
+    assumptions,
+    risks,
+    clarifications: undefined,
+    scope: snapshot.scope,
+    out_of_scope: snapshot.out_of_scope ?? undefined,
+    spec_items: findSpecItems(input.previousPlan.spec_snapshot_id).map((item) => ({
+      title: item.title,
+      description: item.description,
+      priority: item.priority,
+      check_selector: item.check_selector ?? undefined,
+    })),
+    evidence_sources: Array.isArray(snapshot.evidence) ? snapshot.evidence : [],
+    unresolved_questions: unresolved,
+  }
+}
+
+export function resolvePlanGoals(specSnapshotID: string, goals: Array<{ description: string; criteria: string }>) {
+  const existing = listGoalsBySpec(specSnapshotID)
+  if (goals.length < 1) return existing
+  const byDescription = new Map<string, GoalRow[]>()
+  for (const goal of existing) {
+    const key = goal.description.trim()
+    if (!key) continue
+    const next = byDescription.get(key) ?? []
+    next.push(goal)
+    byDescription.set(key, next)
+  }
+  const matched = goals.flatMap((goal) => {
+    const key = goal.description.trim()
+    if (!key) return []
+    const candidates = byDescription.get(key)
+    if (!candidates || candidates.length < 1) return []
+    const exact = candidates.findIndex((item) => item.criteria.trim() === goal.criteria.trim())
+    const next = exact >= 0 ? candidates.splice(exact, 1)[0] : candidates.shift()
+    return next ? [next] : []
+  })
+  return matched.length > 0 ? matched : existing
+}
+
+export function resetPlanGoals(db: Database.TxOrDb, goals: GoalRow[], now: number) {
+  for (const goal of goals) {
+    if (goal.status === "pending") continue
+    db.update(OrchestratorGoalTable)
+      .set({
+        status: "pending",
+        time_updated: now,
+      })
+      .where(eq(OrchestratorGoalTable.id, goal.id))
+      .run()
   }
 }
 
@@ -329,15 +415,23 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
   const unattended = await unattendedProject()
   const timeouts = stageTimeouts(input)
   const specLive = agentStream({ taskID: input.taskID, stage: "spec" })
-  await specLive.start(input.mode === "replan" ? "Spec rewrite started" : "Spec generation started")
-  const rawSpecDraft = await compileSpec(input, specLive.hooks, timeouts.specMs).then(async (result) => {
-    await specLive.finish(input.mode === "replan" ? "Spec rewrite finished" : "Spec generation finished")
-    return result
-  }).catch(async (error) => {
-    await specLive.error(error)
-    if (!(error instanceof SpecFailureError)) throw error
-    throw new PlannerFailureError(error.message, { cause: error })
-  })
+  const rawSpecDraft = await (async () => {
+    if (input.mode === "replan") {
+      await specLive.start("Spec locked; reusing active specification")
+      const result = reuseSpecDraft(input)
+      await specLive.finish("Active specification preserved for replanning")
+      return result
+    }
+    await specLive.start("Spec generation started")
+    return compileSpec(input, specLive.hooks, timeouts.specMs, specLive.statusHook.bind(specLive)).then(async (result) => {
+      await specLive.finish("Spec generation finished")
+      return result
+    }).catch(async (error) => {
+      await specLive.error(error)
+      if (!(error instanceof SpecFailureError)) throw error
+      throw new PlannerFailureError(error.message, { cause: error })
+    })
+  })()
   const initialSpecClarification = specClarification(rawSpecDraft)
   if (unattended && initialSpecClarification) {
     log.info(`${input.mode}: auto-assuming specification clarification for unattended project`, {
@@ -374,16 +468,21 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             title: input.title,
             request: input.request,
             spec: specDraft,
+            sessionID: input.sessionID,
+            metadata: input.metadata,
             allowClarification: !unattended,
             executor: input.executor,
             routing: input.routing,
             timeoutMs: timeouts.plannerMs,
             stream: planLive.hooks,
+            onStatus: planLive.statusHook.bind(planLive),
           })
         : PlannerService.replan({
             title: input.title,
             request: input.request,
             spec: specDraft,
+            sessionID: input.task.session_id ?? undefined,
+            metadata: input.task.metadata ?? undefined,
             previousPrompt: input.previousPlan.prompt,
             previousPlanID: input.previousPlan.id,
             failureSummary: input.failureSummary,
@@ -393,6 +492,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
             routing: input.routing,
             timeoutMs: timeouts.plannerMs,
             stream: planLive.hooks,
+            onStatus: planLive.statusHook.bind(planLive),
           })
     ).then(async (result) => {
       await planLive.finish(input.mode === "replan" ? "Planner replan finished" : "Planner finished")
@@ -487,6 +587,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
       : {
           previous_run_id: input.previousRun.id,
           ...planDraft.metadata,
+          ...(!specMeta && input.previousPlan.metadata?.spec ? { spec: input.previousPlan.metadata.spec } : {}),
           ...(specMeta
             ? {
                 spec: {
@@ -998,7 +1099,7 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
 }
 
 export function persistReplanTransition(input: PersistReplanInput): ReplanQueueResult {
-  const specSnapshotID = Identifier.ascending("spec")
+  const specSnapshotID = input.previousPlan.spec_snapshot_id
   const nextVersion = input.previousPlan.version + 1
   const clarification = plannerClarification(input.compiled.planDraft)
   if (clarification) {
@@ -1091,26 +1192,14 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
     }
   }
   Database.transaction((db) => {
-    const goals = persistSpecSnapshot(db, {
-      taskID: input.task.id,
-      specSnapshotID,
-      version: nextVersion,
-      specDraft: input.compiled.specDraft,
-      now: input.now,
-    })
+    const goals = resolvePlanGoals(specSnapshotID, input.compiled.specDraft.goals ?? [])
+    resetPlanGoals(db, goals, input.now)
     db.update(OrchestratorPlanVersionTable)
       .set({
         status: "superseded",
         time_updated: input.now,
       })
       .where(eq(OrchestratorPlanVersionTable.id, input.previousPlan.id))
-      .run()
-    db.update(OrchestratorSpecSnapshotTable)
-      .set({
-        status: "superseded",
-        time_updated: input.now,
-      })
-      .where(eq(OrchestratorSpecSnapshotTable.id, input.previousPlan.spec_snapshot_id))
       .run()
     db.insert(OrchestratorPlanVersionTable)
       .values({
@@ -1411,10 +1500,6 @@ export function insertPlanItems(
       const next = indices?.shift()
       return next === undefined ? [] : [next]
     }),
-    owned_paths: [] as string[],
-    produces: [] as string[],
-    consumes: [] as string[],
-    parallelism: milestone.goals.length > 0 ? milestone.goals.length : 1,
   }))
   const metadataWaves = Array.isArray(input.planDraft.metadata?.waves) ? input.planDraft.metadata.waves : undefined
   const waves = normalizePlanWaves({
@@ -1422,7 +1507,7 @@ export function insertPlanItems(
     goals: input.goals,
   })
 
-  // Pre-generate plan node IDs so sibling goals can reference each other in depends_on_ids
+  // Pre-generate plan node IDs for sequential dependency resolution (each stage depends on all prior stages)
   const goalNodeIDs = input.goals.map(() => Identifier.ascending("plan_node"))
   const milestoneNodeIDs = waves.map(() => Identifier.ascending("plan_node"))
   const goalWaveIndex = new Map<number, number>()
@@ -1439,7 +1524,7 @@ export function insertPlanItems(
       ? waves.slice(0, waveIndex).flatMap((entry) => entry.goal_indices)
       : []
   })
-  // Defensive cycle check — topological sort via in-degree
+  // Defensive cycle check â€” topological sort via in-degree
   const inDegree = new Map<number, number>()
   for (let i = 0; i < input.goals.length; i++) inDegree.set(i, 0)
   for (const [i, deps] of goalDeps.entries()) {
@@ -1494,10 +1579,6 @@ export function insertPlanItems(
           wave_index: waveIndex,
           wave_title: wave?.title,
           wave_objective: wave?.objective,
-          owned_paths: wave?.owned_paths ?? [],
-          produces: wave?.produces ?? [],
-          consumes: wave?.consumes ?? [],
-          wave_parallelism: wave?.parallelism,
           wave_goal_indices: wave?.goal_indices ?? [index],
         },
         time_created: input.now,
@@ -1519,10 +1600,6 @@ export function insertPlanItems(
         metadata: {
           kind: "wave",
           goal_indices: wave.goal_indices,
-          owned_paths: wave.owned_paths,
-          produces: wave.produces,
-          consumes: wave.consumes,
-          parallelism: wave.parallelism,
         },
         time_created: input.now,
         time_updated: input.now,
@@ -1542,10 +1619,6 @@ export function insertPlanItems(
           kind: "wave",
           milestone_id: milestoneID,
           goal_indices: wave.goal_indices,
-          owned_paths: wave.owned_paths,
-          produces: wave.produces,
-          consumes: wave.consumes,
-          parallelism: wave.parallelism,
         },
         time_created: input.now,
         time_updated: input.now,
@@ -1644,7 +1717,12 @@ export function insertSpecItems(
   }
 }
 
-async function compileSpec(input: CompileTransitionInput, _stream?: TextHooks, timeoutMs?: number) {
+async function compileSpec(
+  input: CompileTransitionInput,
+  stream?: TextHooks,
+  timeoutMs?: number,
+  onStatus?: (summary: string) => void | Promise<void>,
+) {
   const specRoute = input.routing?.spec ?? "opencorvus"
   if (specRoute === "executor" && input.executor !== "opencode" && ExecutorPlanner.supports(input.executor, "spec")) {
     const raw = await ExecutorPlanner.spec({
@@ -1661,7 +1739,11 @@ async function compileSpec(input: CompileTransitionInput, _stream?: TextHooks, t
       title: input.title,
       request: input.request,
       goals: input.goals,
+      sessionID: input.task.session_id ?? undefined,
+      metadata: input.task.metadata ?? undefined,
       timeoutMs,
+      stream,
+      onStatus,
       rewriteContext: {
         previousSpec: input.replanContext?.previousSummary ?? input.previousPlan.summary,
         failureAnalysis: input.replanContext?.failureAnalysis ?? {
@@ -1683,7 +1765,11 @@ async function compileSpec(input: CompileTransitionInput, _stream?: TextHooks, t
     title: input.title,
     request: input.request,
     goals: input.goals,
+    sessionID: input.sessionID,
+    metadata: input.metadata,
     timeoutMs,
+    stream,
+    onStatus,
   })
 }
 
@@ -2253,13 +2339,12 @@ export function persistEvaluation(input: {
     )
   })
   const plan = input.run.plan_version_id ? findPlan(input.run.plan_version_id) : undefined
-  const goals = plan ? listGoalsBySpec(plan.spec_snapshot_id) : []
   writeEvaluationSnapshot({
     task: input.task,
     run: input.run,
     goalRunID: input.goalRunID,
     evaluation,
-    goals,
+    goals: input.goals,
     analysis: input.analysis,
     delivery: input.delivery,
     createdAt: now,
@@ -2268,7 +2353,7 @@ export function persistEvaluation(input: {
     writeGoalSnapshot({
       task: input.task,
       plan,
-      goals,
+      goals: listGoalsBySpec(plan.spec_snapshot_id),
       milestones: listMilestonesByPlan(plan.id),
       createdAt: now,
     })

@@ -60,7 +60,7 @@ describe("orchestrator.goal evaluation workspace", () => {
     await resetDatabase()
   })
 
-  test("runs goal evaluation inside the goal workspace instead of the task root", async () => {
+  test("runs goal execution and evaluation inside the task workspace", async () => {
     await using tmp = await tmpdir({ git: true })
     stubPlanner()
     const dirs: string[] = []
@@ -109,13 +109,15 @@ describe("orchestrator.goal evaluation workspace", () => {
           goal_index,
           status: failed ? "failed" as const : "passed" as const,
           evidence: failed ? "Required checks failed." : "Required checks passed.",
-          reasoning: failed ? "The goal workspace file was not visible during evaluation." : "The goal workspace file was visible during evaluation.",
+          reasoning: failed
+            ? "The task workspace file was not visible during evaluation."
+            : "The task workspace file was visible during evaluation.",
         })),
         replan_guidance: failed
           ? {
               root_cause: "Goal evaluation ran in the wrong directory",
-              what_failed: "The goal workspace file was not visible during evaluation.",
-              suggested_strategy: "Evaluate the goal inside its own workspace.",
+              what_failed: "The task workspace file was not visible during evaluation.",
+              suggested_strategy: "Evaluate the goal inside the task workspace.",
               avoid_approaches: [],
             }
           : null,
@@ -135,14 +137,14 @@ describe("orchestrator.goal evaluation workspace", () => {
       directory: tmp.path,
       fn: async () => {
         const taskID = await OrchestratorService.createTask({
-          request: "verify goal evaluation cwd",
+          request: "verify task workspace cwd",
           checks: {
             verify_cmd: [`"${process.execPath}" -e "process.exit(0)"`],
           },
           goals: [
             {
               description: "Write goal file",
-              criteria: "Create src/from-goal.ts in the goal workspace.",
+              criteria: "Create src/from-goal.ts in the task workspace.",
               priority: "blocking",
               metadata: {
                 check_selector: ["verify_cmd"],
@@ -159,9 +161,8 @@ describe("orchestrator.goal evaluation workspace", () => {
         }
 
         expect(progress.task.status).toBe("completed")
-        expect(dirs).toHaveLength(2)
-        expect(dirs[0]).not.toBe(tmp.path)
-        expect(dirs[1]).toBe(tmp.path)
+        expect(dirs.length).toBeGreaterThanOrEqual(2)
+        expect(dirs.every((dir) => dir === tmp.path)).toBe(true)
         expect(await Bun.file(path.join(tmp.path, "src", "from-goal.ts")).text()).toBe("export const goal = true\n")
         const goalRun = Database.use((db) =>
           db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.task_id, taskID)).get(),

@@ -34,9 +34,8 @@ export function resolvedChecks(
   const lint = explicitCommands(config.lint)
   const verify_cmd = explicitCommands(config.verify_cmd)
   const next = {
-    // build and lint only run when explicitly configured — not auto-discovered
     ...(build !== undefined ? { build } : {}),
-    ...(test !== undefined ? { test } : discovered.test.length > 0 ? { test: discovered.test.map((item) => item.command) } : {}),
+    ...(test !== undefined ? { test } : {}),
     ...(lint !== undefined ? { lint } : {}),
     ...(verify_cmd !== undefined ? { verify_cmd } : {}),
     ...(config.startup ? { startup: config.startup } : {}),
@@ -148,13 +147,6 @@ export function commandGroups(
       group(
         item.name,
         config[item.name],
-        item.name === "build"
-          ? discovered.build
-          : item.name === "test"
-            ? discovered.test
-            : item.name === "lint"
-              ? discovered.lint
-              : [],
         item.label,
         item.family,
       ),
@@ -169,22 +161,21 @@ function explicitCommands(configured?: string[] | false) {
   return
 }
 
-function commandSpecs(configured?: string[] | false, discovered: CheckCommand[] = []) {
+function commandSpecs(configured?: string[] | false) {
   if (configured === false) return []
   if (configured && configured.length > 0) {
     return configured.map((command) => ({ command }))
   }
-  return discovered
+  return []
 }
 
 function group(
   name: "build" | "test" | "lint" | "verify_cmd",
   configured: string[] | false | undefined,
-  discovered: CheckCommand[],
   label: string,
   family: z.infer<typeof NamedCheckFamily>,
 ) {
-  const commands = commandSpecs(configured, discovered)
+  const commands = commandSpecs(configured)
   if (commands.length === 0) return
   return {
     name,
@@ -198,11 +189,7 @@ function namedGroups(
   configured: Record<string, z.infer<typeof NamedCheckConfig>> | undefined,
   discovered: Record<string, CommandGroup>,
 ) {
-  const keys = new Set([
-    ...Object.keys(discovered),
-    ...Object.keys(configured ?? {}),
-  ])
-  return [...keys].flatMap((key) => {
+  return Object.keys(configured ?? {}).flatMap((key) => {
     const current = configured?.[key]
     if (current?.enabled === false) return []
     if (current) {
@@ -216,9 +203,7 @@ function namedGroups(
         })),
       } satisfies CommandGroup]
     }
-    const group = discovered[key]
-    if (!group) return []
-    return [group]
+    return []
   })
 }
 

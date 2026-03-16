@@ -387,3 +387,99 @@ test("decideRetryOrReplan replans immediately for empty deliveries", async () =>
     },
   })
 })
+
+test("decideRetryOrReplan replans immediately for placeholder implementations", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "task",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            budget: {
+              max_runs: 3,
+              max_replans: 2,
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            status: "active",
+            summary: "plan",
+            prompt: "prompt",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 0,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      })
+
+      const task = Database.use((db) =>
+        db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get()!,
+      )
+      const run = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get()!,
+      )
+      const decision = decideRetryOrReplan(task, run, "Implementation is incomplete: sync queue still returns null", {
+        verdict: "rejected",
+        classification: "evaluation",
+        summary: "Implementation is incomplete: sync queue still returns null",
+        goal_statuses: [],
+        replan_guidance: null,
+      }, {
+        changedFiles: ["src/data/sync/sync-queue.ts"],
+      })
+
+      expect(decision.action).toBe("replan")
+    },
+  })
+})

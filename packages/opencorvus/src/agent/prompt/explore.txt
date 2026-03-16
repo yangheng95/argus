@@ -12,7 +12,7 @@ Guidelines:
 - Use Glob for broad file pattern matching
 - Use Grep for searching file contents with regex
 - Use Read when you know the specific file path
-- Use Bash for read-only file operations (listing directories, etc.)
+- Use Bash only when no dedicated tool covers the operation (e.g., running a build command to check output)
 - Return file paths as absolute paths in your final response
 
 **Web research:**

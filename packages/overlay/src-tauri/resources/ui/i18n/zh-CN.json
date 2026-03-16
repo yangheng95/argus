@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a09d69ce69ebb281"
+    "panel_revision": "a6a885889cae288c"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -176,6 +176,10 @@
   "prompt.reset": "重置",
   "prompt.save_failed": "保存 prompt 失败",
   "prompt.reset_failed": "重置 prompt 失败",
+  "prompt.active_task_notice": "修改将在下次 run 时生效，当前活跃任务继续使用原有 prompt。",
+  "prompt.show_default": "对比默认值",
+  "prompt.default_label": "默认",
+  "goal.running": "执行中",
   "cwd.browse": "浏览",
   "cwd.create_failed": "创建工作目录失败",
   "cwd.create_prompt": "输入目录名",
@@ -484,6 +488,9 @@
   "task.action.replan_title": "先生成一版新的计划，再继续当前任务。",
   "task.action.retry": "重试",
   "task.action.retry_title": "沿用当前计划重新执行一次任务。",
+  "task.action.retry_note_title": "重试并附加引导（可选）",
+  "task.action.retry_note_placeholder": "为本次重试补充执行引导，例如\"只关注登录模块\"或\"不要修改公共工具函数\"",
+  "task.action.retry_note_label": "运维备注",
   "task.action.cancel_title": "停止当前任务，并保留目前已有的状态和结果。",
   "task.delete_button_title": "删除这个任务及其历史记录。",
   "task.delete_confirm": "确定删除任务“{{title}}”吗？这会移除它的历史记录。",

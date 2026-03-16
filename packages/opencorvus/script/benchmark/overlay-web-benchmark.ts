@@ -17,6 +17,7 @@ function stageTimeout(name: string, totalMs: number, share: number, fallback: nu
 }
 
 const timeoutMs = Number(flag("--timeout-ms")) || 4 * 60 * 60 * 1000
+const stallTimeoutMs = Number(flag("--stall-timeout-ms")) || 5 * 60 * 1000
 const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.4, 1_200_000)
 const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 1_500_000)
 const specMaxSteps = Number(flag("--spec-max-steps")) || 80
@@ -38,50 +39,52 @@ const mode = (flag("--mode") || (requestFile ? "materialize" : "full")) === "mat
 
 const DEFAULT_TASK_TITLE = "Overlay Web Benchmark NoteStore"
 const DEFAULT_TASK_REQUEST = `
-# 任务
+# ä»»åŠ¡
 
-实现一个最小可用的 NoteStore，并补充测试。
+å®žçŽ°ä¸€ä¸ªæœ€å°å¯ç”¨çš„ NoteStoreï¼Œå¹¶è¡¥å……æµ‹è¯•ã€‚
 
-## 1. 创建 src/note-store.ts
+## 1. åˆ›å»º src/note-store.ts
 
-- 导出 \`Note\` interface：{ id: string; title: string; done: boolean; created_at: number }
-- 导出 \`NoteStore\` class，使用内存 Map
-- \`create(title: string)\`：title trim 后不能为空；id 用 crypto.randomUUID()；done=false；created_at=Date.now()
-- \`get(id: string)\`：返回 Note 或 undefined
-- \`list()\`：返回全部 Note，按 created_at 升序
-- \`toggle(id: string)\`：切换 done，返回更新后的 Note 或 undefined
-- \`remove(id: string)\`：删除并返回 boolean
+- å¯¼å‡º \`Note\` interfaceï¼š{ id: string; title: string; done: boolean; created_at: number }
+- å¯¼å‡º \`NoteStore\` classï¼Œä½¿ç”¨å†…å­˜ Map
+- \`create(title: string)\`ï¼štitle trim åŽä¸èƒ½ä¸ºç©ºï¼›id ç”¨ crypto.randomUUID()ï¼›done=falseï¼›created_at=Date.now()
+- \`get(id: string)\`ï¼šè¿”å›ž Note æˆ– undefined
+- \`list()\`ï¼šè¿”å›žå…¨éƒ¨ Noteï¼ŒæŒ‰ created_at å‡åº
+- \`toggle(id: string)\`ï¼šåˆ‡æ¢ doneï¼Œè¿”å›žæ›´æ–°åŽçš„ Note æˆ– undefined
+- \`remove(id: string)\`ï¼šåˆ é™¤å¹¶è¿”å›ž boolean
 
-## 2. 创建 src/note-store.test.ts
+## 2. åˆ›å»º src/note-store.test.ts
 
-使用 bun:test 覆盖这些用例：
+ä½¿ç”¨ bun:test è¦†ç›–è¿™äº›ç”¨ä¾‹ï¼š
 
-1. create 返回完整 Note
-2. 空 title 会抛错
-3. list 保持创建顺序
-4. toggle 会切换 done
-5. remove 删除成功后，get 返回 undefined
+1. create è¿”å›žå®Œæ•´ Note
+2. ç©º title ä¼šæŠ›é”™
+3. list ä¿æŒåˆ›å»ºé¡ºåº
+4. toggle ä¼šåˆ‡æ¢ done
+5. remove åˆ é™¤æˆåŠŸåŽï¼Œget è¿”å›ž undefined
 
-## 3. 约束
+## 3. çº¦æŸ
 
-- Bun runtime、bun:test 和 crypto.randomUUID() 已可直接使用，不需要补环境
-- 可以自由组织项目并新增必要文件，只要最终交付合理、可运行、易于理解
-- 运行 \`bun test src/note-store.test.ts\` 必须通过
+- Bun runtimeã€bun:test å’Œ crypto.randomUUID() å·²å¯ç›´æŽ¥ä½¿ç”¨ï¼Œä¸éœ€è¦è¡¥çŽ¯å¢ƒ
+- å¯ä»¥è‡ªç”±ç»„ç»‡é¡¹ç›®å¹¶æ–°å¢žå¿…è¦æ–‡ä»¶ï¼Œåªè¦æœ€ç»ˆäº¤ä»˜åˆç†ã€å¯è¿è¡Œã€æ˜“äºŽç†è§£
+- è¿è¡Œ \`bun test src/note-store.test.ts\` å¿…é¡»é€šè¿‡
 `.trim()
 const TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
-const PANEL_REQUEST = `请创建一个新任务并立即开始执行以下工作：\n\n${TASK_REQUEST}`
+const PANEL_REQUEST = `è¯·åˆ›å»ºä¸€ä¸ªæ–°ä»»åŠ¡å¹¶ç«‹å³å¼€å§‹æ‰§è¡Œä»¥ä¸‹å·¥ä½œï¼š\n\n${TASK_REQUEST}`
 const LOCAL_VERIFY_CMD = skipLocalVerify ? "" : (verifyCmd?.trim() || (requestFile ? "" : "bun test src/note-store.test.ts"))
 
 const AUTO_REPLY =
   "Complete the task autonomously end-to-end. Choose reasonable defaults consistent with the request, keep scope minimal, continue execution, and do not ask again unless the request is contradictory or unsafe."
 
 const FINAL = new Set(["completed", "failed", "cancelled"])
-const STREAM_PLACEHOLDERS = new Set(["", "...", "……", "思考中", "Thinking"])
+const STREAM_PLACEHOLDERS = new Set(["", "...", "â€¦â€¦", "æ€è€ƒä¸­", "Thinking"])
 const DIAG_TYPES = new Set([
   "orchestrator.agent.updated",
   "orchestrator.run.created",
   "orchestrator.run.updated",
+  "orchestrator.run.progress",
+  "orchestrator.run.output",
   "orchestrator.task.created",
   "orchestrator.task.updated",
   "orchestrator.spec.created",
@@ -97,10 +100,12 @@ const TASK_RESUME_TIMEOUT_MS = Number(flag("--task-resume-timeout-ms")) || Math.
 const temp = {
   dir: "",
   home: "",
+  config: "",
 }
 
 temp.home = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-home-"))
 temp.dir = await fs.mkdtemp(path.join(os.tmpdir(), "opencorvus-overlay-benchmark-project-"))
+temp.config = path.join(temp.home, "config-override")
 process.env.OPENCORVUS_HOME = temp.home
 const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } = await import("./env")
 const { Log } = await import("../../src/util/log")
@@ -115,6 +120,8 @@ const { resetDatabase } = await import("../../test/fixture/db")
 await loadBenchmarkEnv(import.meta.dir)
 prepareDashscopeEnv()
 const model = await resolveBenchmarkModel(import.meta.dir)
+process.env.OPENCORVUS_BENCHMARK_MODEL = model
+process.env.OPENCORVUS_CONFIG_DIR = temp.config
 await ensureBenchmarkModel(import.meta.dir, model)
 
 process.env.OPENCORVUS_AUTO_DISCOVER_EXECUTORS = "1"
@@ -165,12 +172,67 @@ const eventLogFile = reportFile.endsWith(".json")
   : `${reportFile}.events.ndjson`
 const events: Array<Record<string, unknown>> = []
 let flushed = Promise.resolve()
+let lastEventAt = Date.now()
+let lastProgressAt = Date.now()
+let lastProgressSignature = ""
+let lastLogAt = Date.now()
+let lastActivityLogAt = Date.now()
+let lastHeartbeatAt = 0
+let lastActivityLine = ""
+
+function logLine(value: string) {
+  lastLogAt = Date.now()
+  console.log(value)
+}
+
+function activityLine(value: string) {
+  lastActivityLogAt = Date.now()
+  lastLogAt = lastActivityLogAt
+  console.log(value)
+}
+
+function errorLine(value: string) {
+  lastLogAt = Date.now()
+  console.error(value)
+}
+
+function formatEventLine(entry: {
+  type: string
+  stage: string
+  status: string
+  progressType: string
+  summary: string
+  text: string
+  toolName: string
+  goalRunID: string
+}) {
+  if (entry.type === "orchestrator.run.output" && entry.text && !STREAM_PLACEHOLDERS.has(entry.text)) {
+    return `[overlay-benchmark] output=${clipText(entry.text, 240)}`
+  }
+  if (entry.type === "orchestrator.run.progress") {
+    const detail = entry.summary || entry.text || entry.progressType || entry.status
+    if (!detail || STREAM_PLACEHOLDERS.has(detail)) return ""
+    return `[overlay-benchmark] progress-event=${clipText(detail, 240)}`
+  }
+  const summary = entry.summary || entry.text
+  const parts = [
+    `[overlay-benchmark] event=${entry.type.replace("orchestrator.", "")}`,
+    entry.stage ? `stage=${entry.stage}` : "",
+    entry.status ? `status=${entry.status}` : "",
+    entry.toolName ? `tool=${entry.toolName}` : "",
+    entry.goalRunID ? `goalRun=${entry.goalRunID}` : "",
+    summary ? `detail=${clipText(summary, 180)}` : "",
+  ].filter(Boolean)
+  return parts.join(" ")
+}
+
 const onEvent = ({ directory, payload }: { directory?: string; payload: any }) => {
   if (directory && temp.dir && directory !== temp.dir) return
   if (!payload || typeof payload !== "object" || !("type" in payload)) return
   const type = String(payload.type || "")
   if (!DIAG_TYPES.has(type)) return
   const props = payload.properties && typeof payload.properties === "object" ? payload.properties as Record<string, unknown> : {}
+  lastEventAt = Date.now()
   const entry = {
     at: new Date().toISOString(),
     elapsed_ms: Date.now() - marks.startedAt,
@@ -183,8 +245,15 @@ const onEvent = ({ directory, payload }: { directory?: string; payload: any }) =
     toolName: typeof props.toolName === "string" ? props.toolName : "",
     summary: clipText(typeof props.summary === "string" ? props.summary : "", 600),
     text: clipText(typeof props.text === "string" ? props.text : "", 2000),
+    progressType: typeof props.type === "string" ? props.type : "",
+    goalRunID: typeof props.goalRunID === "string" ? props.goalRunID : "",
   }
   events.push(entry)
+  const line = formatEventLine(entry)
+  if (line && line !== lastActivityLine) {
+    lastActivityLine = line
+    activityLine(line)
+  }
   flushed = flushed
     .then(() => fs.appendFile(eventLogFile, `${JSON.stringify(entry)}\n`))
     .catch(() => undefined)
@@ -216,7 +285,7 @@ try {
   await page.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online", { timeout: 60_000 })
   marks.onlineAt = Date.now()
   const overlay = await syncDirectory(page, temp.dir)
-  console.log(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
+  logLine(`[overlay-benchmark] directory=${overlay.directory} saved=${overlay.savedDirectory}`)
 
   await page.evaluate((budget) => {
     window.__ocNextChatMetadata = {
@@ -286,7 +355,7 @@ try {
   marks.resumedAt = Date.now()
   const board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
-  const progress = mode === "full" ? await waitForFinal(taskID, timeoutMs, api) : null
+  const progress = mode === "full" ? await waitForFinal(taskID, timeoutMs, stallTimeoutMs, api) : null
   marks.completedAt = Date.now()
 
   const transcript = await api(`/task/${taskID}/transcript`).then((res) => res.json())
@@ -308,11 +377,13 @@ try {
     stage_timeout_ms: {
       spec: specTimeoutMs,
       planner: plannerTimeoutMs,
+      stall: stallTimeoutMs,
     },
     stage_max_steps: {
       spec: specMaxSteps,
       planner: plannerMaxSteps,
     },
+    stall_timeout_ms: stallTimeoutMs,
     directory: temp.dir,
     server: server.url.toString(),
     taskID,
@@ -406,10 +477,10 @@ try {
     events,
   }, null, 2))
   await Bun.write(reportFile, JSON.stringify(out, null, 2))
-  console.log(JSON.stringify(out, null, 2))
-  console.log(`report: ${reportFile}`)
-  console.log(`events: ${eventFile}`)
-  console.log(`events_ndjson: ${eventLogFile}`)
+  logLine(JSON.stringify(out, null, 2))
+  logLine(`report: ${reportFile}`)
+  logLine(`events: ${eventFile}`)
+  logLine(`events_ndjson: ${eventLogFile}`)
 
   const pass = mode === "materialize"
     ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass
@@ -430,6 +501,7 @@ try {
       spec: specMaxSteps,
       planner: plannerMaxSteps,
     },
+    stall_timeout_ms: stallTimeoutMs,
     timings_ms: {
       online: marks.onlineAt ? marks.onlineAt - marks.startedAt : null,
       submit: marks.submittedAt ? marks.submittedAt - marks.startedAt : null,
@@ -459,10 +531,10 @@ try {
     events,
   }, null, 2))
   await Bun.write(reportFile, JSON.stringify(out, null, 2))
-  console.error(JSON.stringify(out, null, 2))
-  console.error(`report: ${reportFile}`)
-  console.error(`events: ${eventFile}`)
-  console.error(`events_ndjson: ${eventLogFile}`)
+  errorLine(JSON.stringify(out, null, 2))
+  errorLine(`report: ${reportFile}`)
+  errorLine(`events: ${eventFile}`)
+  errorLine(`events_ndjson: ${eventLogFile}`)
   process.exitCode = 1
 } finally {
   GlobalBus.off("event", onEvent)
@@ -486,6 +558,7 @@ try {
 async function scaffoldProject(dir: string, model: string) {
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
+  await fs.mkdir(temp.config, { recursive: true })
   const providerID = model.split("/")[0] || "openai"
   const config = JSON.stringify(
     {
@@ -515,6 +588,7 @@ async function scaffoldProject(dir: string, model: string) {
   )
   await Bun.write(path.join(dir, "opencorvus.json"), config)
   await Bun.write(path.join(dir, ".opencorvus", "opencorvus.json"), config)
+  await Bun.write(path.join(temp.config, "opencorvus.json"), config)
 }
 
 async function runLocalVerify(cwd: string, cmd: string) {
@@ -578,27 +652,69 @@ async function cleanup(
   try {
     await Promise.race([run(), wait])
   } catch (error) {
-    console.error(`[cleanup] ${label}: ${String(error)}`)
+    errorLine(`[cleanup] ${label}: ${String(error)}`)
     await force?.()
   } finally {
     if (timer) clearTimeout(timer)
   }
 }
 
-async function waitForFinal(taskID: string, timeoutMs: number, api: (pathname: string, init?: RequestInit) => Promise<Response>) {
+async function waitForFinal(
+  taskID: string,
+  timeoutMs: number,
+  stallTimeoutMs: number,
+  api: (pathname: string, init?: RequestInit) => Promise<Response>,
+) {
   const startedAt = Date.now()
-  let last = ""
+  let lastStatus = ""
   while (Date.now() - startedAt < timeoutMs) {
     let progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
     progress = await settle(progress, api)
     if (FINAL.has(progress.task.status)) return progress
-    if (progress.task.status !== last) {
-      last = progress.task.status
-      console.log(`[overlay-benchmark] status=${last}`)
+    const signature = progressSignature(progress)
+    if (signature !== lastProgressSignature) {
+      lastProgressSignature = signature
+      lastProgressAt = Date.now()
+      activityLine(`[overlay-benchmark] progress=${signature}`)
+    }
+    if (progress.task.status !== lastStatus) {
+      lastStatus = progress.task.status
+      activityLine(`[overlay-benchmark] status=${lastStatus}`)
+    }
+    const now = Date.now()
+    const signalAt = Math.max(lastEventAt, lastProgressAt)
+    const silentFor = now - signalAt
+    const logSilentFor = now - lastActivityLogAt
+    if (now - lastHeartbeatAt >= 60_000) {
+      lastHeartbeatAt = now
+      logLine(
+        `[overlay-benchmark] heartbeat status=${progress?.task?.status || ""} signal_age_ms=${silentFor} activity_log_age_ms=${logSilentFor} log_age_ms=${now - lastLogAt} last_progress=${lastProgressSignature || "none"}`,
+      )
+    }
+    if (silentFor >= stallTimeoutMs || logSilentFor >= stallTimeoutMs) {
+      throw new Error(
+        `Task stalled: no event/progress change for ${stallTimeoutMs}ms or no activity log output for ${stallTimeoutMs}ms (last progress: ${lastProgressSignature || "none"}, activity log age: ${logSilentFor}ms, last log age: ${now - lastLogAt}ms)`,
+      )
     }
     await Bun.sleep(2_000)
   }
   throw new Error(`Task did not finish within ${timeoutMs}ms`)
+}
+
+function progressSignature(progress: any) {
+  return JSON.stringify({
+    task: progress?.task?.status || "",
+    run: progress?.run?.status || progress?.activeRun?.status || "",
+    phase: progress?.run?.phase || progress?.activeRun?.phase || "",
+    verdict: progress?.evaluation?.verdict || "",
+    delivery: progress?.delivery?.status || "",
+    goals: Array.isArray(progress?.goalRuns)
+      ? progress.goalRuns.map((item: any) => `${item.goal_id || item.goalID || item.id || "goal"}:${item.status || ""}:${item.phase || ""}`)
+      : [],
+    pending: Array.isArray(progress?.pendingInteractions)
+      ? progress.pendingInteractions.map((item: any) => `${item.id || "interaction"}:${item.type || ""}:${item.status || ""}`)
+      : [],
+  })
 }
 
 async function waitForPlanningVisible(
@@ -789,6 +905,7 @@ function clipText(value: string, max: number) {
 function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string) {
   const filtered = events.filter((item) => !taskID || item.taskID === taskID)
   const agents = filtered.filter((item) => item.type === "orchestrator.agent.updated")
+  const runEvents = filtered.filter((item) => item.type === "orchestrator.run.progress" || item.type === "orchestrator.run.output")
   const kinds = filtered.reduce<Record<string, number>>((map, item) => {
     const type = typeof item.type === "string" ? item.type : ""
     if (!type) return map
@@ -825,9 +942,31 @@ function summarizeEvents(events: Array<Record<string, unknown>>, taskID: string)
       tool_calls: toolCalls,
     }]]
   })
+  const execution = runEvents.length === 0
+    ? []
+    : [["execution", {
+        event_count: runEvents.length,
+        first_event_ms: runEvents[0]?.elapsed_ms ?? null,
+        first_progress_ms: runEvents.find((item) => item.type === "orchestrator.run.progress")?.elapsed_ms ?? null,
+        first_output_ms: runEvents.find((item) => item.type === "orchestrator.run.output")?.elapsed_ms ?? null,
+        last_event_ms: runEvents.at(-1)?.elapsed_ms ?? null,
+        types: runEvents.reduce<Record<string, number>>((map, item) => {
+          const type = typeof item.type === "string" ? item.type : ""
+          if (!type) return map
+          map[type] = (map[type] ?? 0) + 1
+          return map
+        }, {}),
+        progress_types: runEvents.reduce<Record<string, number>>((map, item) => {
+          const type = typeof item.progressType === "string" ? item.progressType : ""
+          if (!type) return map
+          map[type] = (map[type] ?? 0) + 1
+          return map
+        }, {}),
+        goal_runs: [...new Set(runEvents.flatMap((item) => typeof item.goalRunID === "string" && item.goalRunID ? [item.goalRunID] : []))],
+      }]]
   return {
     types: kinds,
-    stages: Object.fromEntries(stages),
+    stages: Object.fromEntries([...stages, ...execution]),
   }
 }
 

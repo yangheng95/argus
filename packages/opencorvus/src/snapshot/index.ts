@@ -25,7 +25,7 @@ export namespace Snapshot {
       ...process.env,
       GIT_DIR: git,
       GIT_WORK_TREE: Instance.worktree,
-      // Parallel goal workspaces share the object store but must not share one git index.
+      // Iterative goal stages share the object store but must not share one git index.
       GIT_INDEX_FILE: path.join(
         git,
         "indexes",

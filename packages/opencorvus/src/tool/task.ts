@@ -15,7 +15,7 @@ import { Log } from "../util/log"
 const parameters = z.object({
   description: z.string().describe("A short (3-5 words) description of the task"),
   prompt: z.string().describe("The task for the agent to perform"),
-  subagent_type: z.string().describe("The type of specialized agent to use for this task"),
+  subagent_type: z.string().describe("The agent type to use for this task"),
   task_id: z
     .string()
     .describe(
@@ -82,7 +82,7 @@ export const TaskTool = Tool.define("task", async (ctx) => {
 
         return await Session.create({
           parentID: ctx.sessionID,
-          title: params.description + ` (@${agent.name} subagent)`,
+          title: params.description + ` (@${agent.name} agent)`,
           permission: [
             ...(planMode
               ? [

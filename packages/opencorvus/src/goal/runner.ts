@@ -1,8 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
 import { Global } from "@/global"
-import { Env } from "@/env"
-import { git } from "@/util/git"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { dict } from "@/util/object"
@@ -308,37 +306,8 @@ export async function createGoalWorkspace(input: {
   goal: GoalRow
   snapshot: string | undefined
 }) {
-  if (!input.snapshot || Instance.project.vcs !== "git") return Instance.directory
-  const env = { ...Env.all() }
-  const directory = path.join(
-    Global.Path.data,
-    "goal-workspace",
-    Instance.project.id,
-    input.task.id,
-    `${Date.now()}-${input.goal.id}`,
-  )
-  await fs.mkdir(path.dirname(directory), { recursive: true })
-  const created = await git(["worktree", "add", "--force", "--detach", "--no-checkout", directory], {
-    cwd: Instance.worktree,
-  })
-  if (created.exitCode !== 0) {
-    const detail = [created.stderr.toString().trim(), created.stdout.toString().trim()].filter(Boolean).join("\n")
-    throw new Error(detail || `Failed to create goal workspace for ${input.goal.id}`)
-  }
-  await Project.addSandbox(Instance.project.id, directory).catch((err) => {
-    log.warn("addSandbox failed for goal workspace", { directory, error: String(err) })
-  })
-  await Instance.provide({
-    directory,
-    fn: async () => {
-      for (const [key, value] of Object.entries(env)) {
-        if (value === undefined) continue
-        Env.set(key, value)
-      }
-      await Snapshot.restore(input.snapshot!)
-    },
-  })
-  return directory
+  void input
+  return Instance.directory
 }
 
 export async function cleanupGoalWorkspace(directory?: string) {
@@ -438,50 +407,55 @@ function extractPlanSection(prompt: string, heading: string) {
 }
 
 export function buildGoalPrompt(input: {
-  brief: string
   plan: PlanRow
   node: PlanNodeRow
   goal: GoalRow
 }) {
   const meta = dict(input.node.metadata)
-  const ownedPaths = strings(meta.owned_paths)
-  const produces = strings(meta.produces)
-  const consumes = strings(meta.consumes)
   const waveTitle = typeof meta.wave_title === "string" ? meta.wave_title.trim() : ""
   const waveObjective = typeof meta.wave_objective === "string" ? meta.wave_objective.trim() : ""
   return [
-    input.brief,
-    "You are executing a single goal for the coordinator. Treat the goal contract below as the only implementation target for this run.",
-    `Goal:\n${input.goal.description}`,
-    `Acceptance:\n${input.goal.criteria}`,
+    "You are executing the next iterative coding stage for the coordinator.",
+    "Stay in the current project workspace and continue from the code that already exists.",
+    "Treat the goal contract below as the only implementation target for this stage.",
+    `Goal:
+${input.goal.description}`,
+    `Acceptance:
+${input.goal.criteria}`,
     localSelectors(input.goal).length > 0
-      ? `Required checks for this goal:\n${localSelectors(input.goal).join(", ")}`
+      ? `Required checks for this goal:
+${localSelectors(input.goal).join(", ")}`
       : undefined,
     waveTitle
       ? [
-          "Wave contract:",
+          "Stage context:",
           `- Wave: ${waveTitle}`,
           waveObjective ? `- Objective: ${waveObjective}` : undefined,
-          ownedPaths.length > 0 ? `- Owned paths: ${ownedPaths.join(", ")}` : undefined,
-          consumes.length > 0 ? `- Consumes: ${consumes.join(", ")}` : undefined,
-          produces.length > 0 ? `- Produces: ${produces.join(", ")}` : undefined,
-          "- Stay inside these owned paths unless the plan context explicitly requires a shared entrypoint change.",
+          "- This stage executes in the same evolving workspace as the previous stages.",
+          "- Do not fork a second implementation track or reset earlier progress.",
         ].filter(Boolean).join("\n")
       : undefined,
-    `Coordinator context:\n${compactPlanContext(input.plan)}`,
+    `Coordinator context:
+${compactPlanContext(input.plan)}`,
+    [
+      "Scope guard:",
+      "- Ignore other goals, later stages, and broader product work unless this goal explicitly requires them.",
+      "- Do not make speculative improvements outside the current goal contract.",
+      "- Do not run git add, git commit, or git push unless the current goal explicitly requires a commit.",
+    ].join("\n"),
     [
       "Workspace root rule:",
       "- Treat the current workspace root as the project root for this run.",
-      "- Create or modify files directly in this root.",
+      "- Create or modify files directly in this root instead of branching into a separate workspace.",
       "- Do not scaffold a nested app or package directory unless the request explicitly asks for one.",
     ].join("\n"),
     [
       "Execution discipline:",
       "- Do not restate or re-plan the whole product.",
-      "- Do not spend this run enumerating future waves or TODO lists.",
+      "- Do not spend this stage enumerating future stages or TODO lists.",
       "- Start implementing the current goal immediately, verify it, and stop once this goal's checks are ready.",
     ].join("\n"),
-    "Do not redefine the goal or broaden scope. Implement only what is needed for this goal, verify it, and stop.",
+    "Do not redefine the goal or broaden scope. Implement only what is needed for this stage, verify it, and stop.",
   ].filter(Boolean).join("\n\n")
 }
 
@@ -567,6 +541,7 @@ export async function evaluateGoal(input: {
       title: input.task.title,
       request: input.task.request,
       sessionID: input.task.session_id ?? undefined,
+      metadata: input.task.metadata ?? undefined,
     },
     goals: [{
       description: input.goal.description,
@@ -640,6 +615,7 @@ export async function evaluateTask(input: {
       title: input.task.title,
       request: input.task.request,
       sessionID: input.task.session_id ?? undefined,
+      metadata: input.task.metadata ?? undefined,
     },
     goals: input.goals.map((goal) => ({
       description: goal.description,

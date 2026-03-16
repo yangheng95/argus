@@ -34,9 +34,10 @@ const EXA_BASE_URL = "https://mcp.exa.ai"
  * - 1 preference tool: preference_list
  * - 1 web search tool: web_search
  */
-export function createPlannerTools(taskWorkDir?: string, options?: { recall?: boolean }) {
+export function createPlannerTools(taskWorkDir?: string, options?: { recall?: boolean; web?: boolean }) {
   const codebase = createCodebaseTools(taskWorkDir) as Record<string, Tool>
   const recall = options?.recall ?? true
+  const web = options?.web ?? true
   let projectId: string
   try {
     projectId = Instance.project.id
@@ -58,7 +59,9 @@ export function createPlannerTools(taskWorkDir?: string, options?: { recall?: bo
   }
   const tools: Record<string, Tool> = {
     ...codebase,
-    web_search: tool({
+  }
+  if (web) {
+    tools.web_search = tool({
       description:
         "Search the web for current documentation, API references, changelogs, or guides. " +
         "Use when the task involves external APIs, third-party libraries, or unfamiliar systems. " +
@@ -113,7 +116,7 @@ export function createPlannerTools(taskWorkDir?: string, options?: { recall?: bo
           return "Web search unavailable or timed out."
         }
       },
-    }),
+    })
   }
   if (!recall) return tools
 
