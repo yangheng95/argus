@@ -1,12 +1,12 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { Session } from "../../session"
-import { SessionPrompt } from "../../session/prompt"
-import { errors } from "../error"
-import { lazy } from "../../util/lazy"
+import { Session } from "../../../session"
+import { SessionPrompt } from "../../../session/prompt"
+import { errors } from "../../error"
+import { lazy } from "../../../util/lazy"
 
-export const SessionManagementMutateFlowRoutes = lazy(() =>
+export const SessionMutateFlowRoutes = lazy(() =>
   new Hono()
     .post(
       "/:sessionID/init",

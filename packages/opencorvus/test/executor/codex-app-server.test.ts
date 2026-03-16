@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { CodingEventInfo } from "../../src/executor/compat"
+import type { CodingEventInfo } from "../../src/executor/contracts"
 import { CodexAppServerExecutor, type CodexAppServerClient } from "../../src/executor/codex-app-server"
 
 describe("codex app server executor", () => {

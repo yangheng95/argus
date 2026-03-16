@@ -34,6 +34,9 @@ export namespace Identifier {
     milestone: "mst",
     executor_session: "exs",
     executor_event: "exe",
+    protocol_event: "pte",
+    protocol_inbox: "pin",
+    protocol_stream_chunk: "psc",
     spec: "spc",
     specitem: "spi",
   } as const

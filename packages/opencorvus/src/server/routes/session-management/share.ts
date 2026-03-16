@@ -1,21 +1,21 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { Session } from "../../session"
-import { SessionPrompt } from "../../session/prompt"
-import { SessionCompaction } from "../../session/compaction"
-import { SessionRevert } from "../../session/revert"
+import { Session } from "../../../session"
+import { SessionPrompt } from "../../../session/prompt"
+import { SessionCompaction } from "../../../session/compaction"
+import { SessionRevert } from "../../../session/revert"
 import { SessionSummary } from "@/session/summary"
-import { Agent } from "../../agent/agent"
+import { Agent } from "../../../agent/agent"
 import { Snapshot } from "@/snapshot"
 import { LLMTrace } from "@/session/llm-trace"
-import { Filesystem } from "../../util/filesystem"
-import { buildSessionTraceHtml } from "../../cli/cmd/export-html"
-import { errors } from "../error"
-import { lazy } from "../../util/lazy"
+import { Filesystem } from "../../../util/filesystem"
+import { buildSessionTraceHtml } from "../../../cli/cmd/export-html"
+import { errors } from "../../error"
+import { lazy } from "../../../util/lazy"
 import path from "path"
 
-export const SessionManagementShareRoutes = lazy(() =>
+export const SessionShareRoutes = lazy(() =>
   new Hono()
     .get(
       "/:sessionID/diff",

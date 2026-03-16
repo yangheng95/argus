@@ -1,12 +1,12 @@
 import { Hono } from "hono"
 import { describeRoute, resolver, validator } from "hono-openapi"
 import z from "zod"
-import { lazy } from "../../util/lazy"
+import { lazy } from "../../../util/lazy"
 import { PanelSettings } from "@/panel/settings"
 import { Session } from "@/session"
-import { errors } from "../error"
+import { errors } from "../../error"
 
-export const SessionManagementPanelSettingsRoutes = lazy(() =>
+export const SessionPanelSettingsRoutes = lazy(() =>
   new Hono()
     .get(
       "/:sessionID/panel-settings",

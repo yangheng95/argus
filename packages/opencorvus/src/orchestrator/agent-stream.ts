@@ -1,6 +1,6 @@
-import { Bus } from "@/bus"
 import { type TextHooks } from "@/llm/api"
 import { type AgentStageType, Event } from "./model"
+import { OrchestratorProtocol } from "./protocol"
 
 type Meta = {
   taskID: string
@@ -24,7 +24,7 @@ async function publish(
     toolName?: string
   },
 ) {
-  await Bus.publish(Event.AgentUpdated, {
+  await OrchestratorProtocol.emit(Event.AgentUpdated, {
     taskID: meta.taskID,
     ...(meta.runID ? { runID: meta.runID } : {}),
     stage: meta.stage,
@@ -33,7 +33,7 @@ async function publish(
     ...(input.toolName ? { toolName: input.toolName } : {}),
     ...(input.text ? { text: input.text } : {}),
     summary: input.summary,
-  })
+  }, { source: "agent-stream" })
 }
 
 export function agentStream(meta: Meta) {

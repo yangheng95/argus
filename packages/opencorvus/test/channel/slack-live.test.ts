@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "bun:test"
-import { Bus } from "../../src/bus"
 import { SlackGateway } from "../../src/channel/slack"
 import { Identifier } from "../../src/id/id"
 import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
+import { OrchestratorProtocol } from "../../src/orchestrator/protocol"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import {
   OrchestratorChannelBindingTable,
@@ -133,14 +133,14 @@ live("delivers orchestrator event to a real Slack thread", async () => {
             })
             .run()
         })
-        await Bus.publish(OrchestratorEvent.EvaluationCompleted, {
+        await OrchestratorProtocol.emit(OrchestratorEvent.EvaluationCompleted, {
           taskID,
           runID,
           evaluationID: Identifier.ascending("evaluation"),
           status: "passed",
           verdict: "accepted",
           summary: "Live outbound Slack event delivery works",
-        })
+        }, { source: "test.slack.live" })
       },
     })
 

@@ -5,13 +5,13 @@ import { PlannerFailureError } from "@/planner/service"
 import { Plugin } from "@/plugin"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
-import { installRuntimeShims } from "@/runtime/shims"
 import { Session } from "@/session"
 import { Snapshot } from "@/snapshot"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { withKeyedLock } from "@/util/lock"
 import { withTimeout } from "@/util/timeout"
+import { OrchestratorRunActor } from "./run-actor"
 import { DeliveryService } from "./delivery"
 import {
   applyGoalDelivery,
@@ -96,7 +96,9 @@ import {
   type TaskRow,
 } from "./store"
 import { Identifier } from "@/id/id"
+import { StreamHub } from "@/protocol/stream-hub"
 import { EXECUTOR_LEASE_MS, executorLeaseHeldByOther, executorLeaseOwner } from "./lease"
+import { OrchestratorProtocol } from "./protocol"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 
@@ -112,7 +114,6 @@ const finalizingRuns = new Set<string>() // guards against concurrent finalizeCo
 const completingRuns = new Set<string>() // guards against concurrent completeRun for the same run
 const finalizingGoalRuns = new Set<string>() // guards against concurrent finalizeGoalRun for the same goal run
 const runAppliedFiles = new Map<string, Set<string>>() // runID → files applied by goal deliveries, for conflict detection
-const runLocks = new Map<string, Promise<void>>()
 const goalRunFinalizeLocks = new Map<string, Promise<void>>()
 const executorEventBridges = new Map<string, AbortController>()
 const EVALUATING_STALE_MS = EVALUATION_HARD_TIMEOUT_MS + 60_000 // consider stale after hard timeout + 1 min buffer
@@ -178,10 +179,6 @@ function runExecutionTarget(run: RunRow, goalRun = activeGoalRun(run)) {
 
 function withGoalRunFinalizeLock<R>(runID: string, fn: () => Promise<R>) {
   return withKeyedLock(goalRunFinalizeLocks, runID, fn)
-}
-
-function withRunLock<R>(runID: string, fn: () => Promise<R>) {
-  return withKeyedLock(runLocks, runID, fn)
 }
 
 async function provideWorkspace<R>(directory: string | undefined, fn: () => Promise<R>) {
@@ -986,8 +983,7 @@ export namespace OrchestratorRuntime {
   }
 
   export async function dispatch(runID: string, hooks: RuntimeHooks) {
-    await withRunLock(runID, async () => {
-      installRuntimeShims()
+    await OrchestratorRunActor.submit(runID, async () => {
       const run = requireRun(runID)
       if (run.status !== "queued") return
       let task = requireTask(run.task_id)
@@ -1010,7 +1006,7 @@ export namespace OrchestratorRuntime {
   }
 
   export async function syncRun(runID: string, hooks: RuntimeHooks) {
-    await withRunLock(runID, async () => {
+    await OrchestratorRunActor.submit(runID, async () => {
       let run = findRun(runID)
       if (!run) throw new Error(`Run not found: ${runID}`)
       let task = requireTask(run.task_id)
@@ -1197,19 +1193,19 @@ export namespace OrchestratorRuntime {
         .where(eq(OrchestratorTaskTable.id, task.id))
         .run()
       Database.effect(() =>
-        Bus.publish(Event.RunCreated, {
+        OrchestratorProtocol.emit(Event.RunCreated, {
           taskID: task.id,
           runID: nextRunID,
           status: "queued",
           summary: "Run queued from operator note",
-        }),
+        }, { source: "runtime.operator_note" }),
       )
       Database.effect(() =>
-        Bus.publish(Event.TaskUpdated, {
+        OrchestratorProtocol.emit(Event.TaskUpdated, {
           taskID: task.id,
           status: "running",
           summary: "Operator note queued a follow-up run",
-        }),
+        }, { source: "runtime.operator_note" }),
       )
     })
     return nextRunID
@@ -1247,7 +1243,6 @@ async function completeRun(run: RunRow, hooks: RuntimeHooks) {
 }
 
 async function _completeRun(run: RunRow, hooks: RuntimeHooks) {
-  installRuntimeShims()
   const task = requireTask(run.task_id)
   const goalRun = latestGoalRun(run)
   OrchestratorRuntime.stopExecutorEventBridge(goalRun?.session_id ?? run.session_id ?? undefined)
@@ -1667,13 +1662,13 @@ async function executeDecision(
   await hooks.updateRun(run, { status: "blocked", blocking_reason: "pending_replan" }, "Waiting for replan confirmation")
   await hooks.updateTask(task, { status: "blocked", blocking_reason: "pending_replan" }, "Waiting for replan confirmation")
   Database.effect(() =>
-    Bus.publish(Event.InteractionRequested, {
+    OrchestratorProtocol.emit(Event.InteractionRequested, {
       taskID: task.id,
       runID: run.id,
       interactionID,
       requestType: "question",
       summary: "Confirm replan",
-    }),
+    }, { source: "runtime.replan_confirmation" }),
   )
   return true
 }
@@ -1721,7 +1716,7 @@ function consumeExecutorEvents(
           payload,
         },
       })
-      Bus.publish(Event.RunOutput, {
+      OrchestratorProtocol.emit(Event.RunOutput, {
         taskID,
         runID,
         goalRunID,
@@ -1734,6 +1729,25 @@ function consumeExecutorEvents(
         sourceLabel: item.source.label,
         status: item.source.status,
         payload,
+      }, { source: "runtime.executor_output", executorSessionID })
+      void StreamHub.append({
+        streamID: StreamHub.id({
+          taskID,
+          runID,
+          goalRunID,
+          sessionID,
+          executorSessionID,
+          sourceID: item.source.id,
+        }),
+        kind: "text_delta",
+        text: item.text,
+        taskID,
+        runID,
+        goalRunID,
+        sessionID,
+        payload,
+      }).catch((error) => {
+        log.warn("protocol stream chunk append failed", { taskID, runID, error: String(error) })
       })
       outputs.set(key, {
         ...item,
@@ -1793,7 +1807,7 @@ function consumeExecutorEvents(
             })
           }
           if (shouldPublishExecutorProgress(event.type)) {
-            Bus.publish(Event.RunProgress, {
+            OrchestratorProtocol.emit(Event.RunProgress, {
               taskID,
               runID,
               goalRunID,
@@ -1805,7 +1819,7 @@ function consumeExecutorEvents(
               sourceLabel: source?.label,
               status: source?.status,
               payload,
-            })
+            }, { source: "runtime.executor_progress", executorSessionID })
           }
         } catch (eventErr) {
           log.warn("executor event handler failed, continuing", { taskID, runID, error: String(eventErr) })
@@ -2054,13 +2068,13 @@ function upsertExecutorInteraction(
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionRequested, {
+      OrchestratorProtocol.emit(Event.InteractionRequested, {
         taskID,
         runID,
         interactionID,
         requestType: event.type === "approval_request" ? "permission" : "question",
         summary: title,
-      }),
+      }, { source: "runtime.executor_interaction", executorSessionID }),
     )
   })
 }

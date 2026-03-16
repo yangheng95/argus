@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import type { CodingEventInfo, CodingProvider } from "../../src/executor/compat"
+import type { CodingEventInfo, CodingProvider } from "../../src/executor/contracts"
 import { ExecutorRegistry } from "../../src/executor/registry"
 
 describe("managed coding executor", () => {

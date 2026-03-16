@@ -3,10 +3,9 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { existsSync } from "fs"
 import fs from "fs/promises"
 import path from "path"
-import { Bus } from "../../src/bus"
 import { Database, eq } from "../../src/storage/db"
 import { CheckRunner } from "../../src/evaluator/service"
-import { type ExecutorAdapter } from "../../src/executor/compat"
+import { type ExecutorAdapter } from "../../src/executor/contracts"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Global } from "../../src/global"
@@ -27,6 +26,7 @@ import { Event } from "../../src/orchestrator/model"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { createGoalRun } from "../../src/orchestrator/transition"
 import { DeliveryService } from "../../src/orchestrator/delivery"
+import { ProtocolStore } from "../../src/protocol/store"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Session } from "../../src/session"
@@ -2336,11 +2336,11 @@ describe("orchestrator.service", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const stopProgress = Bus.subscribe(Event.RunProgress, (event) => {
-          progress.push(event.properties as Record<string, unknown>)
-        })
-        const stopOutput = Bus.subscribe(Event.RunOutput, (event) => {
-          outputs.push(event.properties as Record<string, unknown>)
+        const stopProtocol = ProtocolStore.subscribeEvents((event) => {
+          if (event.type === Event.RunProgress.type && event.payload) progress.push(event.payload)
+          if (event.type === Event.RunOutput.type && event.payload) outputs.push(event.payload)
+        }, {
+          types: [Event.RunProgress.type, Event.RunOutput.type],
         })
         try {
           await OrchestratorService.createTask({
@@ -2356,8 +2356,7 @@ describe("orchestrator.service", () => {
           }
           expect(outputs.some((item) => item.sourceID === "tool_1" && item.text === "Hello from codex")).toBe(true)
         } finally {
-          stopProgress()
-          stopOutput()
+          stopProtocol()
         }
       },
     })

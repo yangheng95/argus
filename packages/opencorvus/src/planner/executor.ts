@@ -1,5 +1,5 @@
 import { ExecutorRegistry } from "@/executor/registry"
-import type { ExecutorNameInfo } from "@/executor/compat"
+import type { ExecutorNameInfo } from "@/executor/contracts"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Env } from "@/env"

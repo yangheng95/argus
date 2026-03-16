@@ -1,20 +1,21 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { Database, and, eq } from "../../storage/db"
-import { EventJobTable } from "../../scheduler/event.sql"
-import { Identifier } from "../../id/id"
+import { Database, and, eq } from "../../../storage/db"
+import { CronJobTable } from "../../../scheduler/cron.sql"
+import { Cron } from "../../../scheduler/cron"
+import { Identifier } from "../../../id/id"
 
-export function ExperimentalEventScheduleRoutes() {
+export function CronScheduleRoutes() {
   return new Hono()
     .get(
-      "/event-schedule",
+      "/schedule",
       describeRoute({
-        summary: "List event-triggered tasks",
-        operationId: "experimental.eventschedule.list",
+        summary: "List scheduled tasks",
+        operationId: "experimental.schedule.list",
         responses: {
           200: {
-            description: "Event-triggered tasks",
+            description: "Scheduled tasks",
             content: {
               "application/json": {
                 schema: resolver(
@@ -22,14 +23,14 @@ export function ExperimentalEventScheduleRoutes() {
                     z.object({
                       id: z.string(),
                       name: z.string(),
-                      eventType: z.string(),
-                      match: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])),
+                      expression: z.string(),
                       prompt: z.string(),
                       enabled: z.boolean(),
                       oneShot: z.boolean(),
-                      cooldownMs: z.number(),
                       lastRun: z.number().nullable(),
-                      lastEvent: z.string().nullable(),
+                      nextRun: z.number(),
+                      failureCount: z.number(),
+                      lastError: z.string().nullable(),
                     }),
                   ),
                 ),
@@ -42,41 +43,35 @@ export function ExperimentalEventScheduleRoutes() {
       async (c) => {
         const { projectId } = c.req.valid("query")
         const jobs = Database.use((db) =>
-          db.select().from(EventJobTable).where(eq(EventJobTable.project_id, projectId)).all(),
+          db.select().from(CronJobTable).where(eq(CronJobTable.project_id, projectId)).all(),
         )
         return c.json(
           jobs.map((j) => ({
             id: j.id,
             name: j.name,
-            eventType: j.event_type,
-            match: j.match_json ?? {},
+            expression: j.expression,
             prompt: j.prompt,
             enabled: j.enabled,
             oneShot: j.one_shot,
-            cooldownMs: j.cooldown_ms,
             lastRun: j.last_run,
-            lastEvent: j.last_event ?? null,
+            nextRun: j.next_run,
+            failureCount: j.failure_count,
+            lastError: j.last_error ?? null,
           })),
         )
       },
     )
     .post(
-      "/event-schedule",
+      "/schedule",
       describeRoute({
-        summary: "Create event-triggered task",
-        operationId: "experimental.eventschedule.create",
+        summary: "Create scheduled task",
+        operationId: "experimental.schedule.create",
         responses: {
           200: {
-            description: "Created event task",
+            description: "Created task",
             content: {
               "application/json": {
-                schema: resolver(
-                  z.object({
-                    id: z.string(),
-                    name: z.string(),
-                    eventType: z.string(),
-                  }),
-                ),
+                schema: resolver(z.object({ id: z.string(), name: z.string(), nextRun: z.number() })),
               },
             },
           },
@@ -86,43 +81,44 @@ export function ExperimentalEventScheduleRoutes() {
         "json",
         z.object({
           name: z.string(),
-          eventType: z.string(),
-          match: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+          expression: z.string(),
           prompt: z.string(),
           projectId: z.string(),
           sessionId: z.string().optional(),
           oneShot: z.boolean().optional(),
-          cooldownMs: z.number().int().min(0).optional(),
         }),
       ),
       async (c) => {
         const body = c.req.valid("json")
+        const parsed = Cron.parse(body.expression)
+        const now = Date.now()
+        const nextRun = Cron.nextRun(parsed, now)
         const id = Identifier.ascending("cron")
+        const oneShot = body.oneShot ?? parsed.type === "interval"
         Database.use((db) =>
           db
-            .insert(EventJobTable)
+            .insert(CronJobTable)
             .values({
               id,
               project_id: body.projectId,
               session_id: body.sessionId,
               name: body.name,
-              event_type: body.eventType,
-              match_json: body.match,
+              expression: body.expression,
               prompt: body.prompt,
               enabled: true,
-              one_shot: body.oneShot ?? false,
-              cooldown_ms: body.cooldownMs ?? 0,
+              one_shot: oneShot,
+              next_run: nextRun,
             })
             .run(),
         )
-        return c.json({ id, name: body.name, eventType: body.eventType })
+        return c.json({ id, name: body.name, nextRun })
       },
     )
     .delete(
-      "/event-schedule/:id",
+      "/schedule/:id",
       describeRoute({
-        summary: "Cancel event-triggered task",
-        operationId: "experimental.eventschedule.delete",
+        summary: "Cancel scheduled task",
+        operationId: "experimental.schedule.delete",
         responses: {
           200: {
             description: "Cancelled",
@@ -136,8 +132,8 @@ export function ExperimentalEventScheduleRoutes() {
         const id = c.req.param("id")
         Database.use((db) =>
           db
-            .delete(EventJobTable)
-            .where(and(eq(EventJobTable.id, id), eq(EventJobTable.project_id, projectId)))
+            .delete(CronJobTable)
+            .where(and(eq(CronJobTable.id, id), eq(CronJobTable.project_id, projectId)))
             .run(),
         )
         return c.json({ ok: true })

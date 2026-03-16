@@ -1,9 +1,10 @@
-import { Bus } from "@/bus"
 import { ExecutorRegistry } from "@/executor/registry"
 import { PermissionNext } from "@/permission/next"
 import { Question } from "@/question"
+import { ReplyInteractionInput } from "./model"
 import { Database, eq } from "@/storage/db"
 import { Event } from "./model"
+import { OrchestratorProtocol } from "./protocol"
 import {
   OrchestratorInteractionRequestTable,
   OrchestratorProgressSnapshotTable,
@@ -24,6 +25,7 @@ import {
 } from "./store"
 import { updateRun, updateTask } from "./state"
 import { Identifier } from "@/id/id"
+import z from "zod"
 
 function interactionGoalRun(row: InteractionRow) {
   const goalRunID = typeof row.payload?.goal_run_id === "string" ? row.payload.goal_run_id : undefined
@@ -71,15 +73,75 @@ export function markInteraction(
       .where(eq(OrchestratorInteractionRequestTable.id, row.id))
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
         taskID: row.task_id,
         runID: row.run_id,
         interactionID: row.id,
         status,
         summary,
-      }),
+      }, { source: "interaction.mark" }),
     )
   })
+}
+
+function answersFromMessage(message?: string) {
+  const text = message?.trim()
+  if (!text) return
+  return [[text]]
+}
+
+export async function replyProtocolInteraction(row: InteractionRow, input: z.infer<typeof ReplyInteractionInput>) {
+  const run = requireRun(row.run_id)
+  const executor = ExecutorRegistry.require(run.executor)
+  if (!executor.resolve) throw new Error(`executor ${run.executor} does not support interaction resolution`)
+  const payload = row.payload ?? {}
+  const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
+  const now = Date.now()
+  const target = executionTarget(run, row)
+
+  if (row.request_type === "permission") {
+    await executor.resolve({
+      sessionID: target.sessionID,
+      queueTaskID: target.queueTaskID,
+      requestID,
+      kind: "approval",
+      response: {
+        decision: input.reply === "always" ? "acceptForSession" : "accept",
+      },
+    })
+    markInteraction(row, "answered", {
+      reply: input.reply ?? "once",
+      message: input.message,
+    }, now)
+    return
+  }
+
+  const questions = Array.isArray(payload.questions)
+    ? payload.questions.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const next = item as Record<string, unknown>
+        if (typeof next.id !== "string" || !next.id) return []
+        return [next.id]
+      })
+    : []
+  const answers = input.answers ?? answersFromMessage(input.message)
+  if (!answers) throw new Error("answers or message are required for protocol input replies")
+  const response = Object.fromEntries(
+    questions.map((id, index) => [id, { answers: answers[index] ?? answers[0] ?? [] }]),
+  )
+  await executor.resolve({
+    sessionID: target.sessionID,
+    queueTaskID: target.queueTaskID,
+    requestID,
+    kind: "input",
+    response: {
+      answers: response,
+    },
+  })
+  markInteraction(row, "answered", {
+    answers: response,
+    message: input.message,
+  }, now)
 }
 
 export async function rejectProtocolInteraction(row: InteractionRow, message?: string) {
@@ -171,16 +233,20 @@ export async function rejectPlannerClarification(row: InteractionRow, message?: 
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
         taskID: task.id,
         runID: run.id,
         interactionID: row.id,
         status: "rejected",
         summary: "Clarification rejected",
-      }),
+      }, { source: "interaction.reject_clarification" }),
     )
-    Database.effect(() => Bus.publish(Event.RunUpdated, { taskID: task.id, runID: run.id, status: "failed", summary: error }))
-    Database.effect(() => Bus.publish(Event.TaskUpdated, { taskID: task.id, status: "failed", summary: error }))
+    Database.effect(() =>
+      OrchestratorProtocol.emit(Event.RunUpdated, { taskID: task.id, runID: run.id, status: "failed", summary: error }, { source: "interaction.reject_clarification" }),
+    )
+    Database.effect(() =>
+      OrchestratorProtocol.emit(Event.TaskUpdated, { taskID: task.id, status: "failed", summary: error }, { source: "interaction.reject_clarification" }),
+    )
   })
 }
 

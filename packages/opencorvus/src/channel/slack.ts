@@ -1,8 +1,8 @@
 import { App } from "@slack/bolt"
-import { Bus } from "@/bus"
 import { ChannelProtocol } from "@/channel/protocol"
 import { Event as OrchestratorEvent } from "@/orchestrator/model"
 import { OrchestratorChannelBindingTable } from "@/orchestrator/orchestrator.sql"
+import { ProtocolStore } from "@/protocol/store"
 import { Instance } from "@/project/instance"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { Database, and, eq } from "@/storage/db"
@@ -50,59 +50,53 @@ export class SlackGateway {
 
   private subscribeEvents() {
     this.unsub?.()
-    const handlers: Array<() => void> = []
-
-    handlers.push(
-      Bus.subscribe(OrchestratorEvent.TaskUpdated, async (event) => {
+    void this.withInstance(async () => {
+      this.unsub = ProtocolStore.subscribeEvents(async (event) => {
+        if (!event.taskID) return
         await this.withInstance(async () => {
-          const binding = this.findBinding(event.properties.taskID)
+          const binding = this.findBinding(event.taskID!)
           if (!binding) return
-          const icon = taskStatusIcon(event.properties.status)
+          if (event.type === OrchestratorEvent.TaskUpdated.type) {
+            const status = typeof event.payload?.status === "string" ? event.payload.status : "queued"
+            const icon = taskStatusIcon(status)
+            await this.sendThread(
+              binding.channel,
+              binding.thread,
+              `${icon} 任务状态: *${status}*\n📁 \`${Instance.directory}\`\n${event.summary}`,
+            )
+            return
+          }
+          if (event.type === OrchestratorEvent.RunCreated.type) {
+            const runID = typeof event.payload?.runID === "string" ? event.payload.runID : event.runID
+            if (!runID) return
+            await this.sendThread(
+              binding.channel,
+              binding.thread,
+              `🚀 开始执行轮次 \`${runID}\`\n📁 \`${Instance.directory}\``,
+            )
+            return
+          }
+          if (event.type !== OrchestratorEvent.EvaluationCompleted.type) return
+          const verdict = typeof event.payload?.verdict === "string" ? event.payload.verdict : "rejected"
+          const icon = verdict === "accepted" ? "✅" : "❌"
           await this.sendThread(
             binding.channel,
             binding.thread,
-            `${icon} 任务状态: *${event.properties.status}*\n📁 \`${Instance.directory}\`\n${event.properties.summary}`,
+            `${icon} 评估完成: verdict=*${verdict}*\n📁 \`${Instance.directory}\`\n${event.summary}`,
           )
         }).catch((error) => {
-          log.error("slack task-updated publish failed", { error, taskID: event.properties.taskID })
+          log.error("slack protocol publish failed", { error, taskID: event.taskID, type: event.type })
         })
-      }),
-    )
-
-    handlers.push(
-      Bus.subscribe(OrchestratorEvent.RunCreated, async (event) => {
-        await this.withInstance(async () => {
-          const binding = this.findBinding(event.properties.taskID)
-          if (!binding) return
-          await this.sendThread(
-            binding.channel,
-            binding.thread,
-            `🚀 开始执行轮次 \`${event.properties.runID}\`\n📁 \`${Instance.directory}\``,
-          )
-        }).catch((error) => {
-          log.error("slack run-created publish failed", { error, taskID: event.properties.taskID })
-        })
-      }),
-    )
-
-    handlers.push(
-      Bus.subscribe(OrchestratorEvent.EvaluationCompleted, async (event) => {
-        await this.withInstance(async () => {
-          const binding = this.findBinding(event.properties.taskID)
-          if (!binding) return
-          const icon = event.properties.verdict === "accepted" ? "✅" : "❌"
-          await this.sendThread(
-            binding.channel,
-            binding.thread,
-            `${icon} 评估完成: verdict=*${event.properties.verdict}*\n📁 \`${Instance.directory}\`\n${event.properties.summary}`,
-          )
-        }).catch((error) => {
-          log.error("slack evaluation-completed publish failed", { error, taskID: event.properties.taskID })
-        })
-      }),
-    )
-
-    this.unsub = () => { for (const h of handlers) h() }
+      }, {
+        types: [
+          OrchestratorEvent.TaskUpdated.type,
+          OrchestratorEvent.RunCreated.type,
+          OrchestratorEvent.EvaluationCompleted.type,
+        ],
+      })
+    }).catch((error) => {
+      log.error("slack protocol subscribe failed", { error })
+    })
   }
 
   private findBinding(taskID: string) {

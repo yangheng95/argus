@@ -2,7 +2,7 @@ import { Instance } from "@/project/instance"
 import type { MiddlewareHandler } from "hono"
 import path from "path"
 import { Installation } from "../installation"
-import { getAdaptor } from "./adaptors"
+import { getAdapter } from "./adapters"
 import { Workspace } from "./workspace"
 
 // This middleware forwards all non-GET requests if the workspace is a
@@ -25,7 +25,7 @@ async function proxySessionRequest(req: Request) {
 
   const url = new URL(req.url)
   const body = req.method === "HEAD" ? undefined : await req.arrayBuffer()
-  return getAdaptor(workspace.config).request(
+  return getAdapter(workspace.config).request(
     workspace.config,
     req.method,
     `${url.pathname}${url.search}`,

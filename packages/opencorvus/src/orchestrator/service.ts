@@ -2,7 +2,7 @@ import z from "zod"
 import { Bus } from "@/bus"
 import { discoverChecks } from "@/evaluator/discovery"
 import { CheckRunner } from "@/evaluator/service"
-import { ExecutorNotConfiguredError } from "@/executor/compat"
+import { ExecutorNotConfiguredError } from "@/executor/contracts"
 import { ExecutorBootstrap } from "@/executor/bootstrap"
 import { ExecutorRegistry } from "@/executor/registry"
 import { writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "@/orchestrator/docs"
@@ -12,6 +12,7 @@ import { PlannerFailureError } from "@/planner/service"
 import { configuredHeadlessModelRef } from "@/llm/headless"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
+import { ProtocolStore } from "@/protocol/store"
 import { Question } from "@/question"
 import { Scheduler } from "@/scheduler"
 import { Session } from "@/session"
@@ -61,13 +62,17 @@ import { mergeTaskChecks, writeTaskChecks } from "./checks"
 import { OrchestratorInteraction } from "./interaction"
 import { OrchestratorRuntime } from "./runtime"
 import { hooks, updateRun, updateTask } from "./state"
+import { OrchestratorProtocol } from "./protocol"
 import {
   isPlannerClarification,
   markInteraction,
+  replyProtocolInteraction,
   rejectPlannerClarification,
   rejectProtocolInteraction,
   rejectReplanConfirmation,
 } from "./interaction-actions"
+import { OrchestratorInteractionActor } from "./interaction-actor"
+import { OrchestratorTaskActor } from "./task-actor"
 import { cleanupGoalWorkspace, removeGoalRunSession } from "./goal-runner"
 import {
   compileTransition,
@@ -400,18 +405,145 @@ function liveTaskMessage(taskID: string) {
 async function continueTaskMessage(taskID: string, message: string) {
   if (liveTaskMessage(taskID)) {
     return {
-      ...(await OrchestratorService.injectMessage(taskID, message)),
+      ...(await injectMessageNow(taskID, message)),
       live: true,
     }
   }
   return {
-    ...(await OrchestratorService.recordOperatorNote(taskID, message)),
+    ...(await recordOperatorNoteNow(taskID, message)),
     live: false,
   }
 }
 
+async function recordOperatorNoteNow(taskID: string, note: string) {
+  const task = requireTask(taskID)
+  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+  const now = Date.now()
+  Database.use((db) =>
+    db
+      .insert(OrchestratorProgressSnapshotTable)
+      .values({
+        id: Identifier.ascending("progress"),
+        task_id: task.id,
+        status: progressStatus(task.status),
+        summary: "Operator note recorded",
+        payload: {
+          note,
+          activeRunID: run?.id,
+        },
+        time_created: now,
+        time_updated: now,
+      })
+      .run(),
+  )
+  if (!run) {
+    return { resumed: false, status: task.status }
+  }
+  if (task.status === "cancelled") {
+    return { resumed: false, status: task.status }
+  }
+  if (
+    ["queued", "planning", "running", "blocked", "evaluating", "delivering"].includes(task.status) &&
+    ["accepted", "running"].includes(run.status)
+  ) {
+    return { resumed: false, status: run.status }
+  }
+  const nextRunID = await OrchestratorRuntime.createOperatorRun(task, run, note)
+  await OrchestratorRuntime.dispatch(nextRunID, hooks())
+  return { resumed: true, status: "running" as const }
+}
+
+async function injectMessageNow(taskID: string, message: string) {
+  const task = requireTask(taskID)
+  const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+  if (!run) throw new Error(`No active run for task ${taskID}`)
+  const target = executionTarget(run)
+
+  if (!["accepted", "running"].includes(run.status)) {
+    return recordOperatorNoteNow(taskID, message)
+  }
+  if (!target.sessionID) {
+    return recordOperatorNoteNow(taskID, message)
+  }
+
+  const executor = ExecutorRegistry.require(run.executor)
+  if (!executor.capabilities().resume) {
+    return recordOperatorNoteNow(taskID, message)
+  }
+
+  const submission = await (
+    target.goalRun?.workspace_dir && target.goalRun.workspace_dir !== Instance.directory
+      ? Instance.provide({
+          directory: target.goalRun.workspace_dir,
+          fn: () =>
+            executor.resume({
+              sessionID: target.sessionID!,
+              message,
+            }),
+        })
+      : executor.resume({
+          sessionID: target.sessionID,
+          message,
+        })
+  )
+
+  ensureExecutorSession({
+    taskID: task.id,
+    runID: run.id,
+    goalRunID: target.goalRun?.id,
+    provider: run.executor,
+    refs: {
+      provider_session_id: submission.sessionID,
+      queue_task_id: submission.queueTaskID,
+    },
+    settings: target.goalRun?.workspace_dir
+      ? {
+          cwd: target.goalRun.workspace_dir,
+        }
+      : undefined,
+  })
+
+  if (target.goalRun) {
+    if (submission.queueTaskID !== target.queueTaskID || submission.sessionID !== target.sessionID) {
+      updateGoalRun(target.goalRun.id, {
+        session_id: submission.sessionID,
+        metadata: {
+          ...(target.goalRun.metadata ?? {}),
+          queue_task_id: submission.queueTaskID,
+          provider_session_id: submission.sessionID,
+        },
+      })
+    }
+  } else if (submission.queueTaskID !== run.executor_ref?.queue_task_id || submission.sessionID !== run.session_id) {
+    await updateRun(
+      run,
+      {
+        session_id: submission.sessionID,
+        executor_ref: {
+          session_id: submission.sessionID,
+          queue_task_id: submission.queueTaskID,
+        },
+      },
+      "Message injected into running session",
+    )
+  }
+
+  await OrchestratorProtocol.emit(Event.MessageInjected, {
+    taskID: task.id,
+    runID: run.id,
+    text: message,
+    summary: "Operator message injected into running session",
+  }, { source: "service.inject_message" })
+
+  return { resumed: true, status: "running" as const }
+}
+
+function withTask<T>(taskID: string, exec: () => Promise<T>) {
+  return OrchestratorTaskActor.submit(taskID, exec)
+}
+
 export namespace OrchestratorService {
-  async function settleTask(taskID: string) {
+  async function syncTask(taskID: string) {
     let previous = ""
     let activeRunID = findTask(taskID)?.active_run_id
     let runChanges = 0
@@ -609,43 +741,49 @@ export namespace OrchestratorService {
   }
 
   export async function getTask(taskID: string) {
-    await settleTask(taskID)
-    const task = requireTask(taskID)
-    const item = listTaskRows([task])[0]
-    return viewTask(task, { directory: item?.directory })
+    return withTask(taskID, async () => {
+      await syncTask(taskID)
+      const task = requireTask(taskID)
+      const item = listTaskRows([task])[0]
+      return viewTask(task, { directory: item?.directory })
+    })
   }
 
   export async function getProgress(taskID: string) {
-    await settleTask(taskID)
-    const task = requireTask(taskID)
-    const item = listTaskRows([task])[0]
-    const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
-    const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-    const delivery = run ? findDeliveryByRun(run.id) : undefined
-    const evaluation = run ? findEvaluationByRun(run.id) : undefined
-    const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
-    const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
-    return {
-      task: viewTask(task, { directory: item?.directory }),
-      spec: spec ? viewSpecSnapshot(spec) : undefined,
-      plan: plan ? viewPlan(plan) : undefined,
-      goals: (specID ? listGoalsBySpec(specID) : []).map(viewGoal),
-      planNodes: plan ? listPlanNodesByPlan(plan.id).map(viewPlanNode) : [],
-      goalRuns: listGoalRunsByTask(taskID).map(viewGoalRun),
-      milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
-      run: run ? viewRun(run) : undefined,
-      pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),
-      delivery: delivery ? viewDelivery(delivery) : undefined,
-      evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
-      snapshots: listSnapshots(taskID).map(viewSnapshot),
-    }
+    return withTask(taskID, async () => {
+      await syncTask(taskID)
+      const task = requireTask(taskID)
+      const item = listTaskRows([task])[0]
+      const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+      const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
+      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+      const delivery = run ? findDeliveryByRun(run.id) : undefined
+      const evaluation = run ? findEvaluationByRun(run.id) : undefined
+      const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
+      const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
+      return {
+        task: viewTask(task, { directory: item?.directory }),
+        spec: spec ? viewSpecSnapshot(spec) : undefined,
+        plan: plan ? viewPlan(plan) : undefined,
+        goals: (specID ? listGoalsBySpec(specID) : []).map(viewGoal),
+        planNodes: plan ? listPlanNodesByPlan(plan.id).map(viewPlanNode) : [],
+        goalRuns: listGoalRunsByTask(taskID).map(viewGoalRun),
+        milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
+        run: run ? viewRun(run) : undefined,
+        pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),
+        delivery: delivery ? viewDelivery(delivery) : undefined,
+        evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
+        snapshots: listSnapshots(taskID).map(viewSnapshot),
+      }
+    })
   }
 
   export async function listRuns(taskID: string) {
-    await settleTask(taskID)
-    requireTask(taskID)
-    return findRuns(taskID).map(viewRun)
+    return withTask(taskID, async () => {
+      await syncTask(taskID)
+      requireTask(taskID)
+      return findRuns(taskID).map(viewRun)
+    })
   }
 
   export async function getRun(runID: string) {
@@ -654,40 +792,46 @@ export namespace OrchestratorService {
   }
 
   export async function getBrief(input: { taskID: string; runID?: string }) {
-    if (input.runID) {
-      await OrchestratorRuntime.syncRun(input.runID, hooks()).catch((err) => {
-        log.warn("syncRun failed in getBrief", { runID: input.runID, error: String(err) })
+    return withTask(input.taskID, async () => {
+      if (input.runID) {
+        await OrchestratorRuntime.syncRun(input.runID, hooks()).catch((err) => {
+          log.warn("syncRun failed in getBrief", { runID: input.runID, error: String(err) })
+        })
+      } else {
+        await OrchestratorRuntime.syncTask(input.taskID, hooks()).catch((err) => {
+          log.warn("syncTask failed in getBrief", { taskID: input.taskID, error: String(err) })
+        })
+      }
+      const task = requireTask(input.taskID)
+      return WorkbenchService.compileBrief({
+        taskID: task.id,
+        runID: input.runID ?? task.active_run_id ?? undefined,
+        planVersionID: task.active_plan_version_id ?? undefined,
+        sessionID: task.session_id ?? undefined,
       })
-    } else {
-      await OrchestratorRuntime.syncTask(input.taskID, hooks()).catch((err) => {
-        log.warn("syncTask failed in getBrief", { taskID: input.taskID, error: String(err) })
-      })
-    }
-    const task = requireTask(input.taskID)
-    return WorkbenchService.compileBrief({
-      taskID: task.id,
-      runID: input.runID ?? task.active_run_id ?? undefined,
-      planVersionID: task.active_plan_version_id ?? undefined,
-      sessionID: task.session_id ?? undefined,
     })
   }
 
   export async function getBoard(taskID: string, input?: { sync?: boolean }) {
-    if (input?.sync !== false) {
-      await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
-        log.warn("syncTask failed in getBoard", { taskID, error: String(err) })
-      })
-    }
-    return WorkbenchService.compileBoard({ taskID })
+    return withTask(taskID, async () => {
+      if (input?.sync !== false) {
+        await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
+          log.warn("syncTask failed in getBoard", { taskID, error: String(err) })
+        })
+      }
+      return WorkbenchService.compileBoard({ taskID })
+    })
   }
 
   export async function getBoardTag(taskID: string, input?: { sync?: boolean }) {
-    if (input?.sync !== false) {
-      await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
-        log.warn("syncTask failed in getBoardTag", { taskID, error: String(err) })
-      })
-    }
-    return WorkbenchService.boardTag({ taskID })
+    return withTask(taskID, async () => {
+      if (input?.sync !== false) {
+        await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
+          log.warn("syncTask failed in getBoardTag", { taskID, error: String(err) })
+        })
+      }
+      return WorkbenchService.boardTag({ taskID })
+    })
   }
 
   export async function getProjectBoard(opts?: { limit?: number; query?: string; status?: string }) {
@@ -769,62 +913,80 @@ export namespace OrchestratorService {
       )
   }
 
+  export async function listProtocolEvents(taskID: string) {
+    return withTask(taskID, async () => {
+      await OrchestratorRuntime.syncTask(taskID, hooks())
+      requireTask(taskID)
+      return ProtocolStore.listTaskEvents(taskID)
+    })
+  }
+
   export async function listTaskInteractions(taskID: string) {
-    await OrchestratorRuntime.syncTask(taskID, hooks())
-    requireTask(taskID)
-    return listInteractions(taskID).map(viewInteraction)
+    return withTask(taskID, async () => {
+      await OrchestratorRuntime.syncTask(taskID, hooks())
+      requireTask(taskID)
+      return listInteractions(taskID).map(viewInteraction)
+    })
   }
 
   export async function selectTaskChecks(
     taskID: string,
     selection: Record<string, boolean>,
   ) {
-    const task = requireTask(taskID)
-    const next = mergeTaskChecks(task.metadata?.checks, selection)
-    return writeTaskChecks(task, next)
+    return withTask(taskID, async () => {
+      const task = requireTask(taskID)
+      const next = mergeTaskChecks(task.metadata?.checks, selection)
+      return writeTaskChecks(task, next)
+    })
   }
 
   export async function updateTaskChecks(taskID: string, raw: z.input<typeof UpdateTaskChecksInput>) {
-    const { checks } = UpdateTaskChecksInput.parse(raw)
-    return writeTaskChecks(requireTask(taskID), checks)
+    return withTask(taskID, async () => {
+      const { checks } = UpdateTaskChecksInput.parse(raw)
+      return writeTaskChecks(requireTask(taskID), checks)
+    })
   }
 
   export async function updateTaskBudget(taskID: string, raw: z.input<typeof UpdateTaskBudgetInput>) {
-    const task = requireTask(taskID)
-    const input = UpdateTaskBudgetInput.parse(raw)
-    const budget = budgetRow(input.budget ?? undefined)
-    if (JSON.stringify(task.budget ?? null) === JSON.stringify(budget ?? null)) {
-      return viewTask(task)
-    }
-    const now = Date.now()
-    Database.transaction((db) => {
-      db.update(OrchestratorTaskTable)
-        .set({
-          budget,
-          time_updated: now,
-        })
-        .where(eq(OrchestratorTaskTable.id, task.id))
-        .run()
-      db.insert(OrchestratorProgressSnapshotTable)
-        .values({
-          id: Identifier.ascending("progress"),
-          task_id: task.id,
-          status: progressStatus(task.status),
-          summary: "Task budget updated",
-          payload: {
-            budget: input.budget ?? null,
-          },
-          time_created: now,
-          time_updated: now,
-        })
-        .run()
-      Database.effect(() => Bus.publish(Event.TaskUpdated, {
-        taskID: task.id,
-        status: task.status,
-        summary: "Task budget updated",
-      }))
+    return withTask(taskID, async () => {
+      const task = requireTask(taskID)
+      const input = UpdateTaskBudgetInput.parse(raw)
+      const budget = budgetRow(input.budget ?? undefined)
+      if (JSON.stringify(task.budget ?? null) === JSON.stringify(budget ?? null)) {
+        return viewTask(task)
+      }
+      const now = Date.now()
+      Database.transaction((db) => {
+        db.update(OrchestratorTaskTable)
+          .set({
+            budget,
+            time_updated: now,
+          })
+          .where(eq(OrchestratorTaskTable.id, task.id))
+          .run()
+        db.insert(OrchestratorProgressSnapshotTable)
+          .values({
+            id: Identifier.ascending("progress"),
+            task_id: task.id,
+            status: progressStatus(task.status),
+            summary: "Task budget updated",
+            payload: {
+              budget: input.budget ?? null,
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        Database.effect(() =>
+          OrchestratorProtocol.emit(Event.TaskUpdated, {
+            taskID: task.id,
+            status: task.status,
+            summary: "Task budget updated",
+          }, { source: "service.update_budget" }),
+        )
+      })
+      return viewTask(requireTask(task.id))
     })
-    return viewTask(requireTask(task.id))
   }
 
   export async function updatePreference(preferenceID: string, input: z.input<typeof UpdatePreferenceInput>) {
@@ -881,139 +1043,144 @@ export namespace OrchestratorService {
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
     const input = ReplyInteractionInput.parse(raw)
     const row = requireInteraction(interactionID)
-    if (row.payload?.protocol_request === true) {
-      await resolveProtocolInteraction(row, input)
-      await OrchestratorRuntime.syncTask(row.task_id, hooks())
-      return viewInteraction(requireInteraction(interactionID))
-    }
-    // Replan confirmation: user approved the spec rewrite → proceed with actual replan
-    if (row.payload?.replan_confirm === true) {
-      const task = requireTask(row.task_id)
-      const run = requireRun(row.run_id)
-      const planID = typeof row.payload?.plan_id === "string" ? row.payload.plan_id : run.plan_version_id
-      const plan = planID ? findPlan(planID) : undefined
-      if (!plan) throw new Error(`Plan not found for replan confirmation: ${planID}`)
-      const failureSummary = typeof row.payload?.failure_summary === "string" ? row.payload.failure_summary : "Evaluation failed"
-      Database.use((db) =>
-        db.update(OrchestratorInteractionRequestTable)
-          .set({ status: "answered", response: { approved: true }, time_resolved: Date.now(), time_updated: Date.now() })
-          .where(eq(OrchestratorInteractionRequestTable.id, interactionID))
-          .run(),
-      )
-      const next = await createReplanRun(task, plan, run, failureSummary, row.payload?.analysis as never)
-      if (next.queued && next.runID) {
-        await OrchestratorRuntime.dispatch(next.runID, hooks())
+    return OrchestratorInteractionActor.submit(row.run_id, async () => {
+      if (row.payload?.protocol_request === true) {
+        await replyProtocolInteraction(row, input)
+        await OrchestratorRuntime.syncTask(row.task_id, hooks())
+        return viewInteraction(requireInteraction(interactionID))
       }
-      return viewInteraction(requireInteraction(interactionID))
-    }
-    if (row.request_type === "permission") {
-      await PermissionNext.reply({
-        requestID: row.external_id,
-        reply: input.reply ?? "once",
-        message: input.message,
-      })
-    }
-    if (row.request_type === "question") {
-      const answers = input.answers ?? answersFromMessage(input.message)
-      if (!answers) throw new Error("answers or message are required for question replies")
-      if (isPlannerClarification(row)) {
-        await answerPlannerClarification(row, answers)
-      } else {
-        await Question.reply({
+      // Replan confirmation: user approved the spec rewrite → proceed with actual replan
+      if (row.payload?.replan_confirm === true) {
+        const task = requireTask(row.task_id)
+        const run = requireRun(row.run_id)
+        const planID = typeof row.payload?.plan_id === "string" ? row.payload.plan_id : run.plan_version_id
+        const plan = planID ? findPlan(planID) : undefined
+        if (!plan) throw new Error(`Plan not found for replan confirmation: ${planID}`)
+        const failureSummary = typeof row.payload?.failure_summary === "string" ? row.payload.failure_summary : "Evaluation failed"
+        Database.use((db) =>
+          db.update(OrchestratorInteractionRequestTable)
+            .set({ status: "answered", response: { approved: true }, time_resolved: Date.now(), time_updated: Date.now() })
+            .where(eq(OrchestratorInteractionRequestTable.id, interactionID))
+            .run(),
+        )
+        const next = await createReplanRun(task, plan, run, failureSummary, row.payload?.analysis as never)
+        if (next.queued && next.runID) {
+          await OrchestratorRuntime.dispatch(next.runID, hooks())
+        }
+        return viewInteraction(requireInteraction(interactionID))
+      }
+      if (row.request_type === "permission") {
+        await PermissionNext.reply({
           requestID: row.external_id,
-          answers,
+          reply: input.reply ?? "once",
+          message: input.message,
         })
       }
-    }
-    await OrchestratorRuntime.syncTask(row.task_id, hooks())
-    return viewInteraction(requireInteraction(interactionID))
+      if (row.request_type === "question") {
+        const answers = input.answers ?? answersFromMessage(input.message)
+        if (!answers) throw new Error("answers or message are required for question replies")
+        if (isPlannerClarification(row)) {
+          await answerPlannerClarification(row, answers)
+        } else {
+          await Question.reply({
+            requestID: row.external_id,
+            answers,
+          })
+        }
+      }
+      await OrchestratorRuntime.syncTask(row.task_id, hooks())
+      return viewInteraction(requireInteraction(interactionID))
+    })
   }
 
   export async function rejectInteraction(interactionID: string, raw?: z.input<typeof RejectInteractionInput>) {
     const input = RejectInteractionInput.parse(raw ?? {})
     const row = requireInteraction(interactionID)
-    if (row.payload?.protocol_request === true) {
-      await rejectProtocolInteraction(row, input.message)
+    return OrchestratorInteractionActor.submit(row.run_id, async () => {
+      if (row.payload?.protocol_request === true) {
+        await rejectProtocolInteraction(row, input.message)
+        await OrchestratorRuntime.syncTask(row.task_id, hooks())
+        return viewInteraction(requireInteraction(interactionID))
+      }
+      // Replan confirmation: user rejected the spec rewrite → fail the task
+      if (row.payload?.replan_confirm === true) {
+        await rejectReplanConfirmation(row, input.message)
+        return viewInteraction(requireInteraction(interactionID))
+      }
+      if (row.request_type === "permission") {
+        await PermissionNext.reply({
+          requestID: row.external_id,
+          reply: "reject",
+          message: input.message,
+        })
+      }
+      if (row.request_type === "question") {
+        if (isPlannerClarification(row)) {
+          await rejectPlannerClarification(row, input.message)
+        } else {
+          await Question.reject(row.external_id)
+        }
+      }
       await OrchestratorRuntime.syncTask(row.task_id, hooks())
       return viewInteraction(requireInteraction(interactionID))
-    }
-    // Replan confirmation: user rejected the spec rewrite → fail the task
-    if (row.payload?.replan_confirm === true) {
-      await rejectReplanConfirmation(row, input.message)
-      return viewInteraction(requireInteraction(interactionID))
-    }
-    if (row.request_type === "permission") {
-      await PermissionNext.reply({
-        requestID: row.external_id,
-        reply: "reject",
-        message: input.message,
-      })
-    }
-    if (row.request_type === "question") {
-      if (isPlannerClarification(row)) {
-        await rejectPlannerClarification(row, input.message)
-      } else {
-        await Question.reject(row.external_id)
-      }
-    }
-    await OrchestratorRuntime.syncTask(row.task_id, hooks())
-    return viewInteraction(requireInteraction(interactionID))
+    })
   }
 
   export async function cancelTask(taskID: string) {
-    const task = requireTask(taskID)
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-    if (run) {
-      for (const target of executionTargets(run)) {
-        if (target.sessionID || target.queueTaskID) {
-          OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
-          await ExecutorRegistry.require(run.executor).abort({
-            sessionID: target.sessionID,
-            queueTaskID: target.queueTaskID,
+    return withTask(taskID, async () => {
+      const task = requireTask(taskID)
+      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+      if (run) {
+        for (const target of executionTargets(run)) {
+          if (target.sessionID || target.queueTaskID) {
+            OrchestratorRuntime.stopExecutorEventBridge(target.sessionID)
+            await ExecutorRegistry.require(run.executor).abort({
+              sessionID: target.sessionID,
+              queueTaskID: target.queueTaskID,
+            })
+          }
+          if (!target.goalRun) continue
+          updateGoalRun(target.goalRun.id, {
+            status: "aborted",
+            error: "task cancelled",
+            blocking_reason: null,
+            time_completed: Date.now(),
           })
+          updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
+          await cleanupGoalWorkspace(target.goalRun.workspace_dir ?? undefined)
+          await removeGoalRunSession(target.goalRun)
         }
-        if (!target.goalRun) continue
-        updateGoalRun(target.goalRun.id, {
-          status: "aborted",
-          error: "task cancelled",
-          blocking_reason: null,
-          time_completed: Date.now(),
-        })
-        updateGoalRunExecutorSessionStatus(target.goalRun.id, "aborted")
-        await cleanupGoalWorkspace(target.goalRun.workspace_dir ?? undefined)
-        await removeGoalRunSession(target.goalRun)
       }
-    }
-    if (run) {
-      await updateRun(
-        run,
+      if (run) {
+        await updateRun(
+          run,
+          {
+            status: "aborted",
+            error: "task cancelled",
+            blocking_reason: null,
+            time_completed: Date.now(),
+          },
+          "Run aborted",
+        )
+      }
+      await updateTask(
+        task,
         {
-          status: "aborted",
+          status: "cancelled",
           error: "task cancelled",
           blocking_reason: null,
           time_completed: Date.now(),
         },
-        "Run aborted",
+        "Task cancelled",
       )
-    }
-    await updateTask(
-      task,
-      {
-        status: "cancelled",
-        error: "task cancelled",
-        blocking_reason: null,
-        time_completed: Date.now(),
-      },
-      "Task cancelled",
-    )
-    // Clean up channel bindings so the thread is not reused
-    Database.use((db) =>
-      db
-        .delete(OrchestratorChannelBindingTable)
-        .where(eq(OrchestratorChannelBindingTable.task_id, taskID))
-        .run(),
-    )
-    return true
+      Database.use((db) =>
+        db
+          .delete(OrchestratorChannelBindingTable)
+          .where(eq(OrchestratorChannelBindingTable.task_id, taskID))
+          .run(),
+      )
+      return true
+    })
   }
 
   export async function deleteSession(sessionID: string, input?: { deleteTasks?: boolean }) {
@@ -1091,119 +1258,91 @@ export namespace OrchestratorService {
   }
 
   export async function retryTask(taskID: string) {
-    const task = requireTask(taskID)
-    if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
-      throw new Error(`task ${taskID} is already active`)
-    }
-    const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
-    if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
-    const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Retry requested by operator."
-    const nextRunID = await OrchestratorRuntime.queueRetry(task, run, summary, hooks())
-    return viewRun(requireRun(nextRunID))
+    return withTask(taskID, async () => {
+      const task = requireTask(taskID)
+      if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
+        throw new Error(`task ${taskID} is already active`)
+      }
+      const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
+      if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
+      const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Retry requested by operator."
+      const nextRunID = await OrchestratorRuntime.queueRetry(task, run, summary, hooks())
+      return viewRun(requireRun(nextRunID))
+    })
   }
 
   export async function replanTask(taskID: string) {
-    const task = requireTask(taskID)
-    if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
-      throw new Error(`task ${taskID} is already active`)
-    }
-    const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
-    if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
-    const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Replan requested by operator."
-    const nextRunID = await OrchestratorRuntime.queueReplan(task, run, summary, hooks())
-    return viewRun(requireRun(nextRunID))
+    return withTask(taskID, async () => {
+      const task = requireTask(taskID)
+      if (["queued", "planning", "running", "evaluating"].includes(task.status)) {
+        throw new Error(`task ${taskID} is already active`)
+      }
+      const run = task.active_run_id ? findRun(task.active_run_id) : findRuns(task.id).at(-1)
+      if (!run) throw new NotFoundError({ message: `Run not found for task ${taskID}` })
+      const summary = task.error ?? findEvaluationByRun(run.id)?.summary ?? "Replan requested by operator."
+      const nextRunID = await OrchestratorRuntime.queueReplan(task, run, summary, hooks())
+      return viewRun(requireRun(nextRunID))
+    })
   }
 
   export async function recordOperatorNote(taskID: string, note: string) {
-    const task = requireTask(taskID)
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-    const now = Date.now()
-    Database.use((db) =>
-      db
-        .insert(OrchestratorProgressSnapshotTable)
-        .values({
-          id: Identifier.ascending("progress"),
-          task_id: task.id,
-          status: progressStatus(task.status),
-          summary: "Operator note recorded",
-          payload: {
-            note,
-            activeRunID: run?.id,
-          },
-          time_created: now,
-          time_updated: now,
-        })
-        .run(),
-    )
-    if (!run) {
-      return { resumed: false, status: task.status }
-    }
-    if (task.status === "cancelled") {
-      return { resumed: false, status: task.status }
-    }
-    if (
-      ["queued", "planning", "running", "blocked", "evaluating", "delivering"].includes(task.status) &&
-      ["accepted", "running"].includes(run.status)
-    ) {
-      return { resumed: false, status: run.status }
-    }
-    const nextRunID = await OrchestratorRuntime.createOperatorRun(task, run, note)
-    await OrchestratorRuntime.dispatch(nextRunID, hooks())
-    return { resumed: true, status: "running" as const }
+    return withTask(taskID, async () => recordOperatorNoteNow(taskID, note))
   }
 
   export async function handleTaskMessage(taskID: string, raw: z.input<typeof TaskMessageInput>) {
-    const input = TaskMessageInput.parse(raw)
-    await appendTaskMessageTranscript(taskID, input.text)
-    const result = await WorkbenchService.ingestTaskMessage({
-      taskID,
-      text: input.text,
-      source: input.source ?? "user_message",
-      userID: input.user_id,
-    })
-    await Bus.publish(Event.TaskMessageRecorded, {
-      taskID,
-      kind: result.kind,
-      source: input.source ?? "user_message",
-      text: input.text,
-      summary: result.message,
-    })
-    if (!result.should_resume) {
-      return result
-    }
-    if (result.kind === "goal" || result.kind === "spec") {
-      const replan = await replanForSpecUpdate(
+    return withTask(taskID, async () => {
+      const input = TaskMessageInput.parse(raw)
+      await appendTaskMessageTranscript(taskID, input.text)
+      const result = await WorkbenchService.ingestTaskMessage({
         taskID,
-        input.text,
-        result.kind === "goal" ? "goal update" : "spec update",
-      )
+        text: input.text,
+        source: input.source ?? "user_message",
+        userID: input.user_id,
+      })
+      await OrchestratorProtocol.emit(Event.TaskMessageRecorded, {
+        taskID,
+        kind: result.kind,
+        source: input.source ?? "user_message",
+        text: input.text,
+        summary: result.message,
+      }, { source: "service.task_message" })
+      if (!result.should_resume) {
+        return result
+      }
+      if (result.kind === "goal" || result.kind === "spec") {
+        const replan = await replanForSpecUpdate(
+          taskID,
+          input.text,
+          result.kind === "goal" ? "goal update" : "spec update",
+        )
+        return {
+          ...result,
+          message: replan.resumed
+            ? result.kind === "goal"
+              ? "Recorded goal update. Queued a spec rewrite and replan."
+              : "Recorded spec update. Queued a spec rewrite and replan."
+            : result.message,
+        }
+      }
+      const note = await continueTaskMessage(taskID, input.text)
       return {
         ...result,
-        message: replan.resumed
-          ? result.kind === "goal"
-            ? "Recorded goal update. Queued a spec rewrite and replan."
-            : "Recorded spec update. Queued a spec rewrite and replan."
-          : result.message,
+        message:
+          result.kind === "plan" && note.live && note.resumed
+            ? "Plan hint recorded and forwarded to the active run."
+            : result.kind === "plan" && note.live && !note.resumed
+              ? "Plan hint recorded. Active run cannot absorb it directly; it will apply on the next run."
+              : result.kind === "plan" && note.resumed
+                ? "Plan hint recorded. Queued a follow-up run."
+                : result.kind === "note" && note.live && note.resumed
+                  ? "Operator note recorded and forwarded to the active run."
+                  : result.kind === "note" && note.live && !note.resumed
+                    ? "Operator note recorded. Active run cannot absorb it directly; it will apply on the next run."
+                    : result.kind === "note" && note.resumed
+                      ? "Operator note recorded. Queued a follow-up run."
+                      : result.message,
       }
-    }
-    const note = await continueTaskMessage(taskID, input.text)
-    return {
-      ...result,
-      message:
-        result.kind === "plan" && note.live && note.resumed
-          ? "Plan hint recorded and forwarded to the active run."
-          : result.kind === "plan" && note.live && !note.resumed
-            ? "Plan hint recorded. Active run cannot absorb it directly; it will apply on the next run."
-            : result.kind === "plan" && note.resumed
-              ? "Plan hint recorded. Queued a follow-up run."
-              : result.kind === "note" && note.live && note.resumed
-                ? "Operator note recorded and forwarded to the active run."
-                : result.kind === "note" && note.live && !note.resumed
-                  ? "Operator note recorded. Active run cannot absorb it directly; it will apply on the next run."
-                  : result.kind === "note" && note.resumed
-                    ? "Operator note recorded. Queued a follow-up run."
-                    : result.message,
-    }
+    })
   }
 
   /**
@@ -1212,90 +1351,7 @@ export namespace OrchestratorService {
    * 否则退化为 operator note（创建新 run）。
    */
   export async function injectMessage(taskID: string, message: string) {
-    const task = requireTask(taskID)
-    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-    if (!run) throw new Error(`No active run for task ${taskID}`)
-    const target = executionTarget(run)
-
-    // 只有运行中的 run 才能注入
-    if (!["accepted", "running"].includes(run.status)) {
-      return recordOperatorNote(taskID, message)
-    }
-    if (!target.sessionID) {
-      return recordOperatorNote(taskID, message)
-    }
-
-    const executor = ExecutorRegistry.require(run.executor)
-    if (!executor.capabilities().resume) {
-      return recordOperatorNote(taskID, message)
-    }
-
-    const submission = await (
-      target.goalRun?.workspace_dir && target.goalRun.workspace_dir !== Instance.directory
-        ? Instance.provide({
-            directory: target.goalRun.workspace_dir,
-            fn: () =>
-              executor.resume({
-                sessionID: target.sessionID!,
-                message,
-              }),
-          })
-        : executor.resume({
-            sessionID: target.sessionID,
-            message,
-          })
-    )
-
-    ensureExecutorSession({
-      taskID: task.id,
-      runID: run.id,
-      goalRunID: target.goalRun?.id,
-      provider: run.executor,
-      refs: {
-        provider_session_id: submission.sessionID,
-        queue_task_id: submission.queueTaskID,
-      },
-      settings: target.goalRun?.workspace_dir
-        ? {
-            cwd: target.goalRun.workspace_dir,
-          }
-        : undefined,
-    })
-
-    // 更新 executor ref（queueTaskID 可能变化）
-    if (target.goalRun) {
-      if (submission.queueTaskID !== target.queueTaskID || submission.sessionID !== target.sessionID) {
-        updateGoalRun(target.goalRun.id, {
-          session_id: submission.sessionID,
-          metadata: {
-            ...(target.goalRun.metadata ?? {}),
-            queue_task_id: submission.queueTaskID,
-            provider_session_id: submission.sessionID,
-          },
-        })
-      }
-    } else if (submission.queueTaskID !== run.executor_ref?.queue_task_id || submission.sessionID !== run.session_id) {
-      await updateRun(
-        run,
-        {
-          session_id: submission.sessionID,
-          executor_ref: {
-            session_id: submission.sessionID,
-            queue_task_id: submission.queueTaskID,
-          },
-        },
-        "Message injected into running session",
-      )
-    }
-
-    await Bus.publish(Event.MessageInjected, {
-      taskID: task.id,
-      runID: run.id,
-      text: message,
-      summary: "Operator message injected into running session",
-    })
-
-    return { resumed: true, status: "running" as const }
+    return withTask(taskID, async () => injectMessageNow(taskID, message))
   }
 
   export async function abortRun(runID: string) {
@@ -1366,60 +1422,6 @@ function answersFromMessage(message?: string) {
   const text = message?.trim()
   if (!text) return
   return [[text]]
-}
-
-async function resolveProtocolInteraction(row: InteractionRow, input: z.infer<typeof ReplyInteractionInput>) {
-  const run = requireRun(row.run_id)
-  const executor = ExecutorRegistry.require(run.executor)
-  if (!executor.resolve) throw new Error(`executor ${run.executor} does not support interaction resolution`)
-  const payload = row.payload ?? {}
-  const requestID = typeof payload.request_id === "string" ? payload.request_id : row.external_id
-  const now = Date.now()
-  const target = executionTarget(run, row)
-
-  if (row.request_type === "permission") {
-    await executor.resolve({
-      sessionID: target.sessionID,
-      queueTaskID: target.queueTaskID,
-      requestID,
-      kind: "approval",
-      response: {
-        decision: input.reply === "always" ? "acceptForSession" : "accept",
-      },
-    })
-    markInteraction(row, "answered", {
-      reply: input.reply ?? "once",
-      message: input.message,
-    }, now)
-    return
-  }
-
-  const questions = Array.isArray(payload.questions)
-    ? payload.questions.flatMap((item) => {
-        if (!item || typeof item !== "object") return []
-        const next = item as Record<string, unknown>
-        if (typeof next.id !== "string" || !next.id) return []
-        return [next.id]
-      })
-    : []
-  const answers = input.answers ?? answersFromMessage(input.message)
-  if (!answers) throw new Error("answers or message are required for protocol input replies")
-  const response = Object.fromEntries(
-    questions.map((id, index) => [id, { answers: answers[index] ?? answers[0] ?? [] }]),
-  )
-  await executor.resolve({
-    sessionID: target.sessionID,
-    queueTaskID: target.queueTaskID,
-    requestID,
-    kind: "input",
-    response: {
-      answers: response,
-    },
-  })
-  markInteraction(row, "answered", {
-    answers: response,
-    message: input.message,
-  }, now)
 }
 
 async function answerPlannerClarification(row: InteractionRow, answers: string[][]) {
@@ -1658,36 +1660,38 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.InteractionResolved, {
+      OrchestratorProtocol.emit(Event.InteractionResolved, {
         taskID: task.id,
         runID: run.id,
         interactionID: row.id,
         status: "answered",
         summary: "Clarification answered",
-      }),
+      }, { source: "service.resolve_clarification" }),
     )
-    Database.effect(() => Bus.publish(Event.PlanCreated, { taskID: task.id, planID, summary: planDraft.summary }))
     Database.effect(() =>
-      Bus.publish(Event.PlanActivated, {
+      OrchestratorProtocol.emit(Event.PlanCreated, { taskID: task.id, planID, summary: planDraft.summary }, { source: "service.resolve_clarification" }),
+    )
+    Database.effect(() =>
+      OrchestratorProtocol.emit(Event.PlanActivated, {
         taskID: task.id,
         planID,
         summary: isReplan ? "Replanned version activated after clarification" : "Plan activated after clarification",
-      }),
+      }, { source: "service.resolve_clarification" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.RunUpdated, {
+      OrchestratorProtocol.emit(Event.RunUpdated, {
         taskID: task.id,
         runID: run.id,
         status: "queued",
         summary: isReplan ? "Replanned run queued after clarification" : "Run queued after clarification",
-      }),
+      }, { source: "service.resolve_clarification" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
+      OrchestratorProtocol.emit(Event.TaskUpdated, {
         taskID: task.id,
         status: "queued",
         summary: isReplan ? "Clarification resolved; replanned task queued" : "Clarification resolved; task queued",
-      }),
+      }, { source: "service.resolve_clarification" }),
     )
   })
   writePrdSnapshot({

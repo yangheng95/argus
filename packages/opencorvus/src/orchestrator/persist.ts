@@ -1,5 +1,4 @@
 import z from "zod"
-import { Bus } from "@/bus"
 import { inferSelectors, selectorList, selectorsSatisfied } from "@/check/policy"
 import { Identifier } from "@/id/id"
 import { executorLeaseAvailable, executorLeaseHeldByOther, executorLeaseOwner, executorLeaseUntil } from "./lease"
@@ -9,7 +8,6 @@ import { ExecutorPlanner } from "@/planner/executor"
 import { protocolInfo, type ProtocolCapabilitiesInfo, type ProtocolRefsInfo, type ProtocolSettingsInfo, ProtocolTransport } from "@/executor/protocol"
 import { type ReplanContext, type WaveStatus } from "@/planner/agent"
 import { PlannerFailureError, PlannerService, type PlanDraft } from "@/planner/service"
-import { installRuntimeShims } from "@/runtime/shims"
 import { writeEvaluationSnapshot, writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "@/orchestrator/docs"
 import { writeSpec } from "@/orchestrator/spec"
 import { SpecFailureError, SpecService } from "@/spec/service"
@@ -40,6 +38,7 @@ import {
   type OrchestratorArtifactKind,
 } from "./orchestrator.sql"
 import { plannerClarification } from "./planner-clarification"
+import { OrchestratorProtocol } from "./protocol"
 import { suppressClarifications, unattendedProject } from "./unattended"
 import { buildSpecReplanInput } from "./spec-goal-service"
 import { findPlan, findSpecItems, findSpecSnapshot, findTask, listGoalsBySpec, listMilestonesByPlan, listPlanNodesByPlan, type GoalRow, type PlanRow, type RunRow, type TaskRow } from "./store"
@@ -411,7 +410,6 @@ function blockedPlanDraft(input: {
 }
 
 export async function compileTransition(input: CompileTransitionInput): Promise<CompileTransitionResult> {
-  installRuntimeShims()
   const unattended = await unattendedProject()
   const timeouts = stageTimeouts(input)
   const specLive = agentStream({ taskID: input.taskID, stage: "spec" })
@@ -713,11 +711,11 @@ export function persistInitialTaskDraft(input: PersistInitialDraftInput) {
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.TaskCreated, {
+      OrchestratorProtocol.emit(Event.TaskCreated, {
         taskID: input.taskID,
         status: "planning",
         summary: "Task created and planning started",
-      }),
+      }, { source: "persist.initial_draft" }),
     )
   })
 }
@@ -860,40 +858,40 @@ export function persistInitialTransition(input: PersistInitialInput) {
       })
       .run()
     Database.effect(() =>
-      Bus.publish(existing ? Event.TaskUpdated : Event.TaskCreated, {
+      OrchestratorProtocol.emit(existing ? Event.TaskUpdated : Event.TaskCreated, {
         taskID: input.taskID,
         status: clarification ? "blocked" : "queued",
         summary: clarification ? "Planning blocked pending clarification" : "Task created",
-      }),
+      }, { source: "persist.initial" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.SpecCreated, {
+      OrchestratorProtocol.emit(Event.SpecCreated, {
         taskID: input.taskID,
         specID: specSnapshotID,
         summary: input.compiled.specDraft.summary,
-      }),
+      }, { source: "persist.initial" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.PlanCreated, {
+      OrchestratorProtocol.emit(Event.PlanCreated, {
         taskID: input.taskID,
         planID: input.planID,
         summary: input.compiled.planDraft.summary,
-      }),
+      }, { source: "persist.initial" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.PlanActivated, {
+      OrchestratorProtocol.emit(Event.PlanActivated, {
         taskID: input.taskID,
         planID: input.planID,
         summary: "Initial plan activated",
-      }),
+      }, { source: "persist.initial" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.RunCreated, {
+      OrchestratorProtocol.emit(Event.RunCreated, {
         taskID: input.taskID,
         runID: input.runID,
         status: clarification ? "blocked" : "queued",
         summary: clarification ? "Run blocked pending clarification" : "Run queued",
-      }),
+      }, { source: "persist.initial" }),
     )
   })
   writePrdSnapshot({
@@ -1070,30 +1068,30 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
       .run()
     Database.effect(() => {
       if (!existing) {
-        Bus.publish(Event.TaskCreated, { taskID: input.taskID, status: "failed", summary: "Task created" })
+        OrchestratorProtocol.emit(Event.TaskCreated, { taskID: input.taskID, status: "failed", summary: "Task created" }, { source: "persist.initial_failure" })
       }
     })
     Database.effect(() =>
-      Bus.publish(Event.SpecCreated, {
+      OrchestratorProtocol.emit(Event.SpecCreated, {
         taskID: input.taskID,
         specID: specSnapshotID,
         summary: specDraft.summary,
-      }),
+      }, { source: "persist.initial_failure" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.RunCreated, {
+      OrchestratorProtocol.emit(Event.RunCreated, {
         taskID: input.taskID,
         runID: input.runID,
         status: "failed",
         summary: "Planning failed",
-      }),
+      }, { source: "persist.initial_failure" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
+      OrchestratorProtocol.emit(Event.TaskUpdated, {
         taskID: input.taskID,
         status: "failed",
         summary: "Planning failed before execution",
-      }),
+      }, { source: "persist.initial_failure" }),
     )
   })
 }
@@ -1171,19 +1169,19 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
         })
         .run()
       Database.effect(() =>
-        Bus.publish(Event.RunCreated, {
+        OrchestratorProtocol.emit(Event.RunCreated, {
           taskID: input.task.id,
           runID: input.nextRunID,
           status: "blocked",
           summary: "Run blocked pending clarification",
-        }),
+        }, { source: "persist.replan_clarification" }),
       )
       Database.effect(() =>
-        Bus.publish(Event.TaskUpdated, {
+        OrchestratorProtocol.emit(Event.TaskUpdated, {
           taskID: input.task.id,
           status: "blocked",
           summary: "Replanning blocked pending clarification",
-        }),
+        }, { source: "persist.replan_clarification" }),
       )
     })
     return {
@@ -1279,40 +1277,40 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.SpecCreated, {
+      OrchestratorProtocol.emit(Event.SpecCreated, {
         taskID: input.task.id,
         specID: specSnapshotID,
         summary: input.compiled.specDraft.summary,
-      }),
+      }, { source: "persist.replan" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.PlanCreated, {
+      OrchestratorProtocol.emit(Event.PlanCreated, {
         taskID: input.task.id,
         planID: input.nextPlanID,
         summary: input.compiled.planDraft.summary,
-      }),
+      }, { source: "persist.replan" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.PlanActivated, {
+      OrchestratorProtocol.emit(Event.PlanActivated, {
         taskID: input.task.id,
         planID: input.nextPlanID,
         summary: "Replanned version activated",
-      }),
+      }, { source: "persist.replan" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.RunCreated, {
+      OrchestratorProtocol.emit(Event.RunCreated, {
         taskID: input.task.id,
         runID: input.nextRunID,
         status: clarification ? "blocked" : "queued",
         summary: clarification ? "Run blocked pending clarification" : "Run queued after replan",
-      }),
+      }, { source: "persist.replan" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
+      OrchestratorProtocol.emit(Event.TaskUpdated, {
         taskID: input.task.id,
         status: clarification ? "blocked" : "running",
         summary: clarification ? "Replanning blocked pending clarification" : "Replanning after evaluation failure",
-      }),
+      }, { source: "persist.replan" }),
     )
   })
   writePrdSnapshot({
@@ -1380,11 +1378,11 @@ export function persistReplanTransitionFailure(input: PersistReplanFailureInput)
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
+      OrchestratorProtocol.emit(Event.TaskUpdated, {
         taskID: input.task.id,
         status: "failed",
         summary: input.error,
-      }),
+      }, { source: "persist.replan_failure" }),
     )
   })
   return {
@@ -1911,19 +1909,19 @@ export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retr
       })
       .run()
     Database.effect(() =>
-      Bus.publish(Event.RunCreated, {
+      OrchestratorProtocol.emit(Event.RunCreated, {
         taskID: task.id,
         runID: nextRunID,
         status: "queued",
         summary: "Retrying current plan after evaluation failure",
-      }),
+      }, { source: "persist.retry" }),
     )
     Database.effect(() =>
-      Bus.publish(Event.TaskUpdated, {
+      OrchestratorProtocol.emit(Event.TaskUpdated, {
         taskID: task.id,
         status: "running",
         summary: "Retrying current plan after evaluation failure",
-      }),
+      }, { source: "persist.retry" }),
     )
   })
   return nextRunID
@@ -2294,11 +2292,11 @@ export function persistEvaluation(input: {
           .run()
         if (goalStatus === "passed") {
           Database.effect(() =>
-            Bus.publish(Event.GoalPassed, { taskID: input.task.id, goalID: goal.id, summary: goal.description }),
+            OrchestratorProtocol.emit(Event.GoalPassed, { taskID: input.task.id, goalID: goal.id, summary: goal.description }, { source: "persist.evaluation" }),
           )
         } else if (goalStatus === "failed") {
           Database.effect(() =>
-            Bus.publish(Event.GoalFailed, { taskID: input.task.id, goalID: goal.id, summary: `${goal.description}: ${gs.evidence}` }),
+            OrchestratorProtocol.emit(Event.GoalFailed, { taskID: input.task.id, goalID: goal.id, summary: `${goal.description}: ${gs.evidence}` }, { source: "persist.evaluation" }),
           )
         }
       }
@@ -2328,14 +2326,14 @@ export function persistEvaluation(input: {
       }
     }
     Database.effect(() =>
-      Bus.publish(Event.EvaluationCompleted, {
+      OrchestratorProtocol.emit(Event.EvaluationCompleted, {
         taskID: input.task.id,
         runID: input.run.id,
         evaluationID: input.evaluationID,
         status: input.finalStatus as EvaluationStatus,
         verdict: input.finalVerdict as EvaluationVerdict,
         summary: input.finalSummary,
-      }),
+      }, { source: "persist.evaluation" }),
     )
   })
   const plan = input.run.plan_version_id ? findPlan(input.run.plan_version_id) : undefined
@@ -2436,7 +2434,7 @@ export function persistDelivery(input: {
         .run()
     }
     Database.effect(() =>
-      Bus.publish(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }),
+      OrchestratorProtocol.emit(Event.DeliveryReady, { taskID: input.task.id, runID: input.run.id, deliveryID: input.deliveryID, summary: input.delivery.summary }, { source: "persist.delivery" }),
     )
   })
 }
@@ -2530,11 +2528,11 @@ export function failGoals(run: RunRow, summary: string) {
     })
   }
   for (const goal of goals) {
-    Bus.publish(Event.GoalFailed, {
+    OrchestratorProtocol.emit(Event.GoalFailed, {
       taskID: run.task_id,
       goalID: goal.id,
       summary: `${goal.description}: ${summary}`,
-    })
+    }, { source: "persist.failed_run" })
   }
 }
 
@@ -2900,11 +2898,11 @@ function deriveMilestoneStatuses(db: Parameters<Parameters<typeof Database.trans
       .where(eq(OrchestratorMilestoneTable.id, ms.id))
       .run()
     if (next === "passed") {
-      Database.effect(() => Bus.publish(Event.MilestonePassed, { taskID, milestoneID: ms.id, summary: ms.title }))
+      Database.effect(() => OrchestratorProtocol.emit(Event.MilestonePassed, { taskID, milestoneID: ms.id, summary: ms.title }, { source: "persist.milestone" }))
     } else if (next === "failed") {
-      Database.effect(() => Bus.publish(Event.MilestoneFailed, { taskID, milestoneID: ms.id, summary: ms.title }))
+      Database.effect(() => OrchestratorProtocol.emit(Event.MilestoneFailed, { taskID, milestoneID: ms.id, summary: ms.title }, { source: "persist.milestone" }))
     } else if (next === "active") {
-      Database.effect(() => Bus.publish(Event.MilestoneActivated, { taskID, milestoneID: ms.id, summary: ms.title }))
+      Database.effect(() => OrchestratorProtocol.emit(Event.MilestoneActivated, { taskID, milestoneID: ms.id, summary: ms.title }, { source: "persist.milestone" }))
     }
   }
 }

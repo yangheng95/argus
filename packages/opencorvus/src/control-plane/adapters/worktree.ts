@@ -1,10 +1,10 @@
 import { Worktree } from "@/worktree"
 import type { Config } from "../config"
-import type { Adaptor } from "./types"
+import type { Adapter } from "./types"
 
 type WorktreeConfig = Extract<Config, { type: "worktree" }>
 
-export const WorktreeAdaptor: Adaptor<WorktreeConfig> = {
+export const WorktreeAdapter: Adapter<WorktreeConfig> = {
   async create(_from: WorktreeConfig, _branch: string) {
     const next = await Worktree.create(undefined)
     return {

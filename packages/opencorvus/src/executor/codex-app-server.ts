@@ -1,6 +1,6 @@
 import z from "zod"
-import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./compat"
-import { record, text } from "./compat"
+import { CodingCapabilities, CodingRunInput, CodingResumeInput, type CodingEventInfo, type CodingProvider } from "./contracts"
+import { record, text } from "./contracts"
 import { ToolAdapterRegistry } from "./protocol"
 
 type RequestID = string | number

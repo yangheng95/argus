@@ -25,7 +25,7 @@ import { fn } from "@/util/fn"
 import { Tool } from "@/tool/tool"
 import { PermissionNext } from "@/permission/next"
 import { fileURLToPath, pathToFileURL } from "bun"
-import { SessionPromptState } from "./prompt-state"
+import { SessionActor } from "./actor"
 import { SessionLoop } from "./loop"
 import { SessionShell } from "./shell-exec"
 import { SessionCommand } from "./command-exec"
@@ -33,8 +33,8 @@ import PLAN_REMINDER from "./prompt/plan-reminder-anthropic.txt"
 import SPEC_REMINDER from "./prompt/spec-reminder-anthropic.txt"
 
 export namespace SessionPrompt {
-  export const assertNotBusy = SessionPromptState.assertNotBusy
-  export const cancel = SessionPromptState.cancel
+  export const assertNotBusy = SessionActor.assertNotBusy
+  export const cancel = SessionActor.cancel
 
   export const { LoopInput, loop, resolveTools, createStructuredOutputTool } = SessionLoop
   export const { ShellInput, shell } = SessionShell
@@ -195,7 +195,7 @@ export namespace SessionPrompt {
   }
 
   async function lastModel(sessionID: string) {
-    return SessionPromptState.lastModel(sessionID)
+    return SessionActor.lastModel(sessionID)
   }
 
   async function createUserMessage(input: PromptInput) {

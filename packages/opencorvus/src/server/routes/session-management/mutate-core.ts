@@ -1,12 +1,12 @@
 import { Hono } from "hono"
 import { describeRoute, validator, resolver } from "hono-openapi"
 import z from "zod"
-import { Session } from "../../session"
+import { Session } from "../../../session"
 import { OrchestratorService } from "@/orchestrator/service"
-import { errors } from "../error"
-import { lazy } from "../../util/lazy"
+import { errors } from "../../error"
+import { lazy } from "../../../util/lazy"
 
-export const SessionManagementMutateCoreRoutes = lazy(() =>
+export const SessionMutateCoreRoutes = lazy(() =>
   new Hono()
     .post(
       "/",

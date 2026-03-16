@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { Bus } from "../../src/bus"
 import { OpencodeExecutor } from "../../src/executor/opencode"
 import { Identifier } from "../../src/id/id"
 import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
+import { OrchestratorProtocol } from "../../src/orchestrator/protocol"
 import {
   OrchestratorChannelBindingTable,
   OrchestratorInteractionRequestTable,
@@ -245,7 +245,7 @@ describe("channel.slack", () => {
       directory: tmp.path,
       init: InstanceBootstrap,
       fn: async () => {
-        const interaction = Database.use((db) =>
+        let interaction = Database.use((db) =>
           db
             .select()
             .from(OrchestratorInteractionRequestTable)
@@ -257,6 +257,22 @@ describe("channel.slack", () => {
             )
             .get(),
         )
+        for (const _ of Array.from({ length: 20 })) {
+          if (interaction) break
+          await Bun.sleep(25)
+          interaction = Database.use((db) =>
+            db
+              .select()
+              .from(OrchestratorInteractionRequestTable)
+              .where(
+                and(
+                  eq(OrchestratorInteractionRequestTable.request_type, "permission"),
+                  eq(OrchestratorInteractionRequestTable.status, "pending"),
+                ),
+              )
+              .get(),
+          )
+        }
         expect(interaction?.status).toBe("pending")
       },
     })
@@ -336,14 +352,14 @@ describe("channel.slack", () => {
       init: InstanceBootstrap,
       fn: async () => {
         ;(gateway as any).subscribeEvents()
-        await Bus.publish(OrchestratorEvent.EvaluationCompleted, {
+        await OrchestratorProtocol.emit(OrchestratorEvent.EvaluationCompleted, {
           taskID,
           runID,
           evaluationID: Identifier.ascending("evaluation"),
           status: "passed",
           verdict: "accepted",
           summary: "All checks passed",
-        })
+        }, { source: "test.slack" })
       },
     })
 
