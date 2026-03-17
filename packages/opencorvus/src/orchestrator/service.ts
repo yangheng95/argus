@@ -547,6 +547,101 @@ function withTask<T>(taskID: string, exec: () => Promise<T>) {
   return OrchestratorTaskActor.submit(taskID, exec)
 }
 
+type CreateTaskBootstrapInput = {
+  input: z.infer<typeof CreateTaskInput>
+  taskID: string
+  planID: string
+  runID: string
+  sessionID: string
+  now: number
+  title: string
+  executor: string
+  metadata: OrchestratorMetadata
+}
+
+async function bootstrapCreatedTask(input: CreateTaskBootstrapInput) {
+  const compiled = await compileTransition({
+    mode: "initial",
+    taskID: input.taskID,
+    sessionID: input.sessionID,
+    now: input.now,
+    title: input.title,
+    request: input.input.request,
+    goals: input.input.goals,
+    executor: input.executor,
+    routing: input.input.routing,
+    budget: input.input.budget,
+    metadata: input.metadata,
+  }).catch(async (error) => {
+    if (!(error instanceof PlannerFailureError)) throw error
+    try {
+      persistInitialTransitionFailure({
+        taskID: input.taskID,
+        runID: input.runID,
+        sessionID: input.sessionID,
+        now: input.now,
+        executor: input.executor,
+        title: input.title,
+        request: input.input.request,
+        requestID: input.input.requestID,
+        source: input.input.source,
+        priority: input.input.priority,
+        budget: input.input.budget,
+        metadata: input.metadata,
+        channelBinding: input.input.channelBinding,
+        projectID: Instance.project.id,
+        error,
+        specDraft: specDraftFromFailure(error),
+      })
+    } catch {
+      // Best effort: planner failure should still surface even if persistence also fails.
+    }
+    throw error
+  })
+
+  persistInitialTransition({
+    taskID: input.taskID,
+    planID: input.planID,
+    runID: input.runID,
+    sessionID: input.sessionID,
+    now: input.now,
+    executor: input.executor,
+    title: input.title,
+    request: input.input.request,
+    requestID: input.input.requestID,
+    source: input.input.source,
+    priority: input.input.priority,
+    budget: input.input.budget,
+    metadata: input.metadata,
+    channelBinding: input.input.channelBinding,
+    milestones: input.input.milestones,
+    promptOverride: input.input.promptOverride,
+    compiled,
+    projectID: Instance.project.id,
+  })
+
+  await OrchestratorRuntime.dispatch(input.runID, hooks())
+}
+
+async function failCreatedTask(taskID: string, error: unknown) {
+  const task = findTask(taskID)
+  if (!task) return
+  if (task.status === "failed" || task.status === "completed" || task.status === "cancelled") return
+  const message = error instanceof Error ? error.message : String(error)
+  await updateTask(
+    task,
+    {
+      status: "failed",
+      blocking_reason: null,
+      error: message,
+      time_completed: Date.now(),
+    },
+    message,
+  ).catch((cause) => {
+    log.error("failed to mark created task as failed", { taskID, error: String(cause), sourceError: message })
+  })
+}
+
 export namespace OrchestratorService {
   async function syncTask(taskID: string) {
     let previous = ""
@@ -603,7 +698,7 @@ export namespace OrchestratorService {
     })
   }
 
-  export async function createTask(raw: z.input<typeof CreateTaskInput>) {
+  export async function createTask(raw: z.input<typeof CreateTaskInput>, options?: { background?: boolean }) {
     const input = CreateTaskInput.parse(raw)
     await prepareProject(input.project)
     const requestID = input.requestID?.trim() || undefined
@@ -685,66 +780,32 @@ export namespace OrchestratorService {
       source: input.source ?? "api",
       userID: slackUser(metadata),
     })
-    const compiled = await compileTransition({
-        mode: "initial",
-        taskID,
-        sessionID: session.id,
-        now,
-        title,
-        request: input.request,
-        goals: input.goals,
-        executor,
-        routing: input.routing,
-        budget: input.budget,
-        metadata,
-      }).catch(async (error) => {
-      if (!(error instanceof PlannerFailureError)) throw error
-      try {
-        persistInitialTransitionFailure({
-          taskID,
-          runID,
-          sessionID: session.id,
-          now,
-          executor,
-          title,
-          request: input.request,
-          requestID,
-          source: input.source,
-          priority: input.priority,
-          budget: input.budget,
-          metadata,
-          channelBinding: input.channelBinding,
-          projectID: Instance.project.id,
-          error,
-          specDraft: specDraftFromFailure(error),
-        })
-      } catch {
-        // Best effort: planner failure should still surface even if persistence also fails.
-      }
-      throw error
-    })
+    const bootstrapInput: CreateTaskBootstrapInput = {
+      input,
+      taskID,
+      planID,
+      runID,
+      sessionID: session.id,
+      now,
+      title,
+      executor,
+      metadata,
+    }
+    if (options?.background === true) {
+      void bootstrapCreatedTask(bootstrapInput).catch(async (error) => {
+        const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
+        if (existing) return
+        const bound = recoverTaskByChannelBinding(input.channelBinding, error)
+        if (bound) return
+        if (error instanceof PlannerFailureError) return
+        log.error("background task bootstrap failed", { taskID, error: String(error) })
+        await failCreatedTask(taskID, error)
+      })
+      return taskID
+    }
 
     try {
-      persistInitialTransition({
-        taskID,
-        planID,
-        runID,
-        sessionID: session.id,
-        now,
-        executor,
-        title,
-        request: input.request,
-        requestID,
-        source: input.source,
-        priority: input.priority,
-        budget: input.budget,
-        metadata,
-        channelBinding: input.channelBinding,
-        milestones: input.milestones,
-        promptOverride: input.promptOverride,
-        compiled,
-        projectID: Instance.project.id,
-      })
+      await bootstrapCreatedTask(bootstrapInput)
     } catch (error) {
       const existing = requestID ? recoverTaskByRequest(requestID, error) : undefined
       if (existing) return existing
@@ -752,8 +813,6 @@ export namespace OrchestratorService {
       if (bound) return bound
       throw error
     }
-
-    await OrchestratorRuntime.dispatch(runID, hooks())
     return taskID
   }
 
@@ -775,7 +834,11 @@ export namespace OrchestratorService {
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
     const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
     const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
+    const snapshotVersion = WorkbenchService.boardTag({ taskID })
+    const lastSequence = ProtocolStore.latestTaskSequence(taskID)
     return {
+      snapshotVersion,
+      lastSequence,
       task: viewTask(task, { directory: item?.directory }),
       spec: spec ? viewSpecSnapshot(spec) : undefined,
       plan: plan ? viewPlan(plan) : undefined,

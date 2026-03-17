@@ -52,8 +52,6 @@
     function clearWorkspaceRuntime(options = {}) {
       state.workspaceEpoch = (state.workspaceEpoch || 0) + 1;
       deps.stopPolling();
-      deps.stopSSE();
-      if (typeof deps.stopEventStream === "function") deps.stopEventStream();
       if (options.preserveChatRequest !== true && typeof deps.stopChatRequest === "function") {
         void deps.stopChatRequest();
       }

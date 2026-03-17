@@ -66,6 +66,8 @@ export const OrchestratorRoutes = lazy(() =>
         const taskID = await OrchestratorService.createTask({
           ...input,
           requestID: input.requestID ?? requestID,
+        }, {
+          background: true,
         }).catch((error) => {
           if (error instanceof ExecutorNotConfiguredError) {
             throw new HTTPException(400, {
@@ -226,13 +228,15 @@ export const OrchestratorRoutes = lazy(() =>
         },
       }),
       validator("param", z.object({ taskID: Task.shape.id })),
+      validator("query", z.object({ after: z.coerce.number().int().min(0).optional() })),
       async (c) => {
         const taskID = c.req.valid("param").taskID
+        const after = c.req.valid("query").after
         const sessionID = taskSession(taskID)
         c.header("X-Accel-Buffering", "no")
         c.header("X-Content-Type-Options", "nosniff")
         return streamSSE(c, async (stream) => {
-          let sequence = ProtocolStore.latestTaskSequence(taskID)
+          let sequence = after ?? ProtocolStore.latestTaskSequence(taskID)
           const stopProtocol = ProtocolStore.subscribeEvents(async (event) => {
             if (event.sequence <= sequence) return
             sequence = Math.max(sequence, event.sequence)
@@ -319,7 +323,7 @@ export const OrchestratorRoutes = lazy(() =>
           })
         }
         c.header("ETag", etag)
-        return c.json(await OrchestratorService.getBoard(taskID, { sync: false }))
+        return c.json(await OrchestratorService.getBoard(taskID, { sync }))
       },
     )
     .get(

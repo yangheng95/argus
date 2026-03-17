@@ -477,6 +477,8 @@ export const ProgressSnapshot = z.object({
 })
 
 export const Progress = z.object({
+  snapshotVersion: z.string(),
+  lastSequence: z.number().int(),
   task: Task,
   spec: z.lazy(() => SpecSnapshot).optional(),
   plan: PlanVersion.optional(),
@@ -649,6 +651,8 @@ export const SpecSnapshot = z.object({
 })
 
 export const TaskBoard = z.object({
+  snapshotVersion: z.string(),
+  lastSequence: z.number().int(),
   task: Task,
   spec: SpecSnapshot.optional(),
   checks: CheckConfig.optional(),
