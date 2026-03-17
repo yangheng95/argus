@@ -26,9 +26,18 @@ test("buildGoalPrompt keeps executor scope local to the current iterative stage"
       description: "Implement IndexedDB journal storage",
       criteria: "Creating, reading, and updating journal records must be validated by tests",
       metadata: {
-        check_selector: ["build", "test"],
+        check_selector: ["build", "test", "ui_review", "startup"],
       },
     } as any,
+    taskRequest: [
+      "Implement IndexedDB journal storage.",
+      "",
+      "Only create or modify these files:",
+      "- src/journal/store.ts",
+      "- src/journal/store.test.ts",
+      "",
+      "Do not add package.json, bun.lock, tsconfig.json, README files, docs, or any other files unless they are strictly required.",
+    ].join("\n"),
   })
 
   expect(prompt).toContain("Coordinator context:")
@@ -36,6 +45,19 @@ test("buildGoalPrompt keeps executor scope local to the current iterative stage"
   expect(prompt).toContain("same evolving workspace")
   expect(prompt).toContain("Workspace root rule:")
   expect(prompt).toContain("Do not scaffold a nested app or package directory")
+  expect(prompt).toContain("Required self-run checks for this goal:")
+  expect(prompt).toContain("build, test")
+  expect(prompt).toContain("Evaluator-managed checks for this goal:")
+  expect(prompt).toContain("ui_review, startup")
+  expect(prompt).toContain("Scoped request constraints:")
+  expect(prompt).toContain("Do not add package.json, bun.lock")
+  expect(prompt).toContain("Do not run bun install, bun add, npm install")
+  expect(prompt).toContain("Do not invoke npm, npx, pnpm, or yarn")
+  expect(prompt).toContain("Do not create package-lock.json")
+  expect(prompt).toContain("Do not create demo pages, dist/index.html")
+  expect(prompt).toContain("Do not keep searching for missing folders, future modules, or 'complete project structure' work.")
+  expect(prompt).toContain("Do not run generic directory-completeness sweeps")
+  expect(prompt).toContain("If this stage is a bootstrap/foundation step, create only the minimal scaffold")
   expect(prompt).toContain("## Run Context")
   expect(prompt).toContain("The previous attempt did not satisfy the acceptance checks.")
   expect(prompt).toContain("Failure focus: Focus this retry on the storage layer.")

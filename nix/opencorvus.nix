@@ -51,7 +51,7 @@ stdenvNoCC.mkDerivation (finalAttrs: {
   installPhase = ''
     runHook preInstall
 
-    install -Dm755 dist/opencorvus-*/bin/opencorvus $out/bin/opencorvus
+    install -Dm755 dist/opencorvus-*/opencorvus $out/bin/opencorvus
     install -Dm644 schema.json $out/share/opencorvus/schema.json
 
     wrapProgram $out/bin/opencorvus \

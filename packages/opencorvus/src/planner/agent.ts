@@ -13,7 +13,9 @@
  */
 import { stepCountIs } from "ai"
 import z from "zod"
+import { extractRawJSON, repairTruncatedJSON, sanitizeJSON, trimToLastComplete, tryParseJSON } from "@/llm/json-repair"
 import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
+import { type FailureAnalysis, type PreviousGoalStatus } from "@/orchestrator/failure"
 import { createPlannerTools, prefetchContext } from "./tools"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
@@ -24,6 +26,7 @@ import { type TextHooks } from "@/llm/api"
 import path from "path"
 import { Config } from "@/config/config"
 import { WaveContract, normalizePlanWaves } from "@/orchestrator/wave"
+import { collectText, ensureMeaningfulSummary, firstContentLine, parseListSection, parseNamedPairs, sectionBody, splitBlocks, summarizeToolUsage } from "@/util/agent-text"
 
 const log = Log.create({ service: "planner-agent" })
 
@@ -78,18 +81,8 @@ export interface WaveStatus {
 
 export interface ReplanContext {
   previousSummary: string
-  failureAnalysis: {
-    classification: string
-    summary: string
-    rootCause: string
-    suggestedStrategy: string
-    avoidApproaches: string[]
-  }
-  previousGoalStatuses: Array<{
-    description: string
-    status: string
-    evidence: string
-  }>
+  failureAnalysis: FailureAnalysis
+  previousGoalStatuses: PreviousGoalStatus[]
   previousWaves?: WaveStatus[]
 }
 
@@ -289,48 +282,8 @@ export const parsePlannerOutput = extractJSON
 // Internals
 // ---------------------------------------------------------------------------
 
-/**
- * Ensure the plan summary is meaningful -- not garbage like "## heading",
- * empty string, or just echoing the first line of the request.
- */
-function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string {
-  if (!summary) return fallbackTitle
-  const trimmed = summary.trim()
-  // Reject summaries that look like markdown headings, blank, or too short
-  if (trimmed.length < 5) return fallbackTitle
-  if (/^#+\s/.test(trimmed)) return fallbackTitle
-  // Reject summaries that are just a file path or directory
-  if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return fallbackTitle
-  return trimmed
-}
-
 function extractJSON(text: string): PlannerOutputType {
-  let raw = text.trim()
-
-  // Try fenced JSON block (complete or truncated)
-  const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fencedComplete) {
-    raw = fencedComplete[1].trim()
-  } else {
-    // Truncated fenced block: opening ``` but no closing ```
-    const fencedOpen = raw.match(/```(?:json)?\s*([\s\S]*)/)
-    if (fencedOpen && fencedOpen[1].includes("{")) {
-      raw = fencedOpen[1].trim()
-    }
-  }
-
-  // Try to find a JSON object in the text
-  if (!raw.startsWith("{")) {
-    // First try complete JSON object
-    const match = raw.match(/(\{[\s\S]*\})/)
-    if (match) {
-      raw = match[1]
-    } else {
-      // Truncated: find the first { and take everything after
-      const idx = raw.indexOf("{")
-      if (idx >= 0) raw = raw.slice(idx)
-    }
-  }
+  let raw = extractRawJSON(text)
 
   // Sanitize LLM JSON issues: unescaped backslashes, raw newlines in strings, etc.
   // Must run BEFORE truncation repair since raw control chars confuse the repairer.
@@ -344,13 +297,13 @@ function extractJSON(text: string): PlannerOutputType {
 
   let obj: any
   // Try multiple parse strategies
-  const parseErr = tryParse(raw)
+  const parseErr = tryParseJSON(raw)
   if (parseErr.ok) {
     obj = parseErr.value
   } else {
     // Try more aggressive repair: trim back to last complete JSON value
     const trimmed = trimToLastComplete(raw)
-    const retryErr = tryParse(trimmed)
+    const retryErr = tryParseJSON(trimmed)
     if (retryErr.ok) {
       log.warn("planner: repaired truncated JSON by trimming", {
         originalLength: raw.length,
@@ -418,15 +371,6 @@ function extractJSON(text: string): PlannerOutputType {
   }
 }
 
-function collectText(result: {
-  text?: string
-  steps: Array<{ text?: string }>
-}) {
-  const direct = result.text?.trim() || ""
-  if (direct) return direct
-  return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
-}
-
 function extractPlannerText(text: string): PlannerOutputType {
   const raw = text.trim()
   if (!raw) throw new Error("planner output empty")
@@ -443,87 +387,6 @@ function extractPlannerText(text: string): PlannerOutputType {
   }))
 }
 
-/**
- * Sanitize common LLM JSON output issues:
- * - Unescaped backslashes (e.g., Windows paths: C:\Users)
- * - Real newlines inside JSON string values
- * - Markdown code blocks inside string values
- */
-function sanitizeJSON(raw: string): string {
-  let result = ""
-  let inString = false
-  let i = 0
-  while (i < raw.length) {
-    const ch = raw[i]
-    if (!inString) {
-      if (ch === '"') inString = true
-      result += ch
-      i++
-      continue
-    }
-    // Inside a string
-    if (ch === "\\") {
-      const next = raw[i + 1]
-      // Valid JSON escapes: " \ / b f n r t u
-      if (next && '"\\\/bfnrtu'.includes(next)) {
-        result += ch + next
-        i += 2
-        continue
-      }
-      // Invalid escape: double the backslash to make it valid
-      result += "\\\\"
-      i++
-      continue
-    }
-    if (ch === '"') {
-      inString = false
-      result += ch
-      i++
-      continue
-    }
-    if (ch === "\n") {
-      result += "\\n"
-      i++
-      continue
-    }
-    if (ch === "\r") {
-      result += "\\r"
-      i++
-      continue
-    }
-    if (ch === "\t") {
-      result += "\\t"
-      i++
-      continue
-    }
-    result += ch
-    i++
-  }
-  return result
-}
-
-function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: JSON.parse(text) }
-  } catch (err) {
-    return { ok: false, error: err as Error }
-  }
-}
-
-function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
-  const map: Record<string, number> = {}
-  for (const step of steps) {
-    const calls = Array.isArray(step.toolCalls) ? step.toolCalls : []
-    for (const call of calls) {
-      if (!call || typeof call !== "object" || !("toolName" in call)) continue
-      const name = String((call as { toolName?: unknown }).toolName || "")
-      if (!name) continue
-      map[name] = (map[name] ?? 0) + 1
-    }
-  }
-  return map
-}
-
 function normalizePlanOutput(input: PlannerOutputType): PlannerOutputType {
   return {
     ...input,
@@ -533,43 +396,6 @@ function normalizePlanOutput(input: PlannerOutputType): PlannerOutputType {
     risks: Array.isArray(input.risks) ? input.risks : [],
     assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
   }
-}
-
-function sectionBody(text: string, names: string[]) {
-  const lines = text.split(/\r?\n/)
-  for (let i = 0; i < lines.length; i++) {
-    const title = lines[i].trim().replace(/^#{1,6}\s*/, "")
-    if (!names.some((name) => title.localeCompare(name, "en", { sensitivity: "accent" }) === 0)) continue
-    const body: string[] = []
-    for (let j = i + 1; j < lines.length; j++) {
-      if (/^#{1,6}\s+/.test(lines[j].trim())) break
-      body.push(lines[j])
-    }
-    return body.join("\n").trim()
-  }
-  return ""
-}
-
-function parseListSection(text: string, names: string[]) {
-  return sectionBody(text, names)
-    .split(/\r?\n/)
-    .flatMap((line) => {
-      const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
-      return value ? [value] : []
-    })
-}
-
-function parseNamedPairs(text: string) {
-  return text.split(/\r?\n/).flatMap((line) => {
-    const value = line.trim().replace(/^[-*•]\s+/, "").replace(/^\d+[.)、]\s+/, "")
-    if (!value) return []
-    const pair = value.split(/[:：]/)
-    if (pair.length < 2) return []
-    return [{
-      question: pair[0].trim(),
-      assumption: pair.slice(1).join(":").trim(),
-    }]
-  })
 }
 
 function parseClarifications(text: string) {
@@ -601,29 +427,6 @@ function parseRecordLines(lines: string[]) {
     record[match[1].trim().toLowerCase()] = match[2].trim()
   }
   return record
-}
-
-function splitBlocks(text: string) {
-  const lines = text.split(/\r?\n/)
-  const blocks: string[][] = []
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (!line) continue
-    const numbered = /^\d+[.)、]\s+/.test(line)
-    const bulleted = /^[-*•]\s+/.test(line)
-    const current = blocks[blocks.length - 1]
-    const currentNumbered = current ? /^\d+[.)、]\s+/.test(current[0] || "") : false
-    if (numbered || (bulleted && !currentNumbered)) {
-      blocks.push([line])
-      continue
-    }
-    if (blocks.length === 0) {
-      blocks.push([line])
-      continue
-    }
-    blocks[blocks.length - 1].push(line)
-  }
-  return blocks
 }
 
 function parseCsv(value: string | undefined) {
@@ -677,119 +480,6 @@ function parseWaves(text: string) {
       consumes: parseCsv(record["consumes"] || record["依赖"]),
     }]
   })
-}
-
-function firstContentLine(text: string) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => !!line && !/^#{1,6}\s+/.test(line))
-    || ""
-}
-
-/**
- * Attempt to repair truncated JSON from LLM output.
- * When the LLM hits the output token limit, JSON is cut off mid-value.
- * Strategy: close all open strings, arrays, and objects.
- */
-function repairTruncatedJSON(raw: string): string {
-  let repaired = raw
-
-  // If truncated inside a string, find and close it
-  let inString = false
-  let escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') inString = !inString
-  }
-  if (inString) {
-    // Truncated mid-string: find last valid string boundary and trim there
-    // Or just close the string
-    repaired += '"'
-  }
-
-  // Remove trailing partial key-value (e.g., `"key": "partial...` or `"key":`)
-  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
-  repaired = repaired.replace(/,\s*$/, "")
-
-  // Count and close unclosed brackets
-  const stack: string[] = []
-  inString = false
-  escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === "{") stack.push("}")
-    else if (ch === "[") stack.push("]")
-    else if (ch === "}" || ch === "]") stack.pop()
-  }
-
-  // Remove any trailing comma that's now at the end
-  repaired = repaired.replace(/,\s*$/, "")
-
-  // Close remaining brackets/braces in reverse order
-  while (stack.length > 0) repaired += stack.pop()
-
-  return repaired
-}
-
-/**
- * Trim JSON back to the last complete value, then close all brackets.
- * More aggressive than repairTruncatedJSON — removes partial values entirely.
- */
-function trimToLastComplete(raw: string): string {
-  // Find positions of all complete value endings (}, ], ", true, false, null, number)
-  let lastComplete = -1
-  let inString = false
-  let escaped = false
-  let depth = 0
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') {
-      inString = !inString
-      if (!inString) lastComplete = i // end of string
-      continue
-    }
-    if (inString) continue
-    if (ch === "{" || ch === "[") depth++
-    else if (ch === "}" || ch === "]") {
-      depth--
-      lastComplete = i
-    }
-  }
-
-  // Trim to last complete value
-  if (lastComplete > 0 && lastComplete < raw.length - 1) {
-    let trimmed = raw.slice(0, lastComplete + 1)
-    // Remove trailing comma
-    trimmed = trimmed.replace(/,\s*$/, "")
-    // Close remaining brackets
-    const stack: string[] = []
-    inString = false
-    escaped = false
-    for (let i = 0; i < trimmed.length; i++) {
-      const ch = trimmed[i]
-      if (escaped) { escaped = false; continue }
-      if (ch === "\\") { escaped = true; continue }
-      if (ch === '"') { inString = !inString; continue }
-      if (inString) continue
-      if (ch === "{") stack.push("}")
-      else if (ch === "[") stack.push("]")
-      else if (ch === "}" || ch === "]") stack.pop()
-    }
-    while (stack.length > 0) trimmed += stack.pop()
-    return trimmed
-  }
-
-  return repairTruncatedJSON(raw)
 }
 
 /**

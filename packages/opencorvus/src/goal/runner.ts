@@ -22,13 +22,6 @@ import { agentStream } from "@/orchestrator/agent-stream"
 const log = Log.create({ service: "goal-runner" })
 export const GOAL_RUN_RETENTION_MS = 72 * 60 * 60 * 1000
 
-function item(input: Record<string, unknown>, key: string) {
-  const value = input[key]
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? { ...(value as Record<string, unknown>) }
-    : undefined
-}
-
 function summary(prefix: string, files: string[]) {
   if (files.length === 0) return `${prefix}. No file changes were detected.`
   const sample = files.slice(0, 3).join(", ")
@@ -204,8 +197,18 @@ async function materializeDiff(file: string) {
   }
 }
 
-function localSelectors(goal: GoalRow) {
+const EVALUATOR_MANAGED_SELECTORS = new Set(["ui_review", "startup", "code_quality", "code_review", "dead_code_review"])
+
+function goalSelectors(goal: GoalRow) {
   return selectorList(goal.metadata).filter((item) => item !== "spec_check")
+}
+
+function executorSelectors(goal: GoalRow) {
+  return goalSelectors(goal).filter((item) => !EVALUATOR_MANAGED_SELECTORS.has(item))
+}
+
+function evaluatorManagedSelectors(goal: GoalRow) {
+  return goalSelectors(goal).filter((item) => EVALUATOR_MANAGED_SELECTORS.has(item))
 }
 
 function analysisFailure(
@@ -234,7 +237,7 @@ function analysisFailure(
 }
 
 function goalChecks(goal: GoalRow, task: TaskRow) {
-  const selectors = localSelectors(goal)
+  const selectors = executorSelectors(goal)
   const base = dict(task.metadata?.checks)
   const pick = (name: string, family: string) => selectors.includes(name) || selectors.includes(family)
   const next: Record<string, unknown> = {
@@ -259,45 +262,6 @@ function goalChecks(goal: GoalRow, task: TaskRow) {
   if (named && Object.keys(named).length > 0) next.named = named
   if (typeof base.timeout_ms === "number") next.timeout_ms = base.timeout_ms
   if (base.custom && typeof base.custom === "object" && !Array.isArray(base.custom)) next.custom = base.custom
-  const startup = item(base, "startup")
-  if (selectors.includes("startup") && typeof startup?.command === "string" && startup.command) {
-    next.startup = {
-      ...startup,
-      mode: typeof startup.mode === "string" ? startup.mode : "strict",
-    }
-  }
-  if (selectors.includes("ui_review")) {
-    const value = item(base, "ui_review")
-    next.ui_review = {
-      ...value,
-      target: "web",
-      mode: typeof value?.mode === "string" ? value.mode : "strict",
-    }
-  }
-  if (selectors.includes("code_quality")) {
-    const value = item(base, "code_quality")
-    next.code_quality = {
-      ...value,
-      enabled: true,
-      mode: typeof value?.mode === "string" ? value.mode : "strict",
-    }
-  }
-  if (selectors.includes("code_review")) {
-    const value = item(base, "code_review")
-    next.code_review = {
-      ...value,
-      enabled: true,
-      mode: typeof value?.mode === "string" ? value.mode : "strict",
-    }
-  }
-  if (selectors.includes("dead_code_review")) {
-    const value = item(base, "dead_code_review")
-    next.dead_code_review = {
-      ...value,
-      enabled: true,
-      mode: typeof value?.mode === "string" ? value.mode : "strict",
-    }
-  }
   return next
 }
 
@@ -398,6 +362,40 @@ function compactPlanContext(plan: PlanRow) {
   ].filter(Boolean).join("\n")
 }
 
+function extractScopedRequest(request: string) {
+  if (!request.trim()) return ""
+  const lines = request.split(/\r?\n/)
+  const collected: string[] = []
+  let capture = false
+  let blankAfterScope = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!capture && /^only\s+(create|modify|create or modify|modify or create).*(files|paths?)\s*:?\s*$/i.test(trimmed)) {
+      capture = true
+      collected.push(trimmed)
+      continue
+    }
+    if (!capture && /^do not\s+/i.test(trimmed)) {
+      collected.push(trimmed)
+      continue
+    }
+    if (capture) {
+      if (!trimmed) {
+        blankAfterScope = true
+        continue
+      }
+      if (blankAfterScope && /^do not\s+/i.test(trimmed)) {
+        collected.push(trimmed)
+        continue
+      }
+      if (blankAfterScope) break
+      if (!/^[-*]\s+/.test(trimmed) && !/^\d+\.\s+/.test(trimmed) && !/^do not\s+/i.test(trimmed)) break
+      collected.push(trimmed)
+    }
+  }
+  return collected.join("\n")
+}
+
 function extractPlanSection(prompt: string, heading: string) {
   const marker = prompt.indexOf(heading)
   if (marker < 0) return ""
@@ -410,10 +408,14 @@ export function buildGoalPrompt(input: {
   plan: PlanRow
   node: PlanNodeRow
   goal: GoalRow
+  taskRequest?: string
 }) {
   const meta = dict(input.node.metadata)
   const waveTitle = typeof meta.wave_title === "string" ? meta.wave_title.trim() : ""
   const waveObjective = typeof meta.wave_objective === "string" ? meta.wave_objective.trim() : ""
+  const runnableChecks = executorSelectors(input.goal)
+  const managedChecks = evaluatorManagedSelectors(input.goal)
+  const requestScope = extractScopedRequest(input.taskRequest ?? "")
   return [
     "You are executing the next iterative coding stage for the coordinator.",
     "Stay in the current project workspace and continue from the code that already exists.",
@@ -422,9 +424,19 @@ export function buildGoalPrompt(input: {
 ${input.goal.description}`,
     `Acceptance:
 ${input.goal.criteria}`,
-    localSelectors(input.goal).length > 0
-      ? `Required checks for this goal:
-${localSelectors(input.goal).join(", ")}`
+    runnableChecks.length > 0
+      ? `Required self-run checks for this goal:
+${runnableChecks.join(", ")}`
+      : undefined,
+    managedChecks.length > 0
+      ? `Evaluator-managed checks for this goal:
+${managedChecks.join(", ")}
+
+Prepare real implementation artifacts so these checks can pass, but do not fabricate placeholder UI/demo assets or long-lived runtime scaffolding just to satisfy them.`
+      : undefined,
+    requestScope
+      ? `Scoped request constraints:
+${requestScope}`
       : undefined,
     waveTitle
       ? [
@@ -442,6 +454,10 @@ ${compactPlanContext(input.plan)}`,
       "- Ignore other goals, later stages, and broader product work unless this goal explicitly requires them.",
       "- Do not make speculative improvements outside the current goal contract.",
       "- Do not run git add, git commit, or git push unless the current goal explicitly requires a commit.",
+      "- Do not run bun install, bun add, npm install, pnpm add, yarn add, or any dependency-management command unless the scoped request explicitly allows package manifest or lockfile edits.",
+      "- This workspace already uses Bun for runtime and tests. Do not invoke npm, npx, pnpm, or yarn in this stage unless the scoped request explicitly requires a different package manager.",
+      "- Do not create package-lock.json, pnpm-lock.yaml, yarn.lock, or any extra lockfile unless the scoped request explicitly allows lockfile changes.",
+      "- If verification appears to require extra dependencies but package.json/bun.lock are out of scope, treat that as a blocker and report it instead of mutating the workspace contract.",
     ].join("\n"),
     [
       "Workspace root rule:",
@@ -454,6 +470,11 @@ ${compactPlanContext(input.plan)}`,
       "- Do not restate or re-plan the whole product.",
       "- Do not spend this stage enumerating future stages or TODO lists.",
       "- Start implementing the current goal immediately, verify it, and stop once this goal's checks are ready.",
+      "- Once the current goal's declared checks are green or evaluator-managed checks are prepared, stop. Do not keep searching for missing folders, future modules, or 'complete project structure' work.",
+      "- Do not run generic directory-completeness sweeps such as find/ls tree audits after the current goal is implemented. Filesystem inspection is allowed only when it directly informs the current goal's owned files or declared checks.",
+      "- Do not create demo pages, dist/index.html, screenshot harnesses, or ad-hoc UI just to satisfy evaluator-managed checks unless the scoped request explicitly asks for them.",
+      "- Do not start long-lived or background servers just to satisfy evaluator-managed checks unless this stage explicitly requires runtime wiring.",
+      "- If this stage is a bootstrap/foundation step, create only the minimal scaffold required for this goal's owned files and checks. Do not pre-build later feature modules.",
     ].join("\n"),
     "Do not redefine the goal or broaden scope. Implement only what is needed for this stage, verify it, and stop.",
   ].filter(Boolean).join("\n\n")
@@ -520,7 +541,7 @@ export async function evaluateGoal(input: {
     },
     delivery,
   )
-  const selectors = localSelectors(input.goal)
+  const selectors = goalSelectors(input.goal)
   const matched = selectors.flatMap((selector) =>
     result.checks.filter((item) => item.name === selector || item.name.startsWith(`${selector}#`)),
   )

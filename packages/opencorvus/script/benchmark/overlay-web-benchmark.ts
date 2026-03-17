@@ -6,6 +6,8 @@ import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
 import { parseSSE } from "../../src/control-plane/sse"
+import { inactivityAgeMs } from "../../src/util/activity-timeout"
+import { auditWorkspace, deriveRunMetrics, evaluateQualityGates, moduleBlocksFromRequest } from "./quality-gates"
 
 function flag(name: string) {
   return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
@@ -24,6 +26,7 @@ const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.4, 1_200_00
 const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 1_500_000)
 const toolTimeoutMs = stageTimeout("--tool-timeout-ms", timeoutMs, 0.15, 10 * 60 * 1000)
 const standbyTimeoutMs = Number(flag("--standby-timeout-ms")) || timeoutMs
+const completionHardTimeoutMs = Number(flag("--completion-hard-timeout-ms")) || 0
 const specMaxSteps = Number(flag("--spec-max-steps")) || 80
 const plannerMaxSteps = Number(flag("--planner-max-steps")) || 96
 const maxRuns = Number(flag("--max-runs")) || 20
@@ -191,6 +194,14 @@ let lastLogAt = Date.now()
 let lastActivityLogAt = Date.now()
 let lastHeartbeatAt = 0
 let lastActivityLine = ""
+let planning: any = null
+let streaming: any = null
+let board: any = null
+let progress: any = null
+let finalBoard: any = null
+let transcript: any = null
+let timeline: any = null
+let runs: any = null
 
 function logLine(value: string) {
   lastLogAt = Date.now()
@@ -397,7 +408,7 @@ try {
   if (!taskID) throw new Error("Task creation did not return task_id")
   eventStream = subscribeTaskEvents(taskID)
 
-  const planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
+  planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
   marks.planningAt = Date.now()
 
   taskID = await waitForTaskCreated(page, api, TASK_CREATE_TIMEOUT_MS)
@@ -439,134 +450,21 @@ try {
     }
   }, { timeout: 120_000 })
   marks.boardAt = Date.now()
-  const streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
+  streaming = await waitForStreamingVisible(page, PLANNING_VISIBLE_TIMEOUT_MS)
   marks.streamingAt = Date.now()
   page = await verifyResume(browser, page, server.url.origin, taskID, temp.dir, api)
   marks.resumedAt = Date.now()
-  const board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
+  board = await api(`/task/${taskID}/board?sync=1`).then((res) => res.json())
 
-  const progress = mode === "full" ? await waitForFinal(taskID, timeoutMs, stallTimeoutMs, api) : null
+  progress = mode === "full" ? await waitForFinal(taskID, stallTimeoutMs, api, completionHardTimeoutMs) : null
   marks.completedAt = Date.now()
+  finalBoard = taskID ? await api(`/task/${taskID}/board?sync=1`).then((res) => res.json()).catch(() => board) : board
 
-  const transcript = await api(`/task/${taskID}/transcript`).then((res) => res.json())
-  const timeline = await api(`/control/timeline?taskID=${encodeURIComponent(taskID)}`).then((res) => res.json())
-  const runs = await api(`/task/${taskID}/runs`).then((res) => res.json())
+  transcript = await api(`/task/${taskID}/transcript`).then((res) => res.json())
+  timeline = await api(`/control/timeline?taskID=${encodeURIComponent(taskID)}`).then((res) => res.json())
+  runs = await api(`/task/${taskID}/runs`).then((res) => res.json())
 
-  const localVerify = await runLocalVerify(temp.dir, LOCAL_VERIFY_CMD)
-
-  const screenshot = path.join(process.cwd(), `overlay-web-benchmark-${Date.now()}.png`)
-  await page.screenshot({ path: screenshot, fullPage: true })
-
-  const out = {
-    generated_at: new Date().toISOString(),
-    mode,
-    title: TASK_TITLE,
-    request_file: requestFile ? path.resolve(requestFile) : null,
-    executor,
-    model,
-    stage_timeout_ms: {
-      spec: specTimeoutMs,
-      planner: plannerTimeoutMs,
-      tool: toolTimeoutMs,
-      standby: standbyTimeoutMs,
-      stall: stallTimeoutMs,
-      request: requestTimeoutMs,
-    },
-    stage_max_steps: {
-      spec: specMaxSteps,
-      planner: plannerMaxSteps,
-    },
-    stall_timeout_ms: stallTimeoutMs,
-    request_timeout_ms: requestTimeoutMs,
-    directory: temp.dir,
-    server: server.url.toString(),
-    taskID,
-    taskStatus: progress?.task?.status || board?.task?.status || "",
-    evaluation: progress?.evaluation?.verdict,
-    changedFiles: progress?.delivery?.result?.changedFiles ?? [],
-    transcriptCount: Array.isArray(transcript) ? transcript.length : 0,
-    timelineCount: Array.isArray(timeline) ? timeline.length : 0,
-    runCount: Array.isArray(runs) ? runs.length : 0,
-    planning: {
-      pendingCount: planning.pendingCount,
-      taskList: planning.taskList,
-      reasoning: planning.reasoning,
-      assistantText: planning.assistantText,
-    },
-    streaming: {
-      reasoning: streaming.reasoning,
-      assistantText: streaming.assistantText,
-      liveRole: streaming.liveRole,
-      liveText: streaming.liveText,
-      reasoningVisible: meaningfulLiveText(streaming.reasoning),
-      assistantVisible: meaningfulLiveText(streaming.assistantText),
-      liveVisible: meaningfulLiveText(streaming.liveText),
-    },
-    materialization: {
-      boardTaskID: board?.task?.id || "",
-      boardStatus: board?.task?.status || "",
-      specVersion: board?.spec?.version ?? null,
-      goalCount: Array.isArray(board?.goals) ? board.goals.length : 0,
-      goalRunCount: Array.isArray(board?.goalRuns) ? board.goalRuns.length : 0,
-      criteriaCount: Array.isArray(board?.checks) ? board.checks.length : 0,
-    },
-    screenshot,
-    resume: {
-      restored: marks.resumedAt > 0,
-      selectedAt: marks.resumedAt ? marks.resumedAt - marks.startedAt : null,
-    },
-    timings_ms: {
-      online: marks.onlineAt - marks.startedAt,
-      submit: marks.submittedAt - marks.startedAt,
-      planning_visible: marks.planningAt - marks.startedAt,
-      streaming_visible: marks.streamingAt - marks.startedAt,
-      task_created: marks.createdAt - marks.startedAt,
-      task_selected: marks.selectedAt - marks.startedAt,
-      board_loaded: marks.boardAt - marks.startedAt,
-      resumed: marks.resumedAt - marks.startedAt,
-      completed: marks.completedAt - marks.startedAt,
-      execution: marks.completedAt - marks.submittedAt,
-    },
-    assertions: {
-      planning_visible: {
-        pass: planning.pendingCount > 0 || planning.taskIDs.length > 0 || !!planning.selectedTaskID,
-        sample: planning,
-      },
-      streaming_visible: {
-        pass:
-          meaningfulLiveText(streaming.reasoning) ||
-          meaningfulLiveText(streaming.assistantText) ||
-          meaningfulLiveText(streaming.liveText),
-        sample: streaming,
-      },
-      materialized: {
-        pass: !!taskID && (board?.task?.id || "") === taskID && marks.resumedAt > 0,
-        sample: {
-          taskID,
-          boardTaskID: board?.task?.id || "",
-          resumed: marks.resumedAt > 0,
-        },
-      },
-      delivery: {
-        pass: mode === "materialize"
-          ? null
-          : progress?.task?.status === "completed" && progress?.evaluation?.verdict === "accepted" && localVerify.exitCode === 0,
-        sample: progress
-          ? {
-              taskStatus: progress.task.status,
-              verdict: progress.evaluation?.verdict || "",
-              localExit: localVerify.exitCode,
-            }
-          : null,
-      },
-    },
-    local_verify: localVerify,
-    diagnostics: {
-      event_file: eventFile,
-      event_count: events.length,
-      stage_summary: summarizeEvents(events, taskID),
-    },
-  }
+  const out = await buildBenchmarkReport()
 
   await flushed
   await Bun.write(eventFile, JSON.stringify({
@@ -584,44 +482,13 @@ try {
 
   const pass = mode === "materialize"
     ? out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass
-    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass
+    : out.assertions.planning_visible.pass && out.assertions.streaming_visible.pass && out.assertions.materialized.pass && out.assertions.delivery.pass && out.failure_matrix.verdict === "accepted"
   if (!pass) {
     process.exit(1)
   }
 } catch (error) {
-  const out = {
-    generated_at: new Date().toISOString(),
-    executor,
-    model,
-    directory: temp.dir,
-    server: server.url.toString(),
-    taskID,
-    error: String(error),
-    stage_max_steps: {
-      spec: specMaxSteps,
-      planner: plannerMaxSteps,
-    },
-    stall_timeout_ms: stallTimeoutMs,
-    request_timeout_ms: requestTimeoutMs,
-    timings_ms: {
-      online: marks.onlineAt ? marks.onlineAt - marks.startedAt : null,
-      submit: marks.submittedAt ? marks.submittedAt - marks.startedAt : null,
-      planning_visible: marks.planningAt ? marks.planningAt - marks.startedAt : null,
-      streaming_visible: marks.streamingAt ? marks.streamingAt - marks.startedAt : null,
-      task_created: marks.createdAt ? marks.createdAt - marks.startedAt : null,
-      task_selected: marks.selectedAt ? marks.selectedAt - marks.startedAt : null,
-      board_loaded: marks.boardAt ? marks.boardAt - marks.startedAt : null,
-      resumed: marks.resumedAt ? marks.resumedAt - marks.startedAt : null,
-      completed: marks.completedAt ? marks.completedAt - marks.startedAt : null,
-      execution: marks.submittedAt && marks.completedAt ? marks.completedAt - marks.submittedAt : null,
-    },
-    overlay: await overlaySnapshot(page).catch((cause) => ({ error: String(cause) })),
-    diagnostics: {
-      event_file: eventFile,
-      event_count: events.length,
-      stage_summary: summarizeEvents(events, taskID),
-    },
-  }
+  if (!marks.completedAt) marks.completedAt = Date.now()
+  const out = await buildBenchmarkReport(error)
   await flushed
   await Bun.write(eventFile, JSON.stringify({
     generated_at: new Date().toISOString(),
@@ -745,6 +612,244 @@ async function runLocalVerify(cwd: string, cmd: string) {
   }
 }
 
+async function buildBenchmarkReport(error?: unknown) {
+  const reportError = error ? String(error) : undefined
+  const completedAt = marks.completedAt || Date.now()
+  const currentBoard = board ?? (taskID ? await tryApiJson(`/task/${taskID}/board?sync=1`) : null)
+  const currentFinalBoard = finalBoard ?? (taskID
+    ? await tryApiJson(`/task/${taskID}/board?sync=1`, currentBoard)
+    : currentBoard)
+  const currentTranscript = transcript ?? (taskID ? await tryApiJson(`/task/${taskID}/transcript`, []) : [])
+  const currentTimeline = timeline ?? (taskID ? await tryApiJson(`/control/timeline?taskID=${encodeURIComponent(taskID)}`, []) : [])
+  const currentRuns = runs ?? (taskID ? await tryApiJson(`/task/${taskID}/runs`, []) : [])
+  const localVerify = await runLocalVerify(temp.dir, LOCAL_VERIFY_CMD)
+  const changedFiles = dedupePaths(progress?.delivery?.result?.changedFiles ?? currentFinalBoard?.delivery?.result?.changedFiles ?? [])
+  const moduleBlocks = resolveModuleBlocks(progress, currentFinalBoard ?? currentBoard, TASK_REQUEST)
+  const artifactAudit = await auditWorkspace({
+    rootDir: temp.dir,
+    changedFiles,
+    request: TASK_REQUEST,
+    moduleBlocks,
+  })
+  const runMetrics = await deriveRunMetrics({
+    rootDir: temp.dir,
+    changedFiles,
+    completedAt,
+    events,
+    evaluationChecks: progress?.evaluation?.checks ?? currentFinalBoard?.evaluation?.checks ?? [],
+    moduleBlocks,
+  })
+  const qualityVerdict = applyBenchmarkErrorVerdict(evaluateQualityGates({
+    artifactAudit,
+    runMetrics,
+    taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
+    evaluationVerdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
+    localVerifyExitCode: localVerify.exitCode,
+  }), reportError)
+  const screenshot = await takeBenchmarkScreenshot(page)
+  const currentOverlay = await overlaySnapshot(page).catch((cause) => ({ error: String(cause) }))
+
+  return {
+    generated_at: new Date().toISOString(),
+    mode,
+    title: TASK_TITLE,
+    request_file: requestFile ? path.resolve(requestFile) : null,
+    executor,
+    model,
+    directory: temp.dir,
+    server: server.url.toString(),
+    taskID,
+    error: reportError,
+    stage_timeout_ms: {
+      spec: specTimeoutMs,
+      planner: plannerTimeoutMs,
+      tool: toolTimeoutMs,
+      standby: standbyTimeoutMs,
+      stall: stallTimeoutMs,
+      request: requestTimeoutMs,
+    },
+    stage_max_steps: {
+      spec: specMaxSteps,
+      planner: plannerMaxSteps,
+    },
+    stall_timeout_ms: stallTimeoutMs,
+    completion_hard_timeout_ms: completionHardTimeoutMs || null,
+    request_timeout_ms: requestTimeoutMs,
+    taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
+    evaluation: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
+    changedFiles,
+    transcriptCount: Array.isArray(currentTranscript) ? currentTranscript.length : 0,
+    timelineCount: Array.isArray(currentTimeline) ? currentTimeline.length : 0,
+    runCount: Array.isArray(currentRuns) ? currentRuns.length : 0,
+    planning: planning
+      ? {
+          pendingCount: planning.pendingCount,
+          taskList: planning.taskList,
+          reasoning: planning.reasoning,
+          assistantText: planning.assistantText,
+        }
+      : null,
+    streaming: streaming
+      ? {
+          reasoning: streaming.reasoning,
+          assistantText: streaming.assistantText,
+          liveRole: streaming.liveRole,
+          liveText: streaming.liveText,
+          reasoningVisible: meaningfulLiveText(streaming.reasoning),
+          assistantVisible: meaningfulLiveText(streaming.assistantText),
+          liveVisible: meaningfulLiveText(streaming.liveText),
+        }
+      : null,
+    materialization: {
+      boardTaskID: currentBoard?.task?.id || "",
+      boardStatus: currentBoard?.task?.status || "",
+      specVersion: currentBoard?.spec?.version ?? null,
+      goalCount: Array.isArray(currentBoard?.goals) ? currentBoard.goals.length : 0,
+      goalRunCount: Array.isArray(currentBoard?.goalRuns) ? currentBoard.goalRuns.length : 0,
+      criteriaCount: Array.isArray(currentBoard?.checks) ? currentBoard.checks.length : 0,
+    },
+    screenshot,
+    resume: {
+      restored: marks.resumedAt > 0,
+      selectedAt: elapsedOrNull(marks.resumedAt),
+    },
+    timings_ms: {
+      online: elapsedOrNull(marks.onlineAt),
+      submit: elapsedOrNull(marks.submittedAt),
+      planning_visible: elapsedOrNull(marks.planningAt),
+      streaming_visible: elapsedOrNull(marks.streamingAt),
+      task_created: elapsedOrNull(marks.createdAt),
+      task_selected: elapsedOrNull(marks.selectedAt),
+      board_loaded: elapsedOrNull(marks.boardAt),
+      resumed: elapsedOrNull(marks.resumedAt),
+      completed: elapsedOrNull(completedAt),
+      execution: marks.submittedAt ? completedAt - marks.submittedAt : null,
+    },
+    assertions: {
+      planning_visible: {
+        pass: !!planning && (planning.pendingCount > 0 || planning.taskIDs.length > 0 || !!planning.selectedTaskID),
+        sample: planning,
+      },
+      streaming_visible: {
+        pass: !!streaming && (
+          meaningfulLiveText(streaming.reasoning) ||
+          meaningfulLiveText(streaming.assistantText) ||
+          meaningfulLiveText(streaming.liveText)
+        ),
+        sample: streaming,
+      },
+      materialized: {
+        pass: !!taskID && (currentBoard?.task?.id || "") === taskID && marks.resumedAt > 0,
+        sample: {
+          taskID,
+          boardTaskID: currentBoard?.task?.id || "",
+          resumed: marks.resumedAt > 0,
+        },
+      },
+      delivery: {
+        pass: mode === "materialize"
+          ? null
+          : (progress?.task?.status || currentFinalBoard?.task?.status) === "completed" &&
+            (progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict) === "accepted" &&
+            localVerify.exitCode === 0 &&
+            qualityVerdict.verdict === "accepted",
+        sample: {
+          taskStatus: progress?.task?.status || currentFinalBoard?.task?.status || "",
+          verdict: progress?.evaluation?.verdict || currentFinalBoard?.evaluation?.verdict || "",
+          localExit: localVerify.exitCode,
+          qualityVerdict: qualityVerdict.verdict,
+        },
+      },
+    },
+    local_verify: localVerify,
+    artifact_audit: artifactAudit,
+    run_metrics: runMetrics,
+    failure_matrix: {
+      verdict: qualityVerdict.verdict,
+      primary_failure: qualityVerdict.primary_failure,
+      failures: qualityVerdict.failures,
+    },
+    manual_review_summary: qualityVerdict.manual_review_summary,
+    overlay: currentOverlay,
+    diagnostics: {
+      event_file: eventFile,
+      event_count: events.length,
+      stage_summary: summarizeEvents(events, taskID),
+    },
+  }
+}
+
+async function tryApiJson(pathname: string, fallback: unknown = null) {
+  try {
+    return await api(pathname).then((res) => res.json())
+  } catch {
+    return fallback
+  }
+}
+
+function applyBenchmarkErrorVerdict(base: ReturnType<typeof evaluateQualityGates>, error?: string) {
+  if (!error || !/(did not finish within|timed out|timeout|stall)/i.test(error)) return base
+  if (base.failures.some((item) => item.category === "liveness")) {
+    return {
+      ...base,
+      verdict: "blocked" as const,
+      primary_failure: "liveness" as const,
+      manual_review_summary: `liveness: Benchmark timed out before task completion | ${base.manual_review_summary}`,
+    }
+  }
+  const failure = {
+    category: "liveness" as const,
+    message: "Benchmark timed out before task completion",
+    evidence: error,
+  }
+  const failures = [failure, ...base.failures]
+  return {
+    verdict: "blocked" as const,
+    primary_failure: "liveness" as const,
+    failures,
+    manual_review_summary: failures.map((item) => `${item.category}: ${item.message}`).join(" | "),
+  }
+}
+
+async function takeBenchmarkScreenshot(page: Page) {
+  const screenshot = path.join(process.cwd(), `overlay-web-benchmark-${Date.now()}.png`)
+  try {
+    await page.screenshot({ path: screenshot, fullPage: true })
+    return screenshot
+  } catch {
+    return null
+  }
+}
+
+function elapsedOrNull(at: number) {
+  return at ? at - marks.startedAt : null
+}
+
+function dedupePaths(files: string[]) {
+  return [...new Set(files.filter((item): item is string => typeof item === "string" && item.length > 0).map((item) => item.replace(/\\/g, "/")))]
+}
+
+function resolveModuleBlocks(progress: any, board: any, request: string) {
+  const specBlocks = progress?.spec?.metadata?.module_blocks ?? board?.spec?.metadata?.module_blocks
+  if (Array.isArray(specBlocks) && specBlocks.length > 0) {
+    return specBlocks
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+      .map((item) => ({
+        id: typeof item.id === "string" ? item.id : "spec-block",
+        owned_paths: Array.isArray(item.owned_paths) ? dedupePaths(item.owned_paths.filter((path): path is string => typeof path === "string")) : [],
+      }))
+      .filter((item) => item.owned_paths.length > 0)
+  }
+  const contractAllowed = progress?.plan?.metadata?.task_contract?.artifacts?.allowed ?? board?.plan?.metadata?.task_contract?.artifacts?.allowed
+  if (Array.isArray(contractAllowed) && contractAllowed.length > 0) {
+    return [{
+      id: "task-contract",
+      owned_paths: dedupePaths(contractAllowed.filter((item): item is string => typeof item === "string")),
+    }]
+  }
+  return moduleBlocksFromRequest(request)
+}
+
 async function launchBrowser(headless: boolean) {
   const executablePath = await findBrowser()
   return puppeteer.launch({
@@ -790,13 +895,13 @@ async function cleanup(
 
 async function waitForFinal(
   taskID: string,
-  timeoutMs: number,
   stallTimeoutMs: number,
   api: (pathname: string, init?: RequestInit) => Promise<Response>,
+  completionHardTimeoutMs = 0,
 ) {
   const startedAt = Date.now()
   let lastStatus = ""
-  while (Date.now() - startedAt < timeoutMs) {
+  while (true) {
     let progress = await api(`/task/${taskID}/progress`).then((res) => res.json())
     progress = await settle(progress, api)
     if (FINAL.has(progress.task.status)) return progress
@@ -811,9 +916,8 @@ async function waitForFinal(
       activityLine(`[overlay-benchmark] status=${lastStatus}`)
     }
     const now = Date.now()
-    const signalAt = Math.max(lastEventAt, lastProgressAt)
-    const silentFor = now - signalAt
-    const logSilentFor = now - lastActivityLogAt
+    const silentFor = inactivityAgeMs(now, lastEventAt, lastProgressAt)
+    const logSilentFor = inactivityAgeMs(now, lastActivityLogAt)
     if (now - lastHeartbeatAt >= 60_000) {
       lastHeartbeatAt = now
       logLine(
@@ -825,9 +929,11 @@ async function waitForFinal(
         `Task stalled: no event/progress change for ${stallTimeoutMs}ms or no activity log output for ${stallTimeoutMs}ms (last progress: ${lastProgressSignature || "none"}, activity log age: ${logSilentFor}ms, last log age: ${now - lastLogAt}ms)`,
       )
     }
+    if (completionHardTimeoutMs > 0 && (now - startedAt) >= completionHardTimeoutMs) {
+      throw new Error(`Task exceeded optional hard completion timeout of ${completionHardTimeoutMs}ms`)
+    }
     await Bun.sleep(2_000)
   }
-  throw new Error(`Task did not finish within ${timeoutMs}ms`)
 }
 
 function progressSignature(progress: any) {

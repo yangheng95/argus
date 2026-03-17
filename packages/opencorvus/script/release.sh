@@ -92,9 +92,9 @@ echo ""
 echo "━━━ dist/ contents ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 for d in dist/*/; do
   name=$(basename "$d")
-  files=$(ls "$d/bin/" 2>/dev/null | grep -v '\.map$' | tr '\n' ' ')
-  ui_count=$(ls "$d/bin/ui/" 2>/dev/null | wc -l)
-  echo "  $name/bin/  $files  (ui: ${ui_count} files)"
+  files=$(ls "$d" 2>/dev/null | grep -v '\.map$' | tr '\n' ' ')
+  ui_count=$(ls "$d/ui/" 2>/dev/null | wc -l)
+  echo "  $name/  $files  (ui: ${ui_count} files)"
 done
 echo ""
 

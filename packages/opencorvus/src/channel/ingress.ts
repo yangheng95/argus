@@ -232,12 +232,14 @@ function interactionID(input: z.infer<typeof ChannelIngressInput>) {
   if (!input.metadata) return undefined
   if (typeof input.metadata.interactionID === "string" && input.metadata.interactionID) return input.metadata.interactionID
   const channel = input.metadata.channel
-  if (channel && typeof channel === "object" && !Array.isArray(channel) && typeof channel.interactionID === "string" && channel.interactionID) {
-    return channel.interactionID
+  if (channel && typeof channel === "object" && !Array.isArray(channel)) {
+    const ch = channel as Record<string, unknown>
+    if (typeof ch.interactionID === "string" && ch.interactionID) return ch.interactionID
   }
   const scoped = input.metadata[input.platform]
-  if (scoped && typeof scoped === "object" && !Array.isArray(scoped) && typeof scoped.interactionID === "string" && scoped.interactionID) {
-    return scoped.interactionID
+  if (scoped && typeof scoped === "object" && !Array.isArray(scoped)) {
+    const sc = scoped as Record<string, unknown>
+    if (typeof sc.interactionID === "string" && sc.interactionID) return sc.interactionID
   }
   return undefined
 }

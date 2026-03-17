@@ -227,7 +227,7 @@ function finalizeEvaluation(
   optional: CheckOutcome[],
   requireSpecCheck: boolean,
 ): CheckReport {
-  const ordered = orderChecks(checks)
+  const ordered = enforceSpecPresence(orderChecks(checks))
   const failed = ordered.filter((item) => item.status === "failed")
   if (failed.length > 0 || optional.some((item) => item.outcome === "failed")) {
     const summary = [
@@ -280,4 +280,28 @@ function finalizeEvaluation(
     checks: ordered,
     artifacts,
   }
+}
+
+function enforceSpecPresence(checks: z.infer<typeof EvaluationCheck>[]) {
+  const specCheck = checks.find((item) => item.name === "spec_check")
+  if (!specCheck || specCheck.status !== "passed") return checks
+
+  const evidence = specCheck.evidence ?? ""
+  const skippedBecauseNoSpec =
+    evidence.includes("No active spec version to compare against") ||
+    evidence.includes("Spec content is empty")
+  if (!skippedBecauseNoSpec) return checks
+
+  const hasOtherChecks = checks.some((item) => item.name !== "spec_check" && item.name !== "evaluation_config")
+  if (!hasOtherChecks) return checks
+
+  return checks.map((item) =>
+    item.name === "spec_check"
+      ? {
+          ...item,
+          status: "failed" as const,
+          evidence: "Spec check is required for explicit evaluator checks, but no active specification was available.",
+        }
+      : item
+  )
 }

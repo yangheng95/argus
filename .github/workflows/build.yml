@@ -318,7 +318,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/RELEASE.md" . 2>/dev/null || true
 
           for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64; do
-            src="/tmp/dist/opencorvus-${platform}/bin"
+            src="/tmp/dist/opencorvus-${platform}"
             [[ -d "$src" ]] || continue
             mkdir -p "$platform"
             find "$src" -maxdepth 1 -type f ! -name '*.map' -exec cp {} "$platform/" \;

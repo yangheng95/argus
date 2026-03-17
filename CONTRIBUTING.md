@@ -64,7 +64,7 @@ To compile a standalone executable:
 Then run it with:
 
 ```bash
-./packages/opencorvus/dist/opencorvus-<platform>/bin/opencorvus
+./packages/opencorvus/dist/opencorvus-<platform>/opencorvus
 ```
 
 Replace `<platform>` with your platform (e.g., `darwin-arm64`, `linux-x64`).

@@ -4336,8 +4336,42 @@ select.field-input {
 }
 
 .prompt-textarea {
-  min-height: calc(220px * var(--ui-scale));
+  min-height: calc(160px * var(--ui-scale));
   font-family: "Iosevka Term", "JetBrains Mono", monospace;
+}
+
+.prompt-diff-details {
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.prompt-diff-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+  font-size: var(--ui-font-control);
+  color: var(--text-soft);
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: calc(6px * var(--ui-scale));
+  transition: background 120ms, color 120ms;
+}
+.prompt-diff-summary::-webkit-details-marker { display: none; }
+.prompt-diff-summary::marker { content: ""; }
+.prompt-diff-summary::before {
+  content: "▸";
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 120ms;
+}
+.prompt-diff-details[open] > .prompt-diff-summary::before {
+  transform: rotate(90deg);
+}
+.prompt-diff-summary:hover {
+  color: var(--text-strong);
+  background: var(--hover-accent-wash);
 }
 
 .prompt-preview-card {
@@ -4929,8 +4963,7 @@ select.field-input {
 }
 
 #channelList {
-  max-height: calc(280px * var(--ui-scale));
-  overflow-y: auto;
+  overflow-y: visible;
   padding-right: 2px;
 }
 

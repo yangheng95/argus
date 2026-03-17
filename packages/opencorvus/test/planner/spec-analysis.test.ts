@@ -75,7 +75,7 @@ describe("PlannerService.initial — with user-provided goals", () => {
         },
       ],
       subtasks: [
-        { title: "Inspect", description: "Inspect", order: 1 },
+        { title: "Inspect", description: "Inspect", order: 1, block_id: "block-1" },
       ],
       risks: [],
     } as any)
@@ -86,6 +86,25 @@ describe("PlannerService.initial — with user-provided goals", () => {
         { description: "Goal A", criteria: "A passes", priority: "blocking" },
         { description: "Goal B", criteria: "B passes", priority: "advisory" },
       ],
+      spec: {
+        summary: "Test spec",
+        content: "# Test spec",
+        goals: [],
+        assumptions: [],
+        risks: [],
+        module_blocks: [
+          {
+            id: "block-1",
+            title: "Block 1",
+            objective: "Implement block 1",
+            owned_paths: ["src/"],
+            spec_item_titles: [],
+            dependencies: [],
+            acceptance: ["build passes"],
+            out_of_scope: [],
+          },
+        ],
+      },
     })
 
     expect(plan.metadata.spec_analysis?.goals).toHaveLength(2)

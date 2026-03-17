@@ -13,6 +13,8 @@ import { SpecAgent, type SpecOutputType, type SpecRewriteContext, type SpecDraft
 import { Log } from "@/util/log"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
+import { mergeTextHooks } from "@/llm/tool-hooks"
+import { createInactivityGuard } from "@/util/inactivity-guard"
 
 const log = Log.create({ service: "spec-service" })
 
@@ -160,11 +162,33 @@ export namespace HeadlessSpecService {
     signal?: AbortSignal
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
-  }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
+  }): Promise<SpecDraft & { scope: string; out_of_scope?: string; spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    const signal = input.signal ?? controller.signal
+    let timedOut = false
+    const guard = createInactivityGuard(timeoutMs, () => {
+      timedOut = true
+      controller.abort(new SpecFailureError(`spec agent stalled after ${timeoutMs}ms without activity`))
+    })
+    const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal
+    const stream = mergeTextHooks(input.stream, {
+      onChunk: async () => {
+        guard.bump()
+      },
+      onStepFinish: async () => {
+        guard.bump()
+      },
+      onFinish: async () => {
+        guard.bump()
+      },
+      onError: async () => {
+        guard.bump()
+      },
+    })
+    const onStatus = async (summary: string) => {
+      guard.bump()
+      await input.onStatus?.(summary)
+    }
 
     log.info("spec service initial starting", {
       title: input.title,
@@ -172,22 +196,16 @@ export namespace HeadlessSpecService {
     })
 
     try {
-      let specTimer: ReturnType<typeof setTimeout>
-      const output = await Promise.race([
-        SpecAgent.initial({
-          title: input.title,
-          request: input.request,
-          goals: input.goals,
-          sessionID: input.sessionID,
-          metadata: input.metadata,
-          signal,
-          stream: input.stream,
-          onStatus: input.onStatus,
-        }).finally(() => clearTimeout(specTimer)),
-        new Promise<never>((_, reject) => {
-          specTimer = setTimeout(() => reject(new SpecFailureError(`spec agent timed out after ${timeoutMs}ms`)), timeoutMs)
-        }),
-      ])
+      const output = await SpecAgent.initial({
+        title: input.title,
+        request: input.request,
+        goals: input.goals,
+        sessionID: input.sessionID,
+        metadata: input.metadata,
+        signal,
+        stream,
+        onStatus,
+      })
       const trimmed = trimOutput(normalizeOutput(output), input.metadata)
 
       log.info("spec service initial completed", {
@@ -227,10 +245,11 @@ export namespace HeadlessSpecService {
         error: String(error),
         cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
       })
+      if (timedOut) throw new SpecFailureError(`spec agent stalled after ${timeoutMs}ms without activity`)
       if (error instanceof SpecFailureError) throw error
       throw new SpecFailureError("spec agent failed", { cause: error })
     } finally {
-      clearTimeout(timer)
+      guard.clear()
       controller.abort()
     }
   }
@@ -249,11 +268,33 @@ export namespace HeadlessSpecService {
     signal?: AbortSignal
     stream?: TextHooks
     onStatus?: (summary: string) => void | Promise<void>
-  }): Promise<SpecDraft & { spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
+  }): Promise<SpecDraft & { scope: string; out_of_scope?: string; spec_items: SpecOutputType["spec_items"]; evidence_sources: string[]; unresolved_questions: string[] }> {
     const timeoutMs = specTimeoutMs(input.timeoutMs)
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    const signal = input.signal ?? controller.signal
+    let timedOut = false
+    const guard = createInactivityGuard(timeoutMs, () => {
+      timedOut = true
+      controller.abort(new SpecFailureError(`spec agent rewrite stalled after ${timeoutMs}ms without activity`))
+    })
+    const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal
+    const stream = mergeTextHooks(input.stream, {
+      onChunk: async () => {
+        guard.bump()
+      },
+      onStepFinish: async () => {
+        guard.bump()
+      },
+      onFinish: async () => {
+        guard.bump()
+      },
+      onError: async () => {
+        guard.bump()
+      },
+    })
+    const onStatus = async (summary: string) => {
+      guard.bump()
+      await input.onStatus?.(summary)
+    }
 
     log.info("spec service rewrite starting", {
       title: input.title,
@@ -261,23 +302,17 @@ export namespace HeadlessSpecService {
     })
 
     try {
-      let rewriteTimer: ReturnType<typeof setTimeout>
-      const output = await Promise.race([
-        SpecAgent.rewrite({
-          title: input.title,
-          request: input.request,
-          rewriteContext: input.rewriteContext,
-          goals: input.goals,
-          sessionID: input.sessionID,
-          metadata: input.metadata,
-          signal,
-          stream: input.stream,
-          onStatus: input.onStatus,
-        }).finally(() => clearTimeout(rewriteTimer)),
-        new Promise<never>((_, reject) => {
-          rewriteTimer = setTimeout(() => reject(new SpecFailureError(`spec agent rewrite timed out after ${timeoutMs}ms`)), timeoutMs)
-        }),
-      ])
+      const output = await SpecAgent.rewrite({
+        title: input.title,
+        request: input.request,
+        rewriteContext: input.rewriteContext,
+        goals: input.goals,
+        sessionID: input.sessionID,
+        metadata: input.metadata,
+        signal,
+        stream,
+        onStatus,
+      })
       const trimmed = trimOutput(normalizeOutput(output), input.metadata)
 
       log.info("spec service rewrite completed", {
@@ -314,16 +349,16 @@ export namespace HeadlessSpecService {
         error: String(error),
         cause: error instanceof Error && "cause" in error ? String(error.cause) : undefined,
       })
+      if (timedOut) throw new SpecFailureError(`spec agent rewrite stalled after ${timeoutMs}ms without activity`)
       if (error instanceof SpecFailureError) throw error
       throw new SpecFailureError("spec agent rewrite failed", { cause: error })
     } finally {
-      clearTimeout(timer)
+      guard.clear()
       controller.abort()
     }
   }
 }
 
 export { HeadlessSpecService as SpecService }
-
 
 

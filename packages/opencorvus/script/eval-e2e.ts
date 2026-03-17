@@ -1418,7 +1418,7 @@ function printReport(results: EvalResult[]) {
 let serverProc: ReturnType<typeof Bun.spawn> | undefined
 
 async function startServer(): Promise<void> {
-  const binaryPath = path.resolve(process.cwd(), "dist/opencorvus-windows-x64/bin/opencorvus.exe")
+  const binaryPath = path.resolve(process.cwd(), "dist/opencorvus-windows-x64/opencorvus.exe")
   if (!fs.existsSync(binaryPath)) {
     console.error(`Binary not found at ${binaryPath}`)
     console.error("Build first: bun run script/build.local.ts --single --binary-only")

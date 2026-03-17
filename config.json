@@ -2,19 +2,8 @@
   "$schema": "https://opencorvus.ai/config.json",
   "skills": {
     "paths": [
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-oeclfeekcvn\\local-skill",
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-fqesd9493f6\\skill-e2e",
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-wxy93p78wu\\local-skill",
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-mk69ykcdpeo\\skill-e2e",
-      "D:\\myhexin-local\\argus-opencode\\skills-market\\github.com-openai-skills",
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-n7t931yq1xk\\local-skill",
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-aypgs2licc\\skill-e2e",
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-t11wog1v9e\\local-skill",
-      "C:\\Users\\hengu\\AppData\\Local\\Temp\\opencorvus-test-7z8lgewzc7o\\skill-e2e",
-      "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-test-1i31bptlq9j\\local-skill",
-      "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-test-125trsok48bg\\local-skill",
-      "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-test-wbqzyd7qvr\\skill-e2e",
-      "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\skills-market\\github.com-openai-skills"
+      "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\skills-market\\github.com-openai-skills",
+      "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\skills-market\\github.com-anthropics-skills"
     ],
     "urls": []
   },
@@ -65,7 +54,23 @@
       "figma": "ask",
       "aspnet-core": "ask",
       "doc": "ask",
-      "chatgpt-apps": "ask"
+      "chatgpt-apps": "ask",
+      "template-skill": "ask",
+      "xlsx": "ask",
+      "web-artifacts-builder": "ask",
+      "webapp-testing": "ask",
+      "mcp-builder": "ask",
+      "slack-gif-creator": "ask",
+      "internal-comms": "ask",
+      "pptx": "ask",
+      "theme-factory": "ask",
+      "doc-coauthoring": "ask",
+      "frontend-design": "ask",
+      "docx": "ask",
+      "canvas-design": "ask",
+      "claude-api": "ask",
+      "algorithmic-art": "ask",
+      "brand-guidelines": "ask"
     }
   }
 }

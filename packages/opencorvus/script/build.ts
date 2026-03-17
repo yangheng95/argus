@@ -75,7 +75,7 @@ if (Object.keys(embeddedEnv).length > 0) {
 }
 const embeddedEnvDefine = Object.keys(embeddedEnv).length > 0 ? JSON.stringify(embeddedEnv) : "undefined"
 if (onefileFlag) {
-  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/bin/ui/")
+  console.warn("onefile mode: overlay UI will be bundled as sidecar files in dist/*/ui/")
 }
 
 const allTargets: {
@@ -151,7 +151,7 @@ type Target = (typeof allTargets)[number]
 
 async function installOverlay(_item: Target, name: string) {
   const overlayDir = path.resolve(dir, "../overlay/src")
-  const destDir = path.join(dir, "dist", name, "bin", "ui")
+  const destDir = path.join(dir, "dist", name, "ui")
   const ASSET_EXTS = new Set([".html", ".js", ".css", ".png", ".svg", ".ico", ".json", ".woff", ".woff2"])
   if (!fs.existsSync(path.join(overlayDir, "index.html"))) {
     console.log(`  overlay: skipping (no frontend assets in ${overlayDir})`)
@@ -206,7 +206,7 @@ for (const item of targets) {
     .filter(Boolean)
     .join("-")
   console.log(`building ${name}`)
-  await $`mkdir -p dist/${name}/bin`
+  await $`mkdir -p dist/${name}`
 
   const parserWorker = fs.realpathSync(path.resolve(dir, "./node_modules/@opentui/core/parser.worker.js"))
   const workerPath = "./src/cli/cmd/tui/worker.ts"
@@ -227,7 +227,7 @@ for (const item of targets) {
     autoloadTsconfig: true,
     autoloadPackageJson: true,
     target: name.replace(pkg.name, "bun"),
-    outfile: `dist/${name}/bin/opencorvus`,
+    outfile: `dist/${name}/opencorvus`,
     execArgv: [`--user-agent=opencorvus/${Script.version}`, "--use-system-ca", "--"],
     windows: {},
   }
@@ -250,37 +250,25 @@ for (const item of targets) {
     },
   })
 
-  await $`rm -rf ./dist/${name}/bin/tui`
+  await $`rm -rf ./dist/${name}/tui`
   await installOverlay(item, name)
   if (binaryOnly) {
-    const files = await fs.promises.readdir(path.join(dir, "dist", name, "bin"))
+    const files = await fs.promises.readdir(path.join(dir, "dist", name))
     await Promise.all(
       files
         .filter((x) => x.endsWith(".map"))
-        .map((x) => fs.promises.rm(path.join(dir, "dist", name, "bin", x), { force: true })),
+        .map((x) => fs.promises.rm(path.join(dir, "dist", name, x), { force: true })),
     )
   }
-  await Bun.file(`dist/${name}/package.json`).write(
-    JSON.stringify(
-      {
-        name,
-        version: Script.version,
-        os: [item.os],
-        cpu: [item.arch],
-      },
-      null,
-      2,
-    ),
-  )
   binaries[name] = Script.version
 }
 
 if (Script.release) {
   for (const key of Object.keys(binaries)) {
     if (key.includes("linux")) {
-      await $`tar -czf ../../${key}.tar.gz *`.cwd(`dist/${key}/bin`)
+      await $`tar -czf ../${key}.tar.gz *`.cwd(`dist/${key}`)
     } else {
-      await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
+      await $`zip -r ../${key}.zip *`.cwd(`dist/${key}`)
     }
   }
   const files = [
