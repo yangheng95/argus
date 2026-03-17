@@ -10,11 +10,12 @@ import { Identifier } from "../../src/id/id"
 import { Event as OrchestratorEvent } from "../../src/orchestrator/model"
 import { OrchestratorGoalRunTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { OrchestratorProtocol } from "../../src/orchestrator/protocol"
-import { PlannerFailureError } from "../../src/orchestrator/service"
+import { OrchestratorService, PlannerFailureError } from "../../src/orchestrator/service"
 import { Preference } from "../../src/preference"
 import { Instance } from "../../src/project/instance"
 import { PlannerService } from "../../src/planner/service"
 import { SpecService } from "../../src/spec/service"
+import { ProtocolStore } from "../../src/protocol/store"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
 import { MessageV2 } from "../../src/session/message"
@@ -676,6 +677,207 @@ describe("orchestrator routes", () => {
     })
 
     expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  test("GET /task/:id/board forwards sync=1 to board reads", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+    const getBoard = OrchestratorService.getBoard
+    const getBoardTag = OrchestratorService.getBoardTag
+    const boardCalls: Array<boolean> = []
+    const tagCalls: Array<boolean> = []
+    const boardSpy = spyOn(OrchestratorService, "getBoard").mockImplementation((taskID, input) => {
+      boardCalls.push(input?.sync !== false)
+      return getBoard(taskID, input)
+    })
+    const tagSpy = spyOn(OrchestratorService, "getBoardTag").mockImplementation((taskID, input) => {
+      tagCalls.push(input?.sync !== false)
+      return getBoardTag(taskID, input)
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "implement feature x",
+          }),
+        })
+        const { task_id } = (await created.json()) as { task_id: string }
+        const response = await app.request(`/task/${task_id}/board?sync=1`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        expect(tagCalls).toContain(true)
+        expect(boardCalls).toContain(true)
+      },
+    })
+
+    boardSpy.mockRestore()
+    tagSpy.mockRestore()
+    expect(submit).toHaveBeenCalled()
+  })
+
+  test("GET /task/:id/board exposes protocol sync metadata", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "surface board sequence metadata",
+          }),
+        })
+
+        expect(created.status).toBe(202)
+        const { task_id } = (await created.json()) as { task_id: string }
+        const before = ProtocolStore.latestTaskSequence(task_id)
+        await ProtocolStore.appendEvent({
+          kind: "event",
+          type: "orchestrator.task.updated",
+          aggregate: "task",
+          aggregate_id: task_id,
+          task_id,
+          source: "test.routes.board",
+          payload: {
+            taskID: task_id,
+            summary: "Task updated for board metadata",
+          },
+        })
+        const response = await app.request(`/task/${task_id}/board?sync=1`, {
+          method: "GET",
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+        })
+
+        expect(response.status).toBe(200)
+        const board = await response.json() as { snapshotVersion?: string; lastSequence?: number }
+        expect(typeof board.snapshotVersion).toBe("string")
+        expect(board.lastSequence).toBeGreaterThan(before)
+      },
+    })
+
+    expect(submit).toHaveBeenCalled()
+  })
+
+  test("GET /task/:id/events replays persisted protocol events after the requested sequence", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+        const created = await app.request("/task", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            project: Instance.project.id,
+            request: "resume protocol events from a cursor",
+          }),
+        })
+
+        expect(created.status).toBe(202)
+        const { task_id } = (await created.json()) as { task_id: string }
+        const before = ProtocolStore.latestTaskSequence(task_id)
+        await ProtocolStore.appendEvent({
+          kind: "event",
+          type: "orchestrator.task.updated",
+          aggregate: "task",
+          aggregate_id: task_id,
+          task_id,
+          source: "test.routes.events",
+          payload: {
+            taskID: task_id,
+            summary: "Event one",
+          },
+        })
+        await ProtocolStore.appendEvent({
+          kind: "event",
+          type: "orchestrator.run.updated",
+          aggregate: "task",
+          aggregate_id: task_id,
+          task_id,
+          source: "test.routes.events",
+          payload: {
+            taskID: task_id,
+            summary: "Event two",
+          },
+        })
+
+        const stop = new AbortController()
+        const response = await app.request(`/task/${task_id}/events?after=${before}`, {
+          headers: {
+            "x-opencorvus-directory": tmp.path,
+          },
+          signal: stop.signal,
+        })
+
+        expect(response.status).toBe(200)
+        expect(response.body).toBeDefined()
+
+        try {
+          const replayed = await new Promise<{ type?: string; sequence?: number }>((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              reject(new Error("timed out waiting for replayed task event"))
+            }, 3000)
+
+            void parseSSE(response.body!, stop.signal, (event) => {
+              const next = event as { type?: string; sequence?: number }
+              if (next.sequence !== before + 1) return
+              clearTimeout(timeout)
+              resolve(next)
+              stop.abort()
+            }).catch((error) => {
+              clearTimeout(timeout)
+              reject(error)
+            })
+          })
+
+          expect(replayed).toEqual(expect.objectContaining({
+            type: "task.updated",
+            sequence: before + 1,
+          }))
+        } finally {
+          stop.abort()
+        }
+      },
+    })
+
+    expect(submit).toHaveBeenCalled()
   })
 
   test("GET /task/:id/events forwards session message events for the task", async () => {

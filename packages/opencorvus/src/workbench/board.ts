@@ -33,6 +33,7 @@ import {
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
 import { EvaluationCheck } from "@/orchestrator/model"
+import { ProtocolStore } from "@/protocol/store"
 import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
 import { compileBrief } from "./brief"
@@ -55,7 +56,7 @@ export function compileBoard(input: { taskID: string }) {
   const tag = boardTagForTask(task)
   const cached = boardCache.get(task.id)
   if (cached?.tag === tag) return cached.board
-  const board = buildBoard(task)
+  const board = buildBoard(task, tag)
   // Evict oldest entries when cache exceeds limit
   if (boardCache.size >= BOARD_CACHE_MAX_SIZE) {
     const firstKey = boardCache.keys().next().value
@@ -70,7 +71,8 @@ export function boardTag(input: { taskID: string }) {
   return boardTagForTask(task)
 }
 
-function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
+function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect, snapshotVersion: string) {
+  const lastSequence = ProtocolStore.latestTaskSequence(task.id)
   const run = task.active_run_id
     ? Database.use((db) => db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, task.active_run_id!)).get())
     : undefined
@@ -205,6 +207,8 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect) {
   const boardEvaluation = viewBoardEvaluation(latestEvaluation)
 
   return {
+    snapshotVersion,
+    lastSequence,
     task: {
       id: task.id,
       projectID: task.project_id,

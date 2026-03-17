@@ -149,6 +149,8 @@ export const PanelTool = Tool.define("panel", {
               }
             : {}),
           metadata,
+        }, {
+          background: true,
         })
         return {
           title: "Task created",

@@ -127,7 +127,12 @@ const state = {
   boardLoading: null,
   boardQueued: false,
   boardKick: null,
+  boardRetryTimer: null,
+  boardRetryCount: 0,
+  boardSyncPending: false,
   boardUpdatedAt: 0,
+  snapshotVersion: "",
+  taskSequence: 0,
   reconnectTimer: null,
   tasksSeq: 0,
   tasksKick: null,
@@ -146,9 +151,6 @@ const state = {
   sse: null,
   sseRetryTimer: null,
   sseConnected: false,
-  eventStream: null,
-  eventRetryTimer: null,
-  eventConnected: false,
   pollTimer: null,
   conversationTimer: null,
   elapsedTimer: null,
@@ -546,8 +548,6 @@ const workspace = window.createOverlayWorkspace?.({
   dom,
   document,
   stopPolling,
-  stopSSE,
-  stopEventStream,
   stopChatRequest,
   renderChatComposer,
   renderMeta,
@@ -2176,7 +2176,7 @@ async function applyPanelResult(result) {
     return;
   }
   if (state.selectedTaskID) {
-    await loadBoard();
+    await loadBoard({ sync: true });
     await loadConversation();
     void loadMemory();
   } else {
@@ -4557,6 +4557,10 @@ async function loadTasks() {
 async function selectTask(taskID, options = {}) {
   const nextTaskID = taskID || "";
   if (nextTaskID === state.selectedTaskID && state.board) return;
+  state.board = null;
+  state.boardEtag = "";
+  state.snapshotVersion = "";
+  state.taskSequence = 0;
   state.agentEvents = [];
   if (nextTaskID) {
     enterTaskWorkspace(nextTaskID, options);
@@ -4584,7 +4588,7 @@ async function selectTask(taskID, options = {}) {
       renderConversation();
     }
 
-  await Promise.all([loadBoard(), loadConversation(), loadMeta(), loadMemory()]);
+  await Promise.all([loadBoard({ sync: true }), loadConversation(), loadMeta(), loadMemory()]);
   rememberWorkspace({
     taskID: nextTaskID,
   });
@@ -4629,38 +4633,82 @@ async function deleteTask(taskID) {
 // ── Board Loading ──
 
 function scheduleBoard(delay = 0) {
+  state.boardSyncPending = true;
+  if (state.boardRetryTimer) {
+    clearTimeout(state.boardRetryTimer);
+    state.boardRetryTimer = null;
+  }
   if (state.boardKick) clearTimeout(state.boardKick);
   state.boardKick = setTimeout(() => {
     state.boardKick = null;
-    loadBoard();
+    loadBoard({ sync: true });
   }, delay);
 }
 
-async function loadBoard() {
+function clearBoardRetry() {
+  if (state.boardRetryTimer) {
+    clearTimeout(state.boardRetryTimer);
+    state.boardRetryTimer = null;
+  }
+  state.boardRetryCount = 0;
+}
+
+function retryBoard(sync) {
+  if (!state.selectedTaskID || state.boardRetryTimer) return;
+  if (sync) state.boardSyncPending = true;
+  const delay = Math.min(1000 * Math.pow(2, Math.min(state.boardRetryCount, 4)), 15000);
+  state.boardRetryCount += 1;
+  state.boardRetryTimer = setTimeout(() => {
+    state.boardRetryTimer = null;
+    loadBoard({ sync: state.boardSyncPending });
+  }, delay);
+}
+
+async function loadBoard(options = {}) {
   if (!state.selectedTaskID) return;
   if (isInteractionBusy()) return;
+  if (options.sync) state.boardSyncPending = true;
   if (state.boardLoading) {
     state.boardQueued = true;
+    if (options.sync) state.boardSyncPending = true;
     return state.boardLoading;
   }
   const taskID = state.selectedTaskID;
+  const sync = options.sync === true || state.boardSyncPending;
+  if (sync) state.boardSyncPending = true;
   state.boardLoading = (async () => {
+    let failed = false;
     try {
       const headers = apiHeaders();
       if (state.boardEtag) headers["If-None-Match"] = state.boardEtag;
-      const res = await fetch(apiUrl(`task/${taskID}/board?sync=0`), {
+      const res = await fetch(apiUrl(`task/${taskID}/board?sync=${sync ? "1" : "0"}`), {
         headers,
         signal: AbortSignal.timeout(10000),
       });
       if (taskID !== state.selectedTaskID) return;
+      state.boardSyncPending = false;
       if (res.status === 304) {
+        clearBoardRetry();
         state.boardUpdatedAt = Date.now();
         return;
       }
       if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
       const etag = res.headers.get("etag");
       if (etag) state.boardEtag = etag;
-      state.board = await res.json();
+      const next = await res.json();
+      const nextSequence = boardSequence(next);
+      if (nextSequence > 0 && nextSequence < state.taskSequence) {
+        AppLog.warn("board", "discarding stale board snapshot", {
+          taskID,
+          sequence: nextSequence,
+          expected: state.taskSequence,
+        });
+        return;
+      }
+      state.board = next;
+      state.snapshotVersion = boardSnapshot(next);
+      state.taskSequence = Math.max(state.taskSequence, nextSequence);
+      clearBoardRetry();
       pruneAgentEvents();
       state.boardUpdatedAt = Date.now();
       renderBoard();
@@ -4669,12 +4717,14 @@ async function loadBoard() {
         loadExecutorEvents(state.board?.task?.activeRunID || ""),
       ]);
     } catch (e) {
+      failed = true;
       AppLog.warn("board", "loadBoard failed", { error: String(e) });
+      if (taskID === state.selectedTaskID) retryBoard(sync);
     } finally {
       state.boardLoading = null;
       if (state.boardQueued) {
         state.boardQueued = false;
-        queueMicrotask(() => loadBoard());
+        if (!failed && !state.boardRetryTimer) queueMicrotask(() => loadBoard({ sync: state.boardSyncPending }));
       }
     }
   })();
@@ -4853,10 +4903,14 @@ function startSSE(taskID, retryCount = 0) {
   state.sse = controller;
   state.sseConnected = false;
   const MAX_SSE_RETRIES = 60;
+  const after = Math.max(0, Number(state.taskSequence) || 0);
 
   (async () => {
     try {
-      const res = await fetch(apiUrl(`task/${taskID}/events`), {
+      const path = after > 0
+        ? `task/${taskID}/events?after=${after}`
+        : `task/${taskID}/events`;
+      const res = await fetch(apiUrl(path), {
         headers: apiHeaders(),
         signal: controller.signal,
       });
@@ -4921,20 +4975,41 @@ function stopSSE() {
   state.sseConnected = false;
 }
 
-function startEventStream(retryCount = 0) {
-  return;
+function boardSequence(board) {
+  const value = Number(board?.lastSequence);
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-function stopEventStream() {
-  if (state.eventRetryTimer) {
-    clearTimeout(state.eventRetryTimer);
-    state.eventRetryTimer = null;
+function boardSnapshot(board) {
+  return typeof board?.snapshotVersion === "string" ? board.snapshotVersion : "";
+}
+
+function eventSequence(event) {
+  const value = Number(event?.sequence);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function acceptEventSequence(event) {
+  const sequence = eventSequence(event);
+  if (!sequence) return "ok";
+  if (sequence <= state.taskSequence) return "duplicate";
+  const gap = state.taskSequence > 0 && sequence > state.taskSequence + 1;
+  if (gap) {
+    AppLog.warn("sse", "task event sequence gap detected", {
+      taskID: state.selectedTaskID,
+      expected: state.taskSequence + 1,
+      actual: sequence,
+    });
   }
-  if (state.eventStream) {
-    state.eventStream.abort();
-    state.eventStream = null;
-  }
-  state.eventConnected = false;
+  state.taskSequence = sequence;
+  return gap ? "gap" : "ok";
+}
+
+function repairEventGap(gap) {
+  if (!gap) return;
+  scheduleTasks(0);
+  scheduleBoard(0);
+  scheduleConversation(0);
 }
 
 function eventData(event) {
@@ -5190,7 +5265,11 @@ function appendAgentEvent(raw) {
 }
 
 function handleEventStreamEvent(event) {
+  const sync = acceptEventSequence(event);
+  if (sync === "duplicate") return;
+  const gap = sync === "gap";
   const type = event.type || "";
+  if (type === "task.heartbeat") return;
   const properties = eventData(event);
   if (type === "message.updated") {
     const info = record(properties.info) ? properties.info : null;
@@ -5216,6 +5295,7 @@ function handleEventStreamEvent(event) {
     }
     state.conversationUpdatedAt = Date.now();
     renderConversation();
+    repairEventGap(gap);
     return;
   }
   if (type === "message.part.updated") {
@@ -5236,6 +5316,7 @@ function handleEventStreamEvent(event) {
     }
     state.conversationUpdatedAt = Date.now();
     renderConversation();
+    repairEventGap(gap);
     return;
   }
   if (type === "message.part.delta") {
@@ -5257,6 +5338,7 @@ function handleEventStreamEvent(event) {
     streamMessagePart(part, target, "text", part.text || "");
     state.conversationUpdatedAt = Date.now();
     renderConversation();
+    repairEventGap(gap);
     return;
   }
   if (type === "run.progress") {
@@ -5268,6 +5350,7 @@ function handleEventStreamEvent(event) {
       payload: properties,
       timestamp: event.timestamp,
     });
+    repairEventGap(gap);
     return;
   }
   if (type === "run.output") {
@@ -5279,6 +5362,7 @@ function handleEventStreamEvent(event) {
       payload: properties,
       timestamp: event.timestamp,
     });
+    repairEventGap(gap);
     return;
   }
   if (type === "agent.updated") {
@@ -5288,6 +5372,7 @@ function handleEventStreamEvent(event) {
       payload: properties,
       timestamp: event.timestamp,
     });
+    repairEventGap(gap);
     return;
   }
   if (
@@ -5306,7 +5391,9 @@ function handleEventStreamEvent(event) {
     scheduleTasks(BOARD_EVENT_DEBOUNCE);
     scheduleBoard(BOARD_EVENT_DEBOUNCE);
     scheduleConversation(CONVERSATION_EVENT_DEBOUNCE);
+    return;
   }
+  repairEventGap(gap);
 }
 
 function handleSSEEvent(event) {
@@ -5336,9 +5423,12 @@ function stopPolling() {
   if (state.conversationTimer) { clearInterval(state.conversationTimer); state.conversationTimer = null; }
   if (state.elapsedTimer) { clearInterval(state.elapsedTimer); state.elapsedTimer = null; }
   if (state.boardKick) { clearTimeout(state.boardKick); state.boardKick = null; }
+  if (state.boardRetryTimer) { clearTimeout(state.boardRetryTimer); state.boardRetryTimer = null; }
   if (state.tasksKick) { clearTimeout(state.tasksKick); state.tasksKick = null; }
   if (state.conversationKick) { clearTimeout(state.conversationKick); state.conversationKick = null; }
-  stopEventStream();
+  state.boardRetryCount = 0;
+  state.boardSyncPending = false;
+  stopSSE();
 }
 
 // ── Rendering: Board ──
@@ -5983,7 +6073,7 @@ const performTaskAction = async function (action) {
         ui_context: "task_controls",
       });
     }
-    await loadBoard();
+    await loadBoard({ sync: true });
   } catch (e) {
     AppLog.error("ui", `Failed to ${action} task`, { error: String(e) });
   }
@@ -6018,7 +6108,7 @@ const deleteGoalAction = async function (id) {
       taskID: state.selectedTaskID || undefined,
       ui_context: "goal_editor",
     });
-    await loadBoard();
+    await loadBoard({ sync: true });
   } catch (e) {
     AppLog.error("ui", "Failed to delete goal", { error: String(e) });
     await nativeMessage(errorText("goal.delete_failed", e), {
@@ -8573,7 +8663,7 @@ dom.criteriaList?.addEventListener("change", async () => {
         checks: buildCheckConfig(),
       }),
     });
-    await loadBoard();
+    await loadBoard({ sync: true });
   } catch (e) {
     AppLog.error("ui", "Failed to update task checks", { error: String(e) });
   }
@@ -8605,7 +8695,7 @@ dom.btnBudgetSave?.addEventListener("click", async () => {
       }),
     });
     state.budgetDirty = false;
-    await loadBoard();
+    await loadBoard({ sync: true });
   } catch (e) {
     AppLog.error("ui", "Failed to update task budget", { error: String(e) });
     await nativeMessage(errorText("budget.save_failed", e), {
@@ -8638,7 +8728,7 @@ dom.btnRefreshTasks.addEventListener("click", async () => {
     loadTasks(),
     loadMeta(),
     loadPreferences(),
-    state.selectedTaskID ? loadBoard() : Promise.resolve(),
+    state.selectedTaskID ? loadBoard({ sync: true }) : Promise.resolve(),
     state.selectedTaskID ? loadConversation() : Promise.resolve(),
     state.selectedTaskID ? loadMemory() : Promise.resolve(),
   ]);
@@ -8843,7 +8933,7 @@ dom.goalForm.addEventListener("submit", async (e) => {
       });
     }
     dom.goalDialog.close();
-    await loadBoard();
+    await loadBoard({ sync: true });
   } catch (e) {
     AppLog.error("ui", "Failed to save goal", { error: String(e) });
     await nativeMessage(errorText("goal.save_failed", e), {
@@ -8996,7 +9086,7 @@ dom.chkAutoPermission?.addEventListener("change", async () => {
   renderTitlebarMenu();
   await persistOverlaySettings();
   closeTitlebarMenu();
-  if (state.autoPermission) void loadBoard();
+  if (state.autoPermission) void loadBoard({ sync: true });
 });
 
 dom.chkUnattended?.addEventListener("change", async () => {
@@ -9005,7 +9095,7 @@ dom.chkUnattended?.addEventListener("change", async () => {
   await persistOverlaySettings();
   await syncUnattendedConfig(true);
   closeTitlebarMenu();
-  if (state.unattended) void loadBoard();
+  if (state.unattended) void loadBoard({ sync: true });
 });
 
 dom.chkAutoQuestion?.addEventListener("change", async () => {
@@ -9013,7 +9103,7 @@ dom.chkAutoQuestion?.addEventListener("change", async () => {
   renderTitlebarMenu();
   await persistOverlaySettings();
   closeTitlebarMenu();
-  if (state.autoQuestion) void loadBoard();
+  if (state.autoQuestion) void loadBoard({ sync: true });
 });
 
 dom.opacityRange?.addEventListener("input", () => {
@@ -10149,10 +10239,6 @@ window.addEventListener("beforeunload", () => {
   if (state.sseRetryTimer) {
     clearTimeout(state.sseRetryTimer);
     state.sseRetryTimer = null;
-  }
-  if (state.eventRetryTimer) {
-    clearTimeout(state.eventRetryTimer);
-    state.eventRetryTimer = null;
   }
   stopPolling();
 });

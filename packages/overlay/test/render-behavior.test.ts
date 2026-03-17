@@ -1117,6 +1117,365 @@ test("task update events refresh board, conversation, and task list together", a
   }
 }, { timeout: 20_000 })
 
+test("event-driven board refresh requests a synced snapshot", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("scheduleBoard") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.directory = "D:/overlay/current"
+      state.connected = true
+      state.board = null
+      state.boardEtag = ""
+      window.__overlayTest = {
+        sync: [],
+      }
+      window.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        if (url.pathname === "/task/task-1/board") {
+          window.__overlayTest.sync.push(url.searchParams.get("sync") || "")
+          return new Response(JSON.stringify({
+            task: { id: "task-1", status: "running", time: {} },
+            lanes: [],
+            interactions: [],
+          }), {
+            status: 200,
+            headers: {
+              "content-type": "application/json; charset=utf-8",
+              etag: "\"board-1\"",
+            },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+      window.eval("scheduleBoard")(0)
+    })
+
+    await tab.waitForFunction(() => {
+      try {
+        return Array.isArray(window.__overlayTest?.sync) && window.__overlayTest.sync.length === 1
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => window.__overlayTest)
+    expect(result.sync).toEqual(["1"])
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task SSE resumes from the latest board sequence", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadBoard") === "function"
+          && typeof window.eval("startSSE") === "function"
+          && typeof window.eval("stopSSE") === "function"
+          && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.directory = "D:/overlay/current"
+      state.connected = true
+      state.board = null
+      state.boardEtag = ""
+      state.taskSequence = 0
+      state.snapshotVersion = ""
+      window.__overlayTest = {
+        urls: [],
+      }
+      window.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        window.__overlayTest.urls.push(url.pathname + url.search)
+        if (url.pathname === "/task/task-1/board") {
+          return new Response(JSON.stringify({
+            snapshotVersion: "board-7",
+            lastSequence: 7,
+            task: { id: "task-1", status: "running", time: {} },
+            lanes: [],
+            interactions: [],
+          }), {
+            status: 200,
+            headers: {
+              "content-type": "application/json; charset=utf-8",
+              etag: "\"board-7\"",
+            },
+          })
+        }
+        if (url.pathname === "/task/task-1/events") {
+          return new Response(new ReadableStream({
+            start() {},
+          }), {
+            status: 200,
+            headers: {
+              "content-type": "text/event-stream",
+            },
+          })
+        }
+        return new Response("not found", { status: 404 })
+      }
+      await window.eval("loadBoard")({ sync: true })
+      window.eval("startSSE")("task-1")
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      window.eval("stopSSE")()
+      return {
+        urls: window.__overlayTest.urls,
+        taskSequence: state.taskSequence,
+        snapshotVersion: state.snapshotVersion,
+      }
+    })
+
+    expect(result.urls.some((item: string) => item.startsWith("/task/task-1/board?sync=1"))).toBe(true)
+    expect(result.urls.some((item: string) => item.startsWith("/task/task-1/events?after=7"))).toBe(true)
+    expect(result.taskSequence).toBe(7)
+    expect(result.snapshotVersion).toBe("board-7")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("duplicate task event sequences are ignored", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleEventStreamEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.taskSequence = 4
+      window.__overlayTest = {
+        board: 0,
+        conversation: 0,
+        tasks: 0,
+      }
+      window.eval("scheduleBoard = () => { window.__overlayTest.board += 1 }")
+      window.eval("scheduleConversation = () => { window.__overlayTest.conversation += 1 }")
+      window.eval("scheduleTasks = () => { window.__overlayTest.tasks += 1 }")
+      window.eval("handleEventStreamEvent")({
+        type: "orchestrator.task.updated",
+        sequence: 4,
+        properties: {
+          taskID: "task-1",
+        },
+      })
+      return {
+        taskSequence: state.taskSequence,
+        counts: window.__overlayTest,
+      }
+    })
+
+    expect(result.taskSequence).toBe(4)
+    expect(result.counts).toEqual({
+      board: 0,
+      conversation: 0,
+      tasks: 0,
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task event sequence gaps trigger a synced compensation refresh", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleEventStreamEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.taskSequence = 4
+      window.__overlayTest = {
+        board: 0,
+        conversation: 0,
+        tasks: 0,
+      }
+      window.eval("scheduleBoard = () => { window.__overlayTest.board += 1 }")
+      window.eval("scheduleConversation = () => { window.__overlayTest.conversation += 1 }")
+      window.eval("scheduleTasks = () => { window.__overlayTest.tasks += 1 }")
+      window.eval("handleEventStreamEvent")({
+        type: "orchestrator.task.updated",
+        sequence: 7,
+        properties: {
+          taskID: "task-1",
+        },
+      })
+      return {
+        taskSequence: state.taskSequence,
+        counts: window.__overlayTest,
+      }
+    })
+
+    expect(result.taskSequence).toBe(7)
+    expect(result.counts).toEqual({
+      board: 1,
+      conversation: 1,
+      tasks: 1,
+    })
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("board refresh failures back off instead of immediately reloading", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("loadBoard") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      state.selectedTaskID = "task-1"
+      state.directory = "D:/overlay/current"
+      state.connected = true
+      state.board = null
+      state.boardEtag = ""
+      window.__overlayTest = {
+        calls: 0,
+      }
+      window.fetch = async (input) => {
+        const raw = typeof input === "string" ? input : input.url
+        const url = new URL(raw, window.location.origin)
+        if (url.pathname === "/task/task-1/board") {
+          window.__overlayTest.calls += 1
+          throw new Error("boom")
+        }
+        return new Response("not found", { status: 404 })
+      }
+      await window.eval("loadBoard")({ sync: true })
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      if (state.boardRetryTimer) clearTimeout(state.boardRetryTimer)
+      state.boardRetryTimer = null
+      return {
+        calls: window.__overlayTest.calls,
+        retryCount: state.boardRetryCount,
+        syncPending: state.boardSyncPending,
+      }
+    })
+
+    expect(result.calls).toBe(1)
+    expect(result.retryCount).toBe(1)
+    expect(result.syncPending).toBe(true)
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("stopPolling tears down the live task SSE channel", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("stopPolling") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(() => {
+      const state = window.eval("state")
+      window.__overlayTest = {
+        aborts: 0,
+      }
+      state.sseConnected = true
+      state.sse = {
+        abort() {
+          window.__overlayTest.aborts += 1
+        },
+      }
+      state.pollTimer = setInterval(() => undefined, 1000)
+      state.conversationTimer = setInterval(() => undefined, 1000)
+      state.boardRetryTimer = setTimeout(() => undefined, 1000)
+      window.eval("stopPolling")()
+      return {
+        aborts: window.__overlayTest.aborts,
+        sseConnected: state.sseConnected,
+        pollTimer: state.pollTimer,
+        conversationTimer: state.conversationTimer,
+        boardRetryTimer: state.boardRetryTimer,
+      }
+    })
+
+    expect(result.aborts).toBe(1)
+    expect(result.sseConnected).toBe(false)
+    expect(result.pollTimer).toBeNull()
+    expect(result.conversationTimer).toBeNull()
+    expect(result.boardRetryTimer).toBeNull()
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
 test("panel stream failure does not retry with a second panel message request", async () => {
   const exe = await browser()
   const server = serve()

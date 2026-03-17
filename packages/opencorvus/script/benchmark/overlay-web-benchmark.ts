@@ -5,6 +5,7 @@ import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import puppeteer, { type Page } from "puppeteer-core"
+import { parseSSE } from "../../src/control-plane/sse"
 
 function flag(name: string) {
   return process.argv.find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1)
@@ -16,8 +17,9 @@ function stageTimeout(name: string, totalMs: number, share: number, fallback: nu
   return Math.max(fallback, Math.min(totalMs, Math.floor(totalMs * share) || fallback))
 }
 
-const timeoutMs = Number(flag("--timeout-ms")) || 4 * 60 * 60 * 1000
+const timeoutMs = Number(flag("--timeout-ms")) || 480_000
 const stallTimeoutMs = stageTimeout("--stall-timeout-ms", timeoutMs, 0.2, 15 * 60 * 1000)
+const requestTimeoutMs = stageTimeout("--request-timeout-ms", timeoutMs, 0.08, 30_000)
 const specTimeoutMs = stageTimeout("--spec-timeout-ms", timeoutMs, 0.4, 1_200_000)
 const plannerTimeoutMs = stageTimeout("--planner-timeout-ms", timeoutMs, 0.45, 1_500_000)
 const toolTimeoutMs = stageTimeout("--tool-timeout-ms", timeoutMs, 0.15, 10 * 60 * 1000)
@@ -119,7 +121,6 @@ process.env.OPENCORVUS_HOME = temp.home
 const { ensureBenchmarkModel, loadBenchmarkEnv, prepareDashscopeEnv, resolveBenchmarkModel } = await import("./env")
 const { Log } = await import("../../src/util/log")
 Log.init({ print: true })
-const { GlobalBus } = await import("../../src/bus/global")
 const { ExecutorBootstrap } = await import("../../src/executor/bootstrap")
 const { Instance } = await import("../../src/project/instance")
 const { InstanceBootstrap } = await import("../../src/project/bootstrap")
@@ -237,27 +238,56 @@ function formatEventLine(entry: {
   return parts.join(" ")
 }
 
-const onEvent = ({ directory, payload }: { directory?: string; payload: any }) => {
-  if (directory && temp.dir && directory !== temp.dir) return
+function eventValue(payload: Record<string, unknown>, props: Record<string, unknown>, key: string) {
+  const value = payload[key]
+  if (typeof value === "string") return value
+  const next = props[key]
+  return typeof next === "string" ? next : ""
+}
+
+function normalizeEvent(payload: unknown) {
   if (!payload || typeof payload !== "object" || !("type" in payload)) return
-  const type = String(payload.type || "")
+  const item = payload as Record<string, unknown>
+  const rawType = String(item.type || "")
+  if (!rawType) return
+  const type = rawType.startsWith("orchestrator.") ? rawType : `orchestrator.${rawType}`
   if (!DIAG_TYPES.has(type)) return
-  const props = payload.properties && typeof payload.properties === "object" ? payload.properties as Record<string, unknown> : {}
+  const props =
+    item.properties && typeof item.properties === "object"
+      ? item.properties as Record<string, unknown>
+      : item.payload && typeof item.payload === "object"
+        ? item.payload as Record<string, unknown>
+        : {}
+  return {
+    type,
+    payload: item,
+    props,
+  }
+}
+
+function topLevelText(item: Record<string, unknown>, key: string) {
+  const value = item[key]
+  return typeof value === "string" ? value : ""
+}
+
+const onEvent = ({ payload }: { payload: unknown }) => {
+  const normalized = normalizeEvent(payload)
+  if (!normalized) return
   lastEventAt = Date.now()
   const entry = {
     at: new Date().toISOString(),
     elapsed_ms: Date.now() - marks.startedAt,
-    type,
-    taskID: typeof props.taskID === "string" ? props.taskID : "",
-    runID: typeof props.runID === "string" ? props.runID : "",
-    stage: typeof props.stage === "string" ? props.stage : "",
-    kind: typeof props.kind === "string" ? props.kind : "",
-    status: typeof props.status === "string" ? props.status : "",
-    toolName: typeof props.toolName === "string" ? props.toolName : "",
-    summary: clipText(typeof props.summary === "string" ? props.summary : "", 600),
-    text: clipText(typeof props.text === "string" ? props.text : "", 2000),
-    progressType: typeof props.type === "string" ? props.type : "",
-    goalRunID: typeof props.goalRunID === "string" ? props.goalRunID : "",
+    type: normalized.type,
+    taskID: eventValue(normalized.payload, normalized.props, "taskID"),
+    runID: eventValue(normalized.payload, normalized.props, "runID"),
+    stage: eventValue(normalized.props, normalized.payload, "stage"),
+    kind: eventValue(normalized.props, normalized.payload, "kind") || topLevelText(normalized.payload, "kind"),
+    status: eventValue(normalized.props, normalized.payload, "status"),
+    toolName: eventValue(normalized.props, normalized.payload, "toolName"),
+    summary: clipText(eventValue(normalized.props, normalized.payload, "summary") || topLevelText(normalized.payload, "summary"), 600),
+    text: clipText(eventValue(normalized.props, normalized.payload, "text"), 2000),
+    progressType: eventValue(normalized.props, normalized.props, "type"),
+    goalRunID: eventValue(normalized.payload, normalized.props, "goalRunID"),
   }
   events.push(entry)
   const line = formatEventLine(entry)
@@ -273,14 +303,47 @@ const onEvent = ({ directory, payload }: { directory?: string; payload: any }) =
 const api = async (pathname: string, init?: RequestInit) => {
   const url = new URL(pathname, server.url)
   url.searchParams.set("directory", temp.dir)
-  const res = await fetch(url, init)
+  const timeoutSignal = AbortSignal.timeout(requestTimeoutMs)
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
+  const res = await fetch(url, {
+    ...init,
+    signal,
+  })
   if (!res.ok) throw new Error(`HTTP ${res.status} ${url.pathname}`)
   return res
 }
 
+function subscribeTaskEvents(taskID: string) {
+  const stop = new AbortController()
+  const signal = stop.signal
+  const run = (async () => {
+    while (!signal.aborted) {
+      const url = new URL(`/task/${taskID}/events`, server.url)
+      url.searchParams.set("directory", temp.dir)
+      const res = await fetch(url, { signal }).catch(() => undefined)
+      if (!res || !res.ok || !res.body) {
+        if (signal.aborted) return
+        await Bun.sleep(1000)
+        continue
+      }
+      await parseSSE(res.body, signal, (event) => onEvent({ payload: event })).catch(() => undefined)
+      if (!signal.aborted) await Bun.sleep(250)
+    }
+  })()
+  return {
+    async stop() {
+      stop.abort()
+      await run.catch(() => undefined)
+    },
+  }
+}
+
+let eventStream = {
+  stop: async () => undefined,
+}
+
 try {
   await Bun.write(eventLogFile, "")
-  GlobalBus.on("event", onEvent)
   await page.evaluateOnNewDocument((serverUrl, directory) => {
     localStorage.setItem("oc_server_url", serverUrl)
     localStorage.setItem("oc_auto_server", "false")
@@ -332,6 +395,7 @@ try {
     .then((res) => res.json())
     .then((body) => String(body.task_id || ""))
   if (!taskID) throw new Error("Task creation did not return task_id")
+  eventStream = subscribeTaskEvents(taskID)
 
   const planning = await waitForPlanningVisible(page, api, PLANNING_VISIBLE_TIMEOUT_MS)
   marks.planningAt = Date.now()
@@ -406,12 +470,14 @@ try {
       tool: toolTimeoutMs,
       standby: standbyTimeoutMs,
       stall: stallTimeoutMs,
+      request: requestTimeoutMs,
     },
     stage_max_steps: {
       spec: specMaxSteps,
       planner: plannerMaxSteps,
     },
     stall_timeout_ms: stallTimeoutMs,
+    request_timeout_ms: requestTimeoutMs,
     directory: temp.dir,
     server: server.url.toString(),
     taskID,
@@ -430,8 +496,11 @@ try {
     streaming: {
       reasoning: streaming.reasoning,
       assistantText: streaming.assistantText,
+      liveRole: streaming.liveRole,
+      liveText: streaming.liveText,
       reasoningVisible: meaningfulLiveText(streaming.reasoning),
       assistantVisible: meaningfulLiveText(streaming.assistantText),
+      liveVisible: meaningfulLiveText(streaming.liveText),
     },
     materialization: {
       boardTaskID: board?.task?.id || "",
@@ -464,7 +533,10 @@ try {
         sample: planning,
       },
       streaming_visible: {
-        pass: meaningfulLiveText(streaming.reasoning) || meaningfulLiveText(streaming.assistantText),
+        pass:
+          meaningfulLiveText(streaming.reasoning) ||
+          meaningfulLiveText(streaming.assistantText) ||
+          meaningfulLiveText(streaming.liveText),
         sample: streaming,
       },
       materialized: {
@@ -530,6 +602,7 @@ try {
       planner: plannerMaxSteps,
     },
     stall_timeout_ms: stallTimeoutMs,
+    request_timeout_ms: requestTimeoutMs,
     timings_ms: {
       online: marks.onlineAt ? marks.onlineAt - marks.startedAt : null,
       submit: marks.submittedAt ? marks.submittedAt - marks.startedAt : null,
@@ -565,7 +638,7 @@ try {
   errorLine(`events_ndjson: ${eventLogFile}`)
   process.exitCode = 1
 } finally {
-  GlobalBus.off("event", onEvent)
+  await cleanup("events.stop", () => eventStream.stop())
   await flushed.catch(() => undefined)
   if (taskID) {
     await cleanup("task.cancel", () =>
@@ -796,9 +869,10 @@ async function waitForStreamingVisible(page: Page, timeoutMs: number) {
     const overlay = await overlaySnapshot(page)
     if (meaningfulLiveText(overlay.reasoning)) return overlay
     if (meaningfulLiveText(overlay.assistantText)) return overlay
+    if (meaningfulLiveText(overlay.liveText)) return overlay
     await Bun.sleep(250)
   }
-  throw new Error(`Overlay did not render streamed assistant output within ${timeoutMs}ms`)
+  throw new Error(`Overlay did not render streamed task output within ${timeoutMs}ms`)
 }
 
 async function waitForTaskCreated(page: Page, api: (pathname: string, init?: RequestInit) => Promise<Response>, timeoutMs: number) {
@@ -909,6 +983,15 @@ async function overlaySnapshot(page: Page) {
   return page.evaluate(() => {
     try {
       const state = window.eval("state")
+      const visibleTurns = [...document.querySelectorAll(".turn[data-role]")]
+        .map((node) => {
+          const element = node as HTMLElement
+          const role = element.dataset.role || ""
+          const text = element.querySelector(".msg-body")?.textContent?.trim() || ""
+          return { role, text }
+        })
+        .filter((item) => item.role && item.role !== "user" && item.text)
+      const liveTurn = visibleTurns.at(-1) || { role: "", text: "" }
       const storage = {
         directory: localStorage.getItem("oc_directory") || "",
         directoryMode: localStorage.getItem("oc_directory_mode") || "",
@@ -927,6 +1010,9 @@ async function overlaySnapshot(page: Page) {
         taskList: document.querySelector("#taskListPanel")?.textContent?.trim() || "",
         reasoning: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent?.trim() || "",
         assistantText: document.querySelector('.turn[data-role="assistant"] .msg-text')?.textContent?.trim() || "",
+        liveRole: liveTurn.role,
+        liveText: liveTurn.text,
+        visibleTurns: visibleTurns.slice(-5),
         storage,
       }
     } catch (error) {
@@ -940,6 +1026,9 @@ async function overlaySnapshot(page: Page) {
         taskList: "",
         reasoning: "",
         assistantText: "",
+        liveRole: "",
+        liveText: "",
+        visibleTurns: [],
         storage: {},
         error: String(error),
       }
