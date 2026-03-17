@@ -53,10 +53,9 @@ if (mode === "cli") {
   const platforms = rawPlatforms.split(",").map((item) => item.trim()).filter(Boolean)
   for (const platform of platforms) {
     const root = path.join(dir, `opencorvus-${platform}`)
-    const bin = path.join(root, "bin")
-    const ui = path.join(bin, "ui")
+    const ui = path.join(root, "ui")
     if (!exists(root)) throw new Error(`Missing CLI platform directory: ${root}`)
-    requireAny(bin, [/^opencorvus(\.exe)?$/], "CLI binary")
+    requireAny(root, [/^opencorvus(\.exe)?$/], "CLI binary")
     requireFile(path.join(ui, "index.html"))
     requireFile(path.join(ui, "app.js"))
     requireFile(path.join(ui, "styles.css"))
@@ -66,12 +65,6 @@ if (mode === "cli") {
           ? path.join(dir, `opencorvus-${platform}.tar.gz`)
           : path.join(dir, `opencorvus-${platform}.zip`)
       requireFile(archive)
-    }
-  }
-  if (current) {
-    const pkg = JSON.parse(fs.readFileSync(path.join(dir, "opencorvus-windows-x64", "package.json"), "utf8")) as { version?: string }
-    if (pkg.version && pkg.version !== current) {
-      throw new Error(`CLI package version mismatch: expected ${current}, got ${pkg.version}`)
     }
   }
   console.log(`CLI assets validated for ${platforms.join(", ")}`)

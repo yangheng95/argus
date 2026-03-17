@@ -831,7 +831,7 @@ export namespace MessageV2 {
           },
         ).toObject()
       case MessageV2.OutputLengthError.isInstance(e):
-        return e
+        return e as ReturnType<InstanceType<typeof MessageV2.OutputLengthError>["toObject"]>
       case LoadAPIKeyError.isInstance(e):
         return new MessageV2.AuthError(
           {
@@ -879,33 +879,43 @@ export namespace MessageV2 {
           },
           { cause: e },
         ).toObject()
-      case !!ProviderError.parseStreamError(e):
+      case !!ProviderError.parseStreamError(e): {
+        let parsed: ReturnType<typeof ProviderError.parseStreamError>
         try {
-          const parsed = ProviderError.parseStreamError(e)
-          if (parsed) {
-            if (parsed.type === "context_overflow") {
-              return new MessageV2.ContextOverflowError(
-                {
-                  message: parsed.message,
-                  responseBody: parsed.responseBody,
-                },
-                { cause: e },
-              ).toObject()
-            }
-            return new MessageV2.APIError(
+          parsed = ProviderError.parseStreamError(e)
+        } catch {
+          // Stream error parsing itself failed; return generic Unknown error
+          return new NamedError.Unknown(
+            { message: e instanceof Error ? e.toString() : JSON.stringify(e) },
+            { cause: e },
+          ).toObject()
+        }
+        if (parsed) {
+          if (parsed.type === "context_overflow") {
+            return new MessageV2.ContextOverflowError(
               {
                 message: parsed.message,
-                isRetryable: parsed.isRetryable,
                 responseBody: parsed.responseBody,
               },
-              {
-                cause: e,
-              },
+              { cause: e },
             ).toObject()
           }
-        } catch {
-          // Stream error parsing itself failed; fall through to generic Unknown error
+          return new MessageV2.APIError(
+            {
+              message: parsed.message,
+              isRetryable: parsed.isRetryable,
+              responseBody: parsed.responseBody,
+            },
+            {
+              cause: e,
+            },
+          ).toObject()
         }
+        return new NamedError.Unknown(
+          { message: e instanceof Error ? e.toString() : JSON.stringify(e) },
+          { cause: e },
+        ).toObject()
+      }
       case e instanceof Error:
         return new NamedError.Unknown({ message: e.toString() }, { cause: e }).toObject()
       default:

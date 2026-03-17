@@ -13,8 +13,12 @@
 import { stepCountIs } from "ai"
 import { type TextHooks } from "@/llm/api"
 import z from "zod"
+import { extractRawJSON, repairTruncatedJSON, sanitizeJSON, trimToLastComplete, tryParseJSON } from "@/llm/json-repair"
 import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
+import { type FailureAnalysis, type PreviousGoalStatus } from "@/orchestrator/failure"
 import { createPlannerTools, prefetchContext } from "@/planner/tools"
+import { collectText, ensureMeaningfulSummary, firstContentLine, parseListSection, parseNamedPairs, sectionBody, summarizeToolUsage } from "@/util/agent-text"
+import { Config } from "@/config/config"
 import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
@@ -110,18 +114,8 @@ export type SpecOutputType = z.infer<typeof SpecOutput>
 
 export interface SpecRewriteContext {
   previousSpec: string
-  failureAnalysis: {
-    classification: string
-    summary: string
-    rootCause: string
-    suggestedStrategy: string
-    avoidApproaches: string[]
-  }
-  previousGoalStatuses: Array<{
-    description: string
-    status: string
-    evidence: string
-  }>
+  failureAnalysis: FailureAnalysis
+  previousGoalStatuses: PreviousGoalStatus[]
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +271,7 @@ async function run(input: {
         maxOutputTokens: 32768,
         timeoutMs: false,
         abortSignal: input.signal,
-                system: specSystem(enableWebSearch),
+        system: await specSystem(enableWebSearch),
         prompt: userPrompt,
         ...(input.stream ? input.stream : {}),
       })
@@ -376,9 +370,11 @@ export function shouldEnableSpecWebSearch(request: string) {
   return !isLargeSpecRequest(request)
 }
 
-function specSystem(enableWebSearch: boolean) {
-  if (enableWebSearch) return SPEC_SYSTEM
-  return SPEC_SYSTEM
+export async function specSystem(enableWebSearch = false) {
+  const config = await Config.get()
+  const base = typeof config.prompt?.spec_system === "string" ? config.prompt.spec_system : SPEC_SYSTEM
+  if (enableWebSearch) return base
+  return base
     .replace("- **web_search**: Search the web for external documentation (use only when needed)\n", "")
     .replace('For external APIs, unfamiliar libraries, or protocols ? use web_search.', 'Rely on the provided request, project memory, preferences, and codebase tools. Do not perform external research unless the request includes explicit external documentation URLs or third-party API requirements.')
     .replace('Use web_search if needed for reference implementations.', 'Do not leave the workspace for reference research in this run; ground the specification in the provided request and codebase context.')
@@ -551,12 +547,12 @@ function extractJSON(text: string, strict = false): SpecOutputType {
   }
 
   let obj: any
-  const parseErr = tryParse(raw)
+  const parseErr = tryParseJSON(raw)
   if (parseErr.ok) {
     obj = parseErr.value
   } else {
     const trimmed = trimToLastComplete(raw)
-    const retryErr = tryParse(trimmed)
+    const retryErr = tryParseJSON(trimmed)
     if (retryErr.ok) {
       obj = retryErr.value
     } else {
@@ -616,31 +612,22 @@ function extractJSON(text: string, strict = false): SpecOutputType {
   }
 }
 
-function collectText(result: {
-  text?: string
-  steps: Array<{ text?: string }>
-}) {
-  const direct = result.text?.trim() || ""
-  if (direct) return direct
-  return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
-}
-
 function extractSpecText(text: string): SpecOutputType {
   const raw = text.trim()
   if (!raw) throw new Error("spec output empty")
   if (raw.startsWith("{") || raw.includes("```json")) return extractJSON(raw)
 
   const items = parseSpecItems(raw)
-  const assumptions = parseNamedPairs(sectionBody(raw, ["Assumptions", "假设"]))
-  const risks = parseListSection(raw, ["Risks", "风险"])
-  const evidence = parseListSection(raw, ["Evidence", "Evidence Sources", "依据", "证据"])
-  const open = parseListSection(raw, ["Open Questions", "Unresolved Questions", "开放问题", "待确认问题"])
+  const assumptions = parseNamedPairs(sectionBody(raw, ["Assumptions", "假设"], { respectHeadingLevel: true }))
+  const risks = parseListSection(raw, ["Risks", "风险"], { respectHeadingLevel: true })
+  const evidence = parseListSection(raw, ["Evidence", "Evidence Sources", "依据", "证据"], { respectHeadingLevel: true })
+  const open = parseListSection(raw, ["Open Questions", "Unresolved Questions", "开放问题", "待确认问题"], { respectHeadingLevel: true })
 
   return normalizeSpecOutput({
-    summary: sectionBody(raw, ["Summary", "摘要"]).split("\n")[0]?.trim() || firstContentLine(raw),
+    summary: sectionBody(raw, ["Summary", "摘要"], { respectHeadingLevel: true }).split("\n")[0]?.trim() || firstContentLine(raw),
     content: raw,
-    scope: sectionBody(raw, ["Scope", "范围"]) || firstContentLine(raw),
-    out_of_scope: sectionBody(raw, ["Out-of-Scope", "Out of Scope", "范围外"]) || undefined,
+    scope: sectionBody(raw, ["Scope", "范围"], { respectHeadingLevel: true }) || firstContentLine(raw),
+    out_of_scope: sectionBody(raw, ["Out-of-Scope", "Out of Scope", "范围外"], { respectHeadingLevel: true }) || undefined,
     spec_items: items,
     assumptions,
     risks,
@@ -663,146 +650,6 @@ function normalizeSpecOutput(input: SpecOutputType): SpecOutputType {
   }
 }
 
-/**
- * Sanitize common LLM JSON output issues:
- * - Unescaped backslashes (e.g., Windows paths: C:\Users)
- * - Real newlines inside JSON string values
- * - Markdown code fences inside string values (```javascript ... ```)
- */
-function sanitizeJSON(raw: string): string {
-  let result = ""
-  let inString = false
-  let i = 0
-  while (i < raw.length) {
-    const ch = raw[i]
-    if (!inString) {
-      if (ch === '"') inString = true
-      result += ch
-      i++
-      continue
-    }
-    // Inside a string
-    if (ch === "\\") {
-      const next = raw[i + 1]
-      // Valid JSON escapes: " \ / b f n r t u
-      if (next && '"\\\/bfnrtu'.includes(next)) {
-        result += ch + next
-        i += 2
-        continue
-      }
-      // Invalid escape: double the backslash to make it valid
-      result += "\\\\"
-      i++
-      continue
-    }
-    if (ch === '"') {
-      inString = false
-      result += ch
-      i++
-      continue
-    }
-    if (ch === "\n") {
-      result += "\\n"
-      i++
-      continue
-    }
-    if (ch === "\r") {
-      result += "\\r"
-      i++
-      continue
-    }
-    if (ch === "\t") {
-      result += "\\t"
-      i++
-      continue
-    }
-    result += ch
-    i++
-  }
-  return result
-}
-
-function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: JSON.parse(text) }
-  } catch (err) {
-    return { ok: false, error: err as Error }
-  }
-}
-
-function repairTruncatedJSON(raw: string): string {
-  let repaired = raw
-  let inString = false
-  let escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') inString = !inString
-  }
-  if (inString) repaired += '"'
-
-  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
-  repaired = repaired.replace(/,\s*$/, "")
-
-  const stack: string[] = []
-  inString = false
-  escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === "{") stack.push("}")
-    else if (ch === "[") stack.push("]")
-    else if (ch === "}" || ch === "]") stack.pop()
-  }
-  repaired = repaired.replace(/,\s*$/, "")
-  while (stack.length > 0) repaired += stack.pop()
-  return repaired
-}
-
-function trimToLastComplete(raw: string): string {
-  let lastComplete = -1
-  let inString = false
-  let escaped = false
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') {
-      inString = !inString
-      if (!inString) lastComplete = i
-      continue
-    }
-    if (inString) continue
-    if (ch === "}" || ch === "]") lastComplete = i
-  }
-
-  if (lastComplete > 0 && lastComplete < raw.length - 1) {
-    let trimmed = raw.slice(0, lastComplete + 1)
-    trimmed = trimmed.replace(/,\s*$/, "")
-    const stack: string[] = []
-    inString = false
-    escaped = false
-    for (let i = 0; i < trimmed.length; i++) {
-      const ch = trimmed[i]
-      if (escaped) { escaped = false; continue }
-      if (ch === "\\") { escaped = true; continue }
-      if (ch === '"') { inString = !inString; continue }
-      if (inString) continue
-      if (ch === "{") stack.push("}")
-      else if (ch === "[") stack.push("]")
-      else if (ch === "}" || ch === "]") stack.pop()
-    }
-    while (stack.length > 0) trimmed += stack.pop()
-    return trimmed
-  }
-  return repairTruncatedJSON(raw)
-}
-
 // ---------------------------------------------------------------------------
 // Quality validation
 // ---------------------------------------------------------------------------
@@ -817,7 +664,7 @@ export function validateSpecQuality(
   const largeRequest = isLargeSpecRequest(request)
   const minimumItems = largeRequest ? 7 : 3
   const maximumItems = largeRequest ? 10 : 8
-  const maxBroadItems = largeRequest ? 2 : 0
+  const maxBroadItems = 0
   const broadTitles = spec.spec_items.filter((item) => isBroadSpecItem(item)).map((item) => item.title)
   const broadItems = broadTitles.length
 
@@ -898,7 +745,7 @@ function isLargeSpecRequest(request: string) {
 export function isBroadSpecItem(item: SpecItem) {
   const title = item.title.trim()
   const detail = item.description.trim()
-  const text = title
+  const text = `${title} ${detail}`
   const conjunction = /( and |,|\/|与|和|及|、|\+)/i.test(title)
   if (/(\u6574\u4f53\u67b6\u6784|\u5b8c\u6574\u5e94\u7528|\u5168\u91cf\u5e94\u7528|UI \u9875\u9762\u5f00\u53d1|\u9875\u9762\u5f00\u53d1|\u7528\u6237\u8ba4\u8bc1\u670d\u52a1\u5b9e\u73b0|\u6570\u636e\u6a21\u578b\u4e0e\u672c\u5730\u5b58\u50a8\u5b9e\u73b0|CRUD \u4e0e\u81ea\u52a8\u4fdd\u5b58\u529f\u80fd)/i.test(text)) return true
   if (
@@ -909,6 +756,10 @@ export function isBroadSpecItem(item: SpecItem) {
     /(sync|queue|offline|background|\u540c\u6b65|\u79bb\u7ebf|\u540e\u53f0)/i.test(`${title} ${detail}`)
   ) return true
   const groups = [
+    /(architecture|bootstrap|foundation|initiali[sz]ation|架构|基础架构|项目初始化|项目架构|搭建)/i,
+    /(data model|model layer|entity|entities|schema|type definition|state management|store|数据模型|模型层|实体|类型定义|状态管理)/i,
+    /(crud|create|edit|delete|remove|restore|draft|editor|创建|编辑|删除|移除|恢复|草稿|日记)/i,
+    /(mood|tag|心情|标签)/i,
     /(auth|\u8ba4\u8bc1|\u767b\u5f55|\u6ce8\u518c|token|session)/i,
     /(supabase|postgres|schema|rls|storage|bucket|\u540e\u7aef|\u5b58\u50a8)/i,
     /(sync|queue|offline|background|\u540c\u6b65|\u79bb\u7ebf|\u540e\u53f0)/i,
@@ -920,79 +771,12 @@ export function isBroadSpecItem(item: SpecItem) {
     /(web|responsive|browser|pwa|\u54cd\u5e94\u5f0f)/i,
   ].filter((pattern) => pattern.test(text)).length
   const verbs = (text.match(/(\u914d\u7f6e|\u5efa\u7acb|\u521b\u5efa|\u5b9e\u73b0|\u652f\u6301|configure|setup|create|implement|support)/gi) || []).length
-  return conjunction && groups >= 3 && verbs >= 1
-}
-
-function ensureMeaningfulSummary(summary: string, fallbackTitle: string): string {
-  if (!summary) return fallbackTitle
-  const trimmed = summary.trim()
-  if (trimmed.length < 5) return fallbackTitle
-  if (/^#+\s/.test(trimmed)) return fallbackTitle
-  if (/^[./\\]/.test(trimmed) && !trimmed.includes(" ")) return fallbackTitle
-  return trimmed
-}
-
-function summarizeToolUsage(steps: Array<{ toolCalls?: unknown[] }>) {
-  const map: Record<string, number> = {}
-  for (const step of steps) {
-    const calls = Array.isArray(step.toolCalls) ? step.toolCalls : []
-    for (const call of calls) {
-      if (!call || typeof call !== "object" || !("toolName" in call)) continue
-      const name = String((call as { toolName?: unknown }).toolName || "")
-      if (!name) continue
-      map[name] = (map[name] ?? 0) + 1
-    }
-  }
-  return map
-}
-
-function headingLevel(line: string) {
-  const match = line.trim().match(/^(#{1,6})\s+/)
-  return match ? match[1].length : 0
-}
-
-function sectionBody(text: string, names: string[]) {
-  const lines = text.split(/\r?\n/)
-  for (let i = 0; i < lines.length; i++) {
-    const level = headingLevel(lines[i])
-    const title = lines[i].trim().replace(/^#{1,6}\s*/, "")
-    if (!names.some((name) => title.localeCompare(name, "en", { sensitivity: "accent" }) === 0)) continue
-    const body: string[] = []
-    for (let j = i + 1; j < lines.length; j++) {
-      const nextLevel = headingLevel(lines[j])
-      if (nextLevel > 0 && nextLevel <= level) break
-      body.push(lines[j])
-    }
-    return body.join("\n").trim()
-  }
-  return ""
-}
-
-function parseListSection(text: string, names: string[]) {
-  return sectionBody(text, names)
-    .split(/\r?\n/)
-    .flatMap((line) => {
-      const value = line.trim().replace(/^[-*\u2022]\s+/, "").replace(/^\d+[.)\u3001]\s+/, "")
-      return value ? [value] : []
-    })
-}
-
-function parseNamedPairs(text: string) {
-  return text.split(/\r?\n/).flatMap((line) => {
-    const value = line.trim().replace(/^[-*\u2022]\s+/, "").replace(/^\d+[.)\u3001]\s+/, "")
-    if (!value) return []
-    const pair = value.split(/[:\uFF1A]/)
-    if (pair.length < 2) return []
-    return [{
-      question: pair[0].trim(),
-      assumption: pair.slice(1).join(":").trim(),
-    }]
-  })
+  return conjunction && groups >= 2 && verbs >= 1
 }
 
 function parseSpecItems(text: string): SpecItem[] {
-  const body = sectionBody(text, ["Spec Items", "Specification Items", "Goals", "\u89c4\u683c\u9879", "\u76ee\u6807"])
-  const source = body || sectionBody(text, ["Acceptance Criteria", "\u9a8c\u6536\u6807\u51c6"]) || text
+  const body = sectionBody(text, ["Spec Items", "Specification Items", "Goals", "\u89c4\u683c\u9879", "\u76ee\u6807"], { respectHeadingLevel: true })
+  const source = body || sectionBody(text, ["Acceptance Criteria", "\u9a8c\u6536\u6807\u51c6"], { respectHeadingLevel: true }) || text
   const items = splitSpecBlocks(source)
     .flatMap((block) => {
       const head = cleanSpecLine(block[0] || "")
@@ -1020,7 +804,7 @@ function parseSpecItems(text: string): SpecItem[] {
       const check_selector = priority === "blocking"
         ? selectors.length > 0 ? selectors : inferSpecChecks([head, description, record.verification, record.evidence].filter(Boolean).join(" "))
         : undefined
-      const base = {
+      const base: SpecItem = {
         title: specTitle(head),
         description: (description || head).slice(0, 400),
         priority,
@@ -1048,7 +832,7 @@ function isVerificationLine(line: string) {
   return /^(verification|verify|check selector|criteria|description|evidence|验证|验收|检查器|检查|说明|描述)[:：]?/i.test(line)
 }
 
-function specChildItem(line: string, priority: SpecItem["priority"], selectors: string[]) {
+function specChildItem(line: string, priority: SpecItem["priority"], selectors: string[]): SpecItem | undefined {
   const title = specTitle(line)
   if (!title || title.length < 6) return
   const check_selector = priority === "blocking"
@@ -1122,7 +906,7 @@ function parseSpecRecordLines(lines: string[]) {
   const record: Record<string, string> = {}
   for (const line of lines) {
     const value = cleanSpecLine(line)
-    const match = value.match(/^([a-zA-Z_ -]+|描述|说明|标准|验收|校验|验证|证据|优先级|检查|检查器)[:]\s*(.+)$/)
+    const match = value.match(/^([a-zA-Z_ -]+|描述|说明|标准|验收|校验|验证|证据|优先级|检查|检查器)[:：]\s*(.+)$/)
     if (!match) continue
     record[normalizeSpecKey(match[1])] = match[2].trim()
   }
@@ -1184,7 +968,7 @@ function specTitle(line: string) {
   return head.trim().slice(0, 80)
 }
 
-function inferSpecPriority(head: string, value?: string) {
+function inferSpecPriority(head: string, value?: string): "advisory" | "blocking" {
   return /advisory|建议|可选/i.test(`${head} ${value ?? ""}`) ? "advisory" : "blocking"
 }
 
@@ -1195,14 +979,6 @@ function parseCheckSelectors(value?: string) {
       .map((item) => item.trim())
       .filter(Boolean))]
     : []
-}
-
-function firstContentLine(text: string) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => !!line && !/^#{1,6}\s+/.test(line))
-    || ""
 }
 
 // ---------------------------------------------------------------------------
@@ -1371,6 +1147,8 @@ Under \`# Spec Items\`, include 3-6 numbered items for ordinary tasks. For large
 - spec_items.check_selector maps to: build, test, lint, verify_cmd, startup, artifact, visual, puppeteer, ui_review, code_quality, code_review, dead_code_review, spec_check
   (artifact = produced binary/file artifact; visual = screenshot-based visual regression; puppeteer = browser automation check; these three are evaluator-managed and cannot be run by the executor directly)
 - Every blocking spec item MUST have at least one check_selector.
+- For non-trivial tasks, usually produce 3-8 execution-sized goals.
+- Reject broad goals like "Build the complete app architecture" unless the user explicitly asks for a single umbrella deliverable.
 - Large greenfield or multi-feature requests MUST be split into 8-10 iterative spec items. Avoid umbrella items like "project bootstrap and architecture setup" or "UI page development".
 - Read the spec items as a stage sequence: earlier items establish foundations, later items refine or extend the same workspace.
 - Each spec item must represent one implementation slice only. If an item bundles multiple independent capabilities with conjunctions like "与" / "和" / "及" / "、" / "and", split it.

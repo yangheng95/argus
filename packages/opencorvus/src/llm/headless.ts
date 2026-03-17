@@ -16,10 +16,11 @@ type ModelRef = {
 function taskModel(metadata?: Record<string, unknown>) {
   const item = metadata?.task_model
   if (!item || typeof item !== "object" || Array.isArray(item)) return
-  if (typeof item.providerID !== "string" || typeof item.modelID !== "string") return
+  const ref = item as Record<string, unknown>
+  if (typeof ref.providerID !== "string" || typeof ref.modelID !== "string") return
   return {
-    providerID: item.providerID,
-    modelID: item.modelID,
+    providerID: ref.providerID,
+    modelID: ref.modelID,
   }
 }
 
@@ -151,6 +152,6 @@ export async function completeHeadlessText<TOOLS extends ToolSet>(input: {
         sessionId: sessionID,
       },
     },
-  })
+  } as Parameters<typeof completeText<TOOLS>>[0])
 }
 

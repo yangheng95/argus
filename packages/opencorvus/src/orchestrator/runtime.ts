@@ -10,6 +10,7 @@ import { Snapshot } from "@/snapshot"
 import { Database, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
 import { withKeyedLock } from "@/util/lock"
+import { inactivityAgeMs } from "@/util/activity-timeout"
 import { withTimeout } from "@/util/timeout"
 import { OrchestratorRunActor } from "./run-actor"
 import { DeliveryService } from "./delivery"
@@ -82,6 +83,7 @@ import {
   findRun,
   findTask,
   goalRunQueueTaskID,
+  latestExecutorEvent,
   latestGoalRunByCoordinator,
   listActiveGoalRunsByCoordinator,
   listGoalsBySpec,
@@ -100,6 +102,7 @@ import { Identifier } from "@/id/id"
 import { StreamHub } from "@/protocol/stream-hub"
 import { EXECUTOR_LEASE_MS, executorLeaseHeldByOther, executorLeaseOwner } from "./lease"
 import { OrchestratorProtocol } from "./protocol"
+import { registerGoalRunSession, unregisterGoalRunSession } from "@/server/routes/task-event"
 
 const log = Log.create({ service: "orchestrator-runtime" })
 
@@ -171,6 +174,33 @@ function hasPendingGoalEvaluations(run: RunRow) {
 
 function activeExecutorSession(run: RunRow, goalRun = activeGoalRun(run)) {
   return goalRun ? findExecutorSessionByGoalRun(goalRun.id) : findExecutorSessionByRun(run.id)
+}
+
+function executorLastActivityAt(executorSessionID: string | undefined) {
+  if (!executorSessionID) return 0
+  return latestExecutorEvent(executorSessionID)?.time_observed ?? 0
+}
+
+function goalRunLastActivityAt(run: RunRow, goalRun: GoalRunRow) {
+  const executorSession = findExecutorSessionByGoalRun(goalRun.id)
+  return Math.max(
+    goalRun.time_updated ?? 0,
+    goalRun.time_started ?? 0,
+    run.time_updated ?? 0,
+    run.time_started ?? 0,
+    run.time_created ?? 0,
+    executorLastActivityAt(executorSession?.id),
+  )
+}
+
+function runLastActivityAt(run: RunRow) {
+  const executorSession = findExecutorSessionByRun(run.id)
+  return Math.max(
+    run.time_updated ?? 0,
+    run.time_started ?? 0,
+    run.time_created ?? 0,
+    executorLastActivityAt(executorSession?.id),
+  )
 }
 
 function latestGoalRun(run: RunRow) {
@@ -290,6 +320,8 @@ async function queueGoalRun(
       selectors: next.goal.metadata?.check_selector,
     },
   })
+  // Register goal run session so its bus events reach the task SSE stream directly.
+  registerGoalRunSession(session.id, task.id)
   const prompt = buildGoalPrompt({
     plan: {
       ...plan,
@@ -297,6 +329,7 @@ async function queueGoalRun(
     },
     node: next.node,
     goal: next.goal,
+    taskRequest: task.request,
   })
   const source: "planner" | "scheduler" | "system" = run.metadata?.strategy === "operator_note" ? "system" : "scheduler"
   const executor = ExecutorRegistry.require(run.executor)
@@ -549,6 +582,7 @@ async function finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, 
 
 async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow, hooks: RuntimeHooks) {
   OrchestratorRuntime.stopExecutorEventBridge(goalRun.session_id ?? undefined)
+  if (goalRun.session_id) unregisterGoalRunSession(goalRun.session_id)
   const goals = goalsForRun(run)
   const goal = currentGoal(goalRun, goals)
   if (!goal) throw new Error(`Goal ${goalRun.goal_id} not found for run ${run.id}`)
@@ -796,14 +830,17 @@ async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow
   }
 
   if (queue.status === "running") {
-    const started = goalRun.time_started ?? run.time_started ?? run.time_created
+    const now = Date.now()
     const maxMs = goalRunTimeoutMs()
-    if (started && (Date.now() - started) > maxMs) {
-      log.warn("goal run exceeded max execution time", {
+    const lastActivityAt = goalRunLastActivityAt(run, goalRun)
+    const inactiveFor = inactivityAgeMs(now, lastActivityAt)
+    if (lastActivityAt > 0 && inactiveFor > maxMs) {
+      log.warn("goal run exceeded inactivity timeout", {
         runID: run.id,
         goalRunID: goalRun.id,
         maxMs,
-        elapsedMs: Date.now() - started,
+        inactiveFor,
+        lastActivityAt,
       })
       try {
         await executor.abort({
@@ -811,7 +848,7 @@ async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow
           queueTaskID,
         })
       } catch (abortErr) {
-        log.warn("failed to abort timed-out goal run executor", {
+        log.warn("failed to abort stalled goal run executor", {
           runID: run.id,
           goalRunID: goalRun.id,
           error: String(abortErr),
@@ -819,7 +856,7 @@ async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow
       }
       await handleExecutionFailure(
         run,
-        `Goal run exceeded maximum execution time (${Math.round(maxMs / 60000)}min)`,
+        `Goal run stalled after ${Math.round(maxMs / 60000)}min without execution activity`,
         hooks,
         goalRun,
       )
@@ -920,12 +957,15 @@ async function syncCoordinatorExecutor(task: TaskRow, run: RunRow, hooks: Runtim
   }
 
   if (queue.status === "running") {
-    const started = run.time_started ?? run.time_created
-    if (started && (Date.now() - started) > RUN_MAX_EXECUTION_MS) {
-      log.warn("run exceeded max execution time", {
+    const now = Date.now()
+    const lastActivityAt = runLastActivityAt(run)
+    const inactiveFor = inactivityAgeMs(now, lastActivityAt)
+    if (lastActivityAt > 0 && inactiveFor > RUN_MAX_EXECUTION_MS) {
+      log.warn("run exceeded inactivity timeout", {
         runID: run.id,
         maxMs: RUN_MAX_EXECUTION_MS,
-        elapsedMs: Date.now() - started,
+        inactiveFor,
+        lastActivityAt,
       })
       try {
         await executor.abort({
@@ -933,11 +973,11 @@ async function syncCoordinatorExecutor(task: TaskRow, run: RunRow, hooks: Runtim
           queueTaskID,
         })
       } catch (abortErr) {
-        log.warn("failed to abort timed-out executor", { runID: run.id, error: String(abortErr) })
+        log.warn("failed to abort stalled executor", { runID: run.id, error: String(abortErr) })
       }
       await handleExecutionFailure(
         run,
-        `Run exceeded maximum execution time (${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min)`,
+        `Run stalled after ${Math.round(RUN_MAX_EXECUTION_MS / 60000)}min without execution activity`,
         hooks,
       )
       return true
@@ -2034,6 +2074,11 @@ export function shouldPersistExecutorEvent(type: string) {
 }
 
 export function shouldPublishExecutorProgress(type: string) {
+  // message.* events are already forwarded to the UI via the direct session bus event
+  // mechanism (Bus.subscribeAll in the task SSE endpoint). Publishing them as RunProgress
+  // events causes the UI to misclassify them as "message_delta" kind and display their
+  // summary strings ("Part updated: text", "Message updated: user") as assistant message text.
+  if (type.startsWith("message.")) return false
   return type !== "protocol.raw" &&
     type !== "usage.updated" &&
     type !== "executor.status"

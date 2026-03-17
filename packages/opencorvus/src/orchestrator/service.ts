@@ -34,6 +34,7 @@ import {
   OrchestratorRunTable,
   OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
+  type OrchestratorExecutor,
   type OrchestratorInteractionStatus,
   type OrchestratorMetadata,
 } from "./orchestrator.sql"
@@ -555,7 +556,7 @@ type CreateTaskBootstrapInput = {
   sessionID: string
   now: number
   title: string
-  executor: string
+  executor: OrchestratorExecutor
   metadata: OrchestratorMetadata
 }
 
@@ -707,7 +708,7 @@ export namespace OrchestratorService {
       if (existing) return existing.id
     }
     const title = input.title?.trim() || deriveTitle(input.request)
-    const executor = input.executor ?? "opencode"
+    const executor: OrchestratorExecutor = input.executor ?? "opencode"
     if (executor !== "opencode" && !ExecutorRegistry.has(executor)) {
       await ExecutorBootstrap.autoRegister(true).catch((err) => {
         log.warn("executor auto-register failed", { executor, error: String(err) })
@@ -1680,7 +1681,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
     insertPlanItems(db, {
       taskID: task.id,
       planID,
-      goals,
+      goals: goals.map((g) => ({ ...g, metadata: g.metadata ?? undefined })),
       planDraft,
       now,
       milestones: [],

@@ -447,6 +447,41 @@ export const EvaluationCheck = z.object({
   evidence: z.string().optional(),
 })
 
+export const EvaluatorVerdict = z.enum(["accepted", "rejected", "blocked"])
+
+export const ArtifactAudit = z.object({
+  source_files_added: z.number().int().nonnegative(),
+  config_files_added: z.number().int().nonnegative(),
+  doc_files_added: z.number().int().nonnegative(),
+  source_file_count: z.number().int().nonnegative(),
+  doc_file_count: z.number().int().nonnegative(),
+  non_source_churn_ratio: z.number().min(0),
+  readme_proliferation_count: z.number().int().nonnegative(),
+  out_of_scope_file_count: z.number().int().nonnegative(),
+  scaffold_noise_count: z.number().int().nonnegative(),
+  placeholder_count: z.number().int().nonnegative(),
+  out_of_scope_files: z.array(z.string()),
+  unmapped_files: z.array(z.string()),
+  placeholder_hits: z.array(z.string()),
+  duplicate_docs: z.array(z.string()),
+  scaffold_expansion_flags: z.array(z.string()),
+})
+
+export const RunMetrics = z.object({
+  meaningful_change_gap_ms: z.number().int().nonnegative(),
+  noop_cycle_count: z.number().int().nonnegative(),
+  repeat_command_ratio: z.number().min(0).max(1),
+  repeat_reasoning_similarity: z.number().min(0).max(1),
+  required_check_pass_rate: z.number().min(0).max(1),
+  critical_check_pass_rate: z.number().min(0).max(1),
+  check_relevance_score: z.number().min(0).max(1),
+  verification_edit_ratio: z.number().min(0),
+  feature_coverage_p0: z.number().min(0).max(1),
+  scope_drift_score: z.number().min(0).max(1),
+  plan_to_change_traceability: z.number().min(0).max(1),
+  delivery_focus_score: z.number().min(0).max(1),
+})
+
 export const Evaluation = z.object({
   id: Identifier.schema("evaluation"),
   taskID: Identifier.schema("task"),

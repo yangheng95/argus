@@ -42,7 +42,7 @@ export const ChannelIngressEnvelope = Thread.extend({
     text: z.string(),
     attachments: MessageAttachmentInput.array().default([]),
   }),
-  context: Context.default({}),
+  context: Context.default(() => ({ allow_create: true, allow_session_mutation: false, bind: true })),
   metadata: z.record(z.string(), z.unknown()).optional(),
   source: z.string().optional(),
   executor: ChannelIngressInput.shape.executor.optional(),

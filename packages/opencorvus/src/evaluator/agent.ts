@@ -13,6 +13,7 @@
 import { stepCountIs } from "ai"
 import z from "zod"
 import { verificationHints } from "@/check/policy"
+import { extractRawJSON, repairTruncatedJSON, sanitizeJSON, trimToLastComplete, tryParseJSON } from "@/llm/json-repair"
 import { completeHeadlessText, resolveHeadlessLanguageModel } from "@/llm/headless"
 import { createEvaluatorTools } from "./tools"
 import { Memory } from "@/memory"
@@ -22,6 +23,7 @@ import { Log } from "@/util/log"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
 import { Config } from "@/config/config"
+import { collectText, countToolCalls, firstContentLine, sectionBody, splitBlocks } from "@/util/agent-text"
 
 const log = Log.create({ service: "evaluator-agent" })
 
@@ -161,7 +163,7 @@ export namespace GoalJudge {
           abortSignal: AbortSignal.timeout(timeoutMs),
           system: await goalJudgeSystem(),
           prompt: userPrompt,
-          ...(input.stream ?? {}),
+          ...(input.stream as TextHooks<typeof explorationTools> | undefined),
         })
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
@@ -169,13 +171,7 @@ export namespace GoalJudge {
         continue
       }
 
-      toolCallCount = result.steps.reduce(
-        (sum, s) => {
-          const step = s as { toolCalls?: unknown[] }
-          return sum + (Array.isArray(step.toolCalls) ? step.toolCalls.length : 0)
-        },
-        0,
-      )
+      toolCallCount = countToolCalls(result.steps)
 
       log.info("evaluator agent finished", {
         attempt,
@@ -235,27 +231,7 @@ export const parseGoalJudgment = extractJSON
 // ---------------------------------------------------------------------------
 
 function extractJSON(text: string, goalCount: number): GoalJudgmentType {
-  let raw = text.trim()
-
-  const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (fencedComplete) {
-    raw = fencedComplete[1].trim()
-  } else {
-    const fencedOpen = raw.match(/```(?:json)?\s*([\s\S]*)/)
-    if (fencedOpen && fencedOpen[1].includes("{")) {
-      raw = fencedOpen[1].trim()
-    }
-  }
-
-  if (!raw.startsWith("{")) {
-    const match = raw.match(/(\{[\s\S]*\})/)
-    if (match) {
-      raw = match[1]
-    } else {
-      const idx = raw.indexOf("{")
-      if (idx >= 0) raw = raw.slice(idx)
-    }
-  }
+  let raw = extractRawJSON(text)
 
   raw = sanitizeJSON(raw)
 
@@ -266,12 +242,12 @@ function extractJSON(text: string, goalCount: number): GoalJudgmentType {
   }
 
   let obj: any
-  const parseErr = tryParse(raw)
+  const parseErr = tryParseJSON(raw)
   if (parseErr.ok) {
     obj = parseErr.value
   } else {
     const trimmed = trimToLastComplete(raw)
-    const retryErr = tryParse(trimmed)
+    const retryErr = tryParseJSON(trimmed)
     if (retryErr.ok) {
       log.warn("evaluator: repaired truncated JSON by trimming", {
         originalLength: raw.length,
@@ -306,95 +282,6 @@ function extractGoalText(text: string, goalCount: number): GoalJudgmentType {
   }, goalCount)
 }
 
-function tryParse(text: string): { ok: true; value: any } | { ok: false; error: Error } {
-  try {
-    return { ok: true, value: JSON.parse(text) }
-  } catch (err) {
-    return { ok: false, error: err as Error }
-  }
-}
-
-function repairTruncatedJSON(raw: string): string {
-  let repaired = raw
-
-  // If truncated inside a string, close it
-  let inString = false
-  let escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') inString = !inString
-  }
-  if (inString) repaired += '"'
-
-  // Remove trailing partial key-value
-  repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*"?[^"]*$/, "")
-  repaired = repaired.replace(/,\s*$/, "")
-
-  // Count and close unclosed brackets
-  const stack: string[] = []
-  inString = false
-  escaped = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') { inString = !inString; continue }
-    if (inString) continue
-    if (ch === "{") stack.push("}")
-    else if (ch === "[") stack.push("]")
-    else if (ch === "}" || ch === "]") stack.pop()
-  }
-
-  repaired = repaired.replace(/,\s*$/, "")
-  while (stack.length > 0) repaired += stack.pop()!
-
-  return repaired
-}
-
-function trimToLastComplete(raw: string): string {
-  let lastComplete = -1
-  let inString = false
-  let escaped = false
-
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i]
-    if (escaped) { escaped = false; continue }
-    if (ch === "\\") { escaped = true; continue }
-    if (ch === '"') {
-      inString = !inString
-      if (!inString) lastComplete = i
-      continue
-    }
-    if (inString) continue
-    if (ch === "{" || ch === "[") { /* depth++ */ }
-    else if (ch === "}" || ch === "]") lastComplete = i
-  }
-
-  if (lastComplete > 0 && lastComplete < raw.length - 1) {
-    let trimmed = raw.slice(0, lastComplete + 1)
-    trimmed = trimmed.replace(/,\s*$/, "")
-    const stack: string[] = []
-    inString = false
-    escaped = false
-    for (let i = 0; i < trimmed.length; i++) {
-      const ch = trimmed[i]
-      if (escaped) { escaped = false; continue }
-      if (ch === "\\") { escaped = true; continue }
-      if (ch === '"') { inString = !inString; continue }
-      if (inString) continue
-      if (ch === "{") stack.push("}")
-      else if (ch === "[") stack.push("]")
-      else if (ch === "}" || ch === "]") stack.pop()
-    }
-    while (stack.length > 0) trimmed += stack.pop()!
-    return trimmed
-  }
-
-  return repairTruncatedJSON(raw)
-}
-
 // ---------------------------------------------------------------------------
 // Model resolution — same 3-tier strategy as planner agent
 // ---------------------------------------------------------------------------
@@ -407,56 +294,6 @@ function trimToLastComplete(raw: string): string {
  * 2. Load that exact model and language surface
  * 3. If that fails, surface the evaluator failure directly
  */
-function sanitizeJSON(raw: string) {
-  let out = ""
-  let inString = false
-  let i = 0
-  while (i < raw.length) {
-    const ch = raw[i]
-    if (!inString) {
-      if (ch === '"') inString = true
-      out += ch
-      i++
-      continue
-    }
-    if (ch === "\\") {
-      const next = raw[i + 1]
-      if (next && '"\\\/bfnrtu'.includes(next)) {
-        out += ch + next
-        i += 2
-        continue
-      }
-      out += "\\\\"
-      i++
-      continue
-    }
-    if (ch === '"') {
-      inString = false
-      out += ch
-      i++
-      continue
-    }
-    if (ch === "\n") {
-      out += "\\n"
-      i++
-      continue
-    }
-    if (ch === "\r") {
-      out += "\\r"
-      i++
-      continue
-    }
-    if (ch === "\t") {
-      out += "\\t"
-      i++
-      continue
-    }
-    out += ch
-    i++
-  }
-  return out
-}
-
 function normalizeAnalysis(input: unknown, goalCount: number): GoalJudgmentType {
   const obj = input && typeof input === "object" ? { ...(input as Record<string, unknown>) } : {}
 
@@ -488,44 +325,6 @@ function normalizeAnalysis(input: unknown, goalCount: number): GoalJudgmentType 
   }
 
   return GoalJudgment.parse(obj)
-}
-
-function sectionBody(text: string, names: string[]) {
-  const lines = text.split(/\r?\n/)
-  for (let i = 0; i < lines.length; i++) {
-    const title = lines[i].trim().replace(/^#{1,6}\s*/, "")
-    if (!names.some((name) => title.localeCompare(name, "en", { sensitivity: "accent" }) === 0)) continue
-    const body: string[] = []
-    for (let j = i + 1; j < lines.length; j++) {
-      if (/^#{1,6}\s+/.test(lines[j].trim())) break
-      body.push(lines[j])
-    }
-    return body.join("\n").trim()
-  }
-  return ""
-}
-
-function splitBlocks(text: string) {
-  const lines = text.split(/\r?\n/)
-  const blocks: string[][] = []
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (!line) continue
-    const numbered = /^\d+[.)、]\s+/.test(line)
-    const bulleted = /^[-*•]\s+/.test(line)
-    const current = blocks[blocks.length - 1]
-    const currentNumbered = current ? /^\d+[.)、]\s+/.test(current[0] || "") : false
-    if (numbered || (bulleted && !currentNumbered)) {
-      blocks.push([line])
-      continue
-    }
-    if (blocks.length === 0) {
-      blocks.push([line])
-      continue
-    }
-    blocks[blocks.length - 1].push(line)
-  }
-  return blocks
 }
 
 function parseRecordLines(lines: string[]) {
@@ -573,20 +372,6 @@ function parseReplanGuidance(text: string) {
     suggested_strategy: record["suggested_strategy"] || record["建议策略"] || "",
     avoid_approaches: avoid,
   }
-}
-
-function firstContentLine(text: string) {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => !!line && !/^#{1,6}\s+/.test(line))
-    || ""
-}
-
-function collectText(result: { text?: string; steps: Array<{ text?: string }> }) {
-  const text = result.text?.trim() || ""
-  if (text) return text
-  return result.steps.map((step) => step.text?.trim() || "").filter(Boolean).join("\n\n")
 }
 
 // ---------------------------------------------------------------------------

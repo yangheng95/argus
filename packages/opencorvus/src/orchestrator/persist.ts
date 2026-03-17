@@ -10,6 +10,7 @@ import { type ReplanContext, type WaveStatus } from "@/planner/agent"
 import { PlannerFailureError, PlannerService, type PlanDraft } from "@/planner/service"
 import { writeEvaluationSnapshot, writeGoalSnapshot, writePlanSnapshot, writePrdSnapshot } from "@/orchestrator/docs"
 import { writeSpec } from "@/orchestrator/spec"
+import { type SpecItem } from "@/spec/agent"
 import { SpecFailureError, SpecService } from "@/spec/service"
 import { Database, and, desc, eq, inArray, isNull, lte, ne, or } from "@/storage/db"
 import { Log } from "@/util/log"
@@ -139,7 +140,7 @@ function stageTimeouts(input: CompileTransitionInput) {
   }
 }
 
-function reuseSpecDraft(input: CompileReplanInput): SpecDraft & { spec_items: unknown[]; evidence_sources: string[]; unresolved_questions: string[]; scope?: string; out_of_scope?: string } {
+function reuseSpecDraft(input: CompileReplanInput): SpecDraft {
   const snapshot = findSpecSnapshot(input.previousPlan.spec_snapshot_id)
   if (!snapshot) throw new PlannerFailureError(`Spec not found for replan: ${input.previousPlan.spec_snapshot_id}`)
   const goals = input.goals.length > 0
@@ -948,6 +949,7 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
   const specDraft = input.specDraft ?? {
     summary: "Specification capture failed before planning completed.",
     content: input.request,
+    scope: "",
     goals: input.metadata.goals && Array.isArray(input.metadata.goals)
       ? (input.metadata.goals as GoalInput[]).map((goal) => ({
           description: goal.description,
@@ -960,12 +962,12 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
           criteria: "The requested change is implemented and acceptance checks pass.",
           priority: "blocking" as const,
         }],
-    assumptions: [],
+    assumptions: [] as Array<{ question: string; assumption: string }>,
     risks: [input.error.message],
     clarifications: [],
-    spec_items: [],
-    evidence_sources: [],
-    unresolved_questions: [],
+    spec_items: [] as SpecItem[],
+    evidence_sources: [] as string[],
+    unresolved_questions: [] as string[],
   }
   const specSnapshotID = Identifier.ascending("spec")
   Database.transaction((db) => {
@@ -1216,7 +1218,7 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
     insertPlanItems(db, {
       taskID: input.task.id,
       planID: input.nextPlanID,
-      goals,
+      goals: goals.map((g) => ({ ...g, metadata: g.metadata ?? undefined })),
       planDraft: input.compiled.planDraft,
       now: input.now,
       milestones: [],
@@ -1730,7 +1732,7 @@ async function compileSpec(
       goals: input.goals,
       ...(input.mode === "replan" ? { replanContext: input.replanContext } : {}),
     })
-    return { ...raw, spec_items: [], evidence_sources: [], unresolved_questions: [] }
+    return { ...raw, scope: "", spec_items: [], evidence_sources: [], unresolved_questions: [] }
   }
   if (input.mode === "replan") {
     return SpecService.rewrite({

@@ -314,6 +314,17 @@ export function listExecutorEvents(executorSessionID: string) {
   )
 }
 
+export function latestExecutorEvent(executorSessionID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorExecutorEventTable)
+      .where(eq(OrchestratorExecutorEventTable.executor_session_id, executorSessionID))
+      .orderBy(desc(OrchestratorExecutorEventTable.sequence))
+      .get(),
+  )
+}
+
 export function listGoals(taskID: string) {
   return Database.use((db) =>
     db

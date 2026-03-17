@@ -76,7 +76,7 @@ for (const target of targets) {
   console.log(`\n=== overlay ${target} (Docker) ===`)
 
   // Verify pre-built opencorvus binary exists
-  const serverBin = path.join(opencorvus, "dist", `opencorvus-linux-${arch}`, "bin", "opencorvus")
+  const serverBin = path.join(opencorvus, "dist", `opencorvus-linux-${arch}`, "opencorvus")
   if (!(await fileExists(serverBin))) {
     console.error(`ERROR: opencorvus binary not found: ${serverBin}`)
     console.error("Run first: cd packages/opencorvus && bun run build --all")

@@ -2574,7 +2574,7 @@ function renderPromptCatalog() {
         </div>
         <label class="field">
           <span class="field-label">${escapeHtml(t("prompt.editor_label"))}</span>
-          <textarea class="field-input prompt-textarea" data-prompt-input="${escapeHtml(entryID)}" rows="12">${escapeHtml(value)}</textarea>
+          <textarea class="field-input prompt-textarea" data-prompt-input="${escapeHtml(entryID)}" rows="8">${escapeHtml(value)}</textarea>
         </label>
         <div class="prompt-toolbar">
           <span class="config-status-box" data-status="${escapeHtml(status.tone)}">${escapeHtml(promptHelper(entry))}</span>
@@ -2590,10 +2590,12 @@ function renderPromptCatalog() {
             <div class="md-content prompt-preview-body">${renderPromptPreview(entry.default_prompt)}</div>
           </div>
         </details>` : ""}
-        <div class="prompt-preview-card">
-          <div class="prompt-preview-head">${escapeHtml(t("prompt.preview"))}</div>
-          <div class="md-content prompt-preview-body" data-prompt-preview="${escapeHtml(entryID)}">${renderPromptPreview(value)}</div>
-        </div>
+        <details class="prompt-diff-details">
+          <summary class="prompt-diff-summary">${escapeHtml(t("prompt.preview"))}</summary>
+          <div class="prompt-preview-card" style="border-top:none;border-radius:0 0 var(--radius) var(--radius)">
+            <div class="md-content prompt-preview-body" data-prompt-preview="${escapeHtml(entryID)}">${renderPromptPreview(value)}</div>
+          </div>
+        </details>
       </div>`;
     })
     .join("")}</div>`;
@@ -4830,10 +4832,17 @@ function currentSessionID() {
 function matchesCurrentSession(sessionID) {
   if (!sessionID) return false;
   const current = currentSessionID();
-  if (current) return current === sessionID;
-  if (state.selectedTaskID) {
-    scheduleConversation(0);
+  if (!current) {
+    if (state.selectedTaskID) scheduleConversation(0);
+    return false;
   }
+  if (current === sessionID) return true;
+  // Also accept sessions that appear in already-loaded messages (e.g., goal run child sessions).
+  // The task SSE is already task-scoped, so any session in state.messages is task-related.
+  if (state.messages.some((msg) => msg.info?.sessionID === sessionID)) return true;
+  // Unknown session — could be a new goal run session not yet in state.messages.
+  // Trigger a conversation refresh so we discover it; subsequent events will then match.
+  scheduleConversation(CONVERSATION_EVENT_DEBOUNCE);
   return false;
 }
 

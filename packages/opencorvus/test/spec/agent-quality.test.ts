@@ -63,16 +63,17 @@ describe("spec quality validation", () => {
   test("recognizes broad umbrella items", () => {
     expect(isBroadSpecItem(item("Implement auth, storage, and sync platform"))).toBe(true)
     expect(isBroadSpecItem(item("Implement database, sync, and search pipeline"))).toBe(true)
+    expect(isBroadSpecItem(item("项目架构与数据模型层"))).toBe(true)
+    expect(isBroadSpecItem(item("项目架构搭建、类型定义与状态管理、日记创建编辑"))).toBe(true)
     expect(isBroadSpecItem(item("Search and filtering"))).toBe(false)
     expect(isBroadSpecItem(item("React Native + Expo 项目初始化"))).toBe(false)
     expect(isBroadSpecItem(item("用户认证模块（注册/登录）"))).toBe(false)
     expect(isBroadSpecItem(item("应用锁与安全加密模块"))).toBe(false)
   })
 
-  test("allows up to two broad items for large greenfield requests", () => {
+  test("rejects umbrella items for large greenfield requests", () => {
     const quality = validateSpecQuality(draft([
       "Implement auth, storage, and sync platform",
-      "Implement database, sync, and search pipeline",
       "Timeline feed",
       "Calendar browsing",
       "Search and filtering",
@@ -80,24 +81,6 @@ describe("spec quality validation", () => {
       "Analytics dashboard",
       "Settings center",
       "Editor interactions",
-      "Test coverage",
-    ]), request, 18)
-
-    expect(quality.score).toBeGreaterThanOrEqual(0.6)
-    expect(quality.reasons).toHaveLength(0)
-  })
-
-  test("still rejects large requests with too many broad items", () => {
-    const quality = validateSpecQuality(draft([
-      "Implement auth, storage, and sync platform",
-      "Implement database, sync, and search pipeline",
-      "Implement auth, database, and security platform",
-      "Timeline feed",
-      "Calendar browsing",
-      "Search and filtering",
-      "Reminder scheduling",
-      "Analytics dashboard",
-      "Settings center",
       "Test coverage",
     ]), request, 18)
 

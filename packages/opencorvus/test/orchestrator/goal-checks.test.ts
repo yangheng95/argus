@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { CheckRunner } from "../../src/evaluator/service"
 import { CheckConfig } from "../../src/orchestrator/model"
-import { blockingEvaluationFailure, evaluateGoal, goalCheckOutcome } from "../../src/orchestrator/goal-runner"
+import { blockingEvaluationFailure, evaluateGoal, goalEvaluationOutcome } from "../../src/orchestrator/goal-runner"
 import { Instance } from "../../src/project/instance"
 import { resetDatabase } from "../fixture/db"
 
@@ -33,7 +33,7 @@ describe("orchestrator.goal checks", () => {
     await resetDatabase()
   })
 
-  test("scopes goal evaluation checks to the selected goal families and named selectors", async () => {
+  test("scopes goal evaluation checks to executor-runnable selectors and named commands", async () => {
     let checks: unknown
     spyOn(CheckRunner, "evaluate").mockImplementation(async (task) => {
       checks = task.metadata?.checks
@@ -97,7 +97,7 @@ describe("orchestrator.goal checks", () => {
           criteria: "startup and verify pass",
           priority: "blocking",
           metadata: {
-            check_selector: ["startup", "smoke"],
+            check_selector: ["startup", "smoke", "ui_review", "code_review"],
           },
         } as any,
         delivery: {
@@ -113,13 +113,9 @@ describe("orchestrator.goal checks", () => {
       test: false,
       lint: false,
       verify_cmd: false,
-      startup: {
-        command: "bun run dev",
-        ready_text: "ready",
-        mode: "soft",
-      },
       named: {
         smoke: {
+          label: "Smoke",
           family: "verify_cmd",
           commands: ["bun run smoke"],
           enabled: true,
@@ -136,12 +132,13 @@ describe("orchestrator.goal checks", () => {
         mode: "strict",
       },
     })
+    expect((checks as Record<string, unknown>).startup).toBeUndefined()
     expect((checks as Record<string, unknown>).ui_review).toBeUndefined()
     expect((checks as Record<string, unknown>).code_review).toBeUndefined()
     expect(((checks as Record<string, unknown>).named as Record<string, unknown>).typecheck).toBeUndefined()
   })
 
-  test("creates a valid minimal ui review config for ui review goals", async () => {
+  test("defers evaluator-managed goal selectors to the judge instead of local goal checks", async () => {
     let checks: unknown
     spyOn(CheckRunner, "evaluate").mockImplementation(async (task) => {
       checks = task.metadata?.checks
@@ -169,10 +166,10 @@ describe("orchestrator.goal checks", () => {
         } as any,
         goal: {
           description: "review ui",
-          criteria: "ui review passes",
+          criteria: "ui review and startup checks pass",
           priority: "blocking",
           metadata: {
-            check_selector: ["ui_review"],
+            check_selector: ["ui_review", "startup"],
           },
         } as any,
         delivery: {
@@ -188,15 +185,13 @@ describe("orchestrator.goal checks", () => {
       test: false,
       lint: false,
       verify_cmd: false,
-      ui_review: {
-        target: "web",
-        mode: "strict",
-      },
       spec_check: {
         enabled: false,
         mode: "strict",
       },
     })
+    expect((checks as Record<string, unknown>).ui_review).toBeUndefined()
+    expect((checks as Record<string, unknown>).startup).toBeUndefined()
   })
 
   test("allows accepted analysis to override review infrastructure failures", () => {
@@ -212,7 +207,7 @@ describe("orchestrator.goal checks", () => {
     } as const
 
     expect(blockingEvaluationFailure(result as any)).toBe(false)
-    expect(goalCheckOutcome(result as any, analysis)).toEqual({
+    expect(goalEvaluationOutcome(result as any, analysis)).toEqual({
       verdict: "accepted",
       status: "passed",
       summary: "Goal accepted.",

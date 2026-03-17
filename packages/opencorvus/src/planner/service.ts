@@ -11,6 +11,8 @@ import { PlannerAgent, type PlannerOutputType, type ReplanContext } from "./agen
 import { type ClarificationResult, type SpecDraft } from "@/spec/agent"
 import { Env } from "@/env"
 import { type TextHooks } from "@/llm/api"
+import { mergeTextHooks } from "@/llm/tool-hooks"
+import { createInactivityGuard } from "@/util/inactivity-guard"
 import { normalizePlanWaves, waveMilestones, type WaveContractType } from "@/orchestrator/wave"
 
 const log = Log.create({ service: "planner" })
@@ -196,32 +198,50 @@ export namespace HeadlessPlannerService {
     }
 
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    let planTimeout: ReturnType<typeof setTimeout>
-    const agentResult = await Promise.race([
-      PlannerAgent.plan({
-        title: input.title,
-        request: input.request,
-        userGoals: goals.map((g) => ({
-          description: g.description,
-          criteria: g.criteria,
-          priority: g.priority,
-        })),
-        sessionID: input.sessionID,
-        metadata: input.metadata,
-        spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
-        timeoutMs,
-        signal: controller.signal,
-        stream: input.stream,
-        onStatus: input.onStatus,
-      }).catch((error) => {
-        throw new PlannerFailureError("planner agent failed", { cause: error })
-      }).finally(() => clearTimeout(planTimeout)),
-      new Promise<never>((_, reject) => {
-        planTimeout = setTimeout(() => reject(new PlannerFailureError(`planner timed out after ${timeoutMs}ms`)), timeoutMs)
-      }),
-    ]).finally(() => {
-      clearTimeout(timer)
+    let timedOut = false
+    const guard = createInactivityGuard(timeoutMs, () => {
+      timedOut = true
+      controller.abort(new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`))
+    })
+    const signal = controller.signal
+    const stream = mergeTextHooks(input.stream, {
+      onChunk: async () => {
+        guard.bump()
+      },
+      onStepFinish: async () => {
+        guard.bump()
+      },
+      onFinish: async () => {
+        guard.bump()
+      },
+      onError: async () => {
+        guard.bump()
+      },
+    })
+    const onStatus = async (summary: string) => {
+      guard.bump()
+      await input.onStatus?.(summary)
+    }
+    const agentResult = await PlannerAgent.plan({
+      title: input.title,
+      request: input.request,
+      userGoals: goals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria,
+        priority: g.priority,
+      })),
+      sessionID: input.sessionID,
+      metadata: input.metadata,
+      spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+      timeoutMs,
+      signal,
+      stream,
+      onStatus,
+    }).catch((error) => {
+      if (timedOut) throw new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`)
+      throw new PlannerFailureError("planner agent failed", { cause: error })
+    }).finally(() => {
+      guard.clear()
       controller.abort()
     })
 
@@ -332,33 +352,51 @@ export namespace HeadlessPlannerService {
     }
 
     const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    let replanTimeout: ReturnType<typeof setTimeout>
-    const agentResult = await Promise.race([
-      PlannerAgent.plan({
-        title: input.title,
-        request: input.request,
-        replanContext: replanCtx,
-        userGoals: goals.map((g) => ({
-          description: g.description,
-          criteria: g.criteria,
-          priority: g.priority,
-        })),
-        sessionID: input.sessionID,
-        metadata: input.metadata,
-        spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
-        timeoutMs,
-        signal: controller.signal,
-        stream: input.stream,
-        onStatus: input.onStatus,
-      }).catch((error) => {
-        throw new PlannerFailureError("planner agent replan failed", { cause: error })
-      }).finally(() => clearTimeout(replanTimeout)),
-      new Promise<never>((_, reject) => {
-        replanTimeout = setTimeout(() => reject(new PlannerFailureError(`planner timed out after ${timeoutMs}ms`)), timeoutMs)
-      }),
-    ]).finally(() => {
-      clearTimeout(timer)
+    let timedOut = false
+    const guard = createInactivityGuard(timeoutMs, () => {
+      timedOut = true
+      controller.abort(new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`))
+    })
+    const signal = controller.signal
+    const stream = mergeTextHooks(input.stream, {
+      onChunk: async () => {
+        guard.bump()
+      },
+      onStepFinish: async () => {
+        guard.bump()
+      },
+      onFinish: async () => {
+        guard.bump()
+      },
+      onError: async () => {
+        guard.bump()
+      },
+    })
+    const onStatus = async (summary: string) => {
+      guard.bump()
+      await input.onStatus?.(summary)
+    }
+    const agentResult = await PlannerAgent.plan({
+      title: input.title,
+      request: input.request,
+      replanContext: replanCtx,
+      userGoals: goals.map((g) => ({
+        description: g.description,
+        criteria: g.criteria,
+        priority: g.priority,
+      })),
+      sessionID: input.sessionID,
+      metadata: input.metadata,
+      spec: spec ? { summary: spec.summary, content: spec.content } : undefined,
+      timeoutMs,
+      signal,
+      stream,
+      onStatus,
+    }).catch((error) => {
+      if (timedOut) throw new PlannerFailureError(`planner stalled after ${timeoutMs}ms without activity`)
+      throw new PlannerFailureError("planner agent replan failed", { cause: error })
+    }).finally(() => {
+      guard.clear()
       controller.abort()
     })
     return agentOutputToDraft(

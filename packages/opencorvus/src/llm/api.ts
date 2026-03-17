@@ -4,13 +4,17 @@ import {
   generateText as generateTextBase,
   streamObject as streamObjectBase,
   streamText as streamTextBase,
-  type StreamTextOnAbortCallback,
   type StreamTextOnChunkCallback,
   type StreamTextOnErrorCallback,
   type StreamTextOnFinishCallback,
   type StreamTextOnStepFinishCallback,
+  type StepResult,
   type ToolSet,
 } from "ai"
+
+type StreamTextOnAbortCallback<TOOLS extends ToolSet> = (event: {
+  readonly steps: StepResult<TOOLS>[]
+}) => PromiseLike<void> | void
 import { Env } from "@/env"
 
 const DEFAULT_TIMEOUT_MS = 5_000
