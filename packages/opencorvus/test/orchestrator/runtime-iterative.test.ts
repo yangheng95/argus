@@ -3,6 +3,7 @@ import { type ExecutorAdapter } from "../../src/executor/contracts"
 import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
 import {
+  OrchestratorEvaluationTable,
   OrchestratorGoalRunTable,
   OrchestratorGoalTable,
   OrchestratorPlanNodeTable,
@@ -17,6 +18,7 @@ import { Instance } from "../../src/project/instance"
 import { Session } from "../../src/session"
 import { Snapshot } from "../../src/snapshot"
 import { Database, eq } from "../../src/storage/db"
+import { createGoalRun, updateGoalRun } from "../../src/orchestrator/transition"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
@@ -318,6 +320,84 @@ test("syncRun serializes the same coordinator run and only queues one iterative 
       expect(goalRuns).toHaveLength(1)
       expect(goalRuns[0]?.goal_id).toBe(goalID)
       expect(goalRuns[0]?.status).toBe("accepted")
+    },
+  })
+})
+
+test("syncRun does not queue the next goal while the previous goal evaluation is pending", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const submit = mock(async (input: { sessionID: string }) => ({
+    sessionID: input.sessionID,
+    queueTaskID: Identifier.ascending("queue"),
+  }))
+  ExecutorRegistry.register("codex", adapter(submit))
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const root = await Session.create({ title: "pending evaluation root" })
+      const goals = [
+        { id: Identifier.ascending("goal"), description: "Build passes" },
+        { id: Identifier.ascending("goal"), description: "Tests pass" },
+      ]
+
+      await seedRun({ rootID: root.id, taskID, specID, planID, runID, goals })
+      Database.use((db) =>
+        db
+          .update(OrchestratorRunTable)
+          .set({ status: "accepted", time_started: now, time_updated: now })
+          .where(eq(OrchestratorRunTable.id, runID))
+          .run(),
+      )
+
+      const goalRun = createGoalRun({
+        taskID,
+        goalID: goals[0]!.id,
+        coordinatorRunID: runID,
+        executor: "codex",
+        now,
+      })
+      updateGoalRun(goalRun.id, {
+        status: "completed",
+        time_started: now,
+        time_completed: now,
+      })
+      Database.transaction((db) => {
+        db.insert(OrchestratorEvaluationTable)
+          .values({
+            id: Identifier.ascending("evaluation"),
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: goalRun.id,
+            status: "pending",
+            verdict: "rejected",
+            summary: `Evaluating goal delivery: ${goals[0]!.description}`,
+            checks: [],
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      })
+
+      await OrchestratorRuntime.syncRun(runID, hooks())
+
+      const goalRuns = Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.coordinator_run_id, runID))
+          .all(),
+      )
+
+      expect(submit).toHaveBeenCalledTimes(0)
+      expect(goalRuns).toHaveLength(1)
+      expect(goalRuns[0]?.goal_id).toBe(goals[0]?.id)
+      expect(goalRuns[0]?.status).toBe("completed")
     },
   })
 })

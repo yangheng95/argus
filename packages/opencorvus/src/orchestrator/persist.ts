@@ -1738,7 +1738,10 @@ async function compileSpec(
       request: input.request,
       goals: input.goals,
       sessionID: input.task.session_id ?? undefined,
-      metadata: input.task.metadata ?? undefined,
+      metadata: {
+        ...(input.task.metadata ?? {}),
+        ...(input.task.budget ? { orchestrator_budget: input.task.budget } : {}),
+      },
       timeoutMs,
       stream,
       onStatus,
@@ -1764,7 +1767,10 @@ async function compileSpec(
     request: input.request,
     goals: input.goals,
     sessionID: input.sessionID,
-    metadata: input.metadata,
+    metadata: {
+      ...(input.metadata ?? {}),
+      ...(budgetRow(input.budget) ? { orchestrator_budget: budgetRow(input.budget) } : {}),
+    },
     timeoutMs,
     stream,
     onStatus,

@@ -2,6 +2,8 @@ import { Instance } from "@/project/instance"
 import { Channel } from "@/util/channel"
 import { Log } from "@/util/log"
 
+const ACTOR_REPLY_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes
+
 export namespace OrchestratorRunActor {
   const log = Log.create({ service: "orchestrator.run-actor" })
 
@@ -90,9 +92,13 @@ export namespace OrchestratorRunActor {
     actor.pending += 1
     const reply = new Channel<Result>()
     if (!actor.inbox.send({ exec, reply })) throw new Error(`Run actor closed: ${runID}`)
-    const result = await reply.recv()
-    if (!result) throw new Error(`Run actor closed: ${runID}`)
-    if (!result.ok) throw result.error
-    return result.value as T
+    try {
+      const result = await reply.recv(undefined, ACTOR_REPLY_TIMEOUT_MS)
+      if (!result) throw new Error(`Run actor closed: ${runID}`)
+      if (!result.ok) throw result.error
+      return result.value as T
+    } finally {
+      reply.close()
+    }
   }
 }

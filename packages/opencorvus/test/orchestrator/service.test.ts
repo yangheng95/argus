@@ -23,6 +23,7 @@ import {
 } from "../../src/orchestrator/orchestrator.sql"
 import { createGoalSession } from "../../src/orchestrator/goal-runner"
 import { Event } from "../../src/orchestrator/model"
+import { OrchestratorRuntime } from "../../src/orchestrator/runtime"
 import { OrchestratorService } from "../../src/orchestrator/service"
 import { createGoalRun } from "../../src/orchestrator/transition"
 import { DeliveryService } from "../../src/orchestrator/delivery"
@@ -30,6 +31,7 @@ import { ProtocolStore } from "../../src/protocol/store"
 import { Instance } from "../../src/project/instance"
 import { Project } from "../../src/project/project"
 import { Session } from "../../src/session"
+import { OrchestratorTaskActor } from "../../src/orchestrator/task-actor"
 import { PlannerFailureError, PlannerService } from "../../src/planner/service"
 import { SpecService } from "../../src/spec/service"
 import { Filesystem } from "../../src/util/filesystem"
@@ -471,6 +473,70 @@ describe("orchestrator.service", () => {
         expect(taskID).toBe(row!.id)
         expect(task?.active_plan_version_id).toBeTruthy()
         expect(task?.active_run_id).toBeTruthy()
+      },
+    })
+  })
+
+  test("getBoard skips task actor head-of-line blocking for read-only requests", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const gate = deferred<void>()
+    stubPlanner()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "render a board while a task-scoped mutation is queued",
+        })
+        const lock = OrchestratorTaskActor.submit(taskID, async () => {
+          await gate.promise
+          return true
+        })
+        await Bun.sleep(25)
+        const board = await OrchestratorService.getBoard(taskID, { sync: false })
+        expect(board.task.id).toBe(taskID)
+        expect(board.task.status).toBeTruthy()
+        gate.resolve()
+        await lock
+      },
+    })
+  })
+
+  test("getProgress falls back to stale state when syncTask times out", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stubPlanner()
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+      sessionID,
+      queueTaskID: Identifier.ascending("task"),
+    }))
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "return progress even when task sync is slow",
+        })
+        const restore = process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS
+        process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS = "50"
+        const gate = deferred<void>()
+        const sync = spyOn(OrchestratorRuntime, "syncTask").mockImplementation(async () => {
+          await gate.promise
+        })
+        try {
+          const started = Date.now()
+          const progress = await OrchestratorService.getProgress(taskID)
+          expect(Date.now() - started).toBeLessThan(1000)
+          expect(progress.task.id).toBe(taskID)
+          expect(sync).toHaveBeenCalled()
+        } finally {
+          gate.resolve()
+          if (restore === undefined) delete process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS
+          else process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS = restore
+        }
       },
     })
   })
@@ -2385,6 +2451,112 @@ describe("orchestrator.service", () => {
       sourceLabel: "rg",
       text: "Second stream",
     }))
+  })
+
+  test("completes a goal run when executor events go idle even if status polling still reports running", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stubPlanner()
+    spyOn(CheckRunner, "evaluate").mockResolvedValue({
+      status: "passed",
+      verdict: "accepted",
+      summary: "All checks passed.",
+      checks: [
+        { name: "build", status: "passed", evidence: "verified" },
+        { name: "test", status: "passed", evidence: "verified" },
+        { name: "spec_check", status: "passed", evidence: "verified" },
+      ],
+      artifacts: [],
+    } as Awaited<ReturnType<typeof CheckRunner.evaluate>>)
+    spyOn(DeliveryService, "deliver").mockResolvedValue({
+      status: "delivered",
+      summary: "Delivery finalized.",
+      artifacts: [],
+      publish: {
+        mode: "manual",
+        adapters: [{ id: "delivery", status: "delivered", summary: "Delivery finalized." }],
+      },
+    })
+    const codex: ExecutorAdapter = {
+      capabilities() {
+        return {
+          submit: true,
+          status: true,
+          abort: true,
+          delivery: true,
+          resume: true,
+          events: true,
+        }
+      },
+      async submit(input: { sessionID: string }) {
+        return {
+          sessionID: input.sessionID,
+          queueTaskID: Identifier.ascending("task"),
+        }
+      },
+      async status(queueTaskID: string) {
+        return {
+          queueTaskID,
+          status: "running",
+          error: null,
+        }
+      },
+      async abort() {
+        return true
+      },
+      async delivery() {
+        return {
+          summary: "executor finished",
+          diffs: [],
+        }
+      },
+      async resume(input: { sessionID: string; message: string; priority?: "high" | "normal" | "low" }) {
+        return {
+          sessionID: input.sessionID,
+          queueTaskID: Identifier.ascending("task"),
+        }
+      },
+      async *events(input: { sessionID?: string }) {
+        yield {
+          type: "message.part.delta",
+          summary: "Delta: text",
+          payload: {
+            sessionID: input.sessionID,
+            messageID: "msg_idle",
+            partID: "part_idle",
+            field: "text",
+            delta: "done",
+          },
+        }
+        yield {
+          type: "session.idle",
+          summary: "Session idle",
+          payload: {
+            sessionID: input.sessionID,
+          },
+        }
+      },
+    }
+    ExecutorRegistry.register("codex", codex)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "finish when idle arrives from executor events",
+          executor: "codex",
+        })
+
+        let progress = await OrchestratorService.getProgress(taskID)
+        for (const _ of Array.from({ length: 240 })) {
+          if (progress.task.status === "completed") break
+          await Bun.sleep(50)
+          progress = await OrchestratorService.getProgress(taskID)
+        }
+
+        expect(progress.task.status).toBe("completed")
+        expect(progress.evaluation?.verdict).toBe("accepted")
+      },
+    })
   })
 
   test("persists task-specific spec metadata and stage routing", async () => {

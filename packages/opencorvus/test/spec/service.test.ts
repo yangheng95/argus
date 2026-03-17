@@ -71,7 +71,62 @@ describe("spec.service goal derivation", () => {
     })
   })
 
-  test("keeps model goals when explicit goals were provided by the caller", async () => {
+  test("trims oversized derived spec items into an execution tranche for budgeted runs", async () => {
+    spyOn(SpecAgent, "initial").mockResolvedValue({
+      ...broad,
+      content: "# Scope\n\n" + "实现完整日记应用。".repeat(600),
+      scope: "实现完整日记应用 MVP。",
+      out_of_scope: "桌面端适配",
+      spec_items: Array.from({ length: 8 }, (_, index) => ({
+        title: `阶段 ${index + 1}`,
+        description: `完成第 ${index + 1} 个交付目标`,
+        priority: "blocking" as const,
+        check_selector: ["build"],
+      })),
+    } as any)
+
+    const spec = await SpecService.initial({
+      title: "实现日记应用",
+      request: "实现一个完整的日记应用。",
+      metadata: {
+        orchestrator_budget: {
+          max_wall_time_ms: 4 * 60 * 60 * 1000,
+        },
+      },
+    })
+
+    expect(spec.goals).toHaveLength(4)
+    expect(spec.spec_items).toHaveLength(4)
+    expect(spec.goals.map((goal) => goal.description)).toEqual(["阶段 1", "阶段 2", "阶段 3", "阶段 4"])
+    expect(spec.content).toContain("## Execution Tranche")
+    expect(spec.content).toContain("## Deferred For Later Iterations")
+    expect(spec.content).toContain("阶段 8")
+    expect((spec as { out_of_scope?: string }).out_of_scope).toContain("Deferred for later iterations")
+  })
+
+  test("drops ui_review from architecture bootstrap items", async () => {
+    spyOn(SpecAgent, "initial").mockResolvedValue({
+      ...broad,
+      spec_items: [{
+        title: "项目架构初始化与技术栈配置",
+        description: "搭建 Expo + React Native 项目结构，配置路由、状态管理和 UI 组件库，建立模块目录。",
+        priority: "blocking" as const,
+        check_selector: ["startup", "ui_review"],
+      }],
+    } as any)
+
+    const spec = await SpecService.initial({
+      title: "实现日记应用",
+      request: "实现一个完整的日记应用。",
+    })
+
+    expect(spec.spec_items[0]?.check_selector).toEqual(["startup"])
+    expect(spec.goals[0]?.metadata).toEqual({
+      check_selector: ["startup"],
+    })
+  })
+
+  test("keeps caller-supplied goals when explicit goals were provided", async () => {
     spyOn(SpecAgent, "initial").mockResolvedValue(broad as any)
 
     const spec = await SpecService.initial({
@@ -87,8 +142,8 @@ describe("spec.service goal derivation", () => {
     })
 
     expect(spec.goals).toHaveLength(1)
-    expect(spec.goals[0]?.description).toContain("完整的React+TypeScript日记应用架构")
-    expect(spec.goals[0]?.description).not.toBe(broad.spec_items[0]?.title)
+    expect(spec.goals[0]?.description).toBe("优先实现数据存储层")
+    expect(spec.goals[0]?.criteria).toBe("数据可保存并可重新读取")
   })
 
   test("rewrite preserves explicit goals when raw-text spec omits structured goals", async () => {

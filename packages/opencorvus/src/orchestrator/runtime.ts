@@ -75,6 +75,7 @@ import {
   findEvaluationByRun,
   findExecutorSessionByGoalRun,
   findExecutorSessionByRun,
+  findGoalRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
@@ -161,6 +162,13 @@ function activeGoalRuns(run: RunRow) {
   return listActiveGoalRunsByCoordinator(run.id)
 }
 
+function hasPendingGoalEvaluations(run: RunRow) {
+  return listGoalRunsByCoordinator(run.id).some((goalRun) => {
+    if (goalRun.status !== "completed") return false
+    return findEvaluationByGoalRun(goalRun.id)?.status === "pending"
+  })
+}
+
 function activeExecutorSession(run: RunRow, goalRun = activeGoalRun(run)) {
   return goalRun ? findExecutorSessionByGoalRun(goalRun.id) : findExecutorSessionByRun(run.id)
 }
@@ -202,11 +210,11 @@ function interactionAnswers(payload: Record<string, unknown> | null | undefined)
 
 async function autoAnswerInteraction(row: InteractionRow) {
   if (row.request_type !== "question") return false
-  const { OrchestratorService } = await import("./service")
-  await OrchestratorService.replyInteraction(row.id, {
+  const { replyInteractionInternal } = await import("./service")
+  await replyInteractionInternal(row.id, {
     answers: interactionAnswers(row.payload as Record<string, unknown> | undefined),
     message: "Auto-answered with default assumptions for unattended execution",
-  })
+  }, { sync: false })
   return true
 }
 
@@ -387,6 +395,7 @@ async function continueGoalPipeline(task: TaskRow, run: RunRow, hooks: RuntimeHo
   if (!plan) throw new Error(`Task ${task.id} has no plan`)
   const refreshedTask = requireTask(task.id)
   const refreshedRun = requireRun(run.id)
+  if (hasPendingGoalEvaluations(refreshedRun)) return
   if (await queueReadyGoalRuns(refreshedTask, refreshedRun, plan, hooks)) return
   if (activeGoalRuns(refreshedRun).length > 0) return
   const pending = pendingBlockingGoals(goalsForRun(refreshedRun))
@@ -707,6 +716,18 @@ async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow
   const queueTaskID = target.queueTaskID
   if (!queueTaskID) return goalRunSyncState(goalRun)
   let executorSession = activeExecutorSession(run, goalRun)
+  if (executorSession?.status === "completed") {
+    if (goalRun.status !== "completed") {
+      updateGoalRun(goalRun.id, {
+        status: "completed",
+        blocking_reason: null,
+        error: null,
+        time_completed: Date.now(),
+      })
+    }
+    await finalizeGoalRun(task, run, findGoalRun(goalRun.id) ?? goalRun, hooks)
+    return "handled" as const
+  }
   const now = Date.now()
   if (executorSession?.status === "active") {
     const previousOwner = executorSession.lease_owner
@@ -1081,20 +1102,6 @@ export namespace OrchestratorRuntime {
       if (activeGoalRuns(run).length === 0 && await syncCoordinatorExecutor(task, run, hooks)) {
         return
       }
-      if (activeGoalRuns(run).length === 0 && !interactionReason && planForRun(run)) {
-        await continueGoalPipeline(task, run, hooks)
-        run = requireRun(runID)
-        task = requireTask(run.task_id)
-        const nextDelivery = findDeliveryByRun(run.id)
-        if (run.status === "completed" && nextDelivery) {
-          await completeRun(run, hooks)
-          return
-        }
-        if (run.status === "failed" || run.status === "aborted") {
-          return
-        }
-      }
-
       for (const goalRun of activeGoalRuns(run)) {
         await syncActiveGoalRun(task, run, goalRun, hooks)
         run = requireRun(runID)
@@ -1673,6 +1680,20 @@ async function executeDecision(
   return true
 }
 
+function completeGoalRunFromIdle(goalRunID: string | undefined) {
+  if (!goalRunID) return
+  const goalRun = findGoalRun(goalRunID)
+  if (!goalRun) return
+  if (!["queued", "accepted", "running", "blocked"].includes(goalRun.status)) return
+  updateGoalRun(goalRunID, {
+    status: "completed",
+    blocking_reason: null,
+    error: null,
+    time_completed: Date.now(),
+  })
+  updateGoalRunExecutorSessionStatus(goalRunID, "completed")
+}
+
 
 
 /** 将 executor 的实时事件桥接到 Bus，供 SSE 转发给前端 */
@@ -1730,7 +1751,7 @@ function consumeExecutorEvents(
         status: item.source.status,
         payload,
       }, { source: "runtime.executor_output", executorSessionID })
-      void StreamHub.append({
+      const streamChunk = {
         streamID: StreamHub.id({
           taskID,
           runID,
@@ -1739,15 +1760,19 @@ function consumeExecutorEvents(
           executorSessionID,
           sourceID: item.source.id,
         }),
-        kind: "text_delta",
+        kind: "text_delta" as const,
         text: item.text,
         taskID,
         runID,
         goalRunID,
         sessionID,
         payload,
-      }).catch((error) => {
-        log.warn("protocol stream chunk append failed", { taskID, runID, error: String(error) })
+      }
+      StreamHub.append(streamChunk).catch(async (error) => {
+        log.warn("protocol stream chunk append failed, retrying", { taskID, runID, error: String(error) })
+        StreamHub.append(streamChunk).catch((retryError) => {
+          log.error("protocol stream chunk append failed after retry", { taskID, runID, error: String(retryError) })
+        })
       })
       outputs.set(key, {
         ...item,
@@ -1821,6 +1846,7 @@ function consumeExecutorEvents(
               payload,
             }, { source: "runtime.executor_progress", executorSessionID })
           }
+          if (event.type === "session.idle") completeGoalRunFromIdle(goalRunID)
         } catch (eventErr) {
           log.warn("executor event handler failed, continuing", { taskID, runID, error: String(eventErr) })
         }

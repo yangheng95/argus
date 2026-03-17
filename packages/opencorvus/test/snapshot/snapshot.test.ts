@@ -554,6 +554,30 @@ test("git info exclude changes", async () => {
   })
 })
 
+test("diffFull ignores default vendor folders without project gitignore", async () => {
+  await using tmp = await bootstrap()
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const before = await Snapshot.track()
+      expect(before).toBeTruthy()
+
+      await fs.mkdir(path.join(tmp.path, "node_modules", "left-pad"), { recursive: true })
+      await Bun.write(path.join(tmp.path, "node_modules", "left-pad", "index.js"), "module.exports = 1\n")
+      await Bun.write(path.join(tmp.path, "src.txt"), "real change\n")
+
+      const patch = await Snapshot.patch(before!)
+      expect(patch.files).toContain(fwd(tmp.path, "src.txt"))
+      expect(patch.files.some((file) => file.includes("/node_modules/"))).toBe(false)
+
+      const after = await Snapshot.track()
+      const diffs = await Snapshot.diffFull(before!, after!)
+      expect(diffs.some((x) => x.file === "src.txt")).toBe(true)
+      expect(diffs.some((x) => x.file.includes("node_modules"))).toBe(false)
+    },
+  })
+})
+
 test("git info exclude keeps global excludes", async () => {
   await using tmp = await bootstrap()
   await Instance.provide({
