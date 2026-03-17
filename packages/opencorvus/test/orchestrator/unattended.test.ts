@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Config } from "../../src/config/config"
+import { ExecutorRegistry } from "../../src/executor/registry"
 import { Identifier } from "../../src/id/id"
 import { OrchestratorInteractionRequestTable, OrchestratorRunTable, OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { OrchestratorRuntime } from "../../src/orchestrator/runtime"
@@ -180,4 +181,82 @@ describe("orchestrator.unattended", () => {
       },
     })
   })
+
+  test("syncRun auto-answers protocol questions without re-entering the run actor", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const now = Date.now()
+        const taskID = Identifier.ascending("task")
+        const runID = Identifier.ascending("run")
+        const interactionID = Identifier.ascending("interaction")
+        const resolve = mock(async () => undefined)
+        process.env.OPENCORVUS_UNATTENDED = "1"
+        spyOn(ExecutorRegistry, "require").mockReturnValue({
+          resolve,
+        } as never)
+
+        Database.transaction((db) => {
+          db.insert(OrchestratorTaskTable)
+            .values({
+              id: taskID,
+              project_id: Instance.project.id,
+              title: "task",
+              request: "request",
+              status: "running",
+              active_run_id: runID,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorRunTable)
+            .values({
+              id: runID,
+              task_id: taskID,
+              executor: "opencode",
+              status: "running",
+              phase: "dispatch",
+              retry_count: 0,
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+          db.insert(OrchestratorInteractionRequestTable)
+            .values({
+              id: interactionID,
+              task_id: taskID,
+              run_id: runID,
+              external_id: "protocol:executor:req-1",
+              request_type: "question",
+              status: "pending",
+              title: "Need input",
+              body: "answer this",
+              payload: {
+                protocol_request: true,
+                request_id: "req-1",
+                questions: [{ id: "q1", question: "What should the agent do?" }],
+              },
+              time_created: now,
+              time_updated: now,
+            })
+            .run()
+        })
+
+        await OrchestratorRuntime.syncRun(runID, hooks())
+
+        const interaction = Database.use((db) =>
+          db.select().from(OrchestratorInteractionRequestTable).where(eq(OrchestratorInteractionRequestTable.id, interactionID)).get(),
+        )
+
+        expect(resolve).toHaveBeenCalledTimes(1)
+        expect(resolve).toHaveBeenCalledWith(expect.objectContaining({
+          requestID: "req-1",
+          kind: "input",
+        }))
+        expect(interaction?.status).toBe("answered")
+      },
+    })
+  }, 3_000)
 })

@@ -19,6 +19,7 @@ import { Session } from "@/session"
 import { MessageV2 } from "@/session/message"
 import { Database, NotFoundError, and, eq, inArray } from "@/storage/db"
 import { Log } from "@/util/log"
+import { withTimeout } from "@/util/timeout"
 import { WorkbenchService } from "@/workbench/service"
 import {
   OrchestratorArtifactTable,
@@ -152,6 +153,10 @@ import {
 import { Identifier } from "@/id/id"
 
 const log = Log.create({ service: "orchestrator" })
+
+function readSyncTimeoutMs() {
+  return Number(process.env.OPENCORVUS_READ_SYNC_TIMEOUT_MS) || 5_000
+}
 
 function initialTaskChecks(input: z.infer<typeof CreateTaskInput>["checks"]) {
   if (!input) return
@@ -571,6 +576,18 @@ export namespace OrchestratorService {
     }
   }
 
+  async function syncTaskView(taskID: string, label: string) {
+    await withTimeout(syncTask(taskID), readSyncTimeoutMs()).catch((err) => {
+      log.warn(`${label} syncTask timed out; returning stale view`, { taskID, error: String(err) })
+    })
+  }
+
+  async function syncRunView(runID: string, label: string) {
+    await withTimeout(OrchestratorRuntime.syncRun(runID, hooks()), readSyncTimeoutMs()).catch((err) => {
+      log.warn(`${label} syncRun timed out; returning stale view`, { runID, error: String(err) })
+    })
+  }
+
   export function init() {
     const current = orchestratorState()
     if (!current.booted) {
@@ -741,97 +758,77 @@ export namespace OrchestratorService {
   }
 
   export async function getTask(taskID: string) {
-    return withTask(taskID, async () => {
-      await syncTask(taskID)
-      const task = requireTask(taskID)
-      const item = listTaskRows([task])[0]
-      return viewTask(task, { directory: item?.directory })
-    })
+    await syncTaskView(taskID, "getTask")
+    const task = requireTask(taskID)
+    const item = listTaskRows([task])[0]
+    return viewTask(task, { directory: item?.directory })
   }
 
   export async function getProgress(taskID: string) {
-    return withTask(taskID, async () => {
-      await syncTask(taskID)
-      const task = requireTask(taskID)
-      const item = listTaskRows([task])[0]
-      const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
-      const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
-      const run = task.active_run_id ? findRun(task.active_run_id) : undefined
-      const delivery = run ? findDeliveryByRun(run.id) : undefined
-      const evaluation = run ? findEvaluationByRun(run.id) : undefined
-      const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
-      const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
-      return {
-        task: viewTask(task, { directory: item?.directory }),
-        spec: spec ? viewSpecSnapshot(spec) : undefined,
-        plan: plan ? viewPlan(plan) : undefined,
-        goals: (specID ? listGoalsBySpec(specID) : []).map(viewGoal),
-        planNodes: plan ? listPlanNodesByPlan(plan.id).map(viewPlanNode) : [],
-        goalRuns: listGoalRunsByTask(taskID).map(viewGoalRun),
-        milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
-        run: run ? viewRun(run) : undefined,
-        pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),
-        delivery: delivery ? viewDelivery(delivery) : undefined,
-        evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
-        snapshots: listSnapshots(taskID).map(viewSnapshot),
-      }
-    })
+    await syncTaskView(taskID, "getProgress")
+    const task = requireTask(taskID)
+    const item = listTaskRows([task])[0]
+    const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+    const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
+    const run = task.active_run_id ? findRun(task.active_run_id) : undefined
+    const delivery = run ? findDeliveryByRun(run.id) : undefined
+    const evaluation = run ? findEvaluationByRun(run.id) : undefined
+    const milestones = plan ? listMilestonesByPlan(plan.id) : listMilestones(taskID)
+    const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
+    return {
+      task: viewTask(task, { directory: item?.directory }),
+      spec: spec ? viewSpecSnapshot(spec) : undefined,
+      plan: plan ? viewPlan(plan) : undefined,
+      goals: (specID ? listGoalsBySpec(specID) : []).map(viewGoal),
+      planNodes: plan ? listPlanNodesByPlan(plan.id).map(viewPlanNode) : [],
+      goalRuns: listGoalRunsByTask(taskID).map(viewGoalRun),
+      milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
+      run: run ? viewRun(run) : undefined,
+      pendingInteractions: listInteractions(taskID).filter((item) => item.status === "pending").map(viewInteraction),
+      delivery: delivery ? viewDelivery(delivery) : undefined,
+      evaluation: evaluation ? viewEvaluation(evaluation) : undefined,
+      snapshots: listSnapshots(taskID).map(viewSnapshot),
+    }
   }
 
   export async function listRuns(taskID: string) {
-    return withTask(taskID, async () => {
-      await syncTask(taskID)
-      requireTask(taskID)
-      return findRuns(taskID).map(viewRun)
-    })
+    await syncTaskView(taskID, "listRuns")
+    requireTask(taskID)
+    return findRuns(taskID).map(viewRun)
   }
 
   export async function getRun(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    await syncRunView(runID, "getRun")
     return viewRun(requireRun(runID))
   }
 
   export async function getBrief(input: { taskID: string; runID?: string }) {
-    return withTask(input.taskID, async () => {
-      if (input.runID) {
-        await OrchestratorRuntime.syncRun(input.runID, hooks()).catch((err) => {
-          log.warn("syncRun failed in getBrief", { runID: input.runID, error: String(err) })
-        })
-      } else {
-        await OrchestratorRuntime.syncTask(input.taskID, hooks()).catch((err) => {
-          log.warn("syncTask failed in getBrief", { taskID: input.taskID, error: String(err) })
-        })
-      }
-      const task = requireTask(input.taskID)
-      return WorkbenchService.compileBrief({
-        taskID: task.id,
-        runID: input.runID ?? task.active_run_id ?? undefined,
-        planVersionID: task.active_plan_version_id ?? undefined,
-        sessionID: task.session_id ?? undefined,
-      })
+    if (input.runID) {
+      await syncRunView(input.runID, "getBrief")
+    } else {
+      await syncTaskView(input.taskID, "getBrief")
+    }
+    const task = requireTask(input.taskID)
+    return WorkbenchService.compileBrief({
+      taskID: task.id,
+      runID: input.runID ?? task.active_run_id ?? undefined,
+      planVersionID: task.active_plan_version_id ?? undefined,
+      sessionID: task.session_id ?? undefined,
     })
   }
 
   export async function getBoard(taskID: string, input?: { sync?: boolean }) {
-    return withTask(taskID, async () => {
-      if (input?.sync !== false) {
-        await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
-          log.warn("syncTask failed in getBoard", { taskID, error: String(err) })
-        })
-      }
-      return WorkbenchService.compileBoard({ taskID })
-    })
+    if (input?.sync !== false) {
+      await syncTaskView(taskID, "getBoard")
+    }
+    return WorkbenchService.compileBoard({ taskID })
   }
 
   export async function getBoardTag(taskID: string, input?: { sync?: boolean }) {
-    return withTask(taskID, async () => {
-      if (input?.sync !== false) {
-        await OrchestratorRuntime.syncTask(taskID, hooks()).catch((err) => {
-          log.warn("syncTask failed in getBoardTag", { taskID, error: String(err) })
-        })
-      }
-      return WorkbenchService.boardTag({ taskID })
-    })
+    if (input?.sync !== false) {
+      await syncTaskView(taskID, "getBoardTag")
+    }
+    return WorkbenchService.boardTag({ taskID })
   }
 
   export async function getProjectBoard(opts?: { limit?: number; query?: string; status?: string }) {
@@ -874,26 +871,26 @@ export namespace OrchestratorService {
   }
 
   export async function getDelivery(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    await syncRunView(runID, "getDelivery")
     const delivery = findDeliveryByRun(runID)
     if (!delivery) throw new NotFoundError({ message: `Delivery not found for run ${runID}` })
     return viewDelivery(delivery)
   }
 
   export async function listArtifacts(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    await syncRunView(runID, "listArtifacts")
     requireRun(runID)
     return findArtifacts(runID).map(viewArtifact)
   }
 
   export async function listEvaluations(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    await syncRunView(runID, "listEvaluations")
     requireRun(runID)
     return findEvaluations(runID).map(viewEvaluation)
   }
 
   export async function getExecutorSession(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    await syncRunView(runID, "getExecutorSession")
     requireRun(runID)
     const row = findExecutorSessionByRun(runID)
     if (!row) throw new NotFoundError({ message: `Executor session not found for run ${runID}` })
@@ -901,7 +898,7 @@ export namespace OrchestratorService {
   }
 
   export async function listExecutorEvents(runID: string) {
-    await OrchestratorRuntime.syncRun(runID, hooks())
+    await syncRunView(runID, "listExecutorEvents")
     requireRun(runID)
     return listExecutorSessionsByRun(runID)
       .flatMap((row) => listExecutorProtocolEvents(row.id).map(viewExecutorEvent))
@@ -914,19 +911,15 @@ export namespace OrchestratorService {
   }
 
   export async function listProtocolEvents(taskID: string) {
-    return withTask(taskID, async () => {
-      await OrchestratorRuntime.syncTask(taskID, hooks())
-      requireTask(taskID)
-      return ProtocolStore.listTaskEvents(taskID)
-    })
+    await syncTaskView(taskID, "listProtocolEvents")
+    requireTask(taskID)
+    return ProtocolStore.listTaskEvents(taskID)
   }
 
   export async function listTaskInteractions(taskID: string) {
-    return withTask(taskID, async () => {
-      await OrchestratorRuntime.syncTask(taskID, hooks())
-      requireTask(taskID)
-      return listInteractions(taskID).map(viewInteraction)
-    })
+    await syncTaskView(taskID, "listTaskInteractions")
+    requireTask(taskID)
+    return listInteractions(taskID).map(viewInteraction)
   }
 
   export async function selectTaskChecks(
@@ -1039,58 +1032,73 @@ function recoverTaskByChannelBinding(
   )
 }
 
+async function replyInteractionNow(
+  interactionID: string,
+  input: z.infer<typeof ReplyInteractionInput>,
+  options?: { sync?: boolean },
+) {
+  const row = requireInteraction(interactionID)
+  const sync = options?.sync !== false
+  if (row.payload?.protocol_request === true) {
+    await replyProtocolInteraction(row, input)
+    if (sync) await OrchestratorRuntime.syncTask(row.task_id, hooks())
+    return viewInteraction(requireInteraction(interactionID))
+  }
+  if (row.payload?.replan_confirm === true) {
+    const task = requireTask(row.task_id)
+    const run = requireRun(row.run_id)
+    const planID = typeof row.payload?.plan_id === "string" ? row.payload.plan_id : run.plan_version_id
+    const plan = planID ? findPlan(planID) : undefined
+    if (!plan) throw new Error(`Plan not found for replan confirmation: ${planID}`)
+    const failureSummary = typeof row.payload?.failure_summary === "string" ? row.payload.failure_summary : "Evaluation failed"
+    Database.use((db) =>
+      db.update(OrchestratorInteractionRequestTable)
+        .set({ status: "answered", response: { approved: true }, time_resolved: Date.now(), time_updated: Date.now() })
+        .where(eq(OrchestratorInteractionRequestTable.id, interactionID))
+        .run(),
+    )
+    const next = await createReplanRun(task, plan, run, failureSummary, row.payload?.analysis as never)
+    if (next.queued && next.runID) {
+      await OrchestratorRuntime.dispatch(next.runID, hooks())
+    }
+    return viewInteraction(requireInteraction(interactionID))
+  }
+  if (row.request_type === "permission") {
+    await PermissionNext.reply({
+      requestID: row.external_id,
+      reply: input.reply ?? "once",
+      message: input.message,
+    })
+  }
+  if (row.request_type === "question") {
+    const answers = input.answers ?? answersFromMessage(input.message)
+    if (!answers) throw new Error("answers or message are required for question replies")
+    if (isPlannerClarification(row)) {
+      await answerPlannerClarification(row, answers)
+    } else {
+      await Question.reply({
+        requestID: row.external_id,
+        answers,
+      })
+    }
+  }
+  if (sync) await OrchestratorRuntime.syncTask(row.task_id, hooks())
+  return viewInteraction(requireInteraction(interactionID))
+}
+
+export async function replyInteractionInternal(
+  interactionID: string,
+  raw: z.input<typeof ReplyInteractionInput>,
+  options?: { sync?: boolean },
+) {
+  return replyInteractionNow(interactionID, ReplyInteractionInput.parse(raw), options)
+}
+
 export namespace OrchestratorService {
   export async function replyInteraction(interactionID: string, raw: z.input<typeof ReplyInteractionInput>) {
     const input = ReplyInteractionInput.parse(raw)
     const row = requireInteraction(interactionID)
-    return OrchestratorInteractionActor.submit(row.run_id, async () => {
-      if (row.payload?.protocol_request === true) {
-        await replyProtocolInteraction(row, input)
-        await OrchestratorRuntime.syncTask(row.task_id, hooks())
-        return viewInteraction(requireInteraction(interactionID))
-      }
-      // Replan confirmation: user approved the spec rewrite → proceed with actual replan
-      if (row.payload?.replan_confirm === true) {
-        const task = requireTask(row.task_id)
-        const run = requireRun(row.run_id)
-        const planID = typeof row.payload?.plan_id === "string" ? row.payload.plan_id : run.plan_version_id
-        const plan = planID ? findPlan(planID) : undefined
-        if (!plan) throw new Error(`Plan not found for replan confirmation: ${planID}`)
-        const failureSummary = typeof row.payload?.failure_summary === "string" ? row.payload.failure_summary : "Evaluation failed"
-        Database.use((db) =>
-          db.update(OrchestratorInteractionRequestTable)
-            .set({ status: "answered", response: { approved: true }, time_resolved: Date.now(), time_updated: Date.now() })
-            .where(eq(OrchestratorInteractionRequestTable.id, interactionID))
-            .run(),
-        )
-        const next = await createReplanRun(task, plan, run, failureSummary, row.payload?.analysis as never)
-        if (next.queued && next.runID) {
-          await OrchestratorRuntime.dispatch(next.runID, hooks())
-        }
-        return viewInteraction(requireInteraction(interactionID))
-      }
-      if (row.request_type === "permission") {
-        await PermissionNext.reply({
-          requestID: row.external_id,
-          reply: input.reply ?? "once",
-          message: input.message,
-        })
-      }
-      if (row.request_type === "question") {
-        const answers = input.answers ?? answersFromMessage(input.message)
-        if (!answers) throw new Error("answers or message are required for question replies")
-        if (isPlannerClarification(row)) {
-          await answerPlannerClarification(row, answers)
-        } else {
-          await Question.reply({
-            requestID: row.external_id,
-            answers,
-          })
-        }
-      }
-      await OrchestratorRuntime.syncTask(row.task_id, hooks())
-      return viewInteraction(requireInteraction(interactionID))
-    })
+    return OrchestratorInteractionActor.submit(row.run_id, async () => replyInteractionNow(interactionID, input))
   }
 
   export async function rejectInteraction(interactionID: string, raw?: z.input<typeof RejectInteractionInput>) {

@@ -14,15 +14,18 @@ export class Channel<T> {
     return true
   }
 
-  recv(signal?: AbortSignal): Promise<T | null> | T | null {
+  recv(signal?: AbortSignal, timeoutMs?: number): Promise<T | null> | T | null {
     if (this.buf.length > 0) return this.buf.shift()!
     if (this.closed) return null
     if (signal?.aborted) return null
-    return new Promise<T | null>((resolve) => {
+    return new Promise<T | null>((resolve, reject) => {
       let settled = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+
       const done = (item: T | null) => {
         if (settled) return
         settled = true
+        if (timer !== undefined) clearTimeout(timer)
         signal?.removeEventListener("abort", abort)
         resolve(item)
       }
@@ -31,8 +34,18 @@ export class Channel<T> {
         if (index >= 0) this.waiters.splice(index, 1)
         done(null)
       }
+      const timeout = () => {
+        if (settled) return
+        settled = true
+        const index = this.waiters.indexOf(done)
+        if (index >= 0) this.waiters.splice(index, 1)
+        signal?.removeEventListener("abort", abort)
+        reject(new Error(`Channel.recv timed out after ${timeoutMs}ms`))
+      }
+
       this.waiters.push(done)
       signal?.addEventListener("abort", abort, { once: true })
+      if (timeoutMs !== undefined) timer = setTimeout(timeout, timeoutMs)
     })
   }
 

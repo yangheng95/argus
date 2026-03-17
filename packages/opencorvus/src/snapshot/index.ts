@@ -5,6 +5,7 @@ import { createHash } from "crypto"
 import { Log } from "../util/log"
 import { Flag } from "../flag/flag"
 import { Global } from "../global"
+import { FileIgnore } from "../file/ignore"
 import z from "zod"
 import { Config } from "../config/config"
 import { Instance } from "../project/instance"
@@ -14,6 +15,20 @@ export namespace Snapshot {
   const log = Log.create({ service: "snapshot" })
   const hour = 60 * 60 * 1000
   const prune = "7.days"
+  const EXTRA_EXCLUDES = [
+    ".expo",
+    ".expo-shared",
+    ".yarn",
+    ".parcel-cache",
+    ".svelte-kit",
+    ".nuxt",
+    ".angular",
+    ".vercel",
+    "android/build",
+    "android/app/build",
+    "ios/build",
+    "Pods",
+  ]
   const coreAutocrlf =
     process.env.OPENCORVUS_SNAPSHOT_CORE_AUTOCRLF || (process.platform === "win32" ? "input" : "false")
   const coreSymlinks =
@@ -255,6 +270,7 @@ export namespace Snapshot {
       const parts = line.split("\t")
       if (parts.length < 3) continue
       const [additions, deletions, file] = parts
+      if (ignore(file)) continue
       const isBinaryFile = additions === "-" && deletions === "-"
       const before = isBinaryFile
         ? ""
@@ -302,14 +318,13 @@ export namespace Snapshot {
     const file = await excludes()
     const target = path.join(git, "info", "exclude")
     await fs.mkdir(path.join(git, "info"), { recursive: true })
-    if (!file) {
-      await Bun.write(target, "")
-      return
-    }
-    const text = await Bun.file(file)
-      .text()
-      .catch(() => "")
-    await Bun.write(target, text)
+    const text = file
+      ? await Bun.file(file)
+        .text()
+        .catch(() => "")
+      : ""
+    const defaults = [...FileIgnore.PATTERNS, ...EXTRA_EXCLUDES].join("\n")
+    await Bun.write(target, [text.trim(), defaults].filter(Boolean).join("\n") + "\n")
   }
 
   async function excludes() {
@@ -325,5 +340,9 @@ export namespace Snapshot {
       .catch(() => false)
     if (!exists) return
     return file.trim()
+  }
+
+  function ignore(file: string) {
+    return FileIgnore.match(file, { extra: EXTRA_EXCLUDES })
   }
 }
