@@ -149,7 +149,7 @@ export namespace HeadlessPlannerService {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
     const spec = unattended && input.spec ? suppressClarifications(input.spec) : input.spec
-    const goals = resolveGoals(input.request, spec, input.goals)
+    const goals = resolveGoals(input.goals)
     const timeoutMs = plannerTimeoutMs(input.timeoutMs)
     const clarification = specClarification(spec)
     if (clarification) {
@@ -281,7 +281,7 @@ export namespace HeadlessPlannerService {
     const unattended = await unattendedProject()
     const stages = resolveStages(input.executor, input.routing)
     const spec = unattended && input.spec ? suppressClarifications(input.spec) : input.spec
-    const goals = resolveGoals(input.request, spec, input.goals)
+    const goals = resolveGoals(input.goals)
     const timeoutMs = plannerTimeoutMs(input.timeoutMs)
     const clarification = specClarification(spec)
     if (clarification) {
@@ -966,13 +966,8 @@ ${truncatedPrevious}
 // Goal helpers
 // ---------------------------------------------------------------------------
 
-function resolveGoals(_request: string, spec?: PlannerSpec, goals?: z.infer<typeof GoalInput>[]) {
-  const source =
-    spec?.goals && spec.goals.length > 0
-      ? spec.goals
-      : Array.isArray(goals) && goals.length > 0
-        ? goals
-        : []
+function resolveGoals(goals?: z.infer<typeof GoalInput>[]) {
+  const source = Array.isArray(goals) && goals.length > 0 ? goals : []
   return source.map((goal) => ({
     ...goal,
     metadata:

@@ -23,60 +23,46 @@ describe("workbench.service", () => {
       summary: "Compiled spec",
       content: "# Scope\n\nImplement feature",
       scope: "Implement feature",
-      goals: [
+      requirements: [
         {
-          description: "Implement feature",
-          criteria: "Task completed successfully",
+          id: "req_feature",
+          title: "Implement feature",
+          description: "Task completed successfully",
           priority: "blocking",
-          metadata: {
-            check_selector: ["spec_check"],
-          },
+          acceptance: ["Task completed successfully"],
+          evidence_refs: ["src/index.ts"],
         },
       ],
       assumptions: [],
       risks: [],
-      spec_items: [
-        {
-          title: "Implement feature",
-          description: "Task completed successfully",
-          priority: "blocking",
-          check_selector: ["spec_check"],
-        },
-      ],
-      evidence_sources: [],
+      evidence_sources: ["src/index.ts"],
       unresolved_questions: [],
     } as any)
     spyOn(SpecService, "rewrite").mockResolvedValue({
       summary: "Rewritten spec",
       content: "# Scope\n\nImplement feature with the updated operator goals",
       scope: "Implement feature with the updated operator goals",
-      goals: [
+      requirements: [
         {
-          description: "Implement feature",
-          criteria: "Task completed successfully",
+          id: "req_feature",
+          title: "Implement feature",
+          description: "Task completed successfully",
           priority: "blocking",
-          metadata: {},
+          acceptance: ["Task completed successfully"],
+          evidence_refs: ["src/index.ts"],
         },
         {
-          description: "add regression coverage",
-          criteria: "The rewritten specification explicitly captures this operator goal and the delivered implementation satisfies it: add regression coverage",
+          id: "req_regression",
+          title: "add regression coverage",
+          description: "The rewritten specification explicitly captures this operator goal and the delivered implementation satisfies it: add regression coverage",
           priority: "blocking",
-          metadata: {
-            check_selector: ["spec_check"],
-          },
+          acceptance: ["Regression coverage is added."],
+          evidence_refs: ["test/regression.test.ts"],
         },
       ],
       assumptions: [],
       risks: [],
-      spec_items: [
-        {
-          title: "Implement feature",
-          description: "Task completed successfully",
-          priority: "blocking",
-          check_selector: [],
-        },
-      ],
-      evidence_sources: [],
+      evidence_sources: ["src/index.ts", "test/regression.test.ts"],
       unresolved_questions: [],
     } as any)
     spyOn(PlannerService, "initial").mockResolvedValue({
@@ -85,6 +71,21 @@ describe("workbench.service", () => {
       metadata: {
         strategy: "initial",
         steps: ["Execute the task"],
+        waves: [
+          {
+            title: "Wave 1",
+            objective: "Implement feature",
+            goal_indices: [0],
+            owned_paths: ["src/index.ts"],
+          },
+        ],
+        milestones: [
+          {
+            title: "Wave 1",
+            description: "Implement feature",
+            goal_indices: [0],
+          },
+        ],
         planner: {
           role: "headless_compiler",
           quality: "compiled",
@@ -99,6 +100,32 @@ describe("workbench.service", () => {
       metadata: {
         strategy: "replan",
         steps: ["Rewrite the specification", "Rebuild the plan", "Execute the task"],
+        waves: [
+          {
+            title: "Wave 1",
+            objective: "Implement feature",
+            goal_indices: [0],
+            owned_paths: ["src/index.ts"],
+          },
+          {
+            title: "Wave 2",
+            objective: "Add regression coverage",
+            goal_indices: [1],
+            owned_paths: ["test/regression.test.ts"],
+          },
+        ],
+        milestones: [
+          {
+            title: "Wave 1",
+            description: "Implement feature",
+            goal_indices: [0],
+          },
+          {
+            title: "Wave 2",
+            description: "Add regression coverage",
+            goal_indices: [1],
+          },
+        ],
         planner: {
           role: "headless_compiler",
           quality: "compiled",
@@ -577,7 +604,7 @@ describe("workbench.service", () => {
     })
   })
 
-  test("brief and board fall back to active spec goals when no active plan exists", async () => {
+  test("brief and board do not surface spec-linked goals when no active plan exists", async () => {
     await using tmp = await tmpdir({ git: true })
     await Instance.provide({
       directory: tmp.path,
@@ -641,11 +668,11 @@ describe("workbench.service", () => {
         })
         const board = WorkbenchService.compileBoard({ taskID })
 
-        expect(brief.goals).toHaveLength(1)
-        expect(brief.content).toContain("Spec-only goal")
+        expect(brief.goals).toHaveLength(0)
+        expect(brief.content).not.toContain("Spec-only goal")
         expect(board.task.activeSpecVersionID).toBe(specID)
         expect(board.plan).toBeUndefined()
-        expect(board.lanes.find((lane) => lane.id === "goals")?.cards[0]?.title).toBe("Spec-only goal")
+        expect(board.lanes.find((lane) => lane.id === "goals")?.cards).toEqual([])
       },
     })
   })

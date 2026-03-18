@@ -481,7 +481,7 @@ function parseWaves(text: string) {
  *   - Subtasks include verification language → +0.2
  *   - PRD length > 300 chars → +0.25
  */
-function validatePlanQuality(
+export function validatePlanQuality(
   plan: PlannerOutputType,
   request: string,
   toolCallCount: number,
@@ -547,8 +547,6 @@ function validatePlanQuality(
       ? plan.waves.flatMap((wave) => wave && typeof wave === "object" ? [wave] : [])
       : []
     const explicitCoverage = new Set<number>()
-    const waveSizes = waves.map((wave) => Array.isArray(wave.goal_indices) ? wave.goal_indices.length : 0)
-    const multiGoalWaves = waveSizes.filter((size) => size > 1).length
     for (const wave of waves) {
       for (const goalIndex of wave.goal_indices) {
         if (Number.isInteger(goalIndex) && goalIndex >= 0 && goalIndex < goalCount) explicitCoverage.add(goalIndex)
@@ -568,9 +566,12 @@ function validatePlanQuality(
       }
     }
     if (waves.length === 0) reasons.push("plan missing stage waves for a multi-goal task")
-    if (explicitCoverage.size < goalCount) reasons.push(`waves cover only ${explicitCoverage.size}/${goalCount} goals`)
-    if (multiGoalWaves > 0) reasons.push("each wave must contain exactly one goal for iterative execution")
-    if (normalizedLength !== goalCount) reasons.push(`plan must provide exactly one iterative wave per goal (got ${normalizedLength}/${goalCount})`)
+    if (explicitCoverage.size < goalCount && normalizedLength < goalCount) {
+      reasons.push(`waves cover only ${explicitCoverage.size}/${goalCount} goals`)
+    }
+    if (normalizedLength !== goalCount) {
+      reasons.push(`plan must provide exactly one iterative wave per goal (got ${normalizedLength}/${goalCount})`)
+    }
     if (reasons.some((reason) => reason.includes("wave") || reason.includes("iterative"))) {
       return {
         score: Math.min(score, 0.49),

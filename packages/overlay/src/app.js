@@ -385,7 +385,6 @@ const dom = {
   planSection: $("#planSection"),
   goalsSection: $("#goalsSection"),
   criteriaSection: $("#criteriaSection"),
-  budgetSection: $("#budgetSection"),
   changesSection: $("#changesSection"),
   channelSection: $("#channelSection"),
   channelConfigBody: $("#channelConfigBody"),
@@ -417,8 +416,7 @@ const dom = {
   criteriaBadge: $("#criteriaBadge"),
   criteriaList: $("#criteriaList"),
   evalBody: $("#evalBody"),
-  budgetBadge: $("#budgetBadge"),
-  budgetBody: $("#budgetBody"),
+  budgetConfigBody: $("#budgetConfigBody"),
   budgetHint: $("#budgetHint"),
   budgetMaxRuns: $("#budgetMaxRuns"),
   budgetMaxReplans: $("#budgetMaxReplans"),
@@ -1033,47 +1031,25 @@ function refreshTechFxPalette() {
 }
 
 function createTechPoint(width, height) {
-  const depth = Math.random();
-  const layer = depth < 0.56 ? "far" : depth < 0.86 ? "mid" : "near";
   return {
-    alpha:
-      layer === "far"
-        ? 0.04 + Math.random() * 0.025
-        : layer === "mid"
-          ? 0.07 + Math.random() * 0.04
-          : 0.11 + Math.random() * 0.05,
-    layer,
-    links: layer === "near" ? 2 : layer === "mid" ? 1 : 0,
-    link_dist: layer === "near" ? 170 + Math.random() * 28 : layer === "mid" ? 136 + Math.random() * 18 : 0,
-    orbit:
-      layer === "far"
-        ? 10 + Math.random() * 14
-        : layer === "mid"
-          ? 18 + Math.random() * 20
-          : 28 + Math.random() * 24,
+    alpha: 0.018 + Math.random() * 0.028,
+    layer: "mid",
+    links: 0,
+    link_dist: 0,
+    orbit: 28 + Math.random() * 48,
     phase: Math.random() * Math.PI * 2,
-    pulse: 0.0008 + Math.random() * 0.001,
-    r:
-      layer === "far"
-        ? 0.7 + Math.random() * 0.75
-        : layer === "mid"
-          ? 1.1 + Math.random() * 0.9
-          : 1.5 + Math.random() * 1.1,
-    speed:
-      layer === "far"
-        ? 0.00002 + Math.random() * 0.000015
-        : layer === "mid"
-          ? 0.00003 + Math.random() * 0.00002
-          : 0.000045 + Math.random() * 0.000025,
-    warm: Math.random() > 0.9,
-    x: Math.random() * (width + 180) - 90,
-    y: Math.random() * (height + 180) - 90,
+    pulse: 0.00018 + Math.random() * 0.00032,
+    r: 55 + Math.random() * 95,
+    speed: 0.0000028 + Math.random() * 0.0000055,
+    warm: Math.random() > 0.68,
+    x: Math.random() * (width + 220) - 110,
+    y: Math.random() * (height + 220) - 110,
   };
 }
 
 function rebuildTechFxPoints() {
-  const total = clampNumber(Math.round((techFx.width * techFx.height) / 64000), 12, 24);
-  const count = reduceMotion() ? Math.max(8, Math.round(total * 0.45)) : total;
+  const total = clampNumber(Math.round((techFx.width * techFx.height) / 130000), 5, 10);
+  const count = reduceMotion() ? Math.max(3, Math.round(total * 0.5)) : total;
   techFx.points = Array.from({ length: count }, () => createTechPoint(techFx.width, techFx.height));
 }
 
@@ -1116,7 +1092,7 @@ function drawTechFx(ts = performance.now(), staticMode = false) {
   const width = techFx.width;
   const height = techFx.height;
   const clock = staticMode ? 0 : ts;
-  const margin = 112;
+  const margin = 220;
   ctx.clearRect(0, 0, width, height);
   const points = techFx.points
     .map((point) => ({
@@ -1124,92 +1100,45 @@ function drawTechFx(ts = performance.now(), staticMode = false) {
       cx: wrapTechCoord(
         point.x
           + Math.cos(clock * point.speed + point.phase) * point.orbit
-          + Math.sin(clock * point.speed * 0.4 + point.phase * 1.6) * point.orbit * 0.46,
+          + Math.sin(clock * point.speed * 0.38 + point.phase * 1.4) * point.orbit * 0.52,
         width,
         margin,
       ),
       cy: wrapTechCoord(
         point.y
-          + Math.sin(clock * point.speed * 0.92 + point.phase) * point.orbit * 0.82
-          + Math.cos(clock * point.speed * 0.34 + point.phase * 1.2) * point.orbit * 0.34,
+          + Math.sin(clock * point.speed * 0.88 + point.phase) * point.orbit * 0.88
+          + Math.cos(clock * point.speed * 0.32 + point.phase * 1.1) * point.orbit * 0.42,
         height,
         margin,
       ),
     }))
-    .sort((a, b) => a.orbit - b.orbit);
-  const links = [];
-
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    for (let j = i + 1; j < points.length; j++) {
-      const b = points[j];
-      const limit = Math.min(a.link_dist, b.link_dist);
-      if (!limit) continue;
-      if (a.layer === "far" && b.layer === "far") continue;
-      const dist = Math.hypot(a.cx - b.cx, a.cy - b.cy);
-      if (dist > limit) continue;
-      links.push({
-        alpha: (1 - dist / limit) * (a.layer === "near" || b.layer === "near" ? 0.15 : 0.1),
-        dist,
-        i,
-        j,
-        warm: a.warm && b.warm,
-      });
-    }
-  }
-
-  links.sort((a, b) => a.dist - b.dist);
-  const counts = Array.from({ length: points.length }, () => 0);
-
-  links.forEach((link) => {
-    const a = points[link.i];
-    const b = points[link.j];
-    if (counts[link.i] >= a.links || counts[link.j] >= b.links) return;
-    counts[link.i] += 1;
-    counts[link.j] += 1;
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(a.cx, a.cy);
-    ctx.lineTo(b.cx, b.cy);
-    ctx.strokeStyle = link.warm ? techFx.colors.warm : techFx.colors.line;
-    ctx.globalAlpha = link.alpha;
-    ctx.lineWidth = a.layer === "near" || b.layer === "near" ? 1 : 0.8;
-    ctx.stroke();
-    ctx.restore();
-  });
+    .sort((a, b) => b.r - a.r);
 
   points.forEach((point) => {
-    if (point.layer === "far") return;
-    ctx.save();
-    ctx.beginPath();
-    ctx.fillStyle = point.warm ? techFx.colors.warm : techFx.colors.glow;
-    ctx.globalAlpha = point.alpha * (point.layer === "near" ? 0.2 : 0.12);
-    ctx.shadowBlur = point.layer === "near" ? 24 : 16;
-    ctx.shadowColor = point.warm ? techFx.colors.warm : techFx.colors.glow;
-    ctx.arc(point.cx, point.cy, point.r * (point.layer === "near" ? 5.4 : 4.1), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  });
+    const pulse = 0.9 + Math.sin(clock * point.pulse + point.phase) * 0.12;
+    const r = point.r * pulse;
+    const color = point.warm ? techFx.colors.warm : techFx.colors.glow;
 
-  points.forEach((point) => {
-    const pulse = 0.9 + Math.sin(clock * point.pulse + point.phase) * 0.14;
-    const color = point.warm ? techFx.colors.warm : point.layer === "far" ? techFx.colors.line : techFx.colors.glow;
+    // Outer diffuse halo
     ctx.save();
     ctx.beginPath();
     ctx.fillStyle = color;
-    ctx.globalAlpha = point.alpha;
-    ctx.shadowBlur = point.layer === "near" ? 16 : point.layer === "mid" ? 10 : 6;
+    ctx.globalAlpha = point.alpha * 0.42;
+    ctx.shadowBlur = r * 1.6;
     ctx.shadowColor = color;
-    ctx.arc(point.cx, point.cy, point.r * pulse, 0, Math.PI * 2);
+    ctx.arc(point.cx, point.cy, r, 0, Math.PI * 2);
     ctx.fill();
-    if (point.layer !== "far") {
-      ctx.beginPath();
-      ctx.fillStyle = techFx.colors.soft;
-      ctx.globalAlpha = point.alpha * 0.65;
-      ctx.shadowBlur = 0;
-      ctx.arc(point.cx, point.cy, Math.max(0.5, point.r * 0.42), 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.restore();
+
+    // Soft inner core
+    ctx.save();
+    ctx.beginPath();
+    ctx.fillStyle = techFx.colors.soft;
+    ctx.globalAlpha = point.alpha * 0.22;
+    ctx.shadowBlur = r * 0.5;
+    ctx.shadowColor = color;
+    ctx.arc(point.cx, point.cy, r * 0.32, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   });
 }
@@ -6610,15 +6539,6 @@ function budgetMinutes(value) {
   return Number.isInteger(next) ? String(next) : next.toFixed(1)
 }
 
-function budgetBadgeText(budget) {
-  if (!budget) return t("budget.defaults")
-  const parts = []
-  if (budget.maxRuns !== undefined) parts.push(`R${budget.maxRuns}`)
-  if (budget.maxReplans !== undefined) parts.push(`P${budget.maxReplans}`)
-  if (budget.maxEvaluations !== undefined) parts.push(`E${budget.maxEvaluations}`)
-  if (budget.maxWallTimeMs !== undefined) parts.push(formatDuration(budget.maxWallTimeMs))
-  return parts.join(" · ") || t("budget.defaults")
-}
 
 function setBudgetInputs(budget) {
   if (dom.budgetMaxRuns) dom.budgetMaxRuns.value = budget?.maxRuns === undefined ? "" : String(budget.maxRuns)
@@ -6665,11 +6585,7 @@ function renderBudgetState(task = state.board?.task) {
 }
 
 function renderBudget(task) {
-  if (!dom.budgetBadge) return
   const budget = taskBudget(task)
-  dom.budgetBadge.textContent = budgetBadgeText(budget)
-  delete dom.budgetBadge.dataset.tone
-  if (budget) dom.budgetBadge.dataset.tone = "accent"
   if (!state.budgetDirty) setBudgetInputs(budget)
   renderBudgetState(task)
 }
@@ -7180,7 +7096,9 @@ function executorOutput(event) {
       .filter((item) => typeof item === "string" && item.trim())
       .join("\n");
     if (text) return clipBlock(text);
-    return clipBlock(stringifyLogValue(output, 2));
+    const fallback = stringifyLogValue(output, 2);
+    if (!fallback || fallback === "[object Object]") return "";
+    return clipBlock(fallback);
   }
   if (typeof event.payload.text === "string") return clipBlock(event.payload.text);
   return "";
@@ -8423,10 +8341,6 @@ function renderClear() {
     dom.criteriaBadge.textContent = "";
     delete dom.criteriaBadge.dataset.tone;
   }
-  if (dom.budgetBadge) {
-    dom.budgetBadge.textContent = "";
-    delete dom.budgetBadge.dataset.tone;
-  }
   setBudgetInputs(undefined);
   renderBudgetState(null);
   if (dom.evalBody) dom.evalBody.innerHTML = `<p class="empty-hint">${escapeHtml(t("detail.no_evaluation"))}</p>`;
@@ -8678,7 +8592,7 @@ dom.criteriaList?.addEventListener("change", async () => {
   }
 });
 
-dom.budgetBody?.addEventListener("input", () => {
+dom.budgetConfigBody?.addEventListener("input", () => {
   state.budgetDirty = true;
   renderBudgetState(state.board?.task);
 });

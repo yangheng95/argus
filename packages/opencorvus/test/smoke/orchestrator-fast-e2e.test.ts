@@ -28,7 +28,7 @@ function stubSpec() {
     summary: `Spec for: ${input.title}`,
     content: `# Scope\n\n${input.request}`,
     scope: input.request,
-    goals: Array.isArray(input.goals) && input.goals.length > 0
+    requirements: (Array.isArray(input.goals) && input.goals.length > 0
       ? input.goals
       : [{
           description: "Implement the requested change",
@@ -37,15 +37,17 @@ function stubSpec() {
           metadata: {
             check_selector: ["build", "test"],
           },
-        }],
+        }]).map((goal: any, index: number) => ({
+          id: `req_${index + 1}`,
+          title: goal.description,
+          description: goal.description,
+          priority: goal.priority ?? "blocking",
+          acceptance: [goal.criteria],
+          evidence_refs: [],
+          metadata: goal.metadata,
+        })),
     assumptions: [],
     risks: [],
-    spec_items: [{
-      title: "Implement the requested change",
-      description: "The requested change is implemented and checks pass.",
-      priority: "blocking",
-      check_selector: ["build", "test"],
-    }],
     evidence_sources: [],
     unresolved_questions: [],
   })
@@ -70,6 +72,12 @@ function stubPlanner() {
     metadata: {
       strategy,
       steps: ["Implement", "Verify"],
+      waves: [{
+        title: "Wave 1",
+        objective: "Implement the requested change",
+        goal_indices: [0],
+        owned_paths: ["src/task.ts"],
+      }],
       planner: {
         role: "headless_compiler",
         quality: "compiled",

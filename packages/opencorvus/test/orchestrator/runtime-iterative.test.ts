@@ -5,6 +5,7 @@ import { Identifier } from "../../src/id/id"
 import {
   OrchestratorEvaluationTable,
   OrchestratorGoalRunTable,
+  OrchestratorGoalSnapshotTable,
   OrchestratorGoalTable,
   OrchestratorPlanNodeTable,
   OrchestratorPlanVersionTable,
@@ -71,11 +72,13 @@ async function seedRun(input: {
   rootID: string
   taskID: string
   specID: string
+  goalSnapshotID?: string
   planID: string
   runID: string
   goals: Array<{ id: string; description: string; metadata?: Record<string, unknown> }>
 }) {
   const now = Date.now()
+  const goalSnapshotID = input.goalSnapshotID ?? Identifier.ascending("goal_snapshot")
   Database.transaction((db) => {
     db.insert(OrchestratorTaskTable)
       .values({
@@ -107,6 +110,19 @@ async function seedRun(input: {
         time_updated: now,
       })
       .run()
+    db.insert(OrchestratorGoalSnapshotTable)
+      .values({
+        id: goalSnapshotID,
+        task_id: input.taskID,
+        spec_snapshot_id: input.specID,
+        version: 1,
+        status: "ready",
+        summary: `${input.goals.length} goals`,
+        metadata: { goal_count: input.goals.length },
+        time_created: now,
+        time_updated: now,
+      })
+      .run()
     db.insert(OrchestratorPlanVersionTable)
       .values({
         id: input.planID,
@@ -116,7 +132,7 @@ async function seedRun(input: {
         status: "active",
         summary: "plan",
         prompt: "Execute the plan",
-        metadata: {},
+        metadata: { goal_snapshot_id: goalSnapshotID },
         time_created: now,
         time_updated: now,
       })
@@ -129,7 +145,10 @@ async function seedRun(input: {
           spec_snapshot_id: input.specID,
           description: goal.description,
           criteria: `${goal.description} succeeds.`,
-          metadata: goal.metadata,
+          metadata: {
+            goal_snapshot_id: goalSnapshotID,
+            ...(goal.metadata ?? {}),
+          },
           priority: "blocking",
           source: "spec",
           status: "pending",
@@ -397,7 +416,69 @@ test("syncRun does not queue the next goal while the previous goal evaluation is
       expect(submit).toHaveBeenCalledTimes(0)
       expect(goalRuns).toHaveLength(1)
       expect(goalRuns[0]?.goal_id).toBe(goals[0]?.id)
-      expect(goalRuns[0]?.status).toBe("completed")
+      expect(goalRuns.some((row) => row.goal_id === goals[1]?.id)).toBe(false)
+    },
+  })
+})
+
+test("syncRun does not queue the next goal while a completed goal is still awaiting its first evaluation record", async () => {
+  await using tmp = await tmpdir({ git: true })
+  const submit = mock(async (input: { sessionID: string }) => ({
+    sessionID: input.sessionID,
+    queueTaskID: Identifier.ascending("queue"),
+  }))
+  ExecutorRegistry.register("codex", adapter(submit))
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const root = await Session.create({ title: "missing evaluation root" })
+      const goals = [
+        { id: Identifier.ascending("goal"), description: "Build passes" },
+        { id: Identifier.ascending("goal"), description: "Tests pass" },
+      ]
+
+      await seedRun({ rootID: root.id, taskID, specID, planID, runID, goals })
+      Database.use((db) =>
+        db
+          .update(OrchestratorRunTable)
+          .set({ status: "accepted", time_started: now, time_updated: now })
+          .where(eq(OrchestratorRunTable.id, runID))
+          .run(),
+      )
+
+      const goalRun = createGoalRun({
+        taskID,
+        goalID: goals[0]!.id,
+        coordinatorRunID: runID,
+        executor: "codex",
+        now,
+      })
+      updateGoalRun(goalRun.id, {
+        status: "completed",
+        time_started: now,
+        time_completed: now,
+      })
+
+      await OrchestratorRuntime.syncRun(runID, hooks())
+
+      const goalRuns = Database.use((db) =>
+        db
+          .select()
+          .from(OrchestratorGoalRunTable)
+          .where(eq(OrchestratorGoalRunTable.coordinator_run_id, runID))
+          .all(),
+      )
+
+      expect(submit).toHaveBeenCalledTimes(0)
+      expect(goalRuns).toHaveLength(1)
+      expect(goalRuns[0]?.goal_id).toBe(goals[0]?.id)
+      expect(goalRuns.some((row) => row.goal_id === goals[1]?.id)).toBe(false)
     },
   })
 })

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { ExecutorRegistry } from "../../src/executor/registry"
-import { PlannerService } from "../../src/planner/service"
 import { PlannerAgent } from "../../src/planner/agent"
+import { PlannerService } from "../../src/planner/service"
 
 beforeEach(() => {
   process.env.OPENCORVUS_UNATTENDED = "0"
@@ -13,7 +13,7 @@ afterEach(() => {
   delete process.env.OPENCORVUS_UNATTENDED
 })
 
-const MOCK_PLAN = {
+const BASE_PLAN = {
   prd: "Expanded spec based on real files",
   summary: "Update the landing page plan summary",
   subtasks: [
@@ -29,35 +29,60 @@ const MOCK_PLAN = {
     },
   ],
   risks: ["Risk"],
-} as any
+} as const
 
 const MOCK_SPEC = {
   summary: "Spec summary",
   content: "# Scope\n\nExpanded spec based on real files",
-  goals: [
+  scope: "Expanded spec based on real files",
+  requirements: [
     {
-      description: "Primary goal",
-      criteria: "build passes",
-      priority: "blocking",
-      metadata: {
-        check_selector: ["build"],
-      },
+      id: "req_primary",
+      title: "Primary requirement",
+      description: "The landing page update builds cleanly.",
+      priority: "blocking" as const,
+      acceptance: ["build passes"],
+      evidence_refs: ["src/app.ts"],
     },
   ],
   assumptions: [],
   risks: [],
-  spec_items: [],
   evidence_sources: [],
   unresolved_questions: [],
 }
 
+const MOCK_GOALS = [
+  {
+    description: "Primary goal",
+    criteria: "build passes",
+    priority: "blocking" as const,
+    metadata: {
+      check_selector: ["build"],
+    },
+  },
+]
+
+function planForGoals(goalCount: number, overrides: Record<string, unknown> = {}) {
+  return {
+    ...BASE_PLAN,
+    waves: Array.from({ length: goalCount }, (_, index) => ({
+      title: `Wave ${index + 1}`,
+      objective: `Execute goal ${index + 1}`,
+      goal_indices: [index],
+      owned_paths: [`src/goal-${index + 1}.ts`],
+    })),
+    ...overrides,
+  } as any
+}
+
 describe("planner.service", () => {
   test("builds an initial plan with execution prompt", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
     const plan = await PlannerService.initial({
       title: "Update landing page",
       request: "Update the landing page hero copy and make sure tests pass.",
       spec: MOCK_SPEC,
+      goals: MOCK_GOALS,
     })
 
     expect(plan.summary).toContain("Update the landing page")
@@ -65,14 +90,13 @@ describe("planner.service", () => {
     expect(plan.metadata.strategy).toBe("initial")
     expect(plan.metadata.planner?.role).toBe("headless_compiler")
     expect(plan.metadata.steps.length).toBeGreaterThan(1)
-    // Execution prompt should contain key workflow elements
     expect(plan.prompt).toContain("## Execution Guide")
     expect(plan.prompt).toContain("planner")
     expect(plan.prompt).toContain("typecheck")
   })
 
   test("planner receives spec as input (decoupled from spec stage)", async () => {
-    const planner = spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    const planner = spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
     const spec = {
       ...MOCK_SPEC,
       content: "# Scope\n\nAuthoritative spec",
@@ -82,6 +106,7 @@ describe("planner.service", () => {
       title: "Update landing page",
       request: "Update the landing page hero copy and make sure tests pass.",
       spec,
+      goals: MOCK_GOALS,
     })
 
     expect(planner).toHaveBeenCalledWith(expect.objectContaining({
@@ -93,10 +118,9 @@ describe("planner.service", () => {
   })
 
   test("builds a replan with failure context and replan section", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue({
-      ...MOCK_PLAN,
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1, {
       summary: "Fix flaky integration test with a new approach",
-    } as any)
+    }))
     const plan = await PlannerService.replan({
       title: "Fix failing test",
       request: "Fix the flaky integration test.",
@@ -121,20 +145,21 @@ describe("planner.service", () => {
   })
 
   test("infers ui and startup selectors for relevant requests", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
     const plan = await PlannerService.initial({
       title: "Review dashboard UI",
       request: "Improve the dashboard UI/UX and make sure the app starts normally before delivery.",
-      spec: {
-        ...MOCK_SPEC,
-        goals: [
-          {
-            description: "Improve the dashboard UI",
-            criteria: "The app starts normally and the UI review passes",
-            priority: "blocking",
+      spec: MOCK_SPEC,
+      goals: [
+        {
+          description: "Improve the dashboard UI",
+          criteria: "The app starts normally and the UI review passes",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["ui_review", "startup"],
           },
-        ],
-      },
+        },
+      ],
     })
 
     expect(plan.prompt).toContain("ui_review")
@@ -144,34 +169,29 @@ describe("planner.service", () => {
   })
 
   test("keeps heavy command selectors goal-local", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(2))
     const plan = await PlannerService.initial({
       title: "Dashboard refresh",
       request: "Improve the dashboard UI/UX and make sure tests pass before delivery.",
-      spec: {
-        ...MOCK_SPEC,
-        goals: [
-          {
-            description: "Refresh dashboard UI",
-            criteria: "The UI review passes.",
-            priority: "blocking",
-          },
-          {
-            description: "Run focused verification",
-            criteria: "The final verification command passes.",
-            priority: "blocking",
-            metadata: {
-              check_selector: ["verify_cmd"],
-            },
-          },
-        ],
-        spec_items: [{
-          title: "Final verification",
-          description: "Run the final verification command",
+      spec: MOCK_SPEC,
+      goals: [
+        {
+          description: "Refresh dashboard UI",
+          criteria: "The UI review passes.",
           priority: "blocking",
-          check_selector: ["verify_cmd"],
-        }],
-      },
+          metadata: {
+            check_selector: ["spec_check", "ui_review"],
+          },
+        },
+        {
+          description: "Run focused verification",
+          criteria: "The final verification command passes.",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["verify_cmd"],
+          },
+        },
+      ],
     })
 
     const goals = plan.metadata.spec_analysis?.goals ?? []
@@ -183,24 +203,25 @@ describe("planner.service", () => {
     expect(goals[0]?.metadata?.check_selector).not.toContain("lint")
     expect(goals[0]?.metadata?.check_selector).not.toContain("verify_cmd")
     expect(goals[1]?.metadata?.check_selector).toContain("verify_cmd")
-    expect(goals[1]?.metadata?.check_selector).toContain("spec_check")
+    expect(goals[1]?.metadata?.check_selector).not.toContain("spec_check")
   })
 
   test("infers code review and dead code selectors for relevant requests", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
     const plan = await PlannerService.initial({
       title: "Review cleanup",
       request: "Do a CR for this refactor and check whether dead code or obsolete branches still remain.",
-      spec: {
-        ...MOCK_SPEC,
-        goals: [
-          {
-            description: "Run a code review",
-            criteria: "Review findings are addressed and dead code is checked",
-            priority: "blocking",
+      spec: MOCK_SPEC,
+      goals: [
+        {
+          description: "Run a code review",
+          criteria: "Review findings are addressed and dead code is checked",
+          priority: "blocking",
+          metadata: {
+            check_selector: ["code_review", "dead_code_review"],
           },
-        ],
-      },
+        },
+      ],
     })
 
     expect(plan.prompt).toContain("code_review")
@@ -208,11 +229,12 @@ describe("planner.service", () => {
   })
 
   test("flags vague requests for clarification by default", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
     const plan = await PlannerService.initial({
-      title: "优化性能",
-      request: "优化性能",
+      title: "Optimize performance",
+      request: "Optimize performance",
       spec: MOCK_SPEC,
+      goals: MOCK_GOALS,
     })
 
     expect(plan.metadata.clarification?.questions.length).toBe(1)
@@ -221,6 +243,7 @@ describe("planner.service", () => {
 
   test("preserves multiple model-generated clarification questions", async () => {
     spyOn(PlannerAgent, "plan").mockResolvedValue({
+      ...planForGoals(1),
       prd: "Expanded spec",
       summary: "Plan summary",
       subtasks: [
@@ -251,6 +274,7 @@ describe("planner.service", () => {
       title: "Ambiguous task",
       request: "Handle this refactor carefully.",
       spec: MOCK_SPEC,
+      goals: MOCK_GOALS,
     })
 
     expect(plan.metadata.planner?.quality).toBe("compiled")
@@ -264,16 +288,21 @@ describe("planner.service", () => {
     await expect(
       PlannerService.initial({
         title: "Failure",
-        request: "优化性能",
+        request: "Optimize performance",
         spec: MOCK_SPEC,
+        goals: MOCK_GOALS,
       }),
     ).rejects.toThrow("planner agent failed")
   })
 
   test("times out internal replanning instead of hanging indefinitely", async () => {
     process.env.OPENCORVUS_PLANNER_TIMEOUT_MS = "20"
-    spyOn(PlannerAgent, "plan").mockImplementation(async () => {
-      await new Promise<never>(() => {})
+    spyOn(PlannerAgent, "plan").mockImplementation(async ({ signal }) => {
+      await new Promise<never>((_, reject) => {
+        signal?.addEventListener("abort", () => {
+          reject(signal.reason ?? new Error("aborted"))
+        }, { once: true })
+      })
       throw new Error("unreachable")
     })
 
@@ -282,19 +311,21 @@ describe("planner.service", () => {
         title: "Failure",
         request: "Optimize performance",
         spec: MOCK_SPEC,
+        goals: MOCK_GOALS,
         previousPrompt: "Old plan",
         previousPlanID: "pln_previous",
         failureSummary: "The build is still failing.",
       }),
-    ).rejects.toThrow("planner timed out after 20ms")
+    ).rejects.toThrow("planner stalled after 20ms without activity")
   })
 
   test("suppresses clarification when allowClarification is false", async () => {
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
     const plan = await PlannerService.initial({
-      title: "优化性能",
-      request: "优化性能",
+      title: "Optimize performance",
+      request: "Optimize performance",
       spec: MOCK_SPEC,
+      goals: MOCK_GOALS,
       allowClarification: false,
     })
 
@@ -303,27 +334,28 @@ describe("planner.service", () => {
 
   test("suppresses spec clarification automatically in unattended mode", async () => {
     process.env.OPENCORVUS_UNATTENDED = "1"
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
 
     const plan = await PlannerService.initial({
-      title: "无人值守任务",
-      request: "优化性能",
+      title: "Unattended task",
+      request: "Optimize performance",
       spec: {
         ...MOCK_SPEC,
         clarifications: [
           {
-            header: "范围",
-            question: "优先优化哪个页面？",
-            context: "请求没有指定目标页面。",
-            default_assumption: "先优化默认首页。",
+            header: "Scope",
+            question: "Which page should be optimized first?",
+            context: "The request does not identify a target page.",
+            default_assumption: "Start with the default landing page.",
           },
         ],
       } as any,
+      goals: MOCK_GOALS,
     })
 
     expect(plan.metadata.clarification).toBeUndefined()
     expect(plan.metadata.planner?.clarification_source).toBe("suppressed")
-    expect(plan.prompt).toContain("先优化默认首页")
+    expect(plan.prompt).toContain("Start with the default landing page.")
   })
 
   test("uses executor-native plan when configured with spec input", async () => {
@@ -347,11 +379,18 @@ describe("planner.service", () => {
       },
       async generatePlanning(input) {
         seen.push(input as Record<string, unknown>)
-        // Only plan stage — spec is now pre-resolved by orchestrator
         return {
           output: JSON.stringify({
             prd: "Executor PRD",
             summary: "Executor plan summary",
+            waves: [
+              {
+                title: "Wave 1",
+                objective: "Execute goal 1",
+                goal_indices: [0],
+                owned_paths: ["src/executor.ts"],
+              },
+            ],
             subtasks: [
               {
                 title: "Inspect",
@@ -384,6 +423,7 @@ describe("planner.service", () => {
     const executorSpec = {
       summary: "Executor spec summary",
       content: "# Scope\n\nExecutor spec",
+      requirements: MOCK_SPEC.requirements,
       assumptions: [],
       risks: [],
     }
@@ -391,7 +431,8 @@ describe("planner.service", () => {
     const plan = await PlannerService.initial({
       title: "Executor plan",
       request: "Plan with executor",
-      spec: executorSpec,
+      spec: executorSpec as any,
+      goals: MOCK_GOALS,
       executor: "codex",
       routing: {
         spec: "executor",
@@ -403,7 +444,6 @@ describe("planner.service", () => {
     expect(plan.metadata.planner?.source).toBe("executor_native")
     expect((plan.metadata.stage_sources?.plan as { resolved?: string })?.resolved).toBe("executor")
     expect((plan.metadata.stage_sources?.plan as { warning?: string })?.warning).toContain("prompt-constrained")
-    // PRD from planner agent takes priority over spec content in expanded_spec
     expect(plan.metadata.spec_analysis?.expanded_spec).toContain("Executor PRD")
     expect(seen[0]?.outputSchema).toMatchObject({
       type: "object",
@@ -416,7 +456,7 @@ describe("planner.service", () => {
     })
   })
 
-  test("falls back to opencorvus planner when executor-native planning is unavailable", async () => {
+  test("fails fast when executor-native planning is requested but unsupported", async () => {
     ExecutorRegistry.register("codex", {
       capabilities() {
         return {
@@ -445,25 +485,23 @@ describe("planner.service", () => {
       },
       async *events() {},
     })
-    spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
 
-    const plan = await PlannerService.initial({
-      title: "Fallback plan",
-      request: "Plan with fallback",
-      spec: { ...MOCK_SPEC, content: "# Scope\n\nFallback spec" },
-      executor: "codex",
-      routing: {
-        plan: "executor",
-      },
-    })
-
-    expect(plan.metadata.planner?.source).toBe("planner_agent")
-    expect((plan.metadata.stage_sources?.plan as { resolved?: string; fallback_reason?: string })?.resolved).toBe("opencorvus")
-    expect((plan.metadata.stage_sources?.plan as { fallback_reason?: string })?.fallback_reason).toContain("does not support plan generation")
+    await expect(
+      PlannerService.initial({
+        title: "Unsupported executor plan",
+        request: "Plan without fallback",
+        spec: { ...MOCK_SPEC, content: "# Scope\n\nFallback spec" },
+        goals: MOCK_GOALS,
+        executor: "codex",
+        routing: {
+          plan: "executor",
+        },
+      }),
+    ).rejects.toThrow("does not support plan generation")
   })
 
   test("surfaces spec-stage clarification before planning", async () => {
-    const planner = spyOn(PlannerAgent, "plan").mockResolvedValue(MOCK_PLAN)
+    const planner = spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
     const specWithClarification = {
       ...MOCK_SPEC,
       clarifications: [
@@ -479,7 +517,8 @@ describe("planner.service", () => {
     const plan = await PlannerService.initial({
       title: "Ambiguous task",
       request: "Refactor this feature.",
-      spec: specWithClarification,
+      spec: specWithClarification as any,
+      goals: MOCK_GOALS,
     })
 
     expect(planner).not.toHaveBeenCalled()
@@ -508,7 +547,7 @@ describe("planner.service", () => {
         }
       },
       async generatePlanning() {
-        throw new Error("should not be called — spec has clarifications")
+        throw new Error("should not be called because spec has clarifications")
       },
       async submit() {
         throw new Error("not used")
@@ -543,7 +582,8 @@ describe("planner.service", () => {
     const plan = await PlannerService.initial({
       title: "Executor clarification",
       request: "Refactor this feature.",
-      spec: specWithClarification,
+      spec: specWithClarification as any,
+      goals: MOCK_GOALS,
       executor: "codex",
       routing: {
         spec: "executor",
@@ -556,7 +596,7 @@ describe("planner.service", () => {
 
   test("propagates spec assumptions into execution prompt and metadata", async () => {
     spyOn(PlannerAgent, "plan").mockResolvedValue({
-      ...MOCK_PLAN,
+      ...planForGoals(1),
       assumptions: [
         {
           question: "Can tests be updated?",
@@ -581,6 +621,7 @@ describe("planner.service", () => {
       title: "Assumption flow",
       request: "Update the feature and keep it safe.",
       spec: specWithAssumptions,
+      goals: MOCK_GOALS,
     })
 
     expect(plan.prompt).toContain("Which environment should be treated as canonical?")
@@ -596,5 +637,41 @@ describe("planner.service", () => {
         assumption: "Yes, if behavior changes require it.",
       },
     ])
+  })
+
+  test("ignores compatibility goals embedded in spec and uses explicit goal-stage input only", async () => {
+    spyOn(PlannerAgent, "plan").mockResolvedValue(planForGoals(1))
+
+    const plan = await PlannerService.initial({
+      title: "Compatibility cleanup",
+      request: "Plan from explicit goals only.",
+      spec: {
+        ...MOCK_SPEC,
+        goals: [
+          {
+            description: "legacy spec goal",
+            criteria: "should be ignored",
+            priority: "blocking",
+          },
+        ],
+      } as any,
+      goals: [
+        {
+          description: "authoritative goal",
+          criteria: "must be preserved",
+          priority: "blocking",
+        },
+      ],
+    })
+
+    expect(plan.metadata.spec_analysis?.goals).toEqual([
+      expect.objectContaining({
+        description: "authoritative goal",
+        criteria: "must be preserved",
+      }),
+    ])
+    expect(plan.metadata.spec_analysis?.goals).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ description: "legacy spec goal" })]),
+    )
   })
 })

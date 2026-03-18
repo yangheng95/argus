@@ -37,36 +37,46 @@ let configDir = ""
 let originalConfigDir: string | undefined
 
 function stub() {
+  const goals = [
+    {
+      description: "Implement the requested change",
+      criteria: "The requested change is implemented and checks pass.",
+      priority: "blocking" as const,
+    },
+  ]
   spyOn(SpecService, "initial").mockResolvedValue({
     summary: "Implement feature",
     content: "# Scope\n\nImplement feature",
-    goals: [
-      {
-        description: "Implement the requested change",
-        criteria: "The requested change is implemented and checks pass.",
-        priority: "blocking",
-      },
-    ],
+    requirements: [{
+      id: "req_impl",
+      title: "Implement the requested change",
+      description: "Implement the requested change",
+      priority: "blocking",
+      acceptance: ["The requested change is implemented and checks pass."],
+      evidence_refs: [],
+      metadata: { check_selector: ["spec_check"] },
+    }],
     assumptions: [],
     risks: [],
     clarifications: [],
-    spec_items: [{
-      title: "Implement the requested change",
-      description: "The requested change is implemented and checks pass.",
-      priority: "blocking",
-      check_selector: ["spec_check"],
-    }],
     evidence_sources: [],
     unresolved_questions: [],
   })
   spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Implement feature",
     prompt: "Do the work",
+    goals,
     metadata: {
       strategy: "initial",
       steps: ["Implement the requested change"],
       clarification: undefined,
       spec_analysis: undefined,
+      waves: goals.map((goal, index) => ({
+        title: `Wave ${index + 1}`,
+        objective: goal.description,
+        goal_indices: [index],
+        owned_paths: [`src/goal-${index + 1}.ts`],
+      })),
     },
   })
   spyOn(OpencodeExecutor, "status").mockImplementation(async (queueTaskID) => ({
@@ -106,6 +116,10 @@ describe("channel routes", () => {
     await using tmp = await tmpdir({ git: true })
     stub()
     installControlModel()
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const requestID = `req-channel-${suffix}`
+    const channelID = `room-${suffix}`
+    const threadID = `thread-${suffix}`
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -124,10 +138,10 @@ describe("channel routes", () => {
           body: JSON.stringify({
             type: "channel_ingress",
             version: "channel.v1",
-            request_id: "req-channel-1",
+            request_id: requestID,
             platform: "discord",
-            channel: "room-1",
-            thread: "thread-1",
+            channel: channelID,
+            thread: threadID,
             user: {
               id: "user-1",
             },
@@ -159,10 +173,10 @@ describe("channel routes", () => {
             .get(),
         )
         expect(task?.source).toBe("channel:discord")
-        expect(task?.request_id).toBe("req-channel-1")
+        expect(task?.request_id).toBe(requestID)
         expect(binding?.platform).toBe("discord")
-        expect(binding?.channel).toBe("room-1")
-        expect(binding?.thread).toBe("thread-1")
+        expect(binding?.channel).toBe(channelID)
+        expect(binding?.thread).toBe(threadID)
         const channel = binding?.payload?.channel as { user_id?: string } | undefined
         expect(channel?.user_id).toBe("user-1")
       },
@@ -379,6 +393,10 @@ describe("channel routes", () => {
     await using tmp = await tmpdir({ git: true })
     stub()
     installControlModel()
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const requestID = `req-feishu-${suffix}`
+    const channelID = `chat-${suffix}`
+    const threadID = `root-${suffix}`
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -397,10 +415,10 @@ describe("channel routes", () => {
           body: JSON.stringify({
             type: "channel_ingress",
             version: "channel.v1",
-            request_id: "req-feishu-1",
+            request_id: requestID,
             platform: "feishu",
-            channel: "chat-9",
-            thread: "root-9",
+            channel: channelID,
+            thread: threadID,
             user: {
               id: "ou_xxx",
             },
@@ -422,8 +440,8 @@ describe("channel routes", () => {
             .get(),
         )
         expect(binding?.platform).toBe("feishu")
-        expect(binding?.channel).toBe("chat-9")
-        expect(binding?.thread).toBe("root-9")
+        expect(binding?.channel).toBe(channelID)
+        expect(binding?.thread).toBe(threadID)
       },
     })
   })

@@ -35,11 +35,11 @@ export class SpecFailureError extends Error {
  * Convert SpecAgent output to the shared spec draft used by the orchestrator.
  */
 function toSpecDraft(output: SpecOutputType, explicitGoals?: z.infer<typeof SpecDraftGoal>[]) {
+  void explicitGoals
   return {
     draft: {
       summary: output.summary,
       content: output.content,
-      goals: explicitGoals ?? [],
       requirements: output.requirements,
       assumptions: output.assumptions,
       risks: output.risks,

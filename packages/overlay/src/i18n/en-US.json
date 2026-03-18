@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "en-US",
-    "panel_revision": "a6a885889cae288c"
+    "panel_revision": "636560bd7619d891"
   },
   "brand.guide_kicker": "Quick Guide",
   "brand.guide_positioning_body": "This is the task cockpit, not decorative chrome: left selects tasks, center drives execution, right verifies spec, plan, evaluation, and file changes so the agent does not drift.",
@@ -77,7 +77,6 @@
   "chat.thinking": "Thinking...",
   "chat.tip": "Enter to send · Shift+Enter for newline",
   "chat.title": "Task",
-  "budget.defaults": "Defaults",
   "budget.empty": "Select a task to edit run budget.",
   "budget.hint": "Leave fields blank to use the orchestrator defaults.",
   "budget.max_evaluations": "Max Evaluations",

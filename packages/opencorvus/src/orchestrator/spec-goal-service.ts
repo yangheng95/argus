@@ -100,5 +100,6 @@ export function buildSpecReplanInput(task: TaskRow, plan: Pick<PlanRow, "spec_sn
     goals,
     goalUpdates,
     planHints,
+    rewriteSpec: constraints.length > 0 || goalUpdates.length > 0,
   }
 }

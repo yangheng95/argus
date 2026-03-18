@@ -42,11 +42,13 @@ The migration will be implemented in small, verifiable slices. Each slice must p
 - Phase 1 is done.
 - Phase 2 is done.
 - Phase 3 is done.
+- Phase 4 is done.
+- Phase 5 is done.
 - Landed shared contracts for `Requirement`, `GoalSnapshot`, `GoalQaProfile`, and enriched goal metadata.
 - Added persistence scaffolding for `orchestrator_requirement` and `orchestrator_goal_snapshot`.
 - Added routing / checks scaffolding for `goal` stage and `goal_check`.
 - Added store and board-level exposure needed for later cutovers.
-- Cut spec generation over to formulation-first `requirements[]` while keeping temporary legacy `spec_items[]` and goal projections alive for runtime compatibility.
+- Cut spec generation over to formulation-first `requirements[]`.
 - Removed spec-service goal derivation and execution-tranche trimming.
 - Moved spec-stage quality gating away from execution-sized slicing and toward formulation coverage, acceptance clarity, and evidence grounding.
 - Persisted first-class requirements on spec snapshot writes and reloads.
@@ -55,6 +57,11 @@ The migration will be implemented in small, verifiable slices. Each slice must p
 - Bound active plan metadata to `goal_snapshot_id` and made runtime / export / board consume goals through the active plan instead of raw spec linkage.
 - Switched plan-node dependency projection to use persisted goal-contract dependencies instead of wave order.
 - Enriched goal execution prompts with `objective`, `owned_paths`, and `done_definition`.
+- Removed planner fallback to `spec.goals`; planner now consumes explicit goal-stage input only.
+- Removed compatibility `goals` emission from spec drafts.
+- Replan now rewrites spec snapshots only for operator-driven requirement / goal updates; pure execution replans may reuse the active spec.
+- Goal recompile now scopes to unresolved goals and downstream dependents when replan context provides a valid seed set.
+- QA export / board now expose grouped rule, goal-acceptance, and spec-acceptance results.
 
 ### Files Landed In Phase 1
 
@@ -95,14 +102,17 @@ The migration will be implemented in small, verifiable slices. Each slice must p
 - Goal decomposition is now a first-class stage and active plans carry `goal_snapshot_id`.
 - Planner consumes goal-stage output instead of spec-derived goal projection.
 - Runtime / export / board now read goals through the active plan-bound goal snapshot.
-- QA pipeline cutover is still pending.
+- QA pipeline runs with grouped rule checks, `goal_check`, and scoped / terminal `spec_check`.
+- Operator `/goal` and `/spec` updates now create new authoritative spec / goal / plan versions instead of mutating planner-only state.
+- Regression coverage now includes rewritten requirements-first tests for spec parsing, goal compilation, planner cutover, workbench export, orchestrator replan, and benchmark-quality guards.
+- `overlay-web` materialize benchmark now passes on the refactored flow.
+- `overlay-web` full benchmark now passes on the refactored flow.
+- Route / channel / control regression fixtures now match the refactored async task lifecycle and current result shapes.
 
 ### Immediate Next Slice
 
-- Phase 5: QA pipeline cutover.
-- Add built-in `goal_check` and scoped `spec_check` execution order.
-- Separate goal acceptance from final full-spec acceptance.
-- After that, revisit goal decomposition quality for scaffolded benchmark workspaces so structural requirements are not emitted as misleading first-run no-op goals.
+- Run broader orchestrator / server regression subsets beyond the cutover slice and classify any remaining failures as contract debt versus unrelated legacy debt.
+- Keep benchmark acceptance and route/control/channel regression suites in sync so refactor status does not drift away from executable evidence.
 
 ## Phase 1: Shared Contracts And Persistence Scaffolding
 
@@ -169,6 +179,8 @@ Stop condition:
 - Goal DAG validity and anti-umbrella rejection are enforced before planner runs.
 
 Status:
+- Benchmark acceptance is now green on both materialize and full overlay-web runs.
+- Route / channel / control regression fixtures are aligned with the refactored contracts and currently green.
 
 - Done.
 - Validation used `bunx tsc --noEmit`; repository-wide failures remain limited to pre-existing `src/acp/agent.ts` and `src/cli/cmd/tui/context/sync.tsx`.
@@ -200,8 +212,8 @@ Stop condition:
 
 Status:
 
-- Active runtime goal lookup is now plan-aware and plan-node dependencies are sourced from goal contracts.
-- QA acceptance still uses the old grouping model.
+- Done.
+- Planner input is goal-stage-only and runtime dispatch stays bound to plan-aware goal snapshots.
 
 ## Phase 5: QA Pipeline Cutover
 
@@ -245,6 +257,11 @@ Stop condition:
 
 - Export and board surfaces show requirements and goal snapshots explicitly.
 - `overlay-web` full benchmark reaches execution + QA instead of dying in spec quality gate.
+
+Status:
+
+- Export and workbench surfaces now show requirements, active goal snapshots, and QA grouping explicitly.
+- `overlay-web` full benchmark rerun is green after the single-goal status writeback fix.
 
 ## Resume Protocol
 

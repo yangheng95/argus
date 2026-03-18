@@ -166,8 +166,10 @@ function activeGoalRuns(run: RunRow) {
 
 function hasPendingGoalEvaluations(run: RunRow) {
   return listGoalRunsByCoordinator(run.id).some((goalRun) => {
+    if (finalizingGoalRuns.has(goalRun.id)) return true
     if (goalRun.status !== "completed") return false
-    return findEvaluationByGoalRun(goalRun.id)?.status === "pending"
+    const evaluation = findEvaluationByGoalRun(goalRun.id)
+    return !evaluation || evaluation.status === "pending"
   })
 }
 
@@ -666,6 +668,7 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       evaluateGoal({ task, goal, delivery: delivered })
     )
     const outcome = goalEvaluationOutcome(result, analysis)
+    const runScopedAnalysis = remapGoalAnalysisToRunScope(analysis, goals, goal)
     persistEvaluation({
       task,
       run,
@@ -674,7 +677,7 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       evaluationID,
       delivery: delivered,
       result,
-      analysis,
+      analysis: runScopedAnalysis,
       finalVerdict: outcome.verdict,
       finalStatus: outcome.status,
       finalSummary: outcome.summary,
@@ -713,7 +716,7 @@ async function _finalizeGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow,
       await continueGoalPipeline(requireTask(task.id), requireRun(run.id), hooks)
       return
     }
-    await handleEvaluationFailure(requireTask(task.id), run, outcome.summary, hooks, analysis)
+    await handleEvaluationFailure(requireTask(task.id), run, outcome.summary, hooks, runScopedAnalysis)
   } finally {
     await dispose().catch((err) => log.warn("dispose failed after goal run finalization", { error: String(err) }))
   }
@@ -747,14 +750,6 @@ async function syncActiveGoalRun(task: TaskRow, run: RunRow, goalRun: GoalRunRow
   if (!queueTaskID) return goalRunSyncState(goalRun)
   let executorSession = activeExecutorSession(run, goalRun)
   if (executorSession?.status === "completed") {
-    if (goalRun.status !== "completed") {
-      updateGoalRun(goalRun.id, {
-        status: "completed",
-        blocking_reason: null,
-        error: null,
-        time_completed: Date.now(),
-      })
-    }
     await finalizeGoalRun(task, run, findGoalRun(goalRun.id) ?? goalRun, hooks)
     return "handled" as const
   }
@@ -1616,6 +1611,25 @@ async function handleEvaluationFailure(task: TaskRow, run: RunRow, summary: stri
     summary,
   )
   await hooks.updateTask(task, { status: "failed", blocking_reason: null, error: summary, time_completed: Date.now() }, summary)
+}
+
+export function remapGoalAnalysisToRunScope(
+  analysis: GoalJudgmentType | undefined,
+  goals: GoalRow[],
+  currentGoal: GoalRow,
+) {
+  if (!analysis) return analysis
+  const statuses = Array.isArray(analysis.goal_statuses) ? analysis.goal_statuses : []
+  if (statuses.length !== 1) return analysis
+  const goalIndex = goals.findIndex((item) => item.id === currentGoal.id)
+  if (goalIndex < 0 || statuses[0]?.goal_index === goalIndex) return analysis
+  return {
+    ...analysis,
+    goal_statuses: statuses.map((item) => ({
+      ...item,
+      goal_index: goalIndex,
+    })),
+  } satisfies GoalJudgmentType
 }
 
 async function executeDecision(

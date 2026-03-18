@@ -23,25 +23,22 @@ function mockSpec() {
   spyOn(SpecService, "initial").mockImplementation(async (input) => ({
     summary: `Spec: ${input.title}`,
     content: `# Scope\n\n${input.request}`,
-    goals: (input.goals ?? [{
+    requirements: (input.goals ?? [{
       description: input.request,
       criteria: "Task completed successfully",
       priority: "blocking" as const,
-    }]).map((goal) => ({
+    }]).map((goal, index) => ({
+      id: `req_${index + 1}`,
+      title: goal.description,
       description: goal.description,
-      criteria: goal.criteria,
       priority: goal.priority ?? ("blocking" as const),
+      acceptance: [goal.criteria],
+      evidence_refs: [],
       metadata: { check_selector: ["verify_cmd"] },
     })),
     assumptions: [],
     risks: [],
     clarifications: [],
-    spec_items: [{
-      title: input.title,
-      description: input.request,
-      priority: "blocking" as const,
-      check_selector: ["spec_check"],
-    }],
     evidence_sources: [],
     unresolved_questions: [],
   }))
@@ -108,6 +105,12 @@ test(
       metadata: {
         strategy: "initial",
         steps: ["Execute the task"],
+        waves: [{
+          title: "Wave 1",
+          objective: "Ship the requested task",
+          goal_indices: [0],
+          owned_paths: ["src/task.ts"],
+        }],
         planner: {
           role: "headless_compiler",
           quality: "compiled",

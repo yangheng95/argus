@@ -1567,6 +1567,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
             task,
             previousPlan,
             previousRun: run,
+            rewriteSpec: true,
             failureSummary,
             replanContext,
           })
@@ -1588,7 +1589,19 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
   const planDraft = compiled.planDraft
   const specDraft = compiled.specDraft
   const planID = Identifier.ascending("plan")
-  const specSnapshotID = isReplan && previousPlan ? previousPlan.spec_snapshot_id : Identifier.ascending("spec")
+  const previousSpecSnapshotID = previousPlan?.spec_snapshot_id
+  const previousSpecSnapshot = previousSpecSnapshotID ? findSpecSnapshot(previousSpecSnapshotID) : undefined
+  const specRewrite = !isReplan || compiled.specStrategy === "rewritten"
+  const specSnapshotID =
+    isReplan && previousPlan && !specRewrite
+      ? previousPlan.spec_snapshot_id
+      : Identifier.ascending("spec")
+  const specVersion =
+    isReplan
+      ? specRewrite
+        ? (previousSpecSnapshot?.version ?? 0) + 1
+        : (previousSpecSnapshot?.version ?? 1)
+      : 1
   const goalSnapshotID = compiled.goalDraft ? Identifier.ascending("goal_snapshot") : undefined
   const previousGoalSnapshotID =
     previousPlan?.metadata && typeof previousPlan.metadata.goal_snapshot_id === "string"
@@ -1643,26 +1656,36 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
           .where(eq(OrchestratorGoalSnapshotTable.id, previousGoalSnapshotID))
           .run()
       }
+      if (specRewrite && previousSpecSnapshotID) {
+        db.update(OrchestratorSpecSnapshotTable)
+          .set({
+            status: "superseded",
+            time_updated: now,
+          })
+          .where(eq(OrchestratorSpecSnapshotTable.id, previousSpecSnapshotID))
+          .run()
+      }
     }
-    const persistedSpec = isReplan
-      ? {
-          requirements: findRequirements(specSnapshotID).map((requirement) => ({
-            id: requirement.id,
-            sourceRequirementID:
-              requirement.metadata && typeof requirement.metadata.source_requirement_id === "string"
-                ? requirement.metadata.source_requirement_id
-                : requirement.id,
-            title: requirement.title,
-            priority: requirement.priority,
-          })),
-        }
-      : persistSpecSnapshot(db, {
+    const persistedSpec =
+      !isReplan || specRewrite
+        ? persistSpecSnapshot(db, {
           taskID: task.id,
           specSnapshotID,
-          version: 1,
+          version: specVersion,
           specDraft,
           now,
         })
+        : {
+            requirements: findRequirements(specSnapshotID).map((requirement) => ({
+              id: requirement.id,
+              sourceRequirementID:
+                requirement.metadata && typeof requirement.metadata.source_requirement_id === "string"
+                  ? requirement.metadata.source_requirement_id
+                  : requirement.id,
+              title: requirement.title,
+              priority: requirement.priority,
+            })),
+          }
     const persistedGoals =
       goalSnapshotID && compiled.goalDraft
         ? persistGoalSnapshot(db, {
@@ -1750,6 +1773,15 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
         status: "answered",
         summary: "Clarification answered",
       }, { source: "service.resolve_clarification" }),
+    )
+    Database.effect(() =>
+      specRewrite
+        ? OrchestratorProtocol.emit(Event.SpecCreated, {
+            taskID: task.id,
+            specID: specSnapshotID,
+            summary: specDraft.summary,
+          }, { source: "service.resolve_clarification" })
+        : undefined,
     )
     Database.effect(() =>
       OrchestratorProtocol.emit(Event.PlanCreated, { taskID: task.id, planID, summary: planDraft.summary }, { source: "service.resolve_clarification" }),

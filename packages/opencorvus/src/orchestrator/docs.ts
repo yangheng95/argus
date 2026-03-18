@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "fs"
 import path from "path"
 import type { GoalJudgmentType } from "@/evaluator/agent"
+import { evaluationGroups } from "@/orchestrator/evaluation-group"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import type { EvaluationRow, GoalRow, MilestoneRow, PlanRow, RunRow, TaskRow } from "./store"
@@ -273,7 +274,7 @@ function goalText(input: {
 }) {
   const summary = counts(input.goals)
   const lines = [
-    "# Spec Goals Snapshot",
+    "# Goal Snapshot",
     "",
     `- Task: ${input.task.title}`,
     `- Task ID: ${input.task.id}`,
@@ -361,10 +362,18 @@ function evaluationText(input: {
     }
   }
 
-  lines.push("", "## Checks", "")
   if (input.evaluation.checks.length === 0) {
+    lines.push("", "## Checks", "")
     lines.push("- No checks recorded.")
   } else {
+    const groups = evaluationGroups(input.evaluation.checks)
+    if (groups.length > 0) {
+      lines.push("", "## QA Groups", "")
+      for (const group of groups) {
+        lines.push(`- [${group.status}] ${group.label}: ${group.checks.join(", ")}`)
+      }
+    }
+    lines.push("", "## Checks", "")
     for (const check of input.evaluation.checks) {
       const label = check.label || check.name
       const family = text(check.family)
@@ -448,7 +457,7 @@ export function writeGoalSnapshot(input: {
   return save({
     kind: "goals",
     taskID: input.task.id,
-    ref: `spec-goals-v${input.plan.version}`,
+    ref: `goal-snapshot-v${input.plan.version}`,
     title: input.task.title,
     createdAt: input.createdAt,
     content: goalText(input),

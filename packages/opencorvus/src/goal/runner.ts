@@ -15,7 +15,18 @@ import { type GoalJudgmentType } from "@/evaluator/agent"
 import { Worktree } from "@/worktree"
 import { Identifier } from "@/id/id"
 import z from "zod"
-import { findRun, findTask, listGoalRunsByTask, type TaskRow, type GoalRow, type PlanRow, type GoalRunRow, type PlanNodeRow } from "@/orchestrator/store"
+import {
+  findDeliveryByGoalRun,
+  findDeliveryByRun,
+  findRun,
+  findTask,
+  listGoalRunsByTask,
+  type TaskRow,
+  type GoalRow,
+  type PlanRow,
+  type GoalRunRow,
+  type PlanNodeRow,
+} from "@/orchestrator/store"
 import { updateGoalRun } from "@/orchestrator/transition"
 import { agentStream } from "@/orchestrator/agent-stream"
 
@@ -42,19 +53,46 @@ function strings(input: unknown) {
   return [...new Set(Array.isArray(input) ? input.filter((item): item is string => typeof item === "string" && item.length > 0) : [])]
 }
 
+function mergeFiles(...groups: Array<string[] | undefined>) {
+  return [...new Set(groups.flatMap((group) => group ?? []))]
+}
+
+function filesFromDeliveryResult(input: unknown) {
+  const result = dict(input)
+  const changed = strings(result.changed_files).filter(includeDeliveryFile)
+  if (changed.length > 0) return changed
+  const diffs = Array.isArray(result.diffs)
+    ? result.diffs.flatMap((item) => {
+        const parsed = Snapshot.FileDiff.safeParse(item)
+        return parsed.success && includeDeliveryFile(parsed.data.file) ? [parsed.data.file] : []
+      })
+    : []
+  return [...new Set(diffs)]
+}
+
 function retryFiles(task: TaskRow) {
   const seen = new Set<string>()
+  const goalRuns = listGoalRunsByTask(task.id)
+  const files = new Set<string>()
   let runID = task.active_run_id ?? undefined
   while (runID && !seen.has(runID)) {
     seen.add(runID)
     const run = findRun(runID)
-    if (!run) return []
+    if (!run) break
     const context = dict(run.metadata?.retry_context)
-    const files = strings(context.changedFiles)
-    if (files.length > 0) return files
+    for (const file of strings(context.changedFiles).filter(includeDeliveryFile)) files.add(file)
+    const runFiles = filesFromDeliveryResult(findDeliveryByRun(run.id)?.result)
+    for (const file of runFiles) files.add(file)
+    const runGoalRuns = goalRuns
+      .filter((goalRun) => goalRun.coordinator_run_id === run.id)
+      .sort((a, b) => (b.time_created ?? 0) - (a.time_created ?? 0) || b.id.localeCompare(a.id))
+    for (const goalRun of runGoalRuns) {
+      const goalFiles = filesFromDeliveryResult(findDeliveryByGoalRun(goalRun.id)?.result)
+      for (const file of goalFiles) files.add(file)
+    }
     runID = typeof run.metadata?.previous_run_id === "string" ? run.metadata.previous_run_id : undefined
   }
-  return []
+  return [...files]
 }
 
 function retrySummary(prefix: string, files: string[]) {
@@ -138,33 +176,44 @@ export async function removeGoalRunSession(goalRun: GoalRunRow) {
 
 async function evaluationDelivery(task: TaskRow, delivery: { summary: string; diffs: z.infer<typeof Snapshot.FileDiff>[] }): Promise<CheckDelivery> {
   const filtered = filterDeliveryDiffs(delivery.diffs)
-  if (filtered.length > 0) {
+  const currentFiles = filtered.map((item) => item.file)
+  const historicalFiles = retryFiles(task)
+  const missingHistory = historicalFiles.filter((file) => !currentFiles.includes(file))
+  if (filtered.length > 0 && missingHistory.length === 0) {
     return {
       summary: delivery.summary,
       diffs: filtered,
-      changedFiles: filtered.map((item) => item.file),
+      changedFiles: currentFiles,
     }
   }
-  const files = retryFiles(task)
-  if (files.length === 0) {
+  if (filtered.length === 0 && missingHistory.length === 0) {
     return {
       summary: delivery.summary,
       diffs: delivery.diffs,
       changedFiles: [],
     }
   }
-  const replayed = (await Promise.all(files.map(materializeDiff))).flatMap((item) => item ? [item] : [])
-  if (replayed.length === 0) {
+  const replayed = (await Promise.all(missingHistory.map(materializeDiff))).flatMap((item) => item ? [item] : [])
+  const mergedDiffs = [...filtered, ...replayed]
+  const changedFiles = mergeFiles(currentFiles, replayed.map((item) => item.file))
+  if (changedFiles.length === 0) {
     return {
       summary: delivery.summary,
-      diffs: delivery.diffs,
+      diffs: filtered.length > 0 ? filtered : delivery.diffs,
       changedFiles: [],
+    }
+  }
+  if (filtered.length > 0) {
+    return {
+      summary: `${delivery.summary} Re-evaluating cumulative changed files from the current delivery and prior run history.`,
+      diffs: mergedDiffs,
+      changedFiles,
     }
   }
   return {
     summary: retrySummary(delivery.summary, replayed.map((item) => item.file)),
     diffs: replayed,
-    changedFiles: replayed.map((item) => item.file),
+    changedFiles,
   }
 }
 
@@ -396,6 +445,28 @@ function extractScopedRequest(request: string) {
   return collected.join("\n")
 }
 
+function allowedRequestPaths(request: string) {
+  if (!request.trim()) return []
+  const lines = request.split(/\r?\n/)
+  const allowed: string[] = []
+  let capture = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!capture && /^only\s+(create|modify|create or modify|modify or create).*(files|paths?)\s*:?\s*$/i.test(trimmed)) {
+      capture = true
+      continue
+    }
+    if (!capture) continue
+    if (!trimmed) break
+    const bullet = trimmed.match(/^[-*]\s+`?([^`]+?)`?\s*$/)
+    const numbered = trimmed.match(/^\d+\.\s+`?([^`]+?)`?\s*$/)
+    const value = bullet?.[1] || numbered?.[1]
+    if (!value) break
+    allowed.push(value.replace(/\\/g, "/"))
+  }
+  return [...new Set(allowed)]
+}
+
 function extractPlanSection(prompt: string, heading: string) {
   const marker = prompt.indexOf(heading)
   if (marker < 0) return ""
@@ -416,6 +487,7 @@ export function buildGoalPrompt(input: {
   const runnableChecks = executorSelectors(input.goal)
   const managedChecks = evaluatorManagedSelectors(input.goal)
   const requestScope = extractScopedRequest(input.taskRequest ?? "")
+  const allowedPaths = allowedRequestPaths(input.taskRequest ?? "")
   return [
     "You are executing the next iterative coding stage for the coordinator.",
     "Stay in the current project workspace and continue from the code that already exists.",
@@ -437,6 +509,14 @@ Prepare real implementation artifacts so these checks can pass, but do not fabri
     requestScope
       ? `Scoped request constraints:
 ${requestScope}`
+      : undefined,
+    allowedPaths.length > 0
+      ? [
+          "Allowed file edits:",
+          ...allowedPaths.map((item) => `- ${item}`),
+          "- Do not create, modify, or delete any file outside this allowlist.",
+          "- If a tool, type error, or test seems to require edits to an unlisted file such as tsconfig.json, package.json, lockfiles, README, or docs, stop and report the blocker instead of widening scope.",
+        ].join("\n")
       : undefined,
     waveTitle
       ? [

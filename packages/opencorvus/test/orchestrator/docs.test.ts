@@ -19,47 +19,44 @@ function stubPipeline() {
     summary: "Task spec",
     content: "# Scope\n\nUpdate src/app.ts to apply the requested change.",
     scope: "Update src/app.ts",
-    goals: [
+    requirements: [
       {
-        description: "Keep build green",
-        criteria: "Build check passes after updating src/app.ts.",
+        id: "req_build",
+        title: "Keep build green",
+        description: "Build check passes after updating src/app.ts.",
         priority: "blocking",
-        metadata: {
-          check_selector: ["build", "spec_check"],
-        },
+        acceptance: ["Build check passes after updating src/app.ts."],
+        evidence_refs: ["src/app.ts"],
       },
     ],
     assumptions: [],
     risks: [],
-    spec_items: [
-      {
-        title: "Keep build green",
-        description: "The requested change builds successfully.",
-        priority: "blocking",
-        check_selector: ["build"],
-      },
-    ],
-    evidence_sources: [],
+    evidence_sources: ["src/app.ts"],
     unresolved_questions: [],
   } as any)
   spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Compiled plan",
     prompt: "Implement the requested change in src/app.ts and verify the build.",
-    goals: [
-      {
-        description: "Keep build green",
-        criteria: "Build check passes after updating src/app.ts.",
-        priority: "blocking",
-        metadata: {
-          check_selector: ["build"],
-        },
-      },
-    ],
     metadata: {
       strategy: "initial",
       steps: [
         "Inspect src/app.ts and apply the requested change.",
         "Run the build check and confirm it passes.",
+      ],
+      waves: [
+        {
+          title: "Wave 1",
+          objective: "Keep build green",
+          goal_indices: [0],
+          owned_paths: ["src/app.ts"],
+        },
+      ],
+      milestones: [
+        {
+          title: "Wave 1",
+          description: "Keep build green",
+          goal_indices: [0],
+        },
       ],
       spec: {
         summary: "Task spec",
@@ -190,7 +187,7 @@ describe("orchestrator docs", () => {
           expect(readFileSync(prds[0]!, "utf-8")).toContain("Modify `src/app.ts`")
           expect(readFileSync(plans[0]!, "utf-8")).toContain("# Plan Graph Snapshot")
           expect(readFileSync(plans[0]!, "utf-8")).toContain("Compiled plan")
-          expect(readFileSync(goals[0]!, "utf-8")).toContain("# Spec Goals Snapshot")
+          expect(readFileSync(goals[0]!, "utf-8")).toContain("# Goal Snapshot")
           // Last goals snapshot should reflect the passed status from evaluation
           expect(readFileSync(goals.at(-1)!, "utf-8")).toContain("[passed] [blocking] Keep build green")
           expect(readFileSync(evaluations[0]!, "utf-8")).toMatch(/# (Coordinator|Goal Run) Evaluation Snapshot/)
@@ -255,7 +252,7 @@ describe("orchestrator docs", () => {
         expect(goalInitial.length).toBeGreaterThan(100)
         expect(goalFinal.length).toBeGreaterThan(100)
         for (const content of [goalInitial, goalFinal]) {
-          expect(content).toContain("# Spec Goals Snapshot")
+          expect(content).toContain("# Goal Snapshot")
           expect(content).toContain("## Goals")
           expect(content).toContain("## Plan Summary")
           // Each goal listing should include criteria
@@ -270,7 +267,7 @@ describe("orchestrator docs", () => {
         expect(evalContent.length).toBeGreaterThan(200)
         // Evaluation can be Coordinator or Goal Run type
         expect(evalContent).toMatch(/# (Coordinator|Goal Run) Evaluation Snapshot/)
-        const evalRequiredSections = ["## Request", "## Summary", "## Checks"]
+        const evalRequiredSections = ["## Request", "## Summary", "## QA Groups", "## Checks"]
         for (const section of evalRequiredSections) {
           expect(evalContent).toContain(section)
         }

@@ -34,20 +34,18 @@ describe("panel tool", () => {
       return {
         summary: "Spec",
         content: "# Scope\n\nImplement feature x",
-        goals: [{
+        requirements: [{
+          id: "req_feature_x",
+          title: "Implement feature x",
           description: "Implement feature x",
-          criteria: "Feature x works",
           priority: "blocking" as const,
+          acceptance: ["Feature x works"],
+          evidence_refs: [],
+          metadata: { check_selector: ["spec_check"] },
         }],
         assumptions: [],
         risks: [],
         clarifications: [],
-        spec_items: [{
-          title: "Implement feature x",
-          description: "Feature x works",
-          priority: "blocking" as const,
-          check_selector: ["spec_check"],
-        }],
         evidence_sources: [],
         unresolved_questions: [],
       }
