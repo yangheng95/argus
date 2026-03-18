@@ -34,11 +34,12 @@ export namespace Identifier {
     milestone: "mst",
     executor_session: "exs",
     executor_event: "exe",
+    goal_snapshot: "gsp",
     protocol_event: "pte",
     protocol_inbox: "pin",
     protocol_stream_chunk: "psc",
+    requirement: "req",
     spec: "spc",
-    specitem: "spi",
   } as const
 
   export function schema(prefix: keyof typeof prefixes) {

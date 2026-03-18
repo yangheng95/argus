@@ -1,4 +1,3 @@
-import { inferFamily } from "@/check/policy"
 import { Instance } from "@/project/instance"
 import { CheckConfig, NamedCheckConfig, NamedCheckFamily } from "@/orchestrator/model"
 import { Filesystem } from "@/util/filesystem"
@@ -11,18 +10,21 @@ import { Log } from "@/util/log"
 
 const discoveryLog = Log.create({ service: "evaluator-discovery" })
 
-export async function resolveConfig(metadata?: Record<string, unknown>) {
+export async function resolveConfig(metadata?: Record<string, unknown>, task?: CheckTask) {
   const configured = CheckConfig.safeParse(metadata?.checks)
   const next = configured.success ? configured.data : {}
   return CheckConfig.parse({
     ...next,
-    spec_check: requiredSpecCheck(next.spec_check),
+    ...(task?.goal ? { goal_check: requiredGoalCheck(next.goal_check) } : {}),
+    spec_check: requiredSpecCheck(next.spec_check, task),
   })
 }
 
 export function autoSpecCheck(task?: CheckTask): Record<string, unknown> {
-  void task
-  return { spec_check: requiredSpecCheck(undefined) }
+  return {
+    ...(task?.goal ? { goal_check: requiredGoalCheck(undefined) } : {}),
+    spec_check: requiredSpecCheck(undefined, task),
+  }
 }
 
 export function resolvedChecks(
@@ -46,6 +48,7 @@ export function resolvedChecks(
     ...(config.code_quality ? { code_quality: config.code_quality } : {}),
     ...(config.code_review ? { code_review: config.code_review } : {}),
     ...(config.dead_code_review ? { dead_code_review: config.dead_code_review } : {}),
+    ...(config.goal_check ? { goal_check: config.goal_check } : {}),
     spec_check: requiredSpecCheck(config.spec_check),
     ...(config.custom ? { custom: config.custom } : {}),
     ...(config.timeout_ms ? { timeout_ms: config.timeout_ms } : {}),
@@ -64,7 +67,7 @@ export function resolvedChecks(
   return CheckConfig.parse(next)
 }
 
-function requiredSpecCheck(current: z.infer<typeof CheckConfig>["spec_check"]) {
+function requiredGoalCheck(current: z.infer<typeof CheckConfig>["goal_check"]) {
   if (current?.enabled === false) {
     return {
       ...current,
@@ -77,6 +80,29 @@ function requiredSpecCheck(current: z.infer<typeof CheckConfig>["spec_check"]) {
     enabled: true,
     mode: "strict" as const,
   }
+}
+
+function requiredSpecCheck(current: z.infer<typeof CheckConfig>["spec_check"], task?: CheckTask) {
+  if (current?.enabled === false) {
+    return {
+      ...current,
+      enabled: false,
+      scope: current.scope ?? inferredSpecScope(task),
+      mode: current.mode ?? ("strict" as const),
+    }
+  }
+  return {
+    ...(current ?? {}),
+    enabled: true,
+    scope: current?.scope ?? inferredSpecScope(task),
+    mode: "strict" as const,
+  }
+}
+
+function inferredSpecScope(task?: CheckTask) {
+  if (task?.goal?.qaProfile?.specScope) return task.goal.qaProfile.specScope
+  if (Array.isArray(task?.requirementIDs) && task.requirementIDs.length > 0) return "mapped_requirements" as const
+  return "full_spec" as const
 }
 
 export async function discoverChecks(changedFiles?: unknown) {
@@ -196,7 +222,7 @@ function namedGroups(
       return [{
         name: key,
         label: current.label ?? discovered[key]?.label ?? checkLabel(key),
-        family: current.family ?? discovered[key]?.family ?? inferFamily(key),
+        family: current.family ?? discovered[key]?.family,
         commands: current.commands.map((command) => ({
           command,
           cwd: current.cwd,

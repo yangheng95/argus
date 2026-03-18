@@ -23,6 +23,14 @@ const timeoutMs = Number(process.argv.find((item) => item.startsWith("--timeout-
 const specTimeoutMs = Number(process.argv.find((item) => item.startsWith("--spec-timeout-ms="))?.split("=")[1]) || Math.max(60_000, Math.min(180_000, Math.floor(timeoutMs * 0.2)))
 const plannerTimeoutMs = Number(process.argv.find((item) => item.startsWith("--planner-timeout-ms="))?.split("=")[1]) || Math.max(60_000, Math.min(180_000, Math.floor(timeoutMs * 0.25)))
 const BENCHMARK_EXECUTOR = "codex"
+
+function benchmarkRouting() {
+  return {
+    spec: "executor" as const,
+    goal: "opencorvus" as const,
+    plan: "executor" as const,
+  }
+}
 const FINAL = new Set(["completed", "failed", "cancelled"])
 const TASK_TITLE = "Overlay Parallel Benchmark"
 const TASK_REQUEST = `
@@ -140,10 +148,7 @@ try {
       title: TASK_TITLE,
       request: TASK_REQUEST,
       executor: BENCHMARK_EXECUTOR,
-      routing: {
-        spec: "executor",
-        plan: "executor",
-      },
+      routing: benchmarkRouting(),
       checks: {
         build: false,
         test: false,

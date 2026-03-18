@@ -7,7 +7,7 @@
  * 2. Preference awareness — respects project conventions and constraints
  * 3. Codebase exploration — reads files, searches code, lists directories
  * 4. Web research — searches external documentation when needed
- * 5. Structured output — scope, requirements, acceptance criteria, spec items
+ * 5. Structured output — scope, requirements, acceptance criteria
  * 6. Rewrite — receives failure analysis and revises spec for replan
  */
 import { stepCountIs } from "ai"
@@ -23,6 +23,7 @@ import { Filesystem } from "@/util/filesystem"
 import { Instance } from "@/project/instance"
 import { Log } from "@/util/log"
 import { Env } from "@/env"
+import { Identifier } from "@/id/id"
 import path from "path"
 
 const log = Log.create({ service: "spec-agent" })
@@ -52,11 +53,24 @@ export const SpecDraftGoal = z.object({
   metadata: z.object({ check_selector: z.array(z.string()).optional() }).catchall(z.unknown()).optional(),
 })
 
+export const RequirementSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  priority: z.enum(["blocking", "advisory"]).default("blocking"),
+  acceptance: z.array(z.string().min(1)).min(1),
+  evidence_refs: z.array(z.string()).default([]),
+  non_goals: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+})
+export type Requirement = z.infer<typeof RequirementSchema>
+
 export const SpecDraftSchema = z.object({
   summary: z.string(),
   content: z.string(),
-  /** Execution goals derived from spec_items — one goal per iterative stage */
+  /** Goal decomposition moves to the goal stage; spec only carries user-explicit goals for compatibility. */
   goals: z.array(SpecDraftGoal).default([]),
+  requirements: z.array(RequirementSchema).default([]),
   assumptions: z.array(
     z.object({
       question: z.string(),
@@ -68,24 +82,12 @@ export const SpecDraftSchema = z.object({
 })
 export type SpecDraft = z.infer<typeof SpecDraftSchema>
 
-// ---------------------------------------------------------------------------
-// Output schema — what the spec agent produces
-// ---------------------------------------------------------------------------
-
-export const SpecItemSchema = z.object({
-  title: z.string().describe("Short title of the spec item"),
-  description: z.string().describe("Detailed description of what must be implemented"),
-  check_selector: z.array(z.string()).optional().describe("Which checks validate this item (build, test, lint, spec_check, etc.)"),
-  priority: z.enum(["blocking", "advisory"]).default("blocking"),
-})
-export type SpecItem = z.infer<typeof SpecItemSchema>
-
 export const SpecOutput = z.object({
   summary: z.string().describe("One-line summary of the specification"),
-  content: z.string().describe("Full markdown specification with Scope, Requirements, Constraints, Out-of-Scope, Open Questions, Spec Items"),
+  content: z.string().describe("Full markdown specification with Scope, Requirements, Constraints, Out-of-Scope, Evidence, Risks, and Open Questions"),
   scope: z.string().describe("What is in scope for this task"),
   out_of_scope: z.string().optional().describe("Explicitly excluded items"),
-  spec_items: z.array(SpecItemSchema).describe("Required spec items — each must be verifiably implemented"),
+  requirements: z.array(RequirementSchema).describe("Formulated requirements — precise, verifiable, and grounded in explored evidence"),
   assumptions: z.array(
     z.object({
       question: z.string(),
@@ -186,7 +188,7 @@ export namespace HeadlessSpecAgent {
 }
 
 export { HeadlessSpecAgent as SpecAgent }
-export const parseSpecOutput = (text: string) => extractJSON(text, true)
+export const parseSpecOutput = (text: string) => extractJSON(text)
 export const parseSpecMarkdown = (text: string) => extractSpecText(text)
 
 // ---------------------------------------------------------------------------
@@ -319,7 +321,7 @@ async function run(input: {
 
     const specQuality = validateSpecQuality(parsed, input.request, toolCallCount)
     log.info("spec agent output", {
-      specItems: parsed.spec_items.length,
+      requirements: parsed.requirements.length,
       contentLength: parsed.content.length,
       evidenceSources: parsed.evidence_sources.length,
       risks: parsed.risks.length,
@@ -413,24 +415,17 @@ function buildUserPrompt(
         retryContext.reasons.some((r) => r.includes("file path") || r.includes("evidence"))
           ? "- Include specific file paths and evidence sources from your exploration"
           : "",
-        retryContext.reasons.some((r) => r.includes("spec item"))
-          ? "- Define concrete spec items with verifiable acceptance criteria"
+        retryContext.reasons.some((r) => r.includes("Requirements") || r.includes("requirement"))
+          ? "- Define concrete requirements with explicit acceptance statements and evidence references"
           : "",
         retryContext.reasons.some((r) => r.includes("content"))
           ? "- Write a detailed specification with all required sections (>500 chars)"
           : "",
-        retryContext.broadTitles.length > 0 ? "- Split every broad item listed below into narrower implementation slices" : "",
-        retryContext.broadTitles.length > 0 ? "" : "",
-        retryContext.broadTitles.length > 0 ? "**Broad items that MUST be split:**" : "",
-        ...retryContext.broadTitles.map((title) => `- ${title}`),
-        retryContext.broadTitles.length > 0 ? "" : "",
-        "**Spec item rules for this attempt:**",
-        "- Under # Spec Items, output the numbered list immediately. Do not add a preface like '包含功能' or '功能模块' before item 1",
-        "- For this large request, produce exactly 8-10 spec items",
-        "- Treat the spec items as iterative implementation stages in one evolving workspace",
-        "- Each item must cover one implementation slice only, not an umbrella feature bundle",
-        "- Do not combine independent domains such as auth + storage + sync, or timeline + calendar + search, into one item",
-        "- Prefer vertical slices such as editor CRUD, timeline feed, calendar browsing, search/filter, reminder jobs, privacy lock, sync queue, stats dashboard, settings, and tests",
+        "**Requirement rules for this attempt:**",
+        "- Under # Requirements, output the numbered list immediately. Do not add a preface like '包含功能' or '功能模块' before item 1",
+        "- Each requirement must include what must be true plus at least one verifiable acceptance statement",
+        "- Cite explored files, APIs, or references in evidence_refs or surrounding requirement text",
+        "- Do not decompose the task into implementation stages or execution slices in the spec stage",
       ]
         .filter(Boolean)
         .join("\n"),
@@ -439,7 +434,7 @@ function buildUserPrompt(
 
   if (input.goals && input.goals.length > 0) {
     sections.push(
-      `# User-Provided Goals\n\nIncorporate these goals into the specification. Ensure each goal has corresponding spec items.\n\n${input.goals
+      `# User-Provided Goals\n\nIncorporate these goals into the specification. Ensure each goal has corresponding formulated requirements, but do not turn the spec into an execution plan.\n\n${input.goals
         .map((g, i) => `${i + 1}. [${g.priority ?? "blocking"}] ${g.description}\n   Criteria: ${g.criteria}`)
         .join("\n")}`,
     )
@@ -513,7 +508,84 @@ function buildUserPrompt(
 // JSON extraction & repair (mirrors planner/agent.ts logic)
 // ---------------------------------------------------------------------------
 
-function extractJSON(text: string, strict = false): SpecOutputType {
+function normalizeTextList(value: unknown, separators: RegExp = /(?:\r?\n|[;；|])/): string[] {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((item) => String(item ?? "").trim()).filter(Boolean))]
+  }
+  if (typeof value !== "string") return []
+  return [...new Set(value
+    .split(separators)
+    .map((item) => item.trim())
+    .filter(Boolean))]
+}
+
+function normalizeRequirementID(value: unknown, seen: Set<string>) {
+  const candidate = typeof value === "string" ? value.trim() : ""
+  if (candidate && !seen.has(candidate)) {
+    seen.add(candidate)
+    return candidate
+  }
+  let next = Identifier.ascending("requirement")
+  while (seen.has(next)) next = Identifier.ascending("requirement")
+  seen.add(next)
+  return next
+}
+
+function normalizeRequirement(
+  raw: unknown,
+  index: number,
+  options?: { seen?: Set<string>; defaultEvidence?: string[] },
+): Requirement | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return
+  const record = raw as Record<string, unknown>
+  const title = typeof record.title === "string" && record.title.trim()
+    ? record.title.trim()
+    : specTitle(
+        typeof record.description === "string" && record.description.trim()
+          ? record.description
+          : `Requirement ${index + 1}`,
+      ) || `Requirement ${index + 1}`
+  const description = typeof record.description === "string" && record.description.trim()
+    ? record.description.trim()
+    : title
+  const acceptance = normalizeTextList(
+    record.acceptance ?? record.criteria ?? record.verification ?? record.done_definition,
+  )
+  const evidence_refs = normalizeTextList(
+    record.evidence_refs ?? record.evidence ?? options?.defaultEvidence ?? [],
+    /(?:\r?\n|[;,，；|])/,
+  )
+  const non_goals = normalizeTextList(record.non_goals ?? record.non_goal)
+  const metadata =
+    record.metadata && typeof record.metadata === "object" && !Array.isArray(record.metadata)
+      ? { ...(record.metadata as Record<string, unknown>) }
+      : undefined
+  const check_selector = parseCheckSelectors(record.check_selector)
+  if (check_selector.length > 0) {
+    if (metadata) metadata.check_selector = check_selector
+    else record.metadata = { check_selector }
+  }
+  return RequirementSchema.parse({
+    id: normalizeRequirementID(record.id, options?.seen ?? new Set<string>()),
+    title,
+    description,
+    priority: record.priority === "advisory" ? "advisory" : "blocking",
+    acceptance: acceptance.length > 0 ? acceptance : [description],
+    evidence_refs,
+    non_goals: non_goals.length > 0 ? non_goals : undefined,
+    metadata: metadata ?? (check_selector.length > 0 ? { check_selector } : undefined),
+  })
+}
+
+function normalizeRequirements(value: unknown, defaultEvidence: string[]): Requirement[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  return value
+    .map((item, index) => normalizeRequirement(item, index, { seen, defaultEvidence }))
+    .filter((item): item is Requirement => !!item)
+}
+
+function extractJSON(text: string): SpecOutputType {
   let raw = text.trim()
 
   const fencedComplete = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -541,7 +613,6 @@ function extractJSON(text: string, strict = false): SpecOutputType {
   raw = sanitizeJSON(raw)
 
   if (raw.startsWith("{") && !raw.endsWith("}")) {
-    if (strict) throw new Error("spec output invalid JSON: truncated JSON")
     log.warn("spec: JSON appears truncated, attempting repair", { length: raw.length })
     raw = repairTruncatedJSON(raw)
   }
@@ -556,26 +627,12 @@ function extractJSON(text: string, strict = false): SpecOutputType {
     if (retryErr.ok) {
       obj = retryErr.value
     } else {
-      if (strict) {
-        throw new Error(`spec output invalid JSON: ${parseErr.error instanceof Error ? parseErr.error.message : String(parseErr.error)}`)
-      }
-      log.error("spec: JSON parse failed after all repair attempts", {
-        error: String(parseErr.error),
-        rawLength: raw.length,
-      })
-      obj = { summary: "", content: "", scope: "", spec_items: [], assumptions: [], risks: [], evidence_sources: [], unresolved_questions: [] }
+      throw new Error(`spec output invalid JSON: ${parseErr.error instanceof Error ? parseErr.error.message : String(parseErr.error)}`)
     }
   }
 
-  // Normalize
-  if (Array.isArray(obj.spec_items)) {
-    obj.spec_items = obj.spec_items.filter((s: any) => s && typeof s === "object" && s.title)
-    for (const s of obj.spec_items) {
-      if (!s.description) s.description = s.title
-      if (s.priority && s.priority !== "blocking" && s.priority !== "advisory") s.priority = "blocking"
-      if (s.check_selector && !Array.isArray(s.check_selector)) s.check_selector = [String(s.check_selector)]
-    }
-  }
+  const evidence_sources = normalizeTextList(obj.evidence_sources ?? [], /(?:\r?\n|[;,，；|])/)
+  obj.requirements = normalizeRequirements(obj.requirements, evidence_sources)
   if (Array.isArray(obj.assumptions)) {
     obj.assumptions = obj.assumptions.filter((a: any) => a && typeof a === "object" && a.question && a.assumption)
   }
@@ -586,29 +643,16 @@ function extractJSON(text: string, strict = false): SpecOutputType {
   if (!obj.summary) obj.summary = ""
   if (!obj.content) obj.content = ""
   if (!obj.scope) obj.scope = ""
-  if (!Array.isArray(obj.spec_items)) obj.spec_items = []
+  if (!Array.isArray(obj.requirements)) obj.requirements = []
   if (!Array.isArray(obj.assumptions)) obj.assumptions = []
   if (!Array.isArray(obj.risks)) obj.risks = []
-  if (!Array.isArray(obj.evidence_sources)) obj.evidence_sources = []
+  obj.evidence_sources = evidence_sources
   if (!Array.isArray(obj.unresolved_questions)) obj.unresolved_questions = []
 
   try {
     return SpecOutput.parse(obj)
   } catch (zodErr) {
-    if (strict) {
-      throw new Error(`spec output failed schema validation: ${zodErr instanceof Error ? zodErr.message : String(zodErr)}`)
-    }
-    log.error("spec: Zod validation failed, returning with defaults", { error: String(zodErr) })
-    return SpecOutput.parse({
-      summary: obj.summary || "",
-      content: obj.content || "",
-      scope: obj.scope || "",
-      spec_items: [],
-      assumptions: [],
-      risks: Array.isArray(obj.risks) ? obj.risks : [],
-      evidence_sources: [],
-      unresolved_questions: [],
-    })
+    throw new Error(`spec output failed schema validation: ${zodErr instanceof Error ? zodErr.message : String(zodErr)}`)
   }
 }
 
@@ -617,10 +661,10 @@ function extractSpecText(text: string): SpecOutputType {
   if (!raw) throw new Error("spec output empty")
   if (raw.startsWith("{") || raw.includes("```json")) return extractJSON(raw)
 
-  const items = parseSpecItems(raw)
+  const evidence = parseListSection(raw, ["Evidence", "Evidence Sources", "依据", "证据"], { respectHeadingLevel: true })
+  const requirements = parseRequirements(raw, evidence)
   const assumptions = parseNamedPairs(sectionBody(raw, ["Assumptions", "假设"], { respectHeadingLevel: true }))
   const risks = parseListSection(raw, ["Risks", "风险"], { respectHeadingLevel: true })
-  const evidence = parseListSection(raw, ["Evidence", "Evidence Sources", "依据", "证据"], { respectHeadingLevel: true })
   const open = parseListSection(raw, ["Open Questions", "Unresolved Questions", "开放问题", "待确认问题"], { respectHeadingLevel: true })
 
   return normalizeSpecOutput({
@@ -628,7 +672,7 @@ function extractSpecText(text: string): SpecOutputType {
     content: raw,
     scope: sectionBody(raw, ["Scope", "范围"], { respectHeadingLevel: true }) || firstContentLine(raw),
     out_of_scope: sectionBody(raw, ["Out-of-Scope", "Out of Scope", "范围外"], { respectHeadingLevel: true }) || undefined,
-    spec_items: items,
+    requirements,
     assumptions,
     risks,
     evidence_sources: evidence,
@@ -642,7 +686,7 @@ function normalizeSpecOutput(input: SpecOutputType): SpecOutputType {
     summary: input.summary ?? "",
     content: input.content ?? "",
     scope: input.scope ?? "",
-    spec_items: Array.isArray(input.spec_items) ? input.spec_items : [],
+    requirements: Array.isArray(input.requirements) ? input.requirements : [],
     assumptions: Array.isArray(input.assumptions) ? input.assumptions : [],
     risks: Array.isArray(input.risks) ? input.risks : [],
     evidence_sources: Array.isArray(input.evidence_sources) ? input.evidence_sources : [],
@@ -662,11 +706,8 @@ export function validateSpecQuality(
   let score = 0
   const reasons: string[] = []
   const largeRequest = isLargeSpecRequest(request)
-  const minimumItems = largeRequest ? 7 : 3
-  const maximumItems = largeRequest ? 10 : 8
-  const maxBroadItems = 0
-  const broadTitles = spec.spec_items.filter((item) => isBroadSpecItem(item)).map((item) => item.title)
-  const broadItems = broadTitles.length
+  const minimumRequirements = largeRequest ? 4 : 2
+  const requirementAcceptances = spec.requirements.reduce((count, item) => count + item.acceptance.length, 0)
 
   if (toolCallCount >= 5) {
     score += 0.2
@@ -683,17 +724,15 @@ export function validateSpecQuality(
   } else if (spec.content.length >= 250) {
     score += 0.08
   } else {
-    reasons.push("Spec content too short - must include Scope, Requirements, Constraints. Target 600+ chars")
+    reasons.push("Spec content too short - must include Scope, Requirements, Constraints, and evidence. Target 600+ chars")
   }
 
-  if (spec.spec_items.length >= minimumItems) {
+  if (spec.requirements.length >= minimumRequirements) {
     score += 0.3
-  } else if (!largeRequest && spec.spec_items.length >= 2) {
+  } else if (!largeRequest && spec.requirements.length >= 1) {
     score += 0.2
-  } else if (!largeRequest && spec.spec_items.length >= 1) {
-    score += 0.1
   } else {
-    reasons.push(`Spec items too coarse - define at least ${minimumItems} concrete, independently verifiable spec items${largeRequest ? " for large multi-feature requests" : ""}`)
+    reasons.push(`Requirements are under-specified - define at least ${minimumRequirements} concrete requirements${largeRequest ? " for large multi-feature requests" : ""}`)
   }
 
   if (spec.evidence_sources.length >= 2) {
@@ -716,23 +755,20 @@ export function validateSpecQuality(
     reasons.push("Spec content lacks specific file paths or detailed technical design keywords")
   }
 
-  if (broadItems > maxBroadItems) {
-    reasons.push(`Spec items still contain ${broadItems} umbrella item(s) - split broad deliverables into narrower executable goals: ${broadTitles.slice(0, 4).join(", ")}${broadTitles.length > 4 ? ", ..." : ""}`)
+  if (requirementAcceptances >= Math.max(spec.requirements.length, minimumRequirements)) {
+    score += 0.1
+  } else {
+    reasons.push("Requirements need clearer acceptance statements - every requirement should be independently verifiable")
   }
 
-  if (largeRequest && spec.spec_items.length > maximumItems) {
-    reasons.push(`Large multi-feature requests should stay within ${minimumItems}-${maximumItems} execution-sized spec items`)
+  const evidenceLinkedRequirements = spec.requirements.filter((item) => item.evidence_refs.length > 0).length
+  if (evidenceLinkedRequirements >= Math.max(1, Math.floor(spec.requirements.length / 2))) {
+    score += 0.1
+  } else if (spec.requirements.length > 0) {
+    reasons.push("Requirements should cite evidence_refs from explored files or references")
   }
 
-  if (largeRequest && (spec.spec_items.length < minimumItems || spec.spec_items.length > maximumItems || broadItems > maxBroadItems)) {
-    return {
-      score: Math.min(score, 0.49),
-      reasons,
-      broadTitles,
-    }
-  }
-
-  return { score: Math.min(score, 1), reasons, broadTitles }
+  return { score: Math.min(score, 1), reasons, broadTitles: [] }
 }
 
 function isLargeSpecRequest(request: string) {
@@ -742,118 +778,46 @@ function isLargeSpecRequest(request: string) {
   return request.length >= 1200 || bullets >= 8 || headings >= 3
 }
 
-export function isBroadSpecItem(item: SpecItem) {
-  const title = item.title.trim()
-  const detail = item.description.trim()
-  const text = `${title} ${detail}`
-  const conjunction = /( and |,|\/|与|和|及|、|\+)/i.test(title)
-  if (/(\u6574\u4f53\u67b6\u6784|\u5b8c\u6574\u5e94\u7528|\u5168\u91cf\u5e94\u7528|UI \u9875\u9762\u5f00\u53d1|\u9875\u9762\u5f00\u53d1|\u7528\u6237\u8ba4\u8bc1\u670d\u52a1\u5b9e\u73b0|\u6570\u636e\u6a21\u578b\u4e0e\u672c\u5730\u5b58\u50a8\u5b9e\u73b0|CRUD \u4e0e\u81ea\u52a8\u4fdd\u5b58\u529f\u80fd)/i.test(text)) return true
-  if (
-    conjunction &&
-    /(\u914d\u7f6e|\u5efa\u7acb|\u521b\u5efa|\u5b9e\u73b0|configure|setup|create|implement)/i.test(`${title} ${detail}`) &&
-    /(auth|\u8ba4\u8bc1|\u767b\u5f55|\u6ce8\u518c|token|session)/i.test(`${title} ${detail}`) &&
-    /(supabase|postgres|schema|rls|storage|bucket|\u540e\u7aef|\u5b58\u50a8)/i.test(`${title} ${detail}`) &&
-    /(sync|queue|offline|background|\u540c\u6b65|\u79bb\u7ebf|\u540e\u53f0)/i.test(`${title} ${detail}`)
-  ) return true
-  const groups = [
-    /(architecture|bootstrap|foundation|initiali[sz]ation|架构|基础架构|项目初始化|项目架构|搭建)/i,
-    /(data model|model layer|entity|entities|schema|type definition|state management|store|数据模型|模型层|实体|类型定义|状态管理)/i,
-    /(crud|create|edit|delete|remove|restore|draft|editor|创建|编辑|删除|移除|恢复|草稿|日记)/i,
-    /(mood|tag|心情|标签)/i,
-    /(auth|\u8ba4\u8bc1|\u767b\u5f55|\u6ce8\u518c|token|session)/i,
-    /(supabase|postgres|schema|rls|storage|bucket|\u540e\u7aef|\u5b58\u50a8)/i,
-    /(sync|queue|offline|background|\u540c\u6b65|\u79bb\u7ebf|\u540e\u53f0)/i,
-    /(ui|screen|view|layout|\u754c\u9762|\u9875\u9762|\u89c6\u56fe|\u5e03\u5c40)/i,
-    /(database|sqlite|drizzle|migration|fts|\u6570\u636e\u5e93|\u8fc1\u79fb)/i,
-    /(image|upload|thumbnail|\u56fe\u7247|\u4e0a\u4f20|\u7f29\u7565\u56fe)/i,
-    /(search|filter|\u641c\u7d22|\u7b5b\u9009)/i,
-    /(security|biometric|secure-store|\u5bc6\u7801|\u751f\u7269\u8bc6\u522b|\u5e94\u7528\u9501)/i,
-    /(web|responsive|browser|pwa|\u54cd\u5e94\u5f0f)/i,
-  ].filter((pattern) => pattern.test(text)).length
-  const verbs = (text.match(/(\u914d\u7f6e|\u5efa\u7acb|\u521b\u5efa|\u5b9e\u73b0|\u652f\u6301|configure|setup|create|implement|support)/gi) || []).length
-  return conjunction && groups >= 2 && verbs >= 1
-}
-
-function parseSpecItems(text: string): SpecItem[] {
-  const body = sectionBody(text, ["Spec Items", "Specification Items", "Goals", "\u89c4\u683c\u9879", "\u76ee\u6807"], { respectHeadingLevel: true })
-  const source = body || sectionBody(text, ["Acceptance Criteria", "\u9a8c\u6536\u6807\u51c6"], { respectHeadingLevel: true }) || text
-  const items = splitSpecBlocks(source)
-    .flatMap((block) => {
+function parseRequirements(text: string, defaultEvidence: string[]): Requirement[] {
+  const body = sectionBody(text, ["Requirements", "Requirement", "\u9700\u6c42", "\u8981\u6c42"], { respectHeadingLevel: true })
+  if (!body.trim()) return []
+  const blocks = splitSpecBlocks(body)
+  const seen = new Set<string>()
+  const requirements = blocks
+    .flatMap((block, index) => {
       const head = cleanSpecLine(block[0] || "")
       if (!head || isSpecMetadataKey(head) || isSpecPreambleLine(head)) return []
       const record = parseSpecRecordLines(block.slice(1))
-      const lines = block.slice(1)
+      const detailLines = block.slice(1)
         .map((line) => cleanSpecLine(line))
         .filter((line) => line && !isSpecMetadataKey(line) && !isSpecPreambleLine(line))
-      const childLines = block.slice(1)
-        .filter((line) => /^[-*•]\s+/.test(line.trim()))
-        .map((line) => cleanSpecLine(line))
-        .filter((line) => line && !isSpecMetadataKey(line) && !isSpecPreambleLine(line) && !isVerificationLine(line))
       const description = [
         record.description,
-        record.criteria,
         record.requirement,
-        lines.join(" "),
-        record.verification,
-        record.evidence,
+        detailLines.join(" "),
       ]
         .map((item) => item?.trim() || "")
-        .find(Boolean)
-      const priority = inferSpecPriority(head, record.priority)
+        .find(Boolean) || head
+      const acceptance = [
+        ...normalizeTextList(record.acceptance),
+        ...normalizeTextList(record.criteria),
+        ...normalizeTextList(record.verification),
+      ]
+      const evidence_refs = normalizeTextList(record.evidence, /(?:\r?\n|[;,，；|])/)
+      const non_goals = normalizeTextList(record.non_goals)
       const selectors = parseCheckSelectors(record.check_selector)
-      const check_selector = priority === "blocking"
-        ? selectors.length > 0 ? selectors : inferSpecChecks([head, description, record.verification, record.evidence].filter(Boolean).join(" "))
-        : undefined
-      const base: SpecItem = {
-        title: specTitle(head),
-        description: (description || head).slice(0, 400),
-        priority,
-        check_selector,
-      }
-      const children = shouldExpandBroadSpecItem(base, childLines)
-        ? childLines
-            .map((line) => specChildItem(line, priority, selectors))
-            .filter((item): item is SpecItem => !!item)
-        : []
-      return children.length >= 2 ? children : [base]
+      return [RequirementSchema.parse({
+        id: normalizeRequirementID(record.id, seen),
+        title: specTitle(head) || `Requirement ${index + 1}`,
+        description: description.slice(0, 1_000),
+        priority: inferSpecPriority(head, record.priority),
+        acceptance: acceptance.length > 0 ? acceptance : [description.slice(0, 400)],
+        evidence_refs: evidence_refs.length > 0 ? evidence_refs : defaultEvidence,
+        non_goals: non_goals.length > 0 ? non_goals : undefined,
+        metadata: selectors.length > 0 ? { check_selector: selectors } : undefined,
+      })]
     })
-    .filter((item) => item.title && item.description)
-  return items.slice(0, 12)
-}
-
-function shouldExpandBroadSpecItem(item: SpecItem, lines: string[]) {
-  if (!isBroadSpecItem(item)) return false
-  if (lines.length < 2) return false
-  if (/(project bootstrap|project initialization|architecture setup|项目初始化|架构搭建)/i.test(item.title)) return false
-  return /( and |,|\/|与|和|及|、)/i.test(item.title)
-}
-
-function isVerificationLine(line: string) {
-  return /^(verification|verify|check selector|criteria|description|evidence|验证|验收|检查器|检查|说明|描述)[:：]?/i.test(line)
-}
-
-function specChildItem(line: string, priority: SpecItem["priority"], selectors: string[]): SpecItem | undefined {
-  const title = specTitle(line)
-  if (!title || title.length < 6) return
-  const check_selector = priority === "blocking"
-    ? selectors.length > 0 ? selectors : inferSpecChecks(line)
-    : undefined
-  return {
-    title,
-    description: line.slice(0, 240),
-    priority,
-    check_selector,
-  } satisfies SpecItem
-}
-
-function inferSpecChecks(text: string) {
-  const selectors = new Set<string>()
-  if (/test|\u6d4b\u8bd5|\u7528\u4f8b/i.test(text)) selectors.add("test")
-  if (/lint|\u683c\u5f0f|\u98ce\u683c/i.test(text)) selectors.add("lint")
-  if (/startup|\u542f\u52a8|\u8fd0\u884c/i.test(text)) selectors.add("startup")
-  if (/ui|\u754c\u9762|\u4ea4\u4e92|\u89c6\u89c9/i.test(text)) selectors.add("ui_review")
-  if (selectors.size === 0) selectors.add("build")
-  return [...selectors]
+  return requirements
 }
 
 function splitSpecBlocks(text: string) {
@@ -917,9 +881,11 @@ function normalizeSpecKey(key: string) {
   const value = key.trim().toLowerCase()
   if (["description", "desc", "描述", "说明"].includes(value)) return "description"
   if (["criteria", "criterion", "acceptance", "验收", "标准"].includes(value)) return "criteria"
+  if (["acceptance criteria", "done definition", "完成定义"].includes(value)) return "acceptance"
   if (["requirement", "requirements", "要求"].includes(value)) return "requirement"
   if (["verification", "verify", "校验", "验证"].includes(value)) return "verification"
-  if (["evidence", "证据"].includes(value)) return "evidence"
+  if (["evidence", "evidence ref", "evidence refs", "证据"].includes(value)) return "evidence"
+  if (["non_goal", "non_goals", "non-goal", "non-goals", "non goal", "non goals", "out of scope", "非目标", "不包含"].includes(value)) return "non_goals"
   if (["priority", "优先级"].includes(value)) return "priority"
   if (["check_selector", "check selectors", "checks", "检查", "检查器"].includes(value)) return "check_selector"
   return value
@@ -934,11 +900,22 @@ function isSpecMetadataKey(line: string) {
     "criteria",
     "criterion",
     "acceptance",
+    "acceptance criteria",
+    "done definition",
     "requirement",
     "requirements",
     "verification",
     "verify",
     "evidence",
+    "evidence ref",
+    "evidence refs",
+    "non_goal",
+    "non_goals",
+    "non-goal",
+    "non-goals",
+    "non goal",
+    "non goals",
+    "out of scope",
     "priority",
     "check_selector",
     "check selectors",
@@ -947,10 +924,13 @@ function isSpecMetadataKey(line: string) {
     "说明",
     "标准",
     "验收",
+    "完成定义",
     "要求",
     "验证",
     "校验",
     "证据",
+    "非目标",
+    "不包含",
     "优先级",
     "检查",
     "检查器",
@@ -972,13 +952,15 @@ function inferSpecPriority(head: string, value?: string): "advisory" | "blocking
   return /advisory|建议|可选/i.test(`${head} ${value ?? ""}`) ? "advisory" : "blocking"
 }
 
-function parseCheckSelectors(value?: string) {
-  return value
-    ? [...new Set(value
-      .split(/[,\s，；;|]+/)
-      .map((item) => item.trim())
-      .filter(Boolean))]
-    : []
+function parseCheckSelectors(value?: unknown) {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((item) => String(item ?? "").trim()).filter(Boolean))]
+  }
+  if (typeof value !== "string") return []
+  return [...new Set(value
+    .split(/[,\s，；;|]+/)
+    .map((item) => item.trim())
+    .filter(Boolean))]
 }
 
 // ---------------------------------------------------------------------------
@@ -1038,7 +1020,7 @@ function readFileSafe(absPath: string, maxLen = 6000): string | null {
 // System prompt
 // ---------------------------------------------------------------------------
 
-export const SPEC_SYSTEM = `You are a senior software architect acting as the specification brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, understand the context, and produce a precise, grounded specification that downstream planning and execution agents can rely on.
+export const SPEC_SYSTEM = `You are a senior software architect acting as the specification brain for OpenCorvus, an autonomous coding orchestrator. Your job is to explore the codebase deeply, understand the context, and produce a precise, grounded specification that downstream goal and planning agents can rely on.
 
 CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specification. A spec produced without tool calls is ALWAYS rejected. You are scored on exploration depth — specs that don't reference specific file paths, types, APIs, and patterns discovered via tools will be automatically retried.
 
@@ -1055,74 +1037,60 @@ CRITICAL: You MUST use tools to explore the codebase BEFORE producing any specif
 
 ## Your Role
 
-You are NOT the planner. You do NOT decompose tasks into subtasks or implementation steps. Your job is to:
-1. **Understand** what the user is asking for
-2. **Explore** the codebase to ground requirements in reality
-3. **Identify** gaps, ambiguities, constraints, and risks
-4. **Define** precise, verifiable spec items (acceptance criteria)
-5. **Surface** unresolved questions that need user input
+You are NOT the goal decomposer and NOT the planner. Do NOT turn the task into execution stages, implementation waves, or workload slices.
 
-The downstream PlannerAgent will take your spec and create implementation plans.
+Your job is to:
+1. Understand what the user is asking for
+2. Explore the codebase to ground the request in reality
+3. Identify gaps, ambiguities, constraints, dependencies, and risks
+4. Formulate precise requirements with explicit acceptance statements
+5. Surface unresolved questions that genuinely block requirement clarity
+
+The downstream goal agent will decompose the workload later. Your output is the source-of-truth formulation layer.
 
 ## Your Process
 
-### Phase 0: RECALL (1-3 tool calls)
+### Phase 0: RECALL
 
-1. **Search memory** (memory_search) with task keywords. If pre-fetched memory exists, only search for gaps.
-2. **List preferences** (preference_list) unless pre-fetched. Preferences are BINDING.
+1. Search memory with task keywords. If pre-fetched memory exists, search only for gaps.
+2. List preferences unless pre-fetched. Preferences are BINDING.
 
-### Phase 1: EXPLORE (5-15 tool calls — MOST IMPORTANT phase)
+### Phase 1: EXPLORE
 
 You MUST explore thoroughly. A spec without specific file paths is worthless.
 Minimum 5 tool calls required. Aim for 8-15 for complex tasks.
-
-Strategy (adapt based on task type):
-
-**For modification tasks:**
-1. **list_directory** on project root and relevant subdirectories
-2. **read_file** on package.json / build config — tech stack, scripts
-3. **search_code** for key types, functions mentioned in the request
-4. **read_file** on 3-5 files directly related to the task
-5. **find_files** to discover related modules, tests, configs
-6. **search_code** for imports/usages of code to be modified
-7. **read_file** on test files — understand existing patterns
-
-**For new module/feature tasks:**
-1. **list_directory** on the target package and similar existing modules
-2. **read_file** on 2-3 existing modules — copy their structure
-3. **search_code** for export/registration patterns
-4. **read_file** on existing tests for test patterns
 
 After exploration, you should know:
 - What already exists that's relevant to the task
 - The coding patterns and conventions to follow
 - The exact types, interfaces, and APIs involved
 - What dependencies and constraints exist
-- What tests are needed and how they're structured
+- What evidence supports each major requirement
 
-### Phase 1.5: RESEARCH (if needed)
+### Phase 1.5: RESEARCH
 
-For external APIs, unfamiliar libraries, or protocols — use web_search.
+For external APIs, unfamiliar libraries, or protocols, use web_search when necessary.
 
-### Phase 2: SPECIFY — Synthesize into Grounded Specification
+### Phase 2: SPECIFY
 
-Your spec must be CONCRETE, not abstract. Reference specific files, functions, and types.
-Think: "Could a planner create implementation steps from this spec without exploring the codebase again?"
+Your spec must be CONCRETE, not abstract. Reference specific files, functions, types, routes, schemas, or configs discovered via tools.
 
-**Spec Items** — Each must be independently verifiable:
-- GOOD: "The SpecAgent class in spec/agent.ts exports initial(), compile(), and rewrite() methods, each returning SpecOutputType"
-- BAD: "Create a spec agent" (too vague)
+The key output is a formulation-oriented \`# Requirements\` section. Each requirement must say:
+- What must be true
+- How acceptance will be judged
+- What explored evidence supports it
+- Optional non-goals or exclusions if needed
 
-**Content** — Must include these markdown sections:
-- **Scope**: What is included in this task
-- **Requirements**: Functional and behavioral requirements, referencing specific code
-- **Constraints**: Technical constraints discovered from codebase exploration
-- **Out-of-Scope**: What is explicitly excluded
-- **Open Questions**: Remaining ambiguities
+GOOD requirement:
+1. Overlay render lifecycle is owned by \`packages/opencorvus/src/...\`
+   - Description: ...
+   - Acceptance: ...
+   - Evidence Refs: \`packages/opencorvus/src/...\`
 
-Do NOT include an \`# Acceptance Criteria\` section in content — acceptance criteria live exclusively in \`# Spec Items\` (each item's Description field). Duplicating them creates inconsistency with the goals passed to downstream agents.
+BAD requirement:
+1. Build the whole architecture
 
-### Phase 3: OUTPUT — Emit markdown only
+### Phase 3: OUTPUT
 
 When you have finished exploring and are ready to deliver the spec, output plain markdown only. Do NOT output JSON.
 
@@ -1132,53 +1100,46 @@ Use these exact sections in order:
 - \`# Requirements\`
 - \`# Constraints\`
 - \`# Out-of-Scope\`
-- \`# Spec Items\`
 - \`# Evidence\`
 - \`# Risks\`
 - \`# Open Questions\`
 
-Under \`# Spec Items\`, include 3-6 numbered items for ordinary tasks. For large greenfield or multi-feature requests, include 8-10 numbered items. Treat these items as iterative stages in one evolving workspace, and give each item a short title plus one verification-oriented sentence.
+Under \`# Requirements\`, include a numbered list. Each requirement should use this structure when possible:
+1. Title
+   - Description: ...
+   - Acceptance: ...
+   - Evidence Refs: ...
+   - Non-Goals: ... (optional)
+
+Do NOT add a \`# Spec Items\` section unless the user explicitly asks for one. Do NOT encode execution ordering or iterative stages in the spec.
 
 ## Rules
 
-- ALWAYS explore the codebase before writing the spec. No exceptions.
+- ALWAYS explore the codebase before writing the spec.
 - Every file path in the spec MUST come from actual tool results or pre-read files.
-- spec_items must be verifiable — each should have clear success/failure criteria.
-- spec_items.check_selector maps to: build, test, lint, verify_cmd, startup, artifact, visual, puppeteer, ui_review, code_quality, code_review, dead_code_review, spec_check
-  (artifact = produced binary/file artifact; visual = screenshot-based visual regression; puppeteer = browser automation check; these three are evaluator-managed and cannot be run by the executor directly)
-- Every blocking spec item MUST have at least one check_selector.
-- For non-trivial tasks, usually produce 3-8 execution-sized goals.
-- Reject broad goals like "Build the complete app architecture" unless the user explicitly asks for a single umbrella deliverable.
-- Large greenfield or multi-feature requests MUST be split into 8-10 iterative spec items. Avoid umbrella items like "project bootstrap and architecture setup" or "UI page development".
-- Read the spec items as a stage sequence: earlier items establish foundations, later items refine or extend the same workspace.
-- Each spec item must represent one implementation slice only. If an item bundles multiple independent capabilities with conjunctions like "与" / "和" / "及" / "、" / "and", split it.
-- Do NOT put a preface line like "包含功能" or "包含的功能模块" under # Spec Items; start directly with item 1.
-- Write in the same language as the request (Chinese request → Chinese spec).
-- If rewriting after failure: revise the spec to address the root cause.
-- After finishing exploration, output the markdown specification directly.
-- clarifications are for requirement ambiguity only (what to build, scope boundaries, missing details). Never ask about implementation approach, technical choices, file structure, or execution steps — those belong to the planner.
+- Requirements must be verifiable. Every blocking requirement needs an explicit acceptance statement.
+- Requirements should cite evidence from explored files, documentation, or memory when relevant.
+- Do NOT decompose the task into implementation slices, waves, or stages.
+- Do NOT reject a requirement merely because it is broad; breadth is handled later by the goal stage.
+- Write in the same language as the request.
+- If rewriting after failure, revise the formulation to address the discovered requirement or scope failure.
+- Clarifications are for requirement ambiguity only. Never ask about implementation approach, technical choices, file structure, or execution steps.
 
-## Quality Self-Check (MANDATORY)
+## Quality Self-Check
 
 Before outputting the final markdown, verify each of these. If ANY answer is NO, use more tools:
 
 1. Did I make at least 5 tool calls to explore the codebase?
 2. Does the content reference specific file paths discovered via tools?
-3. Are all spec items concrete and verifiable (not vague aspirations)?
-4. Does each blocking spec item have a check_selector?
-5. Are evidence_sources populated with actual files I consulted?
-6. Could a planner create implementation steps from this spec WITHOUT further exploration?
+3. Does every blocking requirement include an acceptance statement?
+4. Are evidence sources populated with actual files or references I consulted?
+5. Does the spec contain scope, constraints, and out-of-scope boundaries?
+6. Could a downstream goal agent decompose this workload without re-exploring the codebase?
 7. Does the summary accurately describe the specification in one line?
-8. For large greenfield or multi-feature tasks, did I split the work into 8-10 narrow spec items instead of umbrella deliverables?
 
 ## Output Format
 
-- Content: Use markdown headings exactly as specified above, target 800-2500 chars. Be concise but specific.
-- Spec Items: Include at least 3-6 concrete items for non-trivial tasks. Each item should be independently verifiable.
-- Format each spec item as:
-  1. Title
-     - Description: ...
-     - Verification: ...
-     - Check Selector: build/test/startup/ui_review/...
-- For greenfield projects (creating something new with no existing codebase): Include detailed technical design in the markdown sections — data structures, UI layout, state management, interaction flows. Use web_search if needed for reference implementations.
+- Use markdown headings exactly as specified above, target 800-2500 chars. Be concise but specific.
+- Prefer 3-8 requirements for non-trivial tasks, but optimize for correctness and coverage rather than arbitrary slicing.
+- For greenfield projects, include detailed technical design in the markdown sections: data structures, UI layout, state management, interaction flows, external constraints.
 - Output plain markdown only. Do NOT output JSON.`

@@ -1,13 +1,9 @@
 import type { GoalJudgmentType } from "@/evaluator/agent"
 import { taskNotes } from "@/workbench/preference"
-import { listGoalsBySpec, type TaskRow } from "./store"
+import { listGoalsForPlan, type PlanRow, type TaskRow } from "./store"
 
 function noteText(input: string) {
   return input.trim().replace(/\s+/g, " ")
-}
-
-function goalCriteria(description: string) {
-  return `The active specification and the delivered implementation both satisfy this operator goal: ${description}`
 }
 
 function passedGoalIndices(analysis?: GoalJudgmentType) {
@@ -17,7 +13,7 @@ function passedGoalIndices(analysis?: GoalJudgmentType) {
   )
 }
 
-export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string, analysis?: GoalJudgmentType) {
+export function buildSpecReplanInput(task: TaskRow, plan: Pick<PlanRow, "spec_snapshot_id" | "metadata">, analysis?: GoalJudgmentType) {
   const notes = taskNotes(task.id, 24)
   const constraints = [...new Set(
     notes
@@ -37,31 +33,16 @@ export function buildSpecReplanInput(task: TaskRow, specSnapshotID: string, anal
       .map((note) => noteText(note.content))
       .filter(Boolean),
   )]
-  const current = listGoalsBySpec(specSnapshotID)
+  const current = listGoalsForPlan(plan)
   const passed = passedGoalIndices(analysis)
   const remaining = current.filter((_, index) => !passed.has(index))
   const active = remaining.length > 0 ? remaining : current
-  const existing = new Set(current.map((goal) => noteText(goal.description).toLowerCase()))
-  const goals = [
-    ...active.map((goal) => ({
-      description: goal.description,
-      criteria: goal.criteria,
-      priority: goal.priority,
-      metadata: goal.metadata ?? undefined,
-    })),
-    ...goalUpdates.flatMap((goal) =>
-      existing.has(goal.toLowerCase())
-        ? []
-        : [{
-            description: goal,
-            criteria: goalCriteria(goal),
-            priority: "blocking" as const,
-            metadata: {
-              check_selector: ["spec_check"],
-            },
-          }],
-    ),
-  ]
+  const goals = active.map((goal) => ({
+    description: goal.description,
+    criteria: goal.criteria,
+    priority: goal.priority,
+    metadata: goal.metadata ?? undefined,
+  }))
   const request = goalUpdates.length === 0 && planHints.length === 0 && constraints.length === 0
     ? [
         task.request,

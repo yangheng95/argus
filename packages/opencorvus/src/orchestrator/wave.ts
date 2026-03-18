@@ -129,20 +129,13 @@ export function normalizePlanWaves(input: {
       })
     )
   })
-  let fallbackOffset = 0
-  const fallback = input.goals.flatMap((goal, goalIndex) => {
-    if (claimed.has(goalIndex)) return []
-    const waveDisplayIndex = waves.length + fallbackOffset++
-    return [WaveContract.parse({
-      title: defaultWaveTitle(waveDisplayIndex, goal),
-      objective: cleanText(goal.description) || undefined,
-      goal_indices: [goalIndex],
-      owned_paths: [],
-      produces: [],
-      consumes: [],
-    })]
-  })
-  return [...waves, ...fallback]
+  const missing = input.goals
+    .map((_, goalIndex) => goalIndex)
+    .filter((goalIndex) => !claimed.has(goalIndex))
+  if (missing.length > 0) {
+    throw new Error(`plan waves must cover every goal explicitly; missing goal indices: ${missing.join(", ")}`)
+  }
+  return waves
 }
 
 export function waveMilestones(waves: WaveContractType[]) {

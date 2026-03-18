@@ -116,7 +116,7 @@ function checkSelectionConfig(key: string, current: unknown) {
 
   if (key === "artifact") return base ?? {}
   if (key === "ui_review") return { ...(base ?? {}), target: "web" }
-  if (["code_quality", "code_review", "dead_code_review", "spec_check"].includes(key)) {
+  if (["code_quality", "code_review", "dead_code_review", "goal_check", "spec_check"].includes(key)) {
     return { ...(base ?? {}), enabled: true }
   }
   if (["startup", "visual", "puppeteer"].includes(key)) return base

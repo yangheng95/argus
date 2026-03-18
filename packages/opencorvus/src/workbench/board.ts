@@ -2,17 +2,19 @@ import z from "zod"
 import { Preference } from "@/preference"
 import { normalizeTaskChecks } from "@/orchestrator/checks"
 import {
-  findSpecItems,
+  findGoalSnapshot,
+  findRequirements,
   findSpecSnapshot,
-  listGoalsBySpec,
+  listGoalsForPlan,
   listGoalRunsByTask,
   listMilestonesByPlan,
   listPlanNodesByPlan,
   viewGoal,
+  viewGoalSnapshot,
   viewGoalRun,
   viewMilestone,
   viewPlanNode,
-  viewSpecItem,
+  viewRequirement,
   viewSpecSnapshot,
 } from "@/orchestrator/store"
 import {
@@ -21,14 +23,15 @@ import {
   OrchestratorDeliveryTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
+  OrchestratorGoalSnapshotTable,
   OrchestratorGoalRunTable,
   OrchestratorInteractionRequestTable,
   OrchestratorMilestoneTable,
   OrchestratorPlanNodeTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
+  OrchestratorRequirementTable,
   OrchestratorRunTable,
-  OrchestratorSpecItemTable,
   OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
@@ -81,9 +84,15 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect, snapshotVer
     : undefined
   const specID = task.active_spec_version_id ?? plan?.spec_snapshot_id ?? undefined
   const specRow = specID ? findSpecSnapshot(specID) : undefined
+  const goalSnapshotID =
+    plan?.metadata && typeof plan.metadata.goal_snapshot_id === "string"
+      ? plan.metadata.goal_snapshot_id
+      : undefined
+  const goalSnapshotRow = goalSnapshotID ? findGoalSnapshot(goalSnapshotID) : undefined
   const specSnapshot = specRow ? viewSpecSnapshot(specRow) : undefined
-  const goals = specID ? listGoalsBySpec(specID).map(viewGoal) : []
-  const specItems = specID ? findSpecItems(specID).map(viewSpecItem).toSorted(specItemOrder) : []
+  const goalSnapshot = goalSnapshotRow ? viewGoalSnapshot(goalSnapshotRow) : undefined
+  const requirements = specID ? findRequirements(specID).map(viewRequirement) : []
+  const goals = plan ? listGoalsForPlan(plan).map(viewGoal) : []
   const planNodes = plan ? listPlanNodesByPlan(plan.id).map(viewPlanNode) : []
   const milestones = plan ? listMilestonesByPlan(plan.id).map(viewMilestone) : []
   const goalRuns = listGoalRunsByTask(task.id).map(viewGoalRun)
@@ -241,9 +250,10 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect, snapshotVer
       },
     },
     spec: specSnapshot,
+    goalSnapshot,
+    requirements,
     checks,
     goals,
-    specItems,
     plan: plan
       ? {
           id: plan.id,
@@ -344,7 +354,7 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect, snapshotVer
       {
         id: "spec",
         title: "Spec",
-        cards: specCards(specSnapshot, goals, specItems),
+        cards: specCards(specSnapshot, goals, requirements),
       },
       {
         id: "plan",
@@ -359,7 +369,7 @@ function buildBoard(task: typeof OrchestratorTaskTable.$inferSelect, snapshotVer
       {
         id: "acceptance",
         title: "Acceptance",
-        cards: acceptanceCards(checks, specItems, pendingInteractions),
+        cards: acceptanceCards(checks, requirements, pendingInteractions),
       },
       {
         id: "evaluation",
@@ -383,6 +393,10 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
     ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!)).get())
     : undefined
   const specID = task.active_spec_version_id ?? plan?.spec_snapshot_id ?? undefined
+  const goalSnapshotID =
+    plan?.metadata && typeof plan.metadata.goal_snapshot_id === "string"
+      ? plan.metadata.goal_snapshot_id
+      : undefined
   const spec = specID
     ? Database.use((db) =>
         db
@@ -394,27 +408,35 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
           .get(),
       )
     : undefined
-  const goals = specID
+  const goalSnapshot = goalSnapshotID
     ? Database.use((db) =>
         db
           .select({
-            count: sql<number>`count(*)`,
-            updated: sql<number>`coalesce(max(${OrchestratorGoalTable.time_updated}), 0)`,
+            updated: sql<number>`coalesce(max(${OrchestratorGoalSnapshotTable.time_updated}), 0)`,
           })
-          .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.spec_snapshot_id, specID))
+          .from(OrchestratorGoalSnapshotTable)
+          .where(eq(OrchestratorGoalSnapshotTable.id, goalSnapshotID))
           .get(),
       )
     : undefined
-  const specItems = specID
+  const goals = plan
+    ? (() => {
+        const rows = listGoalsForPlan(plan)
+        return {
+          count: rows.length,
+          updated: rows.reduce((max, row) => Math.max(max, row.time_updated), 0),
+        }
+      })()
+    : undefined
+  const requirements = specID
     ? Database.use((db) =>
         db
           .select({
             count: sql<number>`count(*)`,
-            updated: sql<number>`coalesce(max(${OrchestratorSpecItemTable.time_updated}), 0)`,
+            updated: sql<number>`coalesce(max(${OrchestratorRequirementTable.time_updated}), 0)`,
           })
-          .from(OrchestratorSpecItemTable)
-          .where(eq(OrchestratorSpecItemTable.spec_snapshot_id, specID))
+          .from(OrchestratorRequirementTable)
+          .where(eq(OrchestratorRequirementTable.spec_snapshot_id, specID))
           .get(),
       )
     : undefined
@@ -536,12 +558,14 @@ function boardTagForTask(task: typeof OrchestratorTaskTable.$inferSelect) {
     run?.time_updated ?? 0,
     specID ?? "",
     spec?.updated ?? 0,
+    goalSnapshotID ?? "",
+    goalSnapshot?.updated ?? 0,
     plan?.id ?? "",
     plan?.time_updated ?? 0,
+    requirements?.count ?? 0,
+    requirements?.updated ?? 0,
     goals?.count ?? 0,
     goals?.updated ?? 0,
-    specItems?.count ?? 0,
-    specItems?.updated ?? 0,
     planNodes?.count ?? 0,
     planNodes?.updated ?? 0,
     milestones?.count ?? 0,
@@ -646,12 +670,6 @@ function boardChecks(input: unknown) {
   })
 }
 
-function specItemOrder(a: ReturnType<typeof viewSpecItem>, b: ReturnType<typeof viewSpecItem>) {
-  const priority = (value: string) => (value === "blocking" ? 0 : 1)
-  const status = (value: string) => (value === "failed" ? 0 : value === "pending" ? 1 : 2)
-  return priority(a.priority) - priority(b.priority) || status(a.status) - status(b.status) || a.title.localeCompare(b.title)
-}
-
 function latestGoalRuns(input: Array<ReturnType<typeof viewGoalRun>>) {
   return input.reduce((acc, item) => {
     if (!acc.has(item.goalID)) acc.set(item.goalID, item)
@@ -662,7 +680,7 @@ function latestGoalRuns(input: Array<ReturnType<typeof viewGoalRun>>) {
 function specCards(
   spec: ReturnType<typeof viewSpecSnapshot> | undefined,
   goals: Array<ReturnType<typeof viewGoal>>,
-  specItems: Array<ReturnType<typeof viewSpecItem>>,
+  requirements: Array<ReturnType<typeof viewRequirement>>,
 ) {
   if (!spec) return []
   return [{
@@ -672,7 +690,7 @@ function specCards(
     detail: [
       spec.scope ? `Scope: ${clipBoard(spec.scope)}` : undefined,
       spec.outOfScope ? `Out of scope: ${clipBoard(spec.outOfScope)}` : undefined,
-      `${goals.length} goals, ${specItems.length} spec items`,
+      `${goals.length} goals, ${requirements.length} requirements`,
     ].filter(Boolean).join("\n"),
     status: spec.status,
     time: spec.time.updated,
@@ -782,25 +800,27 @@ function goalCards(goals: Array<ReturnType<typeof viewGoal>>, goalRuns: Map<stri
 
 function acceptanceCards(
   checks: Record<string, unknown>,
-  specItems: Array<ReturnType<typeof viewSpecItem>>,
+  requirements: Array<ReturnType<typeof viewRequirement>>,
   interactions: Array<typeof OrchestratorInteractionRequestTable.$inferSelect>,
 ) {
   return [
     ...blockerCards(interactions),
     ...checkCards(checks),
-    ...specItems.map((item) => ({
+    ...requirements.map((item) => ({
       id: item.id,
-      kind: "spec_item" as const,
+      kind: "requirement" as const,
       title: item.title,
       detail: [
         item.description,
-        item.checkSelector && item.checkSelector.length > 0 ? `Checks: ${item.checkSelector.join(", ")}` : undefined,
+        item.acceptance.length > 0 ? `Acceptance: ${item.acceptance.join("; ")}` : undefined,
+        item.evidenceRefs && item.evidenceRefs.length > 0 ? `Evidence: ${item.evidenceRefs.join(", ")}` : undefined,
       ].filter(Boolean).join("\n"),
       status: item.status,
       time: item.time.updated,
       metadata: {
         priority: item.priority,
-        evidence: item.evidence,
+        acceptance: item.acceptance,
+        non_goals: item.nonGoals,
         ...item.metadata,
       },
     })),
@@ -822,7 +842,7 @@ function blockerCards(input: Array<typeof OrchestratorInteractionRequestTable.$i
 }
 
 function checkCards(input: Record<string, unknown>) {
-  const out = ["spec_check", "build", "test", "lint", "verify_cmd", "startup", "artifact", "visual", "puppeteer", "ui_review", "code_quality", "code_review", "dead_code_review"]
+  const out = ["goal_check", "spec_check", "build", "test", "lint", "verify_cmd", "startup", "artifact", "visual", "puppeteer", "ui_review", "code_quality", "code_review", "dead_code_review"]
     .flatMap((key) => {
       const value = input[key]
       if (!checkEnabled(value)) return []

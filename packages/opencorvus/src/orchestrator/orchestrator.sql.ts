@@ -29,6 +29,7 @@ export type OrchestratorExecutor = "opencode" | "codex" | "claude-code"
 export type OrchestratorPlanStatus = "active" | "superseded"
 export type OrchestratorGoalPriority = "blocking" | "advisory"
 export type OrchestratorGoalStatus = "pending" | "passed" | "failed"
+export type OrchestratorGoalKind = "feature" | "bootstrap" | "integration" | "migration" | "verification" | "system"
 export type OrchestratorPlanNodeKind = "goal" | "milestone" | "step"
 export type OrchestratorMilestoneStatus = "pending" | "active" | "passed" | "failed"
 export type OrchestratorRunStatus = "queued" | "accepted" | "running" | "blocked" | "completed" | "failed" | "aborted"
@@ -46,8 +47,16 @@ export type OrchestratorInteractionType = "permission" | "question"
 export type OrchestratorInteractionStatus = "pending" | "answered" | "rejected" | "expired"
 
 export type OrchestratorSpecSnapshotStatus = "ready" | "blocked" | "completed" | "superseded"
+export type OrchestratorGoalSnapshotStatus = "ready" | "superseded"
 export type OrchestratorGoalSource = "spec" | "system"
-export type OrchestratorSpecItemStatus = "pending" | "done" | "failed"
+export type OrchestratorRequirementStatus = "pending" | "satisfied" | "failed"
+export type OrchestratorSpecCheckScope = "mapped_requirements" | "full_spec" | "both"
+
+export type OrchestratorGoalQaProfile = {
+  rule_selectors?: string[]
+  goal_check_prompt?: string
+  spec_scope?: OrchestratorSpecCheckScope
+}
 
 export const OrchestratorSpecSnapshotTable = sqliteTable(
   "orchestrator_spec_snapshot",
@@ -71,8 +80,30 @@ export const OrchestratorSpecSnapshotTable = sqliteTable(
   ],
 )
 
-export const OrchestratorSpecItemTable = sqliteTable(
-  "orchestrator_spec_item",
+export const OrchestratorGoalSnapshotTable = sqliteTable(
+  "orchestrator_goal_snapshot",
+  {
+    id: text().primaryKey(),
+    task_id: text()
+      .notNull()
+      .references(() => OrchestratorTaskTable.id, { onDelete: "cascade" }),
+    spec_snapshot_id: text()
+      .notNull()
+      .references(() => OrchestratorSpecSnapshotTable.id, { onDelete: "cascade" }),
+    version: integer().notNull().default(1),
+    status: text().notNull().$type<OrchestratorGoalSnapshotStatus>().default("ready"),
+    summary: text().notNull(),
+    metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    ...Timestamps,
+  },
+  (table) => [
+    index("orchestrator_goal_snapshot_task_idx").on(table.task_id),
+    index("orchestrator_goal_snapshot_spec_idx").on(table.spec_snapshot_id),
+  ],
+)
+
+export const OrchestratorRequirementTable = sqliteTable(
+  "orchestrator_requirement",
   {
     id: text().primaryKey(),
     task_id: text()
@@ -83,18 +114,21 @@ export const OrchestratorSpecItemTable = sqliteTable(
       .references(() => OrchestratorSpecSnapshotTable.id, { onDelete: "cascade" }),
     title: text().notNull(),
     description: text().notNull(),
-    status: text().notNull().$type<OrchestratorSpecItemStatus>().default("pending"),
+    status: text().notNull().$type<OrchestratorRequirementStatus>().default("pending"),
     priority: text().notNull().$type<OrchestratorGoalPriority>().default("blocking"),
-    check_selector: text({ mode: "json" }).$type<string[]>(),
-    evidence: text(),
+    acceptance: text({ mode: "json" }).$type<string[]>(),
+    evidence_refs: text({ mode: "json" }).$type<string[]>(),
+    non_goals: text({ mode: "json" }).$type<string[]>(),
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
+    order_index: integer().notNull().default(0),
     ...Timestamps,
   },
   (table) => [
-    index("orchestrator_spec_item_task_idx").on(table.task_id),
-    index("orchestrator_spec_item_snapshot_idx").on(table.spec_snapshot_id),
+    index("orchestrator_requirement_task_idx").on(table.task_id),
+    index("orchestrator_requirement_spec_idx").on(table.spec_snapshot_id),
   ],
 )
+
 export type OrchestratorArtifactKind =
   | "patch"
   | "changed_file"
@@ -220,6 +254,7 @@ export const OrchestratorGoalTable = sqliteTable(
     metadata: text({ mode: "json" }).$type<OrchestratorMetadata>(),
     priority: text().notNull().$type<OrchestratorGoalPriority>().default("blocking"),
     source: text().notNull().$type<OrchestratorGoalSource>().default("spec"),
+    kind: text().$type<OrchestratorGoalKind>(),
     status: text().notNull().$type<OrchestratorGoalStatus>().default("pending"),
     order_index: integer().notNull().default(0),
     ...Timestamps,
