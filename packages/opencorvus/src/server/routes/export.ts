@@ -8,10 +8,12 @@ import { lazy } from "../../util/lazy"
 import {
   findDeliveries,
   findEvaluations,
+  findGoalSnapshot,
   findPlan,
+  findRequirements,
   findRuns,
   findSpecSnapshot,
-  listGoalsBySpec,
+  listGoalsForPlan,
   listGoalRunsByTask,
   listInteractions,
   listMilestones,
@@ -21,10 +23,12 @@ import {
   viewDelivery,
   viewEvaluation,
   viewGoal,
+  viewGoalSnapshot,
   viewInteraction,
   viewMilestone,
   viewPlan,
   viewPlanNode,
+  viewRequirement,
   viewRun,
   viewSnapshot,
   viewSpecSnapshot,
@@ -63,8 +67,14 @@ export const ExportRoutes = lazy(() =>
         const task = requireTask(taskID)
         const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
         const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
+        const goalSnapshotID =
+          plan?.metadata && typeof plan.metadata.goal_snapshot_id === "string"
+            ? plan.metadata.goal_snapshot_id
+            : undefined
+        const goalSnapshot = goalSnapshotID ? findGoalSnapshot(goalSnapshotID) : undefined
         const specSnapshotID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
-        const goals = specSnapshotID ? listGoalsBySpec(specSnapshotID) : []
+        const requirements = specSnapshotID ? findRequirements(specSnapshotID) : []
+        const goals = plan ? listGoalsForPlan(plan) : []
         const planNodes = plan ? listPlanNodesByPlan(plan.id) : []
         const goalRuns = listGoalRunsByTask(taskID)
         const milestones = listMilestones(taskID)
@@ -88,6 +98,8 @@ export const ExportRoutes = lazy(() =>
         return c.json({
           task: viewTask(task),
           spec: spec ? viewSpecSnapshot(spec) : undefined,
+          goalSnapshot: goalSnapshot ? viewGoalSnapshot(goalSnapshot) : undefined,
+          requirements: requirements.map(viewRequirement),
           plan: plan ? viewPlan(plan) : undefined,
           coordinatorRun: coordinatorRun ? viewRun(coordinatorRun) : undefined,
           goals: goals.map(viewGoal),

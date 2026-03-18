@@ -26,21 +26,76 @@ export const EvaluationProvider = z.enum(["opencorvus", "hybrid"])
 
 export const StageRouting = z.object({
   spec: PlanningProvider.optional(),
+  goal: PlanningProvider.optional(),
   plan: PlanningProvider.optional(),
   evaluation: EvaluationProvider.optional(),
+})
+
+export const RequirementPriority = z.enum(["blocking", "advisory"])
+export const RequirementStatus = z.enum(["pending", "satisfied", "failed"])
+export const GoalKind = z.enum(["feature", "bootstrap", "integration", "migration", "verification", "system"])
+export const SpecCheckScope = z.enum(["mapped_requirements", "full_spec", "both"])
+
+export const GoalQaProfile = z.object({
+  rule_selectors: z.array(z.string()).default([]),
+  goal_check_prompt: z.string().optional(),
+  spec_scope: SpecCheckScope.default("mapped_requirements"),
 })
 
 const GoalMetadata = z
   .object({
     check_selector: z.array(z.string()).optional(),
+    goal_snapshot_id: z.string().optional(),
+    title: z.string().optional(),
+    objective: z.string().optional(),
+    requirement_ids: z.array(z.string()).optional(),
+    depends_on_goal_ids: z.array(z.string()).optional(),
+    owned_paths: z.array(z.string()).optional(),
+    done_definition: z.string().optional(),
+    qa_profile: GoalQaProfile.optional(),
+    kind: GoalKind.optional(),
   })
   .catchall(z.any())
+
+export const RequirementInput = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  description: z.string(),
+  priority: RequirementPriority.default("blocking"),
+  acceptance: z.array(z.string().min(1)).min(1),
+  evidence_refs: z.array(z.string()).default([]),
+  non_goals: z.array(z.string()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+})
+
+export const GoalContractInput = z.object({
+  id: z.string().optional(),
+  title: z.string(),
+  objective: z.string(),
+  requirement_ids: z.array(z.string()).default([]),
+  depends_on_goal_ids: z.array(z.string()).default([]),
+  owned_paths: z.array(z.string()).default([]),
+  done_definition: z.string(),
+  qa_profile: GoalQaProfile,
+  priority: RequirementPriority.default("blocking"),
+  kind: GoalKind.default("feature"),
+  source: z.enum(["spec", "system"]).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
+})
 
 export const GoalInput = z.object({
   description: z.string(),
   criteria: z.string(),
   priority: z.enum(["blocking", "advisory"]).optional(),
   source: z.enum(["spec", "system"]).optional(),
+  title: z.string().optional(),
+  objective: z.string().optional(),
+  requirement_ids: z.array(z.string()).optional(),
+  depends_on_goal_ids: z.array(z.string()).optional(),
+  owned_paths: z.array(z.string()).optional(),
+  done_definition: z.string().optional(),
+  qa_profile: GoalQaProfile.optional(),
+  kind: GoalKind.optional(),
   metadata: GoalMetadata.optional(),
 })
 
@@ -151,10 +206,18 @@ export const CheckConfig = z.object({
       mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
+  goal_check: z
+    .object({
+      enabled: z.boolean().optional(),
+      prompt: z.string().optional(),
+      mode: z.enum(["soft", "strict"]).optional(),
+    })
+    .optional(),
   spec_check: z
     .object({
       enabled: z.boolean().optional(),
       prompt: z.string().optional(),
+      scope: SpecCheckScope.optional(),
       mode: z.enum(["soft", "strict"]).optional(),
     })
     .optional(),
@@ -210,6 +273,7 @@ export const PlanVersion = z.object({
   id: Identifier.schema("plan"),
   taskID: Identifier.schema("task"),
   specSnapshotID: Identifier.schema("spec"),
+  goalSnapshotID: Identifier.schema("goal_snapshot").optional(),
   version: z.number().int(),
   status: z.enum(["active", "superseded"]),
   summary: z.string(),
@@ -225,6 +289,15 @@ export const Goal = z.object({
   id: Identifier.schema("goal"),
   taskID: Identifier.schema("task"),
   specSnapshotID: Identifier.schema("spec"),
+  goalSnapshotID: Identifier.schema("goal_snapshot").optional(),
+  title: z.string(),
+  objective: z.string(),
+  requirementIDs: z.array(z.string()).optional(),
+  dependsOnGoalIDs: z.array(z.string()).optional(),
+  ownedPaths: z.array(z.string()).optional(),
+  doneDefinition: z.string().optional(),
+  qaProfile: GoalQaProfile.optional(),
+  kind: GoalKind.optional(),
   description: z.string(),
   criteria: z.string(),
   priority: z.enum(["blocking", "advisory"]),
@@ -238,17 +311,33 @@ export const Goal = z.object({
   }),
 })
 
-export const SpecItem = z.object({
-  id: Identifier.schema("specitem"),
+export const GoalSnapshot = z.object({
+  id: Identifier.schema("goal_snapshot"),
+  taskID: Identifier.schema("task"),
+  specSnapshotID: Identifier.schema("spec"),
+  version: z.number().int(),
+  status: z.enum(["ready", "superseded"]),
+  summary: z.string(),
+  metadata: z.record(z.string(), z.any()).optional(),
+  time: z.object({
+    created: z.number(),
+    updated: z.number(),
+  }),
+})
+
+export const Requirement = z.object({
+  id: Identifier.schema("requirement"),
   taskID: Identifier.schema("task"),
   specSnapshotID: Identifier.schema("spec"),
   title: z.string(),
   description: z.string(),
-  status: z.enum(["pending", "done", "failed"]),
-  priority: z.enum(["blocking", "advisory"]),
-  checkSelector: z.array(z.string()).optional(),
-  evidence: z.string().optional(),
+  status: RequirementStatus,
+  priority: RequirementPriority,
+  acceptance: z.array(z.string()),
+  evidenceRefs: z.array(z.string()).optional(),
+  nonGoals: z.array(z.string()).optional(),
   metadata: z.record(z.string(), z.any()).optional(),
+  orderIndex: z.number().int(),
   time: z.object({
     created: z.number(),
     updated: z.number(),
@@ -516,6 +605,8 @@ export const Progress = z.object({
   lastSequence: z.number().int(),
   task: Task,
   spec: z.lazy(() => SpecSnapshot).optional(),
+  goalSnapshot: z.lazy(() => GoalSnapshot).optional(),
+  requirements: Requirement.array().optional(),
   plan: PlanVersion.optional(),
   goals: Goal.array(),
   planNodes: PlanNode.array(),
@@ -531,6 +622,8 @@ export const Progress = z.object({
 export const TaskExport = z.object({
   task: Task,
   spec: z.lazy(() => SpecSnapshot).optional(),
+  goalSnapshot: z.lazy(() => GoalSnapshot).optional(),
+  requirements: Requirement.array(),
   plan: PlanVersion.optional(),
   coordinatorRun: Run.optional(),
   goals: Goal.array(),
@@ -629,7 +722,7 @@ export const TaskChannelBinding = z.object({
 
 export const TaskBoardCard = z.object({
   id: z.string(),
-  kind: z.enum(["goal", "goal_run", "interaction", "preference", "note", "run", "plan_hint", "spec", "plan", "milestone", "spec_item", "check", "delivery", "evaluation"]),
+  kind: z.enum(["goal", "goal_run", "interaction", "preference", "note", "run", "plan_hint", "spec", "plan", "milestone", "requirement", "check", "delivery", "evaluation"]),
   title: z.string(),
   detail: z.string().optional(),
   status: z.string().optional(),
@@ -690,9 +783,10 @@ export const TaskBoard = z.object({
   lastSequence: z.number().int(),
   task: Task,
   spec: SpecSnapshot.optional(),
+  goalSnapshot: GoalSnapshot.optional(),
+  requirements: Requirement.array(),
   checks: CheckConfig.optional(),
   goals: Goal.array(),
-  specItems: SpecItem.array(),
   plan: PlanVersion.optional(),
   planNodes: PlanNode.array(),
   goalRuns: GoalRun.array(),
@@ -778,7 +872,7 @@ export const ProtocolMessage = z.object({
   }),
 })
 
-export const AgentStage = z.enum(["spec", "planner", "judge"])
+export const AgentStage = z.enum(["spec", "goal", "planner", "judge"])
 export type AgentStageType = z.infer<typeof AgentStage>
 export const AgentEventKind = z.enum(["status", "message_delta", "tool_call", "tool_delta", "tool_result", "error"])
 export type AgentEventKindType = z.infer<typeof AgentEventKind>

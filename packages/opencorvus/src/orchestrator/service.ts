@@ -27,6 +27,7 @@ import {
   OrchestratorDeliveryTable,
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
+  OrchestratorGoalSnapshotTable,
   OrchestratorGoalRunTable,
   OrchestratorInteractionRequestTable,
   OrchestratorPlanVersionTable,
@@ -80,14 +81,12 @@ import {
   compileTransition,
   createReplanRun,
   ensureExecutorSession,
-  insertGoalRows,
   insertPlanItems,
+  persistGoalSnapshot,
   persistInitialTaskDraft,
-  insertSpecItems,
   persistInitialTransition,
   persistInitialTransitionFailure,
-  resetPlanGoals,
-  resolvePlanGoals,
+  persistSpecSnapshot,
   specDraftFromFailure,
   updateGoalRun,
   updateGoalRunExecutorSessionStatus,
@@ -100,11 +99,13 @@ import {
   findExecutorSessionByRun,
   findEvaluationByRun,
   findEvaluations,
+  findGoalSnapshot,
   findGoalRun,
   findInteractionByExternal,
   findPendingInteractions,
   findPlan,
   findPlans,
+  findRequirements,
   findSpecSnapshot,
   findRun,
   findRuns,
@@ -116,7 +117,7 @@ import {
   listProjectTasks,
   listTaskRows,
   searchProjectTasks,
-  listGoalsBySpec,
+  listGoalsForPlan,
   listExecutorEvents as listExecutorProtocolEvents,
   listExecutorSessionsByRun,
   listGoalRunsByTask,
@@ -134,11 +135,13 @@ import {
   viewExecutorSession,
   viewEvaluation,
   viewGoal,
+  viewGoalSnapshot,
   viewGoalRun,
   viewInteraction,
   viewMilestone,
   viewPlan,
   viewPlanNode,
+  viewRequirement,
   viewRun,
   viewSnapshot,
   viewSpecSnapshot,
@@ -830,6 +833,11 @@ export namespace OrchestratorService {
     const item = listTaskRows([task])[0]
     const plan = task.active_plan_version_id ? findPlan(task.active_plan_version_id) : undefined
     const spec = task.active_spec_version_id ? findSpecSnapshot(task.active_spec_version_id) : undefined
+    const goalSnapshotID =
+      plan?.metadata && typeof plan.metadata.goal_snapshot_id === "string"
+        ? plan.metadata.goal_snapshot_id
+        : undefined
+    const goalSnapshot = goalSnapshotID ? findGoalSnapshot(goalSnapshotID) : undefined
     const run = task.active_run_id ? findRun(task.active_run_id) : undefined
     const delivery = run ? findDeliveryByRun(run.id) : undefined
     const evaluation = run ? findEvaluationByRun(run.id) : undefined
@@ -842,8 +850,10 @@ export namespace OrchestratorService {
       lastSequence,
       task: viewTask(task, { directory: item?.directory }),
       spec: spec ? viewSpecSnapshot(spec) : undefined,
+      goalSnapshot: goalSnapshot ? viewGoalSnapshot(goalSnapshot) : undefined,
+      requirements: specID ? findRequirements(specID).map(viewRequirement) : undefined,
       plan: plan ? viewPlan(plan) : undefined,
-      goals: (specID ? listGoalsBySpec(specID) : []).map(viewGoal),
+      goals: (plan ? listGoalsForPlan(plan) : []).map(viewGoal),
       planNodes: plan ? listPlanNodesByPlan(plan.id).map(viewPlanNode) : [],
       goalRuns: listGoalRunsByTask(taskID).map(viewGoalRun),
       milestones: milestones.length > 0 ? milestones.map(viewMilestone) : undefined,
@@ -1519,7 +1529,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
   if (isReplan && !previousPlan) throw new Error(`Previous plan not found for task ${task.id}`)
   const goals =
     previousPlan
-      ? listGoalsBySpec(previousPlan.spec_snapshot_id).map((goal) => ({
+      ? listGoalsForPlan(previousPlan).map((goal) => ({
           description: goal.description,
           criteria: goal.criteria,
           priority: goal.priority,
@@ -1579,6 +1589,12 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
   const specDraft = compiled.specDraft
   const planID = Identifier.ascending("plan")
   const specSnapshotID = isReplan && previousPlan ? previousPlan.spec_snapshot_id : Identifier.ascending("spec")
+  const goalSnapshotID = compiled.goalDraft ? Identifier.ascending("goal_snapshot") : undefined
+  const previousGoalSnapshotID =
+    previousPlan?.metadata && typeof previousPlan.metadata.goal_snapshot_id === "string"
+      ? previousPlan.metadata.goal_snapshot_id
+      : undefined
+  const previousGoalSnapshot = previousGoalSnapshotID ? findGoalSnapshot(previousGoalSnapshotID) : undefined
   const taskMetadata = {
     ...compiled.taskMetadata,
     planner_clarification: false,
@@ -1591,6 +1607,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
   const planMetadata = {
     ...compiled.planMetadata,
     ...(isReplan ? { previous_run_id: previousRunID } : {}),
+    ...(goalSnapshotID ? { goal_snapshot_id: goalSnapshotID } : {}),
     clarified_request: clarifiedRequest,
   }
   Database.transaction((db) => {
@@ -1617,53 +1634,47 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
         })
         .where(eq(OrchestratorPlanVersionTable.id, previousPlan.id))
         .run()
+      if (previousGoalSnapshotID) {
+        db.update(OrchestratorGoalSnapshotTable)
+          .set({
+            status: "superseded",
+            time_updated: now,
+          })
+          .where(eq(OrchestratorGoalSnapshotTable.id, previousGoalSnapshotID))
+          .run()
+      }
     }
-    const goals = isReplan
-      ? (() => {
-          const next = resolvePlanGoals(specSnapshotID, specDraft.goals ?? [])
-          resetPlanGoals(db, next, now)
-          return next
-        })()
-      : (() => {
-          db.insert(OrchestratorSpecSnapshotTable)
-            .values({
-              id: specSnapshotID,
-              task_id: task.id,
-              version: 1,
-              status: "ready",
-              summary: specDraft.summary,
-              content: specDraft.content,
-              scope:
-                typeof (specDraft as { scope?: unknown }).scope === "string"
-                  ? (specDraft as { scope?: string }).scope ?? ""
-                  : "",
-              out_of_scope:
-                typeof (specDraft as { out_of_scope?: unknown }).out_of_scope === "string"
-                  ? (specDraft as { out_of_scope?: string }).out_of_scope
-                  : undefined,
-              evidence: specDraft.evidence_sources.length > 0 ? specDraft.evidence_sources : undefined,
-              metadata: {
-                assumptions: specDraft.assumptions,
-                risks: specDraft.risks,
-                unresolved_questions: specDraft.unresolved_questions,
-              },
-              time_created: now,
-              time_updated: now,
-            })
-            .run()
-          insertSpecItems(db, {
+    const persistedSpec = isReplan
+      ? {
+          requirements: findRequirements(specSnapshotID).map((requirement) => ({
+            id: requirement.id,
+            sourceRequirementID:
+              requirement.metadata && typeof requirement.metadata.source_requirement_id === "string"
+                ? requirement.metadata.source_requirement_id
+                : requirement.id,
+            title: requirement.title,
+            priority: requirement.priority,
+          })),
+        }
+      : persistSpecSnapshot(db, {
+          taskID: task.id,
+          specSnapshotID,
+          version: 1,
+          specDraft,
+          now,
+        })
+    const persistedGoals =
+      goalSnapshotID && compiled.goalDraft
+        ? persistGoalSnapshot(db, {
             taskID: task.id,
             specSnapshotID,
-            specItems: specDraft.spec_items ?? [],
+            goalSnapshotID,
+            version: previousGoalSnapshot ? previousGoalSnapshot.version + 1 : 1,
+            goalDraft: compiled.goalDraft,
+            requirements: persistedSpec.requirements,
             now,
           })
-          return insertGoalRows(db, {
-            taskID: task.id,
-            specSnapshotID,
-            goals: specDraft.goals ?? [],
-            now,
-          })
-        })()
+        : []
     db.insert(OrchestratorPlanVersionTable)
       .values({
         id: planID,
@@ -1681,7 +1692,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
     insertPlanItems(db, {
       taskID: task.id,
       planID,
-      goals: goals.map((g) => ({ ...g, metadata: g.metadata ?? undefined })),
+      goals: persistedGoals,
       planDraft,
       now,
       milestones: [],
@@ -1787,6 +1798,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
     },
     createdAt: now,
   })
+  const persistedPlan = findPlan(planID)
   writeGoalSnapshot({
     task,
     plan: {
@@ -1794,7 +1806,7 @@ async function answerPlannerClarification(row: InteractionRow, answers: string[]
       version: isReplan && previousPlan ? previousPlan.version + 1 : 1,
       summary: planDraft.summary,
     },
-    goals: listGoalsBySpec(specSnapshotID),
+    goals: persistedPlan ? listGoalsForPlan(persistedPlan) : [],
     milestones: listMilestonesByPlan(planID),
     createdAt: now,
   })

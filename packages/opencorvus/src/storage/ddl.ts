@@ -386,7 +386,23 @@ CREATE TABLE IF NOT EXISTS orchestrator_spec_snapshot (
 );
 CREATE INDEX IF NOT EXISTS orchestrator_spec_snapshot_task_idx ON orchestrator_spec_snapshot (task_id);
 
-CREATE TABLE IF NOT EXISTS orchestrator_spec_item (
+CREATE TABLE IF NOT EXISTS orchestrator_goal_snapshot (
+  id               text PRIMARY KEY,
+  task_id          text NOT NULL,
+  spec_snapshot_id text NOT NULL,
+  version          integer NOT NULL DEFAULT 1,
+  status           text NOT NULL DEFAULT 'ready',
+  summary          text NOT NULL,
+  metadata         text,
+  time_created     integer NOT NULL,
+  time_updated     integer NOT NULL,
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
+  FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS orchestrator_goal_snapshot_task_idx ON orchestrator_goal_snapshot (task_id);
+CREATE INDEX IF NOT EXISTS orchestrator_goal_snapshot_spec_idx ON orchestrator_goal_snapshot (spec_snapshot_id);
+
+CREATE TABLE IF NOT EXISTS orchestrator_requirement (
   id               text PRIMARY KEY,
   task_id          text NOT NULL,
   spec_snapshot_id text NOT NULL,
@@ -394,16 +410,18 @@ CREATE TABLE IF NOT EXISTS orchestrator_spec_item (
   description      text NOT NULL,
   status           text NOT NULL DEFAULT 'pending',
   priority         text NOT NULL DEFAULT 'blocking',
-  check_selector   text,
-  evidence         text,
+  acceptance       text,
+  evidence_refs    text,
+  non_goals        text,
   metadata         text,
+  order_index      integer NOT NULL DEFAULT 0,
   time_created     integer NOT NULL,
   time_updated     integer NOT NULL,
-  FOREIGN KEY (task_id)          REFERENCES orchestrator_task(id)          ON DELETE CASCADE,
+  FOREIGN KEY (task_id) REFERENCES orchestrator_task(id) ON DELETE CASCADE,
   FOREIGN KEY (spec_snapshot_id) REFERENCES orchestrator_spec_snapshot(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS orchestrator_spec_item_task_idx     ON orchestrator_spec_item (task_id);
-CREATE INDEX IF NOT EXISTS orchestrator_spec_item_snapshot_idx ON orchestrator_spec_item (spec_snapshot_id);
+CREATE INDEX IF NOT EXISTS orchestrator_requirement_task_idx ON orchestrator_requirement (task_id);
+CREATE INDEX IF NOT EXISTS orchestrator_requirement_spec_idx ON orchestrator_requirement (spec_snapshot_id);
 
 CREATE TABLE IF NOT EXISTS orchestrator_plan_version (
   id           text PRIMARY KEY,
@@ -447,6 +465,7 @@ CREATE TABLE IF NOT EXISTS orchestrator_goal (
   metadata        text,
   priority        text NOT NULL DEFAULT 'blocking',
   source          text NOT NULL DEFAULT 'spec',
+  kind            text,
   status          text NOT NULL DEFAULT 'pending',
   order_index     integer NOT NULL DEFAULT 0,
   time_created    integer NOT NULL,

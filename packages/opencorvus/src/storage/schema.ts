@@ -12,8 +12,9 @@ export { TaskPlanTable } from "../memory/task-plan.sql"
 export { WorkbenchPreferenceTable, WorkbenchTaskNoteTable, WorkbenchBriefSnapshotTable } from "../workbench/workbench.sql"
 export { ProtocolEventTable, ProtocolInboxTable, ProtocolStreamChunkTable } from "../protocol/protocol.sql"
 export {
+  OrchestratorGoalSnapshotTable,
+  OrchestratorRequirementTable,
   OrchestratorSpecSnapshotTable,
-  OrchestratorSpecItemTable,
   OrchestratorTaskTable,
   OrchestratorPlanVersionTable,
   OrchestratorMilestoneTable,

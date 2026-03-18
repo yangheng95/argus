@@ -56,10 +56,10 @@ export const PanelTool = Tool.define("panel", {
             board.spec ? `Spec v${board.spec.version}: ${board.spec.summary}` : "Spec unavailable",
             board.spec?.scope ? `Scope: ${board.spec.scope}` : undefined,
             board.spec?.outOfScope ? `Out of scope: ${board.spec.outOfScope}` : undefined,
-            board.specItems.length > 0 ? "Acceptance items:" : undefined,
-            ...board.specItems.slice(0, 12).map((item, index) =>
-              `${index + 1}. ${item.title}${item.description ? ` - ${item.description}` : ""} [${item.status}]${item.checkSelector?.length ? ` {${item.checkSelector.join(", ")}}` : ""}`),
-            board.specItems.length > 12 ? `... ${board.specItems.length - 12} more items` : undefined,
+            board.requirements.length > 0 ? "Requirements:" : undefined,
+            ...board.requirements.slice(0, 12).map((item, index) =>
+              `${index + 1}. ${item.title}${item.description ? ` - ${item.description}` : ""} [${item.status}]${item.acceptance.length > 0 ? ` {${item.acceptance.join("; ")}}` : ""}`),
+            board.requirements.length > 12 ? `... ${board.requirements.length - 12} more requirements` : undefined,
           ].filter(Boolean).join("\n"),
           metadata: {},
         }
@@ -107,7 +107,7 @@ export const PanelTool = Tool.define("panel", {
             board.task.budget
               ? `Budget: runs=${board.task.budget.maxRuns ?? "default"}, replans=${board.task.budget.maxReplans ?? "default"}, evaluations=${board.task.budget.maxEvaluations ?? "default"}, wall=${board.task.budget.maxWallTimeMs === undefined ? "default" : `${board.task.budget.maxWallTimeMs}ms`}`
               : "Budget: defaults",
-            `Goals: ${board.goals.length}, acceptance items: ${board.specItems.length}`,
+            `Goals: ${board.goals.length}, requirements: ${board.requirements.length}`,
             pendingCount(board) > 0 ? `Pending blockers: ${pendingCount(board)}` : undefined,
             board.evaluation ? `Evaluation: ${board.evaluation.verdict} - ${board.evaluation.summary}` : undefined,
             board.delivery ? `Delivery: ${board.delivery.summary}` : undefined,

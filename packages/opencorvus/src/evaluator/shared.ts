@@ -38,6 +38,22 @@ export type CheckTask = {
   activeSpecVersionID?: string
   request?: string
   metadata?: Record<string, unknown>
+  goal?: {
+    id?: string
+    title: string
+    description: string
+    objective?: string
+    criteria: string
+    priority: "blocking" | "advisory"
+    ownedPaths?: string[]
+    doneDefinition?: string
+    requirementIDs?: string[]
+    qaProfile?: {
+      goalCheckPrompt?: string
+      specScope?: "mapped_requirements" | "full_spec" | "both"
+    }
+  }
+  requirementIDs?: string[]
 }
 
 export type CheckDelivery = {

@@ -4,7 +4,7 @@ import { Global } from "@/global"
 import { Filesystem } from "@/util/filesystem"
 import { Log } from "@/util/log"
 import { dict } from "@/util/object"
-import { inferFamily, selectorList } from "@/check/policy"
+import { selectorList } from "@/check/policy"
 import { CheckRunner } from "@/evaluator/service"
 import { Instance } from "@/project/instance"
 import { Project } from "@/project/project"
@@ -239,7 +239,7 @@ function analysisFailure(
 function goalChecks(goal: GoalRow, task: TaskRow) {
   const selectors = executorSelectors(goal)
   const base = dict(task.metadata?.checks)
-  const pick = (name: string, family: string) => selectors.includes(name) || selectors.includes(family)
+  const pick = (name: string, family?: string) => selectors.includes(name) || (family ? selectors.includes(family) : false)
   const next: Record<string, unknown> = {
     spec_check: { enabled: false, mode: "strict" },
     build: selectors.includes("build") ? base.build : false,
@@ -254,7 +254,7 @@ function goalChecks(goal: GoalRow, task: TaskRow) {
             if (!raw || typeof raw !== "object" || Array.isArray(raw)) return []
             const value = raw as Record<string, unknown>
             if (value.enabled === false) return []
-            const family = typeof value.family === "string" ? value.family : inferFamily(name)
+            const family = typeof value.family === "string" ? value.family : undefined
             return pick(name, family) ? [[name, { ...value, enabled: true }]] : []
           }),
         )

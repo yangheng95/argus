@@ -9,7 +9,7 @@ import { startupResult } from "./checks"
 import { artifactResult } from "./checks"
 import { visualResult } from "./checks"
 import { puppeteerResult } from "./checks"
-import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, specCheckResult } from "./review"
+import { uiReviewResult, codeQualityResult, codeReviewResult, deadCodeReviewResult, goalCheckResult, specCheckResult } from "./review"
 import {
   type CheckTask,
   type CheckDelivery,
@@ -40,10 +40,14 @@ const OPTIONAL_CHECK_DEFS = [
   { name: "code_quality", label: "Code Quality", family: "review", run: (config, task, delivery) => codeQualityResult(config.code_quality, task.request, delivery) },
   { name: "code_review", label: "Code Review", family: "review", run: (config, task, delivery) => codeReviewResult(config.code_review, task.request, delivery) },
   { name: "dead_code_review", label: "Dead Code Review", family: "review", run: (config, task, delivery) => deadCodeReviewResult(config.dead_code_review, task.request, delivery) },
-  { name: "spec_check", label: "Spec Check", family: "acceptance", run: (config, task, delivery) => specCheckResult(config.spec_check, task.request, task.activeSpecVersionID, delivery) },
 ] as const satisfies OptionalCheckDef[]
 
-const BUILTIN_CHECK_DEFS = [...CORE_CHECK_DEFS, ...OPTIONAL_CHECK_DEFS]
+const BUILTIN_CHECK_DEFS = [
+  ...CORE_CHECK_DEFS,
+  ...OPTIONAL_CHECK_DEFS,
+  { name: "goal_check", label: "Goal Check", family: "acceptance" },
+  { name: "spec_check", label: "Spec Check", family: "acceptance" },
+] as const
 initBuiltinCheckIndex(BUILTIN_CHECK_DEFS)
 
 export namespace CheckRunner {
@@ -57,25 +61,33 @@ export namespace CheckRunner {
     task: CheckTask,
     delivery: CheckDelivery,
   ) {
-    const config = await resolveConfig(task.metadata)
+    const config = await resolveConfig(task.metadata, task)
     const discovered = await discoverChecks(task.metadata?.delivery_changed_files)
     const commands = commandGroups(config, discovered)
     const core = await commandChecks(commands, config.timeout_ms ?? DEFAULT_TIMEOUT_MS, delivery)
     if (core.checks.some((item) => item.status === "failed")) {
-      return publishResult(task, finalizeEvaluation(commands, core.checks, core.artifacts, [], !!task.activeSpecVersionID))
+      return publishResult(task, finalizeEvaluation({
+        commands,
+        checks: core.checks,
+        artifacts: core.artifacts,
+        optional: [],
+        requireGoalCheck: !!task.goal && config.goal_check?.enabled !== false,
+        requireSpecCheck: config.spec_check?.enabled !== false,
+      }))
     }
     const optional = await optionalChecks(config, task, delivery)
     const checks = [...core.checks, ...optional.flatMap((item) => Array.isArray(item.checks) ? item.checks : [])]
     const artifacts = [...core.artifacts, ...optional.flatMap((item) => Array.isArray(item.artifacts) ? item.artifacts : [])]
     return publishResult(
       task,
-      finalizeEvaluation(
+      finalizeEvaluation({
         commands,
         checks,
         artifacts,
         optional,
-        !!task.activeSpecVersionID && config.spec_check?.enabled !== false,
-      ),
+        requireGoalCheck: !!task.goal && config.goal_check?.enabled !== false,
+        requireSpecCheck: config.spec_check?.enabled !== false,
+      }),
     )
   }
 
@@ -122,27 +134,41 @@ async function optionalChecks(
   task: CheckTask,
   delivery: CheckDelivery,
 ) {
-  // Phase 1: run local (non-LLM) checks concurrently
   const phase1 = await Promise.all(
     OPTIONAL_CHECK_DEFS.map((item) =>
       LOCAL_CHECK_NAMES.has(item.name) ? item.run(config, task, delivery) : undefined,
     ),
   )
-  // If any local check failed strictly, skip LLM review checks and plugins
   const strictLocalFailed = phase1.some((item) => item !== undefined && item.outcome === "failed")
-  // Phase 2: run LLM review checks (skip if strict local failure)
-  const builtin = await Promise.all(
+  const builtins = await Promise.all(
     OPTIONAL_CHECK_DEFS.map(async (item, i) => {
       if (phase1[i] !== undefined) return phase1[i]!
       if (strictLocalFailed) return emptyOptional()
       return item.run(config, task, delivery)
     }),
   )
-  const plugins = strictLocalFailed ? [] : await pluginChecks(config, task, delivery)
-  return [...builtin, ...plugins].map((item) => ({
+  const phase1Checks = [...builtins, ...(strictLocalFailed ? [] : await pluginChecks(config, task, delivery))].map((item) => ({
     ...item,
     checks: item.checks.map(checkResult),
   }))
+  if (phase1Checks.some((item) => item.outcome === "failed")) return phase1Checks
+
+  const goalCheck = await goalCheckResult(config.goal_check, task, delivery)
+  const goalOutcome = {
+    ...goalCheck,
+    checks: goalCheck.checks.map(checkResult),
+  }
+  if (goalOutcome.outcome === "failed") return [...phase1Checks, goalOutcome]
+
+  const specCheck = await specCheckResult(config.spec_check, task, delivery)
+  return [
+    ...phase1Checks,
+    goalOutcome,
+    {
+      ...specCheck,
+      checks: specCheck.checks.map(checkResult),
+    },
+  ]
 }
 
 async function pluginChecks(
@@ -220,16 +246,17 @@ function orderChecks(input: z.infer<typeof EvaluationCheck>[]) {
   )
 }
 
-function finalizeEvaluation(
-  commands: { name: string }[],
-  checks: z.infer<typeof EvaluationCheck>[],
-  artifacts: CheckArtifact[],
-  optional: CheckOutcome[],
-  requireSpecCheck: boolean,
-): CheckReport {
-  const ordered = enforceSpecPresence(orderChecks(checks))
+function finalizeEvaluation(input: {
+  commands: { name: string }[]
+  checks: z.infer<typeof EvaluationCheck>[]
+  artifacts: CheckArtifact[]
+  optional: CheckOutcome[]
+  requireGoalCheck: boolean
+  requireSpecCheck: boolean
+}): CheckReport {
+  const ordered = orderChecks(input.checks)
   const failed = ordered.filter((item) => item.status === "failed")
-  if (failed.length > 0 || optional.some((item) => item.outcome === "failed")) {
+  if (failed.length > 0 || input.optional.some((item) => item.outcome === "failed")) {
     const summary = [
       failed.length > 0 ? `Failed: ${failed.map((item) => `${item.name} (${item.status})`).join(", ")}` : "",
       ordered.some((item) => item.status === "passed")
@@ -241,13 +268,26 @@ function finalizeEvaluation(
       verdict: "rejected",
       summary: summary ? `${summary}.` : "Evaluator checks failed.",
       checks: ordered,
-      artifacts,
+      artifacts: input.artifacts,
     }
   }
 
   const optionalChecks = ordered.filter((item) => item.name !== "evaluation_config")
+  const goalCheck = ordered.find((item) => item.name === "goal_check")
   const specCheck = ordered.find((item) => item.name === "spec_check")
-  if (requireSpecCheck && (!specCheck || specCheck.status !== "passed")) {
+  if (input.requireGoalCheck && (!goalCheck || goalCheck.status !== "passed")) {
+    const reason = !goalCheck
+      ? "Goal check is required but did not run."
+      : `Goal check is required and must pass before acceptance. Current status: ${goalCheck.status}.`
+    return {
+      status: "failed",
+      verdict: "rejected",
+      summary: reason,
+      checks: ordered,
+      artifacts: input.artifacts,
+    }
+  }
+  if (input.requireSpecCheck && (!specCheck || specCheck.status !== "passed")) {
     const reason = !specCheck
       ? "Spec check is required but did not run."
       : `Spec check is required and must pass before acceptance. Current status: ${specCheck.status}.`
@@ -256,52 +296,28 @@ function finalizeEvaluation(
       verdict: "rejected",
       summary: reason,
       checks: ordered,
-      artifacts,
+      artifacts: input.artifacts,
     }
   }
-  if (commands.length === 0 && optionalChecks.length === 0 && ordered.every((item) => item.status === "skipped")) {
+  if (input.commands.length === 0 && optionalChecks.length === 0 && ordered.every((item) => item.status === "skipped")) {
     return {
       status: "failed",
       verdict: "rejected",
       summary: "No blocking evaluator checks ran.",
       checks: ordered,
-      artifacts,
+      artifacts: input.artifacts,
     }
   }
 
   return {
     status: "passed",
     verdict: "accepted",
-    summary: optional.some((item) => item.outcome === "skipped")
-      ? commands.length === 0
+    summary: input.optional.some((item) => item.outcome === "skipped")
+      ? input.commands.length === 0
         ? "Optional evaluator checks ran in soft mode without blocking the flow."
         : "Core evaluator checks passed; optional checks were skipped."
       : "All evaluator checks passed.",
     checks: ordered,
-    artifacts,
+    artifacts: input.artifacts,
   }
-}
-
-function enforceSpecPresence(checks: z.infer<typeof EvaluationCheck>[]) {
-  const specCheck = checks.find((item) => item.name === "spec_check")
-  if (!specCheck || specCheck.status !== "passed") return checks
-
-  const evidence = specCheck.evidence ?? ""
-  const skippedBecauseNoSpec =
-    evidence.includes("No active spec version to compare against") ||
-    evidence.includes("Spec content is empty")
-  if (!skippedBecauseNoSpec) return checks
-
-  const hasOtherChecks = checks.some((item) => item.name !== "spec_check" && item.name !== "evaluation_config")
-  if (!hasOtherChecks) return checks
-
-  return checks.map((item) =>
-    item.name === "spec_check"
-      ? {
-          ...item,
-          status: "failed" as const,
-          evidence: "Spec check is required for explicit evaluator checks, but no active specification was available.",
-        }
-      : item
-  )
 }

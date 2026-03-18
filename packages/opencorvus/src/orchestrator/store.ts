@@ -12,14 +12,15 @@ import {
   OrchestratorExecutorSessionTable,
   OrchestratorEvaluationTable,
   OrchestratorGoalTable,
+  OrchestratorGoalSnapshotTable,
   OrchestratorGoalRunTable,
   OrchestratorInteractionRequestTable,
   OrchestratorMilestoneTable,
   OrchestratorPlanNodeTable,
   OrchestratorPlanVersionTable,
   OrchestratorProgressSnapshotTable,
+  OrchestratorRequirementTable,
   OrchestratorRunTable,
-  OrchestratorSpecItemTable,
   OrchestratorSpecSnapshotTable,
   OrchestratorTaskTable,
   type OrchestratorBudget,
@@ -42,7 +43,8 @@ export type ProgressRow = typeof OrchestratorProgressSnapshotTable.$inferSelect
 export type ExecutorSessionRow = typeof OrchestratorExecutorSessionTable.$inferSelect
 export type ExecutorEventRow = typeof OrchestratorExecutorEventTable.$inferSelect
 export type SpecSnapshotRow = typeof OrchestratorSpecSnapshotTable.$inferSelect
-export type SpecItemRow = typeof OrchestratorSpecItemTable.$inferSelect
+export type GoalSnapshotRow = typeof OrchestratorGoalSnapshotTable.$inferSelect
+export type RequirementRow = typeof OrchestratorRequirementTable.$inferSelect
 export type TaskProjectRow = {
   id: string
   name?: string
@@ -124,22 +126,41 @@ export function findSpecSnapshots(taskID: string) {
   )
 }
 
-export function findSpecItems(specSnapshotID: string) {
+export function findGoalSnapshot(goalSnapshotID: string) {
+  return Database.use((db) =>
+    db.select().from(OrchestratorGoalSnapshotTable).where(eq(OrchestratorGoalSnapshotTable.id, goalSnapshotID)).get(),
+  )
+}
+
+export function findGoalSnapshots(taskID: string) {
   return Database.use((db) =>
     db
       .select()
-      .from(OrchestratorSpecItemTable)
-      .where(eq(OrchestratorSpecItemTable.spec_snapshot_id, specSnapshotID))
+      .from(OrchestratorGoalSnapshotTable)
+      .where(eq(OrchestratorGoalSnapshotTable.task_id, taskID))
+      .orderBy(desc(OrchestratorGoalSnapshotTable.version))
       .all(),
   )
 }
 
-export function findSpecItemsByTask(taskID: string) {
+export function findRequirements(specSnapshotID: string) {
   return Database.use((db) =>
     db
       .select()
-      .from(OrchestratorSpecItemTable)
-      .where(eq(OrchestratorSpecItemTable.task_id, taskID))
+      .from(OrchestratorRequirementTable)
+      .where(eq(OrchestratorRequirementTable.spec_snapshot_id, specSnapshotID))
+      .orderBy(asc(OrchestratorRequirementTable.order_index))
+      .all(),
+  )
+}
+
+export function findRequirementsByTask(taskID: string) {
+  return Database.use((db) =>
+    db
+      .select()
+      .from(OrchestratorRequirementTable)
+      .where(eq(OrchestratorRequirementTable.task_id, taskID))
+      .orderBy(asc(OrchestratorRequirementTable.order_index))
       .all(),
   )
 }
@@ -163,7 +184,23 @@ export function viewSpecSnapshot(row: SpecSnapshotRow) {
   }
 }
 
-export function viewSpecItem(row: SpecItemRow) {
+export function viewGoalSnapshot(row: GoalSnapshotRow) {
+  return {
+    id: row.id,
+    taskID: row.task_id,
+    specSnapshotID: row.spec_snapshot_id,
+    version: row.version,
+    status: row.status,
+    summary: row.summary,
+    metadata: row.metadata ?? undefined,
+    time: {
+      created: row.time_created,
+      updated: row.time_updated,
+    },
+  }
+}
+
+export function viewRequirement(row: RequirementRow) {
   return {
     id: row.id,
     taskID: row.task_id,
@@ -172,9 +209,11 @@ export function viewSpecItem(row: SpecItemRow) {
     description: row.description,
     status: row.status,
     priority: row.priority,
-    checkSelector: row.check_selector ?? undefined,
-    evidence: row.evidence ?? undefined,
+    acceptance: row.acceptance ?? [],
+    evidenceRefs: row.evidence_refs ?? undefined,
+    nonGoals: row.non_goals ?? undefined,
     metadata: row.metadata ?? undefined,
+    orderIndex: row.order_index,
     time: {
       created: row.time_created,
       updated: row.time_updated,
@@ -345,6 +384,35 @@ export function listGoalsBySpec(specID: string) {
       .orderBy(OrchestratorGoalTable.order_index)
       .all(),
   )
+}
+
+function goalMetadata(row: GoalRow) {
+  return row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+    ? row.metadata as Record<string, unknown>
+    : {}
+}
+
+export function goalSnapshotIDOfPlan(row: Pick<PlanRow, "metadata">) {
+  const metadata =
+    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+      ? row.metadata as Record<string, unknown>
+      : {}
+  return typeof metadata.goal_snapshot_id === "string" && metadata.goal_snapshot_id.trim()
+    ? metadata.goal_snapshot_id
+    : undefined
+}
+
+export function listGoalsByGoalSnapshot(goalSnapshotID: string) {
+  const snapshot = findGoalSnapshot(goalSnapshotID)
+  if (!snapshot) return []
+  return listGoalsBySpec(snapshot.spec_snapshot_id)
+    .filter((row) => goalMetadata(row).goal_snapshot_id === goalSnapshotID)
+}
+
+export function listGoalsForPlan(plan: Pick<PlanRow, "spec_snapshot_id" | "metadata">) {
+  const goalSnapshotID = goalSnapshotIDOfPlan(plan)
+  if (goalSnapshotID) return listGoalsByGoalSnapshot(goalSnapshotID)
+  return []
 }
 
 export function listPlanNodesByPlan(planID: string) {
@@ -693,10 +761,16 @@ export function viewTask(row: TaskRow, input?: { directory?: string }) {
 }
 
 export function viewPlan(row: PlanRow) {
+  const metadata = row.metadata ?? undefined
+  const goalSnapshotID =
+    metadata && typeof metadata.goal_snapshot_id === "string"
+      ? metadata.goal_snapshot_id
+      : undefined
   return {
     id: row.id,
     taskID: row.task_id,
     specSnapshotID: row.spec_snapshot_id,
+    goalSnapshotID,
     version: row.version,
     status: row.status,
     summary: row.summary,
@@ -710,10 +784,31 @@ export function viewPlan(row: PlanRow) {
 }
 
 export function viewGoal(row: GoalRow) {
+  const metadata = goalMetadata(row)
+  const title = typeof metadata.title === "string" && metadata.title.trim() ? metadata.title : row.description
+  const objective = typeof metadata.objective === "string" && metadata.objective.trim() ? metadata.objective : row.criteria
   return {
     id: row.id,
     taskID: row.task_id,
     specSnapshotID: row.spec_snapshot_id,
+    goalSnapshotID: typeof metadata.goal_snapshot_id === "string" ? metadata.goal_snapshot_id : undefined,
+    title,
+    objective,
+    requirementIDs: Array.isArray(metadata.requirement_ids)
+      ? metadata.requirement_ids.filter((item): item is string => typeof item === "string")
+      : undefined,
+    dependsOnGoalIDs: Array.isArray(metadata.depends_on_goal_ids)
+      ? metadata.depends_on_goal_ids.filter((item): item is string => typeof item === "string")
+      : undefined,
+    ownedPaths: Array.isArray(metadata.owned_paths)
+      ? metadata.owned_paths.filter((item): item is string => typeof item === "string")
+      : undefined,
+    doneDefinition: typeof metadata.done_definition === "string" ? metadata.done_definition : undefined,
+    qaProfile:
+      metadata.qa_profile && typeof metadata.qa_profile === "object" && !Array.isArray(metadata.qa_profile)
+        ? metadata.qa_profile as Record<string, unknown>
+        : undefined,
+    kind: typeof row.kind === "string" ? row.kind : typeof metadata.kind === "string" ? metadata.kind : undefined,
     description: row.description,
     criteria: row.criteria,
     source: row.source,

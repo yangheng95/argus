@@ -19,6 +19,21 @@ function stageTimeout(name: string, totalMs: number, share: number, fallback: nu
   return Math.max(fallback, Math.min(totalMs, Math.floor(totalMs * share) || fallback))
 }
 
+function benchmarkRoutingForExecutor(executor: "opencode" | "codex" | "claude-code") {
+  if (executor === "opencode") {
+    return {
+      spec: "opencorvus" as const,
+      goal: "opencorvus" as const,
+      plan: "opencorvus" as const,
+    }
+  }
+  return {
+    spec: "executor" as const,
+    goal: "opencorvus" as const,
+    plan: "executor" as const,
+  }
+}
+
 const timeoutMs = Number(flag("--timeout-ms")) || 480_000
 const stallTimeoutMs = stageTimeout("--stall-timeout-ms", timeoutMs, 0.2, 15 * 60 * 1000)
 const requestTimeoutMs = stageTimeout("--request-timeout-ms", timeoutMs, 0.08, 30_000)
@@ -387,10 +402,7 @@ try {
         maxReplans,
         maxEvaluations,
       },
-      routing: {
-        spec: "executor",
-        plan: "executor",
-      },
+      routing: benchmarkRoutingForExecutor(executor),
       checks: {
         build: false,
         lint: false,

@@ -16,7 +16,6 @@ import { OrchestratorRunActor } from "./run-actor"
 import { DeliveryService } from "./delivery"
 import {
   applyGoalDelivery,
-  blockingEvaluationFailure,
   buildGoalPrompt,
   cleanupGoalWorkspace,
   cleanupStaleGoalWorkspaces,
@@ -86,7 +85,7 @@ import {
   latestExecutorEvent,
   latestGoalRunByCoordinator,
   listActiveGoalRunsByCoordinator,
-  listGoalsBySpec,
+  listGoalsForPlan,
   listGoalRunsByCoordinator,
   listPlanNodesByPlan,
   requireRun,
@@ -141,7 +140,7 @@ function interactionStaleMs() {
 
 function goalsForRun(run: RunRow) {
   const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
-  return plan ? listGoalsBySpec(plan.spec_snapshot_id) : []
+  return plan ? listGoalsForPlan(plan) : []
 }
 
 function planForRun(run: RunRow) {
@@ -410,7 +409,7 @@ async function queueGoalRun(
 async function queueReadyGoalRuns(task: TaskRow, run: RunRow, plan: PlanRow, hooks: RuntimeHooks) {
   if (activeGoalRuns(run).length > 0) return 0
   const nodes = listPlanNodesByPlan(plan.id)
-  const ready = readyGoalNodes(nodes, listGoalsBySpec(plan.spec_snapshot_id))
+  const ready = readyGoalNodes(nodes, listGoalsForPlan(plan))
   const next = ready[0]
   if (!next) return 0
   log.info("dispatching iterative goal stage", {
@@ -533,12 +532,9 @@ async function _finalizeCoordinatorRun(task: TaskRow, run: RunRow, hooks: Runtim
   })
   const goals = goalsForRun(run)
   const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
-  const phase1Failed = blockingEvaluationFailure(result)
-  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
-  const finalStatus = (finalVerdict === "accepted" ? "passed" : "failed") as typeof result.status
-  const finalSummary = phase1Failed && analysis.verdict === "accepted"
-    ? `Rejected: automated checks failed. ${result.summary}`
-    : analysis.summary
+  const finalVerdict = result.verdict
+  const finalStatus = result.status
+  const finalSummary = result.summary
   persistEvaluation({
     task,
     run,
@@ -1319,12 +1315,9 @@ async function runEvaluation(task: TaskRow, run: RunRow, existingDelivery: Deliv
   })
   const goals = goalsForRun(run)
   const { result, analysis, analysisError } = await evaluateTask({ task, goals, delivery })
-  const phase1Failed = blockingEvaluationFailure(result)
-  const finalVerdict = phase1Failed ? "rejected" : analysis.verdict
-  const finalStatus = (finalVerdict === "accepted" ? "passed" : "failed") as typeof result.status
-  const finalSummary = phase1Failed && analysis.verdict === "accepted"
-    ? `Rejected: automated checks failed. ${result.summary}`
-    : analysis.summary
+  const finalVerdict = result.verdict
+  const finalStatus = result.status
+  const finalSummary = result.summary
 
   persistEvaluation({
     task, run, deliveryID, evaluationID, delivery, result,

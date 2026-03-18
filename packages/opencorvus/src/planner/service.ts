@@ -29,7 +29,6 @@ type StageInfo = {
   requested: z.infer<typeof PlanningProvider> | z.infer<typeof EvaluationProvider>
   resolved: "opencorvus" | "executor"
   executor?: ExecutorNameInfo
-  fallback_reason?: string
   warning?: string
 }
 
@@ -65,11 +64,7 @@ const SpecAnalysis = z.object({
 })
 type SpecAnalysisResult = z.infer<typeof SpecAnalysis>
 
-type PlannerSpec = SpecDraft & {
-  spec_items?: Array<{
-    check_selector?: string[]
-  }>
-}
+type PlannerSpec = SpecDraft
 
 export type PlanDraft = {
   summary: string
@@ -196,7 +191,6 @@ export namespace HeadlessPlannerService {
         },
       )
     }
-
     const controller = new AbortController()
     let timedOut = false
     const guard = createInactivityGuard(timeoutMs, () => {
@@ -244,7 +238,6 @@ export namespace HeadlessPlannerService {
       guard.clear()
       controller.abort()
     })
-
     return agentOutputToDraft(
       input.title,
       input.request,
@@ -350,7 +343,6 @@ export namespace HeadlessPlannerService {
         },
       )
     }
-
     const controller = new AbortController()
     let timedOut = false
     const guard = createInactivityGuard(timeoutMs, () => {
@@ -421,19 +413,16 @@ export { HeadlessPlannerService as PlannerService }
 
 function resolveStages(executor: ExecutorNameInfo | undefined, routing?: z.infer<typeof StageRouting>): StageSet {
   const requestedEvaluation = routing?.evaluation ?? "opencorvus"
+  if (requestedEvaluation === "hybrid") {
+    throw new PlannerFailureError("hybrid evaluation is not implemented")
+  }
   return {
     spec: resolvePlanningStage("spec", routing?.spec ?? "opencorvus", executor),
     plan: resolvePlanningStage("plan", routing?.plan ?? "opencorvus", executor),
-    evaluation: requestedEvaluation === "hybrid"
-      ? {
-          requested: requestedEvaluation,
-          resolved: "opencorvus",
-          fallback_reason: "hybrid evaluation is not implemented yet",
-        }
-      : {
-          requested: requestedEvaluation,
-          resolved: "opencorvus",
-        },
+    evaluation: {
+      requested: requestedEvaluation,
+      resolved: "opencorvus",
+    },
   }
 }
 
@@ -448,20 +437,9 @@ function resolvePlanningStage(
       resolved: "opencorvus",
     }
   }
-  if (!executor || executor === "opencode") {
-    return {
-      requested,
-      resolved: "opencorvus",
-      fallback_reason: "executor-native planning requires an external executor",
-    }
-  }
+  if (!executor || executor === "opencode") throw new PlannerFailureError("executor-native planning requires an external executor")
   if (!ExecutorPlanner.supports(executor, stage)) {
-    return {
-      requested,
-      resolved: "opencorvus",
-      executor,
-      fallback_reason: `executor ${executor} does not support ${stage} generation`,
-    }
+    throw new PlannerFailureError(`executor ${executor} does not support ${stage} generation`)
   }
   return {
     requested,
@@ -495,7 +473,7 @@ function planSpecMeta(spec?: PlannerSpec, stages?: StageSet) {
   return {
     summary: spec.summary,
     source: stages?.spec,
-    ...("spec_items" in spec ? { spec_items: (spec as Record<string, unknown>).spec_items } : {}),
+    ...("requirements" in spec ? { requirements: (spec as Record<string, unknown>).requirements } : {}),
     ...("evidence_sources" in spec ? { evidence_sources: (spec as Record<string, unknown>).evidence_sources } : {}),
     ...("unresolved_questions" in spec ? { unresolved_questions: (spec as Record<string, unknown>).unresolved_questions } : {}),
     ...("scope" in spec && (spec as Record<string, unknown>).scope ? { scope: (spec as Record<string, unknown>).scope } : {}),
@@ -988,47 +966,20 @@ ${truncatedPrevious}
 // Goal helpers
 // ---------------------------------------------------------------------------
 
-function resolveGoals(request: string, spec?: PlannerSpec, goals?: z.infer<typeof GoalInput>[]) {
+function resolveGoals(_request: string, spec?: PlannerSpec, goals?: z.infer<typeof GoalInput>[]) {
   const source =
     spec?.goals && spec.goals.length > 0
       ? spec.goals
       : Array.isArray(goals) && goals.length > 0
         ? goals
         : []
-  // Request-level selectors (inferred from request text + spec_check when spec exists).
-  // These are merged into every goal as a baseline.
-  // Per-goal selectors from spec_items are preserved in goal.metadata.check_selector
-  // by spec/service.ts and are NOT merged here across goals.
-  const baseSelectors = goalSelectors(request, spec)
-  return source.map((goal) => {
-    const perGoal = goal.metadata?.check_selector ?? []
-    const check_selector = [...new Set([...perGoal, ...baseSelectors])]
-    return {
-      ...goal,
-      metadata: check_selector.length > 0
-        ? {
-            ...goal.metadata,
-            check_selector,
-          }
+  return source.map((goal) => ({
+    ...goal,
+    metadata:
+      goal.metadata && typeof goal.metadata === "object" && !Array.isArray(goal.metadata)
+        ? { ...goal.metadata }
         : goal.metadata,
-    }
-  })
-}
-
-function goalSelectors(request: string, spec?: PlannerSpec) {
-  // Return request-level selectors only (inferred from request text).
-  // Per-goal check_selectors from spec_items are already preserved in
-  // goal.metadata.check_selector by spec/service.ts deriveGoals() and must
-  // NOT be merged here — cross-item fan-out would apply every item's checks
-  // to every goal, breaking the per-goal binding set by the spec agent.
-  const selectors = inferSelectors(request).filter((item) =>
-    !["build", "test", "lint", "verify_cmd"].includes(item)
-  )
-  if (!spec) return [...new Set(selectors)]
-  // spec_check validates the delivery against the approved spec; add it when
-  // a spec exists and the goal does not already carry a more specific selector.
-  selectors.push("spec_check")
-  return [...new Set(selectors)]
+  }))
 }
 
 function deriveClarification(output: PlannerOutputType, request: string): ClarificationResult | undefined {
@@ -1083,19 +1034,6 @@ function heuristicClarification(request: string): ClarificationResult | undefine
       default_assumption: "Focus on the primary user-facing path in the main package.",
     }],
   }
-}
-
-function inferSelectors(request: string) {
-  const lower = request.toLowerCase()
-  const selectors = new Set(["build", "test", "lint", "verify_cmd"])
-  if (/(ui|ux|design|layout|页面|界面|交互|体验|accessibility)/.test(lower)) selectors.add("ui_review")
-  if (/(code quality|maintain|readab|review|refactor|代码质量|可维护|可读)/.test(lower)) selectors.add("code_quality")
-  if (/\bcr\b|code review|审查|代码评审|review finding|review comment/.test(lower)) selectors.add("code_review")
-  if (/(dead code|unused code|unused export|obsolete|stale branch|死代码|无用代码|废弃分支|清理旧代码)/.test(lower))
-    selectors.add("dead_code_review")
-  if (/(startup|start normally|starts normally|boot|launch|serve|server|启动|运行起来|正常启动)/.test(lower))
-    selectors.add("startup")
-  return [...selectors]
 }
 
 function summarize(input: string) {

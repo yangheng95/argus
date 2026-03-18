@@ -330,18 +330,6 @@ function extractJSON(text: string): PlannerOutputType {
       if (!obj.subtasks[i].description) obj.subtasks[i].description = obj.subtasks[i].title
     }
   }
-  if (!Array.isArray(obj.waves) && Array.isArray(obj.milestones)) {
-    obj.waves = obj.milestones
-      .filter((item: unknown) => item && typeof item === "object" && !Array.isArray(item))
-      .map((item: unknown) => {
-        const wave = item as Record<string, unknown>
-        return {
-          title: wave.title,
-          objective: wave.description,
-          goal_indices: wave.goal_indices,
-        }
-      })
-  }
   if (Array.isArray(obj.waves)) {
     obj.waves = obj.waves.filter((wave: unknown) => wave && typeof wave === "object" && !Array.isArray(wave))
   }
@@ -566,15 +554,23 @@ function validatePlanQuality(
         if (Number.isInteger(goalIndex) && goalIndex >= 0 && goalIndex < goalCount) explicitCoverage.add(goalIndex)
       }
     }
-    const normalized = normalizePlanWaves({
-      waves,
-      goals: Array.from({ length: goalCount }, (_, index) => ({ description: `Goal ${index + 1}` })),
-    })
+    let normalizedLength = 0
+    try {
+      normalizedLength = normalizePlanWaves({
+        waves,
+        goals: Array.from({ length: goalCount }, (_, index) => ({ description: `Goal ${index + 1}` })),
+      }).length
+    } catch (error) {
+      reasons.push(error instanceof Error ? error.message : String(error))
+      return {
+        score: Math.min(score, 0.49),
+        reasons,
+      }
+    }
     if (waves.length === 0) reasons.push("plan missing stage waves for a multi-goal task")
     if (explicitCoverage.size < goalCount) reasons.push(`waves cover only ${explicitCoverage.size}/${goalCount} goals`)
     if (multiGoalWaves > 0) reasons.push("each wave must contain exactly one goal for iterative execution")
-    if (normalized.length < goalCount) reasons.push("plan must provide one iterative wave per goal")
-    if (normalized.length > goalCount + 2) reasons.push("plan creates unnecessary extra waves instead of a direct iterative sequence")
+    if (normalizedLength !== goalCount) reasons.push(`plan must provide exactly one iterative wave per goal (got ${normalizedLength}/${goalCount})`)
     if (reasons.some((reason) => reason.includes("wave") || reason.includes("iterative"))) {
       return {
         score: Math.min(score, 0.49),
