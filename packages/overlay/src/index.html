@@ -899,11 +899,28 @@
           <button type="button" class="btn btn-ghost mini" id="btnLogRefresh" data-i18n="common.refresh">Refresh</button>
           <button type="button" class="btn btn-ghost mini" id="btnLogCopy" data-i18n="log.copy">Copy</button>
           <button type="button" class="btn btn-ghost mini" id="btnLogClear" data-i18n="log.clear">Clear</button>
+          <button type="button" class="btn btn-ghost mini" id="btnLogServerLogs" data-i18n="log.server_logs">Server Logs</button>
+          <button type="button" class="btn btn-accent mini" id="btnExecGraph" data-i18n="log.exec_graph">Exec Graph</button>
           <button type="button" class="btn btn-ghost" id="btnCloseLog" data-i18n="common.close">Close</button>
         </div>
       </div>
       <div class="log-viewer" id="logViewerBody">
         <div class="empty-hint" data-i18n="log.empty">No logs</div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Exec Graph Dialog -->
+  <dialog class="dialog dialog-execgraph" id="execGraphDialog">
+    <div class="dialog-form execgraph-form">
+      <div class="dialog-head">
+        <h3 class="dialog-title" data-i18n="log.exec_graph_title">Execution Graph</h3>
+        <div class="dialog-actions compact">
+          <button type="button" class="btn btn-ghost" id="btnCloseExecGraph" data-i18n="common.close">Close</button>
+        </div>
+      </div>
+      <div class="execgraph-frame-wrap">
+        <iframe id="execGraphIframe" class="execgraph-iframe" sandbox="allow-scripts allow-same-origin"></iframe>
       </div>
     </div>
   </dialog>

@@ -55,7 +55,7 @@ const executor = (flag("--executor") || "opencode") as
   | "codex"
   | "claude-code"
 const requestFile = flag("--request-file")
-const verifyCmd = flag("--verify-cmd")
+const deliveryVerifyCmd = flag("--delivery-verify-cmd")
 const skipLocalVerify = process.argv.includes("--skip-local-verify")
 const mode = (flag("--mode") || (requestFile ? "materialize" : "full")) === "materialize" ? "materialize" : "full"
 
@@ -94,7 +94,10 @@ Acceptance:
 `.trim()
 const TASK_REQUEST = requestFile ? (await Bun.file(path.resolve(requestFile)).text()).trim() : DEFAULT_TASK_REQUEST
 const TASK_TITLE = flag("--title")?.trim() || (requestFile ? path.parse(requestFile).name : DEFAULT_TASK_TITLE)
-const LOCAL_VERIFY_CMD = skipLocalVerify ? "" : (verifyCmd?.trim() || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
+// DELIVERY_VERIFY_CMD: runs only at final quality gate (buildBenchmarkReport).
+// Never passed to the orchestrator as per-goal checks — per-goal evaluation uses the LLM judge only.
+// For the default NoteStore task, use bun test as the acceptance command.
+const DELIVERY_VERIFY_CMD = skipLocalVerify ? "" : (deliveryVerifyCmd?.trim() || (requestFile ? "" : "bun test ./src/note-store.test.ts"))
 const TASK_GOALS = requestFile
   ? undefined
   : [{
@@ -407,7 +410,7 @@ try {
         build: false,
         lint: false,
         test: false,
-        verify_cmd: LOCAL_VERIFY_CMD ? [LOCAL_VERIFY_CMD] : false,
+        verify_cmd: false,
         spec_check: {
           enabled: false,
         },
@@ -537,6 +540,7 @@ try {
 
 async function scaffoldProject(dir: string, model: string) {
   await fs.mkdir(path.join(dir, "src"), { recursive: true })
+  await fs.mkdir(path.join(dir, "data"), { recursive: true })
   await fs.mkdir(path.join(dir, ".opencorvus"), { recursive: true })
   await fs.mkdir(temp.config, { recursive: true })
   await Bun.write(
@@ -560,6 +564,7 @@ async function scaffoldProject(dir: string, model: string) {
           module: "Preserve",
           moduleResolution: "Bundler",
           strict: true,
+          skipLibCheck: true,
         },
       },
       null,
@@ -608,7 +613,7 @@ async function runLocalVerify(cwd: string, cmd: string) {
       stderr: "",
     }
   }
-  const shell = process.platform === "win32" ? ["powershell", "-Command", cmd] : ["bash", "-lc", cmd]
+  const shell = process.platform === "win32" ? ["cmd", "/c", cmd] : ["bash", "-lc", cmd]
   const proc = Bun.spawn(shell, {
     cwd,
     stdout: "pipe",
@@ -633,7 +638,7 @@ async function buildBenchmarkReport(error?: unknown) {
   const currentTranscript = transcript ?? (taskID ? await tryApiJson(`/task/${taskID}/transcript`, []) : [])
   const currentTimeline = timeline ?? (taskID ? await tryApiJson(`/control/timeline?taskID=${encodeURIComponent(taskID)}`, []) : [])
   const currentRuns = runs ?? (taskID ? await tryApiJson(`/task/${taskID}/runs`, []) : [])
-  const localVerify = await runLocalVerify(temp.dir, LOCAL_VERIFY_CMD)
+  const localVerify = await runLocalVerify(temp.dir, DELIVERY_VERIFY_CMD)
   const changedFiles = dedupePaths(progress?.delivery?.result?.changedFiles ?? currentFinalBoard?.delivery?.result?.changedFiles ?? [])
   const moduleBlocks = resolveModuleBlocks(progress, currentFinalBoard ?? currentBoard, TASK_REQUEST)
   const artifactAudit = await auditWorkspace({

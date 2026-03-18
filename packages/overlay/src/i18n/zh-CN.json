@@ -383,6 +383,10 @@
   "log.source.client": "客户端",
   "log.source.server": "服务端",
   "log.title": "日志",
+  "log.server_logs": "服务器日志",
+  "log.hide_server": "隐藏日志",
+  "log.exec_graph": "执行图",
+  "log.exec_graph_title": "执行图",
   "plan.context.clarification": {
     "one": "**需要澄清**：{{count}} 个未解决问题",
     "other": "**需要澄清**：{{count}} 个未解决问题"

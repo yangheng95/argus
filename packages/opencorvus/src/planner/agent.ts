@@ -938,6 +938,7 @@ Under \`# Clarifications\`, only emit execution blockers. Format each line as:
 - Do not create README.md, documentation files, or scaffold files unless the request explicitly requires them.
 - Do not emit generic advice like "follow best practices". Name files, modules, commands, and concrete changes.
 - clarifications are execution blockers only: emit them when the implementation path is genuinely unknowable (e.g., cannot determine which files to modify). Never ask about requirements, acceptance criteria, or scope — those are defined by the spec. Never ask what the user wants to build.
+- **Final verification wave**: When the acceptance criteria includes commands that must pass (e.g., type-check, test, build, lint commands appropriate for the project's language and toolchain — such as \`bunx tsc --noEmit\` / \`bun test\` for Bun+TS, \`pytest\` for Python, \`cargo test\` for Rust, \`go test ./...\` for Go, \`npm test\` / \`yarn build\` for Node), the LAST wave MUST be a dedicated "Final Integration & Fix" wave. The executor in that wave must: (1) run the acceptance commands, (2) diagnose and fix any errors or test failures found, (3) re-run to confirm all commands pass. The evaluator will mechanically verify these commands — if they fail, the wave is rejected and retried.
 
 ## Quality Self-Check
 

@@ -209,7 +209,22 @@ export namespace GoalJudge {
     }
 
     if (!parsed) {
-      throw lastError ?? new Error("Evaluator analysis failed after retries")
+      // Do NOT throw — a thrown error propagates to the orchestrator which marks the task as hard-failed.
+      // Instead, return an inconclusive verdict so the orchestrator can retry the execution run.
+      const errMsg = lastError?.message ?? "Evaluator analysis failed after retries"
+      log.error("evaluator agent failed to produce valid output after all retries, returning inconclusive", { error: errMsg })
+      return {
+        verdict: "inconclusive" as const,
+        classification: "environment" as const,
+        summary: `Evaluator produced no output: ${errMsg}`,
+        goal_statuses: Array.from({ length: input.goals.length }, (_, i) => ({
+          goal_index: i,
+          status: "inconclusive" as const,
+          evidence: "Evaluator analysis produced no output — retry required",
+          reasoning: errMsg,
+        })),
+        replan_guidance: null,
+      }
     }
 
     log.info("evaluator agent output", {
@@ -559,6 +574,7 @@ A shallow evaluation is worse than no evaluation. You must investigate deeply en
 - **list_directory**: Verify project structure and file existence
 - **memory_search**: Search historical failures and prior context
 - **preference_list**: Load project conventions
+- **run_command**: Execute a shell command and capture actual output — use ONLY when goal criteria explicitly require a command to pass (e.g., \`bunx tsc --noEmit\` / \`bun test\` for Bun+TS, \`pytest\` for Python, \`cargo test\` for Rust, \`go test ./...\` for Go, \`npm test\` for Node)
 
 ## Process
 
@@ -571,6 +587,17 @@ A shallow evaluation is worse than no evaluation. You must investigate deeply en
 
 - If checks failed, identify which checks failed and what they indicate.
 - If checks passed, still verify that the implementation actually satisfies the goals.
+
+### Phase 1.5: MECHANICAL VERIFICATION (when applicable)
+
+If any goal's criteria explicitly states that a **command must pass** (e.g., \`bunx tsc --noEmit\`, \`bun test\`, \`bun run build\`), you MUST use \`run_command\` to actually execute it and use the real output as your primary evidence:
+
+- Run \`bunx tsc --noEmit\` if the goal requires TypeScript to compile without errors.
+- Run \`bun test\` (or the specific test file) if the goal requires tests to pass.
+- If the command fails: reject the goal with the actual error output. Do NOT accept a goal where a required command fails.
+- If the command passes: treat this as strong evidence the goal's mechanical requirements are met.
+
+Do NOT run these commands for goals that do not mention them. Intermediate goals (e.g., "implement DB schema") should be evaluated semantically — the test suite may not exist yet.
 
 ### Phase 2: INVESTIGATE
 
@@ -641,7 +668,11 @@ Before outputting markdown, verify:
 2. Every goal has evidence tied to concrete files/tests/output.
 3. Replan guidance is concrete when the delivery is rejected.
 4. Passing checks were cross-checked against actual changed code.
-5. I did not fabricate evidence.`
+5. I did not fabricate evidence.
+
+## Step Budget Warning
+
+You have a limited number of steps. After 12 tool calls, you MUST stop investigating and emit your final verdict — even if you have unanswered questions. Use what you have. A verdict based on partial evidence is always better than no verdict.`
 
 export async function goalJudgeSystem() {
   const config = await Config.get()

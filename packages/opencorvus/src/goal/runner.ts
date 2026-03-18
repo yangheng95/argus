@@ -758,7 +758,19 @@ export async function evaluateTask(input: {
         analysisError: message,
       }
     })
-  return { result, ...analyzed }
+  // When no blocking checks ran (all disabled), the LLM judge is the sole arbiter.
+  // Override the check-based result with the LLM judge's verdict so the orchestrator
+  // can accept/retry correctly instead of always hard-failing.
+  const noChecksRan = result.status === "failed" && result.summary === "No blocking evaluator checks ran."
+  const finalResult = noChecksRan
+    ? {
+        ...result,
+        status: analyzed.analysis.verdict === "accepted" ? ("passed" as const) : ("failed" as const),
+        verdict: analyzed.analysis.verdict === "accepted" ? ("accepted" as const) : ("rejected" as const),
+        summary: analyzed.analysis.summary ?? result.summary,
+      }
+    : result
+  return { result: finalResult, ...analyzed }
 }
 
 const REVIEW_CHECKS = new Set(["ui_review", "code_quality", "code_review", "dead_code_review"])

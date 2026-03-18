@@ -7940,3 +7940,69 @@ body[data-theme="light"] .section-badge[data-tone="accent"] {
   }
 
 }
+
+/* ── NDJSON Event Log ── */
+.ndjson-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+.ndjson-event {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--bg-2, #f8f9fa);
+  border-left: 2px solid transparent;
+  font-size: 12px;
+}
+.ndjson-event:hover { background: var(--bg-3, #eef0f3); }
+.ndjson-event-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ndjson-elapsed { color: #9CA3AF; font-family: monospace; font-size: 11px; min-width: 44px; }
+.ndjson-type { color: #6B7280; font-size: 11px; }
+.ndjson-event-body { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; padding-left: 50px; }
+.ndjson-stage { font-size: 11px; font-weight: 600; padding: 0 4px; border-radius: 3px; background: rgba(0,0,0,.06); }
+.ndjson-tool { font-size: 11px; font-family: monospace; font-weight: 600; }
+.ndjson-summary { font-size: 12px; color: #374151; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ndjson-status { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 8px; }
+.ndjson-status-accepted { background: #DCFCE7; color: #166534; }
+.ndjson-status-failed { background: #FEE2E2; color: #991B1B; }
+.ndjson-status-running { background: #FEF3C7; color: #92400E; }
+.ndjson-badge { font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 4px; text-transform: uppercase; }
+.ndjson-badge.tool-call { background: #DBEAFE; color: #1D4ED8; }
+.ndjson-badge.tool-result { background: #DCFCE7; color: #166534; }
+.ndjson-badge.msg-delta { background: #F3E8FF; color: #6B21A8; }
+.ndjson-badge.status-badge { background: #F1F5F9; color: #475569; }
+.log-divider { font-size: 11px; color: #9CA3AF; padding: 8px 4px 4px; border-top: 1px solid var(--border, #e5e7eb); margin-top: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── Exec Graph Dialog ── */
+.dialog-execgraph {
+  width: 95vw;
+  max-width: 95vw;
+  height: 90vh;
+  max-height: 90vh;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-1, #fff);
+}
+.execgraph-form {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.execgraph-frame-wrap {
+  flex: 1;
+  overflow: hidden;
+}
+.execgraph-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #F7F9FC;
+}
