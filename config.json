@@ -3,7 +3,11 @@
   "skills": {
     "paths": [
       "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\skills-market\\github.com-openai-skills",
-      "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\skills-market\\github.com-anthropics-skills"
+      "C:\\Users\\chuan\\myhexin-local\\argus-opencode\\skills-market\\github.com-anthropics-skills",
+      "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-test-y338ocmq2o\\local-skill",
+      "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-test-02iym4oaw1cg\\skill-e2e",
+      "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-test-kif4cdsj5d\\local-skill",
+      "C:\\Users\\chuan\\AppData\\Local\\Temp\\opencorvus-test-5xz31o61tzj\\skill-e2e"
     ],
     "urls": []
   },

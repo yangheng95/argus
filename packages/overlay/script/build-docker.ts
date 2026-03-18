@@ -17,9 +17,8 @@ const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
 const tauriDir = path.resolve(dir, "src-tauri")
-const resources = path.join(tauriDir, "resources")
-const overlayUi = path.join(dir, "src")
 const dockerDir = path.join(dir, "docker")
+const stagedResources = path.join(tauriDir, "resources")
 
 const IMAGE_NAME = "opencorvus-overlay-builder"
 
@@ -35,6 +34,25 @@ async function fileExists(p: string) {
     .access(p)
     .then(() => true)
     .catch(() => false)
+}
+
+async function removeDirIfEmpty(dir: string) {
+  const entries = await fs.readdir(dir).catch(() => null)
+  if (entries && entries.length === 0) {
+    await fs.rmdir(dir).catch(() => undefined)
+  }
+}
+
+async function cleanupStaging(serverFile: string) {
+  await Promise.all([
+    fs.rm(path.join(stagedResources, serverFile), { force: true }).catch(() => undefined),
+    fs.rm(path.join(stagedResources, "ui"), { recursive: true, force: true }).catch(() => undefined),
+  ])
+  await removeDirIfEmpty(stagedResources)
+}
+
+function tauriArgs() {
+  return ["--config", JSON.stringify({ bundle: { resources: [] } })]
 }
 
 /** Convert Windows path to Docker-compatible path (for -v mounts in Git Bash/MINGW). */
@@ -58,20 +76,10 @@ async function ensureDockerImage(platform: "linux/amd64" | "linux/arm64") {
   return tag
 }
 
-async function stageResources(serverBin: string) {
-  await fs.mkdir(resources, { recursive: true })
-  // Stage opencorvus binary (no .exe — Linux binary)
-  await fs.copyFile(serverBin, path.join(resources, "opencorvus"))
-  // Stage overlay UI
-  const uiDest = path.join(resources, "ui")
-  await fs.rm(uiDest, { recursive: true, force: true }).catch(() => undefined)
-  await fs.cp(overlayUi, uiDest, { recursive: true })
-  console.log("  staged: opencorvus binary + ui")
-}
-
 for (const target of targets) {
   const [, arch] = target.split("-") as [string, "x64" | "arm64"]
   const dockerPlatform = arch === "x64" ? "linux/amd64" : "linux/arm64"
+  const packageName = `opencorvus-overlay-${target}`
 
   console.log(`\n=== overlay ${target} (Docker) ===`)
 
@@ -91,9 +99,7 @@ for (const target of targets) {
 
   // Build Docker image if needed
   const image = await ensureDockerImage(dockerPlatform as "linux/amd64" | "linux/arm64")
-
-  // Stage resources (opencorvus binary + UI) onto host fs (mounted into container)
-  await stageResources(serverBin)
+  await cleanupStaging("opencorvus")
 
   // Named volumes for Cargo and build cache (avoids recompiling on every run)
   const cargoVol = `opencorvus-cargo-cache-${arch}`
@@ -104,15 +110,18 @@ for (const target of targets) {
     --platform ${dockerPlatform}
     -v ${toDockerPath(path.join(dir, "src"))}:/overlay/src:ro
     -v ${toDockerPath(tauriDir)}:/overlay/src-tauri
+    -v ${toDockerPath(serverBin)}:/overlay/embedded/opencorvus:ro
     -v ${cargoVol}:/root/.cargo/registry
     -v ${targetVol}:/overlay/src-tauri/target
     -w /overlay/src-tauri
     -e CARGO_TARGET_DIR=/overlay/src-tauri/target
+    -e OPENCORVUS_EMBED_PATH=/overlay/embedded/opencorvus
     ${image}
-    tauri build`
+    tauri build --no-bundle ${tauriArgs()}`
 
-  // Collect artifacts
-  const outDir = path.join(dir, "dist-artifacts", target)
+  // Collect artifacts into a flat portable package directory
+  const outDir = path.join(dir, "dist", packageName)
+  await fs.rm(outDir, { recursive: true, force: true }).catch(() => undefined)
   await fs.mkdir(outDir, { recursive: true })
 
   // The target volume is a named Docker volume — copy artifacts out of it
@@ -122,9 +131,10 @@ for (const target of targets) {
     -v ${toDockerPath(outDir)}:/out
     --platform ${dockerPlatform}
     ${image}
-    sh -c "cp -f ${releaseInVol}/opencorvus-overlay* /out/ 2>/dev/null || true && find ${releaseInVol}/bundle -type f -exec cp {} /out/ \\; 2>/dev/null || true"`
+    sh -c "cp -f ${releaseInVol}/opencorvus-overlay /out/opencorvus-overlay"`
+  await cleanupStaging("opencorvus")
 
-  console.log(`  artifacts → packages/overlay/dist-artifacts/${target}/`)
+  console.log(`  portable package → packages/overlay/dist/${packageName}/`)
 }
 
 console.log("\nDocker overlay builds complete.")

@@ -1,18 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test"
 import type { ChannelAdapter, IncomingMessage } from "../src/adapter"
 import { SessionCoordinator } from "../src/session-coordinator"
+import { sdkMock } from "./sdk-mock"
 
-const sdk = {
-  createOpencode: async () => {
-    throw new Error("not used in this test")
-  },
-  createOpencodeClient: () => {
-    throw new Error("not used in this test")
-  },
-}
-
-mock.module("@opencorvus-ai/sdk", () => sdk)
-mock.module("@opencorvus-ai/sdk/v2", () => sdk)
+mock.module("@opencorvus-ai/sdk", () => sdkMock)
+mock.module("@opencorvus-ai/sdk/v2", () => sdkMock)
 
 const { ChannelRuntime } = await import("../src/core")
 

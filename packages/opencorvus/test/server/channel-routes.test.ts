@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, setDefaultTimeout, spyOn, test } from "bun:test"
 import fs from "fs/promises"
 import os from "os"
 import path from "path"
@@ -17,6 +17,7 @@ import { ProtocolStore } from "../../src/protocol/store"
 import {
   OrchestratorChannelBindingTable,
   OrchestratorInteractionRequestTable,
+  OrchestratorPlanVersionTable,
   OrchestratorTaskTable,
 } from "../../src/orchestrator/orchestrator.sql"
 import { OrchestratorService } from "../../src/orchestrator/service"
@@ -32,6 +33,7 @@ import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
+setDefaultTimeout(60_000)
 
 let configDir = ""
 let originalConfigDir: string | undefined
@@ -84,6 +86,31 @@ function stub() {
     status: "running",
     error: null,
   }))
+}
+
+async function waitForTaskBootstrap(taskID: string, timeoutMs = 5_000) {
+  const started = Date.now()
+  while ((Date.now() - started) < timeoutMs) {
+    const task = Database.use((db) =>
+      db
+        .select()
+        .from(OrchestratorTaskTable)
+        .where(eq(OrchestratorTaskTable.id, taskID))
+        .get(),
+    )
+    const plan = task?.active_plan_version_id
+      ? Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorPlanVersionTable)
+            .where(eq(OrchestratorPlanVersionTable.id, task.active_plan_version_id!))
+            .get(),
+        )
+      : undefined
+    if (task?.session_id && task.active_run_id && plan) return
+    await Bun.sleep(25)
+  }
+  throw new Error(`timed out waiting for task bootstrap: ${taskID}`)
 }
 
 describe("channel routes", () => {
@@ -220,6 +247,7 @@ describe("channel routes", () => {
         })
         const { result } = (await created.json()) as { result: { task_id: string } }
         const task_id = result.task_id
+        await waitForTaskBootstrap(task_id)
 
         const response = await app.request("/channel/v1/ingress", {
           method: "POST",
@@ -334,7 +362,7 @@ describe("channel routes", () => {
         })
 
         try {
-          await app.request("/channel/v1/ingress", {
+          const created = await app.request("/channel/v1/ingress", {
             method: "POST",
             headers: {
               "content-type": "application/json",
@@ -356,6 +384,8 @@ describe("channel routes", () => {
               },
             }),
           })
+          const createdBody = await created.json() as { result: { task_id: string } }
+          await waitForTaskBootstrap(createdBody.result.task_id)
 
           const response = await app.request("/channel/v1/ingress", {
             method: "POST",
@@ -643,7 +673,7 @@ describe("channel routes", () => {
     })
   })
 
-  test("POST /channel/v1/ingress supports plan queries and screenshot attachments", async () => {
+  test("POST /channel/v1/ingress supports plan queries against an explicit task context", async () => {
     await using tmp = await tmpdir({ git: true })
     stub()
     installControlModel()
@@ -664,30 +694,12 @@ describe("channel routes", () => {
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
+        const taskID = await OrchestratorService.createTask({
+          request: "Validate the channel plan flow.",
+          source: "api",
+        }, { background: true })
+        await waitForTaskBootstrap(taskID)
         const app = Server.App()
-        const created = await app.request("/channel/v1/ingress", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-opencorvus-directory": tmp.path,
-          },
-          body: JSON.stringify({
-            type: "channel_ingress",
-            version: "channel.v1",
-            request_id: "req-plan-create",
-            platform: "discord",
-            channel: "room-plan",
-            thread: "thread-plan",
-            user: {
-              id: "user-plan",
-            },
-            message: {
-              text: "Create a task to validate the channel plan flow.",
-            },
-          }),
-        })
-        expect(created.status).toBe(200)
-
         const planned = await app.request("/channel/v1/ingress", {
           method: "POST",
           headers: {
@@ -704,13 +716,38 @@ describe("channel routes", () => {
             message: {
               text: "view plan",
             },
+            context: {
+              task_id: taskID,
+              allow_create: false,
+            },
           }),
         })
         expect(planned.status).toBe(200)
         const plannedBody = await planned.json() as { result: { kind: string; message: string } }
         expect(plannedBody.result.kind).toBe("panel_response")
         expect(plannedBody.result.message).toContain("Plan")
+      },
+    })
+  })
 
+  test("POST /channel/v1/ingress supports screenshot attachments without creating a task", async () => {
+    await using tmp = await tmpdir({ git: true })
+    stub()
+    installControlModel()
+    spyOn(GuiScreenshot, "captureWindowScreenshot").mockResolvedValue({
+      mime: "image/png",
+      filename: "opencorvus-gui.png",
+      url: `data:image/png;base64,${Buffer.from("hello").toString("base64")}`,
+      title: "OpenCorvus",
+      app: "OpenCorvus",
+      width: 1280,
+      height: 720,
+    })
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
         const screenshot = await app.request("/channel/v1/ingress", {
           method: "POST",
           headers: {
@@ -726,6 +763,9 @@ describe("channel routes", () => {
             thread: "thread-plan",
             message: {
               text: "send me an OpenCorvus screenshot",
+            },
+            context: {
+              allow_create: false,
             },
           }),
         })

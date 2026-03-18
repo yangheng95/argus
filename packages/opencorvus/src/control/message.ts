@@ -10,7 +10,7 @@ import { Database, eq } from "@/storage/db"
 import { OrchestratorTaskTable } from "@/orchestrator/orchestrator.sql"
 import { panelCapabilityPrompt } from "@/panel/capability"
 import { ControlMessageInput, ControlMessageResult, PanelLocalAction } from "./message-schema"
-import { ControlTimeline } from "./timeline"
+import { ControlTimeline, TimelineStoredPart } from "./timeline"
 import { Bus } from "@/bus"
 import { Log } from "@/util/log"
 import { asRecord } from "@/util/object"
@@ -23,7 +23,9 @@ type StreamCallback = (event: { type: string; [key: string]: unknown }) => void
 type RunResult = {
   result: z.infer<typeof ControlMessageResult>
   timeline: boolean
+  timelineMessage?: MessageV2.WithParts
 }
+type TimelinePartRecord = z.infer<typeof TimelineStoredPart>
 type StreamState = {
   assistant: Set<string>
   raw: Map<string, string>
@@ -42,7 +44,7 @@ export namespace ControlMessage {
   export async function handle(raw: z.input<typeof ControlMessageInput>) {
     const input = ControlMessageInput.parse(raw)
     const runResult = await run(input)
-    if (runResult.timeline) appendTimeline(input, runResult.result)
+    if (runResult.timeline) appendTimeline(input, runResult.result, runResult.timelineMessage)
     return runResult.result
   }
 
@@ -52,7 +54,7 @@ export namespace ControlMessage {
   ) {
     const input = ControlMessageInput.parse(raw)
     const runResult = await run(input, onEvent)
-    if (runResult.timeline) appendTimeline(input, runResult.result)
+    if (runResult.timeline) appendTimeline(input, runResult.result, runResult.timelineMessage)
     return runResult.result
   }
 }
@@ -203,6 +205,7 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
       return {
         result: output,
         timeline: shouldAppendTimeline(input, output, control),
+        timelineMessage: result,
       } satisfies RunResult
     }
 
@@ -238,7 +241,11 @@ async function run(input: z.infer<typeof ControlMessageInput>, onEvent?: StreamC
   }
 }
 
-function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.infer<typeof ControlMessageResult>) {
+function appendTimeline(
+  input: z.infer<typeof ControlMessageInput>,
+  result: z.infer<typeof ControlMessageResult>,
+  timelineMessage?: MessageV2.WithParts,
+) {
   const now = Date.now()
   const userTime = typeof input.time_created === "number" ? input.time_created : now
   ControlTimeline.append({
@@ -254,6 +261,7 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
         role: "user",
         text: input.text,
         time_created: userTime,
+        parts: timelineInputParts(input),
         metadata: {
           ...(input.metadata ?? {}),
           allow_create: input.allow_create,
@@ -264,6 +272,7 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
         role: "assistant",
         text: result.message,
         time_created: Math.max(now, userTime + 1),
+        parts: timelineAssistantParts(timelineMessage, result.message),
         metadata: {
           kind: result.kind,
           ...(result.task_id ? { task_id: result.task_id } : {}),
@@ -275,6 +284,123 @@ function appendTimeline(input: z.infer<typeof ControlMessageInput>, result: z.in
       },
     ],
   })
+}
+
+function timelineInputParts(input: z.infer<typeof ControlMessageInput>): TimelinePartRecord[] {
+  return [
+    {
+      type: "text" as const,
+      text: input.text,
+      kind: "user_content" as const,
+      source: "user" as const,
+      audience: {
+        model: false,
+        ui: true,
+        acp: false,
+      },
+    },
+    ...(input.attachments ?? []).map((item) => ({
+      type: "file" as const,
+      mime: item.mime,
+      url: item.url,
+      ...(item.filename ? { filename: item.filename } : {}),
+    })),
+  ]
+}
+
+function timelineAssistantParts(message: MessageV2.WithParts | undefined, fallbackText: string): TimelinePartRecord[] {
+  const parts = Array.isArray(message?.parts)
+    ? message.parts.flatMap((part) => timelineMessagePart(part))
+    : []
+  const hasVisibleText = parts.some((part) =>
+    part.type === "text" &&
+    typeof part.text === "string" &&
+    part.text.trim() &&
+    !(part.audience && part.audience.ui === false) &&
+    !(part.kind === "trace" && !part.audience?.ui),
+  )
+  if (hasVisibleText || !fallbackText.trim()) return parts
+  return [
+    ...parts,
+    {
+      type: "text" as const,
+      text: fallbackText,
+      synthetic: true,
+      kind: "control" as const,
+      source: "system" as const,
+      audience: {
+        model: false,
+        ui: true,
+        acp: false,
+      },
+    },
+  ]
+}
+
+function timelineMessagePart(part: MessageV2.Part): TimelinePartRecord[] {
+  if (part.type === "text") {
+    return [{
+      type: "text" as const,
+      text: part.text,
+      ...(part.synthetic !== undefined ? { synthetic: part.synthetic } : {}),
+      ...(part.ignored !== undefined ? { ignored: part.ignored } : {}),
+      ...(part.kind ? { kind: part.kind } : {}),
+      ...(part.source ? { source: part.source } : {}),
+      ...(part.audience ? { audience: part.audience } : {}),
+      ...(part.time ? { time: part.time } : {}),
+      ...(part.metadata ? { metadata: part.metadata } : {}),
+    }]
+  }
+  if (part.type === "reasoning") {
+    return [{
+      type: "reasoning" as const,
+      text: part.text,
+      time: part.time,
+      ...(part.metadata ? { metadata: part.metadata } : {}),
+    }]
+  }
+  if (part.type === "file") {
+    return [{
+      type: "file" as const,
+      mime: part.mime,
+      url: part.url,
+      ...(part.filename ? { filename: part.filename } : {}),
+      ...(part.source ? { source: part.source } : {}),
+    }]
+  }
+  if (part.type === "tool") {
+    return [{
+      type: "tool" as const,
+      callID: part.callID,
+      tool: part.tool,
+      state: part.state,
+      ...(part.metadata ? { metadata: part.metadata } : {}),
+    }]
+  }
+  if (part.type === "patch") {
+    return [{
+      type: "patch" as const,
+      hash: part.hash,
+      files: part.files,
+    }]
+  }
+  if (part.type === "subtask") {
+    return [{
+      type: "subtask" as const,
+      prompt: part.prompt,
+      description: part.description,
+      agent: part.agent,
+      ...(part.model ? { model: part.model } : {}),
+      ...(part.command ? { command: part.command } : {}),
+    }]
+  }
+  if (part.type === "compaction") {
+    return [{
+      type: "compaction" as const,
+      auto: part.auto,
+    }]
+  }
+  return []
 }
 
 function emitStreamText(state: StreamState, partID: string, text: string, onEvent: StreamCallback) {

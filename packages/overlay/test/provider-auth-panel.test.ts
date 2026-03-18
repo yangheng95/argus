@@ -199,6 +199,14 @@ async function openProviderSettings(tab: Page) {
   await tab.waitForFunction(() => (document.querySelector("#llmAdvanced") as HTMLDetailsElement | null)?.open === true)
 }
 
+async function dialogState(tab: Page) {
+  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true)
+  return tab.evaluate(() => ({
+    inputVisible: document.querySelector("#appDialogInputField")?.classList.contains("hidden") === false,
+    selectVisible: document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === false,
+  }))
+}
+
 async function acceptDialog(tab: Page) {
   await tab.waitForFunction(() =>
     (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open === true &&
@@ -206,6 +214,7 @@ async function acceptDialog(tab: Page) {
     document.querySelector("#appDialogSelectField")?.classList.contains("hidden") === true,
   )
   await tab.click("#btnAppDialogOk")
+  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
 }
 
 async function submitDialogInput(tab: Page, value: string) {
@@ -216,6 +225,7 @@ async function submitDialogInput(tab: Page, value: string) {
   await tab.click("#appDialogInput", { clickCount: 3 })
   await tab.type("#appDialogInput", value)
   await tab.click("#btnAppDialogOk")
+  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
 }
 
 async function submitDialogSelect(tab: Page, value: string) {
@@ -225,6 +235,7 @@ async function submitDialogSelect(tab: Page, value: string) {
   )
   await tab.select("#appDialogSelect", value)
   await tab.click("#btnAppDialogOk")
+  await tab.waitForFunction(() => (document.querySelector("#appDialog") as HTMLDialogElement | null)?.open !== true)
 }
 
 test("overlay oauth auth handles prompt-driven authorize flow and pasted redirect urls", async () => {
@@ -374,7 +385,8 @@ test("overlay oauth auth handles prompt-driven authorize flow and pasted redirec
     async (tab, state) => {
       await openProviderSettings(tab)
       await tab.select("#llmProvider", "openai-codex")
-      await acceptDialog(tab)
+      const firstDialog = await dialogState(tab)
+      if (!firstDialog.inputVisible && !firstDialog.selectVisible) await acceptDialog(tab)
       await submitDialogSelect(tab, "manual")
       await submitDialogInput(tab, "overlay")
       await submitDialogInput(tab, "http://localhost:1455/auth/callback?code=oauth-code&state=overlay-state")

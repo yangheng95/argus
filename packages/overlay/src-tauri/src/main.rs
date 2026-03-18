@@ -14,6 +14,8 @@ use std::{
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -31,6 +33,8 @@ const TRAY_TOOLTIP_DEFAULT: &str = "OpenCorvus";
 const TRAY_TOOLTIP_ALERT: &str = "OpenCorvus - Action required";
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+include!(concat!(env!("OUT_DIR"), "/embedded_sidecar.rs"));
 
 #[derive(Default)]
 struct ServerState {
@@ -218,6 +222,9 @@ fn overlay_pick_dir<R: Runtime>(app: AppHandle<R>, start: Option<String>) -> Res
 
 fn candidate_server_paths<R: Runtime>(app: &AppHandle<R>) -> Vec<PathBuf> {
     let mut result = Vec::new();
+    if let Ok(Some(path)) = ensure_embedded_server_path(app) {
+        result.push(path);
+    }
     let dir = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|p| p.to_path_buf()));
@@ -236,6 +243,49 @@ fn candidate_server_paths<R: Runtime>(app: &AppHandle<R>) -> Vec<PathBuf> {
     }
 
     result
+}
+
+fn embedded_server_file_name() -> String {
+    let suffix = format!("-{}", EMBEDDED_SERVER_STAMP);
+    if let Some((stem, ext)) = EMBEDDED_SERVER_NAME.rsplit_once('.') {
+        return format!("{stem}{suffix}.{ext}");
+    }
+    format!("{EMBEDDED_SERVER_NAME}{suffix}")
+}
+
+fn ensure_embedded_server_path<R: Runtime>(app: &AppHandle<R>) -> Result<Option<PathBuf>, String> {
+    if EMBEDDED_SERVER_BYTES.is_empty() {
+        return Ok(None);
+    }
+
+    let mut root = app
+        .path()
+        .app_local_data_dir()
+        .unwrap_or_else(|_| std::env::temp_dir());
+    root.push("embedded");
+    fs::create_dir_all(&root).map_err(|err| err.to_string())?;
+
+    let path = root.join(embedded_server_file_name());
+    let expected_len = EMBEDDED_SERVER_BYTES.len() as u64;
+    let up_to_date = fs::metadata(&path)
+        .map(|meta| meta.len() == expected_len)
+        .unwrap_or(false);
+    if up_to_date {
+        return Ok(Some(path));
+    }
+
+    let tmp = path.with_extension(format!("tmp-{}", std::process::id()));
+    fs::write(&tmp, EMBEDDED_SERVER_BYTES).map_err(|err| err.to_string())?;
+    #[cfg(unix)]
+    {
+        let perms = fs::Permissions::from_mode(0o755);
+        fs::set_permissions(&tmp, perms).map_err(|err| err.to_string())?;
+    }
+    if path.exists() {
+        let _ = fs::remove_file(&path);
+    }
+    fs::rename(&tmp, &path).map_err(|err| err.to_string())?;
+    Ok(Some(path))
 }
 
 fn server_path<R: Runtime>(app: &AppHandle<R>) -> Option<PathBuf> {

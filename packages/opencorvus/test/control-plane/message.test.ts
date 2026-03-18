@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import { Bus } from "../../src/bus"
 import { ControlMessage } from "../../src/control"
+import { ControlTimeline } from "../../src/control/timeline"
 import { Instance } from "../../src/project/instance"
 import { MessageV2 } from "../../src/session/message"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -419,6 +420,88 @@ describe("control.message", () => {
         expect(events.some((event) => event.type === "reasoning_delta" && event.delta === "正在分析请求并规划下一步...")).toBe(true)
         expect(events.some((event) => event.type === "reasoning_delta" && event.delta === "正在创建任务并启动规划...")).toBe(true)
         expect(events.some((event) => String(event.delta || "").includes("电商网站"))).toBe(false)
+      },
+    })
+  })
+
+  test("persists structured assistant tool parts into control timeline", async () => {
+    await using tmp = await tmpdir({ git: true })
+
+    spyOn(SessionPrompt, "prompt").mockResolvedValue({
+      info: {
+        id: "msg_control_timeline",
+        sessionID: "session_control_timeline",
+        role: "assistant",
+        parentID: "msg_parent",
+        modelID: "control",
+        providerID: "mock-control",
+        mode: "json_schema",
+        agent: "control",
+        path: {
+          cwd: tmp.path,
+          root: tmp.path,
+        },
+        cost: 0,
+        tokens: {
+          input: 0,
+          output: 0,
+          reasoning: 0,
+          cache: {
+            read: 0,
+            write: 0,
+          },
+        },
+        time: {
+          created: 10,
+          completed: 11,
+        },
+        structured: {
+          kind: "panel_response",
+          message: "Executor set to codex.",
+        },
+      },
+      parts: [
+        {
+          id: "tool_panel",
+          sessionID: "session_control_timeline",
+          messageID: "msg_control_timeline",
+          type: "tool",
+          callID: "call_panel",
+          tool: "panel",
+          state: {
+            status: "completed",
+            input: {
+              action: "set_executor",
+              executor: "codex",
+            },
+            output: "{\"message\":\"Executor set to codex.\"}",
+            title: "Executor updated",
+            metadata: {},
+            time: {
+              start: 10,
+              end: 11,
+            },
+          },
+        },
+      ],
+    } as any)
+
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const result = await ControlMessage.handle({
+          surface: "panel",
+          text: "switch executor to codex",
+        })
+
+        expect(result.message).toBe("Executor set to codex.")
+        const timeline = ControlTimeline.list({ surface: "panel" })
+        const assistant = timeline.find((item) =>
+          item.info.role === "assistant" &&
+          item.parts.some((part) => part.type === "tool" && part.tool === "panel"),
+        )
+        expect(assistant).toBeDefined()
+        expect(assistant?.parts.some((part) => part.type === "text" && part.text === "Executor set to codex.")).toBe(true)
       },
     })
   })

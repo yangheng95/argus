@@ -6,7 +6,6 @@ import { Log } from "@/util/log"
 import { Filesystem } from "@/util/filesystem"
 
 const log = Log.create({ service: "session.llm-trace" })
-const TRACE_DIR = path.join(Global.Path.data, "llm-trace")
 const FLAG = "OPENCORVUS_LLM_TRACE"
 
 const MAX_DEPTH = 8
@@ -96,6 +95,10 @@ export type CallRecord = {
 }
 
 export namespace LLMTrace {
+  function traceDir() {
+    return path.join(Global.Path.data, "llm-trace")
+  }
+
   export type StartInput = {
     callID: string
     sessionID: string
@@ -144,7 +147,7 @@ export namespace LLMTrace {
   }
 
   export function filepath(sessionID: string) {
-    return path.join(TRACE_DIR, `${sessionID}.jsonl`)
+    return path.join(traceDir(), `${sessionID}.jsonl`)
   }
 
   export async function read(sessionID: string): Promise<CallRecord[]> {

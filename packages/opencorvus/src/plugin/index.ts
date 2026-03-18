@@ -18,6 +18,7 @@ export namespace Plugin {
   const log = Log.create({ service: "plugin" })
 
   const BUILTIN = ["opencorvus-anthropic-auth@0.0.13"]
+  const skipBuiltinDependencyPlugins = process.env.OPENCORVUS_SKIP_DEP_INSTALL === "1"
 
   // Built-in plugins that are directly imported (not installed from npm)
   const INTERNAL_PLUGINS: PluginInstance[] = [CodexAuthPlugin, CopilotAuthPlugin, GitlabAuthPlugin]
@@ -49,7 +50,7 @@ export namespace Plugin {
 
     let plugins = config.plugin ?? []
     if (plugins.length) await Config.waitForDependencies()
-    if (!Flag.OPENCORVUS_DISABLE_DEFAULT_PLUGINS) {
+    if (!Flag.OPENCORVUS_DISABLE_DEFAULT_PLUGINS && !skipBuiltinDependencyPlugins) {
       plugins = [...BUILTIN, ...plugins]
     }
 

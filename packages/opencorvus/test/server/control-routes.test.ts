@@ -125,10 +125,17 @@ describe("control routes", () => {
         expect(res.status).toBe(200)
         const body = await res.json() as Array<{
           info: { role: string }
-          parts: Array<{ type: string; text: string }>
+          parts: Array<{ type: string; text?: string; tool?: string }>
         }>
-        const user = body.find((item) => item.info.role === "user" && item.parts[0]?.text === "Use executor codex for desktop panel actions and new tasks.")
-        const assistant = body.find((item) => item.info.role === "assistant" && item.parts[0]?.text.includes("Executor set to codex"))
+        const user = body.find((item) =>
+          item.info.role === "user" &&
+          item.parts.some((part) => part.type === "text" && part.text === "Use executor codex for desktop panel actions and new tasks."),
+        )
+        const assistant = body.find((item) =>
+          item.info.role === "assistant" &&
+          item.parts.some((part) => part.type === "text" && (part.text || "").includes("Executor set to codex")) &&
+          item.parts.some((part) => part.type === "tool"),
+        )
         expect(user).toBeDefined()
         expect(assistant).toBeDefined()
       },
@@ -166,14 +173,14 @@ describe("control routes", () => {
         expect(res.status).toBe(200)
         const body = await res.json() as Array<{
           info: { role: string; taskID?: string }
-          parts: Array<{ type: string; text: string }>
+          parts: Array<{ type: string; text?: string; tool?: string }>
         }>
         expect(body).toHaveLength(2)
         expect(body[0]?.info.role).toBe("user")
         expect(body[0]?.info.taskID).toBe(created.task_id)
-        expect(body[0]?.parts[0]?.text).toBe("Create a task to implement feature x.")
+        expect(body[0]?.parts.some((part) => part.type === "text" && part.text === "Create a task to implement feature x.")).toBe(true)
         expect(body[1]?.info.role).toBe("assistant")
-        expect(body[1]?.parts[0]?.text).toContain("Task accepted:")
+        expect(body[1]?.parts.some((part) => part.type === "text" && (part.text || "").includes("Task accepted:"))).toBe(true)
       },
     })
   })

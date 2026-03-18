@@ -25,49 +25,38 @@ async function withProject(fn: () => Promise<void>) {
 }
 
 test("openai-codex provider is available with oauth auth and keeps codex models", async () => {
-  await Auth.set("openai-codex", {
-    type: "oauth",
-    access: "access-token",
-    refresh: "refresh-token",
-    expires: Date.now() + 60_000,
-  })
-
-  try {
-    await withProject(async () => {
-      const providers = await Provider.list()
-      expect(providers["openai-codex"]).toBeDefined()
-      expect(providers["openai-codex"].models["gpt-5.4"]).toBeDefined()
-      expect(providers["openai-codex"].models["gpt-5.2-codex"]).toBeDefined()
-      expect(providers["openai-codex"].models["gpt-5.2"]).toBeDefined()
-      expect(providers["openai-codex"].models["gpt-4.1"]).toBeUndefined()
+  await withProject(async () => {
+    await Auth.set("openai-codex", {
+      type: "oauth",
+      access: "access-token",
+      refresh: "refresh-token",
+      expires: Date.now() + 60_000,
     })
-  } finally {
-    await Auth.remove("openai-codex")
-  }
+    const providers = await Provider.list()
+    expect(providers["openai-codex"]).toBeDefined()
+    expect(providers["openai-codex"].models["gpt-5.4"]).toBeDefined()
+    expect(providers["openai-codex"].models["gpt-5.2-codex"]).toBeDefined()
+    expect(providers["openai-codex"].models["gpt-5.2"]).toBeDefined()
+    expect(providers["openai-codex"].models["gpt-4.1"]).toBeUndefined()
+  })
 }, 15_000)
 
 test("legacy openai oauth auth migrates to openai-codex", async () => {
-  await Auth.set("openai", {
-    type: "oauth",
-    access: "legacy-access",
-    refresh: "legacy-refresh",
-    expires: Date.now() + 60_000,
-  })
-
-  try {
-    await withProject(async () => {
-      expect((await Auth.get("openai"))).toBeUndefined()
-      expect(await Auth.get("openai-codex")).toMatchObject({
-        type: "oauth",
-        access: "legacy-access",
-        refresh: "legacy-refresh",
-      })
+  await withProject(async () => {
+    await Auth.set("openai", {
+      type: "oauth",
+      access: "legacy-access",
+      refresh: "legacy-refresh",
+      expires: Date.now() + 60_000,
+    })
+    expect((await Auth.get("openai"))).toBeUndefined()
+    expect(await Auth.get("openai-codex")).toMatchObject({
+      type: "oauth",
+      access: "legacy-access",
+      refresh: "legacy-refresh",
+    })
       const providers = await Provider.list()
       expect(providers["openai-codex"]).toBeDefined()
       expect(providers["openai"]).toBeUndefined()
-    })
-  } finally {
-    await Auth.remove("openai-codex")
-    await Auth.remove("openai")
-  }
+  })
 }, 15_000)

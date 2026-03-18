@@ -9,6 +9,10 @@ function sanitizePath(p: string): string {
   return p.replace(/\0/g, "")
 }
 
+process.env.OPENCORVUS_SKIP_DEP_INSTALL ??= "1"
+process.env.OPENCORVUS_TEST_HOME ??= path.join(os.tmpdir(), "opencorvus-test-home")
+process.env.OPENCORVUS_TEST_MANAGED_CONFIG_DIR ??= path.join(process.env.OPENCORVUS_TEST_HOME, "managed")
+
 // Schema URL written by config.ts when generating opencorvus.json files.
 // Kept in one place so tests stay in sync with the source.
 const CONFIG_SCHEMA_URL = "https://opencorvus.ai/config.json"
@@ -20,7 +24,10 @@ type TmpDirOptions<T> = {
   dispose?: (dir: string) => Promise<T>
 }
 export async function tmpdir<T>(options?: TmpDirOptions<T>) {
-  const dirpath = sanitizePath(path.join(os.tmpdir(), "opencorvus-test-" + Math.random().toString(36).slice(2)))
+  const root = process.env.OPENCORVUS_TEST_HOME
+    ? path.join(process.env.OPENCORVUS_TEST_HOME, "workspaces")
+    : os.tmpdir()
+  const dirpath = sanitizePath(path.join(root, "opencorvus-test-" + Math.random().toString(36).slice(2)))
   await fs.mkdir(dirpath, { recursive: true })
   if (options?.git) {
     await $`git init`.cwd(dirpath).quiet()

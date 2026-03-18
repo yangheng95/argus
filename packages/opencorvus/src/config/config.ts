@@ -72,8 +72,6 @@ export namespace Config {
     return process.env.OPENCORVUS_TEST_MANAGED_CONFIG_DIR || systemManagedConfigDir()
   }
 
-  const managedDir = managedConfigDir()
-
   // Custom merge function that concatenates array fields instead of replacing them
   function mergeConfigConcatArrays(target: Info, source: Info): Info {
     const merged = mergeDeep(target, source)
@@ -191,6 +189,7 @@ export namespace Config {
     // Kept separate from directories array to avoid write operations when installing plugins
     // which would fail on system directories requiring elevated permissions
     // This way it only loads config file and not skills/plugins/commands
+    const managedDir = managedConfigDir()
     try {
       if (existsSync(managedDir)) {
         for (const file of ["opencorvus.jsonc", "opencorvus.json"]) {
@@ -316,6 +315,11 @@ export namespace Config {
   }
 
   export async function needsInstall(dir: string) {
+    if (process.env.OPENCORVUS_SKIP_DEP_INSTALL === "1") {
+      log.debug("dependency install disabled by env", { dir })
+      return false
+    }
+
     // Some config dirs may be read-only.
     // Installing deps there will fail; skip installation in that case.
     const writable = await isWritable(dir)

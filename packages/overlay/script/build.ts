@@ -9,24 +9,26 @@ const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const repo = path.resolve(dir, "../..")
 const opencorvus = path.resolve(repo, "packages/opencorvus")
 const tauri = path.resolve(dir, "src-tauri")
-const resources = path.join(tauri, "resources")
 const target = path.join(tauri, "target")
 const release = path.join(target, "release")
-const overlayUi = path.join(dir, "src")
 
 const serverFile = process.platform === "win32" ? "opencorvus.exe" : "opencorvus"
-
-const distName = [
+const overlayFile = process.platform === "win32" ? "opencorvus-overlay.exe" : "opencorvus-overlay"
+const serverDistName = [
   "opencorvus",
   process.platform === "win32" ? "windows" : process.platform,
   process.arch,
 ].join("-")
+const packageName = [
+  "opencorvus-overlay",
+  process.platform === "win32" ? "windows" : process.platform,
+  process.arch,
+].join("-")
 
-const distServer = path.join(opencorvus, "dist", distName, serverFile)
-const stagedServer = path.join(resources, serverFile)
-const stagedUi = path.join(resources, "ui")
-const releaseServer = path.join(release, serverFile)
-const releaseUi = path.join(release, "ui")
+const distServer = path.join(opencorvus, "dist", serverDistName, serverFile)
+const distRoot = path.join(dir, "dist", packageName)
+const packagedOverlay = path.join(distRoot, overlayFile)
+const stagedResources = path.join(tauri, "resources")
 
 function text(error: unknown) {
   if (typeof error === "string") return error
@@ -60,17 +62,6 @@ async function copyFile(src: string, dest: string, options?: { required?: boolea
   }
 }
 
-async function copyDir(src: string, dest: string, options?: { required?: boolean }) {
-  if (!(await exists(src))) {
-    if (options?.required) throw new Error(`Missing required directory: ${src}`)
-    return false
-  }
-  await fs.rm(dest, { recursive: true, force: true }).catch(() => undefined)
-  await fs.mkdir(path.dirname(dest), { recursive: true })
-  await fs.cp(src, dest, { recursive: true })
-  return true
-}
-
 async function cargoPath() {
   if (process.platform !== "win32") return process.env.PATH
   const dir = process.env.USERPROFILE ? path.join(process.env.USERPROFILE, ".cargo", "bin") : ""
@@ -81,31 +72,36 @@ async function cargoPath() {
   return [dir, ...list].join(path.delimiter)
 }
 
-async function tauriArgs() {
-  if (process.platform !== "win32") return []
-  const conf = await Bun.file(path.join(tauri, "tauri.conf.json")).json()
-  if (typeof conf.version !== "string" || !conf.version.includes("-")) return []
-  const version = conf.version.split("-", 1)[0]
-  console.warn(`overlay build: using Windows bundle version ${version} for prerelease ${conf.version}`)
-  return ["--config", JSON.stringify({ version })]
+function tauriArgs() {
+  return ["--config", JSON.stringify({ bundle: { resources: [] } })]
 }
 
-async function cleanLegacyOutputs() {
-  await fs.rm(path.join(target, "bundle-build"), { recursive: true, force: true }).catch(() => undefined)
+async function removeDirIfEmpty(dir: string) {
+  const entries = await fs.readdir(dir).catch(() => null)
+  if (entries && entries.length === 0) {
+    await fs.rmdir(dir).catch(() => undefined)
+  }
+}
+
+async function cleanBuildResidue() {
+  await Promise.all([
+    fs.rm(path.join(target, "build-resources"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(target, "bundle-build"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(release, "bundle"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(release, "nsis"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(release, "wix"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(release, serverFile), { force: true }).catch(() => undefined),
+    fs.rm(path.join(release, "ui"), { recursive: true, force: true }).catch(() => undefined),
+    fs.rm(path.join(stagedResources, serverFile), { force: true }).catch(() => undefined),
+    fs.rm(path.join(stagedResources, "ui"), { recursive: true, force: true }).catch(() => undefined),
+  ])
+  await removeDirIfEmpty(stagedResources)
   const files = await fs.readdir(release).catch(() => [])
   await Promise.all(
     files
       .filter((file) => /^OpenCorvus_.*\.(?:msi|exe)$/i.test(file))
       .map((file) => fs.rm(path.join(release, file), { force: true }).catch(() => undefined)),
   )
-}
-
-async function cleanUnusedOutputs() {
-  await Promise.all([
-    fs.rm(path.join(target, "debug"), { recursive: true, force: true }).catch(() => undefined),
-    fs.rm(path.join(release, "nsis"), { recursive: true, force: true }).catch(() => undefined),
-    fs.rm(path.join(release, "wix"), { recursive: true, force: true }).catch(() => undefined),
-  ])
 }
 
 const skipOpencorvusBuild = process.argv.includes("--skip-opencorvus-build")
@@ -120,16 +116,20 @@ if (!(await exists(distServer))) {
   )
 }
 
-await fs.mkdir(resources, { recursive: true })
-await copyFile(distServer, stagedServer, { required: true })
-await copyDir(overlayUi, stagedUi, { required: true })
-await cleanLegacyOutputs()
+await fs.rm(distRoot, { recursive: true, force: true }).catch(() => undefined)
+await cleanBuildResidue()
 
-await $`tauri build ${await tauriArgs()}`.cwd(dir).env({
+await $`tauri build --no-bundle ${tauriArgs()}`.cwd(dir).env({
   CARGO_TARGET_DIR: target,
+  OPENCORVUS_EMBED_PATH: distServer,
   PATH: await cargoPath(),
 })
 
-await copyFile(distServer, releaseServer, { tolerateBusy: true })
-await copyDir(overlayUi, releaseUi, { required: true })
-await cleanUnusedOutputs()
+const builtOverlay = path.join(release, overlayFile)
+if (!(await exists(builtOverlay))) {
+  throw new Error(`Overlay binary not found at ${builtOverlay}`)
+}
+
+await fs.mkdir(distRoot, { recursive: true })
+await copyFile(builtOverlay, packagedOverlay, { required: true })
+await cleanBuildResidue()

@@ -198,7 +198,14 @@ test("copying chat and logs does not open the dialog", async () => {
     }, base)
     await tab.goto(`${base}/ui/index.html`, { waitUntil: "load" })
     await tab.waitForFunction(() => document.querySelector("#connBadge")?.dataset.status === "online")
+    await tab.waitForSelector(".task-row-main[data-task-id='task-1']")
+    await tab.click(".task-row-main[data-task-id='task-1']")
+    await tab.waitForFunction(() => document.body.dataset.workspace === "task")
     await tab.waitForFunction(() => (document.querySelector("#chatCount")?.textContent || "").trim().length > 0)
+    await tab.waitForFunction(() => {
+      const button = document.querySelector("#btnChatCopyAll")
+      return button instanceof HTMLButtonElement && !button.disabled
+    })
 
     await tab.click("#btnChatCopyAll")
     await new Promise((resolve) => setTimeout(resolve, 200))
@@ -219,6 +226,10 @@ test("copying chat and logs does not open the dialog", async () => {
     await tab.waitForFunction(() => (document.querySelector("#titlebarMenu") as HTMLElement | null)?.hidden === false)
     await tab.click("#btnLog")
     await tab.waitForFunction(() => (document.querySelector("#logDialog") as HTMLDialogElement | null)?.open === true)
+    await tab.waitForFunction(() => {
+      const button = document.querySelector("#btnLogCopy")
+      return button instanceof HTMLButtonElement && !button.disabled
+    })
     await tab.click("#btnLogCopy")
     await new Promise((resolve) => setTimeout(resolve, 200))
 
