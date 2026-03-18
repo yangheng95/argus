@@ -5,6 +5,7 @@ import { Database, NotFoundError, and, asc, desc, eq, inArray, isNull, like, lt 
 import type { SQL } from "@/storage/db"
 import { Snapshot } from "@/snapshot"
 import { EvaluationCheck } from "./model"
+import { evaluationGroups } from "./evaluation-group"
 import {
   OrchestratorArtifactTable,
   OrchestratorDeliveryTable,
@@ -979,6 +980,7 @@ export function viewDelivery(row: DeliveryRow) {
 }
 
 export function viewEvaluation(row: EvaluationRow) {
+  const checks = arrayOfChecks(row.checks)
   return {
     id: row.id,
     taskID: row.task_id,
@@ -988,7 +990,8 @@ export function viewEvaluation(row: EvaluationRow) {
     status: row.status,
     verdict: row.verdict,
     summary: row.summary,
-    checks: arrayOfChecks(row.checks),
+    groups: evaluationGroups(checks),
+    checks,
     time: {
       created: row.time_created,
       updated: row.time_updated,

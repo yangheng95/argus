@@ -95,6 +95,7 @@ type CompileReplanInput = {
   title: string
   request: string
   goals: GoalInput[]
+  rewriteSpec?: boolean
   executor: RunRow["executor"]
   routing?: RoutingInput
   task: TaskRow
@@ -111,6 +112,7 @@ export type CompileTransitionResult = {
   goalDraft?: GoalDraft
   planDraft: PlanDraft
   specMeta?: ReturnType<typeof writeSpec>
+  specStrategy: "generated" | "rewritten" | "reused"
   taskMetadata: Record<string, unknown>
   planMetadata: Record<string, unknown>
 }
@@ -155,15 +157,6 @@ function requirementsFromSpecDraft(specDraft: Pick<SpecDraft, "requirements">): 
 function reuseSpecDraft(input: CompileReplanInput): SpecDraft {
   const snapshot = findSpecSnapshot(input.previousPlan.spec_snapshot_id)
   if (!snapshot) throw new PlannerFailureError(`Spec not found for replan: ${input.previousPlan.spec_snapshot_id}`)
-  const goals = input.goals.length > 0
-    ? input.goals
-    : listGoalsForPlan(input.previousPlan).map((goal) => ({
-        description: goal.description,
-        criteria: goal.criteria,
-        priority: goal.priority,
-        source: goal.source,
-        metadata: goal.metadata ?? undefined,
-      }))
   const assumptions = Array.isArray(snapshot.metadata?.assumptions)
     ? snapshot.metadata.assumptions
       .filter((item): item is { question: string; assumption: string } =>
@@ -198,7 +191,6 @@ function reuseSpecDraft(input: CompileReplanInput): SpecDraft {
   return {
     summary: snapshot.summary,
     content: snapshot.content,
-    goals,
     requirements,
     assumptions,
     risks,
@@ -356,13 +348,14 @@ function blockedPlanDraft(input: {
   title: string
   request: string
   specDraft: SpecDraft
+  goals?: GoalInput[]
   clarification: NonNullable<ReturnType<typeof specClarification>>
   failureSummary?: string
   previousPlanID?: string
   replanContext?: ReplanContext
 }): PlanDraft {
   const assumptions = Array.isArray(input.specDraft.assumptions) ? input.specDraft.assumptions : []
-  const goals = Array.isArray(input.specDraft.goals) ? input.specDraft.goals : []
+  const goals = Array.isArray(input.goals) ? input.goals : []
   const risks = Array.isArray(input.specDraft.risks) ? [...new Set(input.specDraft.risks)] : []
   return {
     summary: "Clarification required before planning",
@@ -412,17 +405,17 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
   const unattended = await unattendedProject()
   const timeouts = stageTimeouts(input)
   const specLive = agentStream({ taskID: input.taskID, stage: "spec" })
-  const rawSpecDraft = await (async () => {
-    if (input.mode === "replan") {
+  const [rawSpecDraft, specStrategy] = await (async () => {
+    if (input.mode === "replan" && !input.rewriteSpec) {
       await specLive.start("Spec locked; reusing active specification")
       const result = reuseSpecDraft(input)
       await specLive.finish("Active specification preserved for replanning")
-      return result
+      return [result, "reused"] as const
     }
-    await specLive.start("Spec generation started")
+    await specLive.start(input.mode === "replan" ? "Spec rewrite started" : "Spec generation started")
     return compileSpec(input, specLive.hooks, timeouts.specMs, specLive.statusHook.bind(specLive)).then(async (result) => {
-      await specLive.finish("Spec generation finished")
-      return result
+      await specLive.finish(input.mode === "replan" ? "Spec rewrite finished" : "Spec generation finished")
+      return [result, input.mode === "replan" ? "rewritten" : "generated"] as const
     }).catch(async (error) => {
       await specLive.error(error)
       if (!(error instanceof SpecFailureError)) throw error
@@ -440,10 +433,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
   const specDraft = unattended ? suppressClarifications(rawSpecDraft) : rawSpecDraft
   const specBlock = unattended ? undefined : specClarification(specDraft)
   let goalDraft: GoalDraft | undefined
-  const plannerSpec = {
-    ...specDraft,
-    goals: [],
-  } satisfies SpecDraft
+  const plannerSpec = specDraft
   let planDraft = await (async () => {
     if (specBlock) {
       return blockedPlanDraft({
@@ -451,6 +441,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
         title: input.title,
         request: input.request,
         specDraft,
+        goals: input.goals,
         clarification: specBlock,
         ...(input.mode === "replan"
           ? {
@@ -650,6 +641,7 @@ export async function compileTransition(input: CompileTransitionInput): Promise<
     goalDraft,
     planDraft,
     specMeta,
+    specStrategy,
     taskMetadata,
     planMetadata,
   }
@@ -1018,7 +1010,6 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
     summary: "Specification capture failed before planning completed.",
     content: input.request,
     scope: "",
-    goals: [],
     assumptions: [] as Array<{ question: string; assumption: string }>,
     risks: [input.error.message],
     clarifications: [],
@@ -1156,7 +1147,11 @@ export function persistInitialTransitionFailure(input: PersistInitialFailureInpu
 }
 
 export function persistReplanTransition(input: PersistReplanInput): ReplanQueueResult {
-  const specSnapshotID = input.previousPlan.spec_snapshot_id
+  const previousSpecSnapshotID = input.previousPlan.spec_snapshot_id
+  const previousSpecSnapshot = findSpecSnapshot(previousSpecSnapshotID)
+  const specRewrite = input.compiled.specStrategy === "rewritten"
+  const specSnapshotID = specRewrite ? Identifier.ascending("spec") : previousSpecSnapshotID
+  const specVersion = specRewrite ? (previousSpecSnapshot?.version ?? 0) + 1 : (previousSpecSnapshot?.version ?? 1)
   const nextVersion = input.previousPlan.version + 1
   const previousGoalSnapshotID = goalSnapshotIDOfPlan(input.previousPlan)
   const previousGoalSnapshot = previousGoalSnapshotID ? findGoalSnapshot(previousGoalSnapshotID) : undefined
@@ -1169,6 +1164,22 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
   }
   if (clarification) {
     Database.transaction((db) => {
+      if (specRewrite) {
+        db.update(OrchestratorSpecSnapshotTable)
+          .set({
+            status: "superseded",
+            time_updated: input.now,
+          })
+          .where(eq(OrchestratorSpecSnapshotTable.id, previousSpecSnapshotID))
+          .run()
+        persistSpecSnapshot(db, {
+          taskID: input.task.id,
+          specSnapshotID,
+          version: specVersion,
+          specDraft: input.compiled.specDraft,
+          now: input.now,
+        })
+      }
       db.insert(OrchestratorRunTable)
         .values({
           id: input.nextRunID,
@@ -1195,10 +1206,12 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
         .run()
       db.update(OrchestratorTaskTable)
         .set({
+          active_spec_version_id: specSnapshotID,
           active_run_id: input.nextRunID,
           status: "blocked",
           error: null,
           blocking_reason: "clarification",
+          metadata: input.compiled.taskMetadata,
           time_completed: null,
           time_updated: input.now,
         })
@@ -1264,6 +1277,24 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
       })
       .where(eq(OrchestratorPlanVersionTable.id, input.previousPlan.id))
       .run()
+    const persistedSpec = specRewrite
+      ? (() => {
+          db.update(OrchestratorSpecSnapshotTable)
+            .set({
+              status: "superseded",
+              time_updated: input.now,
+            })
+            .where(eq(OrchestratorSpecSnapshotTable.id, previousSpecSnapshotID))
+            .run()
+          return persistSpecSnapshot(db, {
+            taskID: input.task.id,
+            specSnapshotID,
+            version: specVersion,
+            specDraft: input.compiled.specDraft,
+            now: input.now,
+          })
+        })()
+      : undefined
     if (previousGoalSnapshotID) {
       db.update(OrchestratorGoalSnapshotTable)
         .set({
@@ -1281,7 +1312,7 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
             goalSnapshotID: nextGoalSnapshotID,
             version: nextGoalSnapshotVersion,
             goalDraft: input.compiled.goalDraft,
-            requirements: requirementLinks(findRequirements(specSnapshotID)),
+            requirements: persistedSpec?.requirements ?? requirementLinks(findRequirements(specSnapshotID)),
             now: input.now,
           })
         : []
@@ -1363,11 +1394,13 @@ export function persistReplanTransition(input: PersistReplanInput): ReplanQueueR
       })
       .run()
     Database.effect(() =>
-      OrchestratorProtocol.emit(Event.SpecCreated, {
-        taskID: input.task.id,
-        specID: specSnapshotID,
-        summary: input.compiled.specDraft.summary,
-      }, { source: "persist.replan" }),
+      specRewrite
+        ? OrchestratorProtocol.emit(Event.SpecCreated, {
+            taskID: input.task.id,
+            specID: specSnapshotID,
+            summary: input.compiled.specDraft.summary,
+          }, { source: "persist.replan" })
+        : undefined,
     )
     Database.effect(() =>
       OrchestratorProtocol.emit(Event.PlanCreated, {
@@ -1839,7 +1872,6 @@ async function compileSpec(
     return {
       summary: typeof specDraft.summary === "string" ? specDraft.summary : input.title,
       content: typeof specDraft.content === "string" ? specDraft.content : input.request,
-      goals: Array.isArray(specDraft.goals) ? specDraft.goals as GoalInput[] : [],
       requirements: Array.isArray(specDraft.requirements) ? specDraft.requirements as Requirement[] : [],
       assumptions: Array.isArray(specDraft.assumptions) ? specDraft.assumptions as Array<{ question: string; assumption: string }> : [],
       risks: Array.isArray(specDraft.risks) ? specDraft.risks as string[] : [],
@@ -2072,18 +2104,18 @@ export function createRetryRun(task: TaskRow, run: RunRow, summary: string, retr
   Database.transaction((db) => {
     const plan = run.plan_version_id ? findPlan(run.plan_version_id) : undefined
     if (plan) {
-      db.update(OrchestratorGoalTable)
-        .set({
-          status: "pending",
-          time_updated: now,
-        })
-        .where(
-          and(
-            eq(OrchestratorGoalTable.spec_snapshot_id, plan.spec_snapshot_id),
-            eq(OrchestratorGoalTable.status, "failed"),
-          ),
-        )
-        .run()
+      const failedGoalIDs = listGoalsForPlan(plan)
+        .filter((goal) => goal.status === "failed")
+        .map((goal) => goal.id)
+      if (failedGoalIDs.length > 0) {
+        db.update(OrchestratorGoalTable)
+          .set({
+            status: "pending",
+            time_updated: now,
+          })
+          .where(inArray(OrchestratorGoalTable.id, failedGoalIDs))
+          .run()
+      }
     }
     db.insert(OrchestratorRunTable)
       .values({
@@ -2271,6 +2303,7 @@ export async function createReplanRun(task: TaskRow, plan: PlanRow, run: RunRow,
       title: task.title,
       request: rewrite.request,
       goals: rewrite.goals,
+      rewriteSpec: rewrite.rewriteSpec,
       executor: run.executor,
       routing,
       task,
@@ -2482,7 +2515,10 @@ export function persistEvaluation(input: {
             }]
           : analysisGoals
       for (const gs of goalStatuses) {
-        const goal = input.goals[gs.goal_index]
+        const goal =
+          input.goalRunID && input.goals.length === 1
+            ? input.goals[0]
+            : input.goals[gs.goal_index]
         if (!goal) continue
         let goalStatus =
           input.goalRunID && input.goals.length === 1

@@ -19,16 +19,18 @@ function stubPlanner() {
   spyOn(SpecService, "initial").mockImplementation(async (input: any) => ({
     summary: `Spec for: ${input.title}`,
     content: `# Scope\n\n${input.request}`,
-    goals: (input.goals ?? []).map((goal: any) => ({
-      description: goal.description,
-      criteria: goal.criteria,
+    requirements: (input.goals ?? []).map((goal: any, index: number) => ({
+      id: `req_${index + 1}`,
+      title: goal.description,
+      description: goal.criteria,
       priority: goal.priority ?? "blocking",
+      acceptance: [goal.criteria],
+      evidence_refs: goal.metadata?.check_selector ?? ["verify_cmd"],
       metadata: goal.metadata,
     })),
     assumptions: [],
     risks: [],
     clarifications: [],
-    spec_items: [],
     evidence_sources: [],
     unresolved_questions: [],
   }))
@@ -50,6 +52,12 @@ function stubPlanner() {
         source: "planner_agent",
         clarification_source: "none",
       },
+      waves: (input.goals ?? []).map((goal: any, index: number) => ({
+        title: `Wave ${index + 1}`,
+        objective: goal.description,
+        goal_indices: [index],
+        owned_paths: [`src/goal-${index + 1}.ts`],
+      })),
     },
   }) as any)
 }

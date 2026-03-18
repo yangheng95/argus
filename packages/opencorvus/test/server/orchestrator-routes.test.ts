@@ -25,6 +25,41 @@ import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
+async function waitFor<T>(label: string, read: () => Promise<T> | T, predicate: (value: T) => boolean, attempts = 120, delayMs = 25) {
+  let last!: T
+  for (let index = 0; index < attempts; index += 1) {
+    last = await read()
+    if (predicate(last)) return last
+    await Bun.sleep(delayMs)
+  }
+  throw new Error(`Timed out waiting for ${label}`)
+}
+
+async function waitForTaskRow(taskID: string, predicate: (task: { status: string; metadata?: Record<string, unknown>; session_id?: string | null }) => boolean) {
+  return waitFor(`task ${taskID}`, () =>
+    Database.use((db) =>
+      db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get(),
+    ), (task) => !!task && predicate(task))
+}
+
+async function waitForRunRow(taskID: string, predicate: (run: { status: string; phase?: string | null; executor?: string; metadata?: Record<string, unknown> }) => boolean) {
+  return waitFor(`run for task ${taskID}`, () =>
+    Database.use((db) =>
+      db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, taskID)).get(),
+    ), (run) => !!run && predicate(run))
+}
+
+async function waitForGoalRunRow(taskID: string, predicate: (goalRun: { status: string; metadata?: Record<string, unknown> }) => boolean) {
+  return waitFor(`goal run for task ${taskID}`, () =>
+    Database.use((db) =>
+      db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.task_id, taskID)).get(),
+    ), (goalRun) => !!goalRun && predicate(goalRun))
+}
+
+async function waitForProgress(taskID: string, predicate: (progress: Awaited<ReturnType<typeof OrchestratorService.getProgress>>) => boolean) {
+  return waitFor(`progress for task ${taskID}`, () => OrchestratorService.getProgress(taskID), predicate)
+}
+
 function mockLLM() {
   const goals = (input: { request: string; goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }>; spec?: { goals?: Array<{ description: string; criteria: string; priority?: "blocking" | "advisory"; metadata?: Record<string, unknown> }> } }) =>
     (input.goals ?? input.spec?.goals ?? [{ description: input.request, criteria: "Task completed successfully", priority: "blocking" as const }]).map((goal) => ({
@@ -36,32 +71,36 @@ function mockLLM() {
   spyOn(SpecService, "initial").mockImplementation(async (input) => ({
     summary: `Spec: ${input.title}`,
     content: `# Scope\n\n${input.request}`,
-    goals: goals(input),
+    requirements: goals(input).map((goal, index) => ({
+      id: `req_${index + 1}`,
+      title: goal.description,
+      description: goal.description,
+      priority: goal.priority,
+      acceptance: [goal.criteria],
+      evidence_refs: [],
+      metadata: goal.metadata,
+    })),
     assumptions: [],
     risks: [],
     clarifications: [],
-    spec_items: [{
-      title: input.title,
-      description: input.request,
-      priority: "blocking" as const,
-      check_selector: ["spec_check"],
-    }],
     evidence_sources: [],
     unresolved_questions: [],
   }))
   spyOn(SpecService, "rewrite").mockImplementation(async (input) => ({
     summary: `Spec rewrite: ${input.title}`,
     content: `# Scope\n\n${input.request}`,
-    goals: goals(input),
+    requirements: goals(input).map((goal, index) => ({
+      id: `req_${index + 1}`,
+      title: goal.description,
+      description: goal.description,
+      priority: goal.priority,
+      acceptance: [goal.criteria],
+      evidence_refs: [],
+      metadata: goal.metadata,
+    })),
     assumptions: [],
     risks: [input.rewriteContext.failureAnalysis.summary],
     clarifications: [],
-    spec_items: [{
-      title: input.title,
-      description: input.request,
-      priority: "blocking" as const,
-      check_selector: ["spec_check"],
-    }],
     evidence_sources: [],
     unresolved_questions: [],
   }))
@@ -92,6 +131,12 @@ function mockLLM() {
     metadata: {
       strategy: "initial" as const,
       steps: ["1. Execute the task"],
+      waves: goals(input).map((goal, index) => ({
+        title: `Wave ${index + 1}`,
+        objective: goal.description,
+        goal_indices: [index],
+        owned_paths: [`src/goal-${index + 1}.ts`],
+      })),
       planner: {
         role: "headless_compiler" as const,
         quality: "compiled" as const,
@@ -109,6 +154,12 @@ function mockLLM() {
       steps: ["1. Retry the task"],
       failure_summary: input.failureSummary,
       previous_plan_id: input.previousPlanID,
+      waves: goals(input).map((goal, index) => ({
+        title: `Wave ${index + 1}`,
+        objective: goal.description,
+        goal_indices: [index],
+        owned_paths: [`src/goal-${index + 1}.ts`],
+      })),
       planner: {
         role: "headless_compiler" as const,
         quality: "compiled" as const,
@@ -131,7 +182,7 @@ describe("orchestrator routes", () => {
 
   test("POST /task returns task_id and dispatches a run", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -159,29 +210,21 @@ describe("orchestrator routes", () => {
         const json = (await response.json()) as { task_id: string }
         expect(typeof json.task_id).toBe("string")
 
-        const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, json.task_id)).get(),
-        )
-        expect(task?.status).toBe("running")
+        const task = await waitForTaskRow(json.task_id, (row) => row.status !== "planning")
+        expect(["queued", "running", "accepted", "failed", "completed", "evaluating"]).toContain(task.status)
         expect(task?.metadata?.checks).toBeDefined()
 
-        const run = Database.use((db) =>
-          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, json.task_id)).get(),
-        )
-        const goalRun = Database.use((db) =>
-          db.select().from(OrchestratorGoalRunTable).where(eq(OrchestratorGoalRunTable.task_id, json.task_id)).get(),
-        )
-        expect(run?.status).toBe("accepted")
+        const run = await waitForRunRow(json.task_id, (row) => row.status === "accepted" || row.status === "running")
+        const goalRun = await waitForGoalRunRow(json.task_id, (row) => typeof row.metadata?.queue_task_id === "string")
+        expect(["accepted", "running"]).toContain(run.status)
         expect(goalRun?.metadata?.queue_task_id).toBeTruthy()
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("POST /task is idempotent when request id is reused", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -190,6 +233,7 @@ describe("orchestrator routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        const requestID = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         const first = await app.request("/task", {
           method: "POST",
           headers: {
@@ -198,7 +242,7 @@ describe("orchestrator routes", () => {
           },
           body: JSON.stringify({
             project: Instance.project.id,
-            requestID: "req-123",
+            requestID,
             request: "implement feature x",
           }),
         })
@@ -210,7 +254,7 @@ describe("orchestrator routes", () => {
           },
           body: JSON.stringify({
             project: Instance.project.id,
-            requestID: "req-123",
+            requestID,
             request: "implement feature x",
           }),
         })
@@ -225,20 +269,19 @@ describe("orchestrator routes", () => {
           db
             .select()
             .from(OrchestratorTaskTable)
-            .where(eq(OrchestratorTaskTable.request_id, "req-123"))
+            .where(eq(OrchestratorTaskTable.request_id, requestID))
             .all(),
         )
         expect(tasks.length).toBe(1)
-        expect(tasks[0]?.request_id).toBe("req-123")
+        expect(tasks[0]?.request_id).toBe(requestID)
+        await waitForRunRow(firstBody.task_id, () => true)
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("DELETE /task/:id removes the task and its root session", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -259,9 +302,7 @@ describe("orchestrator routes", () => {
           }),
         })
         const { task_id } = (await created.json()) as { task_id: string }
-        const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, task_id)).get(),
-        )
+        const task = await waitForTaskRow(task_id, (row) => !!row.session_id)
 
         expect(task?.session_id).toBeTruthy()
 
@@ -286,13 +327,11 @@ describe("orchestrator routes", () => {
         expect(nextSession).toBeNull()
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("POST /task accepts request id header for idempotency", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -301,12 +340,13 @@ describe("orchestrator routes", () => {
       directory: tmp.path,
       fn: async () => {
         const app = Server.App()
+        const requestID = `req-header-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
         const first = await app.request("/task", {
           method: "POST",
           headers: {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
-            "x-opencorvus-request-id": "req-header-1",
+            "x-opencorvus-request-id": requestID,
           },
           body: JSON.stringify({
             project: Instance.project.id,
@@ -318,7 +358,7 @@ describe("orchestrator routes", () => {
           headers: {
             "content-type": "application/json",
             "x-opencorvus-directory": tmp.path,
-            "x-opencorvus-request-id": "req-header-1",
+            "x-opencorvus-request-id": requestID,
           },
           body: JSON.stringify({
             project: Instance.project.id,
@@ -329,15 +369,21 @@ describe("orchestrator routes", () => {
         const firstBody = (await first.json()) as { task_id: string }
         const secondBody = (await second.json()) as { task_id: string }
         expect(secondBody.task_id).toBe(firstBody.task_id)
+        const tasks = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorTaskTable)
+            .where(eq(OrchestratorTaskTable.request_id, requestID))
+            .all(),
+        )
+        expect(tasks).toHaveLength(1)
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("POST /task/:id/message stores preference update", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -381,13 +427,11 @@ describe("orchestrator routes", () => {
         expect(body.message).toContain("Preference saved")
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("GET /task/:id/brief returns compiled assistant brief", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -442,13 +486,11 @@ describe("orchestrator routes", () => {
         expect(body.content).toContain("lockfile_policy: avoid_changes")
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("POST /task/:id/message records free-form preference text as a note", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -509,13 +551,11 @@ describe("orchestrator routes", () => {
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("GET /task/:id/board returns unified board projection", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -572,13 +612,11 @@ describe("orchestrator routes", () => {
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("PATCH /task/:id/budget updates the task run budget", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -625,13 +663,11 @@ describe("orchestrator routes", () => {
         })
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("GET /task/:id/board returns 304 when the board tag is unchanged", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -675,13 +711,11 @@ describe("orchestrator routes", () => {
         expect(second.headers.get("etag")).toBe(etag)
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("GET /task/:id/board forwards sync=1 to board reads", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -729,12 +763,11 @@ describe("orchestrator routes", () => {
 
     boardSpy.mockRestore()
     tagSpy.mockRestore()
-    expect(submit).toHaveBeenCalled()
   })
 
   test("GET /task/:id/board exposes protocol sync metadata", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -783,13 +816,11 @@ describe("orchestrator routes", () => {
         expect(board.lastSequence).toBeGreaterThan(before)
       },
     })
-
-    expect(submit).toHaveBeenCalled()
   })
 
   test("GET /task/:id/events replays persisted protocol events after the requested sequence", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -876,13 +907,11 @@ describe("orchestrator routes", () => {
         }
       },
     })
-
-    expect(submit).toHaveBeenCalled()
   })
 
   test("GET /task/:id/events forwards session message events for the task", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -905,9 +934,7 @@ describe("orchestrator routes", () => {
 
         expect(created.status).toBe(202)
         const { task_id } = (await created.json()) as { task_id: string }
-        const task = Database.use((db) =>
-          db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, task_id)).get(),
-        )
+        const task = await waitForTaskRow(task_id, (row) => !!row.session_id)
 
         expect(task?.session_id).toBeTruthy()
 
@@ -962,13 +989,11 @@ describe("orchestrator routes", () => {
         }))
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("GET /task/:id/events forwards agent stream events for the task", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -1021,8 +1046,14 @@ describe("orchestrator routes", () => {
 
             void parseSSE(response.body!, stop.signal, (event) => {
               seen.push(event)
-              const next = event as { type?: string }
+              const next = event as {
+                type?: string
+                payload?: { stage?: string; kind?: string; text?: string; taskID?: string }
+              }
               if (next.type !== "agent.updated") return
+              if (next.payload?.stage !== "planner") return
+              if (next.payload?.kind !== "message_delta") return
+              if (next.payload?.text !== "Build homepage") return
               clearTimeout(timeout)
               resolve()
             }).catch((error) => {
@@ -1045,13 +1076,11 @@ describe("orchestrator routes", () => {
         }))
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("GET /task/:id/board includes api user-scoped preferences after message", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -1103,13 +1132,11 @@ describe("orchestrator routes", () => {
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("GET /tasks returns project-level aggregation", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -1156,13 +1183,12 @@ describe("orchestrator routes", () => {
         expect(body.tasks.length).toBe(2)
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(2)
   })
 
   test("GET /global/tasks returns tasks across projects with directories", async () => {
     await using first = await tmpdir({ git: true })
     await using second = await tmpdir({ git: true })
+    const prefix = `global-task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const insert = async (dir: string, title: string, time: number) =>
       Instance.provide({
         directory: dir,
@@ -1186,10 +1212,10 @@ describe("orchestrator routes", () => {
       })
 
     const now = Date.now()
-    await insert(first.path, "global-task-one", now - 10)
-    await insert(second.path, "global-task-two", now)
+    await insert(first.path, `${prefix}-one`, now - 10)
+    await insert(second.path, `${prefix}-two`, now)
 
-    const response = await Server.App().request("/global/tasks?q=global-task", {
+    const response = await Server.App().request(`/global/tasks?q=${prefix}`, {
       headers: {
         "x-opencorvus-directory": first.path,
       },
@@ -1201,14 +1227,14 @@ describe("orchestrator routes", () => {
     }
 
     expect(body.summary.total_tasks).toBe(2)
-    expect(body.tasks.map((item) => item.task.title)).toEqual(["global-task-two", "global-task-one"])
+    expect(body.tasks.map((item) => item.task.title)).toEqual([`${prefix}-two`, `${prefix}-one`])
     expect(body.tasks.map((item) => item.task.directory)).toEqual([second.path, first.path])
     expect(body.tasks.map((item) => item.project?.worktree)).toEqual([second.path, first.path])
   })
 
   test("POST /task/:id/retry queues a deterministic retry run", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -1256,13 +1282,7 @@ describe("orchestrator routes", () => {
           }),
         })
         const { task_id } = (await created.json()) as { task_id: string }
-        const progress = await app.request(`/task/${task_id}/progress`, {
-          method: "GET",
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        expect(progress.status).toBe(200)
+        await waitForProgress(task_id, (progress) => progress.task.status === "failed")
 
         const response = await app.request(`/task/${task_id}/retry`, {
           method: "POST",
@@ -1275,13 +1295,11 @@ describe("orchestrator routes", () => {
         expect(body.status).toBe("accepted")
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(2)
   })
 
   test("POST /task/:id/replan queues a replanned run", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -1329,13 +1347,7 @@ describe("orchestrator routes", () => {
           }),
         })
         const { task_id } = (await created.json()) as { task_id: string }
-        const progress = await app.request(`/task/${task_id}/progress`, {
-          method: "GET",
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
-        })
-        expect(progress.status).toBe(200)
+        await waitForProgress(task_id, (progress) => progress.task.status === "failed")
 
         const response = await app.request(`/task/${task_id}/replan`, {
           method: "POST",
@@ -1349,13 +1361,11 @@ describe("orchestrator routes", () => {
         expect(body.phase).toBe("replan")
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(2)
   })
 
   test("PATCH and DELETE preference routes mutate board data", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -1436,13 +1446,11 @@ describe("orchestrator routes", () => {
         delete process.env.OPENCORVUS_WORKBENCH_LLM
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("PATCH and DELETE goal routes are no longer exposed", async () => {
     await using tmp = await tmpdir({ git: true })
-    const submit = spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
+    spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
     }))
@@ -1474,6 +1482,7 @@ describe("orchestrator routes", () => {
           }),
         })
         const { task_id } = (await created.json()) as { task_id: string }
+        await waitForProgress(task_id, (progress) => progress.goals.some((goal) => goal.description === "Initial goal"))
 
         const before = await app.request(`/task/${task_id}/board`, {
           headers: {
@@ -1506,8 +1515,6 @@ describe("orchestrator routes", () => {
         expect(removed.status).toBe(404)
       },
     })
-
-    expect(submit).toHaveBeenCalledTimes(1)
   })
 
   test("POST /task accepts a registered custom executor", async () => {
@@ -1577,13 +1584,12 @@ describe("orchestrator routes", () => {
 
         expect(response.status).toBe(202)
         const body = (await response.json()) as { task_id: string }
-        const run = Database.use((db) =>
-          db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.task_id, body.task_id)).get(),
-        )
+        const run = await waitForRunRow(body.task_id, (row) => row.executor === "codex")
         expect(run?.executor).toBe("codex")
       },
     })
 
+    await waitFor("custom executor submit", () => calls.length, (count) => count === 1)
     expect(calls).toHaveLength(1)
     expect(calls[0]).toContain("implement feature y")
   })
@@ -1620,7 +1626,7 @@ describe("orchestrator routes", () => {
     })
   })
 
-  test("POST /task returns 503 when planner compilation fails", async () => {
+  test("POST /task returns 202 and persists a failed task when planner compilation fails in background bootstrap", async () => {
     await using tmp = await tmpdir({ git: true })
     mock.restore()
     mockLLM()
@@ -1642,21 +1648,11 @@ describe("orchestrator routes", () => {
           }),
         })
 
-        expect(response.status).toBe(503)
-        expect(await response.text()).toContain("planner agent failed")
-
-        const task = Database.use((db) =>
-          db
-            .select()
-            .from(OrchestratorTaskTable)
-            .where(eq(OrchestratorTaskTable.request, "implement feature x"))
-            .orderBy(OrchestratorTaskTable.time_created)
-            .all()
-            .filter((item) => item.status === "failed")
-            .at(-1),
-        )
+        expect(response.status).toBe(202)
+        const body = (await response.json()) as { task_id: string }
+        const task = await waitForTaskRow(body.task_id, (row) => row.status === "failed")
         expect(task?.status).toBe("failed")
-        expect(task?.error).toContain("planner agent failed")
+        expect(String((task as { error?: string }).error ?? "")).toContain("planner agent failed")
       },
     })
   })

@@ -181,7 +181,7 @@ test("buildRetryContext falls back to latest goal-run delivery and evaluation", 
       )
       const context = buildRetryContext(run, "failed")
       expect(context.deliverySummary).toBe("goal delivery")
-      expect(context.changedFiles).toBeUndefined()
+      expect(context.changedFiles).toEqual([])
       expect(context.checks?.[0]?.name).toBe("verify_cmd")
     },
   })
@@ -280,6 +280,22 @@ test("buildRetryContext inherits changed files from previous retry context when 
             time_updated: now,
           })
           .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: Identifier.ascending("delivery"),
+            task_id: taskID,
+            run_id: runID,
+            status: "candidate",
+            summary: "retry delivery",
+            result: {
+              summary: "retry delivery",
+              changed_files: [],
+              diffs: [],
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
       })
 
       const run = Database.use((db) =>
@@ -287,7 +303,445 @@ test("buildRetryContext inherits changed files from previous retry context when 
       )
       const context = buildRetryContext(run, "failed")
 
+      expect(context.deliverySummary).toBe("retry delivery")
       expect(context.changedFiles).toEqual(["src/retry.ts"])
+    },
+  })
+})
+
+test("buildRetryContext inherits changed files from an earlier goal delivery in the same run", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const goalID = Identifier.ascending("goal")
+      const previousGoalRunID = Identifier.ascending("goal_run")
+      const latestGoalRunID = Identifier.ascending("goal_run")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "task",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            status: "active",
+            summary: "plan",
+            prompt: "prompt",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalTable)
+          .values({
+            id: goalID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            description: "goal",
+            criteria: "criteria",
+            priority: "blocking",
+            source: "spec",
+            status: "pending",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 0,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalRunTable)
+          .values({
+            id: previousGoalRunID,
+            task_id: taskID,
+            coordinator_run_id: runID,
+            goal_id: goalID,
+            status: "completed",
+            executor: "opencode",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: Identifier.ascending("delivery"),
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: previousGoalRunID,
+            status: "candidate",
+            summary: "previous goal delivery",
+            result: {
+              summary: "previous goal delivery",
+              changed_files: ["src/same-run.ts"],
+              diffs: [],
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalRunTable)
+          .values({
+            id: latestGoalRunID,
+            task_id: taskID,
+            coordinator_run_id: runID,
+            goal_id: goalID,
+            status: "failed",
+            executor: "opencode",
+            metadata: {},
+            time_created: now + 1,
+            time_updated: now + 1,
+          })
+          .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: Identifier.ascending("delivery"),
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: latestGoalRunID,
+            status: "candidate",
+            summary: "latest empty goal delivery",
+            result: {
+              summary: "latest empty goal delivery",
+              changed_files: [],
+              diffs: [],
+            },
+            time_created: now + 1,
+            time_updated: now + 1,
+          })
+          .run()
+      })
+
+      const run = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get()!,
+      )
+      const context = buildRetryContext(run, "failed")
+
+      expect(context.deliverySummary).toBe("latest empty goal delivery")
+      expect(context.changedFiles).toEqual(["src/same-run.ts"])
+    },
+  })
+})
+
+test("buildRetryContext inherits changed files from a previous run delivery when a replan run has no retry context", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const previousRunID = Identifier.ascending("run")
+      const runID = Identifier.ascending("run")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "task",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            status: "active",
+            summary: "plan",
+            prompt: "prompt",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: previousRunID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "failed",
+            phase: "dispatch",
+            retry_count: 1,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: Identifier.ascending("delivery"),
+            task_id: taskID,
+            run_id: previousRunID,
+            status: "candidate",
+            summary: "previous run delivery",
+            result: {
+              summary: "previous run delivery",
+              changed_files: ["src/replan-chain.ts"],
+              diffs: [],
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "replan",
+            retry_count: 0,
+            metadata: {
+              previous_run_id: previousRunID,
+              strategy: "replan",
+            },
+            time_created: now + 1,
+            time_updated: now + 1,
+          })
+          .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: Identifier.ascending("delivery"),
+            task_id: taskID,
+            run_id: runID,
+            status: "candidate",
+            summary: "replan delivery",
+            result: {
+              summary: "replan delivery",
+              changed_files: [],
+              diffs: [],
+            },
+            time_created: now + 1,
+            time_updated: now + 1,
+          })
+          .run()
+      })
+
+      const run = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get()!,
+      )
+      const context = buildRetryContext(run, "failed")
+
+      expect(context.deliverySummary).toBe("replan delivery")
+      expect(context.changedFiles).toEqual(["src/replan-chain.ts"])
+    },
+  })
+})
+
+test("buildRetryContext merges current delivery files with historical same-run files", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const goalID = Identifier.ascending("goal")
+      const previousGoalRunID = Identifier.ascending("goal_run")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "task",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            status: "active",
+            summary: "plan",
+            prompt: "prompt",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalTable)
+          .values({
+            id: goalID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            description: "goal",
+            criteria: "criteria",
+            priority: "blocking",
+            source: "spec",
+            status: "pending",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 0,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalRunTable)
+          .values({
+            id: previousGoalRunID,
+            task_id: taskID,
+            coordinator_run_id: runID,
+            goal_id: goalID,
+            status: "completed",
+            executor: "opencode",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: Identifier.ascending("delivery"),
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: previousGoalRunID,
+            status: "candidate",
+            summary: "previous goal delivery",
+            result: {
+              summary: "previous goal delivery",
+              changed_files: ["src/note-store.ts"],
+              diffs: [],
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: Identifier.ascending("delivery"),
+            task_id: taskID,
+            run_id: runID,
+            status: "candidate",
+            summary: "current run delivery",
+            result: {
+              summary: "current run delivery",
+              changed_files: ["package.json"],
+              diffs: [],
+            },
+            time_created: now + 1,
+            time_updated: now + 1,
+          })
+          .run()
+      })
+
+      const run = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get()!,
+      )
+      const context = buildRetryContext(run, "failed")
+
+      expect(context.deliverySummary).toBe("current run delivery")
+      expect(context.changedFiles).toEqual(["package.json", "src/note-store.ts"])
     },
   })
 })

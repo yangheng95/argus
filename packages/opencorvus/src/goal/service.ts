@@ -1,4 +1,5 @@
 import z from "zod"
+import path from "path"
 import { type TextHooks } from "@/llm/api"
 import { type ReplanContext } from "@/planner/agent"
 import {
@@ -53,6 +54,10 @@ type GoalCompileInput = {
   onStatus?: (summary: string) => void | Promise<void>
 }
 
+type GoalValidationScope = {
+  requiredRequirementIDs?: Set<string>
+}
+
 export class GoalFailureError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options)
@@ -82,7 +87,7 @@ function normalizedGoal(goal: GoalContractDraftType): GoalContractDraftType {
   }
 }
 
-function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft) {
+function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft, scope: GoalValidationScope = {}) {
   const requirements = Array.isArray(spec.requirements) ? spec.requirements : []
   if (requirements.length < 1) {
     throw new GoalFailureError("Goal decomposition requires at least one formulated requirement")
@@ -123,7 +128,10 @@ function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft) {
 
   const blockingRequirements = new Set(
     requirements
-      .filter((item) => (item.priority ?? "blocking") === "blocking")
+      .filter((item) =>
+        (item.priority ?? "blocking") === "blocking"
+        && (!scope.requiredRequirementIDs || scope.requiredRequirementIDs.has(item.id.trim()))
+      )
       .map((item) => item.id.trim()),
   )
   const coveredBlockingRequirements = new Set(
@@ -140,7 +148,7 @@ function validateGoalGraph(goalDraft: GoalDraft, spec: SpecDraft) {
   for (const goal of goals) {
     const text = `${goal.title} ${goal.objective} ${goal.done_definition}`.toLowerCase()
     const umbrella =
-      /(all|everything|entire|full app|whole system|project setup|bootstrap|infrastructure|foundation|base project|全量|全部|整体|基础设施|项目初始化|脚手架)/.test(text)
+      /\b(everything|entire\s+(app|system|project|workflow|surface)|full\s+app|whole\s+(app|system|project)|all\s+(features|requirements|modules|routes|components|pages|workflows|checks|tests)|project setup|bootstrap|infrastructure|foundation|base project)\b|全量|全部|整体|基础设施|项目初始化|脚手架/.test(text)
     if (umbrella && goal.requirement_ids.length > 1) {
       throw new GoalFailureError(`Goal ${goal.id} is too broad and reads like an umbrella stage`)
     }
@@ -211,6 +219,16 @@ function normalizeText(value: string) {
   return value.trim().toLowerCase()
 }
 
+function requirementSelectorMetadata(requirement: RequirementDraft) {
+  const metadata =
+    requirement.metadata && typeof requirement.metadata === "object" && !Array.isArray(requirement.metadata)
+      ? requirement.metadata as Record<string, unknown>
+      : undefined
+  return Array.isArray(metadata?.check_selector)
+    ? uniqueStrings(metadata.check_selector.filter((item): item is string => typeof item === "string" && item.trim().length > 0))
+    : []
+}
+
 function sanitizeId(value: string) {
   const slug = value
     .trim()
@@ -221,6 +239,11 @@ function sanitizeId(value: string) {
 }
 
 function classifyRequirement(requirement: RequirementDraft): GoalCategory {
+  const selectors = requirementSelectorMetadata(requirement).map((item) => normalizeText(item))
+  if (selectors.length > 0) {
+    if (selectors.every((item) => item.includes("test"))) return "verification"
+    if (selectors.every((item) => item.includes("build") || item.includes("lint") || item.includes("typecheck"))) return "quality"
+  }
   const title = normalizeText(requirement.title)
   const body = normalizeText([
     requirement.title,
@@ -229,24 +252,24 @@ function classifyRequirement(requirement: RequirementDraft): GoalCategory {
     ...(requirement.evidence_refs ?? []),
   ].join("\n"))
 
-  if (/(test suite|tests?|verification|验收|测试|校验|验证)/.test(title)) return "verification"
-  if (/(type safety|error handling|类型安全|错误处理)/.test(title)) return "quality"
-  if (/(app entry|route organization|application entry|入口|路由组织)/.test(title)) return "integration"
-  if (/(timeline|时间轴|筛选)/.test(title)) return "timeline"
-  if (/(middleware|bearer token|auth middleware|中间件)/.test(title)) return "middleware"
-  if (/(tag|标签)/.test(title)) return "tag"
-  if (/(crud|diary|日记)/.test(title)) return "diary"
-  if (/(auth|register|login|jwt|token|认证|注册|登录)/.test(title)) return "auth"
-  if (/(schema|sqlite|database|migration|db\b|数据库|表结构)/.test(title)) return "database"
-  if (/(setup|dependencies|project|config|配置|初始化|依赖)/.test(title)) return "setup"
+  if (/\btest suite\b|\btests?\b|\bverification\b|验收|测试|校验|验证/.test(title)) return "verification"
+  if (/\btype safety\b|\berror handling\b|类型安全|错误处理/.test(title)) return "quality"
+  if (/\bapp entry\b|\broute organization\b|\bapplication entry\b|入口|路由组织/.test(title)) return "integration"
+  if (/\btimeline\b|时间轴|筛选/.test(title)) return "timeline"
+  if (/\bmiddleware\b|\bbearer token\b|\bauth middleware\b|中间件/.test(title)) return "middleware"
+  if (/\btag\b|标签/.test(title)) return "tag"
+  if (/\bcrud\b|\bdiary\b|日记/.test(title)) return "diary"
+  if (/\bauth\b|\bregister\b|\blogin\b|\bjwt\b|\btoken\b|认证|注册|登录/.test(title)) return "auth"
+  if (/\bschema\b|\bsqlite\b|\bdatabase\b|\bmigration\b|\bdb\b|数据库|表结构/.test(title)) return "database"
+  if (/\bsetup\b|\bdependencies\b|\bproject\b|\bconfig\b|配置|初始化|依赖/.test(title)) return "setup"
 
-  if (/(timeline|时间轴|筛选)/.test(body)) return "timeline"
-  if (/(middleware|bearer token|中间件)/.test(body)) return "middleware"
-  if (/(auth|register|login|jwt|token|认证|注册|登录)/.test(body)) return "auth"
-  if (/(tag|标签)/.test(body) && !/(diary crud|日记 crud)/.test(body)) return "tag"
-  if (/(schema|sqlite|database|migration|数据库|表结构)/.test(body)) return "database"
-  if (/(project setup|dependencies|bun install|typecheck|项目配置|依赖)/.test(body)) return "setup"
-  if (/(diary|日记)/.test(body)) return "diary"
+  if (/\btimeline\b|时间轴|筛选/.test(body)) return "timeline"
+  if (/\bmiddleware\b|\bbearer token\b|中间件/.test(body)) return "middleware"
+  if (/\bauth\b|\bregister\b|\blogin\b|\bjwt\b|\btoken\b|认证|注册|登录/.test(body)) return "auth"
+  if (/\btag\b|标签/.test(body) && !(/\bdiary crud\b|日记 crud/.test(body))) return "tag"
+  if (/\bschema\b|\bsqlite\b|\bdatabase\b|\bmigration\b|数据库|表结构/.test(body)) return "database"
+  if (/\bproject setup\b|\bdependencies\b|\bbun install\b|\btypecheck\b|项目配置|依赖/.test(body)) return "setup"
+  if (/\bdiary\b|日记/.test(body)) return "diary"
   return "other"
 }
 
@@ -276,6 +299,115 @@ function extractOwnedPaths(requirement: RequirementDraft) {
   return [...paths]
 }
 
+function normalizeOwnedPath(value: string) {
+  return value
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s*\([^)]*\)\s*$/g, "")
+    .replace(/\\/g, "/")
+}
+
+function isAmbientEvidencePath(value: string) {
+  const normalized = normalizeOwnedPath(value).toLowerCase()
+  return normalized === "package.json"
+    || normalized === "tsconfig.json"
+    || normalized === "bunfig.toml"
+    || normalized === "bun.lock"
+    || normalized === "package-lock.json"
+    || normalized === "pnpm-lock.yaml"
+    || normalized === "yarn.lock"
+    || normalized === "readme.md"
+    || normalized.endsWith("/readme.md")
+}
+
+function codeSurfacePaths(paths: string[]) {
+  const normalized = uniqueStrings(paths.map(normalizeOwnedPath).filter(Boolean))
+  if (normalized.length <= 1) return normalized
+  const nonAmbient = normalized.filter((item) => !isAmbientEvidencePath(item))
+  const codeLike = nonAmbient.filter((item) =>
+    /^(src|app|lib|server|client|test|tests)\//i.test(item)
+    || /\.(ts|tsx|js|jsx|mts|cts|css|scss|html|mdx|vue|svelte|py|go|rs|java|kt|swift|rb|php|cs|sql)$/i.test(item),
+  )
+  if (codeLike.length > 0) return codeLike
+  if (nonAmbient.length > 0) return nonAmbient
+  return normalized
+}
+
+function clusterSurfacePaths(category: GoalCategory, explicitOwnedPaths: string[]) {
+  const explicit = codeSurfacePaths(explicitOwnedPaths)
+  const fallback = codeSurfacePaths(defaultOwnedPaths(category))
+  if (explicit.length === 0) return fallback
+  const fallbackRoots = fallback
+    .filter((item) => item.endsWith("/"))
+    .sort((a, b) => a.length - b.length)
+  if (fallbackRoots.length > 0) {
+    const matchingRoots = fallbackRoots.filter((root) =>
+      explicit.every((item) => item === root || item.startsWith(root)),
+    )
+    if (matchingRoots.length > 0) return [matchingRoots[0]!]
+  }
+  return explicit
+}
+
+function clusterableCategory(category: GoalCategory) {
+  return category === "other" || category === "quality" || category === "verification"
+}
+
+function clusterKeyForRecord(input: {
+  category: GoalCategory
+  goalID: string
+  clusterOwnedPaths: string[]
+}) {
+  if (!clusterableCategory(input.category) || input.clusterOwnedPaths.length === 0) return input.goalID
+  return `${input.category}\u0000${[...input.clusterOwnedPaths].sort().join("|")}`
+}
+
+function clusterTitle(input: {
+  category: GoalCategory
+  records: Array<{
+    requirement: RequirementDraft
+    explicitOwnedPaths: string[]
+    clusterOwnedPaths: string[]
+  }>
+}) {
+  if (input.records.length === 1) return input.records[0]!.requirement.title.trim()
+  const explicitFiles = uniqueStrings(
+    input.records.flatMap((record) =>
+      record.explicitOwnedPaths.filter((item) => /\.[a-z0-9]+$/i.test(item)),
+    ),
+  )
+  if (explicitFiles.length > 0) {
+    const primaryFile = explicitFiles[0]!
+    return `${path.basename(primaryFile, path.extname(primaryFile))} implementation`
+  }
+  const explicitPaths = uniqueStrings(input.records.flatMap((record) => record.clusterOwnedPaths))
+  if (explicitPaths.length > 0) {
+    const primary = explicitPaths[0]!
+    return `${path.basename(primary, path.extname(primary))} implementation`
+  }
+  return input.records[0]!.requirement.title.trim()
+}
+
+function clusterObjective(input: {
+  category: GoalCategory
+  records: Array<{
+    requirement: RequirementDraft
+    clusterOwnedPaths: string[]
+  }>
+}) {
+  if (input.records.length === 1) {
+    return input.records[0]!.requirement.description.trim() || `Implement requirement ${input.records[0]!.requirement.id}`
+  }
+  const descriptions = input.records
+    .map((record) => record.requirement.description.trim() || record.requirement.title.trim())
+    .filter(Boolean)
+  const explicitPaths = uniqueStrings(input.records.flatMap((record) => record.clusterOwnedPaths))
+  const scope = explicitPaths.length > 0
+    ? `the shared surface ${explicitPaths.join(", ")}`
+    : `${input.category} requirements`
+  return `Implement the grouped contract for ${scope}: ${descriptions.join("; ")}`
+}
+
 function defaultOwnedPaths(category: GoalCategory) {
   switch (category) {
     case "setup":
@@ -303,6 +435,120 @@ function defaultOwnedPaths(category: GoalCategory) {
   }
 }
 
+function metadataRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+function stringsFromUnknown(value: unknown) {
+  return Array.isArray(value)
+    ? value.flatMap((item) => typeof item === "string" && item.trim() ? [item.trim()] : [])
+    : []
+}
+
+function normalizedTextKey(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ")
+}
+
+function hintedGoalSeeds(goals: GoalContractDraftType[], hints: GoalInputType[], replanContext?: ReplanContext) {
+  const bySourceGoalID = new Map(goals.map((goal) => [goal.id, goal.id]))
+  const byRequirementID = new Map<string, string[]>()
+  const byText = new Map<string, string[]>()
+
+  for (const goal of goals) {
+    for (const requirementID of goal.requirement_ids) {
+      const list = byRequirementID.get(requirementID) ?? []
+      list.push(goal.id)
+      byRequirementID.set(requirementID, list)
+    }
+    for (const candidate of [goal.id, goal.title, goal.objective]) {
+      const key = normalizedTextKey(candidate)
+      if (!key) continue
+      const list = byText.get(key) ?? []
+      list.push(goal.id)
+      byText.set(key, list)
+    }
+  }
+
+  const seeds = new Set<string>()
+  for (const hint of hints) {
+    const metadata = metadataRecord(hint.metadata)
+    const hintedSourceGoalID = typeof metadata?.source_goal_id === "string" ? metadata.source_goal_id.trim() : ""
+    if (hintedSourceGoalID && bySourceGoalID.has(hintedSourceGoalID)) {
+      seeds.add(hintedSourceGoalID)
+      continue
+    }
+    const requirementIDs = uniqueStrings([
+      ...stringsFromUnknown(hint.requirement_ids),
+      ...stringsFromUnknown(metadata?.source_requirement_ids),
+    ])
+    for (const requirementID of requirementIDs) {
+      for (const goalID of byRequirementID.get(requirementID) ?? []) seeds.add(goalID)
+    }
+    for (const candidate of [hint.title, hint.description, hint.objective]) {
+      if (!candidate?.trim()) continue
+      for (const goalID of byText.get(normalizedTextKey(candidate)) ?? []) seeds.add(goalID)
+    }
+  }
+
+  if (seeds.size > 0) return seeds
+
+  const unresolved = (replanContext?.previousGoalStatuses ?? [])
+    .filter((goal) => goal.status !== "passed")
+    .flatMap((goal) => [goal.description])
+  for (const description of unresolved) {
+    for (const goalID of byText.get(normalizedTextKey(description)) ?? []) seeds.add(goalID)
+  }
+  return seeds
+}
+
+function scopedGoalDraft(goalDraft: GoalDraft, input: GoalCompileInput): GoalDraft {
+  if (!input.replanContext) return goalDraft
+  const hints = Array.isArray(input.goalHints) ? input.goalHints : []
+  if (hints.length === 0) {
+    throw new GoalFailureError("Goal recompile requires unresolved goal scope from the previous plan")
+  }
+
+  const seeds = hintedGoalSeeds(goalDraft.goals, hints, input.replanContext)
+  if (seeds.size === 0) {
+    throw new GoalFailureError("Goal recompile could not resolve the unresolved goal scope")
+  }
+  if (seeds.size >= goalDraft.goals.length) return goalDraft
+
+  const downstream = new Map<string, string[]>()
+  for (const goal of goalDraft.goals) {
+    for (const dependencyID of goal.depends_on_goal_ids) {
+      const list = downstream.get(dependencyID) ?? []
+      list.push(goal.id)
+      downstream.set(dependencyID, list)
+    }
+  }
+
+  const included = new Set<string>()
+  const queue = [...seeds]
+  while (queue.length > 0) {
+    const next = queue.shift()!
+    if (included.has(next)) continue
+    included.add(next)
+    for (const goalID of downstream.get(next) ?? []) queue.push(goalID)
+  }
+
+  const goals = goalDraft.goals
+    .filter((goal) => included.has(goal.id))
+    .map((goal) => ({
+      ...goal,
+      depends_on_goal_ids: goal.depends_on_goal_ids.filter((dependencyID) => included.has(dependencyID)),
+    }))
+  const requiredRequirementIDs = new Set(goals.flatMap((goal) => goal.requirement_ids))
+  const scoped = {
+    summary: `${goals.length} scoped goals recompiled from ${requiredRequirementIDs.size} requirements`,
+    goals,
+  } satisfies GoalDraft
+  validateGoalGraph(scoped, input.spec, { requiredRequirementIDs })
+  return scoped
+}
+
 function goalKindForCategory(category: GoalCategory): z.infer<typeof GoalKind> {
   switch (category) {
     case "setup":
@@ -320,15 +566,26 @@ function goalKindForCategory(category: GoalCategory): z.infer<typeof GoalKind> {
   }
 }
 
-function ruleSelectorsForCategory(category: GoalCategory) {
+function ruleSelectorsForCategory(
+  category: GoalCategory,
+  options?: {
+    hasVerificationCluster?: boolean
+  },
+) {
   switch (category) {
     case "setup":
+      return ["build"]
+    case "quality":
       return ["build"]
     case "verification":
       return ["test"]
     default:
-      return ["build", "test"]
+      return options?.hasVerificationCluster ? ["build"] : ["build", "test"]
   }
+}
+
+function explicitRuleSelectors(requirement: RequirementDraft) {
+  return requirementSelectorMetadata(requirement)
 }
 
 async function compile(input: GoalCompileInput): Promise<GoalDraft> {
@@ -342,58 +599,94 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
     index,
     category: classifyRequirement(requirement),
     goalID: goalIdForRequirement(requirement, index),
+    explicitOwnedPaths: uniqueStrings(extractOwnedPaths(requirement)),
+    clusterOwnedPaths: clusterSurfacePaths(
+      classifyRequirement(requirement),
+      uniqueStrings(extractOwnedPaths(requirement)),
+    ),
   }))
   const ordered = [...records].sort((a, b) => CATEGORY_RANK[a.category] - CATEGORY_RANK[b.category] || a.index - b.index)
-  const byCategory = new Map<GoalCategory, string[]>()
+  const clusters = [] as Array<{
+    id: string
+    category: GoalCategory
+    records: typeof ordered
+  }>
+  const clusterIndexByKey = new Map<string, number>()
   for (const item of ordered) {
-    const list = byCategory.get(item.category) ?? []
-    list.push(item.goalID)
-    byCategory.set(item.category, list)
+    const key = clusterKeyForRecord(item)
+    const index = clusterIndexByKey.get(key)
+    if (index === undefined) {
+      clusterIndexByKey.set(key, clusters.length)
+      clusters.push({
+        id: item.goalID,
+        category: item.category,
+        records: [item],
+      })
+      continue
+    }
+    clusters[index]!.records.push(item)
   }
-  const blockingNonVerification = ordered
-    .filter((item) => (item.requirement.priority ?? "blocking") === "blocking" && item.category !== "verification")
-    .map((item) => item.goalID)
+  const byCategory = new Map<GoalCategory, string[]>()
+  for (const cluster of clusters) {
+    const list = byCategory.get(cluster.category) ?? []
+    list.push(cluster.id)
+    byCategory.set(cluster.category, list)
+  }
+  const blockingNonVerification = clusters
+    .filter((cluster) =>
+      cluster.category !== "verification"
+      && cluster.records.some((item) => (item.requirement.priority ?? "blocking") === "blocking")
+    )
+    .map((cluster) => cluster.id)
+  const hasVerificationCluster = clusters.some((cluster) => cluster.category === "verification")
 
   const priorByCategory = new Map<GoalCategory, string>()
-  const goals = ordered.map(({ requirement, category, goalID }) => {
+  const goals = clusters.map((cluster) => {
+    const { category } = cluster
     const dependencies = new Set<string>()
     if (category === "verification") {
       for (const dependencyID of blockingNonVerification) {
-        if (dependencyID !== goalID) dependencies.add(dependencyID)
+        if (dependencyID !== cluster.id) dependencies.add(dependencyID)
       }
     } else {
       for (const dependencyCategory of CATEGORY_DEPENDENCIES[category]) {
         for (const dependencyID of byCategory.get(dependencyCategory) ?? []) {
-          if (dependencyID !== goalID) dependencies.add(dependencyID)
+          if (dependencyID !== cluster.id) dependencies.add(dependencyID)
         }
       }
     }
     const previousSameCategory = priorByCategory.get(category)
-    if (previousSameCategory && previousSameCategory !== goalID) {
+    if (previousSameCategory && previousSameCategory !== cluster.id) {
       dependencies.add(previousSameCategory)
     }
-    priorByCategory.set(category, goalID)
+    priorByCategory.set(category, cluster.id)
 
     const ownedPaths = uniqueStrings([
-      ...extractOwnedPaths(requirement),
+      ...cluster.records.flatMap((item) => item.explicitOwnedPaths),
       ...defaultOwnedPaths(category),
     ])
-    const acceptance = requirement.acceptance.map((item) => item.trim()).filter(Boolean)
+    const acceptance = uniqueStrings(cluster.records.flatMap((item) => item.requirement.acceptance.map((value) => value.trim()).filter(Boolean)))
+    const selectors = uniqueStrings(cluster.records.flatMap((item) => explicitRuleSelectors(item.requirement)))
+    const primary = cluster.records[0]!
+    const requirementIDs = cluster.records.map((item) => item.requirement.id)
+    const priority = cluster.records.some((item) => (item.requirement.priority ?? "blocking") === "blocking") ? "blocking" as const : "advisory" as const
+    const title = clusterTitle(cluster)
+    const objective = clusterObjective(cluster)
 
     return normalizedGoal({
-      id: goalID,
-      title: requirement.title.trim(),
-      objective: requirement.description.trim() || `Implement requirement ${requirement.id}`,
-      requirement_ids: [requirement.id],
+      id: cluster.id,
+      title,
+      objective,
+      requirement_ids: requirementIDs,
       depends_on_goal_ids: [...dependencies],
       owned_paths: ownedPaths,
       done_definition: acceptance.join("; "),
       qa_profile: {
-        rule_selectors: ruleSelectorsForCategory(category),
-        goal_check_prompt: `Verify requirement ${requirement.id} (${requirement.title.trim()}) is fully satisfied.`,
+        rule_selectors: selectors.length > 0 ? selectors : ruleSelectorsForCategory(category, { hasVerificationCluster }),
+        goal_check_prompt: `Verify requirements ${requirementIDs.join(", ")} (${cluster.records.map((item) => item.requirement.title.trim()).join("; ")}) are fully satisfied.`,
         spec_scope: "mapped_requirements",
       },
-      priority: requirement.priority ?? "blocking",
+      priority,
       kind: goalKindForCategory(category),
     })
   })
@@ -412,7 +705,8 @@ async function compile(input: GoalCompileInput): Promise<GoalDraft> {
 
 async function run(input: GoalCompileInput) {
   try {
-    return await compile(input)
+    const goalDraft = await compile(input)
+    return scopedGoalDraft(goalDraft, input)
   } catch (error) {
     if (error instanceof GoalFailureError) throw error
     throw new GoalFailureError("goal stage failed", { cause: error })

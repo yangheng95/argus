@@ -56,6 +56,7 @@ test("persistEvaluation writes goal snapshots from transaction state", async () 
             priority: "normal",
             active_run_id: runID,
             active_plan_version_id: planID,
+            active_spec_version_id: specID,
             time_created: now,
             time_updated: now,
           })
@@ -402,6 +403,217 @@ test("persistEvaluation binds goal-run assessment to the evaluated goal subset",
       const text = await Bun.file(path.join(dir, file!)).text()
       expect(text).toContain("[failed] auth")
       expect(text).not.toContain("[failed] bootstrap")
+    },
+  })
+})
+
+test("persistEvaluation updates a single goal-run even when analysis indexes use coordinator scope", async () => {
+  await using tmp = await tmpdir({ git: true })
+
+  await Instance.provide({
+    directory: tmp.path,
+    fn: async () => {
+      const now = Date.now()
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const goalOneID = Identifier.ascending("goal")
+      const goalTwoID = Identifier.ascending("goal")
+      const goalRunID = Identifier.ascending("goal_run")
+      const nodeID = Identifier.ascending("node")
+      const deliveryID = Identifier.ascending("delivery")
+      const evaluationID = Identifier.ascending("evaluation")
+
+      Database.transaction((db) => {
+        db.insert(OrchestratorTaskTable)
+          .values({
+            id: taskID,
+            project_id: Instance.project.id,
+            title: "task",
+            request: "ship the change",
+            status: "running",
+            priority: "normal",
+            active_run_id: runID,
+            active_plan_version_id: planID,
+            active_spec_version_id: specID,
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorSpecSnapshotTable)
+          .values({
+            id: specID,
+            task_id: taskID,
+            version: 1,
+            status: "ready",
+            summary: "spec",
+            content: "spec",
+            scope: "",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorPlanVersionTable)
+          .values({
+            id: planID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            status: "active",
+            summary: "plan",
+            prompt: "prompt",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalTable)
+          .values([{
+            id: goalOneID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            description: "bootstrap",
+            criteria: "bootstrap",
+            priority: "blocking",
+            source: "goal",
+            status: "pending",
+            order_index: 0,
+            time_created: now,
+            time_updated: now,
+          }, {
+            id: goalTwoID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            description: "note-store implementation",
+            criteria: "ship note-store",
+            priority: "blocking",
+            source: "goal",
+            status: "pending",
+            order_index: 1,
+            time_created: now,
+            time_updated: now,
+          }])
+          .run()
+        db.insert(OrchestratorPlanNodeTable)
+          .values({
+            id: nodeID,
+            task_id: taskID,
+            plan_version_id: planID,
+            item_type: "goal",
+            item_id: goalTwoID,
+            title: "Implement note-store",
+            status: "pending",
+            order_index: 0,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorRunTable)
+          .values({
+            id: runID,
+            task_id: taskID,
+            plan_version_id: planID,
+            executor: "opencode",
+            status: "running",
+            phase: "dispatch",
+            retry_count: 0,
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalRunTable)
+          .values({
+            id: goalRunID,
+            task_id: taskID,
+            coordinator_run_id: runID,
+            goal_id: goalTwoID,
+            status: "running",
+            base_ref: "HEAD",
+            merge_ref: "HEAD",
+            metadata: {},
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorDeliveryTable)
+          .values({
+            id: deliveryID,
+            task_id: taskID,
+            run_id: runID,
+            goal_run_id: goalRunID,
+            status: "candidate",
+            summary: "done",
+            result: {
+              summary: "done",
+              changed_files: [],
+              diffs: [],
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+      })
+
+      const task = Database.use((db) =>
+        db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, taskID)).get()!,
+      )
+      const run = Database.use((db) =>
+        db.select().from(OrchestratorRunTable).where(eq(OrchestratorRunTable.id, runID)).get()!,
+      )
+      const goals = Database.use((db) =>
+        db.select().from(OrchestratorGoalTable).where(eq(OrchestratorGoalTable.id, goalTwoID)).all(),
+      )
+
+      persistEvaluation({
+        task,
+        run,
+        goalRunID,
+        deliveryID,
+        evaluationID,
+        delivery: {
+          summary: "done",
+          diffs: [],
+        },
+        result: {
+          status: "passed",
+          verdict: "accepted",
+          summary: "note-store accepted",
+          checks: [],
+          artifacts: [],
+        },
+        analysis: {
+          verdict: "accepted",
+          classification: "unknown",
+          summary: "note-store accepted",
+          goal_statuses: [{
+            goal_index: 1,
+            status: "passed",
+            evidence: "note-store satisfies the spec",
+            reasoning: "The evaluated goal is the second coordinator goal.",
+          }],
+          replan_guidance: null,
+        },
+        finalVerdict: "accepted",
+        finalStatus: "passed",
+        finalSummary: "note-store accepted",
+        goals,
+        finalizeSpec: false,
+      })
+
+      const [goalOne, goalTwo] = Database.use((db) =>
+        db.select()
+          .from(OrchestratorGoalTable)
+          .where(eq(OrchestratorGoalTable.task_id, taskID))
+          .orderBy(OrchestratorGoalTable.order_index)
+          .all(),
+      )
+
+      expect(goalOne?.status).toBe("pending")
+      expect(goalTwo?.status).toBe("passed")
     },
   })
 })

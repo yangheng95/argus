@@ -24,37 +24,45 @@ import { tmpdir } from "../fixture/fixture"
 Log.init({ print: false })
 
 function stub() {
+  const goals = [
+    {
+      description: "Implement the requested change",
+      criteria: "The requested change is implemented and checks pass.",
+      priority: "blocking" as const,
+    },
+  ]
   spyOn(SpecService, "initial").mockResolvedValue({
     summary: "Implement feature",
     content: "# Scope\n\nImplement the requested change.",
-    goals: [
-      {
-        description: "Implement the requested change",
-        criteria: "The requested change is implemented and checks pass.",
-        priority: "blocking",
-      },
-    ],
+    requirements: [{
+      id: "req_impl",
+      title: "Implement the requested change",
+      description: "Implement the requested change",
+      priority: "blocking",
+      acceptance: ["The requested change is implemented and checks pass."],
+      evidence_refs: [],
+      metadata: { check_selector: ["spec_check"] },
+    }],
     assumptions: [],
     risks: [],
-    spec_items: [],
     evidence_sources: [],
     unresolved_questions: [],
   })
   spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Implement feature",
     prompt: "Do the work",
-    goals: [
-      {
-        description: "Implement the requested change",
-        criteria: "The requested change is implemented and checks pass.",
-        priority: "blocking",
-      },
-    ],
+    goals,
     metadata: {
       strategy: "initial",
       steps: ["Implement the requested change"],
       clarification: undefined,
       spec_analysis: undefined,
+      waves: goals.map((goal, index) => ({
+        title: `Wave ${index + 1}`,
+        objective: goal.description,
+        goal_indices: [index],
+        owned_paths: [`src/goal-${index + 1}.ts`],
+      })),
     },
   })
 }
@@ -94,6 +102,8 @@ describe("channel.slack", () => {
     await using tmp = await tmpdir({ git: true })
     const { SlackGateway } = await import("../../src/channel/slack")
     stub()
+    const channelID = `C${Date.now()}`
+    const threadTS = `${Date.now()}.01`
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -130,8 +140,8 @@ describe("channel.slack", () => {
     ;(gateway as any).startedAt = "0"
 
     await (gateway as any).handleMessage({
-      channel: "C1",
-      ts: "1.01",
+      channel: channelID,
+      ts: threadTS,
       thread_ts: undefined,
       user: "U1",
       text: "implement this feature",
@@ -141,12 +151,28 @@ describe("channel.slack", () => {
       directory: tmp.path,
       init: InstanceBootstrap,
       fn: async () => {
-        const task = Database.use((db) => db.select().from(OrchestratorTaskTable).get())
-        const binding = Database.use((db) => db.select().from(OrchestratorChannelBindingTable).get())
-        expect(task?.source).toBe("slack")
+        const binding = Database.use((db) =>
+          db
+            .select()
+            .from(OrchestratorChannelBindingTable)
+            .where(
+              and(
+                eq(OrchestratorChannelBindingTable.platform, "slack"),
+                eq(OrchestratorChannelBindingTable.channel, channelID),
+                eq(OrchestratorChannelBindingTable.thread, threadTS),
+              ),
+            )
+            .get(),
+        )
+        const task = binding
+          ? Database.use((db) => db.select().from(OrchestratorTaskTable).where(eq(OrchestratorTaskTable.id, binding.task_id)).get())
+          : undefined
+        expect(typeof task?.request).toBe("string")
+        expect(task?.request?.length).toBeGreaterThan(0)
         expect(binding?.platform).toBe("slack")
-        expect(binding?.channel).toBe("C1")
-        expect(binding?.thread).toBe("1.01")
+        expect(binding?.channel).toBe(channelID)
+        expect(binding?.thread).toBe(threadTS)
+        expect(binding?.task_id).toBe(task?.id)
       },
     })
 
@@ -158,6 +184,8 @@ describe("channel.slack", () => {
     await using tmp = await tmpdir({ git: true })
     const { SlackGateway } = await import("../../src/channel/slack")
     stub()
+    const channelID = `C${Date.now()}`
+    const threadTS = `${Date.now()}.02`
     spyOn(OpencodeExecutor, "submit").mockImplementation(async ({ sessionID }) => ({
       sessionID,
       queueTaskID: Identifier.ascending("task"),
@@ -217,8 +245,8 @@ describe("channel.slack", () => {
           source: "slack",
           channelBinding: {
             platform: "slack",
-            channel: "C2",
-            thread: "2.01",
+            channel: channelID,
+            thread: threadTS,
           },
         })
         const task = Database.use((db) =>
@@ -259,7 +287,7 @@ describe("channel.slack", () => {
         )
         for (const _ of Array.from({ length: 20 })) {
           if (interaction) break
-          await Bun.sleep(25)
+          await Bun.sleep(100)
           interaction = Database.use((db) =>
             db
               .select()
@@ -278,9 +306,9 @@ describe("channel.slack", () => {
     })
 
     await (gateway as any).handleMessage({
-      channel: "C2",
-      ts: "2.02",
-      thread_ts: "2.01",
+      channel: channelID,
+      ts: `${Date.now()}.03`,
+      thread_ts: threadTS,
       user: "U2",
       text: "allow",
     })

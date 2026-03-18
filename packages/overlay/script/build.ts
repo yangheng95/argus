@@ -22,7 +22,7 @@ const distName = [
   process.arch,
 ].join("-")
 
-const distServer = path.join(opencorvus, "dist", distName, "bin", serverFile)
+const distServer = path.join(opencorvus, "dist", distName, serverFile)
 const stagedServer = path.join(resources, serverFile)
 const stagedUi = path.join(resources, "ui")
 const releaseServer = path.join(release, serverFile)

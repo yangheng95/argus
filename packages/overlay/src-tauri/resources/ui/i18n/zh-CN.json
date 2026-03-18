@@ -1,7 +1,7 @@
 {
   "_meta": {
     "language": "zh-CN",
-    "panel_revision": "a6a885889cae288c"
+    "panel_revision": "636560bd7619d891"
   },
   "brand.guide_kicker": "快速说明",
   "brand.guide_positioning_body": "这不是一个装饰性浮层，而是任务驾驶舱：左边选择任务，中间推进执行，右边盯 spec、plan、评估和文件变更，防止 agent 一路跑偏。",
@@ -77,7 +77,6 @@
   "chat.thinking": "思考中",
   "chat.tip": "Enter 发送 · Shift+Enter 换行",
   "chat.title": "任务",
-  "budget.defaults": "默认",
   "budget.empty": "选择一个任务后再编辑运行 budget。",
   "budget.hint": "留空表示沿用 orchestrator 默认值。",
   "budget.max_evaluations": "最大评估次数",

@@ -1,9 +1,9 @@
 import { Identifier } from "@/id/id"
 import { Memory } from "@/memory"
+import { listGoalsForPlan } from "@/orchestrator/store"
 import { Preference } from "@/preference"
 import { Database, eq } from "@/storage/db"
 import {
-  OrchestratorGoalTable,
   OrchestratorPlanVersionTable,
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
@@ -24,17 +24,7 @@ export function compileBrief(input: {
   const plan = planID
     ? Database.use((db) => db.select().from(OrchestratorPlanVersionTable).where(eq(OrchestratorPlanVersionTable.id, planID)).get())
     : undefined
-  const specID = plan?.spec_snapshot_id ?? task.active_spec_version_id ?? undefined
-  const goals = specID
-    ? Database.use((db) =>
-        db
-          .select()
-          .from(OrchestratorGoalTable)
-          .where(eq(OrchestratorGoalTable.spec_snapshot_id, specID))
-          .orderBy(OrchestratorGoalTable.order_index)
-          .all(),
-      )
-    : []
+  const goals = plan ? listGoalsForPlan(plan) : []
   const prefs = preferences({
     projectID: task.project_id,
     sessionID: task.session_id ?? input.sessionID,

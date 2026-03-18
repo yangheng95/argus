@@ -68,8 +68,6 @@ export type Requirement = z.infer<typeof RequirementSchema>
 export const SpecDraftSchema = z.object({
   summary: z.string(),
   content: z.string(),
-  /** Goal decomposition moves to the goal stage; spec only carries user-explicit goals for compatibility. */
-  goals: z.array(SpecDraftGoal).default([]),
   requirements: z.array(RequirementSchema).default([]),
   assumptions: z.array(
     z.object({

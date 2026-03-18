@@ -21,7 +21,7 @@ afterEach(async () => {
   await resetDatabase()
 })
 
-test("GET /export/task/:taskID includes spec goals and goal-run exports without active plan/run", async () => {
+test("GET /export/task/:taskID includes goal-snapshot evaluations and QA groups without active plan/run", async () => {
   await using tmp = await tmpdir({ git: true })
   const now = Date.now()
   const taskID = Identifier.ascending("task")
@@ -201,7 +201,20 @@ test("GET /export/task/:taskID includes spec goals and goal-run exports without 
               status: "passed",
               verdict: "accepted",
               summary: "Coordinator evaluation",
-              checks: [],
+              checks: [
+                {
+                  name: "build",
+                  status: "passed",
+                  family: "build",
+                  label: "Build",
+                },
+                {
+                  name: "goal_check",
+                  status: "passed",
+                  family: "goal_check",
+                  label: "Goal Check",
+                },
+              ],
               time_created: now,
               time_updated: now,
               time_completed: now,
@@ -215,7 +228,14 @@ test("GET /export/task/:taskID includes spec goals and goal-run exports without 
               status: "passed",
               verdict: "accepted",
               summary: "Goal evaluation",
-              checks: [],
+              checks: [
+                {
+                  name: "spec_check",
+                  status: "passed",
+                  family: "spec_check",
+                  label: "Spec Check",
+                },
+              ],
               time_created: now,
               time_updated: now,
               time_completed: now,
@@ -237,12 +257,12 @@ test("GET /export/task/:taskID includes spec goals and goal-run exports without 
         goals: Array<{ id: string }>
         planNodes: Array<{ id: string }>
         deliveries: Array<{ id: string; goalRunID?: string }>
-        evaluations: Array<{ id: string; goalRunID?: string }>
+        evaluations: Array<{ id: string; goalRunID?: string; groups?: Array<{ id: string }> }>
       }
 
       expect(body.plan).toBeUndefined()
       expect(body.coordinatorRun?.id).toBe(runID)
-      expect(body.goals.map((item) => item.id)).toEqual([goalID])
+      expect(body.goals).toEqual([])
       expect(body.planNodes).toHaveLength(0)
       expect(body.deliveries).toHaveLength(2)
       expect(body.deliveries.map((item) => item.id).sort()).toEqual([deliveryID, goalDeliveryID].sort())
@@ -250,6 +270,13 @@ test("GET /export/task/:taskID includes spec goals and goal-run exports without 
       expect(body.evaluations).toHaveLength(2)
       expect(body.evaluations.map((item) => item.id).sort()).toEqual([evaluationID, goalEvaluationID].sort())
       expect(body.evaluations.some((item) => item.goalRunID === goalRunID)).toBe(true)
+      expect(body.evaluations.find((item) => item.id === evaluationID)?.groups?.map((group) => group.id)).toEqual([
+        "rules",
+        "goal_acceptance",
+      ])
+      expect(body.evaluations.find((item) => item.id === goalEvaluationID)?.groups?.map((group) => group.id)).toEqual([
+        "spec_acceptance",
+      ])
     },
   })
 })

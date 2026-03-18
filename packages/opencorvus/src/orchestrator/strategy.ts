@@ -14,6 +14,7 @@ import {
   findPlans,
   findRun,
   findRuns,
+  listGoalRunsByCoordinator,
   latestGoalRunByCoordinator,
   type RunRow,
   type TaskRow,
@@ -124,7 +125,10 @@ export function buildRetryContext(
   const goalDelivery = goalRun ? findDeliveryByGoalRun(goalRun.id) : undefined
   const delivery = runDelivery ?? goalDelivery
   const evaluation = findEvaluationByRun(run.id) ?? (goalRun ? findEvaluationByGoalRun(goalRun.id) : undefined)
-  const files = deliveryChangedFiles(delivery?.result?.changed_files, !!runDelivery) ?? inheritedChangedFiles(run)
+  const currentFiles = deliveryChangedFiles(delivery?.result)
+  const inheritedFiles = inheritedChangedFiles(run)
+  const mergedFiles = mergeChangedFiles(currentFiles, inheritedFiles)
+  const files = mergedFiles.length > 0 ? mergedFiles : (delivery ? [] : undefined)
   return {
     deliverySummary: delivery?.summary ?? undefined,
     changedFiles: files,
@@ -138,15 +142,35 @@ export function buildRetryContext(
   }
 }
 
-function deliveryChangedFiles(input: unknown, preserveEmpty = false) {
-  if (!Array.isArray(input)) return
-  const files = [...new Set(input.filter((item): item is string => typeof item === "string" && item.length > 0))]
-  if (files.length === 0) return preserveEmpty ? [] : undefined
-  return files
+function deliveryChangedFiles(input: unknown) {
+  if (Array.isArray(input)) {
+    const files = [...new Set(input.filter((item): item is string => typeof item === "string" && item.length > 0))]
+    return files.length > 0 ? files : []
+  }
+  if (!input || typeof input !== "object") return
+  const result = input as Record<string, unknown>
+  const changed = Array.isArray(result.changed_files)
+    ? [...new Set(result.changed_files.filter((item): item is string => typeof item === "string" && item.length > 0))]
+    : []
+  if (changed.length > 0) return changed
+  const diffs = Array.isArray(result.diffs)
+    ? [...new Set(result.diffs.flatMap((item) => {
+        if (!item || typeof item !== "object") return []
+        const file = (item as Record<string, unknown>).file
+        return typeof file === "string" && file.length > 0 ? [file] : []
+      }))]
+    : []
+  if (diffs.length > 0) return diffs
+  return Array.isArray(result.changed_files) || Array.isArray(result.diffs) ? [] : undefined
+}
+
+function mergeChangedFiles(...groups: Array<string[] | undefined>) {
+  return [...new Set(groups.flatMap((group) => group ?? []))]
 }
 
 function inheritedChangedFiles(run: RunRow) {
   const seen = new Set<string>()
+  const files = new Set<string>()
   let current: RunRow | undefined = run
   while (current && !seen.has(current.id)) {
     seen.add(current.id)
@@ -154,11 +178,19 @@ function inheritedChangedFiles(run: RunRow) {
       current.metadata?.retry_context && typeof current.metadata.retry_context === "object" && !Array.isArray(current.metadata.retry_context)
         ? current.metadata.retry_context as RetryContext
         : undefined
-    const files = deliveryChangedFiles(meta?.changedFiles)
-    if (files) return files
+    for (const file of deliveryChangedFiles(meta?.changedFiles) ?? []) files.add(file)
+    const runFiles = deliveryChangedFiles(findDeliveryByRun(current.id)?.result)
+    for (const file of runFiles ?? []) files.add(file)
+    const goalRuns = listGoalRunsByCoordinator(current.id)
+      .sort((a, b) => (b.time_created ?? 0) - (a.time_created ?? 0) || b.id.localeCompare(a.id))
+    for (const goalRun of goalRuns) {
+      const goalFiles = deliveryChangedFiles(findDeliveryByGoalRun(goalRun.id)?.result)
+      for (const file of goalFiles ?? []) files.add(file)
+    }
     const previous = typeof current.metadata?.previous_run_id === "string" ? current.metadata.previous_run_id : undefined
     current = previous ? findRun(previous) ?? undefined : undefined
   }
+  return files.size > 0 ? [...files] : undefined
 }
 
 

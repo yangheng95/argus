@@ -536,6 +536,13 @@ export const EvaluationCheck = z.object({
   evidence: z.string().optional(),
 })
 
+export const EvaluationGroup = z.object({
+  id: z.enum(["rules", "goal_acceptance", "spec_acceptance"]),
+  label: z.string(),
+  status: EvaluationCheck.shape.status,
+  checks: z.array(z.string()).min(1),
+})
+
 export const EvaluatorVerdict = z.enum(["accepted", "rejected", "blocked"])
 
 export const ArtifactAudit = z.object({
@@ -580,6 +587,7 @@ export const Evaluation = z.object({
   status: z.enum(["pending", "passed", "failed"]),
   verdict: z.enum(["accepted", "rejected"]),
   summary: z.string(),
+  groups: EvaluationGroup.array().optional(),
   checks: EvaluationCheck.array(),
   time: z.object({
     created: z.number(),

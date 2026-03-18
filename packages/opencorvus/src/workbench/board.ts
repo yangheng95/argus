@@ -36,6 +36,7 @@ import {
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"
 import { EvaluationCheck } from "@/orchestrator/model"
+import { evaluationGroups } from "@/orchestrator/evaluation-group"
 import { ProtocolStore } from "@/protocol/store"
 import { Database, desc, eq, sql } from "@/storage/db"
 import { WorkbenchTaskNoteTable } from "./workbench.sql"
@@ -926,6 +927,18 @@ function evaluationCards(evaluation: ReturnType<typeof viewBoardEvaluation>) {
         delivery_id: evaluation.deliveryID,
       },
     },
+    ...evaluation.groups.map((group) => ({
+      id: `${evaluation.id}:group:${group.id}`,
+      kind: "evaluation" as const,
+      title: group.label,
+      detail: group.checks.join(", "),
+      status: group.status,
+      time: evaluation.time.completed ?? evaluation.time.updated,
+      metadata: {
+        group_id: group.id,
+        checks: group.checks,
+      },
+    })),
     ...evaluation.checks.map((item) => ({
       id: `${evaluation.id}:${item.name}`,
       kind: "check" as const,
@@ -1036,6 +1049,7 @@ function viewBoardEvaluation(
     | undefined,
 ) {
   if (!row) return undefined
+  const checks = boardChecks(row.checks)
   return {
     id: row.id,
     taskID: row.task_id,
@@ -1044,7 +1058,8 @@ function viewBoardEvaluation(
     status: row.status,
     verdict: row.verdict,
     summary: clipBoard(row.summary),
-    checks: boardChecks(row.checks),
+    groups: evaluationGroups(checks),
+    checks,
     time: {
       created: row.time_created,
       updated: row.time_updated,

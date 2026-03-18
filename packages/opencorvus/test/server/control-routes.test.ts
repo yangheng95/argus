@@ -19,41 +19,44 @@ let configDir = ""
 let originalConfigDir: string | undefined
 
 function clarify() {
+  const goals = [
+    {
+      description: "Clarify the requested change",
+      criteria: "The requested change is clearly scoped.",
+      priority: "blocking" as const,
+    },
+  ]
   spyOn(SpecService, "initial").mockResolvedValue({
     summary: "Clarify feature",
     content: "# Scope\n\nImplement feature",
-    goals: [
-      {
-        description: "Clarify the requested change",
-        criteria: "The requested change is clearly scoped.",
-        priority: "blocking",
-      },
-    ],
+    requirements: [{
+      id: "req_clarify",
+      title: "Clarify the requested change",
+      description: "Clarify the requested change",
+      priority: "blocking",
+      acceptance: ["The requested change is clearly scoped."],
+      evidence_refs: [],
+      metadata: { check_selector: ["spec_check"] },
+    }],
     assumptions: [],
     risks: [],
     clarifications: [],
-    spec_items: [{
-      title: "Clarify the requested change",
-      description: "The requested change is clearly scoped.",
-      priority: "blocking",
-      check_selector: ["spec_check"],
-    }],
     evidence_sources: [],
     unresolved_questions: [],
   })
   spyOn(PlannerService, "initial").mockResolvedValue({
     summary: "Clarify feature",
     prompt: "Ask before executing",
-    goals: [
-      {
-        description: "Clarify the requested change",
-        criteria: "The requested change is clearly scoped.",
-        priority: "blocking",
-      },
-    ],
+    goals,
     metadata: {
       strategy: "initial",
       steps: ["Clarify the requested change"],
+      waves: goals.map((goal, index) => ({
+        title: `Wave ${index + 1}`,
+        objective: goal.description,
+        goal_indices: [index],
+        owned_paths: [`docs/clarification-${index + 1}.md`],
+      })),
       clarification: {
         reason: "Need clarification before planning.",
         questions: [
@@ -225,6 +228,7 @@ describe("control routes", () => {
 
   test("GET /control/timeline orders entries by their original created time", async () => {
     await using tmp = await tmpdir({ git: true })
+    const taskID = `task-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
     await Instance.provide({
       directory: tmp.path,
@@ -232,7 +236,7 @@ describe("control routes", () => {
         ControlTimeline.append({
           surface: "panel",
           source: "panel",
-          taskID: "task-1",
+          taskID,
           entries: [
             {
               role: "assistant",
@@ -248,7 +252,7 @@ describe("control routes", () => {
         })
 
         const app = Server.App()
-        const res = await app.request("/control/timeline?taskID=task-1", {
+        const res = await app.request(`/control/timeline?taskID=${taskID}`, {
           headers: {
             "x-opencorvus-directory": tmp.path,
           },
