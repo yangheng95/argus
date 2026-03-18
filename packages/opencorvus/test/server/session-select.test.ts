@@ -1,17 +1,24 @@
-import { describe, expect, test } from "bun:test"
-import path from "path"
+import { afterEach, describe, expect, mock, test } from "bun:test"
 import { Session } from "../../src/session"
 import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
+import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
-const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
 
 describe("tui.selectSession endpoint", () => {
+  afterEach(async () => {
+    mock.restore()
+    await resetDatabase()
+  })
+
   test("should return 200 when called with valid session", async () => {
+    await using tmp = await tmpdir({ git: true })
+
     await Instance.provide({
-      directory: projectRoot,
+      directory: tmp.path,
       fn: async () => {
         // #given
         const session = await Session.create({})
@@ -20,7 +27,10 @@ describe("tui.selectSession endpoint", () => {
         const app = Server.App()
         const response = await app.request("/tui/select-session", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
           body: JSON.stringify({ sessionID: session.id }),
         })
 
@@ -35,8 +45,10 @@ describe("tui.selectSession endpoint", () => {
   })
 
   test("should return 404 when session does not exist", async () => {
+    await using tmp = await tmpdir({ git: true })
+
     await Instance.provide({
-      directory: projectRoot,
+      directory: tmp.path,
       fn: async () => {
         // #given
         const nonExistentSessionID = "ses_nonexistent123"
@@ -45,7 +57,10 @@ describe("tui.selectSession endpoint", () => {
         const app = Server.App()
         const response = await app.request("/tui/select-session", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
           body: JSON.stringify({ sessionID: nonExistentSessionID }),
         })
 
@@ -56,8 +71,10 @@ describe("tui.selectSession endpoint", () => {
   })
 
   test("should return 400 when session ID format is invalid", async () => {
+    await using tmp = await tmpdir({ git: true })
+
     await Instance.provide({
-      directory: projectRoot,
+      directory: tmp.path,
       fn: async () => {
         // #given
         const invalidSessionID = "invalid_session_id"
@@ -66,7 +83,10 @@ describe("tui.selectSession endpoint", () => {
         const app = Server.App()
         const response = await app.request("/tui/select-session", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
           body: JSON.stringify({ sessionID: invalidSessionID }),
         })
 

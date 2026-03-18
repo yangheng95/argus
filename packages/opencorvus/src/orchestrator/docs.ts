@@ -10,7 +10,7 @@ const log = Log.create({ service: "orchestrator.docs" })
 
 type Check = {
   name: string
-  status: string
+  status: "passed" | "failed" | "skipped"
   evidence?: string
   label?: string
   family?: string

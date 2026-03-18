@@ -11,8 +11,8 @@ import { Glob } from "../util/glob"
 export namespace Truncate {
   export const MAX_LINES = 2000
   export const MAX_BYTES = 50 * 1024
-  export const DIR = path.join(Global.Path.data, "tool-output")
-  export const GLOB = path.join(DIR, "*")
+  export const DIR = "" as string
+  export const GLOB = "" as string
   const RETENTION_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
   const HOUR_MS = 60 * 60 * 1000
 
@@ -34,13 +34,14 @@ export namespace Truncate {
   }
 
   export async function cleanup() {
+    const dir = Truncate.DIR
     const cutoff = Identifier.timestamp(Identifier.create("tool", false, Date.now() - RETENTION_MS))
-    const entries = await Glob.scan("tool_*", { cwd: DIR, include: "file" }).catch(() => [] as string[])
+    const entries = await Glob.scan("tool_*", { cwd: dir, include: "file" }).catch(() => [] as string[])
     for (const entry of entries) {
       if (Identifier.timestamp(entry) >= cutoff) continue
       // Best-effort cleanup of expired tool output files.
       // Failure is non-critical; the file will be retried on the next cycle.
-      await fs.unlink(path.join(DIR, entry)).catch(() => {})
+      await fs.unlink(path.join(dir, entry)).catch(() => {})
     }
   }
 
@@ -93,7 +94,7 @@ export namespace Truncate {
     const preview = out.join("\n")
 
     const id = Identifier.ascending("tool")
-    const filepath = path.join(DIR, id)
+    const filepath = path.join(Truncate.DIR, id)
     await Filesystem.write(filepath, text)
 
     const hint = hasTaskTool(agent)
@@ -106,4 +107,18 @@ export namespace Truncate {
 
     return { content: message, truncated: true, outputPath: filepath }
   }
+
+  Object.defineProperty(Truncate, "DIR", {
+    enumerable: true,
+    get() {
+      return path.join(Global.Path.data, "tool-output")
+    },
+  })
+
+  Object.defineProperty(Truncate, "GLOB", {
+    enumerable: true,
+    get() {
+      return path.join(Truncate.DIR, "*")
+    },
+  })
 }

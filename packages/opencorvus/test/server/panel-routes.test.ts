@@ -1,25 +1,56 @@
-import { afterEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, setDefaultTimeout, test } from "bun:test"
+import { Identifier } from "../../src/id/id"
+import { OrchestratorTaskTable } from "../../src/orchestrator/orchestrator.sql"
 import { Instance } from "../../src/project/instance"
-import { OrchestratorService } from "../../src/orchestrator/service"
 import { Server } from "../../src/server/server"
 import { Session } from "../../src/session"
+import { Database } from "../../src/storage/db"
 import { Log } from "../../src/util/log"
 import { installControlModel } from "../control-plane/mock-control-model"
 import { resetDatabase } from "../fixture/db"
 import { tmpdir } from "../fixture/fixture"
 import { Memory } from "../../src/memory"
 
-Log.init({ print: false })
+setDefaultTimeout(20_000)
+
+async function findControlLogLine(input: {
+  app: ReturnType<typeof Server.App>
+  directory: string
+  requestID: string
+  message: string
+}) {
+  for (const _ of Array.from({ length: 80 })) {
+    const logs = await input.app.request("/log/tail?n=500", {
+      headers: {
+        "x-opencorvus-directory": input.directory,
+      },
+    })
+    expect(logs.status).toBe(200)
+    const body = await logs.json() as { lines: string[] }
+    const line = body.lines.find((entry) =>
+      entry.includes("service=control-message") &&
+      entry.includes(input.message) &&
+      entry.includes(input.requestID),
+    )
+    if (line) return line
+    await Bun.sleep(50)
+  }
+  return undefined
+}
 
 describe("panel routes", () => {
+  beforeEach(async () => {
+    await Log.init({ print: false, dev: true })
+  })
+
   afterEach(async () => {
     mock.restore()
+    await Instance.disposeAll()
     await resetDatabase()
   })
 
   test("GET /panel/capabilities filters actions by surface", async () => {
     await using tmp = await tmpdir({ git: true })
-
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -53,6 +84,7 @@ describe("panel routes", () => {
   test("POST /panel/message proxies to panel control service", async () => {
     await using tmp = await tmpdir({ git: true })
     installControlModel()
+    const requestID = `req_panel_proxy_${Date.now()}`
 
     await Instance.provide({
       directory: tmp.path,
@@ -68,6 +100,7 @@ describe("panel routes", () => {
             surface: "panel",
             text: "Use executor codex for desktop panel actions and new tasks.",
             executor: "opencode",
+            request_id: requestID,
             metadata: {
               executor: "codex",
               ui_context: "engine_bar",
@@ -86,6 +119,13 @@ describe("panel routes", () => {
         expect(body.session_id).toBeUndefined()
         expect(body.local_action?.type).toBe("set_executor")
         expect(body.local_action?.executor).toBe("codex")
+        const resultLine = await findControlLogLine({
+          app,
+          directory: tmp.path,
+          requestID,
+          message: "panel request completed",
+        })
+        expect(resultLine).toBeDefined()
       },
     })
   })
@@ -117,25 +157,18 @@ describe("panel routes", () => {
         })
 
         expect(response.status).toBe(200)
-        await Bun.sleep(50)
-
-        const logs = await app.request("/log/tail?n=500", {
-          headers: {
-            "x-opencorvus-directory": tmp.path,
-          },
+        const requestLine = await findControlLogLine({
+          app,
+          directory: tmp.path,
+          requestID,
+          message: "panel request received",
         })
-        expect(logs.status).toBe(200)
-        const body = await logs.json() as { lines: string[] }
-        const requestLine = body.lines.find((line) =>
-          line.includes("service=control-message") &&
-          line.includes("panel request received") &&
-          line.includes(requestID),
-        )
-        const resultLine = body.lines.find((line) =>
-          line.includes("service=control-message") &&
-          line.includes("panel request completed") &&
-          line.includes(requestID),
-        )
+        const resultLine = await findControlLogLine({
+          app,
+          directory: tmp.path,
+          requestID,
+          message: "panel request completed",
+        })
 
         expect(requestLine).toBeDefined()
         expect(requestLine).toContain(`"request_id":"${requestID}"`)
@@ -225,7 +258,6 @@ describe("panel routes", () => {
 
   test("POST /panel/message rejects sessionID in desktop panel requests", async () => {
     await using tmp = await tmpdir({ git: true })
-
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
@@ -285,16 +317,26 @@ describe("panel routes", () => {
 
   test("panel knowledge memory resolves taskID through the linked task session", async () => {
     await using tmp = await tmpdir({ git: true })
-
     await Instance.provide({
       directory: tmp.path,
       fn: async () => {
-        const taskID = await OrchestratorService.createTask({
-          request: "Remember panel task context",
-          source: "panel",
-        })
-        const task = await OrchestratorService.getTask(taskID)
-        if (!task.sessionID) throw new Error("task missing linked session")
+        const session = await Session.create({ title: "panel memory task" })
+        const taskID = Identifier.ascending("task")
+        const now = Date.now()
+        Database.use((db) =>
+          db.insert(OrchestratorTaskTable).values({
+            id: taskID,
+            project_id: Instance.project.id,
+            session_id: session.id,
+            source: "panel",
+            title: "Remember panel task context",
+            request: "Remember panel task context",
+            status: "queued",
+            priority: "normal",
+            time_created: now,
+            time_updated: now,
+          }).run(),
+        )
         Memory.writeFile({
           title: "Global lesson",
           content: "## Lesson\nSocket Mode must be enabled before the bot will receive events.",
@@ -309,7 +351,7 @@ describe("panel routes", () => {
           projectId: Instance.project.id,
           kind: "episode",
           scope: "session",
-          sessionID: task.sessionID,
+          sessionID: session.id,
         })
 
         const app = Server.App()

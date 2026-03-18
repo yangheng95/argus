@@ -91,6 +91,7 @@ import {
   requireRun,
   requireTask,
   type DeliveryRow,
+  type GoalRow,
   type GoalRunRow,
   type InteractionRow,
   type PlanRow,

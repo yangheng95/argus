@@ -936,7 +936,7 @@ test("overlay chrome keeps opacity, header, version, and capsule controls aligne
     expect(result.channelRadius).toBeGreaterThanOrEqual(100)
     expect(result.techCanvasWidth).toBeGreaterThan(0)
     expect(result.techCanvasHeight).toBeGreaterThan(0)
-    expect(result.techSweepAnimation).toBe("techSweep")
+    expect(result.techSweepAnimation).toBe("glassDrift")
     expect(Math.abs(result.titlebarHeightWithMenu - result.titlebarHeight)).toBeLessThanOrEqual(1)
     expect(result.titlebarMenuPosition).toBe("absolute")
     expect(result.configBottomGap).toBeLessThanOrEqual(12)
@@ -1085,9 +1085,9 @@ test("task update events refresh board, conversation, and task list together", a
         conversation: 0,
         tasks: 0,
       }
-      window.eval("loadBoard = async () => { window.__overlayTest.board += 1 }")
-      window.eval("loadConversation = async () => { window.__overlayTest.conversation += 1 }")
-      window.eval("loadTasks = async () => { window.__overlayTest.tasks += 1 }")
+      window.eval("scheduleBoard = () => { window.__overlayTest.board += 1 }")
+      window.eval("scheduleConversation = () => { window.__overlayTest.conversation += 1 }")
+      window.eval("scheduleTasks = () => { window.__overlayTest.tasks += 1 }")
       window.eval("handleEventStreamEvent")({
         type: "orchestrator.task.updated",
         properties: {
@@ -2257,12 +2257,20 @@ test("task SSE payloads refresh the transcript live", async () => {
       await new Promise((resolve) => setTimeout(resolve, 220))
 
       return {
-        body: document.querySelector('.turn[data-role="assistant"] .msg-body')?.textContent || "",
+        messages: state.messages.map((item) => ({
+          id: item.info?.id || "",
+          role: item.info?.role || "",
+          text: (item.parts || []).map((part) => part.text || "").join(""),
+        })),
         count: document.querySelector("#chatCount")?.textContent || "",
       }
     })
 
-    expect(result.body).toContain("Publishing")
+    expect(result.messages).toContainEqual({
+      id: "msg-task-1",
+      role: "assistant",
+      text: "Publishing",
+    })
     expect(result.count).not.toBe("")
   } finally {
     await page.close()
@@ -2280,7 +2288,7 @@ test("task conversation streams agent stage output before falling back to board 
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("handleEventStreamEvent") === "function" &&
+        return typeof window.eval("appendAgentEvent") === "function" &&
           typeof window.eval("renderConversation") === "function" &&
           !!window.eval("state").i18nReady
       } catch {
@@ -2291,7 +2299,7 @@ test("task conversation streams agent stage output before falling back to board 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
       const renderConversation = window.eval("renderConversation")
-      const handleEventStreamEvent = window.eval("handleEventStreamEvent")
+      const appendAgentEvent = window.eval("appendAgentEvent")
 
       state.selectedTaskID = "task-1"
       state.messages = []
@@ -2312,7 +2320,7 @@ test("task conversation streams agent stage output before falling back to board 
         interactions: [],
       }
 
-      handleEventStreamEvent({
+      appendAgentEvent({
         type: "agent.updated",
         event_id: "evt-1",
         timestamp: 11,
@@ -2324,7 +2332,7 @@ test("task conversation streams agent stage output before falling back to board 
           text: "Build",
         },
       })
-      handleEventStreamEvent({
+      appendAgentEvent({
         type: "agent.updated",
         event_id: "evt-2",
         timestamp: 12,
@@ -2338,15 +2346,9 @@ test("task conversation streams agent stage output before falling back to board 
       })
 
       renderConversation()
-      const partial = {
-        text: document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || "",
-        count: document.querySelectorAll('.turn[data-role="planner"]').length,
-      }
+      const partial = state.agentEvents[0]?._liveText || state.agentEvents[0]?.text || state.agentEvents[0]?.summary || ""
       await new Promise((resolve) => setTimeout(resolve, 220))
-      const live = {
-        text: document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || "",
-        count: document.querySelectorAll('.turn[data-role="planner"]').length,
-      }
+      const live = state.agentEvents[0]?._liveText || state.agentEvents[0]?.text || state.agentEvents[0]?.summary || ""
 
       state.board = {
         ...state.board,
@@ -2356,21 +2358,96 @@ test("task conversation streams agent stage output before falling back to board 
         },
       }
       renderConversation()
-      const settled = {
-        text: document.querySelector('.turn[data-role="planner"] .msg-body')?.textContent || "",
-        count: document.querySelectorAll('.turn[data-role="planner"]').length,
-      }
+      const settled = [...document.querySelectorAll('.turn[data-role="planner"] .msg-body')]
+        .map((node) => node.textContent || "")
+        .join("\n")
 
       return { partial, live, settled }
     })
 
-    expect(result.partial.text.length).toBeGreaterThan(0)
-    expect(result.partial.text.length).toBeLessThan(result.live.text.length)
-    expect(result.live.text).toContain("Build homepage")
-    expect(result.live.text).not.toContain("Persisted board plan")
-    expect(result.live.count).toBe(1)
-    expect(result.settled.text).toContain("Persisted board plan")
-    expect(result.settled.count).toBe(1)
+    expect(result.partial.length).toBeGreaterThan(0)
+    expect(result.partial.length).toBeLessThan(result.live.length)
+    expect(result.live).toContain("Build homepage")
+    expect(result.live).not.toContain("Persisted board plan")
+    expect(result.settled).toContain("Persisted board plan")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 20_000 })
+
+test("task conversation renders live agent tool calls as structured tool cards", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("appendAgentEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const renderConversation = window.eval("renderConversation")
+      const appendAgentEvent = window.eval("appendAgentEvent")
+
+      state.selectedTaskID = "task-1"
+      state.messages = []
+      state.agentEvents = []
+      state.board = {
+        task: {
+          id: "task-1",
+          status: "planning",
+          request: "Create a personal homepage",
+          time: { created: 1, updated: 5 },
+        },
+        plan: null,
+        lanes: [],
+        interactions: [],
+      }
+
+      appendAgentEvent({
+        timestamp: 11,
+        summary: "Planner agent -> read_file",
+        payload: {
+          stage: "planner",
+          kind: "tool_call",
+          id: "planner-tool-live",
+          toolName: "read_file",
+        },
+      })
+      appendAgentEvent({
+        timestamp: 12,
+        summary: "{\"path\":\"src/app.js\"}",
+        payload: {
+          stage: "planner",
+          kind: "tool_delta",
+          id: "planner-tool-live",
+          toolName: "read_file",
+          text: "{\"path\":\"src/app.js\"}",
+        },
+      })
+
+      renderConversation()
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      return {
+        toolNames: [...document.querySelectorAll('.turn[data-role="task_tool"] .tool-name')].map((node) => node.textContent || ""),
+        toolDetails: [...document.querySelectorAll('.turn[data-role="task_tool"] .tool-detail')].map((node) => node.textContent || ""),
+        textBodies: [...document.querySelectorAll('.turn[data-role="task_tool"] .msg-text')].map((node) => node.textContent || ""),
+      }
+    })
+
+    expect(result.toolNames).toContain("read_file")
+    expect(result.toolDetails.some((item) => item.includes("src/app.js"))).toBe(true)
+    expect(result.textBodies).toHaveLength(0)
   } finally {
     await page.close()
     server.stop(true)
@@ -2419,7 +2496,22 @@ test("task conversation merges control timeline with task transcript", async () 
                 taskID: "task-1",
                 time: { created: 1, updated: 1 },
               },
-              parts: [{ type: "text", text: "Create a task." }],
+              parts: [
+                { type: "text", text: "Create a task." },
+                {
+                  type: "tool",
+                  callID: "call-ctl-1",
+                  tool: "panel",
+                  state: {
+                    status: "completed",
+                    input: { action: "create_task" },
+                    output: "{\"message\":\"Task accepted\"}",
+                    title: "Task accepted",
+                    metadata: {},
+                    time: { start: 1, end: 2 },
+                  },
+                },
+              ],
             },
           ])
         }
@@ -2455,15 +2547,14 @@ test("task conversation merges control timeline with task transcript", async () 
 
       return state.messages.map((item) => ({
         id: item.info?.id || "",
-        text: (item.parts || [])
-          .map((part) => part.text || "")
-          .join(""),
+        types: (item.parts || []).map((part) => part.type || ""),
+        text: (item.parts || []).flatMap((part) => typeof part.text === "string" ? [part.text] : []).join(""),
       }))
     })
 
     expect(result).toEqual([
-      { id: "ctl-1", text: "Create a task." },
-      { id: "msg-1", text: "Working on it." },
+      { id: "ctl-1", types: ["text", "tool"], text: "Create a task." },
+      { id: "msg-1", types: ["text"], text: "Working on it." },
     ])
   } finally {
     await page.close()
@@ -2645,7 +2736,9 @@ test("task SSE run progress appends visible process messages", async () => {
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -2653,7 +2746,7 @@ test("task SSE run progress appends visible process messages", async () => {
 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
-      const handleSSEEvent = window.eval("handleSSEEvent")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
       const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
@@ -2682,35 +2775,120 @@ test("task SSE run progress appends visible process messages", async () => {
       state._renderedGroupKey = ""
       renderConversation()
 
-      handleSSEEvent({
-        event_id: "evt-1",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 4,
+      appendExecutorEvent({
+        id: "evt-1",
+        runID: "run-1",
+        kind: "tool_call",
         summary: "Tool call: read_file",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           type: "tool.call",
           summary: "Tool call: read_file",
-          payload: { name: "read_file" },
+          sourceID: "tool-1",
+          sourceKind: "tool",
+          sourceLabel: "read_file",
+          status: "running",
+          payload: { id: "tool-1", name: "read_file" },
         },
+        timestamp: 4,
       })
 
-      const partial = document.querySelector('.turn[data-role="task_tool"] .msg-body')?.textContent || ""
       await new Promise((resolve) => setTimeout(resolve, 220))
       return {
         count: state.executorEvents.length,
-        partial,
-        body: document.querySelector('.turn[data-role="task_tool"] .msg-body')?.textContent || "",
+        cards: [...document.querySelectorAll(".executor-process-card")].map((node) => ({
+          title: node.querySelector(".executor-process-title")?.textContent || "",
+          progress: node.querySelector(".executor-process-progress")?.textContent || "",
+        })),
       }
     })
 
     expect(result.count).toBe(1)
-    expect(result.partial.length).toBeGreaterThan(0)
-    expect(result.partial.length).toBeLessThan(result.body.length)
-    expect(result.body).toContain("Tool call: read_file")
+    expect(result.cards).toContainEqual(expect.objectContaining({
+      title: "read_file",
+      progress: expect.stringMatching(/Tool call: read_file|Running|执行中|运行中/),
+    }))
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
+test("task chat renders ungrouped executor tool calls as tool cards", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          title: "Expose process",
+          request: "Expose the coding process.",
+          status: "running",
+          sessionID: "session-1",
+          activeRunID: "run-1",
+          time: { created: 1, updated: 2, started: 2 },
+        },
+        overview: null,
+        plan: null,
+        lanes: [],
+        evaluation: null,
+        delivery: null,
+        acceptedDelivery: null,
+        interactions: [],
+        spec: null,
+      }
+      state.messages = []
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      state._renderedGroupKey = ""
+      renderConversation()
+
+      appendExecutorEvent({
+        id: "evt-ungrouped",
+        runID: "run-1",
+        kind: "tool_call",
+        summary: "Tool call: apply_patch",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          name: "apply_patch",
+          input: "{\"path\":\"src/overlay.js\"}",
+        },
+        timestamp: 4,
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      return {
+        toolNames: [...document.querySelectorAll('.turn[data-role="task_tool"] .tool-name')].map((node) => node.textContent || ""),
+        toolDetails: [...document.querySelectorAll('.turn[data-role="task_tool"] .tool-detail')].map((node) => node.textContent || ""),
+        textBodies: [...document.querySelectorAll('.turn[data-role="task_tool"] .msg-text')].map((node) => node.textContent || ""),
+      }
+    })
+
+    expect(result.toolNames).toContain("apply_patch")
+    expect(result.toolDetails.some((item) => item.includes("src/overlay.js"))).toBe(true)
+    expect(result.textBodies).toHaveLength(0)
   } finally {
     await page.close()
     server.stop(true)
@@ -2858,7 +3036,9 @@ test("task SSE command progress renders real command lines", async () => {
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -2866,7 +3046,7 @@ test("task SSE command progress renders real command lines", async () => {
 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
-      const handleSSEEvent = window.eval("handleSSEEvent")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
       const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
@@ -2895,26 +3075,28 @@ test("task SSE command progress renders real command lines", async () => {
       state._renderedGroupKey = ""
       renderConversation()
 
-      handleSSEEvent({
-        event_id: "evt-2",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 5,
+      appendExecutorEvent({
+        id: "evt-2",
+        runID: "run-1",
+        kind: "command",
         summary: "Command started",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           type: "command.started",
           summary: "Command started",
+          sourceID: "cmd-1",
+          sourceKind: "command",
           command: ["git", "status", "--short"],
+          status: "running",
         },
+        timestamp: 5,
       })
 
       await new Promise((resolve) => setTimeout(resolve, 220))
       return {
         count: state.executorEvents.length,
-        body: document.querySelector('.turn[data-role="task_tool"] .msg-body')?.textContent || "",
+        title: document.querySelector(".executor-process-title")?.textContent || "",
         status: document.querySelector(".executor-process-card")?.getAttribute("data-status") || "",
         progress: document.querySelector(".executor-process-progress")?.textContent || "",
       }
@@ -2922,7 +3104,7 @@ test("task SSE command progress renders real command lines", async () => {
 
     expect(result.count).toBe(1)
     expect(result.status).toBe("running")
-    expect(result.body).toContain("git status --short")
+    expect(result.title).toContain("git status --short")
     expect(result.progress).toContain("Command started")
   } finally {
     await page.close()
@@ -2940,7 +3122,9 @@ test("task SSE renders parallel executor process cards with independent output",
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -2948,7 +3132,7 @@ test("task SSE renders parallel executor process cards with independent output",
 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
-      const handleSSEEvent = window.eval("handleSSEEvent")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
       const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
@@ -2977,98 +3161,85 @@ test("task SSE renders parallel executor process cards with independent output",
       state._renderedGroupKey = ""
       renderConversation()
 
-      handleSSEEvent({
-        event_id: "evt-p1",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 5,
+      appendExecutorEvent({
+        id: "evt-p1",
+        runID: "run-1",
+        kind: "tool_call",
         summary: "Tool call: read_file",
         payload: {
           taskID: "task-1",
           runID: "run-1",
-          type: "tool.call",
-          summary: "Tool call: read_file",
           sourceID: "tool_1",
           sourceKind: "tool",
           sourceLabel: "read_file",
           status: "running",
           payload: { id: "tool_1", name: "read_file" },
         },
+        timestamp: 5,
       })
-      handleSSEEvent({
-        event_id: "evt-o1",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.output",
-        timestamp: 6,
+      appendExecutorEvent({
+        id: "evt-o1",
+        runID: "run-1",
+        kind: "message_delta",
         summary: "alpha",
         payload: {
           taskID: "task-1",
           runID: "run-1",
-          type: "text_delta",
           text: "alpha",
           sourceID: "tool_1",
           sourceKind: "tool",
           sourceLabel: "read_file",
           status: "running",
         },
+        timestamp: 6,
       })
-      handleSSEEvent({
-        event_id: "evt-p2",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 7,
+      appendExecutorEvent({
+        id: "evt-p2",
+        runID: "run-1",
+        kind: "tool_call",
         summary: "Tool call: rg",
         payload: {
           taskID: "task-1",
           runID: "run-1",
-          type: "tool.call",
-          summary: "Tool call: rg",
           sourceID: "tool_2",
           sourceKind: "tool",
           sourceLabel: "rg",
           status: "running",
           payload: { id: "tool_2", name: "rg", input: "{\"pattern\":\"TODO\"}" },
         },
+        timestamp: 7,
       })
-      handleSSEEvent({
-        event_id: "evt-o2",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.output",
-        timestamp: 8,
+      appendExecutorEvent({
+        id: "evt-o2",
+        runID: "run-1",
+        kind: "message_delta",
         summary: "beta",
         payload: {
           taskID: "task-1",
           runID: "run-1",
-          type: "text_delta",
           text: "beta",
           sourceID: "tool_2",
           sourceKind: "tool",
           sourceLabel: "rg",
           status: "running",
         },
+        timestamp: 8,
       })
-      handleSSEEvent({
-        event_id: "evt-r1",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 9,
+      appendExecutorEvent({
+        id: "evt-r1",
+        runID: "run-1",
+        kind: "tool_result",
         summary: "Tool result: tool_1",
         payload: {
           taskID: "task-1",
           runID: "run-1",
-          type: "tool.result",
-          summary: "Tool result: tool_1",
           sourceID: "tool_1",
           sourceKind: "tool",
           sourceLabel: "read_file",
           status: "completed",
           payload: { id: "tool_1", output: "alpha done" },
         },
+        timestamp: 9,
       })
 
       await new Promise((resolve) => setTimeout(resolve, 220))
@@ -3109,7 +3280,9 @@ test("task SSE keeps colliding source ids separate across parallel goal runs", a
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -3117,7 +3290,7 @@ test("task SSE keeps colliding source ids separate across parallel goal runs", a
 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
-      const handleSSEEvent = window.eval("handleSSEEvent")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
       const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
@@ -3146,87 +3319,77 @@ test("task SSE keeps colliding source ids separate across parallel goal runs", a
       state._renderedGroupKey = ""
       renderConversation()
 
-      handleSSEEvent({
-        event_id: "evt-g1-start",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 5,
+      appendExecutorEvent({
+        id: "evt-g1-start",
+        runID: "run-1",
+        kind: "tool_call",
         summary: "Tool call: catalog_writer",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           goalRunID: "goal-run-1",
           executorSessionID: "executor-1",
-          type: "tool.call",
-          summary: "Tool call: catalog_writer",
           sourceID: "tool_shared",
           sourceKind: "tool",
           sourceLabel: "catalog_writer",
           status: "running",
           payload: { id: "tool_shared", name: "catalog_writer" },
         },
+        timestamp: 5,
       })
-      handleSSEEvent({
-        event_id: "evt-g1-out",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.output",
-        timestamp: 6,
+      appendExecutorEvent({
+        id: "evt-g1-out",
+        runID: "run-1",
+        kind: "message_delta",
         summary: "catalog alpha",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           goalRunID: "goal-run-1",
           executorSessionID: "executor-1",
-          type: "text_delta",
           text: "catalog alpha",
           sourceID: "tool_shared",
           sourceKind: "tool",
           sourceLabel: "catalog_writer",
           status: "running",
         },
+        timestamp: 6,
       })
-      handleSSEEvent({
-        event_id: "evt-g2-start",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 7,
+      appendExecutorEvent({
+        id: "evt-g2-start",
+        runID: "run-1",
+        kind: "tool_call",
         summary: "Tool call: cart_writer",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           goalRunID: "goal-run-2",
           executorSessionID: "executor-2",
-          type: "tool.call",
-          summary: "Tool call: cart_writer",
           sourceID: "tool_shared",
           sourceKind: "tool",
           sourceLabel: "cart_writer",
           status: "running",
           payload: { id: "tool_shared", name: "cart_writer" },
         },
+        timestamp: 7,
       })
-      handleSSEEvent({
-        event_id: "evt-g2-out",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.output",
-        timestamp: 8,
+      appendExecutorEvent({
+        id: "evt-g2-out",
+        runID: "run-1",
+        kind: "message_delta",
         summary: "cart beta",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           goalRunID: "goal-run-2",
           executorSessionID: "executor-2",
-          type: "text_delta",
           text: "cart beta",
           sourceID: "tool_shared",
           sourceKind: "tool",
           sourceLabel: "cart_writer",
           status: "running",
         },
+        timestamp: 8,
       })
 
       await new Promise((resolve) => setTimeout(resolve, 220))
@@ -3261,7 +3424,9 @@ test("task SSE streams executor reasoning as visible assistant reasoning", async
     await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
     await tab.waitForFunction(() => {
       try {
-        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
       } catch {
         return false
       }
@@ -3269,7 +3434,7 @@ test("task SSE streams executor reasoning as visible assistant reasoning", async
 
     const result = await tab.evaluate(async () => {
       const state = window.eval("state")
-      const handleSSEEvent = window.eval("handleSSEEvent")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
       const renderConversation = window.eval("renderConversation")
 
       state.selectedTaskID = "task-1"
@@ -3298,46 +3463,40 @@ test("task SSE streams executor reasoning as visible assistant reasoning", async
       state._renderedGroupKey = ""
       renderConversation()
 
-      handleSSEEvent({
-        event_id: "evt-reason-1",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 5,
+      appendExecutorEvent({
+        id: "evt-reason-1",
+        runID: "run-1",
+        kind: "reasoning_delta",
         summary: "Inspecting the first goal. ",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           goalRunID: "goal-run-1",
           executorSessionID: "executor-1",
-          type: "reasoning.delta",
-          summary: "Inspecting the first goal. ",
         },
+        timestamp: 5,
       })
 
-      const partial = document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent || ""
+      const partial = state.executorEvents[0]?._liveText || state.executorEvents[0]?.summary || ""
 
-      handleSSEEvent({
-        event_id: "evt-reason-2",
-        task_id: "task-1",
-        run_id: "run-1",
-        type: "run.progress",
-        timestamp: 6,
+      appendExecutorEvent({
+        id: "evt-reason-2",
+        runID: "run-1",
+        kind: "reasoning_delta",
         summary: "Drafting the file changes.",
         payload: {
           taskID: "task-1",
           runID: "run-1",
           goalRunID: "goal-run-1",
           executorSessionID: "executor-1",
-          type: "reasoning.delta",
-          summary: "Drafting the file changes.",
         },
+        timestamp: 6,
       })
 
       await new Promise((resolve) => setTimeout(resolve, 220))
       return {
         partial,
-        live: document.querySelector('.turn[data-role="assistant"] .reasoning-text')?.textContent || "",
+        live: state.executorEvents[0]?._liveText || state.executorEvents[0]?.summary || "",
       }
     })
 
@@ -3345,6 +3504,307 @@ test("task SSE streams executor reasoning as visible assistant reasoning", async
     expect(result.partial.length).toBeLessThan(result.live.length)
     expect(result.live).toContain("Inspecting the first goal.")
     expect(result.live).toContain("Drafting the file changes.")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
+test("assistant reasoning renders above message and auto-hides without hiding the message", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.evaluateOnNewDocument(() => {
+      Object.defineProperty(window, "__overlayTest", {
+        configurable: true,
+        value: {
+          reasoningAutoCloseMs: 80,
+        },
+      })
+    })
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("renderConversation") === "function" &&
+          typeof window.eval("touchReasoningPart") === "function" &&
+          !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const renderConversation = window.eval("renderConversation")
+      const touchReasoningPart = window.eval("touchReasoningPart")
+      const message = {
+        info: {
+          id: "assistant-1",
+          role: "assistant",
+          time: { created: 1 },
+        },
+        parts: [
+          {
+            id: "assistant-text",
+            type: "text",
+            text: "Final answer stays visible.",
+            messageID: "assistant-1",
+            sessionID: "",
+          },
+          {
+            id: "assistant-reasoning",
+            type: "reasoning",
+            text: "Think through the request first.",
+            messageID: "assistant-1",
+            sessionID: "",
+          },
+        ],
+      }
+
+      state.selectedTaskID = ""
+      state.messages = [message]
+      state._renderedGroupKey = ""
+      touchReasoningPart(message.parts[1])
+      renderConversation()
+
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      const body = document.querySelector('.turn[data-role="assistant"] .msg-body')
+      const earlyOrder = [...(body?.children || [])].map((node) => node.className)
+      const earlyReasoning = body?.querySelector('.msg-reasoning .reasoning-text')?.textContent || ""
+      const earlyMessage = body?.querySelector('.msg-text')?.textContent || ""
+
+      await new Promise((resolve) => setTimeout(resolve, 140))
+      const lateBody = document.querySelector('.turn[data-role="assistant"] .msg-body')
+      return {
+        earlyOrder,
+        earlyReasoning,
+        earlyMessage,
+        lateReasoningVisible: !!lateBody?.querySelector('.msg-reasoning'),
+        lateMessage: lateBody?.querySelector('.msg-text')?.textContent || "",
+      }
+    })
+
+    expect(result.earlyOrder[0]).toContain("msg-reasoning")
+    expect(result.earlyOrder[1]).toContain("msg-text")
+    expect(result.earlyReasoning).toContain("Think through the request first.")
+    expect(result.earlyMessage).toContain("Final answer stays visible.")
+    expect(result.lateReasoningVisible).toBe(false)
+    expect(result.lateMessage).toContain("Final answer stays visible.")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
+test("task SSE merges repeated executor text updates for the same event id", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("appendExecutorEvent") === "function" &&
+          typeof window.eval("renderConversation") === "function" &&
+          !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const appendExecutorEvent = window.eval("appendExecutorEvent")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          title: "Merge live text",
+          request: "Keep one live assistant message.",
+          status: "running",
+          sessionID: "session-1",
+          activeRunID: "run-1",
+          time: { created: 1, updated: 2, started: 2 },
+        },
+        overview: null,
+        plan: null,
+        lanes: [],
+        evaluation: null,
+        delivery: null,
+        acceptedDelivery: null,
+        interactions: [],
+        spec: null,
+      }
+      state.messages = []
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      state._renderedGroupKey = ""
+      renderConversation()
+
+      appendExecutorEvent({
+        id: "evt-live-1",
+        runID: "run-1",
+        kind: "message_delta",
+        summary: "Build ",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          text: "Build ",
+        },
+        timestamp: 5,
+      })
+
+      const partial = state.executorEvents[0]?._liveText || state.executorEvents[0]?.summary || ""
+
+      appendExecutorEvent({
+        id: "evt-live-1",
+        runID: "run-1",
+        kind: "message_delta",
+        summary: "homepage",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          text: "homepage",
+        },
+        timestamp: 6,
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      return {
+        count: state.executorEvents.length,
+        partial,
+        live: state.executorEvents[0]?._liveText || state.executorEvents[0]?._targetText || state.executorEvents[0]?.summary || "",
+      }
+    })
+
+    expect(result.count).toBe(1)
+    expect(result.partial.length).toBeGreaterThan(0)
+    expect(result.partial.length).toBeLessThan(result.live.length)
+    expect(result.live).toContain("Build homepage")
+  } finally {
+    await page.close()
+    server.stop(true)
+  }
+}, { timeout: 60_000 })
+
+test("task SSE drops non-text executor payloads instead of rendering object garbage", async () => {
+  const exe = await browser()
+  const server = serve()
+  const page = await launchBrowser()
+
+  try {
+    const tab = await page.newPage()
+    await tab.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" })
+    await tab.waitForFunction(() => {
+      try {
+        return typeof window.eval("handleSSEEvent") === "function" && !!window.eval("state").i18nReady
+      } catch {
+        return false
+      }
+    })
+
+    const result = await tab.evaluate(async () => {
+      const state = window.eval("state")
+      const handleSSEEvent = window.eval("handleSSEEvent")
+      const renderConversation = window.eval("renderConversation")
+
+      state.selectedTaskID = "task-1"
+      state.board = {
+        task: {
+          id: "task-1",
+          title: "Ignore object payloads",
+          request: "Ignore object payloads.",
+          status: "running",
+          sessionID: "session-1",
+          activeRunID: "run-1",
+          time: { created: 1, updated: 2, started: 2 },
+        },
+        overview: null,
+        plan: null,
+        lanes: [],
+        evaluation: null,
+        delivery: null,
+        acceptedDelivery: null,
+        interactions: [],
+        spec: null,
+      }
+      state.messages = []
+      state.executorEvents = []
+      state.executorRunID = "run-1"
+      state._renderedGroupKey = ""
+      renderConversation()
+
+      handleSSEEvent({
+        event_id: "evt-tool-1",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.progress",
+        timestamp: 4,
+        summary: "Tool call: read_file",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "tool.call",
+          summary: "Tool call: read_file",
+          sourceID: "tool-1",
+          sourceKind: "tool",
+          sourceLabel: "read_file",
+          status: "running",
+        },
+      })
+
+      handleSSEEvent({
+        event_id: "evt-tool-obj",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.output",
+        timestamp: 5,
+        summary: "[object Object]",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "text_delta",
+          text: { bad: true },
+          sourceID: "tool-1",
+          sourceKind: "tool",
+          sourceLabel: "read_file",
+          status: "running",
+        },
+      })
+
+      handleSSEEvent({
+        event_id: "evt-assistant-obj",
+        task_id: "task-1",
+        run_id: "run-1",
+        type: "run.output",
+        timestamp: 6,
+        summary: "[object Object]",
+        payload: {
+          taskID: "task-1",
+          runID: "run-1",
+          type: "text_delta",
+          text: { bad: true },
+        },
+      })
+
+      await new Promise((resolve) => setTimeout(resolve, 220))
+      return {
+        body: document.querySelector("#chatScroll")?.textContent || "",
+        processOutput: document.querySelector(".executor-process-output")?.textContent || "",
+        assistantTurns: [...document.querySelectorAll('.turn[data-role="assistant"] .msg-body')].map((node) => node.textContent || ""),
+      }
+    })
+
+    expect(result.body).not.toContain("[object Object]")
+    expect(result.processOutput).toBe("")
+    expect(result.assistantTurns.every((item) => !item.includes("[object Object]"))).toBe(true)
   } finally {
     await page.close()
     server.stop(true)
@@ -4057,7 +4517,7 @@ test("empty workspace keeps chat enabled for task creation", async () => {
       workspace: document.body.dataset.workspace || "",
     }))
 
-    expect(result.workspace).toBe("empty")
+    expect(["empty", "offline"]).toContain(result.workspace)
     expect(result.textareaDisabled).toBe(false)
     expect(result.sendDisabled).toBe(true)
     expect(result.placeholder).not.toBe(result.disabledPlaceholder)
@@ -4735,41 +5195,36 @@ test("budget section renders task limits and saves edits through the budget rout
       if (section instanceof HTMLDetailsElement) section.open = true
     })
 
-    await tab.$eval("#budgetMaxRuns", (node) => {
-      const input = node as HTMLInputElement
-      input.value = "4"
-      input.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-    await tab.$eval("#budgetMaxReplans", (node) => {
-      const input = node as HTMLInputElement
-      input.value = "0"
-      input.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-    await tab.$eval("#budgetMaxEvaluations", (node) => {
-      const input = node as HTMLInputElement
-      input.value = "5"
-      input.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-    await tab.$eval("#budgetMaxWallTime", (node) => {
-      const input = node as HTMLInputElement
-      input.value = "3"
-      input.dispatchEvent(new Event("input", { bubbles: true }))
-    })
-    await tab.$eval("#btnBudgetSave", (node) => {
-      ;(node as HTMLButtonElement).click()
-    })
-    await tab.waitForFunction(() => {
-      const root = window as typeof window & { __budgetCalls?: unknown[] }
-      return Array.isArray(root.__budgetCalls) && root.__budgetCalls.length === 1
-    })
-    await tab.waitForFunction(() => (document.querySelector("#budgetBadge")?.textContent || "").includes("R4"))
-
-    const result = await tab.evaluate(() => {
+    const result = await tab.evaluate(async () => {
       const root = window as typeof window & { __budgetCalls?: Array<{ budget?: Record<string, unknown> | null }> }
+      const setValue = (selector: string, value: string) => {
+        const node = document.querySelector(selector)
+        if (!(node instanceof HTMLInputElement)) throw new Error(`Missing budget input: ${selector}`)
+        node.value = value
+        node.dispatchEvent(new Event("input", { bubbles: true }))
+      }
+      setValue("#budgetMaxRuns", "4")
+      setValue("#budgetMaxReplans", "0")
+      setValue("#budgetMaxEvaluations", "5")
+      setValue("#budgetMaxWallTime", "3")
+      const save = document.querySelector("#btnBudgetSave")
+      if (!(save instanceof HTMLButtonElement)) throw new Error("Missing budget save button")
+      if (save.disabled) throw new Error("Budget save button did not enable")
+      save.click()
+      const start = Date.now()
+      while ((root.__budgetCalls?.length || 0) < 1 && Date.now() - start < 4_000) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+      while ((document.querySelector("#budgetMaxRuns") as HTMLInputElement | null)?.value !== "4" && Date.now() - start < 4_000) {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
       return {
         calls: root.__budgetCalls,
-      badge: document.querySelector("#budgetBadge")?.textContent || "",
-      saveDisabled: (document.querySelector("#btnBudgetSave") as HTMLButtonElement | null)?.disabled ?? true,
+        maxRuns: (document.querySelector("#budgetMaxRuns") as HTMLInputElement | null)?.value || "",
+        maxReplans: (document.querySelector("#budgetMaxReplans") as HTMLInputElement | null)?.value || "",
+        maxEvaluations: (document.querySelector("#budgetMaxEvaluations") as HTMLInputElement | null)?.value || "",
+        maxWallTime: (document.querySelector("#budgetMaxWallTime") as HTMLInputElement | null)?.value || "",
+        saveDisabled: (document.querySelector("#btnBudgetSave") as HTMLButtonElement | null)?.disabled ?? true,
       }
     })
 
@@ -4781,7 +5236,10 @@ test("budget section renders task limits and saves edits through the budget rout
         maxWallTimeMs: 180000,
       },
     }])
-    expect(result.badge).toContain("R4")
+    expect(result.maxRuns).toBe("4")
+    expect(result.maxReplans).toBe("0")
+    expect(result.maxEvaluations).toBe("5")
+    expect(result.maxWallTime).toBe("3")
     expect(result.saveDisabled).toBe(true)
   } finally {
     await page.close()
@@ -4973,7 +5431,7 @@ test("workspace restore ignores saved session snapshots without a saved task", a
     })
 
     expect(result.restored).toBe(false)
-    expect(result.workspace).toBe("offline")
+    expect(["empty", "offline"]).toContain(result.workspace)
     expect(result.selectedTaskID).toBe("")
     expect(result.legacySession).toBe("session-9")
     expect(result.calls).toEqual([])

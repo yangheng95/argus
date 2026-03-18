@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, mock, test } from "bun:test"
+import { Instance } from "../../src/project/instance"
 import { Server } from "../../src/server/server"
 import { openPathCommand } from "../../src/server/routes/app"
 import { Log } from "../../src/util/log"
 import { resetDatabase } from "../fixture/db"
+import { tmpdir } from "../fixture/fixture"
 
 Log.init({ print: false })
 
@@ -34,18 +36,26 @@ describe("app routes", () => {
   })
 
   test("POST /path/open validates non-empty input", async () => {
-    const app = Server.App()
+    await using tmp = await tmpdir({ git: true })
 
-    const response = await app.request("/path/open", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
+    await Instance.provide({
+      directory: tmp.path,
+      fn: async () => {
+        const app = Server.App()
+
+        const response = await app.request("/path/open", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-opencorvus-directory": tmp.path,
+          },
+          body: JSON.stringify({
+            path: "",
+          }),
+        })
+
+        expect(response.status).toBe(400)
       },
-      body: JSON.stringify({
-        path: "",
-      }),
     })
-
-    expect(response.status).toBe(400)
   })
 })

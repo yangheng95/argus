@@ -650,7 +650,9 @@ test("installs dependencies in writable OPENCORVUS_CONFIG_DIR", async () => {
   })
 
   const prev = process.env.OPENCORVUS_CONFIG_DIR
+  const prevSkipInstall = process.env.OPENCORVUS_SKIP_DEP_INSTALL
   process.env.OPENCORVUS_CONFIG_DIR = tmp.extra
+  delete process.env.OPENCORVUS_SKIP_DEP_INSTALL
 
   try {
     await Instance.provide({
@@ -666,6 +668,8 @@ test("installs dependencies in writable OPENCORVUS_CONFIG_DIR", async () => {
   } finally {
     if (prev === undefined) delete process.env.OPENCORVUS_CONFIG_DIR
     else process.env.OPENCORVUS_CONFIG_DIR = prev
+    if (prevSkipInstall === undefined) delete process.env.OPENCORVUS_SKIP_DEP_INSTALL
+    else process.env.OPENCORVUS_SKIP_DEP_INSTALL = prevSkipInstall
   }
 })
 
@@ -1289,10 +1293,9 @@ test("permission config preserves key order", async () => {
       const config = await Config.get()
       // Zod z.object().catchall() outputs known schema keys first (in definition order),
       // then catchall keys in input order. "read", "edit", "external_directory",
-      // "skill", "todowrite", "todoread", "plan_enter", "plan_exit" are defined in the
+      // "todowrite", "todoread", "plan_enter", "plan_exit" are defined in the
       // Permission schema; "*", "write", and wildcard keys fall through to catchall.
       expect(Object.keys(config.permission!)).toEqual([
-        "skill",
         "read",
         "edit",
         "external_directory",

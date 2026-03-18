@@ -52,7 +52,7 @@ describe("orchestrator.goal workspace env", () => {
         Env.set("__OPENLENS_GOAL_WORKSPACE_ENV__", "present")
         const result = await commandResult(
           {
-            command: `& "${BunProc.which()}" print-env.js`,
+            command: `"${BunProc.which()}" print-env.js`,
             cwd: tmp.path,
           },
           5_000,

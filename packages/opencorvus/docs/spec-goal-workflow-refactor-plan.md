@@ -108,11 +108,12 @@ The migration will be implemented in small, verifiable slices. Each slice must p
 - `overlay-web` materialize benchmark now passes on the refactored flow.
 - `overlay-web` full benchmark now passes on the refactored flow.
 - Route / channel / control regression fixtures now match the refactored async task lifecycle and current result shapes.
+- Full `packages/opencorvus/test/server` regression suite is currently green on the refactored contracts.
 
 ### Immediate Next Slice
 
-- Run broader orchestrator / server regression subsets beyond the cutover slice and classify any remaining failures as contract debt versus unrelated legacy debt.
-- Keep benchmark acceptance and route/control/channel regression suites in sync so refactor status does not drift away from executable evidence.
+- Run broader non-server package regressions and classify any remaining failures as contract debt versus unrelated legacy debt.
+- Keep benchmark acceptance and full server regression suites in sync so refactor status does not drift away from executable evidence.
 
 ## Phase 1: Shared Contracts And Persistence Scaffolding
 

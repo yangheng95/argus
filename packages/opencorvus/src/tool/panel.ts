@@ -48,7 +48,9 @@ export const PanelTool = Tool.define("panel", {
   async execute(params, ctx) {
     switch (params.action) {
       case "view_spec": {
-        const board = await OrchestratorService.getBoard(params.taskID)
+        // Control-plane read actions should return the current board snapshot
+        // immediately instead of blocking on a full task sync.
+        const board = await OrchestratorService.getBoard(params.taskID, { sync: false })
         return {
           title: "Spec",
           output: [
@@ -65,7 +67,7 @@ export const PanelTool = Tool.define("panel", {
         }
       }
       case "view_plan": {
-        const board = await OrchestratorService.getBoard(params.taskID)
+        const board = await OrchestratorService.getBoard(params.taskID, { sync: false })
         return {
           title: "Plan",
           output: [
@@ -94,7 +96,7 @@ export const PanelTool = Tool.define("panel", {
             metadata: {},
           }
         }
-        const board = await OrchestratorService.getBoard(params.taskID)
+        const board = await OrchestratorService.getBoard(params.taskID, { sync: false })
         return {
           title: "Board",
           output: [

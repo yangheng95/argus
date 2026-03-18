@@ -478,6 +478,27 @@ test("syncRun times out a long-running goal run and queues a retry", async () =>
           queue_task_id: "queue-1",
         },
       })
+      Database.use((db) =>
+        db
+          .update(OrchestratorGoalRunTable)
+          .set({
+            time_started: now - 61_000,
+            time_updated: now - 61_000,
+          })
+          .where(eq(OrchestratorGoalRunTable.id, goalRun.id))
+          .run(),
+      )
+      Database.use((db) =>
+        db
+          .update(OrchestratorRunTable)
+          .set({
+            time_created: now - 61_000,
+            time_started: now - 61_000,
+            time_updated: now - 61_000,
+          })
+          .where(eq(OrchestratorRunTable.id, runID))
+          .run(),
+      )
 
       const status = spyOn(ExecutorRegistry.require("opencode"), "status").mockResolvedValue({
         queueTaskID: "queue-1",
@@ -511,15 +532,15 @@ test("syncRun times out a long-running goal run and queues a retry", async () =>
       expect(abort).toHaveBeenCalled()
       expect(dispatch).toHaveBeenCalledTimes(1)
       expect(previous?.status).toBe("failed")
-      expect(previous?.error).toContain("Goal run exceeded maximum execution time")
+      expect(previous?.error).toContain("Goal run stalled after 1min without execution activity")
       expect(active?.id).not.toBe(runID)
       expect(active?.status).toBe("queued")
       expect(active?.metadata?.previous_run_id).toBe(runID)
       expect(task?.status).toBe("running")
-      expect(evaluation?.summary).toContain("Goal run exceeded maximum execution time")
+      expect(evaluation?.summary).toContain("Goal run stalled after 1min without execution activity")
       expect(goal?.status).toBe("pending")
       expect(failedGoalRun?.status).toBe("failed")
-      expect(failedGoalRun?.error).toContain("Goal run exceeded maximum execution time")
+      expect(failedGoalRun?.error).toContain("Goal run stalled after 1min without execution activity")
     },
   })
 })

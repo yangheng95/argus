@@ -8,6 +8,7 @@ import { Identifier } from "../../src/id/id"
 import {
   OrchestratorDeliveryTable,
   OrchestratorEvaluationTable,
+  OrchestratorGoalSnapshotTable,
   OrchestratorGoalRunTable,
   OrchestratorGoalTable,
   OrchestratorPlanNodeTable,
@@ -39,6 +40,7 @@ test("persistEvaluation writes goal snapshots from transaction state", async () 
       const now = Date.now()
       const taskID = Identifier.ascending("task")
       const specID = Identifier.ascending("spec")
+      const goalSnapshotID = Identifier.ascending("goal_snapshot")
       const planID = Identifier.ascending("plan")
       const runID = Identifier.ascending("run")
       const goalID = Identifier.ascending("goal")
@@ -84,6 +86,21 @@ test("persistEvaluation writes goal snapshots from transaction state", async () 
             status: "active",
             summary: "plan",
             prompt: "prompt",
+            metadata: {
+              goal_snapshot_id: goalSnapshotID,
+            },
+            time_created: now,
+            time_updated: now,
+          })
+          .run()
+        db.insert(OrchestratorGoalSnapshotTable)
+          .values({
+            id: goalSnapshotID,
+            task_id: taskID,
+            spec_snapshot_id: specID,
+            version: 1,
+            status: "ready",
+            summary: "goals",
             metadata: {},
             time_created: now,
             time_updated: now,
@@ -96,6 +113,9 @@ test("persistEvaluation writes goal snapshots from transaction state", async () 
             spec_snapshot_id: specID,
             description: "goal",
             criteria: "criteria",
+            metadata: {
+              goal_snapshot_id: goalSnapshotID,
+            },
             priority: "blocking",
             source: "spec",
             status: "pending",
@@ -970,11 +990,13 @@ test("activeGoalRunByCoordinator uses a stable secondary sort", async () => {
     directory: tmp.path,
     fn: async () => {
       const now = Date.now()
-      const taskID = "task-cr"
-      const specID = "spec-cr"
-      const planID = "plan-cr"
-      const runID = "run-cr"
-      const goalID = "goal-cr"
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const goalID = Identifier.ascending("goal")
+      const goalRunAID = Identifier.ascending("goal_run")
+      const goalRunBID = Identifier.ascending("goal_run")
 
       Database.transaction((db) => {
         db.insert(OrchestratorTaskTable)
@@ -1050,7 +1072,7 @@ test("activeGoalRunByCoordinator uses a stable secondary sort", async () => {
           .run()
         db.insert(OrchestratorGoalRunTable)
           .values([{
-            id: "goal_run_a",
+            id: goalRunAID,
             task_id: taskID,
             goal_id: goalID,
             coordinator_run_id: runID,
@@ -1059,7 +1081,7 @@ test("activeGoalRunByCoordinator uses a stable secondary sort", async () => {
             time_created: now,
             time_updated: now,
           }, {
-            id: "goal_run_b",
+            id: goalRunBID,
             task_id: taskID,
             goal_id: goalID,
             coordinator_run_id: runID,
@@ -1071,7 +1093,7 @@ test("activeGoalRunByCoordinator uses a stable secondary sort", async () => {
           .run()
       })
 
-      expect(activeGoalRunByCoordinator(runID)?.id).toBe("goal_run_b")
+      expect(activeGoalRunByCoordinator(runID)?.id).toBe(goalRunBID)
     },
   })
 })
@@ -1083,10 +1105,10 @@ test("createRetryRun reuses an active retry run for the same previous run", asyn
     directory: tmp.path,
     fn: async () => {
       const now = Date.now()
-      const taskID = "task-retry"
-      const specID = "spec-retry"
-      const planID = "plan-retry"
-      const runID = "run-retry"
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
 
       Database.transaction((db) => {
         db.insert(OrchestratorTaskTable)
@@ -1177,12 +1199,12 @@ test("createGoalRun reuses an active goal run for the same node", async () => {
     directory: tmp.path,
     fn: async () => {
       const now = Date.now()
-      const taskID = "task-goal-run"
-      const specID = "spec-goal-run"
-      const planID = "plan-goal-run"
-      const runID = "run-goal-run"
-      const goalID = "goal-goal-run"
-      const nodeID = "node-goal-run"
+      const taskID = Identifier.ascending("task")
+      const specID = Identifier.ascending("spec")
+      const planID = Identifier.ascending("plan")
+      const runID = Identifier.ascending("run")
+      const goalID = Identifier.ascending("goal")
+      const nodeID = Identifier.ascending("node")
 
       Database.transaction((db) => {
         db.insert(OrchestratorTaskTable)

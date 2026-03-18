@@ -38,8 +38,11 @@ export namespace Auth {
   export const Info = z.discriminatedUnion("type", [Oauth, Api, WellKnown]).meta({ ref: "Auth" })
   export type Info = z.infer<typeof Info>
 
-  const filepath = path.join(Global.Path.data, "auth.json")
   const codexFilepath = path.join(realHome(), ".codex", "auth.json")
+
+  function filepath() {
+    return path.join(Global.Path.data, "auth.json")
+  }
 
   function realHome() {
     try {
@@ -108,7 +111,7 @@ export namespace Auth {
   }
 
   async function stored(): Promise<Record<string, Info>> {
-    const data = await Filesystem.readJson<Record<string, unknown>>(filepath).catch(() => ({}))
+    const data = await Filesystem.readJson<Record<string, unknown>>(filepath()).catch(() => ({}))
     const parsed = Object.entries(data).reduce(
       (acc, [key, value]) => {
         const parsed = Info.safeParse(value)
@@ -160,12 +163,12 @@ export namespace Auth {
 
   export async function set(key: string, info: Info) {
     const data = await stored()
-    await Filesystem.writeJson(filepath, { ...data, [key]: info }, 0o600)
+    await Filesystem.writeJson(filepath(), { ...data, [key]: info }, 0o600)
   }
 
   export async function remove(key: string) {
     const data = await stored()
     delete data[key]
-    await Filesystem.writeJson(filepath, data, 0o600)
+    await Filesystem.writeJson(filepath(), data, 0o600)
   }
 }

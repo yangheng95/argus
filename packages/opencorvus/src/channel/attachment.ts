@@ -6,7 +6,6 @@ import { createHmac, timingSafeEqual } from "node:crypto"
 import path from "node:path"
 import z from "zod"
 
-const dir = path.join(Global.Path.data, "channel-attachments")
 const lifetime = 1000 * 60 * 60 * 24
 const loopback = new Set(["127.0.0.1", "localhost", "::1"])
 
@@ -24,6 +23,7 @@ export namespace ChannelAttachment {
   })
 
   export async function create(raw: z.input<typeof Input>) {
+    const dir = path.join(Global.Path.data, "channel-attachments")
     const input = Input.parse(raw)
     const base = await publicUrl()
     if (!base) {
@@ -50,6 +50,7 @@ export namespace ChannelAttachment {
   }
 
   export async function get(id: string) {
+    const dir = path.join(Global.Path.data, "channel-attachments")
     const raw = await Bun.file(path.join(dir, `${id}.json`)).text().catch(() => undefined)  // attachment not found is expected
     if (!raw) return
     let parsed: unknown

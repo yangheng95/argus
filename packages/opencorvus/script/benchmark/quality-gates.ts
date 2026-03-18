@@ -38,7 +38,10 @@ const CONFIG_BASENAMES = new Set([
   "package-lock.json",
   "bun.lock",
 ])
-const PLACEHOLDER_RE = /\b(TODO|FIXME|stub|placeholder|mock-only|not implemented)\b/i
+// Case-sensitive: only uppercase TODO/FIXME count as action markers (avoids "todo item" in product JSDoc)
+const PLACEHOLDER_MARKER_RE = /\b(TODO|FIXME)\b/
+// Case-insensitive: implementation quality signals that indicate incomplete code
+const PLACEHOLDER_IMPL_RE = /\b(stub|placeholder|mock-only|not implemented)\b/i
 const VERIFY_RE = /\b(verify|verification|check|test|assert|readme|structure|scaffold|ls\s|find\s)\b/i
 
 export async function auditWorkspace(input: {
@@ -61,7 +64,7 @@ export async function auditWorkspace(input: {
   const placeholderHits = (await Promise.all(files.map(async (file) => {
     const abs = path.join(input.rootDir, file)
     const content = await fs.readFile(abs, "utf8").catch(() => "")
-    return PLACEHOLDER_RE.test(content) ? [file] : []
+    return (PLACEHOLDER_MARKER_RE.test(content) || PLACEHOLDER_IMPL_RE.test(content)) ? [file] : []
   }))).flat()
 
   const nonSourceCount = Math.max(0, files.length - sourceFiles.length)

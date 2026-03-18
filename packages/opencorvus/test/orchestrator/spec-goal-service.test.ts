@@ -10,7 +10,7 @@ afterEach(() => {
 
 test("buildSpecReplanInput keeps only unresolved goals during replan", () => {
   spyOn(Preference, "taskNotes").mockReturnValue([])
-  spyOn(Store, "listGoalsBySpec").mockReturnValue([
+  spyOn(Store, "listGoalsForPlan").mockReturnValue([
     {
       description: "Bootstrap the project",
       criteria: "The app builds and runs",
@@ -68,8 +68,13 @@ test("buildSpecReplanInput keeps only unresolved goals during replan", () => {
       id: "tsk_replan",
       request: "Build the diary app.",
     } as Parameters<typeof buildSpecReplanInput>[0],
-    "spc_replan",
-    analysis,
+    {
+      spec_snapshot_id: "spc_replan",
+      metadata: {
+        goal_snapshot_id: "gsp_replan",
+      },
+    },
+    analysis as Parameters<typeof buildSpecReplanInput>[2],
   )
 
   expect(rewrite.goals.map((goal) => goal.description)).toEqual([

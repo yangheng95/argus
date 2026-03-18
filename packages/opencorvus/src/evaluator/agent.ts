@@ -593,13 +593,15 @@ Under \`# Verdict\`, write exactly one of:
 - inconclusive
 
 Under \`# Classification\`, write exactly one of:
-- transient
-- environment
-- input
-- permission
-- evaluation
-- strategy
-- unknown
+- transient — the check or test failed due to timing, flakiness, or infrastructure noise; a simple retry will fix it
+- environment — a missing dependency, broken build tool, or platform incompatibility is the root cause
+- input — the task specification itself is ambiguous, self-contradictory, or truly impossible to implement; do NOT use this when the executor merely misread or misapplied a clear spec element
+- permission — the executor was blocked by access controls or sandbox restrictions
+- evaluation — the implementation is partially or mostly correct but has specific, targeted issues (wrong field name, missing edge case, incorrect logic in one method); use this when the fix is clear and the code is salvageable
+- strategy — the fundamental approach is architecturally wrong and must be rewritten from scratch
+- unknown — cannot determine
+
+**Classification decision rule**: If the spec is clear AND the executor produced code that almost works but made a naming, typing, or logic error, classify as \`evaluation\`. Reserve \`input\` strictly for cases where the spec itself is the problem (contradictory requirements, impossible constraints, missing critical information).
 
 Under \`# Goal Statuses\`, each goal must be a numbered block in this shape:
 

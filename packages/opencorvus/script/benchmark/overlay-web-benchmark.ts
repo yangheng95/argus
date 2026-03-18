@@ -560,7 +560,6 @@ async function scaffoldProject(dir: string, model: string) {
           module: "Preserve",
           moduleResolution: "Bundler",
           strict: true,
-          types: ["bun-types"],
         },
       },
       null,

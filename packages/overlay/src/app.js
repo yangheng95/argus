@@ -169,9 +169,12 @@ const state = {
 };
 
 const liveTextStreams = new Map();
+const reasoningVisibility = new Map();
+const reasoningHideTimers = new Map();
 const LIVE_TEXT_INTERVAL = 18;
 const LIVE_TEXT_MIN_CHUNK = 6;
 const LIVE_TEXT_MAX_CHUNK = 48;
+const DEFAULT_REASONING_AUTO_CLOSE_MS = 5000;
 
 function stopLiveText(key) {
   const entry = liveTextStreams.get(key);
@@ -183,6 +186,60 @@ function stopLiveText(key) {
 function clearLiveTextStreams() {
   for (const key of [...liveTextStreams.keys()]) {
     stopLiveText(key);
+  }
+}
+
+function stopReasoningHideTimer(key) {
+  const timer = reasoningHideTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  reasoningHideTimers.delete(key);
+}
+
+function reasoningPartKey(part) {
+  if (!record(part)) return "";
+  const id = typeof part.id === "string" ? part.id : "";
+  const messageID = typeof part.messageID === "string" ? part.messageID : "";
+  const sessionID = typeof part.sessionID === "string" ? part.sessionID : "";
+  if (!id && !messageID && !sessionID) return "";
+  return `reasoning:${sessionID}:${messageID}:${id}`;
+}
+
+function reasoningPartHidden(part) {
+  const key = reasoningPartKey(part);
+  return key ? reasoningVisibility.get(key)?.hidden === true : false;
+}
+
+function reasoningAutoCloseMs() {
+  const value = Number(overlayTestConfig()?.reasoningAutoCloseMs);
+  if (Number.isFinite(value)) return Math.max(0, Math.floor(value));
+  return DEFAULT_REASONING_AUTO_CLOSE_MS;
+}
+
+function scheduleReasoningAutoHide(key) {
+  if (!key) return;
+  stopReasoningHideTimer(key);
+  const timer = setTimeout(() => {
+    reasoningHideTimers.delete(key);
+    const current = reasoningVisibility.get(key) || { hidden: false };
+    if (current.hidden) return;
+    reasoningVisibility.set(key, { ...current, hidden: true });
+    state.conversationUpdatedAt = Date.now();
+    renderConversation();
+  }, reasoningAutoCloseMs());
+  reasoningHideTimers.set(key, timer);
+}
+
+function touchReasoningPart(part) {
+  const key = reasoningPartKey(part);
+  if (!key) return;
+  const current = reasoningVisibility.get(key);
+  reasoningVisibility.set(key, { ...(current || {}), hidden: false });
+  stopReasoningHideTimer(key);
+  scheduleReasoningAutoHide(key);
+  if (current?.hidden) {
+    state.conversationUpdatedAt = Date.now();
+    renderConversation();
   }
 }
 
@@ -286,6 +343,7 @@ function hydrateLivePart(existing, part) {
       text: part.text.startsWith(current) ? current : "",
     };
     streamMessagePart(next, part.text, "text", next.text);
+    if (part.type === "reasoning" && part.text.trim()) touchReasoningPart(next);
     return next;
   }
   if (part.type === "tool" && record(part.state) && typeof part.state.output === "string" && part.state.output) {
@@ -2178,12 +2236,14 @@ async function panelMessageStream(text, metadata, signal, workspaceEpoch = state
           const part = ensureMessageReasoningPart(placeholder, `panel-reasoning:${requestID}`);
           if (!part) continue;
           streamMessagePart(part, reasoning, "text", part.text || "");
+          if (reasoning.trim()) touchReasoningPart(part);
           renderConversation();
         } else if (ev.type === "reasoning_replace" && placeholder && typeof ev.text === "string") {
           reasoning = ev.text;
           const part = ensureMessageReasoningPart(placeholder, `panel-reasoning:${requestID}`);
           if (!part) continue;
           streamMessagePart(part, reasoning, "text", part.text || "");
+          if (reasoning.trim()) touchReasoningPart(part);
           renderConversation();
         } else if (ev.type === "message_delta" && placeholder && typeof ev.delta === "string") {
           streamed = true;
@@ -5077,6 +5137,185 @@ function agentText(event) {
   return agentTargetText(event);
 }
 
+function toolNameKey(name) {
+  return String(name || "").toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+function toolInputCommand(input) {
+  if (!record(input)) return "";
+  const value = input.command ?? input.argv ?? input.cmd;
+  if (typeof value === "string") return value.trim();
+  if (!Array.isArray(value)) return "";
+  return value
+    .flatMap((item) => typeof item === "string" && item.trim() ? [item.trim()] : [])
+    .join(" ")
+    .trim();
+}
+
+function toolStateInput(value, fallback = "") {
+  if (record(value)) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback.trim() ? { raw: fallback.trim() } : {};
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (record(parsed)) return parsed;
+    } catch {}
+    return { raw: trimmed };
+  }
+  if (Array.isArray(value)) {
+    const raw = value
+      .flatMap((item) => typeof item === "string" && item.trim() ? [item.trim()] : [])
+      .join(" ")
+      .trim();
+    if (raw) return { raw };
+  }
+  return fallback.trim() ? { raw: fallback.trim() } : {};
+}
+
+function eventToolName(event) {
+  const candidates = [
+    event?.toolName,
+    event?.payload?.toolName,
+    event?.payload?.name,
+    event?.sourceLabel,
+  ];
+  for (const item of candidates) {
+    if (typeof item === "string" && item.trim()) return item.trim();
+  }
+  const summary = displayString(event?.summary).trim();
+  const match = summary.match(/^(?:tool call|tool result|shell command):\s*(.+)$/i);
+  if (match?.[1]?.trim()) return match[1].trim();
+  return "unknown";
+}
+
+function eventToolStatus(event, preferred = "") {
+  const status = String(
+    preferred ||
+    event?.sourceStatus ||
+    event?.payload?.status ||
+    "",
+  ).trim().toLowerCase();
+  if (status.includes("fail") || status.includes("error")) return "error";
+  if (status.includes("complete") || status.includes("done")) return "completed";
+  if (status.includes("queue") || status.includes("pending")) return "pending";
+  if (event?.kind === "tool_result") return "completed";
+  return "running";
+}
+
+function eventToolPart(event, options = {}) {
+  if (!event) return null;
+  const created = Number(event?.time?.created || Date.now());
+  const summary = displayString(event?.summary).trim();
+  const inputText = displayString(event?.text || event?.payload?.text).trim();
+  const input = toolStateInput(
+    event?.payload?.input ?? event?.payload?.arguments ?? event?.payload?.args ?? "",
+    inputText,
+  );
+  const id = typeof event?.id === "string" && event.id ? event.id : `tool:${created}:${eventToolName(event)}`;
+  const callID = typeof event?.sourceID === "string" && event.sourceID
+    ? event.sourceID
+    : typeof event?.payload?.id === "string" && event.payload.id
+      ? event.payload.id
+      : id;
+  const tool = eventToolName(event);
+  const status = eventToolStatus(event, typeof options.status === "string" ? options.status : "");
+  const output = clipBlock(displayString(options.output || event?.payload?.output || event?.payload?.result || summary));
+  if (status === "completed") {
+    return {
+      id,
+      type: "tool",
+      callID,
+      tool,
+      state: {
+        status: "completed",
+        input,
+        output: output || summary || tool,
+        title: summary || tool,
+        metadata: { synthetic: true },
+        time: {
+          start: created,
+          end: created,
+        },
+      },
+    };
+  }
+  if (status === "error") {
+    return {
+      id,
+      type: "tool",
+      callID,
+      tool,
+      state: {
+        status: "error",
+        input,
+        error: output || summary || tool,
+        metadata: { synthetic: true },
+        time: {
+          start: created,
+          end: created,
+        },
+      },
+    };
+  }
+  if (status === "pending") {
+    return {
+      id,
+      type: "tool",
+      callID,
+      tool,
+      state: {
+        status: "pending",
+        input,
+        raw: inputText || summary || tool,
+      },
+    };
+  }
+  return {
+    id,
+    type: "tool",
+    callID,
+    tool,
+    state: {
+      status: "running",
+      input,
+      title: summary || tool,
+      metadata: { synthetic: true },
+      time: {
+        start: created,
+      },
+    },
+  };
+}
+
+function displayToolIcon(name) {
+  const n = toolNameKey(name);
+  if (n === "read" || n === "readfile") return "\uD83D\uDCC4";
+  if (n === "edit" || n === "editfile" || n === "applypatch") return "\u270F\uFE0F";
+  if (n === "write" || n === "writefile") return "\uD83D\uDCDD";
+  if (n === "bash" || n === "shellcommand") return "\uD83D\uDCBB";
+  if (n === "grep" || n === "searchcode") return "\uD83D\uDD0D";
+  if (n === "glob" || n === "findfiles") return "\uD83D\uDCC2";
+  if (n === "agent" || n === "spawnagent") return "\uD83E\uDD16";
+  if (n === "todowrite" || n === "todoupdate" || n === "updateplan") return "\u2611\uFE0F";
+  return "\u26A1";
+}
+
+function displayToolDetail(name, input, state) {
+  const safeInput = record(input) ? input : {};
+  const safeState = record(state) ? state : {};
+  const n = toolNameKey(name);
+  const path = safeInput.file_path || safeInput.filePath || safeInput.path || safeInput.filename || "";
+  if (path) return shortPath(path);
+  if (n === "bash" || n === "shellcommand") return clipText(toolInputCommand(safeInput), 80);
+  if (n === "grep" || n === "searchcode") return safeInput.pattern || safeInput.query || safeInput.q || "";
+  if (n === "glob" || n === "findfiles") return safeInput.pattern || safeInput.glob || "";
+  if (n === "agent" || n === "spawnagent") return clipText(safeInput.description || safeInput.prompt || "", 80);
+  if (typeof safeInput.raw === "string" && safeInput.raw.trim()) return clipText(safeInput.raw, 80);
+  if ((safeState.status === "completed" || safeState.status === "running") && typeof safeState.title === "string") return safeState.title;
+  return "";
+}
+
 function visibleAgentEvent(event) {
   if (!event) return false;
   if (event.kind === "message_delta") return !!agentText(event);
@@ -5090,6 +5329,9 @@ function visibleAgentEvent(event) {
 function agentMessage(event) {
   const text = agentText(event);
   if (!text || !visibleAgentEvent(event)) return null;
+  const part = event.kind === "tool_call" || event.kind === "tool_result"
+    ? eventToolPart(event)
+    : { type: "text", text };
   return {
     _synthetic: true,
     info: {
@@ -5097,7 +5339,7 @@ function agentMessage(event) {
       role: event.kind === "tool_call" || event.kind === "tool_result" ? "task_tool" : agentRole(event.stage),
       time: { created: event.time?.created || Date.now() },
     },
-    parts: [{ type: "text", text }],
+    parts: [part],
   };
 }
 
@@ -5272,6 +5514,7 @@ function handleEventStreamEvent(event) {
       scheduleConversation(0);
       return;
     }
+    if (part.type === "reasoning") touchReasoningPart(part);
     const target = `${typeof part._targetText === "string" ? part._targetText : part.text || ""}${properties.delta}`;
     streamMessagePart(part, target, "text", part.text || "");
     state.conversationUpdatedAt = Date.now();
@@ -6677,7 +6920,7 @@ function formatTranscriptTool(part) {
   const hiddenTools = ["planner", "todowrite", "todoupdate", "task_report"];
   if (hiddenTools.includes(toolName.toLowerCase())) return "";
   const st = part?.state || {};
-  const detail = toolDetail(toolName, st.input || {}, st);
+  const detail = displayToolDetail(toolName, st.input || {}, st);
   const status = st.status || "pending";
   return [t("transcript.tool", { status: toolStatusLabel(status), tool: toolName }), detail].filter(Boolean).join(" ");
 }
@@ -6726,6 +6969,18 @@ function formatConversationTranscript(messages) {
     })
     .filter(Boolean)
     .join("\n\n---\n\n");
+}
+
+function orderedMessageParts(message) {
+  const parts = Array.isArray(message?.parts) ? message.parts : [];
+  if (parts.length < 2) return parts;
+  const reasoning = [];
+  const rest = [];
+  for (const part of parts) {
+    if (part?.type === "reasoning") reasoning.push(part);
+    else rest.push(part);
+  }
+  return [...reasoning, ...rest];
 }
 
 async function createManagedSession() {
@@ -6860,7 +7115,7 @@ function signPart(part) {
     return ["tool", part.tool || "", st.status || "", signText(st.input || {}), signText(st.output || ""), st.title || ""].join("\u001f");
   }
   if (part.type === "reasoning") {
-    return ["reasoning", part.text || ""].join("\u001f");
+    return ["reasoning", reasoningPartHidden(part) ? "0" : "1", part.text || ""].join("\u001f");
   }
   if (part.type === "patch") {
     return ["patch", ...(Array.isArray(part.files) ? part.files : [])].join("\u001f");
@@ -7096,9 +7351,7 @@ function executorOutput(event) {
       .filter((item) => typeof item === "string" && item.trim())
       .join("\n");
     if (text) return clipBlock(text);
-    const fallback = stringifyLogValue(output, 2);
-    if (!fallback || fallback === "[object Object]") return "";
-    return clipBlock(fallback);
+    return "";
   }
   if (typeof event.payload.text === "string") return clipBlock(event.payload.text);
   return "";
@@ -7119,17 +7372,19 @@ function executorCall(events, index, event) {
 
 function executorTargetText(event, events = [], index = -1) {
   if (typeof event?._targetText === "string") return event._targetText;
-  const summary = String(event?.summary || "").trim();
+  const summary = displayString(event?.summary).trim();
   const command = executorCommand(event);
   const output = executorOutput(event);
 
   if (event?.kind === "message_delta") {
-    if (typeof event?.payload?.text === "string" && event.payload.text.trim()) return event.payload.text;
+    const text = displayString(event?.payload?.text);
+    if (text.trim()) return text;
     return summary;
   }
 
   if (event?.kind === "reasoning_delta") {
-    if (typeof event?.payload?.text === "string" && event.payload.text.trim()) return event.payload.text;
+    const text = displayString(event?.payload?.text);
+    if (text.trim()) return text;
     return summary;
   }
 
@@ -7188,6 +7443,19 @@ function visibleExecutorEvent(event) {
 function executorMessage(event, events = [], index = -1) {
   const text = executorText(event, events, index);
   if (!text || !visibleExecutorEvent(event)) return null;
+  const part = event.kind === "tool_call" || event.kind === "tool_result"
+    ? eventToolPart(event, {
+      status: event.kind === "tool_result" ? "completed" : "",
+      output: event.kind === "tool_result" ? (executorOutput(event) || text) : "",
+    })
+    : {
+      id: `${event.kind === "reasoning_delta" ? "reasoning" : "text"}:${event.id || index}`,
+      type: event.kind === "reasoning_delta" ? "reasoning" : "text",
+      text,
+      messageID: event.id,
+      sessionID: "",
+    };
+  if (part.type === "reasoning" && reasoningPartHidden(part)) return null;
   return {
     _synthetic: true,
     info: {
@@ -7195,7 +7463,7 @@ function executorMessage(event, events = [], index = -1) {
       role: event.kind === "message_delta" || event.kind === "reasoning_delta" ? "assistant" : "task_tool",
       time: { created: event.time?.created || Date.now() },
     },
-    parts: [{ type: event.kind === "reasoning_delta" ? "reasoning" : "text", text }],
+    parts: [part],
   };
 }
 
@@ -7243,12 +7511,15 @@ function executorProcessStatus(event) {
 
 function executorProcessTitle(event, events = [], index = -1) {
   const call = event?.kind === "tool_result" ? executorCall(events, index, event) : null;
-  if (typeof event?.sourceLabel === "string" && event.sourceLabel.trim()) return event.sourceLabel.trim();
+  const sourceLabel = displayString(event?.sourceLabel).trim();
+  if (sourceLabel) return sourceLabel;
   const command = executorCommand(event);
   if (command) return command;
-  if (typeof event?.payload?.name === "string" && event.payload.name.trim()) return event.payload.name.trim();
-  if (typeof call?.payload?.name === "string" && call.payload.name.trim()) return call.payload.name.trim();
-  return String(event?.summary || "").trim() || String(event?.id || "");
+  const payloadName = displayString(event?.payload?.name).trim();
+  if (payloadName) return payloadName;
+  const callName = displayString(call?.payload?.name).trim();
+  if (callName) return callName;
+  return displayString(event?.summary).trim() || displayString(event?.id).trim();
 }
 
 function executorProcessDetail(event, events = [], index = -1) {
@@ -7257,22 +7528,20 @@ function executorProcessDetail(event, events = [], index = -1) {
   const command = executorCommand(event) || executorCommand(call);
   if (kind === "tool") {
     if (command && command !== executorProcessTitle(event, events, index)) return command;
-    if (typeof event?.payload?.input === "string" && event.payload.input.trim()) {
-      return clipText(event.payload.input.replace(/\s+/g, " "), 120);
-    }
-    if (typeof call?.payload?.input === "string" && call.payload.input.trim()) {
-      return clipText(call.payload.input.replace(/\s+/g, " "), 120);
-    }
+    const input = displayString(event?.payload?.input);
+    if (input.trim()) return clipText(input.replace(/\s+/g, " "), 120);
+    const callInput = displayString(call?.payload?.input);
+    if (callInput.trim()) return clipText(callInput.replace(/\s+/g, " "), 120);
   }
-  if (kind === "approval" && typeof event?.payload?.message === "string" && event.payload.message.trim()) {
-    return event.payload.message.trim();
-  }
-  if (kind === "input" && typeof event?.summary === "string" && event.summary.trim()) return event.summary.trim();
+  const approvalMessage = displayString(event?.payload?.message).trim();
+  if (kind === "approval" && approvalMessage) return approvalMessage;
+  const summary = displayString(event?.summary).trim();
+  if (kind === "input" && summary) return summary;
   return "";
 }
 
 function executorProcessNote(event, events = [], index = -1) {
-  const summary = String(event?.summary || "").trim();
+  const summary = displayString(event?.summary).trim();
   if (!summary || genericExecutorSummary(event)) return "";
   const title = executorProcessTitle(event, events, index);
   const detail = executorProcessDetail(event, events, index);
@@ -7283,7 +7552,7 @@ function executorProcessNote(event, events = [], index = -1) {
 function executorProcessProgress(event, events = [], index = -1) {
   const status = executorProcessStatus(event);
   if (event?.kind === "message_delta") return processStatusLabel(status);
-  const summary = String(event?.summary || "").trim();
+  const summary = displayString(event?.summary).trim();
   const title = executorProcessTitle(event, events, index);
   const detail = executorProcessDetail(event, events, index);
   const output = event?.kind === "message_delta" ? "" : executorOutput(event);
@@ -7386,6 +7655,15 @@ function syncExecutorText(event, index = -1) {
     return;
   }
   event._targetText = target;
+  if (event.kind === "reasoning_delta" && target.trim()) {
+    touchReasoningPart({
+      id: `reasoning:${event.id || index}`,
+      type: "reasoning",
+      text: target,
+      messageID: event.id,
+      sessionID: "",
+    });
+  }
   startLiveText(key, target, typeof event._liveText === "string" ? event._liveText : "", (value) => {
     event._liveText = value;
   });
@@ -7417,6 +7695,31 @@ function mergeExecutorDelta(current, event, events, index) {
 }
 
 function mergeExecutorEventList(events = [], event) {
+  const index = typeof event?.id === "string" && event.id
+    ? events.findIndex((item) => item.id === event.id)
+    : -1;
+  if (index >= 0) {
+    if (executorDeltaKind(event?.kind)) {
+      const next = mergeExecutorDelta(events[index], event, events, index);
+      return [
+        ...events.slice(0, index),
+        next,
+        ...events.slice(index + 1),
+      ];
+    }
+    return [
+      ...events.slice(0, index),
+      {
+        ...events[index],
+        ...event,
+        payload: {
+          ...(record(events[index]?.payload) ? events[index].payload : {}),
+          ...(record(event?.payload) ? event.payload : {}),
+        },
+      },
+      ...events.slice(index + 1),
+    ];
+  }
   const sourceIndex = executorDeltaKind(event?.kind) && event?.sourceID
     ? events.findIndex((item) =>
       item.kind === event.kind &&
@@ -7495,8 +7798,6 @@ async function loadExecutorEvents(runID = state.board?.task?.activeRunID || "") 
 function appendExecutorEvent(raw) {
   const event = executorEventEntry(raw);
   if (!event) return;
-  const exists = state.executorEvents.some((item) => item.id === event.id);
-  if (exists) return;
   if (event.runID && state.executorRunID && state.executorRunID !== event.runID) {
     // New run started — discard stale events from the previous run and adopt the new runID.
     state.executorEvents = [];
@@ -7806,7 +8107,7 @@ function renderFilePart(part) {
 }
 
 function renderTextPart(part, role) {
-  let text = part.text || "";
+  let text = displayString(part.text);
   if (!text.trim()) return "";
 
   // Skip system/scheduler messages that are not for UI
@@ -7960,7 +8261,7 @@ function inlineMarkdown(text) {
 
 
 function toolIcon(name) {
-  const n = name.toLowerCase();
+  const n = toolNameKey(name);
   if (n === "read" || n === "readfile") return "\uD83D\uDCC4";       // 📄
   if (n === "edit" || n === "editfile") return "\u270F\uFE0F";       // ✏️
   if (n === "write" || n === "writefile") return "\uD83D\uDCDD";     // 📝
@@ -7996,8 +8297,9 @@ function shortPath(p) {
 }
 
 function renderReasoningPart(part) {
-  const text = part.text || "";
+  const text = displayString(part.text);
   if (!text.trim()) return "";
+  if (reasoningPartHidden(part)) return "";
   return `<div class="msg-reasoning">
     <div class="reasoning-label">${escapeHtml(t("transcript.reasoning"))}</div>
     <div class="reasoning-text">${escapeHtml(text)}</div>
@@ -8144,11 +8446,11 @@ function renderConversation() {
   const target = conversationTarget();
   const targetKey = conversationTargetKey(target);
   const sessionChanged = state._renderedGroupKey !== targetKey;
+  const nextNodes = groups.map((group, index) => renderTurn(group, sigs[index]));
 
-  if (sessionChanged) {
+  if (sessionChanged || nextNodes.some((node) => !node)) {
     const frag = document.createDocumentFragment();
-    for (let index = 0; index < groups.length; index += 1) {
-      const node = renderTurn(groups[index], sigs[index]);
+    for (const node of nextNodes) {
       if (node) frag.appendChild(node);
     }
     el.innerHTML = "";
@@ -8158,14 +8460,14 @@ function renderConversation() {
     const limit = Math.min(turns.length, groups.length);
     for (let index = 0; index < limit; index += 1) {
       if (turns[index]?.dataset.groupSig === sigs[index]) continue;
-      const node = renderTurn(groups[index], sigs[index]);
+      const node = nextNodes[index];
       if (node) turns[index].replaceWith(node);
     }
     if (turns.length > groups.length) {
       turns.slice(groups.length).forEach((node) => node.remove());
     }
     for (let index = turns.length; index < groups.length; index += 1) {
-      const node = renderTurn(groups[index], sigs[index]);
+      const node = nextNodes[index];
       if (node) el.appendChild(node);
     }
   }
@@ -8198,7 +8500,7 @@ function renderTurn(group, sig = "") {
   const { role, messages } = group;
   let bodyHtml = "";
   for (const message of messages) {
-    for (const part of message.parts || []) {
+    for (const part of orderedMessageParts(message)) {
       bodyHtml += renderPart(part, role);
     }
   }
@@ -8297,8 +8599,8 @@ function renderToolPart(part) {
   const hiddenTools = ["planner", "structuredoutput", "todowrite", "todoupdate", "task_report"];
   if (hiddenTools.includes(toolName.toLowerCase())) return "";
 
-  const detail = toolDetail(toolName, input, st);
-  const icon = toolIcon(toolName);
+  const detail = displayToolDetail(toolName, input, st);
+  const icon = displayToolIcon(toolName);
   const statusText = toolStatusLabel(status);
 
   let html = `<div class="msg-tool">
@@ -8309,11 +8611,12 @@ function renderToolPart(part) {
   </div>`;
 
   const output = st.output || "";
+  const error = st.error || output || "";
   if (output && status === "completed") {
     html += `<div class="msg-tool-output">${escapeHtml(output)}</div>`;
   }
-  if (status === "error" && output) {
-    html += `<div class="msg-tool-error">${escapeHtml(output)}</div>`;
+  if (status === "error" && error) {
+    html += `<div class="msg-tool-error">${escapeHtml(error)}</div>`;
   }
   return html;
 }
@@ -9738,6 +10041,13 @@ function stringifyLogValue(value, space = 0) {
     /* value contains circular references or is otherwise non-serializable */
     return String(value ?? "");
   }
+}
+
+function displayString(value, space = 0) {
+  if (typeof value === "string") return value.trim() === "[object Object]" ? "" : value;
+  if (value === undefined || value === null) return "";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }
 
 function parseLogValue(raw) {

@@ -4,6 +4,7 @@ import { listGoalsForPlan } from "@/orchestrator/store"
 import { Preference } from "@/preference"
 import { Database, eq } from "@/storage/db"
 import {
+  OrchestratorGoalTable,
   OrchestratorPlanVersionTable,
   OrchestratorTaskTable,
 } from "@/orchestrator/orchestrator.sql"

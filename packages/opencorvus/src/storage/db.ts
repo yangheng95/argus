@@ -22,7 +22,7 @@ export const NotFoundError = NamedError.create(
 const log = Log.create({ service: "db" })
 
 export namespace Database {
-  export const Path = path.join(Global.Path.data, "opencorvus.db")
+  export const Path = "" as string
   type Schema = typeof schema
   export type Transaction = SQLiteTransaction<"sync", void, Schema>
 
@@ -33,9 +33,9 @@ export namespace Database {
   }
 
   export const Client = lazy(() => {
-    log.info("opening database", { path: path.join(Global.Path.data, "opencorvus.db") })
+    log.info("opening database", { path: Database.Path })
 
-    const sqlite = new BunDatabase(path.join(Global.Path.data, "opencorvus.db"), { create: true })
+    const sqlite = new BunDatabase(Database.Path, { create: true })
     state.sqlite = sqlite
 
     sqlite.run("PRAGMA journal_mode = WAL")
@@ -104,4 +104,19 @@ export namespace Database {
       throw err
     }
   }
+
+  function resolvePath() {
+    const testHome = process.env.OPENCORVUS_TEST_HOME?.trim()
+    if (testHome) {
+      return path.join(testHome, "shared", "data", "opencorvus.db")
+    }
+    return path.join(Global.Path.data, "opencorvus.db")
+  }
+
+  Object.defineProperty(Database, "Path", {
+    enumerable: true,
+    get() {
+      return resolvePath()
+    },
+  })
 }
